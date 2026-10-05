@@ -620,12 +620,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         <p>
           <strong>Topics</strong> are the row of subjects above the list, each with a count. Choose
           one to see only the articles about it; choose a second to narrow to articles about{" "}
-          <em>both</em>. A model names them from your articles’ titles and one-sentence summaries,
-          using your profile if you have written one: broad subjects first, with finer ones inside
-          them marked <strong>›</strong>. New articles are sorted in by themselves. Each article
-          shows the topics it is in under its title: up to four, or the first three and how many
-          more. Topics appear once there are about eight different articles on the shelf, and shift
-          as it grows.
+          <em>both</em>. Usually, a model names them from your articles’ titles and one-sentence
+          summaries, using your profile if you have written one: broad subjects first, with finer
+          ones inside them marked <strong>›</strong>. Until that answer exists, the row can fall
+          back to phrases from the articles themselves. New articles are sorted in by themselves.
+          Each article shows the topics it is in under its title: up to four, or the first three
+          and how many more. Topics appear once there are about eight different articles on the
+          shelf, and shift as it grows.
         </p>
       </>
     ),

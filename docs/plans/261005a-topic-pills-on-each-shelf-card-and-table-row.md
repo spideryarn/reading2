@@ -45,15 +45,17 @@ are other people's and are not in this reader's tree.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-1. **A line of topic pills on each card, and under the byline line of each table row.** Each pill
-   is the topic's hue dot and its label, in the model's face when a model named it, with the faint
-   `›` when it is a finer topic. The same marks as the pills in the row above, smaller, with no
-   count.
+1. **A line of topic pills on each card, and the same topics as running text under the byline line
+   of each table row.** Each is the topic's hue dot and its label, in the model's face when a model
+   named it, with the faint `›` when it is a finer topic. The same marks as the pills in the row
+   above, smaller, with no count. In the table there is no border round each
+   ([§ The browser check](#the-browser-check-and-what-it-changed)).
 2. **Up to four are all shown. From five, the first three, then `+N`.** In the server's rank order,
    which is the order of the row above: broad subjects first, then by how many articles. `+N` is
    plain text; a screen reader hears *"and 2 more"*.
-3. **Labels, not buttons.** Pressing a pill, or the `+N`, opens the article: like a tag chip, it is
-   part of the card's link. See the question below.
+3. **Labels, not buttons.** On a card, pressing a pill or the `+N` opens the article: like a tag
+   chip, it is part of the card's stretched link. In the table they are static labels; only the
+   title is the row's link. See the question below.
 4. **On its own line**, under the meta line, so pills arriving a moment after the cards do not
    re-wrap the line the tags and badges are on. An article in no topic has no line.
 5. **Nothing while topics load, fail, or do not exist** (a shelf under eight works). No placeholder.
@@ -62,7 +64,8 @@ are other people's and are not in this reader's tree.
 
 - A new pure module `src/web/article-topics.ts`: `articleTopics(terms)` returns the hue stops and
   the per-slug topic lists. This is the `topicsBySlug` code moved out of `ShelfTerms.tsx`, plus a
-  `finer` flag on each topic. `rowTopics(topics, cap)` returns `{ shown, more }`.
+  `finer` flag on each topic. `rowTopics(topics)` returns `{ shown, more }` using the one shelf-row
+  cap.
 - `Library.tsx` computes it once (a memo on the answer's `terms`) and hands it to `ShelfTerms` as a
   prop, so the O(topics³) colouring still runs once per answer and the row, the paper card and the
   cards cannot disagree about a hue.
@@ -96,13 +99,13 @@ None of that is hard, but it is behaviour Greg did not ask for, so it goes to hi
 
 ## Costs, named
 
-- **Every card with topics is one line taller** (about 24px), and the line arrives after the cards
-  do, once the topics answer lands. **It can move more than once**: the hook shows a partial answer
-  while articles are still being read, shows a new one when a re-think lands, and drops the old one
-  when the archive is switched in or the shelf changes. Each of those can add, remove or re-wrap a
-  card's line. Accepted for this version. Holding the pills back until the answer is settled would
-  hide them for the minutes a re-think takes; a per-card placeholder would be a guess at which cards
-  have topics.
+- **Every card with topics is at least one line taller** (about 24px), and long pills can wrap it
+  onto further lines. The line arrives after the cards do, once the topics answer lands. **It can
+  move more than once**: the hook shows a partial answer while articles are still being read, shows
+  a new one when a re-think lands, and drops the old one when the archive is switched in or the
+  shelf changes. Each of those can add, remove or re-wrap a card's line. Accepted for this version.
+  Holding the pills back until the answer is settled would hide them for the minutes a re-think
+  takes; a per-card placeholder would be a guess at which cards have topics.
 - **A fresh arrival has no pills** until it is sorted in, which happens by itself.
 - **On touch there is no way to read the topics behind `+N`** from the card. They are in the
   Topics row's *More detail* view.
@@ -117,8 +120,10 @@ None of that is hard, but it is behaviour Greg did not ask for, so it goes to hi
 - Rendered, through `Library` with a stubbed terms answer (the harness in
   `tests/shelf-topics.test.tsx`): a card shows its article's first three of five and `+2`, and all
   of four; the table view shows the same; the pills land in cards and in table cells when the
-  answer arrives after the rows; nothing on the line is pressable, focusable or lifted above the
-  link. Watched red (seven tests) before the wiring.
+  answer arrives after the rows; nothing on the line is pressable or focusable, and on a card
+  nothing is lifted above the stretched link. Watched red (seven tests) before the wiring.
+- Code review added the regression that a table row keeps its topics while its title is being
+  renamed; watched red against the early return, then green after the fix.
 - Controls that pass without the change, kept as regressions: no line for an article in no topic,
   none before the answer. The *Include public* section draws its own cards and its slugs are not in
   the answer, so it has no test of its own.
@@ -149,6 +154,44 @@ cards and table; GPT Sol's code review; push to `dev`.
 | F3 (P2): the layout can shift more than once, not "once per load" | Accepted, and the cost above now says so. |
 | F4 (P2): `+1` hides one label in about the room it would take | Up to four are shown; three and `+N` from five. |
 | F5 (P2): three of the planned tests pass without the change; nothing tested a press on `+N` | The tests section above names the controls as controls; the browser check presses every part of the line. |
+
+## GPT Sol's code review
+
+`261005a-topic-pills-code-review-sol.md`, on commit `cfd0b3bdc`: *ship with the fixes I made*. No
+P0. It confirmed all five plan-review findings were done, that the context value keeps its identity,
+and that a late answer reaches the table's cells. It fixed, and I read and kept:
+
+- **C1 (P1): the table's topics vanished while its title was being renamed**, because the cell
+  returns early for the editor. They now stay under the editor; a test was watched red.
+- C2–C5 (P3), wording: the docs implied a table pill opens the article (only a card's does, the
+  table row has no stretched link); "one line taller" (pills can wrap); `/help` implied topics are
+  always model-named (the phrase row is still the fallback); a `cap` parameter that does not exist.
+
+## The browser check, and what it changed
+
+A Sonnet subagent drove Playwright against a dev server in this worktree at 1440, 820 (touch) and
+390 (touch), with the topics answer stubbed so one article had six topics, one five, one four, one
+a single 40-character label and one none. Cards: no sideways scroll at any width; the counts, the
+dots' colours against the row above and the `›` all right; pressing a pill and pressing `+3` each
+opened the article, and `elementFromPoint` at both was the card's title link; the Tag button and
+the action menu still opened. Screenshots: `261005a-shot-*.png`.
+
+**It found the table ugly, and that was fixed.** The Article column is about 250px wide, so
+bordered pills stacked one to a line: 74px of pills for a four-topic article. In the table the
+topics are now running text, the dot and the label with no border, wrapping like the byline above
+them (`plain` on `ShelfRowTopics`). This fix was made after the code review's snapshot; it is a
+styling branch in one component, has its own assertion, and was re-shot in the browser.
+
+GPT Sol looked at that change alone (`261005a-topic-pills-code-review-2-sol.md`, read-only): the
+branch, the list semantics and the utilities hold; D1 (P2), the test scanned the whole subtree for
+a border class, now checks the items' own classes; D2 (P3), a line of this plan still said "pills"
+of the table, corrected. The re-shoot then showed a dot left at the end of one line with its label
+on the next; each topic is now `inline-block`, so lines break between topics. That one class was
+changed after Sol's second look and checked in the browser only.
+
+Not exercised: the *Include public* section (the test account had no public articles to list). That
+its cards carry no pills rests on the code: the section draws its own cards and never renders the
+slot.
 
 ## Questions for Greg (nobody is in the chat; built the first option of each)
 

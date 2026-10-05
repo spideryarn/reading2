@@ -154,7 +154,7 @@ export const CHIP_ORDER = ["opened", "added", "published", "title", "length", "o
  * than the topics themselves, so it can be one stable reference and the
  * columns are not rebuilt when the topics answer lands. Plan 261005a.
  */
-export type RowTopicsSlot = ComponentType<{ slug: string; className?: string }>;
+export type RowTopicsSlot = ComponentType<{ slug: string; className?: string; plain?: boolean }>;
 
 export function libraryColumns(
   shelf: Shelf,
@@ -349,6 +349,7 @@ function TitleCell({
   hidden: readonly string[];
 }) {
   const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
+  const topics = Topics ? <Topics slug={entry.slug} className="tw:mt-1" plain /> : null;
 
   /* The same in-place rename the card offers, and deliberately the same
      component: the three-outcome contract (`undefined` cancelled, `null` reset
@@ -358,19 +359,22 @@ function TitleCell({
      opened it are two different cells. */
   if (shelf.renaming === entry.slug) {
     return (
-      <TitleEditor
-        title={entry.title}
-        overridden={Boolean(entry.titleOverridden)}
-        /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
-           16px and does not zoom back out. The reading view's fields get that floor
-           from narrow-window.css § a field iOS zooms into; the utilities layer
-           outranks it, so a `tw:`-styled field says so itself. */
-        className="tw:text-sm tw:any-pointer-coarse:text-base"
-        onDone={(title) => {
-          if (title === undefined) shelf.cancelRename();
-          else void shelf.rename(entry.slug, title);
-        }}
-      />
+      <>
+        <TitleEditor
+          title={entry.title}
+          overridden={Boolean(entry.titleOverridden)}
+          /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
+             16px and does not zoom back out. The reading view's fields get that floor
+             from narrow-window.css § a field iOS zooms into; the utilities layer
+             outranks it, so a `tw:`-styled field says so itself. */
+          className="tw:text-sm tw:any-pointer-coarse:text-base"
+          onDone={(title) => {
+            if (title === undefined) shelf.cancelRename();
+            else void shelf.rename(entry.slug, title);
+          }}
+        />
+        {topics}
+      </>
     );
   }
 
@@ -472,7 +476,7 @@ function TitleCell({
           <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
-      {Topics && <Topics slug={entry.slug} className="tw:mt-1" />}
+      {topics}
     </>
   );
 }

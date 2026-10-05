@@ -61,6 +61,7 @@ const ARCHIVED: LibraryEntry[] = [
 ];
 let activeArticles = ACTIVE;
 let archivedArticles = ARCHIVED;
+let renaming: string | null;
 
 const term = (key: string, ...members: [string, number][]) => ({
   key,
@@ -133,11 +134,11 @@ vi.mock("../src/web/useShelf.js", async () => {
           archivedFailed: false,
           loadArchived,
           restore: async () => {},
-          renaming: null,
+          renaming,
           beginRename: () => {},
           cancelRename: () => {},
         }),
-        [archived, loadArchived],
+        [archived, loadArchived, renaming],
       );
     },
   };
@@ -184,6 +185,7 @@ beforeEach(() => {
   asked = [];
   activeArticles = ACTIVE;
   archivedArticles = ARCHIVED;
+  renaming = null;
   answer = async (url) => (url.includes("archived=1") ? ALL_TERMS : ACTIVE_TERMS);
 });
 
@@ -933,6 +935,9 @@ describe("an article's topics on its card and its table row", () => {
        card's stretched title link, so a press anywhere on it opens the article. */
     expect(line?.querySelectorAll("button, a, [tabindex]")).toHaveLength(0);
     expect(line?.outerHTML).not.toContain("tw:relative");
+    /* On a card they are pills, each with its border. */
+    expect(line?.hasAttribute("data-row-topics-plain")).toBe(false);
+    expect([...(line?.children ?? [])].filter((li) => li.className.includes("tw:border"))).toHaveLength(3);
     expect(line?.querySelectorAll("[data-topic-slot]")).toHaveLength(3);
     expect([...(line?.querySelectorAll(".voice-ai") ?? [])].map((s) => s.textContent)).toEqual([
       "Neuroscience",
@@ -957,8 +962,25 @@ describe("an article's topics on its card and its table row", () => {
   it("shows the same in the table", async () => {
     await show("/?view=table");
     expect(pillsIn(tableRow("Memory and the brain"))).toEqual(OF_FIVE);
+    /* As running text, not bordered pills: the Article column is too narrow
+       for pills to sit side by side (the browser check of plan 261005a). */
+    const line = tableRow("Memory and the brain")?.querySelector("[data-row-topics]");
+    expect(line?.hasAttribute("data-row-topics-plain")).toBe(true);
+    const items = [...(line?.children ?? [])];
+    expect(items).toHaveLength(4);
+    expect(items.filter((li) => li.className.includes("tw:border") || li.className.includes("tw:rounded-full"))).toEqual([]);
     expect(tableRow("Startups and founders")).toBeDefined();
     expect(tableRow("Startups and founders")?.querySelector("[data-row-topics]")).toBeNull();
+  });
+
+  it("keeps the topics in the table while its title is being renamed", async () => {
+    renaming = "mem-brain";
+    await show("/?view=table");
+    const row = [...host.querySelectorAll("tbody tr")].find((tr) =>
+      tr.querySelector('input[value="Memory and the brain"]'),
+    );
+    expect(row, "the title editor's row").toBeDefined();
+    expect(pillsIn(row)).toEqual(OF_FIVE);
   });
 
   it("draws none before the topics answer lands, and all of them after, without a reload", async () => {
