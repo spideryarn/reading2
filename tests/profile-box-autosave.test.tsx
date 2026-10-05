@@ -206,18 +206,67 @@ describe("leaving the page", () => {
 });
 
 describe("what it says", () => {
-  it("says it is saving, then that it saved, with a tick", () => {
-    render("Cognitive", { kind: "saving" });
-    expect(status()).toMatch(/saving/i);
-    expect(host.querySelector(".prof-save svg")).not.toBeNull();
-    render("Cognitive", { kind: "saved" });
-    expect(status()).toMatch(/^saved$/i);
-    expect(host.querySelector(".prof-save.is-saved svg")).not.toBeNull();
+  /* Greg, 2026-10-05: "a faint green tick that appears when it saves (with a
+     tooltip) and then fades away, with no scary 'unsaved' indicator". So the
+     words are the same before, during and after; only the tick comes and goes. */
+  it("reads the same while typing and while saving, with no tick and no spinner", () => {
+    render("Cognitive", { kind: "clean" });
+    const quiet = status();
+    expect(quiet).toBe("Saves as you type.");
+    for (const kind of ["dirty", "saving"] as const) {
+      render("Cognitive", { kind });
+      expect(status(), kind).toBe(quiet);
+      expect(status(), kind).not.toMatch(/unsaved|not saved|saving/i);
+      expect(host.querySelector(".prof-save svg"), kind).toBeNull();
+    }
   });
 
-  it("says when something has not been saved yet", () => {
-    render("Cognitive", { kind: "dirty" });
-    expect(status()).toMatch(/unsaved/i);
+  it("ticks a save that landed, and says Saved to a screen reader and on hover", () => {
+    render("Cognitive", { kind: "saved" });
+    const tick = host.querySelector<HTMLElement>(".prof-save.is-saved .prof-save-tick");
+    expect(tick?.querySelector("svg")).not.toBeNull();
+    /* A polite announcement may wait longer than the visual tick. Its words
+       must survive the tick becoming visibility:hidden. */
+    expect(host.querySelector(".prof-save > .sr-only")?.textContent).toBe("Saved");
+    expect(tick?.querySelector(".sr-only")).toBeNull();
+    expect(tick?.getAttribute("aria-hidden")).toBe("true");
+    expect(host.querySelector(".prof-save-words")?.textContent).toBe("Saves as you type.");
+    /* The card is the house Tooltip, opened by hover. */
+    act(() => {
+      tick?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      tick?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+      vi.advanceTimersByTime(2_000);
+    });
+    expect(document.querySelector("[role=tooltip]")?.textContent).toBe("Saved");
+  });
+
+  it("removes an open tooltip when the visual tick finishes, keeping the polite words", () => {
+    render("Cognitive", { kind: "saved" });
+    const tick = host.querySelector<HTMLElement>(".prof-save-tick");
+    act(() => {
+      tick?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      tick?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+      vi.advanceTimersByTime(2_000);
+    });
+    expect(document.querySelector("[role=tooltip]")).not.toBeNull();
+    /* jsdom has WebkitAnimation styles but no AnimationEvent constructor,
+       so React subscribes to the prefixed event in this environment. */
+    act(() => tick?.dispatchEvent(new Event("webkitAnimationEnd", { bubbles: true })));
+    expect(host.querySelector(".prof-save-tick")).toBeNull();
+    expect(document.querySelector("[role=tooltip]")).toBeNull();
+    expect(host.querySelector(".prof-save > .sr-only")?.textContent).toBe("Saved");
+  });
+
+  /* The fade is a CSS animation on a mounted element, so a second save has to
+     mount a new one or its tick would never be seen. */
+  it("ticks again for the next save", () => {
+    render("Cognitive", { kind: "saved" });
+    const first = host.querySelector(".prof-save-tick");
+    render("Cognitive more", { kind: "dirty" });
+    expect(host.querySelector(".prof-save-tick")).toBeNull();
+    render("Cognitive more", { kind: "saved" });
+    expect(host.querySelector(".prof-save-tick")).not.toBeNull();
+    expect(host.querySelector(".prof-save-tick")).not.toBe(first);
   });
 
   it("names the failure rather than looking saved", () => {
