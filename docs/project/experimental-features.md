@@ -239,8 +239,9 @@ reading view saying where in the structure you are, part › section, following 
 > — Greg, 2026-09-29 (spya-m3pteb)
 
 It is the tree [Structure](structure.md) draws and the same "you are here", each crumb jumps to its
-part or section and carries the row's card. A chapter with no sections shows the chapter alone,
-never one of its paragraphs (`src/web/crumbs.ts` § `crumbPath`). It reuses the controls bar rather than adding a second
+part or section and carries the row's card. A chapter whose stored children are only block leaves
+shows the chapter alone (`src/web/crumbs.ts` § `crumbPath`); bounded window sections still appear.
+A tree with only block leaves has no breadcrumb bar. It reuses the controls bar rather than adding a second
 piece of sticky chrome, and the bar stops sliding away while it holds the breadcrumb. The bar costs
 44px at the top of the prose on a wider window. **On a narrow window it is three lines in a 68px bar, since
 2026-10-03**: the ancestors on one line, the current section on up to two, because one line cut both

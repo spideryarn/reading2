@@ -313,6 +313,27 @@ describe("the headings breadcrumb", () => {
     expect(host.querySelector("nav.crumbs")).toBeNull();
   });
 
+  it("a tree containing only labelled block leaves has no empty controls bar", async () => {
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    const original = OWNED.tree;
+    OWNED.tree = {
+      ...TREE,
+      nodes: {
+        n0: { ...TREE.nodes.n0!, children: ["n3"] },
+        n3: { ...TREE.nodes.n3!, parent: "n0", depth: 1 },
+      },
+    };
+    try {
+      await open();
+      expect(host.textContent, "the article is up").toContain(PARAGRAPH);
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+      expect(host.querySelector(".reader > .controls")).toBeNull();
+      expect(host.querySelector(".bar-sentinel")).toBeNull();
+    } finally {
+      OWNED.tree = original;
+    }
+  });
+
   it("with the switch on, the bar holds the path and the last crumb is current", async () => {
     experimentalSince = "2026-10-02T00:00:00.000Z";
     await open();

@@ -33,7 +33,7 @@ import {
 import { ABSENT_TARGET, placeAnswer, snapshotWriteTarget } from "../scripts/subagent-cli.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
-import { pinForWrapper } from "./helpers/wrapper-env.js";
+import { pinForWrapper, runWrapper } from "./helpers/wrapper-env.js";
 
 /**
  * Build the noise line once, outside the loop. Doing it per line — `$(printf 'x%.0s' {1..200})` —
@@ -1488,14 +1488,16 @@ describe("--output: a report the run wrote itself is not overwritten", () => {
   /** `pre` is what the target holds before the wrapper starts; `body` is given the target's path. */
   function runAt(o: {
     pre?: string; body: (target: string) => string; extraArgs?: string[]; env?: Record<string, string>;
+    activitySuffix?: string; models?: string;
   }) {
     const target = join(mkdtempSync(join(tmpdir(), "run-codex-target-")), "answer.md");
     if (o.pre !== undefined) writeFileSync(target, o.pre);
-    const bin = fakeCodex(o.body(target));
-    const r = spawnSync(
-      "npx",
-      ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--output", target, ...(o.extraArgs ?? [])],
-      { encoding: "utf8", env: pinForWrapper({ ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`, ...o.env }) },
+    const bin = fakeCodex(o.body(target), o.models);
+    const r = runWrapper(
+      "scripts/run-codex.ts",
+      ["--prompt", "p", "--output", target, ...(o.extraArgs ?? []),
+        ...(o.activitySuffix ? ["--activity-log", `${target}${o.activitySuffix}`] : [])],
+      pinForWrapper({ ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`, ...o.env }),
     );
     return { ...r, target, sidecar: `${target}.last-message.txt`, earlier: `${target}.earlier-attempt.txt` };
   }
@@ -1569,10 +1571,47 @@ describe("--output: a report the run wrote itself is not overwritten", () => {
     expect(r.stdout).toContain(r.earlier);
   }, 60_000);
 
-  const launched = (f: LaunchFixture, body: string) => spawnSync(
-    "npx",
-    ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
-    { encoding: "utf8", env: pinForWrapper({ ...process.env, PATH: `${dirname(fakeCodex(body))}:${process.env.PATH}` }) },
+  it("preserves the first report before a retry also writes the target", () => {
+    const r = runAt({
+      body: (t) => `if [ -z "$CODEX_API_KEY" ]; then printf 'ATTEMPT-ONE REPORT\\n' > ${shellQuote(t)}; `
+        + `echo "ERROR: Your workspace is out of credits." >&2; exit 1; fi\n`
+        + `printf 'ATTEMPT-TWO REPORT\\n' > ${shellQuote(t)}\n${lastMessage}`,
+      env: { CODEX_API_KEY: "sk-TEST" },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe("ATTEMPT-TWO REPORT\n");
+    expect(text(r.earlier)).toBe("ATTEMPT-ONE REPORT\n");
+    expect(text(r.sidecar)).toBe(LAST);
+  }, 60_000);
+
+  it("a model-family refusal before the retry keeps the actual last attempt's report", () => {
+    const r = runAt({
+      models: `if [ "$1" = app-server ] && [ -n "$CODEX_API_KEY" ]; then read -r _; echo '{"id":1,"result":{}}'; `
+        + `read -r _; read -r _; echo '{"id":2,"result":{"data":[]}}'; exit 0; fi\n${MODEL_LIST_STAND_IN}`,
+      body: (t) => `printf 'ATTEMPT-ONE REPORT\\n' > ${shellQuote(t)}\n${lastMessage}\n`
+        + `echo "ERROR: Your workspace is out of credits." >&2; exit 1`,
+      env: { CODEX_API_KEY: "sk-TEST" },
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("--model sol");
+    expect(text(r.target)).toBe("ATTEMPT-ONE REPORT\n");
+    expect(text(r.earlier)).toBe("ATTEMPT-ONE REPORT\n");
+  }, 60_000);
+
+  it.each([".last-message.txt", ".earlier-attempt.txt"])("refuses a transcript colliding with %s before the child runs", (suffix) => {
+    const r = runAt({
+      body: (t) => `printf 'THE-REPORT\\n' > ${shellQuote(t)}\n${lastMessage}`,
+      pre: "STALE\n", activitySuffix: suffix,
+    });
+    expect(r.status, r.stderr).toBe(1);
+    expect(r.stderr).toContain("same file");
+    expect(text(r.target)).toBe("STALE\n");
+  }, 60_000);
+
+  const launched = (f: LaunchFixture, body: string) => runWrapper(
+    "scripts/run-codex.ts",
+    ["--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
+    pinForWrapper({ ...process.env, PATH: `${dirname(fakeCodex(body))}:${process.env.PATH}` }),
   );
 
   it("keeps a report written to --launch-dir's default answer path, and exit.json describes it", () => {
@@ -1593,6 +1632,21 @@ describe("--output: a report the run wrote itself is not overwritten", () => {
     expect(r.status, r.stderr).toBe(0);
     expect(text(join(f.dir, "answer.md"))).toBe(LAST);
     expect(existsSync(join(f.dir, "answer.md.last-message.txt"))).toBe(false);
+  }, 60_000);
+
+  it("a launched failure keeps its report and empty last message, but records failure", () => {
+    const f = makeLaunchDir();
+    const target = join(f.dir, "answer.md");
+    const r = launched(f, `printf 'THE-REPORT\\n' > ${shellQuote(target)}\n: > "$out"`);
+    expect(r.status).toBe(1);
+    expect(text(target)).toBe("THE-REPORT\n");
+    expect(text(`${target}.last-message.txt`)).toBe("");
+    expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+      kind: "present", record: {
+        verdict: { kind: "failed", cause: "empty-answer" },
+        answer: { path: target, bytes: 11, usable: true },
+      },
+    });
   }, 60_000);
 });
 

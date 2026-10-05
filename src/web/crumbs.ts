@@ -32,6 +32,10 @@ export interface Crumb {
 /** Inclusive at both ends, as structure.ts § `contains` says why. */
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
 
+/** Stored sections survive projection cuts; block leaves cannot supply a breadcrumb. Reader uses
+ * the same eligibility rule to avoid pinning an empty bar for a tree made entirely of leaves. */
+export const isCrumbSection = (n: SummaryNode): boolean => n.node.children.length > 0 || !!n.supplement;
+
 /**
  * The crumbs for the reader standing on `row`, outermost first.
  *
@@ -54,7 +58,7 @@ export function crumbPath(root: SummaryNode | null, row: number): Crumb[] {
        `next.children` at the cut for a real section too. And not the
        apparatus, which is one crumb whatever is stored beneath it.
        docs/plans/261005c-long-document-follow-ups-… § (g). */
-    if (next.node.children.length === 0 && !next.supplement) break;
+    if (!isCrumbSection(next)) break;
     const label = nodeLabel(next, next.title);
     if (label) {
       path.push({

@@ -30,7 +30,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  closeSync, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync,
+  closeSync, copyFileSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync,
   renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -107,6 +107,31 @@ export function sameWriteTarget(a: string, b: string): boolean {
   };
   const first = identify(a);
   return first !== undefined && first === identify(b);
+}
+
+/** All answer destinations must be distinct from each other and the transcript, including aliases.
+ * `sameWriteTarget` creates missing files; remove its empty sidecar probes before the run starts. */
+export function answerWriteConflict(target: string, transcript: string): string | undefined {
+  const sidecars = [`${target}.last-message.txt`, `${target}.earlier-attempt.txt`];
+  const probes = sidecars.filter((path) => {
+    try { lstatSync(path); return false; }
+    catch (e) { return (e as NodeJS.ErrnoException).code === 'ENOENT'; }
+  });
+  const paths = [target, ...sidecars, transcript];
+  try {
+    for (let i = 0; i < paths.length; i++) {
+      for (let j = i + 1; j < paths.length; j++) {
+        if (sameWriteTarget(paths[i]!, paths[j]!)) {
+          return `${paths[i]} and ${paths[j]} are the same file; the second write would destroy the first`;
+        }
+      }
+    }
+    return undefined;
+  } finally {
+    for (const path of probes) {
+      if (existsSync(path) && lstatSync(path).isFile() && statSync(path).size === 0) rmSync(path);
+    }
+  }
 }
 
 /**

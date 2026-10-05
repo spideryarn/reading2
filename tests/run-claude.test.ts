@@ -30,7 +30,7 @@ import type { RegistryReading } from "../tools/overseer/accounts.js";
 import { sameWriteTarget } from "../scripts/subagent-cli.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
-import { resolveAsWrapper, wrapperEnv } from "./helpers/wrapper-env.js";
+import { resolveAsWrapper, runWrapper, wrapperEnv } from "./helpers/wrapper-env.js";
 
 /** One line of the NDJSON transcript, as the CLI writes it. */
 const resultEvent = (fields: Record<string, unknown> = {}): string =>
@@ -679,14 +679,15 @@ describe("the CLI, end to end", () => {
    * the codex tests carry the wider set of cases; these pin this wrapper's own wiring.
    */
   describe("--output: a report the run wrote itself is not overwritten", () => {
-    function runAt(o: { pre?: string; body: (target: string) => string }) {
+    function runAt(o: { pre?: string; body: (target: string) => string; activitySuffix?: string }) {
       const target = join(mkdtempSync(join(tmpdir(), "run-claude-target-")), "answer.md");
       if (o.pre !== undefined) writeFileSync(target, o.pre);
       const bin = fakeClaude(o.body(target));
-      const r = spawnSync(
-        "npx",
-        ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", target],
-        { encoding: "utf8", env: wrapperEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
+      const r = runWrapper(
+        "scripts/run-claude.ts",
+        ["--prompt", "p", "--output", target,
+          ...(o.activitySuffix ? ["--activity-log", `${target}${o.activitySuffix}`] : [])],
+        wrapperEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }),
       );
       return { ...r, target, sidecar: `${target}.last-message.txt` };
     }
@@ -714,6 +715,16 @@ describe("the CLI, end to end", () => {
       expect(r.status, r.stderr).toBe(0);
       expect(readFileSync(r.target, "utf8")).toBe("THE-ANSWER");
       expect(existsSync(r.sidecar)).toBe(false);
+    }, 60_000);
+
+    it.each([".last-message.txt", ".earlier-attempt.txt"])("refuses a transcript colliding with %s before the child runs", (suffix) => {
+      const r = runAt({
+        body: (t) => `printf 'THE-REPORT\\n' > ${shellQuote(t)}\n${result()}`,
+        pre: "STALE\n", activitySuffix: suffix,
+      });
+      expect(r.status, r.stderr).toBe(1);
+      expect(r.stderr).toContain("same file");
+      expect(readFileSync(r.target, "utf8")).toBe("STALE\n");
     }, 60_000);
 
     it("a kept report does not make an empty result pass", () => {

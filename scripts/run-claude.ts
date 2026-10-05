@@ -54,7 +54,7 @@ import {
   type RegistryReading,
 } from '../tools/overseer/accounts.js';
 import {
-  answerIsUsable, elapsedSeconds, formatAnswer, loadRepoEnv, placeAnswer, readAnswerForConsole,
+  answerIsUsable, answerWriteConflict, elapsedSeconds, formatAnswer, loadRepoEnv, placeAnswer, readAnswerForConsole,
   runChild, sameWriteTarget, sanitisedEnv, snapshotWriteTarget, type RunResult,
 } from './subagent-cli.js';
 import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
@@ -791,6 +791,8 @@ async function main(): Promise<void> {
     fail(`--output and --activity-log are the same file (${answerPath}); the second write would`
       + ' destroy the first');
   }
+  const pathConflict = answerWriteConflict(answerPath, logPath);
+  if (pathConflict) fail(pathConflict);
   launch?.notePaths({ answer: answerPath, transcript: logPath });
 
   // **One deadline, starting here.** The probe is a second process, and its own 30 seconds used to

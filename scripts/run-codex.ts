@@ -56,7 +56,7 @@ import { dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { isMain } from '../src/is-main.js';
 import {
-  ABSENT_TARGET, answerIsUsable, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv,
+  ABSENT_TARGET, answerIsUsable, answerWriteConflict, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv,
   placeAnswer, readAnswerForConsole, runChild, sameWriteTarget, sanitisedEnv, snapshotWriteTarget,
   type RunResult, type WriteTargetSnapshot,
 } from './subagent-cli.js';
@@ -677,7 +677,8 @@ export function authHint(log: string, usedKey = true): string {
  */
 async function runPlan(
   args: Args, promptPath: string, tmpDir: string, plan: boolean[],
-  snapshotTarget: () => WriteTargetSnapshot, modelFamily?: string,
+  snapshotTarget: () => WriteTargetSnapshot, preserveTarget: (before: WriteTargetSnapshot) => void,
+  modelFamily?: string,
 ): Promise<{
   run: RunResult; outFile: string; logs: string[]; attempt: number; model: string;
   /** What the answer target held just before the last attempt was spawned — see `placeAnswer`. */
@@ -749,6 +750,9 @@ async function runPlan(
       && answerIsUsable(outFile);
     if (worked || attempt === plan.length - 1) break;
     if (!shouldFallBack(run, log, { streamed: args.stream, sandbox: args.sandbox })) break;
+    // Save bytes before the next child can overwrite them; a hash at the next attempt only detects
+    // the loss after it happened. Keep the target too, as that attempt's freshness baseline.
+    preserveTarget(targetBeforeAttempt);
     // Said out loud, because a run that quietly cost twice what the caller expected is the whole
     // risk of doing this automatically. Names the credential; never its value.
     console.log(`${credentialName(withKey)} could not run this — retrying with ${credentialName(plan[attempt + 1]!)}.`);
@@ -818,6 +822,14 @@ async function main(): Promise<void> {
   }
   // Fresh temp dir per run, so a run's -o file can never be a previous run's leftover.
   const tmpDir = mkdtempSync(join(tmpdir(), 'run-codex-'));
+  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
+  const transcriptTarget = args.activityLog
+    ? resolve(args.activityLog)
+    : launch ? launch.defaults.transcript : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+  if (answerTarget !== undefined) {
+    const conflict = answerWriteConflict(answerTarget, transcriptTarget);
+    if (conflict) fail(conflict);
+  }
   // `--output x --activity-log x` wrote the answer over the log, exited 0, and printed both paths.
   // This wrapper never had the check at all; it arrived here with the Claude one, and the shared
   // helper asks the filesystem rather than comparing strings. GPT Sol's F13, 2026-09-06.
@@ -876,7 +888,6 @@ async function main(): Promise<void> {
   const promptMismatch = launch?.promptProblem(readFileSync(promptPath));
   if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
   // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
-  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
   /* What that target holds now, and again before each credential attempt, so a report the run
      writes there itself is kept rather than replaced by codex's one-line last message. Taken here —
      after the `sameWriteTarget` preflight, which can create the file empty — and on the effective
@@ -884,8 +895,14 @@ async function main(): Promise<void> {
   const snapshotTarget = (): WriteTargetSnapshot =>
     answerTarget === undefined ? ABSENT_TARGET : snapshotWriteTarget(answerTarget);
   const targetAtStart = snapshotTarget();
+  const preserveTarget = (before: WriteTargetSnapshot): void => {
+    if (answerTarget === undefined || snapshotTarget() === before || !answerIsUsable(answerTarget)) return;
+    const aside = `${answerTarget}.earlier-attempt.txt`;
+    copyFileSync(answerTarget, aside);
+    console.log(`Saved ${answerTarget} from the failed credential attempt at ${aside} before retrying.`);
+  };
   const { run, outFile, logs, attempt, model, targetBeforeAttempt, modelFailure } = await runPlan(
-    args, promptPath, tmpDir, plan, snapshotTarget, modelFamily,
+    args, promptPath, tmpDir, plan, snapshotTarget, preserveTarget, modelFamily,
   );
   modelNote = askedFor === model ? model : `${model}, the newest ${askedFor}`;
   launch?.noteRun(run);
@@ -918,9 +935,7 @@ async function main(): Promise<void> {
   let logPath: string | undefined;
   if (logs.length) {
     // Under `--launch-dir` an unset --activity-log defaults into the attempt directory.
-    logPath = args.activityLog
-      ? resolve(args.activityLog)
-      : launch ? launch.defaults.transcript : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+    logPath = transcriptTarget;
     mkdirSync(dirname(logPath), { recursive: true });
     writeFileSync(logPath, logs.join('\n'));
     launch?.notePaths({ transcript: logPath });
