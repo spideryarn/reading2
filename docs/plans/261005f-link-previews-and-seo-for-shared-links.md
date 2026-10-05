@@ -168,6 +168,18 @@ Greg*, with the questions below. What the research says, shortly:
   Facebook, X and LinkedIn? Recommended: yes; it is a line each, and a few words on the page that
   names the hole to authors.
 
+**Decided**, Greg, 2026-10-05:
+
+- Q-index-own-pages: **yes**. "yes definitely we want those to be visible"
+- Q-index-shared-articles: **no**. "no"
+- Q-tagline: **not in the text**, as recommended. "use your judgment"; the Overseer took the
+  recommendation.
+- Q-lead-image: **use the lead image** when we host a copy. "hmmm, not sure. go with the lead image
+  for now"
+- Q-cards-for-other-pages: **yes**. "yes, allow them"
+
+Dispatched to session `seo-own-pages-and-cards`.
+
 ## Reviews
 
 GPT Sol reviewed this plan on 2026-10-05, before the build: approve with changes. Taken: the

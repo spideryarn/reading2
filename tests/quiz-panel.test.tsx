@@ -1711,6 +1711,28 @@ describe("an arrival from the prose", () => {
     expect(stem(), "the earlier filter effect overruled the prose arrival").toBe(first.question);
     expect(host.querySelector<HTMLInputElement>(".quiz-only-read input")?.checked).toBe(false);
   });
+
+  it("preserves a live mark when reading levels exclude the same question requested by an arrival", () => {
+    const readSoFar: ReadSoFar = {
+      levels: new Map([[OTHER, 4 as const]]),
+      status: "failed",
+      bodyWords: new Map([[KNOWN, 100], [OTHER, 100], [THIRD, 100]]),
+    };
+    const marking: Attempt = { questionId: first.id, answer: "half", status: "marking", reply: "So far", error: null };
+    const o = owner({ quiz: PATH, attempt: marking });
+    paintAt(o, null, { readSoFar });
+    const before = cleared.length;
+    const a: QuizArrival = { batchId: PATH.batchId, questionId: first.id };
+    paintAt(o, a, { readSoFar: { ...readSoFar, status: "loaded" } });
+    expect(cleared.length, "the earlier filter aborted the requested question's mark").toBe(before);
+    expect(stem()).toBe(first.question);
+
+    /* A handled arrival cannot permanently override a later filter press,
+       even if its owner has not yet removed it from the props. */
+    act(() => host.querySelector<HTMLInputElement>(".quiz-only-read input")?.click());
+    expect(stem()).toBe(second.question);
+    expect(cleared.length).toBeGreaterThan(before);
+  });
 });
 
 /**

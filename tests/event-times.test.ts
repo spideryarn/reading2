@@ -723,14 +723,14 @@ describe("search_runs.finished_at and search_runs.colour_at", () => {
 
   it("is stamped when the hits land, and nulled when an errored run is retried", async () => {
     const criterion = `finish and retry ${mintId()}`;
-    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, criterion, "meaning"));
+    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", criterion, "meaning"));
     expect((await read(run.id)).finished_at).toBeNull();
 
     await mine(() => pgSearchStore.finish(SLUG, run.id, { status: "error", error: "no" }, attempt));
     const failed = await read(run.id);
     expectRecent(failed.finished_at, "finished_at after a failed search");
 
-    const again = await mine(() => pgSearchStore.begin(SLUG, criterion, "meaning", run.id));
+    const again = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", criterion, "meaning", run.id));
     expect(again.run.id).toBe(run.id);
     const reset = await read(run.id);
     expect(reset.finished_at, "a retried search kept the failed attempt's finish").toBeNull();
@@ -741,12 +741,12 @@ describe("search_runs.finished_at and search_runs.colour_at", () => {
   });
 
   it("is nulled when a quick search is revised in place", async () => {
-    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, `quick ${mintId()}`, "quick"));
+    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", `quick ${mintId()}`, "quick"));
     await mine(() => pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt));
     expectRecent((await read(run.id)).finished_at, "finished_at after a quick search");
 
     const revised = await mine(() =>
-      pgSearchStore.begin(SLUG, `quick revised ${mintId()}`, "quick", run.id, undefined, { revises: true }),
+      pgSearchStore.begin(SLUG, "feedfacefeedface", `quick revised ${mintId()}`, "quick", run.id, undefined, { revises: true }),
     );
     expect(revised.run.id).toBe(run.id);
     expect((await read(run.id)).finished_at, "a revised search kept the old answer's finish").toBeNull();
@@ -754,7 +754,7 @@ describe("search_runs.finished_at and search_runs.colour_at", () => {
   });
 
   it("is left alone, with the whole run, by a stale attempt's late answer", async () => {
-    const { run } = await mine(() => pgSearchStore.begin(SLUG, `stale ${mintId()}`, "meaning"));
+    const { run } = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", `stale ${mintId()}`, "meaning"));
     const before = await rowOf("search_runs", inArticle(run.id));
 
     await mine(() => pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, randomUUID()));
@@ -765,14 +765,14 @@ describe("search_runs.finished_at and search_runs.colour_at", () => {
   });
 
   it("is stamped by the sweep that declares a run abandoned", async () => {
-    const { run } = await mine(() => pgSearchStore.begin(SLUG, `swept ${mintId()}`, "meaning"));
+    const { run } = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", `swept ${mintId()}`, "meaning"));
     await mine(() => pgSearchStore.sweepPending(SLUG, SWEEP_ALL));
     expect((await rowOf("search_runs", inArticle(run.id))).status).toBe("error");
     expectRecent((await read(run.id)).finished_at, "finished_at after the sweep");
   });
 
   it("times a recolour and a cleared colour, and neither moves the other two clocks", async () => {
-    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, `colour ${mintId()}`, "meaning"));
+    const { run, attempt } = await mine(() => pgSearchStore.begin(SLUG, "feedfacefeedface", `colour ${mintId()}`, "meaning"));
     await mine(() => pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt));
     const before = await read(run.id);
     expect(before.colour_at).toBeNull();
@@ -797,7 +797,7 @@ describe("referee_criteria.finished_at and referee_criteria.colour_at", () => {
   const TIMES = ["finished_at", "colour_at", "created_at"];
   const read = (id: string) => cells("referee_criteria", inArticle(id), TIMES);
   const begin = (criterion: string, id?: string) =>
-    mine(() => pgRefereeCriteriaStore.begin(SLUG, criterion, { kind: "single" }, id));
+    mine(() => pgRefereeCriteriaStore.begin(SLUG, "feedfacefeedface", criterion, { kind: "single" }, id));
 
   it("is stamped when the results land, and nulled when an errored criterion is retried", async () => {
     const criterion = `Finish and retry ${mintId()}`;

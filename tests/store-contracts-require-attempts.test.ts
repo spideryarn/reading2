@@ -45,7 +45,7 @@ async function theContracts(
   comments: CommentStore,
 ): Promise<string[]> {
   /* ---- Search ---- */
-  const searchAttempt: string = (await search.begin("slug", "a criterion", "quick")).attempt;
+  const searchAttempt: string = (await search.begin("slug", "hash", "a criterion", "quick")).attempt;
   await search.finish("slug", "run", { status: "done", hits: [] }, searchAttempt);
   await search.finish("slug", "run", { status: "error", error: "no" }, searchAttempt);
   // @ts-expect-error — no attempt: identity alone cannot say which call is reporting.
@@ -57,7 +57,7 @@ async function theContracts(
 
   /* ---- Referee criteria ---- */
   const criterionAttempt: string = (
-    await criteria.begin("slug", "a criterion", { kind: "single" })
+    await criteria.begin("slug", "hash", "a criterion", { kind: "single" })
   ).attempt;
   await criteria.finish("slug", "id", { status: "done", results: [] }, criterionAttempt);
   // @ts-expect-error — no attempt.

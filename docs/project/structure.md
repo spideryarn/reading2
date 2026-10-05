@@ -90,9 +90,60 @@ Also: [260928a](../plans/260928a-structure-two-columns-readable.md) moved the sw
 later and made the faces look alike, and
 [260916b](../plans/260916b-rich-tooltips-on-structure-mode-rows.md) gave the rows rich tooltips.
 
+## When it is only the headings
+
+A long document's structure can fall back to a tree built from the author's own headings, with no
+summary on any section and some sections named by their opening words
+([structure-step.md § The fallback](structure-step.md#the-fallback-a-tree-from-the-documents-own-headings)). Nothing on screen said so
+until 2026-10-05.
+
+> B yes add an indication. Although I'm not delighted by falling back to the original headings. I
+> feel like it should be possible to do this robustly, progressively and fairly low-latency, e.g.
+> just the top-level headings first, then the lower-level headings within each of those? then do
+> the summaries later in parallel? or something like that. Run evals etc.
+>
+> — Greg, 2026-10-05, answering [Q-plain-tree-notice]
+
+This section is the indication. The rest of what he asks for, a structure that does not need the
+fallback, is separate work.
+
+**The line.** *"These section names are the document's own headings and opening words. The fuller
+version, with a line on what each section says, could not be made."* ("And opening words", because
+a stretch with no heading of its own is named by its first words.) It is in the band's head row, under the Fisheye and Expanded
+chips, so it is in the columns, the list and Expanded alike. It shows exactly when the tree is
+marked `provisional: "headings"`, never because gists happen to be missing, and every reader sees
+it, a visitor included.
+
+**Try again**, for the owner only, beside the line (which then adds *"Trying again may make it."*).
+One press runs the `structure` step again, forced by name. What it buys:
+
+- **The structure call**, but only the slices that failed: the ones that answered are checkpointed
+  ([structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)).
+- **The paragraph labels again**, as the free job every new tree queues. This is why `structure`
+  is not on Metadata's re-run list ([`src/rerun-steps.ts`](../../src/rerun-steps.ts)); here the old
+  labels were written for sections the new tree replaces, so nothing good is lost.
+- **The arc again, if the tree changed.** The tab that pressed asks for it, once and unforced, when the run finishes,
+  because arc sentences are matched to parts by block range and a re-cut tree would otherwise drop
+  them without a word.
+
+It costs no import slot. The other things made from the old tree (Glossary, Quotes, Ideas and the
+rest) are kept and read as out of date in their own modes, as after any change to the article;
+nothing remakes them.
+
+The run can fall back again, which is why the line says *may*. Nothing refetches the article, so a
+finished run says *"Finished. Reload the page to see what it made."* with a Reload button, and
+after the reload the line is either gone or still there.
+
+One arm per kind of stand-in tree: the words are chosen by a `switch` on `Tree.provisional` in
+[`src/web/StructureNotice.tsx`](../../src/web/StructureNotice.tsx), so a second kind is a compile
+error there until it has words.
+
 ## Where the code is
 
 Each file's header comment says what it owns.
+
+- [`src/web/StructureNotice.tsx`](../../src/web/StructureNotice.tsx) — the line a headings tree
+  draws, and the owner's *Try again*.
 
 - [`src/web/modes/structure/`](../../src/web/modes/structure/StructureMode.tsx) — the mode
   controller, which picks the face; its header has the rule for which.

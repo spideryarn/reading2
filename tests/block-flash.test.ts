@@ -348,7 +348,7 @@ describe("flashBlock with a passage", () => {
     const annotations = readFileSync("src/web/styles/annotations.css", "utf8");
     /* Since 2026-10-03 the background a quote brings is its resting fill (plan
        261003l); until then it was a tint the pressed quote alone wore. */
-    const ring = "rgb(var(--quote-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)))";
+    const ring = "rgb(var(--quote-prose-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)))";
     expect(annotations, "the quote's own fill this test competes against").toContain(ring);
     const css = `${readFileSync("src/web/styles/prose.css", "utf8")}\n${annotations}`
       .replaceAll("var(--highlight-wash)", "rgb(1, 2, 3)")

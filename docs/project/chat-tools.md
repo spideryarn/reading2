@@ -610,6 +610,10 @@ the one place this pulls against the "?" answer's pedagogical addendum, which is
 says nothing at all about where an answer comes from
 ([comments.md](comments.md), [260905c](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md)).
 
+Since 2026-10-05 Debate leans on exactly this trigger: *Check this claim in chat* on a claim's
+heading starts an ordinary chat that asks whether the claim holds up, with no prompt of its own
+([debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat)).
+
 ### And so is asking where a passage stands, and every claim says where it came from
 
 Report 3D, 2026-09-12 — a question typed under the "?" drew only on the article:
