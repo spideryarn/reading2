@@ -913,6 +913,22 @@ clearest reason a headless table was the right kind of library: TanStack owns th
 no opinion at all about how a row is drawn, so this feature survived the switch untouched. A
 batteries-included grid would have made it a fight.
 
+### The card says when the piece was published
+
+On the line under the title, after the author and the site: `Rich Sutton · incompleteideas.net ·
+13 Mar 2019 · ~6 min · 21 blocks`. Greg, 2026-10-04 (report `spya-cqjhbn`):
+
+> Show the publication date in the logged-in homepage Shelf
+
+Until then a card said it only while the shelf was sorted by Published. It is printed by
+[`publishedOf`](../../src/web/relative-time.ts), the same reader the sort and the Metadata page use,
+so a paper dated only to a year says `2017` and a piece with no date says nothing. **Bare, with no
+"published" in front**: beside the author and the site a date reads as the piece's own, and the
+times that belong to the reader (added, opened) are on the bottom row. While the shelf is sorted by
+Published the note on the bottom row says the date as well; that repeat is known and left
+([261005e](../plans/261005e-an-end-of-article-mark-and-the-publication-date-on-the-shelf-card.md)).
+The Table view is unchanged: its Published column still starts hidden.
+
 ### Three rules a browser cannot check
 
 The sort moved from the server into the client, and three things came with it that look right on
