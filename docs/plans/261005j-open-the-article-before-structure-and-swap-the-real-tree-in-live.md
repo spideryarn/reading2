@@ -1,6 +1,8 @@
 # Open the article before Structure, and swap the real tree in live
 
-Status: **planned and reviewed; being built.** § Review record says what the review changed, and where it differs the review record wins. Parent: [plans.md](../project/plans.md). Picks up option A of
+Status: **built, 2026-10-05; on `dev`, not deployed.** § Review record says what the two reviews
+and the browser check changed, and where it differs from the text above it, the review record wins.
+The full suite was not run (box load); targeted files and typecheck were. Parent: [plans.md](../project/plans.md). Picks up option A of
 [the investigation](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md),
 which was stopped on 2026-10-04, after Greg answered the question it ended on:
 
@@ -251,6 +253,32 @@ tree still ends in *Reload the page* and does not use the live swap; older step 
 
 **Not run: the full suite and `npm run check`**, at the Overseer's request while the box was
 loaded. Targeted files and typecheck only.
+
+**In a browser** (two Sonnet agents, Playwright, the local stack, real model calls, 2026-10-05):
+
+| Case | What happened |
+|---|---|
+| Web page, 1280 (Wikipedia, *Orrery*) | Open 13.5 s after pressing Add. The line showed; the real tree landed 16.8 s later with no reload (a marker on `window` survived); rows gained their gists. [before](261005j-shot-A-1-temp-line.png), [after](261005j-shot-A-2-after-swap.png) |
+| Web page, 390 (*Astrolabe*) | Open 16.6 s; real tree 64 s later; no reload; the line overlaps nothing. [shot](261005j-shot-B-1-temp-line.png) |
+| PDF (arXiv 1412.6980) | Open 207 s after upload (extract and figure recovery, unchanged); the structure job took 35 s more and the tree landed with no reload. [shot](261005j-shot-C-1-temp-line.png) |
+| Structure job stopped (*Slide rule*) | *The full structure is not available.* and **Build it**; one press built it and it landed with no reload. [shot](261005j-shot-D-1-stalled.png) |
+| Scrolled to mid-article (*Planimeter*) | The paragraph at the top of the window moved 0.08 px when the tree landed 33 s after open. [shot](261005j-shot-F-scrolled-after-swap.png) |
+| An article from before today | Structure as ever, no line. |
+
+Two things it found:
+
+- **Marginalia asked for its relation words on open**, a job the gate refuses on a stand-in, so
+  with the structure job stopped it left a failure card. The column now waits, as the arc does
+  (`OwnerMarginFeed`, with a test seen red first). On the second run `relations` and `arc` were both
+  created 2 s after the structure job finished.
+- **At the very top of the article the first paragraph moves down about 80 px** when the tree
+  lands, because the masthead gains its one-line gist. Scrolled anywhere else the browser holds the
+  reader's paragraph still. Left as it is.
+
+The main-mode jobs did not appear in the browser because the local test reader has them switched
+off (`auto_modes_off_at`, read from the local database); the publication test covers a reader who
+has them on. Not checked in a browser: Diagram at 390, and the Stop button on the job card (the
+job was stopped through its route).
 
 Sol's answer to *is there a simpler design*: the add-page route (`read-while-importing`) is the
 credible one, because it needs none of this protocol. Greg picks between them, or keeps both.

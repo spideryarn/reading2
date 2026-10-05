@@ -160,7 +160,8 @@ reader's place, a chat mid-answer and a half-typed comment are not touched.
   cannot put the outline back.
 - **Node ids are positional**, so what held one across the swap lets go: Diagram's hover and
   roving, Outline's focused row, the arrow keys' depth.
-- **`useArc` does not ask for an arc** until the real tree is in.
+- **`useArc` does not ask for an arc, and Marginalia does not ask for its relation words**, until
+  the real tree is in. Both steps come after `structure`, so the server would refuse them.
 
 **The line** (`StructureArriving`, in the head row where the notice above goes; the band draws one
 or the other): *"This is a temporary outline. The full structure is not available yet."* It claims

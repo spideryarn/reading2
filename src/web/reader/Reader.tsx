@@ -26,7 +26,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, GlossaryEntry, ThreadOrigin } from "../../types.js";
+import {
+  awaitingStructure,
+  type Article,
+  type BlockId,
+  type CitedWork,
+  type GlossaryEntry,
+  type ThreadOrigin,
+} from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
@@ -3466,7 +3473,14 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerMarginFeed slug={slug} shown={marginRoom} onFeed={setOwnerFeed} />}
+        {owner && (
+          <OwnerMarginFeed
+            slug={slug}
+            shown={marginRoom}
+            awaitingStructure={awaitingStructure(article.tree)}
+            onFeed={setOwnerFeed}
+          />
+        )}
         {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}
