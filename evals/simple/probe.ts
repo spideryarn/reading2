@@ -182,7 +182,7 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
            pair of system prompts that band sends (plan 261005b; GPT Sol's plan
            review, F1). A file from before hashed the one pair there was. */
         const bodyWords = body.reduce((n, b) => n + b.words, 0);
-        const band = simple.bandFor(bodyWords);
+        const band = simple.evidenceBand(body);
         const systemsSha256 = createHash("sha256")
           .update(JSON.stringify(simple.SIMPLE_SYSTEMS_BY_BAND[band]))
           .digest("hex");

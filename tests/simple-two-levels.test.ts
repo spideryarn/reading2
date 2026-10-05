@@ -24,6 +24,8 @@ import {
   emptyDropped,
   generateSimpleSummary,
   inputFingerprint,
+  isStale,
+  renderPrompt,
 } from "../src/simple-summary.js";
 import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
@@ -168,7 +170,7 @@ const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored:
  */
 function oldRow(simple: unknown = OLD_SIMPLE) {
   return {
-    version: "simple/2",
+    version: "simple/2" as const,
     promptVersion: "simple-prompt/7",
     generator: "stub-model",
     slug: "s",
@@ -310,12 +312,28 @@ describe("an unforced Summary preserves usable words for the same article", () =
   function storedRow() {
     const store = memoryArtefacts();
     const tree = { ...ARTICLE.tree, nodes: {} };
-    const row = { ...oldRow(), generator: CAPABLE_MODEL, sourceHash: inputFingerprint(BLOCKS, tree, ARTICLE.meta) };
+    const row = { ...oldRow(), generator: CAPABLE_MODEL, sourceHash: inputFingerprint(BLOCKS, tree, ARTICLE.meta, oldRow().promptVersion) };
     store.plant("s", "structure", "blocks", { blocks: BLOCKS });
     store.plant("s", "structure", "tree", tree);
     store.plant("s", "extract", "meta", { ...ARTICLE.meta, slug: "s" });
     return { store, row };
   }
+  it("keeps the pre-band hash and freshness for every pre-band prompt", async () => {
+    const { articleWithIds } = await import("../src/article-prompt.js");
+    const { store, row } = storedRow();
+    const tree = { ...ARTICLE.tree, nodes: {} };
+    const oldHash = createHash("sha256")
+      .update(`spya-simple-input/1\n${JSON.stringify([articleWithIds(ARTICLE.meta!, BLOCKS), renderPrompt(null)])}`)
+      .digest("hex").slice(0, 16);
+    for (let n = 1; n <= 8; n++) {
+      const promptVersion = `simple-prompt/${n}`;
+      const legacy = { ...row, promptVersion, sourceHash: oldHash };
+      expect(inputFingerprint(BLOCKS, tree, ARTICLE.meta, promptVersion)).toBe(oldHash);
+      expect(isStale(legacy, BLOCKS, tree, ARTICLE.meta)).toBe(false);
+      store.plant("s", "simple", "simple", legacy);
+      expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
+    }
+  });
   it("skips a stored summary from a different model generation", async () => {
     const { store, row } = storedRow();
     row.generator = "anthropic/claude-sonnet-4";

@@ -224,7 +224,7 @@ export const FIRST_LEVEL: SimpleLevel = "fuller";
 export const LEVEL_ATTEMPTS = 2;
 
 /**
- * The most sentences a paragraph is asked for — "two to five" in `PITCH`'s
+ * The most sentences a paragraph is asked for — "two to five" in `FULLER_LENGTH`'s
  * shapes. Not enforced (a sentence count is the prompt's ask, not a limit);
  * here only to size `ANSWER_TOKENS`.
  */
@@ -253,8 +253,8 @@ const most = (pick: (limits: (typeof SIMPLE_LIMITS)[SimpleLevel]) => number): nu
 
 /**
  * One call's answer budget in tokens, sized for the larger level: Fuller's
- * word ceiling at 0.75 words a token, doubled for safety (850 words, ~1,134
- * tokens, so 2,268); plus, for each of its paragraphs, three ids and the JSON
+ * word ceiling at 0.75 words a token, doubled for safety; plus, for each of
+ * its paragraphs, three ids and the JSON
  * around them, its `list`, and the JSON around each sentence, key included, at
  * twice the sentences asked for (the model runs over a count it is given, as
  * it does over a length). Undersizing does not degrade: it throws
@@ -328,6 +328,14 @@ export function bandFor(bodyWords: number): SimpleBand {
   let band: SimpleBand = "short";
   for (const candidate of SIMPLE_BANDS) if (bodyWords >= BAND_FROM[candidate]) band = candidate;
   return band;
+}
+
+/**
+ * Match `blocks.ts`'s count, including whitespace preserved inside a `pre`;
+ * `wordCount` trims that whitespace and can move a block across a band edge.
+ * Text is available to both generation and narrow freshness reads. */
+export function evidenceBand(evidence: readonly Pick<BlockFingerprint, "text">[]): SimpleBand {
+  return bandFor(evidence.reduce((n, b) => n + (b.text.length ? b.text.split(/\s+/).length : 0), 0));
 }
 
 /** How LENGTH ends for Brief; `simpleSystem` supplies the line it finishes. */
@@ -674,11 +682,16 @@ export function renderPrompt(profile: string | null): string {
  *
  * The instructions have their own `SIMPLE_PROMPT_VERSION`; the stored shape
  * has `SIMPLE_VERSION`, and the model has its own stamp field.
+ * Since `/9`, the selected band also participates: literal block-looking
+ * text can render identically to a separate block while changing the band.
+ * A stored pre-band prompt keeps its original fingerprint algorithm, so a
+ * prompt update alone never makes its article stale or pays for a rewrite.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
+  promptVersion: string = SIMPLE_PROMPT_VERSION,
 ): string {
   /* `BlockFingerprint.treatment` is a database string rather than Block's
      narrower union; the CHECK behind it permits only the same values, and
@@ -693,8 +706,13 @@ export function inputFingerprint(
       } as Meta)
     : ({ title: fallbackHeadTitle(tree) } as Meta);
   const request = [articleWithIds(renderedMeta, evidence), renderPrompt(null)];
+  /* A pre-field row's generic stamp uses its stored-shape version. */
+  const legacy = promptVersion === SIMPLE_VERSION || /^simple-prompt\/[1-8]$/.test(promptVersion);
+  const framed = legacy
+    ? `spya-simple-input/1\n${JSON.stringify(request)}`
+    : `spya-simple-input/2\n${JSON.stringify([...request, evidenceBand(evidence)])}`;
   return createHash("sha256")
-    .update(`spya-simple-input/1\n${JSON.stringify(request)}`, "utf8")
+    .update(framed, "utf8")
     .digest("hex")
     .slice(0, 16);
 }
@@ -706,7 +724,7 @@ export function isStale(
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): boolean {
-  return simple.sourceHash !== inputFingerprint(blocks, tree, meta);
+  return simple.sourceHash !== inputFingerprint(blocks, tree, meta, simplePromptVersion(simple));
 }
 
 /**
@@ -1069,10 +1087,9 @@ export async function generateSimpleSummary(opts: {
      so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
   const evidenceIds = new Set(evidence.map((b) => b.id as string));
-  /* How long a summary this piece is asked for (plan 261005b). Counted over
-     exactly the body the request shows, so it moves only when `sourceHash`
-     does and the stamp needs no field for it. */
-  const systems = SIMPLE_SYSTEMS_BY_BAND[bandFor(evidence.reduce((n, b) => n + b.words, 0))];
+  /* The same band participates in the fingerprint: counting evidence alone
+     does not make it recoverable from the rendered article's bytes. */
+  const systems = SIMPLE_SYSTEMS_BY_BAND[evidenceBand(evidence)];
   /* What the checker quotes beside each paragraph: the same blocks' text. */
   const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
   const guard = opts.guard ?? SIMPLE_CHECK_ENABLED;

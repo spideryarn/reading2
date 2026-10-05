@@ -15,7 +15,7 @@ Greg:
 ## What was decided, in one paragraph
 
 Fuller is asked for a length that depends on the piece's length, in four bands (about 250, 500,
-700 and 900 words); a piece of 2,500 to 15,000 words is asked exactly what it was. Brief is asked
+700 and 900 words); a piece of 2,500 to 14,999 words is asked exactly what it was. Brief is asked
 for about 80 words whatever the piece, as before. Two things were built, measured and dropped: a
 Brief whose length also followed the piece, and a sentence telling the summary of a long piece to
 cover the whole of it.
@@ -59,13 +59,25 @@ The arms, each a directory `evals/results/simple/high-none-<arm>/`:
 | `len1whole` | one book write, bands on both levels and the "whole piece" sentence in both |
 | `len2a`, `len2b` | the long article and the book: Brief as before, Fuller banded with the sentence |
 
+**Three early `len1a` prompt hashes are unreliable.** Identity and Haters (`short`) and Scaling
+(`standard`) all record `systemsSha256` beginning `89945d81`, despite asking for different bands.
+Scaling's unchanged standard pair should hash to `0653f349`, as the later standard records do.
+The probe now hashes the actual band's pair (F1), but that does not repair these earlier records.
+The cause is known: when those three were written the probe hashed every band's prompts together,
+once a run, and the tree then still had the "whole piece" sentence in the two long bands, so the
+value is a hash of a set of prompts that includes two that never shipped. Their word counts and
+judge answers can be checked; their exact effective prompt bytes cannot be verified from the
+saved hashes. Recovering the source snapshot or repeating those writes
+would close that provenance gap. The comparison labels below retain the recorded arm names.
+
 Two of the `len0` pairs (*Race* and *Dodo*) were written with the long bands switched off by a
 one-line edit and not on the earlier commit. The standard band's prompt is the old prompt byte for
-byte, so the request was the old request; their `sourceSha256` is not the old file's.
+byte; this establishes the old prompt, not the old answer budget or validation limits. Those
+request settings were not recorded. Their `sourceSha256` is not the old file's.
 
 ## Length
 
-Words, two writes each.
+Words, two writes each except Scaling's single before write.
 
 | piece (band) | Brief before | Brief banded | Fuller before | Fuller banded |
 |---|---|---|---|---|
@@ -83,7 +95,7 @@ Words, two writes each.
   (331 against 330).
 - **The standard band did not move**, as its prompt did not: 440 to 534 before, 482 to 497 after.
   *Scaling* has one `len0` write here; two more of the same prompt from the day before
-  (`high-none-timed500a|b`) gave 481 and 438.
+  (`high-none-timed500a|b`) gave 438 and 481 respectively.
 - **Brief barely obeyed its band.** Asked for 60 in the short band it wrote 71 to 94, where the
   old prompt asked for 80 and got 88 to 105. Asked for 140 for the book it wrote 145 and 159.
 - **No write failed**, on a limit or otherwise, in 28 recorded writes.
@@ -174,8 +186,10 @@ pairs, a second fresh judge, headings given.
 - The control split as widely as the test: of two writes of the prompt without the sentence, the
   judge preferred the same one twice and said it covered more.
 
-No effect that can be told from two writes differing. The sentence was left out, which is also the
-simpler prompt.
+This did not establish an overall preference benefit. Coverage favored the sentence in two pairs,
+and the long article's writes were longer; that is evidence of a possible effect, not evidence of
+no effect. With only two writes per piece, variable control judgments and three claim suspicions,
+the sentence was left out pending stronger evidence, keeping the simpler prompt.
 
 ## What reading them found
 
@@ -193,6 +207,8 @@ simpler prompt.
 
 - **One judge model, two writes a cell.** The Fuller result is 8 of 8 with a stated reason in
   each; the smaller results are within what a control pair moves by.
+- **Incomplete prompt provenance** for three early `len1a` writes, as noted above. The corrected
+  probe applies to future writes; the raw preference tally remains a comparison of the saved prose.
 - **No narrative book.** The stand-in is a mathematical survey. Whether 900 words suits *The
   Order of Time* is for Greg to see when he presses Rerun on it.
 - **Nothing over 50,000 words** was run. The book band asks the same of a 200,000-word piece.

@@ -50,7 +50,8 @@ prompt.** The band is picked in code from the words of the body-evidence blocks 
 - **The standard band's Fuller prompt does not change by a byte**, and neither does Brief's in
   any band, pinned by the hashes `tests/simple-two-levels.test.ts` already held. Fuller's answer
   budget and validation limit do change (below), so the measurement included standard-band
-  articles, before twice and after twice (Sol's plan review, F2).
+  articles: Dodo twice before and after, Scaling once before and twice after, with two earlier
+  same-prompt Scaling writes reported separately (Sol's plan review, F2).
 - **Three values and nothing else.** The band changes the paragraphs asked for, the words asked
   for and the "never more than" in Fuller's LENGTH section. Everything else in the prompt is the
   same in every band.
@@ -116,6 +117,10 @@ One stage.
    `generateSimpleSummary` counts the evidence's words and picks the band. `src/types.ts`:
    Fuller's limit. `evals/simple/probe.ts` records each article's band and hashes the pair of
    prompts that band sends (Sol, F1).
+   The code review found a real splitter collision: literal block-looking text in a code block
+   can render like a second block while selecting a different band. The current fingerprint now
+   includes the band, shared with generation; freshness and unforced stamps retain the old
+   algorithm for pre-band summaries. [The postmortem](../postmortems/261005b-derived-instructions-must-participate-in-the-request-fingerprint.md).
 2. Tests: `tests/simple-length-bands.test.ts` (the thresholds at their edges, each band's asks,
    Brief the same in every band), and in `tests/simple-summary.test.ts` the request for a body at
    each edge carries that band's prompts, with a 100,000-word supplement that must not count. The
@@ -141,13 +146,15 @@ taken out.
   as important (the judge quoted the passage each time), and in both book pairs the longer Brief
   was the one judged padded. And asked for 60 words it wrote 71 to 94, so the cut was mostly not
   happening anyway. Brief is back to its old prompt, byte for byte, and its limits did not move.
-- **The sentence.** Sol's F4: it fights Brief's own "at most one other key idea", so it came out
-  of Brief before anything was measured. For Fuller it was measured apart, two writes each on the
+- **The sentence.** Sol's F4: it fights Brief's own "at most one other key idea", so it was
+  excluded from the main Brief comparison; the exploratory `len1whole` write still included it
+  in both levels. For Fuller it was measured apart, two writes each on the
   long article and the book with it against two without: the judge preferred without twice, with
   once, and one tie, and the two control pairs (without against without) split as widely. It
   raised the long article's Fuller from about 610 words to about 695, nearer the 700 asked for,
   and in three of the four pairs the judge suspected a bent claim in the with-sentence summary
-  alone. Not an effect; left out.
+  alone. Coverage favored it in two pairs, so an effect remains possible; the sample did not
+  establish an overall preference benefit. Left out pending stronger evidence.
 
 ## Measuring it
 
@@ -189,11 +196,23 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
 
 | ID | Finding | Disposition |
 |---|---|---|
-| F1 (P2) | the probe hashed the standard pair of prompts for every article | fixed: the band and that band's pair are recorded per article |
-| F2 (P2) | unchanged prompt bytes do not excuse standard articles from measurement, since their budget and limits changed | taken: two standard articles, before twice and after twice |
+| F1 (P2) | the probe hashed the standard pair of prompts for every article | fixed for new writes; three early `len1a` hashes remain unreliable (investigation § How) |
+| F2 (P2) | unchanged prompt bytes do not excuse standard articles from measurement, since their budget and limits changed | taken: Dodo twice before and after; Scaling once before, twice after, plus two earlier same-prompt writes outside the blind pairs |
 | F3 (P2) | a judge who sees only the summaries cannot tell an omission that matters | taken: the short essays' pairs carry the whole essay, and it is what found Brief's omissions |
-| F4 (P2) | the "cover the whole of it" sentence conflicts with Brief's "at most one other key idea" | taken: out of Brief unmeasured, measured apart for Fuller, then out of that too |
+| F4 (P2) | the "cover the whole of it" sentence conflicts with Brief's "at most one other key idea" | taken: excluded from the main Brief comparison (the exploratory `len1whole` still had it); measured apart for Fuller, then out of that too |
 | F5 (P3) | the book's body is 47,957 words, not 49,462 (that is every block) | fixed |
+
+**The code review** (GPT Sol, write-capable, 2026-10-05; approve after its own fixes):
+[the prompt](261005b-summary-length-code-review-prompt.md),
+[its answer](261005b-summary-length-code-review-sol.md). The candidate was commit `de2eb5bb9`.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F6 (P1) | two articles can render to the same bytes, share a fingerprint, and be in different bands (a code block whose text looks like the next block's line) | fixed by Sol, red first: the band is in the fingerprint for `/9` and later, and a summary stored by `/1` to `/8` keeps the old algorithm so none goes stale. Read and taken; the fix had [a narrow second check](261005b-summary-length-f6-check-sol.md). [The postmortem](../postmortems/261005b-derived-instructions-must-participate-in-the-request-fingerprint.md) |
+| F7 (P2) | the long band's paragraph ask was pinned by no test | fixed by Sol: a literal assertion |
+| F8 (P2) | three early `len1a` files record a prompt hash that is not their band's | not repaired, explained: the cause is in the investigation § How. The prose and the tallies are unaffected |
+| F9 (P3) | "no effect" said more than the sentence trial showed | fixed by Sol: "did not establish an overall preference benefit" |
+| F10 (P3) | the eval's header said `len2` shipped, and other small contradictions | fixed by Sol |
 
 **The arms**, under `evals/results/simple/high-none-<arm>/`:
 
@@ -206,7 +225,7 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
 
 - **Two control writes of the long article** (and of *Dodo*) were made with the long bands
   switched off by a one-line edit, not on the earlier commit; the standard band's prompt is the
-  old prompt byte for byte, so the request is the old request.
+  old prompt byte for byte. The saved files do not verify the old answer budget or limits.
 - A paid run was lost: one unreadable article in a batch of four crashed the probe before the
   other three were written to disk.
 - $6.96 of model calls across the 28 recorded writes, and the lost run on top.

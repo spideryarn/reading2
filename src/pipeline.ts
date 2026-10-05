@@ -4255,7 +4255,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       const stored = await store.stampFor(ctx.slug, "simple");
       return {
-        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta, stored?.promptVersion),
         promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
         model: stored?.model ?? CAPABLE_MODEL,
       };

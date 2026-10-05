@@ -15,6 +15,7 @@ import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
+import { splitIntoBlocks } from "../src/blocks.js";
 import { SHAPE, stampOf, whyUnusable } from "../src/store/artifacts.js";
 import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../src/types.js";
 import {
@@ -29,6 +30,7 @@ import {
   emptyDropped,
   generateSimpleSummary,
   inputFingerprint,
+  isStale,
   renderPrompt,
 } from "../src/simple-summary.js";
 import { HIGH_POWER_MODEL, modelFor, STAGE_EFFORT } from "../src/models.js";
@@ -848,8 +850,8 @@ describe("the request", () => {
   ] as const)("asks for the %s band's lengths of a body of %i words", async (band, bodyWords) => {
     answer = good();
     const spoken = EVIDENCE.reduce((n, b) => n + b.words, 0);
-    const padding = block("spya-ffffff", "word", { words: bodyWords - spoken });
-    const appendix = block("spya-gggggg", "appendix", { words: 100_000, treatment: "supplement" });
+    const padding = block("spya-ffffff", words(bodyWords - spoken));
+    const appendix = block("spya-gggggg", words(100_000), { treatment: "supplement" });
     await generateSimpleSummary({
       power: "standard",
       article: { ...article(), blocks: [...BLOCKS, padding, appendix] },
@@ -1060,6 +1062,34 @@ describe("the request", () => {
     expect(inputFingerprint(edited, example.tree, example.meta)).not.toBe(
       inputFingerprint(BLOCKS, example.tree, example.meta),
     );
+  });
+
+  it("fingerprints the band even when literal block-looking prose renders like another block", async () => {
+    answer = good();
+    const spoken = EVIDENCE.reduce((n, b) => n + b.words, 0);
+    const text = words(2_498 - spoken);
+    const one = splitIntoBlocks(`<pre id="spya-ffffff">${text}\n\nspya-gggggg: word</pre>`).blocks;
+    const two = splitIntoBlocks(`<pre id="spya-ffffff">${text}</pre><p id="spya-gggggg">word</p>`).blocks;
+    const a = { ...article(), blocks: [...BLOCKS, ...one] };
+    const b = { ...article(), blocks: [...BLOCKS, ...two] };
+    const before = await generateSimpleSummary({ power: "standard", article: a, profile: null });
+    const after = await generateSimpleSummary({ power: "standard", article: b, profile: null });
+    const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
+    expect(systems[0]?.[0]?.text).toBe(systems[2]?.[0]?.text);
+    expect(systems[0]?.[1]?.text).toBe(SIMPLE_SYSTEMS_BY_BAND.standard.fuller);
+    expect(systems[2]?.[1]?.text).toBe(SIMPLE_SYSTEMS_BY_BAND.short.fuller);
+    expect(before.simpleSummary.sourceHash).not.toBe(after.simpleSummary.sourceHash);
+    expect(isStale(before.simpleSummary, b.blocks, b.tree, b.meta)).toBe(true);
+  });
+
+  it("keeps the splitter's word count for an indented code block at a band edge", async () => {
+    answer = good();
+    const spoken = EVIDENCE.reduce((n, b) => n + b.words, 0);
+    const padding = splitIntoBlocks(`<pre id="spya-ffffff">  ${words(2_499 - spoken)}</pre>`).blocks;
+    expect([...EVIDENCE, ...padding].reduce((n, b) => n + b.words, 0)).toBe(2_500);
+    await generateSimpleSummary({ power: "standard", article: { ...article(), blocks: [...BLOCKS, ...padding] }, profile: null });
+    const system = (sent[0]!.body as { system: { text: string }[] }).system[1]?.text;
+    expect(system).toBe(SIMPLE_SYSTEMS_BY_BAND.standard.fuller);
   });
 
   it("pitches Brief at twelve and Fuller at eighteen, and both keep the plain-words rule", () => {

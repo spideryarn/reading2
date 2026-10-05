@@ -21,8 +21,8 @@ bands:
 | the piece | Fuller is asked for about |
 |---|---|
 | under 2,500 words | 250 words, in three to five paragraphs |
-| 2,500 to 15,000 (as before) | 500, in five to eight |
-| 15,000 to 40,000 | 700, in six to nine |
+| 2,500 to 14,999 (as before) | 500, in five to eight |
+| 15,000 to 39,999 | 700, in six to nine |
 | 40,000 and up | 900, in eight to eleven |
 
 Measured before and after on six pieces: a book's Fuller went from about 500 words to about 840,

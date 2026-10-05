@@ -82,7 +82,9 @@ describe("what Fuller is asked for in each band", () => {
     expect(flat(SIMPLE_SYSTEMS_BY_BAND.book.fuller)).toContain(
       "Eight to eleven paragraphs, each two to five sentences. Every sentence under 30 words. About 900 words in all, and never more than 1050.",
     );
-    expect(flat(SIMPLE_SYSTEMS_BY_BAND.long.fuller)).toContain("About 700 words in all, and never more than 820.");
+    expect(flat(SIMPLE_SYSTEMS_BY_BAND.long.fuller)).toContain(
+      "Six to nine paragraphs, each two to five sentences. Every sentence under 30 words. About 700 words in all, and never more than 820.",
+    );
     expect(flat(SIMPLE_SYSTEMS_BY_BAND.short.fuller)).toContain(
       "Three to five paragraphs, each two to five sentences. Every sentence under 30 words. About 250 words in all, and never more than 330.",
     );

@@ -5513,8 +5513,8 @@ export interface SimpleSummary {
   generator: string;
   slug: string;
   /**
-   * A hash of the body-only article rendering and the **profile-free** user
-   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * A hash of the body-only article rendering, the length band since `/9`, and
+   * the **profile-free** user message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
    * it, so a changed profile never makes the paragraphs stale.
    */
   sourceHash: string;

@@ -199,7 +199,8 @@ So Summary's band has two presses that rewrite, and each is drawn only when its 
   and [`ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) draws it only when the profile changed.
 - **The server decides both reasons; the band only reads them.** *Stale* is the stored
   `sourceHash` against the article as it is now ([`simple-summary.ts`](../../src/simple-summary.ts)
-  § `isStale`). The fingerprint covers the rendered article's text and head and the fixed,
+  § `isStale`). The fingerprint covers the rendered article's text and head, the length band
+  for prompts since `/9`, and the fixed,
   profile-free user message; prompt-version and model stamps are separate. Changing those stamps
   alone never makes a summary stale. The store also reports stale when the article's tree is
   missing, because it cannot check the fingerprint (`pg.ts` § `loadSimpleSummary`).

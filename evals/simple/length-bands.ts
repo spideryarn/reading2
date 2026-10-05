@@ -14,10 +14,11 @@
  * book write that carried the "cover the whole of it" sentence the plan
  * dropped. Calls no model.
  *
- * **Two of the `len0` files were written with the long bands switched off by a
+ * **Four of the `len0` files were written with the long bands switched off by a
  * one-line edit rather than on the commit before** (race and dodo, both
  * draws): the standard band's prompt is the old prompt byte for byte, so with
- * every piece forced into it the request is the old request. Their
+ * every piece forced into it sends the old prompt. The files do not record
+ * its answer budget or limits. Their
  * `sourceSha256` is therefore not the pre-change file's.
  *
  * **pairs** — same article, same level: the test (before `a` against after
@@ -32,8 +33,8 @@
  * **The arms, in the order they were written.** `len1a|len1b` banded Brief as
  * well as Fuller and carried no "cover the whole of it" sentence; the judge
  * preferred the old Brief, so what shipped bands Fuller alone. `len2a|len2b`
- * are the long article and the book again with that sentence in Fuller, which
- * is what shipped; their Brief is the old prompt's. `pairs sentence` and
+ * are the long article and the book again with that sentence in Fuller;
+ * that sentence did not ship. Their Brief is the old prompt's. `pairs sentence` and
  * `score sentence` are the second round: Fuller with the sentence (`len2`)
  * against without (`len1`), and `len1a` against `len1b` as its control.
  */
@@ -171,8 +172,8 @@ async function pairs(round: "" | "-sentence"): Promise<void> {
   for (const { w } of order) {
     const l = load(w.left, w.slug);
     const r = load(w.right, w.slug);
-    /* The Scaling Hypothesis has no `len0a`: its first control write is the
-       earlier `high-none-timed500a`, of the same prompt. Said, not hidden. */
+    /* Scaling has no `len0a`; its a test and control are omitted. Earlier
+       same-prompt writes are reported separately, not substituted here. */
     if (!l || !r) {
       console.log(`no pair for ${w.slug} ${w.level} ${w.left}/${w.right}: one side was never written`);
       continue;
