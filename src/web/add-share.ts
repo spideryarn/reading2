@@ -36,11 +36,19 @@
  *    unpublished import nobody can read.
  *  - **A reload cannot read the state back, so it does not claim one** (code
  *    review F10). Before publication no route says whether the article is
- *    public. The controller leaves a mark in the tab when a publish took or
- *    may have (`ShareIo.marks`), and a fresh controller that finds the mark
- *    starts at `unknown`: the box ticked, a sentence saying why, and
- *    unticking sends `private`. The mark never sends a publish. Another tab
- *    has no mark and starts at `off`; that residual is accepted.
+ *    public. The controller leaves a mark in the tab **before** each publish
+ *    is sent (`ShareIo.marks`), since the server can commit one whose answer
+ *    the page never sees, and removes it only when the outcome rules
+ *    publication out. A fresh controller that finds the mark starts at
+ *    `unknown`: the box ticked, a sentence saying why, and unticking sends
+ *    `private`. The mark never sends a publish. Another tab has no mark and
+ *    starts at `off`; that residual is accepted.
+ *  - **Attached to a page again, it asks first** (fix check F16, F17). The
+ *    registry keeps a controller across visits, and between two visits the
+ *    article may have published and Metadata's switch may have changed it.
+ *    So every attachment after the first runs the probe again and sends
+ *    nothing while it is out. A published article gives way to Metadata,
+ *    whatever was held: `resume`.
  *  - **It first finds out whether there is already an article here** (P2-2).
  *    An import can adopt one already on the shelf (`freeSlug`, src/jobs.ts),
  *    with a glossary and notes that would go public on the press, and the
@@ -149,6 +157,18 @@ export class ShareAtAdd {
   /** A terminal pre-claim 404 is waiting for Retry to make the job live again. */
   private retryOnNextAlive = false;
   private active = true;
+  /** `pause` has run since the last attachment, so the next `resume` asks again. */
+  private detached = false;
+  /** A probe is out. A second attachment waits on it and does not ask again. */
+  private probeOut = false;
+  /**
+   * Nothing may be sent as public: the attachment's probe is out, or it
+   * could not say. Lifted by a probe that finds nothing published, and by
+   * `settle`.
+   */
+  private held = false;
+  /** `settle` was called while the probe was out, so it is owed when the probe answers. */
+  private settleOwed = false;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -173,22 +193,44 @@ export class ShareAtAdd {
   start(): void {
     if (this.started) return;
     this.started = true;
-    void this.io.probe(this.slug).then(
-      (found) => this.probed(found),
-      () => this.probed("unknown"),
-    );
+    this.ask();
   }
 
   /** Stop unsent work when its page leaves, without undoing a confirmed share. */
   pause(): void {
     this.active = false;
+    this.detached = true;
     this.clearRetry();
   }
 
-  /** Effect replay may attach the same controller again under StrictMode. */
+  /**
+   * **A page is showing this controller.** The first time that is all; any
+   * time after a `pause` it asks again whether an article is published here
+   * before doing anything else, and sends nothing until that has answered
+   * (`asked`):
+   *
+   *  - **published**: the state is Metadata's to say and to change. Whatever
+   *    was held here gives way to the *already an article* line; a `waiting`
+   *    intent from an earlier visit must not publish over a later unshare.
+   *  - **nothing published**: Metadata cannot have touched it, so what was
+   *    held is still true, and a `waiting` share goes on.
+   *  - **could not say**: what was held stays on screen, and nothing is sent
+   *    from `waiting` on this attachment. `settle`, or the next attachment,
+   *    may.
+   *
+   * StrictMode's mount, unmount, mount lands here with the first probe still
+   * out. That probe is the answer to this attachment too; it is not asked
+   * twice.
+   */
   resume(): void {
     this.active = true;
-    this.kick();
+    if (!this.detached) {
+      this.kick();
+      return;
+    }
+    this.detached = false;
+    this.held = true;
+    this.ask();
   }
 
   /** Whether the page's job can still create the article's row. */
@@ -243,12 +285,14 @@ export class ShareAtAdd {
     this.retryOnNextAlive = false;
     switch (this.state.kind) {
       case "confirming":
-      case "gave-up":
         this.set({ kind: "off" });
         return;
+      case "gave-up":
       case "waiting":
-        /* Nothing has taken effect: every attempt so far was answered 404. */
+        /* Nothing has taken effect: every attempt so far was answered 404,
+           so there is nothing for a reload to be unsure about either. */
         this.clearRetry();
+        this.io.marks.forget(this.slug);
         this.set({ kind: "off" });
         return;
       case "on":
@@ -286,50 +330,91 @@ export class ShareAtAdd {
       this.notYet = 0;
       this.set({ kind: "waiting" });
     }
+    /* Not ahead of an attachment's probe: it may be about to say the article
+       is published. `asked` pays this when it answers. */
+    if (this.probeOut) this.settleOwed = true;
+    else this.held = false;
     this.kick();
     return this.inFlight ?? Promise.resolve();
   }
 
-  private probed(found: Probe): void {
-    if (this.state.kind !== "probing") return;
-    if (found === "article") this.set({ kind: "adopted" });
-    else if (found === "unknown") this.set({ kind: "unavailable" });
-    /* Nothing published, and this tab remembers making it public. That is
-       not read back from anywhere, so it is not `on`: `unknown`, which draws
-       the box ticked and lets it be unticked. It sends nothing. */
-    else if (this.io.marks.recall(this.slug)) this.set({ kind: "unknown", because: "reload" });
-    else this.set({ kind: "off" });
+  /** Run the probe, unless one is already out. */
+  private ask(): void {
+    if (this.probeOut) return;
+    this.probeOut = true;
+    void this.io.probe(this.slug).then(
+      (found) => this.asked(found),
+      () => this.asked("unknown"),
+    );
+  }
+
+  private asked(found: Probe): void {
+    this.probeOut = false;
+    const owed = this.settleOwed;
+    this.settleOwed = false;
+    if (this.state.kind === "probing" || (this.state.kind === "unavailable" && found === "none")) {
+      /* The first answer, or the first one that could say. */
+      this.held = false;
+      if (found === "article") this.set({ kind: "adopted" });
+      else if (found === "unknown") this.set({ kind: "unavailable" });
+      /* Nothing published, and this tab remembers asking to make it public.
+         That is not read back from anywhere, so it is not `on`: `unknown`,
+         which draws the box ticked and lets it be unticked. It sends nothing. */
+      else if (this.io.marks.recall(this.slug)) this.set({ kind: "unknown", because: "reload" });
+      else this.set({ kind: "off" });
+      return;
+    }
+    /* A later attachment, over a state from an earlier visit: `resume`. */
+    if (found === "article") {
+      this.clearRetry();
+      this.retryOnNextAlive = false;
+      /* Metadata reads the truth now, so the hint has nothing left to say. */
+      this.io.marks.forget(this.slug);
+      if (this.state.kind !== "adopted") this.set({ kind: "adopted" });
+      return;
+    }
+    /* `none` lifts the hold. `unknown` leaves it, unless completion has since
+       said the row exists and asked for the share to be sent. */
+    if (found === "none" || owed) this.held = false;
+    this.kick();
   }
 
   private kick(): void {
-    if (!this.active || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
+    if (!this.active || this.held || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
     this.send("public");
   }
 
   private send(to: "public" | "private"): void {
     const before = this.state;
+    /* **Before the request, not when it answers.** The server can commit a
+       publish whose reply this page never sees, and a reload in that gap
+       would otherwise find no mark and draw the box off over a public
+       article. Every send, retries and `settle` included. What removes it is
+       an outcome that rules publication out, below and in `untick`. */
+    if (to === "public") this.io.marks.remember(this.slug);
     this.set({ kind: "saving", to });
     this.inFlight = this.io.put(this.slug, to).then(
       (answer) => {
         this.inFlight = null;
+        /* The article published while this was out, and the controller has
+           given way to Metadata (`asked`). Its answer is not this box's to draw. */
+        if (this.state.kind !== "saving") return;
         this.retryOnNextAlive = false;
         this.notYet = 0;
         if (answer === null) {
-          /* A publish we cannot read may have taken. An unshare we cannot read
-             leaves whatever mark there was. */
-          if (to === "public") this.io.marks.remember(this.slug);
+          /* Unreadable: it may have taken, so the mark stays as it is. */
           this.set({ kind: "unknown", because: "write" });
         } else if (answer.publicAt !== null) {
-          this.io.marks.remember(this.slug);
           this.set({ kind: "on", publicAt: answer.publicAt });
         } else {
-          /* Private, in the server's own words: the only thing that forgets. */
+          /* Private, in the server's own words. */
           this.io.marks.forget(this.slug);
           this.set({ kind: "off" });
         }
       },
       (e: unknown) => {
         this.inFlight = null;
+        if (this.state.kind !== "saving") return;
         const status = statusOf(e);
         const message = e instanceof Error ? e.message : "The request failed.";
         if (to === "public" && status === 404 && this.jobAlive) {
@@ -352,9 +437,11 @@ export class ShareAtAdd {
         /* A failed attempt that ended before the article row existed is tried
            again when JobCard's Retry produces the replacement job. */
         this.retryOnNextAlive = to === "public" && status === 404;
+        /* The server answered a publish with a refusal, so the article is
+           not public on our account. No status is no answer, and keeps it;
+           so does the *not yet* above, which is followed by another send. */
+        if (to === "public" && status !== null) this.io.marks.forget(this.slug);
         if (status === null || before.kind === "unknown") {
-          /* No status is no answer: a publish may have committed. */
-          if (to === "public" && status === null) this.io.marks.remember(this.slug);
           this.set({ kind: "unknown", because: "write" });
           return;
         }

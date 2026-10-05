@@ -213,11 +213,16 @@ article becomes readable by others when the import publishes.
   failed import that was shared stays public under its old slug, with nothing published for
   anyone to read.
 - **A reload cannot read the switch back before publication.** No owner read returns visibility
-  until there is a published revision. So the tab keeps a mark in `sessionStorage` when a share
-  goes out, and a reloaded page that finds the mark shows *we cannot read that back* and offers
+  until there is a published revision. So the tab writes a mark in `sessionStorage` before a
+  share request is sent, and a reloaded page that finds the mark shows *we cannot read that back* and offers
   the untick. The mark never sends a public request. A second tab has no mark and shows an
   unticked box over an article that is public: accepted for now, and the fix is a server read
   ([postmortem 261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md)).
+- **Coming back to the add page asks again, and a published article belongs to this card.** The
+  controller outlives the page, so on every return it repeats the metadata read before sending
+  anything. If the article has published since, whatever it remembered gives way to the line
+  pointing here: this card may have changed the switch, and an intent from an earlier visit must
+  not publish over a later unshare. A page that stays open through publication is not asked again.
 - **A 404 while the job is alive means the row is not there yet** and is retried. After five
   minutes it stops, and tries once more when the import completes.
 - **The add page does not leave by itself while sharing is unsettled**: the confirmation open, or

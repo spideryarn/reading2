@@ -202,12 +202,24 @@ this section is the truth.
   - **one controller per slug per tab** (`shareAtAddFor`), not one per add address;
   - **after a reload** the page cannot read the switch back before publication. A
     `sessionStorage` mark makes it say so and offer the untick. A second tab has no mark.
+  - a [fix check](261005l-permalink-and-share-fix-check-sol.md) by Sol then found three more in
+    that shape (F10's gap, F16, F17) and a sentence that claimed too much (F18). Closed: the mark
+    is written before the request is sent; a controller re-reads on every return to the add page
+    and gives way to Metadata once the article has published; the sentence says *asked*.
   - Once the page has waited at *Ready* for sharing it stays until *Open the article*, so the
     link and the result can be read.
   The postmortem is
   [261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md).
 - **Left as found:** `HighPowerIntent.dispose()` is called during render in `AddPage.tsx`
   (Sol's F15, older than this change).
+
+**Not checked in a browser.** A Sonnet subagent started the dev server and could not sign in:
+`npm run db:check` reported the shared local database 16 columns behind `dev` (the private link,
+reading difficulty and citation counts, none of them this change's), so `/api/library` answered
+500. Applying the migration was refused to the subagent by the permission classifier and was not
+then done by its parent. What stands in for it is component tests through the real `AddPage`,
+`JobCard` and `OwnerNotShared`, which cannot see layout. **The widths (desktop, iPad, phone) are
+unchecked**, and that check is still owed.
 
 A third question for Greg came out of the review:
 

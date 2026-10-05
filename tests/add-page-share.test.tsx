@@ -504,7 +504,8 @@ describe("one share per slug", () => {
     await settle();
     expect(shareBox()?.checked, "the first slug's state was lost").toBe(true);
     expect(text()).toContain(SHARE_AT_ADD_ON);
-    expect(probes, "the first slug was probed twice").toEqual([SLUG, OTHER]);
+    /* Shown again is attached again, and an attachment asks first (fix check F16). */
+    expect(probes).toEqual([SLUG, OTHER, SLUG]);
     expect(puts).toEqual([PUBLIC()]);
   });
 
@@ -532,7 +533,8 @@ describe("one controller per slug, whatever the address (GPT Sol's code review, 
 
     expect(shareBox()?.checked, "a second controller started from off").toBe(true);
     expect(text()).toContain(SHARE_AT_ADD_ON);
-    expect(probes, "a second controller probed again").toEqual([SLUG]);
+    /* The same controller, attached again, asks again; nothing is published, so it keeps its state. */
+    expect(probes).toEqual([SLUG, SLUG]);
     expect(puts, "a second writer for one slug").toEqual([PUBLIC()]);
 
     /* And the one writer is the one the box unticks. */
@@ -608,5 +610,25 @@ describe("after a reload, before the import has published (GPT Sol's code review
     putAnswer = did;
     await reload();
     expect(shareBox()?.checked).toBe(false);
+  });
+});
+
+describe("coming back to the add page after the article has published (GPT Sol's fix check, F16)", () => {
+  it("does not say Public from memory: the Metadata line, and no request", async () => {
+    await importing();
+    await share();
+    expect(text()).toContain(SHARE_AT_ADD_ON);
+
+    /* Leave. The import publishes, and Metadata's switch is now the one that knows. */
+    act(() => root.unmount());
+    probeAnswer = async () => json({ stages: [] });
+    root = createRoot(host);
+    await importing();
+
+    expect(probes, "the retained controller was not asked again").toEqual([SLUG, SLUG]);
+    expect(text()).not.toContain(SHARE_AT_ADD_ON);
+    expect(shareBox()).toBeNull();
+    expect(text()).toContain(SHARE_AT_ADD_ALREADY_AN_ARTICLE);
+    expect(puts).toEqual([PUBLIC()]);
   });
 });

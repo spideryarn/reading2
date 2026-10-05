@@ -81,10 +81,17 @@ from "give each compensating write an owner": **the compensating writes were rem
   closes the unseen refusal and the old write undoing a new one, because neither write exists.
 - **One controller per slug per tab**, in a module-level registry, so two add addresses for one
   slug share one writer.
-- **A reload shows *unknown*, not *off*.** A `sessionStorage` mark, written when a share goes out,
+- **A reload shows *unknown*, not *off*.** A `sessionStorage` mark, written before a share request
+  is sent,
   makes a reloaded page say it cannot read the switch back and offer the untick. This is option 3's
   browser-only alternative, with the mark as the hint that triggers it. It is not option 4: the
   mark never draws a state as known and never sends a public request.
+
+- **A second check found the registry had made a new stale state** (the
+  [fix check](../plans/261005l-permalink-and-share-fix-check-sol.md), F16 and F17): a controller
+  kept for the tab's life could say Public after Metadata had unshared, or send an old waiting
+  intent over it. It now repeats its read on every return to the add page, and gives way to
+  Metadata once the article has published. Same class: a remembered state shown as a server fact.
 
 **Still open:** a second tab has no mark, so there the box is unticked over a public, unpublished
 article. Closing it needs the pre-publication visibility read of option 3, a server change, put to

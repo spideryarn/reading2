@@ -14,6 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SHARE_AT_ADD_RECALLED } from "../src/messages.js";
 import { MAX_NOT_YET } from "../src/web/add-high-power.js";
 import {
   type Probe,
@@ -35,7 +36,9 @@ function refusal(status: number, message = "no"): Error {
 type Answer = typeof PUBLIC | typeof PRIVATE | null | Error;
 
 /** Requests whose answers are queued by the test, recording every `put`. */
-function scripted(probe: Probe | Error, ...answers: Answer[]) {
+function scripted(first: Probe | Error, ...answers: Answer[]) {
+  /** What the probe answers now. A case may change it between attachments. */
+  const found: { now: Probe | Error } = { now: first };
   const calls: Array<[string, "public" | "private"]> = [];
   const probes: string[] = [];
   /** The slugs this tab remembers making public: the page's `sessionStorage`. */
@@ -48,8 +51,8 @@ function scripted(probe: Probe | Error, ...answers: Answer[]) {
     },
     probe: async (slug) => {
       probes.push(slug);
-      if (probe instanceof Error) throw probe;
-      return probe;
+      if (found.now instanceof Error) throw found.now;
+      return found.now;
     },
     put: async (slug, to) => {
       calls.push([slug, to]);
@@ -59,7 +62,7 @@ function scripted(probe: Probe | Error, ...answers: Answer[]) {
       return next;
     },
   };
-  return { io, calls, probes, marks };
+  return { io, calls, probes, marks, found };
 }
 
 /** A started share whose probe has answered. */
@@ -495,6 +498,253 @@ describe("what this tab remembers across a reload", () => {
     marks.add("an-essay");
     const share = await offered(io);
     expect(share.get()).toEqual({ kind: "adopted" });
+  });
+});
+
+describe("the mark is written before a publish is sent (GPT Sol's fix check, F10)", () => {
+  it("exists at the moment the request goes out, on every send", async () => {
+    const seen: boolean[] = [];
+    const { io: base, marks } = scripted("none");
+    const answers: Answer[] = [refusal(404), PUBLIC];
+    const io: ShareIo = {
+      ...base,
+      put: async (slug, to) => {
+        if (to === "public") seen.push(marks.has(slug));
+        const next = answers.shift();
+        if (next instanceof Error) throw next;
+        return next ?? null;
+      },
+    };
+    const share = await offered(io);
+    confirm(share);
+    await vi.runAllTimersAsync();
+    expect(seen).toEqual([true, true]);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+
+  it("a fresh controller made while that request is unanswered starts unknown, not off", async () => {
+    const { io: base, marks } = scripted("none");
+    const io: ShareIo = { ...base, put: () => new Promise(() => {}) };
+    const share = await offered(io);
+    confirm(share);
+    expect(share.get()).toEqual({ kind: "saving", to: "public" });
+
+    /* The reload: the same tab's marks, a new controller, nothing published yet. */
+    const { io: fresh } = scripted("none");
+    const again = new ShareAtAdd("an-essay", { ...fresh, marks: io.marks }, 10);
+    again.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect([...marks]).toEqual(["an-essay"]);
+    expect(again.get()).toEqual({ kind: "unknown", because: "reload" });
+  });
+
+  it("keeps the mark while only *not yet* has come back, and while a give-up can still be revived", async () => {
+    const answers: Answer[] = Array.from({ length: MAX_NOT_YET + 1 }, () => refusal(404));
+    const { io, marks } = scripted("none", ...answers);
+    const share = await offered(io);
+    confirm(share);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(share.get()).toEqual({ kind: "waiting" });
+    expect([...marks]).toEqual(["an-essay"]);
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "gave-up" });
+    expect([...marks]).toEqual(["an-essay"]);
+  });
+
+  it("forgets it when the reader unticks with only *not yet* behind them", async () => {
+    for (const untilGaveUp of [false, true]) {
+      const answers: Answer[] = Array.from({ length: MAX_NOT_YET + 1 }, () => refusal(404));
+      const { io, marks } = scripted("none", ...answers);
+      const share = await offered(io, untilGaveUp ? 10 : 60_000);
+      confirm(share);
+      if (untilGaveUp) await vi.runAllTimersAsync();
+      else await vi.advanceTimersByTimeAsync(0);
+      share.untick();
+      expect(share.get()).toEqual({ kind: "off" });
+      expect([...marks]).toEqual([]);
+    }
+  });
+
+  it("forgets it when the server refuses the publish, or says there is no article after the job ended", async () => {
+    for (const answer of [refusal(409, "No."), refusal(404, "No article")]) {
+      const { io, marks } = scripted("none", answer);
+      const share = await offered(io);
+      share.observe(false);
+      confirm(share);
+      await vi.runAllTimersAsync();
+      expect(share.get().kind).toBe("refused");
+      expect([...marks]).toEqual([]);
+    }
+  });
+
+  it("says what is known: the reader asked, not that it took (F18)", () => {
+    expect(SHARE_AT_ADD_RECALLED).toContain("You asked to make this public");
+    expect(SHARE_AT_ADD_RECALLED).not.toContain("You made this public");
+  });
+});
+
+describe("a controller attached to a page again asks first (GPT Sol's fix check, F16 and F17)", () => {
+  /* The registry keeps a controller across visits, and between two visits the
+     article may have published and Metadata's switch may have changed it. */
+  it("F16: on, then the article published: the Metadata line, not Public, and no request", async () => {
+    const { io, calls, probes, marks, found } = scripted("none", PUBLIC);
+    const share = await offered(io);
+    confirm(share);
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+
+    share.pause();
+    found.now = "article";
+    share.resume();
+    await vi.runAllTimersAsync();
+    expect(probes).toEqual(["an-essay", "an-essay"]);
+    expect(share.get()).toEqual({ kind: "adopted" });
+    expect(calls).toEqual([["an-essay", "public"]]);
+    expect([...marks], "a published article's state is Metadata's to say").toEqual([]);
+  });
+
+  it("F17: waiting, then the article published: no public request, ever", async () => {
+    const { io, calls, found } = scripted("none", refusal(404));
+    const share = await offered(io, 10);
+    confirm(share);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(share.get()).toEqual({ kind: "waiting" });
+
+    share.pause();
+    found.now = "article";
+    share.resume();
+    await vi.runAllTimersAsync();
+    share.observe(true);
+    await share.settle();
+    await vi.runAllTimersAsync();
+    expect(calls, "an old intent published over whatever Metadata last said").toEqual([["an-essay", "public"]]);
+    expect(share.get()).toEqual({ kind: "adopted" });
+  });
+
+  it.each([
+    ["an open confirmation", (share: ShareAtAdd) => { share.open(); share.tick(true); }],
+    ["a give-up", null],
+  ] as const)("%s also gives way to a published article", async (name, arrange) => {
+    const answers: Answer[] = name === "a give-up" ? Array.from({ length: MAX_NOT_YET + 1 }, () => refusal(404)) : [];
+    const { io, calls, found } = scripted("none", ...answers);
+    const share = await offered(io);
+    if (arrange) arrange(share);
+    else {
+      confirm(share);
+      await vi.runAllTimersAsync();
+      expect(share.get()).toEqual({ kind: "gave-up" });
+    }
+    const sent = calls.length;
+    share.pause();
+    found.now = "article";
+    share.resume();
+    await vi.runAllTimersAsync();
+    share.share();
+    await share.settle();
+    expect(share.get()).toEqual({ kind: "adopted" });
+    expect(calls).toHaveLength(sent);
+  });
+
+  it("with nothing published, keeps on as it was", async () => {
+    const { io, calls, probes } = scripted("none", PUBLIC);
+    const share = await offered(io);
+    confirm(share);
+    await vi.runAllTimersAsync();
+    share.pause();
+    share.resume();
+    await vi.runAllTimersAsync();
+    expect(probes).toHaveLength(2);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+    expect(calls).toEqual([["an-essay", "public"]]);
+  });
+
+  it("with nothing published, a waiting share is sent only after the probe has answered", async () => {
+    let answerProbe: (found: Probe) => void = () => {};
+    const { io: base, calls } = scripted("none", refusal(404), PUBLIC);
+    let asked = 0;
+    const io: ShareIo = {
+      ...base,
+      probe: (slug) => {
+        asked += 1;
+        if (asked === 1) return base.probe(slug);
+        return new Promise((resolve) => {
+          answerProbe = resolve;
+        });
+      },
+    };
+    const share = await offered(io, 10);
+    confirm(share);
+    await vi.advanceTimersByTimeAsync(0);
+    share.pause();
+    share.resume();
+    share.observe(true);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls, "it sent while the probe was out").toHaveLength(1);
+    expect(share.get()).toEqual({ kind: "waiting" });
+
+    answerProbe("none");
+    await vi.runAllTimersAsync();
+    expect(calls).toHaveLength(2);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+
+  it("when the probe cannot say, keeps what it showed and does not send on this attachment", async () => {
+    const { io, calls, found } = scripted("none", refusal(404), PUBLIC);
+    const share = await offered(io, 10);
+    confirm(share);
+    await vi.advanceTimersByTimeAsync(0);
+    share.pause();
+    found.now = "unknown";
+    share.resume();
+    share.observe(true);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(share.get()).toEqual({ kind: "waiting" });
+    expect(calls).toHaveLength(1);
+
+    /* Completion says the row exists, and the reader confirmed for this slug. */
+    await share.settle();
+    expect(calls).toHaveLength(2);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+
+  it("StrictMode's mount, unmount, mount asks once and is not left stuck", async () => {
+    const { io, calls, probes } = scripted("none", PUBLIC);
+    const share = new ShareAtAdd("an-essay", io, 10);
+    share.start();
+    share.resume();
+    share.pause();
+    share.start();
+    share.resume();
+    await vi.runAllTimersAsync();
+    expect(probes).toEqual(["an-essay"]);
+    expect(share.get()).toEqual({ kind: "off" });
+    confirm(share);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([["an-essay", "public"]]);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+
+  it("a publish still out when the article turns out to be published does not bring Public back", async () => {
+    let answer: (v: typeof PUBLIC) => void = () => {};
+    const { io: base, found, marks } = scripted("none");
+    const io: ShareIo = {
+      ...base,
+      put: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    };
+    const share = await offered(io);
+    confirm(share);
+    share.pause();
+    found.now = "article";
+    share.resume();
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "adopted" });
+    answer(PUBLIC);
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "adopted" });
+    expect([...marks]).toEqual([]);
   });
 });
 
