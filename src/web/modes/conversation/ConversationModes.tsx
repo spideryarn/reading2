@@ -997,7 +997,16 @@ export function ConversationBand({
             void setThread(corrected);
           },
           ...(origin && current ? {
-            /* Data survives a mode change; URL navigation above does not. */
+            /* Data survives a mode change; URL navigation above does not.
+
+               Accepted residual (review CR-6, plan 261005i): this moves the
+               draft's bookkeeping to a corrected id, but a band that was
+               closed and reopened before `begin` arrived still addresses the
+               guess. The server corrects a chat's id only when the guess
+               equals an existing message id in this article (about one in a
+               million), and then a follow-up from the reopened composer
+               starts a separate conversation with no origin. The first
+               conversation and its origin are intact. */
             onConfirmed: (confirmed: string) => {
               if (confirmed !== current) {
                 drafts.moveThread(current, confirmed);

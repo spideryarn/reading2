@@ -466,3 +466,43 @@ wide window you get the second column only when Marginalia is already on.
   the column opening for a chat alone is in `[Q-start-beside]`. It also checked four of my
   doubts and cleared them: an anchorless thread draws in `ChatDialog`, the composite FK is
   right, `MAX_ANCHOR_CHARS` (20,000) is ample, and `reader_notes` needs nothing.
+- 2026-10-05 — the first build stage, by an Opus subagent, tests red first; committed as
+  `eaf3a3fee`. The migration is `drizzle/20261005150617_chat_thread_origin.sql`, additive, applied
+  to the local database only (`Target: postgresql://postgres@127.0.0.1:54362/postgres`). What it
+  decided that the plan had not:
+  - **Keeping the caller's summaries current (F1) is a refetch**, `refresh()` on
+    `useChatAnchors`, with the guards widened so a refetch cannot undo a local write or land
+    after a newer one.
+  - **One more CHECK than planned**, `chat_threads_origin_chat_only`: only a `chat`-kind thread
+    may have an origin.
+  - **The mark is a second line inside the claim's heading**, so it shows when the claim is
+    folded. The button stays after a chat exists, so a second chat can be started from one claim.
+  - **The list row's icon is to the right of the title**, not the left as in the picture above;
+    the next stage, when every row may have one, can move it.
+  - **The route checks that the block exists, not that the quote is in it.**
+- 2026-10-05 — GPT Sol code review of `eaf3a3fee`
+  ([answer](261005i-chats-started-from-a-mode-stage-1-code-review-sol.md)): land, after six
+  established P1s it fixed itself, each with a test it saw red, committed as `1cf578937`. All six
+  are about the origin's life before the server has confirmed the thread. CR-1: the 409 was
+  checked only under a per-process lock, so `withTurn` now refuses a conflicting origin again
+  under the database's article lock. CR-2: a refused draft could show Debate's icon on a plain
+  thread; the `begin` frame now carries the stored origin and the list draws only that. CR-3: an
+  answer that landed after the reader left Chat left no mark; the refresh now comes from the
+  turn finishing, not the component. CR-4: emptying the seeded text lost the origin on return.
+  CR-5: a failed first Send resumed as a different, plain draft. CR-6: a thread id corrected by
+  the server after the reader left Chat kept the origin on the guessed id. Its six postmortems are
+  `docs/postmortems/261005h` to `261005m`. Checked by me on `1cf578937`: typecheck clean; 48 test
+  files, 908 tests green, the Postgres suites included.
+- 2026-10-05 — GPT Sol round two, a narrow read-only check of those six fixes
+  ([answer](261005i-chats-started-from-a-mode-stage-1-code-review-2-sol.md)): CR-1 to CR-5
+  closed, no new finding, no regression found in ordinary chat, block chat, Remember, drafts,
+  retry, edit or Live. **Sol still objects to CR-6; overruled, after Opus arbitrated.** What is
+  left of it: if the server stores a chat under a different id from the browser's guess, and
+  the reader leaves Chat and comes back before the acknowledgement arrives, a follow-up goes to
+  the guessed id and starts a separate conversation with no origin. Opus read `withTurn`,
+  `targetOf` and `mintId`: for a `chat`-kind thread the server changes the id only when the
+  guess equals an existing *message* id in the same article, about one in a million per new chat
+  before the timing is counted, and nothing is lost when it happens (the first conversation and
+  its origin are intact). Sol's fix was a publish-and-subscribe channel in the draft store; that
+  is more moving parts than the residual is worth. Written at the site, `onConfirmed` in
+  `ConversationModes.tsx`.
