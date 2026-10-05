@@ -688,6 +688,55 @@ and be written over. `tests/last-view.test.ts` scans the client for `useQuerySta
 one that neither list has heard of, so the next parameter is a decision rather than an
 omission.
 
+### An article never opened here arrives at a default
+
+> When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
+> room) and (if there's even more room) Marginalia mode in right-hand
+>
+> — Greg, 2026-10-04 (spya-ax5tmm)
+
+One more case in the same decision, since 2026-10-05
+([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)).
+A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
+it, arrives at:
+
+| Usable width (rail on) | Arrives at |
+|---|---|
+| below 700px | the article alone — a band would cover the prose |
+| 700px and up | `?mode=summary` (Brief) |
+| 900px and up, experimental switch on | `?mode=summary&margin=1` |
+
+The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
+([`layout.ts`](../../src/web/layout.ts)) and `notesFit`
+([`marginalia/press.ts`](../../src/web/marginalia/press.ts)), which are what the reading view and
+the Marginalia button use, with the reader's own two measurements
+([`reader/measure.ts`](../../src/web/reader/measure.ts)). So the default cannot name a column the
+layout would decline to draw. It is measured once, on arrival; resizing afterwards never reapplies
+it.
+
+- **The link always wins**, as for a restore, and so does anything the reader has done: the default
+  is applied only while the address still says nothing.
+- **It does not override a later choice.** An empty view is stored as `""` rather than the key being
+  removed, so going back to Plain at the top and reopening stays Plain. Only *no key* is a first
+  open.
+- **"First open" means first open in this browser.** An article read on another device gets the
+  default once here. A bare Metadata visit does not use up the article's first open. The key is
+  written on every open of the reading view, so a visit while signed out, or on a
+  window too narrow for a band, uses the first open up: the default is not held over for a wider
+  window or a later sign-in. An article already in this browser that was last left in Plain at the
+  top had no key before this shipped, so it gets the default once.
+- **Marginalia joins only with the experimental switch on**, because it is behind that switch
+  ([experimental-features.md](experimental-features.md)). So the default waits for the switch's
+  answer. If settings are already loaded, the address is settled before paint; otherwise the
+  default waits for them, whether the article payload has arrived yet or not. The shelf does not
+  load this setting itself. A switch that never answers means no default.
+- **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
+- **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
+  open would be a first one. `readLastView` tells *failed* from *no key* for this.
+- **It starts nothing.** Arriving in Summary or with the notes on spends nothing
+  ([summaries.md](summaries.md), [marginalia.md](marginalia.md)); with no summary stored the owner
+  sees the empty state and **Write it**.
+
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):
 anything cross-device, pruning old entries, remembering the matcher, remembering which of the

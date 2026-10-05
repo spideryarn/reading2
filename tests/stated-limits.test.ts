@@ -11,22 +11,41 @@
  * other. **A red test here is not a bug report. It is the question "is the
  * sentence in the dialog still true?"**
  *
+ * Since 2026-10-05 it is, for structure: a document whose table of contents
+ * will not fit one model answer is given a tree built from its own headings
+ * instead of being refused (src/heading-tree.ts § `buildBoundedHeadingTree`,
+ * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
+ * The two numbers below that used to be ceilings are now where the path
+ * changes, and they stay pinned for that reason.
+ *
  * No database, no network, no model: the documents are synthetic
- * (tests/helpers/synthetic-blocks.ts) and the functions are the real ones.
+ * (tests/helpers/synthetic-blocks.ts), the functions are the real ones, and
+ * the model seam throws if anything reaches it.
  *
  * Each assertion was watched red once, by the perturbation named beside it.
  */
 import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { POSTGRES_MAX_PARAMETERS, inBatches, rowsPerStatement } from "../src/db/insert-batches.js";
 import { blockIdentities, revisionBlocks } from "../src/db/schema.js";
-import { wholeDocumentRequest } from "../src/structure.js";
+import { BOUNDED_TREE_GENERATOR } from "../src/heading-tree.js";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { generateStructure, wholeDocumentRequest } from "../src/structure.js";
 import { TooLongForOnePass } from "../src/token-budget.js";
 import type { Block } from "../src/types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES, uploadLimits } from "../src/uploads.js";
+import { expectBoundedTree, expectPlannable } from "./helpers/bounded-tree.js";
 import { DENSITIES, plainBlocks } from "./helpers/synthetic-blocks.js";
+
+/* The documents below are past what one answer holds, so no model may be asked. */
+vi.mock("../src/messages-stream.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/messages-stream.js")>()),
+  streamMessage: () => {
+    throw new Error("stated-limits: the structure step asked a model about a document too long for one answer");
+  },
+}));
 
 const density = (name: string) => {
   const found = DENSITIES.find((d) => d.name === name);
@@ -36,9 +55,9 @@ const density = (name: string) => {
 const DENSE = density("dense paper");
 const HEADINGLESS = density("headingless prose");
 
-/** The most headingless blocks the structure step takes in one pass. Measured, 2026-10-04. */
+/** The most headingless blocks the structure step asks a model about in one pass. Measured, 2026-10-04. */
 const MOST_HEADINGLESS_BLOCKS = 2889;
-/** The most pages of a paper as dense as Kuhn's that it takes. Measured, 2026-10-04. */
+/** The most pages of a paper as dense as Kuhn's that it asks a model about. Measured, 2026-10-04. */
 const MOST_DENSE_PAGES = 178;
 
 const accepts = (blocks: Block[]): boolean => {
@@ -70,28 +89,39 @@ describe("the limits the upload dialog states", () => {
     expect(MAX_UPLOAD_BYTES).toBe(50 * 1024 * 1024);
   });
 
-  it("structure takes 2,889 blocks of headingless prose in one pass and refuses 2,890", () => {
-    /* Red by pinning 2,888 (the second line fails) and 2,890 (the first). */
+  /** The step as the pipeline calls it, with nowhere to keep a checkpoint and no model behind it. */
+  const structure = (blocks: Block[]) =>
+    generateStructure({ blocks, slug: "stated-limits", checkpoints: nullCheckpointStore(), power: "standard" });
+
+  /** A tree from the document's own headings: sound, bounded, labellable, and nothing was bought. */
+  const expectHeadingsRun = (blocks: Block[], run: Awaited<ReturnType<typeof structure>>): void => {
+    expect(run.source).toEqual({ by: "headings", reason: "answer-too-long" });
+    expectBoundedTree(blocks, run.parts.tree);
+    expectPlannable(blocks, run.parts.tree);
+    expect(run.parts.tree.generator).toBe(BOUNDED_TREE_GENERATOR);
+    expect(run.model).toBe(BOUNDED_TREE_GENERATOR);
+    expect([run.wholeDocumentCalls, run.inputTokens, run.outputTokens]).toEqual([0, 0, 0]);
+    expect([run.wholeDocumentResumed, run.deepen, run.deepenFailed]).toEqual([false, null, false]);
+  };
+
+  it("one model answer holds 2,889 blocks of headingless prose and not 2,890", () => {
+    /* Where the path changes, no longer where a document stops. Red by pinning
+       2,888 (the second line fails) and 2,890 (the first). */
     expect(accepts(headingless.slice(0, MOST_HEADINGLESS_BLOCKS))).toBe(true);
     expect(() => wholeDocumentRequest(headingless.slice(0, MOST_HEADINGLESS_BLOCKS + 1))).toThrow(TooLongForOnePass);
   });
 
-  it("KNOWN GAP: a paper as dense as Kuhn's is refused by structure past about 178 pages, short of the 250 stated", () => {
-    /* **This is a promise the dialog makes and the structure step does not
-       keep, pinned so it cannot be forgotten — not a behaviour anybody wants.**
-       A PDF of 179 to 250 pages at this density (14.4 blocks and 1.8 headings a
-       page: Kuhn, 142 pages, the one dense paper measured) passes the page cap,
-       is transcribed and paid for, and is then refused as `[ai-too-long]`.
+  it("a headingless document one block past that still becomes an article", async () => {
+    /* Red before the fallback existed (`TooLongForOnePass` out of
+       `generateStructure`), and by stamping the model's name on the tree. */
+    const blocks = headingless.slice(0, MOST_HEADINGLESS_BLOCKS + 1);
+    expectHeadingsRun(blocks, await structure(blocks));
+  });
 
-       The ways out, and whose call it is, are
-       docs/plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md
-       § The decision this will probably end on.
-
-       **If this went red because the ceiling was lifted**, good: delete the gap
-       from this test, and update that plan, the investigation it names and the
-       sentence in `uploadLimits()` so that the stated-limits story is true
-       again. If it went red because the ceiling fell, the gap got wider and the
-       same people need telling.
+  it("a paper as dense as Kuhn's passes one answer at about 178 pages, and still becomes an article at the 250 stated", async () => {
+    /* A PDF of 179 to 250 pages at this density (14.4 blocks and 1.8 headings
+       a page: Kuhn, 142 pages, the one dense paper measured) was transcribed,
+       paid for and then refused as `[ai-too-long]` until 2026-10-05.
 
        The page count is found here, not typed in. Red by pinning 177 and 179. */
     let most = 0;
@@ -100,10 +130,10 @@ describe("the limits the upload dialog states", () => {
       most = pages;
     }
     expect(most).toBe(MOST_DENSE_PAGES);
-    expect(most, "the gap between the stated cap and what structure accepts").toBeLessThan(MAX_PAGES);
-    /* And the stated cap itself is refused: the first refusal was a ceiling,
-       not a hole. Both of these two red by setting MAX_PAGES to 178. */
+    /* The stated cap is past it, so this document really takes the other path. */
     expect(accepts(densePages(MAX_PAGES))).toBe(false);
+    const blocks = densePages(MAX_PAGES);
+    expectHeadingsRun(blocks, await structure(blocks));
   });
 
   it("the store is not the first thing to refuse a long document", () => {

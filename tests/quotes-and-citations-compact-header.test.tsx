@@ -100,6 +100,7 @@ function quotesOwner(q: Quotes, profiled = false): QuotesOwner {
     error: null,
     retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,

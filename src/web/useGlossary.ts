@@ -756,6 +756,8 @@ export interface UseGlossary {
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
   job: Job | null;
+  /** The job list has answered once, so `job === null` means no run rather than not known yet. */
+  loaded: boolean;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: StepFailure | null;
   /**
@@ -1123,6 +1125,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     slug,
     error,
     job: queue.job,
+    loaded: queue.loaded,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,

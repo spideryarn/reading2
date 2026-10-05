@@ -11,7 +11,15 @@
  */
 import type { Block, BlockId } from "../types.js";
 import type { ActionOutcome } from "./command-match.js";
-import type { CommandExecutor, CommandProposal, GlossaryLookupSource, Outcome } from "./command-proposal.js";
+import type {
+  CommandExecutor,
+  CommandProposal,
+  FindMorePresses,
+  GlossaryLookupSource,
+  Outcome,
+} from "./command-proposal.js";
+import { FIND_MORE_MODES, type FindMoreMode } from "./find-more.js";
+import { handOffFindMore } from "./find-more-handoff.js";
 import { handOffGlossaryAsk } from "./glossary-ask-handoff.js";
 import { findLiteral, MIN_FIND_CHARS } from "./search-hits.js";
 
@@ -137,6 +145,36 @@ export function glossaryRunners({
 }
 
 /**
+ * **How to open each band whose list can be added to right now** — the plain
+ * mode setter for each, from the reading view. A band left out, or
+ * `undefined`, gets no press and so no row.
+ */
+export type FindMoreOpeners = { readonly [M in FindMoreMode]?: (() => void) | undefined };
+
+/**
+ * **The bar's *Find more* presses** (plan 261004k, Stage 2) — one per band the
+ * reading view says can be added to. A press posts nothing and arms nothing:
+ * it leaves the one-shot hand-off (find-more-handoff.ts) and opens the band
+ * with `open`, which must be the plain mode setter, never the Dock's press —
+ * that arms generate-on-open, and the band's own button is about to be
+ * pressed. The band takes the hand-off and presses it (useFindMoreHandOff.ts).
+ */
+export function findMoreRunners(slug: string, open: FindMoreOpeners): FindMorePresses {
+  return Object.fromEntries(
+    FIND_MORE_MODES.flatMap((mode) => {
+      const show = open[mode];
+      if (show === undefined) return [];
+      const press = (): ActionOutcome => {
+        handOffFindMore(slug, mode);
+        show();
+        return CLOSE;
+      };
+      return [[mode, press] as const];
+    }),
+  );
+}
+
+/**
  * **The reading view's executor, built once** — what Reader.tsx hands the Dock
  * (command-proposal.ts § `CommandExecutor`), from the controllers it already
  * owns. A function rather than an object literal in Reader so that *what is
@@ -148,7 +186,9 @@ export function glossaryRunners({
  *  - **the glossary is the owner's**, and absent otherwise: the read whose
  *    `ready` gates the ask (F1) is an owner-only fetch, and the ask spends;
  *  - **the bookmark exists only when the page hands one in**, which it does
- *    once the opening comments read has landed without error (F6).
+ *    once the opening comments read has landed without error (F6);
+ *  - **a Find more exists only for a band the page names**, which it does for
+ *    the owner while that band's list can be added to (`findMoreRunners`).
  */
 export function readingExecutor({
   slug,
@@ -156,6 +196,7 @@ export function readingExecutor({
   jump,
   glossary,
   bookmark,
+  findMore,
 }: {
   slug: string;
   blocks: Block[];
@@ -163,6 +204,7 @@ export function readingExecutor({
   jump(blockId: BlockId): void;
   glossary?: (GlossaryLookupSource & { openTerm(termId: BlockId): void; openGlossary(): void }) | undefined;
   bookmark?: ((blockId: BlockId) => Promise<boolean>) | undefined;
+  findMore?: FindMoreOpeners | undefined;
 }): CommandExecutor {
   return {
     runners: {
@@ -171,6 +213,7 @@ export function readingExecutor({
       ...(bookmark === undefined ? {} : { bookmark: bookmarkRunner(blocks, bookmark) }),
     },
     sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
+    ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
   };
 }
 
@@ -186,6 +229,9 @@ export function readingExecutor({
  *  - **a find**, which in the bar is an address rather than a runner;
  *  - **the jump of the surface the chat is drawn in** — the band's, which
  *    steps a covering band aside on a phone, or the dialog's plain one.
+ *
+ * **Not the reading view's `findMore`**: that is a row of the bar's, not a
+ * proposal, and no chip token names it.
  *
  * Chat is the owner's, so this is only ever built for one.
  */

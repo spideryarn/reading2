@@ -312,7 +312,10 @@ the paragraphs.
 
   [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
-  with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
+  with nothing stored the owner sees an empty state with **Write it**. That is also what lets
+  Summary be where a signed-in reader's first open of an article lands, where there is room
+  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
+  The add page's *Generate the
   main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
   Q-summary-on-add), and it writes what the press writes: both plain-words levels, Brief and
   Fuller, all or none, through the `simple` step. Like the press it writes only when the article

@@ -103,6 +103,7 @@ import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
 import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
@@ -2442,9 +2443,23 @@ export function Reader({
    *    which arms generate-on-open (F1). The term travels in the one-shot
    *    hand-off (glossary-ask-handoff.ts), not the address.
    *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
+   *  - `findMore` names a band **only while its list can be added to**, as the
+   *    read mounted here says (find-more.ts § `glossaryAppendOnOffer`,
+   *    `quotesAppendOnOffer`; plan 261004k, GPT Sol's F3) — and only a band
+   *    the Dock draws. The opener is the plain mode setter here too: the bar's
+   *    press leaves a hand-off (find-more-handoff.ts) and the band presses its
+   *    own Find more.
    */
   const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
   const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
+  const dockDraws = (target: FindMoreMode) =>
+    shownBehindTheSwitch({
+      experimental: MODE_CATALOG[target].experimental,
+      on: experimental.on,
+      current: mode === target,
+    });
+  const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
+  const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
   const executor = useMemo(
     () =>
       readingExecutor({
@@ -2460,8 +2475,27 @@ export function Reader({
             }
           : undefined,
         bookmark: canBookmark ? bookmarkBlock : undefined,
+        findMore: isOwner
+          ? {
+              glossary: moreTerms ? () => showBand("glossary") : undefined,
+              quotes: moreQuotes ? () => showBand("quotes") : undefined,
+            }
+          : undefined,
       }),
-    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, showBand, canBookmark, bookmarkBlock],
+    [
+      slug,
+      article.blocks,
+      jumpTo,
+      isOwner,
+      glossaryReady,
+      terms,
+      openTermInGlossary,
+      showBand,
+      canBookmark,
+      bookmarkBlock,
+      moreTerms,
+      moreQuotes,
+    ],
   );
   /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The

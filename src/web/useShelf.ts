@@ -52,6 +52,7 @@ import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { readCachedShelf } from "./lib/cached-shelf.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 
 /** Every shelf catch, including its action catches, goes through the same
  * reader-facing boundary. Non-Error throws are bugs too, never copy. */
@@ -443,7 +444,11 @@ export function useShelf(readerId: string): Shelf {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      return (await readJson<{ entry: LibraryEntry }>(r)).entry;
+      const { entry } = await readJson<{ entry: LibraryEntry | null }>(r);
+      if (entry === null) {
+        throw new ReaderFacingError("The change was saved, but couldn't be shown. Refresh the shelf to check.");
+      }
+      return entry;
     },
     [],
   );

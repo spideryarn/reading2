@@ -1,0 +1,169 @@
+{"level":"info","time":"2026-10-05T01:25:25.428Z","service":"spideryarn","env":"development","component":"store","msg":"serving article reads from Postgres"}
+{"level":"debug","time":"2026-10-05T01:25:25.431Z","service":"spideryarn","env":"development","component":"store","local":true,"ssl":"disabled","max":5,"msg":"database pool created"}
+fat sectionless chapters to refill: 1966-2148
+{
+ "wallMs": 79898,
+ "dollars": 0.450798,
+ "calls": [
+  {
+   "ms": 18013,
+   "inputTokens": 15176,
+   "outputTokens": 1696,
+   "dollars": 0.047312,
+   "outcome": "ok"
+  },
+  {
+   "ms": 53280,
+   "inputTokens": 49049,
+   "outputTokens": 5136,
+   "dollars": 0.149458,
+   "outcome": "ok"
+  },
+  {
+   "ms": 77062,
+   "inputTokens": 86385,
+   "outputTokens": 7357,
+   "dollars": 0.24634,
+   "outcome": "ok"
+  },
+  {
+   "ms": 2801,
+   "inputTokens": 3474,
+   "outputTokens": 74,
+   "dollars": 0.007688,
+   "outcome": "ok"
+  }
+ ],
+ "refills": [
+  {
+   "name": "refill-0",
+   "lo": 1966,
+   "hi": 2148,
+   "ms": 18015,
+   "inputTokens": 15176,
+   "outputTokens": 1696,
+   "ok": true,
+   "repairs": 0,
+   "droppedChildren": 0,
+   "depth1": 3
+  }
+ ],
+ "hinted": [
+  {
+   "name": "hint-slice-2",
+   "lo": 1521,
+   "hi": 2148,
+   "ms": 53280,
+   "inputTokens": 49049,
+   "outputTokens": 5136,
+   "ok": true,
+   "repairs": 2,
+   "droppedChildren": 2,
+   "depth1": 4
+  },
+  {
+   "name": "hint-slice-3",
+   "lo": 2149,
+   "hi": 3052,
+   "ms": 77063,
+   "inputTokens": 86385,
+   "outputTokens": 7357,
+   "ok": true,
+   "repairs": 0,
+   "droppedChildren": 0,
+   "depth1": 3
+  }
+ ],
+ "root2": {
+  "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+  "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+ },
+ "root2GistWords": 13,
+ "rootMs": 2801,
+ "stitchedRefilled": {
+  "name": "stitched-refilled",
+  "checkTreeProblems": [],
+  "leafDepths": {
+   "2": 20,
+   "3": 3033
+  },
+  "parts": 29,
+  "sections": 134,
+  "largestSectionlessPart": 8,
+  "unaskableLabelBatches": 0,
+  "stitchRepairs": 0,
+  "root": {
+   "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+   "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+  }
+ },
+ "stitchedHinted": {
+  "name": "stitched-hinted",
+  "checkTreeProblems": [],
+  "leafDepths": {
+   "2": 22,
+   "3": 3031
+  },
+  "parts": 19,
+  "sections": 105,
+  "largestSectionlessPart": 10,
+  "unaskableLabelBatches": 0,
+  "stitchRepairs": 0,
+  "root": {
+   "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+   "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+  }
+ }
+}
+
+stitched-refilled
+    0    52   4 Front matter and contents
+   52     8   5 Introduction by Jonathan Coulton
+   60   401  10 The Things That Make Me Weak and Strange Get Engineered Away
+  461    76   4 The Right Book
+  537    59   5 Other People's Money
+  596   209   6 Scroogled
+  805   175   6 1. Nice networks don't go down
+  980    79   4 2. Progress pilgrims
+ 1059   199   7 3. Conflict of Insect
+ 1258     6   0 Afterword to Human Readable
+ 1264   251   6 Liberation Spectrum
+ 1515     6   0 Afterword to Liberation Spectrum
+ 1521   192   9 Power Punctuation!
+ 1713    73   7 Visit the Sins
+ 1786    81   5 Day Two with Ethan
+ 1867    18   2 Leaving the Ward
+ 1885    27   2 The Father Arrives
+ 1912    54   3 The Reunion
+ 1966     4   2 Afterword: ADD and grandfather
+ 1970   127   9 Constitutional Crisis
+ 2097    52   5 Pester Power
+ 2149   227   8 Chicken Little
+ 2376   135   5 Central Park and the demotion
+ 2511   149   5 Inside Buhle's body
+ 2660     8   0 Afterword
+ 2668    91   4 Epoch 2570
+ 2759   147   5 The spam and the fallout
+ 2906   132   4 The campaign and the shutdown
+ 3038    15   2 Afterwords and acknowledgments
+
+stitched-hinted
+    0    52   4 Front matter and contents
+   52     8   5 Introduction by Jonathan Coulton
+   60   401  10 The Things That Make Me Weak and Strange Get Engineered Away
+  461    76   4 The Right Book
+  537    59   5 Other People's Money
+  596   209   6 Scroogled
+  805   175   6 1. Nice networks don't go down
+  980    79   4 2. Progress pilgrims
+ 1059   199   7 3. Conflict of Insect
+ 1258     6   0 Afterword to Human Readable
+ 1264   251   6 Liberation Spectrum
+ 1515     6   0 Afterword to Liberation Spectrum
+ 1521   192   9 Power Punctuation!
+ 1713   258   9 Visit the Sins
+ 1971   126   9 Constitutional Crisis
+ 2097    52   5 Pester Power
+ 2149   514   8 Chicken Little
+ 2663   380   8 Epoch
+ 3043    10   0 I'm Only In It For the Money, by Russell Galen

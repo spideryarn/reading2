@@ -31,6 +31,14 @@ at those numbers work?
 - Two plain bugs found on the way are fixed, and one limit that was stated wrongly in the code is
   corrected. They are listed under § What was fixed.
 
+**Since 2026-10-05 the 250-page book imports.** Greg chose the way out (D, then E, below), and D
+is built: when one answer will not fit, the structure step builds the tree from the document's own
+headings with no model call. The same book, re-imported on the local stack: structure in 5
+seconds for $0, 13 parts and 79 sections, labels finished, article response 2.3 MB. The tree has
+no gists until E fills it in.
+[261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
+Everything below is as measured on 2026-10-04, before that.
+
 ## How it was measured
 
 Two instruments.
@@ -63,7 +71,7 @@ Each row is a ceiling, in the order a growing document meets it.
 
 | What stops | At | What the reader sees | Now |
 |---|---|---|---|
-| Structure, one answer for the whole tree | 2,890 blocks of prose with no headings; or about 322 headings | "This article is longer than this step can handle in one go… [ai-too-long]". No Retry. Transcription already paid for. | **Open. Greg's decision**, below. |
+| Structure, one answer for the whole tree | 2,890 blocks of prose with no headings; or about 322 headings | "This article is longer than this step can handle in one go… [ai-too-long]". No Retry. Transcription already paid for. | **Lifted 2026-10-05**: a tree from the document's headings, no model, no gists ([261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md)) |
 | Relations (a reading mode, after import) | about 2,930 paragraphs | the same sentence, on that mode | Open, same cause |
 | The article response, against Vercel's 4.5 MB | about 3,200 blocks of plain prose; lower with gists and labels | not measured on Vercel | Open, queued |
 | The block insert | 3,856 blocks exactly | "blocks did not finish… trying again is worth a go" (it was not) | **Fixed** |
@@ -166,7 +174,8 @@ left. Either the cap goes to 50 MB or the dialog says two numbers.
 
 In the Overseer's queue, each naming this report:
 
-- `qi-kbkbw4rp`: the structure ceiling. Waiting on Greg.
+- `qi-kbkbw4rp`: the structure ceiling. Greg chose D then E on 2026-10-04; D is built, in
+  [261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 - `qi-bv9nbj5z`: the 32 MB cap on an address against the stated 50 MB. Greg answered the same
   day, and it is built: [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
 - `qi-sbytr395`: the article response against Vercel's 4.5 MB.

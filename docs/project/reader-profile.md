@@ -29,7 +29,7 @@ wiring.
 
 The purpose is asked for in two more places since 2026-09-30, both writing through
 [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
-before the modes are queued, and Skim's *What do you want from this piece?* over a ready
+as it is typed (below), and Skim's *What do you want from this piece?* over a ready
 route with none set ([skim.md](skim.md),
 [plan 260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md)).
 Metadata is still where it is edited.
@@ -39,7 +39,19 @@ never touched, the reading view asks *Why are you reading this?* once, in a smal
 if the article still has none — a one-shot `sessionStorage` mark from the add page, owner only
 ([`src/web/PurposePrompt.tsx`](../../src/web/PurposePrompt.tsx),
 [plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
-The add page's box also says, under it, that it is not saved until Save and open.
+
+**The add page's box saves as you type** since 2026-10-04 (Greg: *"B with a small debounce of some
+kind"*): 700 ms after the last keystroke, on blur, and on the way out, as soon as the article's row
+exists; words typed before that are held and saved the moment it does. The reason is timing. The
+server queues the first modes when the import publishes, with the purpose stored by then
+([plan 261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
+so a purpose saved at a button after the import was always too late for them. A reader still typing
+at that moment still misses. On a re-add the box shows the purpose already stored, so an emptied box
+clears it. The saving is a small class of its own, bound to one article's slug
+([`src/web/add-purpose.ts`](../../src/web/add-purpose.ts)), because one add page can change which
+article it is about (a new address, a Retry) and `useAutosavedText` cannot be re-pointed;
+[plan 261004l](../plans/261004l-the-add-page-purpose-box-saves-as-you-type.md) has why, and what
+is still best effort.
 
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.

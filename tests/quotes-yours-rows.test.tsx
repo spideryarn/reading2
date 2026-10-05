@@ -111,6 +111,7 @@ function owner(quotes: Quotes | null, over: Partial<QuotesOwner> = {}): QuotesOw
     error: null,
     retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,

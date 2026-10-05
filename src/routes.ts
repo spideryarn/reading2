@@ -5473,7 +5473,7 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
 async function patchShelf(
   slug: string,
   body: unknown,
-): Promise<{ entry: LibraryEntry; purpose: string | null }> {
+): Promise<{ entry: LibraryEntry | null; purpose: string | null }> {
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
      be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
      folded into the checks below. */
@@ -5509,6 +5509,9 @@ async function patchShelf(
     change.archived = archived;
   }
 
+  /* `entry` is `null` for an article still being imported: written, with no
+     card to show for it yet. The add page saves the purpose then, and reads
+     only `purpose` back (src/web/purpose.ts). */
   const entry = await shelfStore.patch(slug, change);
   /* **`purpose` is answered beside the entry, not on it.** `LibraryEntry` is the
      shelf card, and it already refuses to carry the superseded title for the

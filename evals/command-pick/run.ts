@@ -6,6 +6,12 @@
  *     npx tsx evals/command-pick/run.ts                         # every arm, every phrase
  *     npx tsx evals/command-pick/run.ts --arm jev-pick --only p01,n03
  *     npx tsx evals/command-pick/run.ts --force                 # redo rows that already have an answer
+ *     npx tsx evals/command-pick/run.ts --arm jev-pick,hyb-luna --budget 1   # production's two calls only (the 2026-10-04 run)
+ *
+ * **Each run has its own directory**, `results/<yyMMdd>/`, named by
+ * `--results` and defaulting to `CURRENT_RUN`. A run that has been written up
+ * is in `FROZEN_RUNS` and this file will not write to it: its answers were
+ * measured against the list as it was that day.
  *
  * **This spends money** — about $1.50 for everything. Jev goes through the
  * declared bypass in ./jev.ts and the chat models through the one in
@@ -42,8 +48,27 @@ import { type Phrase, PHRASES, wantsArgument } from "./phrases.js";
 
 loadEnvLocal();
 
-export const RESULTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "results", "261003");
-const BUDGET_USD = 4;
+/** Read here, not in `main`, because summarise.ts imports this file for the same directory. */
+function flag(name: string): string | undefined {
+  const argv = process.argv.slice(2);
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
+/** The run a bare command writes and scores. */
+export const CURRENT_RUN = "261004";
+/** The run before it, which summarise.ts compares the current one with. */
+export const PREVIOUS_RUN = "261003";
+/** Written up, and measured against a list that has since changed: never written to again. */
+const FROZEN_RUNS: readonly string[] = [PREVIOUS_RUN];
+
+export const RUN = flag("--results") ?? CURRENT_RUN;
+if (!/^\d{6}$/.test(RUN)) throw new Error(`--results takes a run's date as yyMMdd, not "${RUN}"`);
+
+export const resultsDir = (run: string): string => path.join(path.dirname(fileURLToPath(import.meta.url)), "results", run);
+export const RESULTS_DIR = resultsDir(RUN);
+const BUDGET_USD = Number(flag("--budget") ?? 4);
+if (!(BUDGET_USD > 0)) throw new Error("--budget takes a number of dollars");
 
 /**
  * **Thinking off, or as low as the model takes** — latency is the question.
@@ -238,17 +263,16 @@ async function runChat(p: Phrase, row: Row, arm: ChatArm, kind: ArgumentKind | n
   return r.body;
 }
 
-export function loadRows(arm: string): Row[] {
-  const file = path.join(RESULTS_DIR, `${arm}.json`);
+export function loadRows(arm: string, dir: string = RESULTS_DIR): Row[] {
+  const file = path.join(dir, `${arm}.json`);
   return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Row[]) : [];
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
-  const flag = (name: string) => {
-    const i = argv.indexOf(name);
-    return i >= 0 ? argv[i + 1] : undefined;
-  };
+  if (FROZEN_RUNS.includes(RUN)) {
+    throw new Error(`results/${RUN}/ is a finished measurement against the list as it was then; a new run goes in its own directory`);
+  }
   const force = argv.includes("--force");
   const only = flag("--only")?.split(",");
   const arms = flag("--arm")?.split(",") ?? ALL_ARMS;

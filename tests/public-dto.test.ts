@@ -179,7 +179,9 @@ const NODE_FIELDS = {
   navLabel: "Example",
   summary: "A longer restatement.",
   sourceHeading: "The example",
-  gist: "The one worked example, and what it costs the argument.",
+  /* Crosses: it decides the face a title is drawn in, as `sourceHeading` does. */
+  titleFrom: "opening-words" as const,
+  gist:"The one worked example, and what it costs the argument.",
   /* **It crosses**, and the note above about leaving a note is why this line
      says so. The question is drawn in Summary mode, and Summary mode is a
      public surface as much as a signed-in one — a visitor reading a shared
@@ -474,6 +476,7 @@ describe("the public article payload", () => {
         "tree.nodes.n1.summary",
         "tree.nodes.n1.sourceHeading",
         "tree.nodes.n1.title",
+        "tree.nodes.n1.titleFrom",
         /* Apparatus or argument, and it crosses on purpose since 2026-08-29 —
            see the test below for the decision and what a visitor saw without
            it. */
