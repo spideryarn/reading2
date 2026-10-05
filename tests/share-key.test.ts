@@ -13,7 +13,14 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { articles } from "../src/db/schema.js";
-import { SHARE_KEY_CHARS, type ShareKey, parseShareKey, withoutShareKey } from "../src/share-key.js";
+import {
+  SHARE_KEY_CHARS,
+  type ShareKey,
+  parseShareKey,
+  shareKeyIn,
+  withShareKey,
+  withoutShareKey,
+} from "../src/share-key.js";
 import { linkSharedSlug } from "../src/store/link-shared-slug.js";
 import { PUBLIC_ONLY, accessFor, publicAccessWhere } from "../src/store/public-access.js";
 import { mintShareKey } from "../src/store/pg-share-link.js";
@@ -143,5 +150,34 @@ describe("an address with its key taken off", () => {
     ]) {
       expect(withoutShareKey(address)).toBe(address);
     }
+  });
+});
+
+/**
+ * **The browser's half**: reading the key off the page's address, and putting
+ * it on a request of ours. Only a parsed key is ever forwarded.
+ */
+describe("carrying a key from the page's address to a request", () => {
+  it("reads a well-formed key out of a query string", () => {
+    expect(shareKeyIn(`?mode=summary&key=${KEY}&at=spya-aaaaaa`)).toBe(KEY);
+    expect(shareKeyIn(`key=${KEY}`)).toBe(KEY);
+  });
+
+  it.each([
+    ["no key", "?mode=summary"],
+    ["an empty key", "?key="],
+    ["a short key", "?key=abc"],
+    ["a long key", `?key=${KEY}A`],
+    ["a key with a character base64url does not have", `?key=${KEY.slice(0, 21)}%2F`],
+    ["nothing", ""],
+  ])("reads %s as no key, so nothing is forwarded", (_name, search) => {
+    expect(shareKeyIn(search)).toBeNull();
+  });
+
+  it("puts a key on a path as ?key=, and leaves the path alone without one", () => {
+    expect(withShareKey("/api/public/article/a-piece", KEY as ShareKey)).toBe(
+      `/api/public/article/a-piece?key=${KEY}`,
+    );
+    expect(withShareKey("/api/public/article/a-piece", null)).toBe("/api/public/article/a-piece");
   });
 });

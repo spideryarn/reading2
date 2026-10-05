@@ -71,7 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHARED_WITH_YOU } from "../src/messages.js";
+import { SHARED_BY_PRIVATE_LINK, SHARED_WITH_YOU } from "../src/messages.js";
 import type { Arc, Article, BlockId, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
@@ -461,6 +461,11 @@ const OWNED: Article = {
  */
 let owned: () => Response;
 /**
+ * How the public article route answers **a request carrying a private link's
+ * key**, by key. Empty unless a test fills it. See `reply`.
+ */
+const keyed = new Map<string, () => Response>();
+/**
  * A `/api/…/` prefix the server answers 404 for — *nobody has asked for one of
  * these yet*, which is the state the five self-starting modes act on. Null
  * unless a test sets it. See `reply`.
@@ -563,6 +568,13 @@ function json(body: unknown, status = 200): Response {
  */
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return publicArticle();
+  /* A request carrying a private link's key. A key nobody set an answer for
+     gets the 404 the server gives a wrong one, which is also what an absent
+     article gets. */
+  if (url.startsWith(`/api/public/article/${SLUG}?key=`)) {
+    const answer = keyed.get(url.slice(url.indexOf("?key=") + "?key=".length));
+    return answer ? answer() : json({ error: "Not found" }, 404);
+  }
   if (url === `/api/article/${SLUG}`) return owned();
   /* The reader's own row, answered properly rather than with the `{}` below: a
      response that does not mention `experimentalSince` is an **error** in the
@@ -642,6 +654,7 @@ beforeEach(() => {
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
+  keyed.clear();
   owned = () => json(OWNED);
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -3657,5 +3670,232 @@ describe("an owner's reading view, left alone", () => {
     await open("?mode=glossary");
 
     expect(await jobPollsInAMinute(), "job-list polls in a minute with Glossary open").toBeGreaterThan(3);
+  });
+});
+
+/**
+ * **A private link**: `/read/<slug>?key=<key>` on an article that is not
+ * public. docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * The acceptance rule of this file holds unchanged: one public request, no
+ * POST, no `Authorization`. What is new is that the request carries the key,
+ * that the key stays in the address while the reader moves about the article,
+ * that it is kept nowhere else, and that the notice says which way in this is.
+ *
+ * `publicArticle` answers 404 throughout, as the server does for a private
+ * article asked for without a key, so a page that forgot the key shows the
+ * landing page and not the article.
+ */
+describe("a visitor holding a private link", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStUv";
+  const OTHER_KEY = "ZyXwVuTsRqPoNmLkJiHgFe";
+  const LINKED: PublicArticle = { ...ARTICLE, sharedBy: "link" };
+  const PROSE = "The first paragraph of the piece.";
+  const withKey = `/api/public/article/${SLUG}?key=${KEY}`;
+
+  /* This suite's jsdom has no `localStorage`, so the rest of this file never
+     meets the remembered view. These cases are about what is written there, so
+     they get a map, and give the absence back afterwards. */
+  const local = new Map<string, string>();
+  const hadLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+  /** Everything this origin's two stores hold, as one string to search. */
+  const stored = (): string => {
+    const session = window.sessionStorage;
+    return [
+      ...[...local].map(([k, v]) => `${k}=${v}`),
+      ...Array.from({ length: session.length }, (_, i) => {
+        const k = session.key(i) ?? "";
+        return `${k}=${session.getItem(k)}`;
+      }),
+    ].join("\n");
+  };
+
+  beforeEach(() => {
+    local.clear();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => local.get(key) ?? null,
+        setItem: (key: string, value: string) => void local.set(key, value),
+        removeItem: (key: string) => void local.delete(key),
+      },
+    });
+    window.sessionStorage.clear();
+    publicArticle = () => json({ error: "Not found" }, 404);
+    keyed.set(KEY, () => json(LINKED));
+  });
+
+  afterEach(() => {
+    if (hadLocalStorage) Object.defineProperty(window, "localStorage", hadLocalStorage);
+    else delete (window as { localStorage?: unknown }).localStorage;
+  });
+
+  it("is the control: without the key this article is not readable", async () => {
+    await open();
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}`);
+    expect(host.textContent).not.toContain(PROSE);
+  });
+
+  it("makes one public request, with the key, no POST and no Authorization", async () => {
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain("View only");
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.filter((r) => r.auth !== null)).toEqual([]);
+  });
+
+  it("says it is a private link, in place of the public sentence", async () => {
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    /* And on the details page, which draws the same notice. */
+    await remount();
+    await open(`?key=${KEY}`, "/metadata");
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+  });
+
+  /* Public wins: the server says `sharedBy: "public"` of a public article
+     whatever key came, and the notice follows the server. */
+  it("shows the public notice on a public article opened with a key", async () => {
+    keyed.set(KEY, () => json(ARTICLE));
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain(SHARED_WITH_YOU);
+    expect(host.textContent).not.toContain(SHARED_BY_PRIVATE_LINK);
+  });
+
+  it("shows the owner no notice, and sends the owner's requests no key", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain("as its owner renamed it");
+    expect(host.textContent).not.toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    expect(trace.length, "the owner's page must have asked for something").toBeGreaterThan(0);
+    expect(trace.filter((r) => r.url.includes(KEY) || r.url.includes("key="))).toEqual([]);
+  });
+
+  /* Somebody with an account follows a colleague's private link. The owned
+     route is asked first, without the key, and says not yours; the public one
+     is then asked exactly as a stranger's browser asks it. */
+  it("lets a signed-in reader who is not the owner read it like a stranger", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    const asked = trace.filter((r) => r.url.includes(SLUG));
+    expect(asked.map((r) => `${r.method} ${r.url}`)).toEqual([
+      `GET /api/article/${SLUG}`,
+      `GET ${withKey}`,
+    ]);
+    expect(asked[1]?.auth, "the public request carries no token").toBeNull();
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  it.each([
+    ["a short one", "abc"],
+    ["an empty one", ""],
+    ["one with a character a key cannot have", `${KEY.slice(0, 21)}!`],
+    ["one that is too long", `${KEY}A`],
+  ])("forwards nothing for a malformed key: %s", async (_name, bad) => {
+    await open(`?key=${encodeURIComponent(bad)}`);
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}`);
+    expect(trace.filter((r) => r.url.includes("key="))).toEqual([]);
+    expect(host.textContent).not.toContain(PROSE);
+  });
+
+  it("keeps the key in the address through a mode change, and asks nothing more", async () => {
+    await open(`?key=${KEY}`);
+    trace.length = 0;
+
+    const [first] = modeRadios().filter((b) => b.getAttribute("aria-checked") !== "true");
+    expect(first, "the bar must draw a mode to press").toBeDefined();
+    const before = modeInUrl();
+    await act(async () => first?.click());
+    await settle();
+    expect(await modeAfterPress(before), "the press must have changed the mode").not.toBe(before);
+
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(PROSE);
+    expect(trace, "a mode change is not a new load").toEqual([]);
+  });
+
+  it("keeps the key on the way to the details page and back, without loading again", async () => {
+    await open(`?key=${KEY}`);
+    trace.length = 0;
+
+    const out = host.querySelector<HTMLAnchorElement>(`a[href^="/read/${SLUG}/metadata"]`);
+    expect(out, "the bar must link to the details page").not.toBeNull();
+    expect(new URL(out?.href ?? "", location.origin).searchParams.get("key")).toBe(KEY);
+    await act(async () => out?.click());
+    await settle();
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+
+    const back = host.querySelector<HTMLAnchorElement>('a[aria-label="Back to the article"]');
+    expect(back, "the details page must link back").not.toBeNull();
+    await act(async () => back?.click());
+    await settle();
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(PROSE);
+    expect(trace, "neither step is a new load").toEqual([]);
+  });
+
+  /* What makes a copied passage link open for the next person. */
+  it("keeps the key in a passage link", async () => {
+    await open(`?key=${KEY}`);
+    const { blockPermalink } = await import("../src/web/BlockRef.js");
+    const link = new URL(blockPermalink("spya-bbbbbb" as BlockId));
+    expect(link.searchParams.get("key")).toBe(KEY);
+    expect(link.searchParams.get("at")).toBe("spya-bbbbbb");
+  });
+
+  /* One slug, two keys: an answer fetched under one is never drawn under the
+     other, and the new key is asked about. */
+  it("loads again when the key changes on the same article, and never shows the old answer", async () => {
+    const { navigate } = await import("../src/web/router.js");
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(PROSE);
+    trace.length = 0;
+
+    await act(async () => navigate(`/read/${SLUG}?key=${OTHER_KEY}`));
+    // Before the new answer lands: the old one is already gone.
+    expect(host.textContent).not.toContain(PROSE);
+    await settle();
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}?key=${OTHER_KEY}`);
+    expect(trace.filter((r) => r.url === withKey)).toEqual([]);
+    expect(host.textContent, "a key the server refuses reads nothing").not.toContain(PROSE);
+
+    /* And the other way: from a refused key to the right one. */
+    trace.length = 0;
+    await act(async () => navigate(`/read/${SLUG}?key=${KEY}`));
+    await settle();
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+    expect(host.textContent).toContain(PROSE);
+  });
+
+  it("writes the key to neither of the browser's stores, whatever the reader does", async () => {
+    await open(`?key=${KEY}&mode=summary&at=spya-bbbbbb`);
+    const [first] = modeRadios().filter((b) => b.getAttribute("aria-checked") !== "true");
+    await act(async () => first?.click());
+    await settle();
+    const out = host.querySelector<HTMLAnchorElement>(`a[href^="/read/${SLUG}/metadata"]`);
+    await act(async () => out?.click());
+    await settle();
+
+    /* The control: the remembered view really was written, so an empty search
+       below is about the key and not about storage that never worked. */
+    expect(stored(), "the remembered view must have been saved").toContain(SLUG);
+    expect(stored()).not.toContain(KEY);
+    expect(stored()).not.toContain("key=");
   });
 });

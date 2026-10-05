@@ -55,6 +55,30 @@ export function parseShareKey(raw: unknown): ShareKey | null {
 }
 
 /**
+ * **The key in a query string, for the browser**: `location.search` in, a
+ * parsed key or `null` out.
+ *
+ * The first `key` only, as the server reads it. Anything that is not a key is
+ * `null`, so the page asks exactly what a page with no key asks and a
+ * malformed value is never sent anywhere.
+ */
+export function shareKeyIn(search: string): ShareKey | null {
+  return parseShareKey(new URLSearchParams(search).get(SHARE_KEY_PARAM));
+}
+
+/**
+ * **A path of ours with the key on it**, or the same path when there is none.
+ *
+ * Takes a `ShareKey`, so only a value `parseShareKey` passed can be forwarded.
+ * For the two public requests a visitor's page makes for one article: its
+ * payload and its pictures (src/web/public-api.ts, src/web/rehost.ts). The
+ * path must have no query string of its own; neither of those does.
+ */
+export function withShareKey(path: string, key: ShareKey | null): string {
+  return key === null ? path : `${path}?${SHARE_KEY_PARAM}=${encodeURIComponent(key)}`;
+}
+
+/**
  * **An address with its `key` parameter removed**, for anything that stores or
  * forwards where a reader was. Every other part of it is kept.
  *

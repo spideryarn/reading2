@@ -116,6 +116,7 @@ async function visitor(available: PublicArtefacts): Promise<void> {
         available,
         signedIn: false,
         sessionUnconfirmed: false,
+        sharedBy: "public",
       }),
     );
   });
@@ -252,6 +253,7 @@ describe("whose article a visitor is looking at", () => {
           available: NONE,
           signedIn: false,
           sessionUnconfirmed: false,
+          sharedBy: "public",
         }),
       );
     });

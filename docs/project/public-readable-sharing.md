@@ -135,6 +135,57 @@ the no-training claim with the same hedge, and links `/privacy` for it.
 `tests/shared-notice-banner.test.tsx` holds the training wording to both pages. The banner does not
 ask for evidence, because `/privacy` promises we won't.
 
+## A private link: the same republishing, to fewer people
+
+Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
+well as making an article public. Anyone who has it reads what a visitor to a public article reads.
+It is listed nowhere and the owner can turn it off. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md); what keeps it
+closed is in
+[security-map.md § The unauthenticated namespace](security-map.md#the-unauthenticated-namespace-and-the-tripwire-under-it).
+
+> When they open a page with a private link, it should say that it's a private link, i.e. not visible to anyone without the link
+>
+> — Greg, 2026-10-05
+
+**The notice.** When the server says `sharedBy: "link"`, `SharedNotice` leads with
+`SHARED_BY_PRIVATE_LINK` in place of `SHARED_WITH_YOU`: *"This is a private link. This article isn't
+listed anywhere, and nobody can see it without the link."* The source, takedown and training lines
+are the banner's own, unchanged. The chip in the bar takes the same sentence for its hover. A public
+article opened with a key is `sharedBy: "public"` and gets the public notice, because public wins.
+The owner never sees either. `tests/shared-notice-banner.test.tsx` and
+`tests/public-network-trace.test.tsx` § a visitor holding a private link hold all three.
+
+**The card.** Access & sharing on the Metadata page is two controls:
+[`PrivateLink.tsx`](../../src/web/PrivateLink.tsx) above, the public switch
+(`AccessSharing.tsx`) below. The private link's control reads its state from
+`GET /api/article/:slug/share-link` each time the card opens, never from a copy. *Create a link*
+opens the same confirmation going public does: the derived inventory, the note about the reader
+profile and the rights tick-box, with the sentences about listing swapped for ones about a link. On,
+it draws the whole link, *Copy*, *Turn off* and *On since*. Two sentences depend on the other
+control:
+
+- when both are on, the link's control says the public address works without the link and turning
+  the link off will not make the article private (`PRIVATE_LINK_ALSO_PUBLIC`);
+- while a link is on, the public switch does not say *"Only you can read this"* of a private
+  article. It says who else can (`SHARING_OFF_WITH_LINK`), and when the link's state could not be
+  read it says only that the article is not public.
+
+A refusal from the server, such as a paper not read through yet, is shown in the server's words
+and leaves the card as it was. A write that did not come back draws no link and no state.
+`tests/private-link-card.test.tsx` and `tests/access-sharing.test.tsx`.
+
+**Not fixed: the padlock beside the title.** The masthead's mark and the shelf's badge are drawn
+from `Article.visibility`, which a private link does not change, and the link's state is
+deliberately on no payload but its own route's. So an owner's padlock hover still says *"Only you
+can read this"* over an article with a link on. Putting that right needs the owner's article
+payload to say whether a link is on, without the key.
+
+**The pages.** `/features/public-readable-sharing` has a section, *A private link*; `/privacy`
+names it in *Who can see your shelf*, *If you send us a bug report*, *Deleting things* and
+*If something here is yours*; `/help` § Sharing describes both ways. The first two are held to the
+code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.test.ts`.
+
 ## Where the code is
 
 | File | What's in it |

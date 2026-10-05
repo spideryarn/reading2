@@ -147,6 +147,15 @@ beforeEach(() => {
         }),
       );
     }
+    /* The card's first control reads its private link on its own route
+       (src/web/PrivateLink.tsx). No link, so the public switch below it may
+       say *"Only you can read this"*; an unreadable `{}` here would make it
+       say only *"This is not public"*, which is right and is not this test. */
+    if (url.endsWith("/share-link")) {
+      return Promise.resolve(
+        new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    }
     return Promise.resolve(new Response("{}", { status: 200 }));
   });
   host = document.createElement("div");

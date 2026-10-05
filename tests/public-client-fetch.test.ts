@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicArticle } from "../src/public-types.js";
 import { pathOf, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
 import type { PublicLibrary } from "../src/public-library-types.js";
+import { parseShareKey, type ShareKey } from "../src/share-key.js";
 import { loadPublicArticle, loadPublicLibrary, publicFetch } from "../src/web/public-api.js";
 
 /** Every request this file's calls made, exactly as `fetch` saw it. */
@@ -200,6 +201,55 @@ describe("reading a public endpoint", () => {
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
     await loadPublicArticle("a b/c");
     expect(calls[0]?.url).toBe("/api/public/article/a%20b%2Fc");
+  });
+});
+
+/**
+ * **A private link's key goes out on the article request, and on nothing
+ * else.** docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * The request stays what it was in every other respect: one bare `fetch`, no
+ * `Authorization`, no cookies. And the library takes no key, because a listing
+ * names no article for a key to be the key of.
+ */
+describe("a private link's key on the public article request", () => {
+  const KEY = parseShareKey("AbCdEfGhIjKlMnOpQrStUv") as ShareKey;
+
+  it("is the test's own control: the key parses", () => {
+    expect(KEY).not.toBeNull();
+  });
+
+  it("adds ?key= to the article request, with credentials still omitted", async () => {
+    next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
+    await loadPublicArticle("a-piece", undefined, KEY);
+
+    expect(calls.map((c) => c.url)).toEqual([`/api/public/article/a-piece?key=${KEY}`]);
+    expect(calls[0]?.init?.credentials).toBe("omit");
+    expect(new Headers(calls[0]?.init?.headers).get("Authorization")).toBeNull();
+    expect(calls[0]?.init?.method ?? "GET").toBe("GET");
+  });
+
+  it("sends no key parameter at all when there is no key", async () => {
+    next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
+    await loadPublicArticle("a-piece", undefined, null);
+    await loadPublicArticle("a-piece");
+    expect(calls.map((c) => c.url)).toEqual([
+      "/api/public/article/a-piece",
+      "/api/public/article/a-piece",
+    ]);
+  });
+
+  it("still reads a refused key as not shared, the answer an absent article gets", async () => {
+    next = () => new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
+    await expect(loadPublicArticle("a-piece", undefined, KEY)).resolves.toEqual({
+      kind: "not-shared",
+    });
+  });
+
+  it("never sends one to the library", async () => {
+    next = () => new Response(JSON.stringify({ articles: [] }), { status: 200 });
+    await loadPublicLibrary();
+    expect(calls.map((c) => c.url)).toEqual(["/api/public/library"]);
   });
 });
 

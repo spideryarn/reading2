@@ -285,6 +285,7 @@ import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { ownLabel } from "./lib/own-label.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+import { PrivateLink } from "./PrivateLink.js";
 import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
@@ -1421,10 +1422,49 @@ function SharingSection({
   sharing: ArticleSharing | undefined;
 }) {
   if (!offer) return null;
+  return <SharingCard slug={slug} title={title} sharing={sharing} onVisibility={onVisibility} />;
+}
+
+/**
+ * The card itself: the private link, then the public switch (plan 261005e).
+ *
+ * **Two controls, and one thing passes between them**: whether the article is
+ * public now. The private link's control says so when both are on, because
+ * turning the link off then closes nothing. It hears it the way the masthead
+ * does, from what the public switch reports upwards: the page's own answer
+ * first, `null` the moment a write goes out, then the server's answer. Until
+ * the switch has said anything, the page's fetch is the answer.
+ */
+function SharingCard({
+  slug,
+  title,
+  sharing,
+  onVisibility,
+}: {
+  slug: string;
+  title: string;
+  sharing: ArticleSharing | undefined;
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
+}) {
+  /* `undefined` is *the switch has reported nothing yet*; `null` is its own
+     *we no longer know*. */
+  const [reported, setReported] = useState<Visibility | null | undefined>(undefined);
+  const visibility = reported === undefined ? (sharing?.visibility ?? null) : reported;
+  const report = useCallback(
+    (forSlug: string, to: Visibility | null) => {
+      if (forSlug === slug) setReported(to);
+      onVisibility(forSlug, to);
+    },
+    [slug, onVisibility],
+  );
+  /* And the other way: whether a private link is on, from the control that
+     reads it to the switch whose *"Only you can read this"* depends on it.
+     `null` until that control has read it, and whenever it cannot say. */
+  const [linkOn, setLinkOn] = useState<boolean | null>(null);
   return (
     <Section
       label="Access & sharing"
-      keywords="anyone everybody readers signed in account permission public link privacy visible who can read send friend colleague republish"
+      keywords="anyone everybody readers signed in account permission public private link key privacy visible who can read send friend colleague republish"
     >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
@@ -1437,12 +1477,28 @@ function SharingSection({
           `${CARD} p-4`, matching the compact control cards elsewhere on the
           page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
-        <AccessSharing
+        <PrivateLink
           slug={slug}
           title={title}
           sharing={sharing}
-          onVisibility={onVisibility}
+          isPublic={visibility === null ? null : visibility === "public"}
+          onLink={setLinkOn}
         />
+        {/* The second control, under its own heading and a rule, so the card
+            reads as two switches and not one paragraph. */}
+        <div className="tw:mt-4 tw:border-t tw:border-rule tw:pt-4">
+          <h3 className="tw:m-0 tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:font-sans tw:text-sm tw:font-semibold tw:text-ink">
+            <Globe size={14} />
+            Public
+          </h3>
+          <AccessSharing
+            slug={slug}
+            title={title}
+            sharing={sharing}
+            onVisibility={report}
+            privateLinkOn={linkOn}
+          />
+        </div>
       </div>
     </Section>
   );

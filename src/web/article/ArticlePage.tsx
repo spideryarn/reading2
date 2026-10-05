@@ -42,13 +42,14 @@ import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
+import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
@@ -106,7 +107,10 @@ export function ArticlePage({
      article it made in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
-  const access = useArticleAccess(slug, readerId, attempt);
+  /* A private link's key, when the address has one (useShareKey.ts). A visitor's
+     requests carry it; an owner's never do. */
+  const shareKey = useShareKey();
+  const access = useArticleAccess(slug, readerId, attempt, shareKey);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -234,6 +238,7 @@ export function ArticlePage({
           crossrefs={access.crossrefs}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
+          sharedBy={access.sharedBy}
           view={view}
         />
       )}
@@ -607,10 +612,13 @@ function VisitorArticle({
   crossrefs,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
   view,
 }: {
   slug: string;
   article: Article;
+  /** Public, or by a private link. For the notice, on both views. */
+  sharedBy: PublicSharedBy;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -639,6 +647,7 @@ function VisitorArticle({
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}
+        sharedBy={sharedBy}
       />
     );
   return (
@@ -654,6 +663,7 @@ function VisitorArticle({
         crossrefs,
         signedIn,
         sessionUnconfirmed,
+        sharedBy,
       }}
     />
   );

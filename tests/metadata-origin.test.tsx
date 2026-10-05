@@ -179,6 +179,7 @@ async function visitor(meta: Partial<Meta>, sourceGuess?: SourceGuess) {
         /* This file is about where the piece came from; the session is beside
            the point, so it is the ordinary answer. App.tsx § ArticleAccess. */
         sessionUnconfirmed: false,
+        sharedBy: "public",
       }),
     );
   });
