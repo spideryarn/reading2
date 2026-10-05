@@ -667,7 +667,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             can pass the link on. We cannot tell you who has opened it.
           </li>
           <li>
-            <strong>It is not listed anywhere</strong>, and the page tells whoever opens it that it
+            <strong>An article shared only this way is not listed anywhere</strong>, and the page tells whoever opens it that it
             is a private link. They get what a visitor to a public article gets, and like any
             visitor they cannot write anything or start any AI work.
           </li>

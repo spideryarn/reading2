@@ -428,7 +428,7 @@ describe("the public-readable-sharing page", () => {
     });
 
     it("says a pasted private link shows no preview of the piece, and the page handler sends none", () => {
-      expect(PAGE).toMatch(/shows no title or description/);
+      expect(PAGE).toMatch(/Pasting a link to an article shared only this way into a chat shows no title or description/);
       /* A link share is its own arm in the page handler, with no head. */
       expect(read("src/public/page.ts")).toMatch(/found\.sharedBy === "public" \? \{ kind: "found", head: found\.head \} : \{ kind: "link" \}/);
     });
@@ -454,4 +454,8 @@ describe("the public-readable-sharing page", () => {
       expect(PAGE).not.toMatch(/private link[^.]*\b(secret|secure|only you)\b/i);
     });
   });
+});
+
+it("qualifies Help's listing promise for an article that is only link-shared", () => {
+  expect(read("src/web/help/help-topics.tsx")).toMatch(/An article shared only this way is not listed anywhere/);
 });

@@ -4442,6 +4442,10 @@ export const SHARING_RIGHTS_CONFIRM =
 /** The control's heading. */
 export const PRIVATE_LINK_HEADING = "Private link";
 
+export const SHARING_MARK_NAME_LINK = "Private link — manage sharing";
+export const SHARING_MARK_PRESS_LINK =
+  "Press to go to this article's Metadata page, where you can turn off its private link.";
+
 /** What a private link is, said under the control in both states. */
 export const PRIVATE_LINK_WHAT =
   "Anyone who has the link can read this without signing in, and can pass it on. A private link " +
@@ -4461,7 +4465,7 @@ export const PRIVATE_LINK_CONFIRM_TITLE = "Share the full text of this article b
 export function privateLinkConfirmBody(title: string): string {
   return (
     `This puts the whole extracted text of “${title}” where anyone who has the link can read ` +
-    "it without signing in. It is not listed anywhere, but anyone you send the link to can pass it on."
+    "it without signing in. Making this link does not list the article anywhere, but anyone you send the link to can pass it on."
   );
 }
 
@@ -4613,16 +4617,15 @@ export const ALWAYS_SHARED = [
   {
     key: "pictures",
     label: "Its pictures",
-    /* **Not "served from our copy", which the first draft said and which is not
-       true today.** The `assets` step stores the bytes and the manifest crosses
-       in the payload, but nothing in `src/web/` reads it yet: every `<img>` in
-       `block.html` still points at the publisher, for a visitor exactly as for
-       the owner (docs/plans/260829b-hosting-the-articles-images.md). The sentence
-       says what a visitor gets — the pictures, and the record — and stays true
-       whichever server ends up sending the bytes. */
+    /* **Which server sends the bytes has changed once already, so the sentence
+       names both.** Until the images were rehosted every `<img>` pointed at the
+       publisher and this row said so; since then a visitor's browser asks our
+       public asset route first (src/web/rehost.ts) and falls back to the
+       publisher only for a picture we hold no copy of. GPT Sol's C3 on plan
+       261005e found the old sentence still here. */
     detail:
-      "Every image in the article. A visitor's browser fetches them from the publisher, exactly " +
-      "as yours does.",
+      "Every image in the article. A visitor's browser gets them from the copy we keep, or from " +
+      "the publisher where we have no copy.",
   },
   {
     key: "provenance",

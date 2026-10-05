@@ -777,6 +777,7 @@ describe("a body saved by an older deployment", () => {
     });
     expect(shelfFromCachedBody({ articles: [rich] })).toEqual([rich]);
     expect(shelfFromCachedBody({ articles: [{ ...rich, visibility: "private" }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...rich, privateLinkOn: "yes" }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, lastOpenedAt: 17 }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, publishedAt: 2024 }] })).toBeNull();
     /* A paper dated only to a year (plan 261004h): a whole year in the

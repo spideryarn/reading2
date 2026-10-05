@@ -31,12 +31,13 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Link2,
   MessageCircle,
   Pencil,
   RefreshCw,
 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { SHARING_BADGE, SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_BADGE, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
@@ -94,14 +95,15 @@ export function SharedBadge({
    * the `title` — `IconButton`'s `titled`, the same switch for the same reason.
    */
   titled = true,
-}: { titled?: boolean } = {}) {
+  privateLink = false,
+}: { titled?: boolean; privateLink?: boolean } = {}) {
   return (
     <span
       className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight-text"
-      title={titled ? SHARING_ON : undefined}
+      title={titled ? privateLink ? SHARING_OFF_WITH_LINK : SHARING_ON : undefined}
     >
-      <Globe size={11} />
-      {SHARING_BADGE}
+      {privateLink ? <Link2 size={11} /> : <Globe size={11} />}
+      {privateLink ? PRIVATE_LINK_HEADING : SHARING_BADGE}
     </span>
   );
 }
@@ -296,7 +298,9 @@ export function ShelfCard({
         {minimal && <NotProcessedBadge />}
         {/* Ahead of the fixture chip: of the two, this is the one that says
             something about who else can see the article. */}
-        {entry.visibility === "public" && <SharedBadge />}
+        {(entry.visibility === "public" || entry.privateLinkOn === true) && (
+          <SharedBadge privateLink={entry.visibility !== "public"} />
+        )}
         {entry.fixture && (
           <span
             className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5"

@@ -465,6 +465,7 @@ export function Metadata({
   article,
   onRenamed,
   onVisibility,
+  onPrivateLink,
   archive: sharedArchive,
 }: {
   slug: string;
@@ -486,6 +487,7 @@ export function Metadata({
    * is one of the values.
    */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
   /** The owner's controller. Optional only for focused tests that mount this page alone. */
   archive?: ArchiveControl | undefined;
 }) {
@@ -1169,6 +1171,7 @@ export function Metadata({
             pressing it is how you find out. */}
         <SharingSection
           onVisibility={onVisibility}
+          onPrivateLink={onPrivateLink}
           slug={slug}
           title={meta.title}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
@@ -1406,11 +1409,13 @@ function SharingSection({
   offer,
   sharing,
   onVisibility,
+  onPrivateLink,
 }: {
   slug: string;
   title: string;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
   /**
@@ -1422,7 +1427,7 @@ function SharingSection({
   sharing: ArticleSharing | undefined;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} sharing={sharing} onVisibility={onVisibility} />;
+  return <SharingCard slug={slug} title={title} sharing={sharing} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1440,11 +1445,13 @@ function SharingCard({
   title,
   sharing,
   onVisibility,
+  onPrivateLink,
 }: {
   slug: string;
   title: string;
   sharing: ArticleSharing | undefined;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
 }) {
   /* `undefined` is *the switch has reported nothing yet*; `null` is its own
      *we no longer know*. */
@@ -1461,6 +1468,10 @@ function SharingCard({
      reads it to the switch whose *"Only you can read this"* depends on it.
      `null` until that control has read it, and whenever it cannot say. */
   const [linkOn, setLinkOn] = useState<boolean | null>(null);
+  const reportLink = useCallback((on: boolean | null) => {
+    setLinkOn(on);
+    onPrivateLink?.(slug, on);
+  }, [slug, onPrivateLink]);
   return (
     <Section
       label="Access & sharing"
@@ -1482,7 +1493,7 @@ function SharingCard({
           title={title}
           sharing={sharing}
           isPublic={visibility === null ? null : visibility === "public"}
-          onLink={setLinkOn}
+          onLink={reportLink}
         />
         {/* The second control, under its own heading and a rule, so the card
             reads as two switches and not one paragraph. */}

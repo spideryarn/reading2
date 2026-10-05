@@ -2036,6 +2036,8 @@ export interface Article {
    * insist on.
    */
   visibility?: Visibility;
+  /** Owner-only sharing state. Absent means unknown; never contains the key. */
+  privateLinkOn?: boolean;
 
   /**
    * **When the owner archived this article — `null` while it is on the shelf.**
@@ -2214,6 +2216,8 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /** Owner-only fact that a private link is on, independently of public visibility. */
+  privateLinkOn?: boolean;
   /**
    * Whether the pipeline can safely reuse the stored source document. A
    * rebuild with no web address leaves `fetch` unforced, so this is exactly

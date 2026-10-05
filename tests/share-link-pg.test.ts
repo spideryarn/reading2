@@ -404,6 +404,9 @@ describe("a private link", { timeout: 60_000 }, () => {
     expect(state.headers["cache-control"]).toBe("private, no-store");
 
     expect(await tokenOf(MINE)).toEqual({ token: null, at: null });
+    expect((await call("GET", `/api/article/${MINE.slug}`, { as: OWNER })).body.privateLinkOn).toBe(false);
+    const shelf = await call("GET", "/api/library", { as: OWNER });
+    expect((shelf.body.articles as Array<{ slug: string; privateLinkOn: boolean }>).find((e) => e.slug === MINE.slug)?.privateLinkOn).toBe(false);
     for (const key of [undefined, "", NOBODYS_KEY]) {
       expect(shape(await article(MINE, key)), String(key)).toEqual(sameAs(absent, MINE.slug));
     }
@@ -528,6 +531,11 @@ describe("a private link", { timeout: 60_000 }, () => {
       expect(r.text, url).not.toContain(KEYS.mine);
       expect(r.text, url).not.toMatch(/share_?token/i);
     }
+    const owned = await call("GET", `/api/article/${MINE.slug}`, { as: OWNER });
+    expect(owned.body.privateLinkOn).toBe(true);
+    const shelf = await call("GET", "/api/library", { as: OWNER });
+    expect((shelf.body.articles as Array<{ slug: string; privateLinkOn: boolean }>).find((e) => e.slug === MINE.slug)?.privateLinkOn).toBe(true);
+    expect((await article(MINE, KEYS.mine)).body).not.toHaveProperty("privateLinkOn");
     /* The control: the article route did answer with this article. */
     expect((await call("GET", `/api/article/${MINE.slug}`, { as: OWNER })).status).toBe(200);
   });
@@ -793,6 +801,9 @@ describe("a private link", { timeout: 60_000 }, () => {
 
   it("stops working on the next request after Turn off, for the page and for a picture", async () => {
     const off = await link("DELETE", MINE);
+    expect((await call("GET", `/api/article/${MINE.slug}`, { as: OWNER })).body.privateLinkOn).toBe(false);
+    const shelf = await call("GET", "/api/library", { as: OWNER });
+    expect((shelf.body.articles as Array<{ slug: string; privateLinkOn: boolean }>).find((e) => e.slug === MINE.slug)?.privateLinkOn).toBe(false);
     expect(off.status).toBe(200);
     expect(off.body).toEqual({ on: false });
     expect(await tokenOf(MINE)).toEqual({ token: null, at: null });

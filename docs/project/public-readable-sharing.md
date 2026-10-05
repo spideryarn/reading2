@@ -175,11 +175,11 @@ A refusal from the server, such as a paper not read through yet, is shown in the
 and leaves the card as it was. A write that did not come back draws no link and no state.
 `tests/private-link-card.test.tsx` and `tests/access-sharing.test.tsx`.
 
-**Not fixed: the padlock beside the title.** The masthead's mark and the shelf's badge are drawn
-from `Article.visibility`, which a private link does not change, and the link's state is
-deliberately on no payload but its own route's. So an owner's padlock hover still says *"Only you
-can read this"* over an article with a link on. Putting that right needs the owner's article
-payload to say whether a link is on, without the key.
+**The owner's marks carry only a boolean.** `Article.privateLinkOn` and
+`LibraryEntry.privateLinkOn` let the masthead and shelf name a private link without carrying its
+key. The card reports changes back to the owner article view, including an unknown result after
+a lost reply. Public wins when both are on. `tests/masthead-sharing-mark.test.tsx`,
+`tests/shelf-shared-badge.test.tsx` and `tests/metadata-sharing-card.test.tsx` hold these paths.
 
 **The pages.** `/features/public-readable-sharing` has a section, *A private link*; `/privacy`
 names it in *Who can see your shelf*, *If you send us a bug report*, *Deleting things* and

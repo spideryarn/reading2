@@ -225,6 +225,13 @@ describe("reading the link's state", () => {
 });
 
 describe("making a link", () => {
+  it("does not promise to unlist an article that is already public", async () => {
+    await mount({ isPublic: true });
+    await press("Create a link");
+    expect(host.textContent).toContain(PRIVATE_LINK_ALSO_PUBLIC);
+    expect(host.textContent).not.toContain("It is not listed anywhere");
+  });
+
   it("shows what goes out and asks for the rights tick before anything is sent", async () => {
     await mount();
     await press("Create a link");

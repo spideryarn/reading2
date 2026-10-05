@@ -229,6 +229,9 @@ export function PrivateLink({
         <Link2 size={14} />
         {PRIVATE_LINK_HEADING}
       </h3>
+      {isPublic === true && (on !== null || confirming) && (
+        <p className="tw:m-0 tw:mb-3 tw:text-ink">{PRIVATE_LINK_ALSO_PUBLIC}</p>
+      )}
 
       {card.kind === "pending" && (
         <p className="tw:m-0 tw:text-ink-faint">{privateLinkInFlight(card.to)}</p>
@@ -249,9 +252,6 @@ export function PrivateLink({
           <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">
             On since {exactly(on.since)}. {PRIVATE_LINK_WHAT}
           </p>
-          {isPublic === true && (
-            <p className="tw:m-0 tw:mb-3 tw:text-ink">{PRIVATE_LINK_ALSO_PUBLIC}</p>
-          )}
           <Tooltip placement="bottom" content={<TipNote>{PRIVATE_LINK_STOP_TIP}</TipNote>}>
             {/* `outline`, not `destructive`: this is the safe direction, as
                 *Stop sharing* is below. */}

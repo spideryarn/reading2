@@ -327,6 +327,8 @@ function OwnedArticle({
     null,
   );
   const visibility = shared?.slug === slug ? shared.visibility : null;
+  const [linked, setLinked] = useState<{ slug: string; on: boolean | null } | null>(null);
+  const linkState = linked?.slug === slug ? linked.on : undefined;
 
   /**
    * **One archive controller across both views.** A request begun from the
@@ -359,7 +361,14 @@ function OwnedArticle({
       mine !== null
         ? { ...fetched, meta: { ...fetched.meta, title: mine.title }, titleOverridden: mine.overridden }
         : fetched;
-    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const guessedArticle = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    let guessedAt = guessedArticle;
+    if (linkState === null) {
+      const { privateLinkOn: _cleared, ...rest } = guessedArticle;
+      guessedAt = rest;
+    } else if (linkState !== undefined) {
+      guessedAt = { ...guessedArticle, privateLinkOn: linkState };
+    }
     if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -369,7 +378,7 @@ function OwnedArticle({
       return rest;
     }
     return { ...guessedAt, visibility };
-  }, [fetched, mine, guessed, visibility]);
+  }, [fetched, mine, guessed, visibility, linkState]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string, overridden: boolean) =>
@@ -391,6 +400,9 @@ function OwnedArticle({
     setShared((was) =>
       was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
     );
+  }, []);
+  const linkedTo = useCallback((forSlug: string, on: boolean | null) => {
+    setLinked((was) => was?.slug === forSlug && was.on === on ? was : { slug: forSlug, on });
   }, []);
 
   /**
@@ -433,6 +445,7 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        onPrivateLink={linkedTo}
         archive={archive}
       />
     );

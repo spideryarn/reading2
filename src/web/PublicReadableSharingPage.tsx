@@ -240,7 +240,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             public. Anyone who has that link can read the same copy without an account, and can
             pass the link on. An article shared only this way is not on our shelf of shared articles
             and is not used as an example anywhere, and its page tells whoever opens it that it is a
-            private link. Pasting one into a chat shows no title or description of the piece. The
+            private link. Pasting a link to an article shared only this way into a chat shows no title or description of the piece. The
             reader who made the link can turn it off, and it stops working on the next request.
           </p>
           <p>

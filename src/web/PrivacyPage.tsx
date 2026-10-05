@@ -536,8 +536,8 @@ export function PrivacyPage() {
           is your profile. The
           sharing card lists exactly what will go out before you turn it on. If you make a{" "}
           <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
-          the link can read the article without signing in, and can pass it on. It is not listed
-          anywhere, and they get the same things a public reader gets, your comments and searches
+          the link can read the article without signing in, and can pass it on. An article shared
+          only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
           included. We cannot tell you who has read it. The link’s key is part of its address, so
           it stays in the browser history of whoever opens it. Turning the link off refuses the
           next request made with it; it cannot take back what somebody has already read or copied.

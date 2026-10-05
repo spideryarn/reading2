@@ -251,7 +251,7 @@ describe("the privacy page", () => {
     });
 
     it("says it is not listed, and that we cannot tell who read it", () => {
-      expect(prose).toMatch(/not listed anywhere/);
+      expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
       expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
       expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
       /* Nothing records a visit: the public routes write nothing. */
