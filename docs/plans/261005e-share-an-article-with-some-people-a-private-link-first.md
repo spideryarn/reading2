@@ -1,7 +1,8 @@
 # Share an article with some people: a private link first
 
 **Status as of 2026-10-05: a design, not built, waiting on Greg.** Nothing in `src/` has changed.
-Evidence: no hit for `share_token` or `linkSharedSlug` outside this file. Reports `spya-hwdefp` and
+Evidence: no hit for `share_token` or `linkSharedSlug` outside this plan and its review. GPT Sol
+reviewed it on 2026-10-05 (*sound with the listed changes*); the changes are made, § Review. Reports `spya-hwdefp` and
 `spya-v322fd`, both Greg's (admin, proved by `feedback-reporter.ts`). Queue item `qi-98933vdd`.
 
 It waits for two reasons. Greg asked for a discussion before anything complex is built. And every
@@ -44,7 +45,8 @@ The second, 22:21 UTC the same day (`spya-v322fd`):
 proposes three stages, each useful on its own, and asks Greg to approve the first:
 
 1. **A private link.** Anyone who has it can read the article, exactly as a visitor reads a public
-   one today. It is not listed anywhere. The owner can turn it off. Small.
+   one today. A private link does not list it anywhere. The owner can turn it off. **Reading
+   only: the people it is sent to cannot comment or highlight.** Small to medium.
 2. **Signed-in people with the link can comment and highlight.** No AI. Medium, and it needs a
    product answer first (who sees whose comments).
 3. **Share with named email addresses**, with an invitation email, and AI use charged to the
@@ -59,11 +61,11 @@ Surveyed 2026-10-05 against the code; the file names are where to check.
 - **Two states only.** `articles.visibility` is `'private'` or `'public'`, held by a CHECK
   (`src/db/schema.ts`), and three other CHECKs repeat the pair (two on `article_visibility_changes`,
   one on `ingest_events`). Billing reads `= 'public'` live to halve an article's cost.
-- **Public means listed.** Every public article is on `/read/public` and may be used as an example
-  on `/` and `/features`. The sharing card says so: *"Anyone can read this without signing in, and
+- **Public means listed.** A public article that is readable and not archived is on `/read/public`
+  (the newest 200) and may be used as an example on `/` and `/features`. The sharing card says so: *"Anyone can read this without signing in, and
   it's listed publicly."*
-- **There is an accidental "unlisted" today**: a public article that is archived keeps its link and
-  drops off the public shelf. It is not a substitute. Archiving also hides the article from the
+- **There is a kind of "unlisted" today**: a public article that is archived keeps its link and
+  drops off the public shelf, by design (`src/store/public-library.ts`). It is not a substitute. Archiving also hides the article from the
   owner's own shelf, and the link is not a secret (next point).
 - **A slug is not a secret.** The `-spya-xxxxxx` suffix is about 30 bits and comes from
   `Math.random` (`src/ids.ts`), slugs minted before 2026-08-31 have none, and the slug is written to
@@ -74,14 +76,16 @@ Surveyed 2026-10-05 against the code; the file names are where to check.
 - **Nothing can hold a second person on an article.** Comments, highlights and bookmarks are one
   table, `comments`. Every read filters by `article_id` alone; `owner_id` is written and never read;
   the primary key is `(article_id, id)`; there is no row-level security in Postgres
-  ([auth.md](../project/auth.md) § What is still shared). 58 store call sites go through
-  `articleIdForOwned`, which means "the signed-in person owns this article".
+  ([auth.md](../project/auth.md) § What is still shared). `articleIdForOwned`, which means "the
+  signed-in person owns this article", is named 58 times across 14 store files.
 - **A model call is recorded against one person** (`ai_calls.owner_id`) **and one article**, but the
   article is looked up through the owner predicate, so a call by somebody else on your article
-  would be saved with no article on it.
+  would be saved with the article's slug but no link to its row.
 - **Email**: `src/email.ts` sends through Resend, 100 a day on the free plan, shared with sign-in
-  mail. The gift voucher is the one precedent for writing to somebody who has no account, and it
-  needed an outbox table. Our own tables hold no email addresses.
+  mail. The gift voucher is the one precedent for writing to somebody who has no account. It
+  needed an outbox table, and it already tells an existing reader from a prospective one by
+  matching the address to an account. We keep no general list of readers' current addresses or of
+  names to show beside a comment (vouchers and feedback reports each keep the addresses they need).
 - **Sign-in** is Google or email and password. There is no magic link. A sign-in can return to
   `/read/<slug>`, but only in the same tab and within ten minutes (`src/web/auth-return.ts`).
 
@@ -104,7 +108,7 @@ public one:
 Access & Sharing
   Private link     [ Create a link ]
       Anyone who has the link can read this without signing in.
-      It is not listed anywhere. They can pass it on.
+      A private link does not list it anywhere. They can pass it on.
 
   Public           [ Make public ]            (as today)
 ```
@@ -117,9 +121,18 @@ goes out and what stays, and the rights tick-box. Then:
       On since 5 October. Anyone who has the link can read this …
 ```
 
+The card reads the current link back from the server each time it opens, so it can be copied again
+later.
+
 *Turn off* makes the link stop working on the next request. Creating a link again makes a new one;
 the old one stays dead. That is the whole of "invalidate", and it costs nothing extra to build,
 because without it there is no way to stop sharing at all. Time limits are left out, as Greg said.
+
+**The two controls are independent, and public wins.** An article that is public is readable by
+anyone, with any key, a wrong key or none, and it is listed, shows the public notice and counts at
+the public rate. Turning its private link off only removes the link as a way in; the public address
+goes on working. Making it private again leaves a private link working if one is on. The card says
+so when both are on.
 
 ### What the person with the link sees
 
@@ -138,14 +151,19 @@ source, takedown and no-training lines
   on it.** That is the simpler option, and the one passed over is a third `visibility` value, which
   [260827ai](260827ai-public-read-only-access.md) suggested: it would mean editing every place that
   reads the pair, for no gain, and it could not express "public and also has a link".
-- **Stored in the clear**, so the owner can copy it again later. Hashing it would protect nothing:
-  a database that leaked would have leaked the article text beside it.
+- **Stored in the clear**, so the owner can copy it again later. The option passed over is storing
+  only a hash and showing the link once. That would stop a stolen copy of the database being used
+  to read later revisions, but a stolen copy already holds the article's text, the owner could never
+  copy the link again, and the link can be turned off. Sol called the clear-text choice reasonable
+  for a v1 (F8).
 - **One new predicate, in its own leaf file**, the sibling of `publicSlug`:
   `linkSharedSlug(slug, key)` is `slug = ? and share_token = ?`. It is never OR-ed into
   `publicSlug`, so the listing and the showcase cannot see a link-shared article whatever happens
   to them later. The public reader's queries each repeat the predicate in their own `where` today;
-  they would take a small union, `{ kind: "public", slug } | { kind: "link", slug, key }`, and one
-  function turns it into the right predicate.
+  they would take one access value, and one function turns it into the predicate: the public one,
+  or, when a key came with the request, *public or this key* built from the two leaves. So a public
+  article never refuses a reader for carrying a stale key. The asset read needs nothing more:
+  it checks access before it reads the manifest, and `storedAssetFor` is untouched.
 - **The same three public routes**, no new ones: `/api/public/article/:slug` and
   `/api/public/asset/:slug/:hash` accept `?key=`. `/api/public/library` does not. A wrong key, an
   absent article and a private one all give the same 404.
@@ -153,9 +171,23 @@ source, takedown and no-training lines
   (`handleApi`), and Sentry is configured not to send it (`urlQueryParams: false`). Today a public
   handler is deliberately given the path only (`PublicRequest`), so the dispatcher would hand it
   one more named field, `key`, and handlers would go on matching on the path alone.
-- **No link preview.** The page shell for `/read/<slug>?key=…` stays the plain one, with no title
-  or description in its `og:` tags. A chat app that unfurls the link learns nothing, and no
-  server-rendered page ever has the key written into it.
+- **The browser has to carry the key too.** Today the article request (`src/web/public-api.ts`) and
+  both image paths (`src/web/rehost.ts`) are built from the slug alone, and the access hook
+  (`src/web/article/access.ts`) reloads on slug, reader and retry. Each takes the key, and the hook
+  must reload when the key changes and never show an answer fetched under another key. Mode
+  switches and the details page already keep unknown query parameters, and the remembered-view
+  store already leaves them out.
+- **The HTML page answers 200 for a right key, with no preview.** Today `/read/<slug>` for a private
+  article is a 404 status carrying the plain app shell (`src/public/page.ts`). With a right key it
+  must be a 200, still the plain shell, with no title or description in its `og:` tags; a wrong key
+  stays the same 404 as an absent article, and a database failure stays what it is today. So the
+  automatic preview in a chat app shows nothing about the article. A service that is handed the
+  whole link holds the key and could open it, as any recipient can.
+- **Feedback must not carry the key out.** The Feedback button records `location.href`, and the
+  report's URL goes into our table, a Sentry tag and the admin email
+  (`src/web/FeedbackButton.tsx`, `src/feedback.ts`, `src/feedback-notice.ts`). The `key` parameter
+  is removed in the browser before sending and again on the server before storing, so an older
+  client is covered (Sol's F1).
 - **Nothing leaves in a referrer**: the whole site already sends `Referrer-Policy: no-referrer`.
 - **The audit**: a small append-only table, `article_share_link_events` (article, actor,
   `created` or `turned-off`, rights confirmed, when), without the token in it. The existing
@@ -170,7 +202,9 @@ source, takedown and no-training lines
 
 - **Anyone with the link can pass it on**, and we cannot tell who read it. Greg named this.
 - **The key is in a URL**, so it is in the browser history of everyone who opens it, and in
-  Vercel's own access log, which we do not control. Our log and Sentry do not get it.
+  Vercel's own access log, which we do not control. Our request log does not get it, Sentry's error
+  events do not, and feedback reports will not once the change above is made. A passage link copied
+  from a link-shared article carries the key, which is what makes it open for the next person.
 - **It republishes the text to some people**, so the rights tick-box and the takedown route apply
   as they do to a public article. `/privacy`, `/features/public-readable-sharing` and `/help` each
   need a sentence, and the first two have tests that hold them to the code.
@@ -181,19 +215,29 @@ These are the guards the survey found; a build has to move each one deliberately
 
 | Test | What it must now say |
 |---|---|
-| `tests/owner-isolation.test.ts` | a fourth sanctioned `eq(articles.slug, …)` leaf, with its own assertions; the count of public doors and of queries naming `articles` in the public graph |
-| `tests/public-imports.test.ts` | unchanged: no new table is read by the public graph, since the token is a column of `articles`. The audit table is written from the owner's side only |
+| `tests/owner-isolation.test.ts` | a fourth sanctioned `eq(articles.slug, …)` leaf, with its own assertions. The counts of public doors and of queries naming `articles` stay as they are, since no route or query is added |
+| `tests/public-imports.test.ts` | its table allowlist is unchanged: the token is a column of `articles`, and the audit table is written from the owner's side only. It gains the same leaf-closure assertion for the new predicate that `publicSlug` has |
 | `tests/public-visibility-pg.test.ts` | a private article with a token is readable with the right key, and a 404 with a wrong key, no key, another article's key, and after *Turn off*; it is absent from `/api/public/library` |
 | `tests/asset-route.test.ts` | the same for bytes: right key, wrong key, after turning off |
 | `tests/public-dto.test.ts`, `tests/shared-inventory.test.ts` | the one new payload fact, that this is a link share (for the notice), is named and has its inventory row |
 | `tests/public-network-trace.test.tsx` | a visitor with a key still makes one public request, no POST, no `Authorization` |
+| `tests/public-reads.test.ts` | its SQL assertions on the revision, asset, comments, searches and source-guess predicates, for both ways in, with the projections and row filters unchanged |
+| `tests/public-dispatch.test.ts` | only the named `key` reaches a handler; the library is unaffected; GET, HEAD and refusals keep `no-store` |
+| `tests/public-read-page.test.ts` | the page's status for a right key, a wrong key and a database failure, and no article metadata in the shell |
+| `tests/public-client-fetch.test.ts`, `tests/rehost.test.ts` | the key reaches the article request and both image paths, with credentials still omitted |
+| new client tests | the key survives a mode change and a trip to the details page; a key change on one slug reloads; the key is not in remembered view state |
+| new owner-route tests | only the owner; the rights tick; the minimal-paper refusal; create, read back, turn off, create again; the audit row written in the same transaction |
+| public and link together | a public article with a link on: any key reads it, it is listed, the notice is the public one; turning the link off changes nothing a visitor sees |
+| new feedback test | a report filed from a `?key=` address has no key in the stored row, the Sentry envelope or the admin email |
+| `tests/public-readable-sharing-page.test.tsx`, `tests/privacy-page.test.ts` | the sentences those two pages gain |
 | a new log test | a request carrying `?key=` writes no line containing the key |
 
 ### Size
 
-One session: one additive migration, one leaf predicate, the reader's access union, one owner route
-(create and turn off), the card, the notice, the docs and the tests above. Roughly the size of one
-stage of the original public sharing. It edits four files on the defences list
+One or two sessions, an estimate and not a measurement: one additive migration, one leaf predicate,
+the reader's access value, the page handler, the key through the browser's three requests, the
+feedback change, one owner route (read, create and turn off), the card, the notice, the docs and
+the tests above. Roughly the size of one stage of the original public sharing. It edits four files on the defences list
 (`src/public/routes.ts`, `src/store/public-slug.ts`'s sibling, `src/store/public-reader.ts`,
 `src/asset-delivery.ts`'s caller), which is why it waits for Greg.
 
@@ -205,16 +249,23 @@ the owner's.
 
 It is a separate plan, because it is where "one article, one person" stops being true:
 
-- **The `comments` table must start reading the column it already writes.** Every read and every
-  edit filters by author as well as article, the primary key takes the author in, and a
-  non-owner's routes are a new, separate set that never goes through `ownedSlug`. This is the
+- **The `comments` table must start reading the column it already writes.** Who wrote a comment
+  decides who may change it, and a rule decides who may see it (the question below). A
+  non-owner's routes are a new, separate set that never goes through `ownedSlug`. The keys and
+  queries are for that plan to settle. This is the
   hazard [260827ai](260827ai-public-read-only-access.md) § Stage 3 named: *"The moment two readers
   share one `article_id`, that invariant is gone and those tables leak into each other."*
 - **A row that says who has joined.** When a signed-in person opens a private link, we record
   `(article, person, first opened)`. That is what lets them comment, lets them come back without
   the key, and lets the owner see a list of who has joined. It is also the row stage 3 would
   create ahead of time from an email address, so it is the bridge between the two designs.
-- **A name to show.** We hold no names and no addresses in our own tables. Showing a person's email
+- **A way to read for a signed-in person who is not the owner.** The public namespace has no person
+  in it by design, and the owner's routes refuse everyone else, so this is a third way in, behind
+  the sign-in gate, with its own predicate and guards. It is another edit to a defence, and it is
+  the largest part of this stage.
+- **What turning the link off does to people who have joined**: removes them all, or only stops new
+  people joining. A privacy promise, to be decided in that plan.
+- **A name to show.** We keep no names to show beside a comment. Showing a person's email
   address to other readers would be a new disclosure, so a commenter needs a display name.
 - **What a public visitor sees.** If the article is also public, other people's comments must not
   ride out under the owner's name. The public projection today publishes every non-referee comment
@@ -230,23 +281,28 @@ Not designed. Listed so the cost is visible:
 1. **A list of people per article**, edited only by the owner: the stage 2 row, created from an
    email address before the person has opened anything, and a switch that makes the article
    readable *only* by people on the list.
-2. **Matching an address to an account.** Our tables hold no addresses, so an invitation waits
-   under the address and is claimed when somebody signs in with it, verified. Google sign-in and
+2. **Matching an address to an account.** The voucher code already does a version of this. An
+   invitation waits under the address and is claimed when somebody signs in with it, verified;
+   an account whose address later changes has to keep its place. Google sign-in and
    password sign-up both have to land back on the article, and today's return path is one tab and
    ten minutes.
 3. **The invitation email**: an outbox table as the gift voucher has, two letters (has an account,
    has none), a limit per sender so it cannot be used to send spam through our domain, and the
    Resend allowance of 100 a day that sign-in mail also draws on.
-4. **A read path for a signed-in non-owner.** The public namespace has no person in it by design,
-   so this is a third way in, behind the sign-in gate, with its own predicate and its own guards.
+4. **Reading for named people only.** The signed-in read path arrives in stage 2. This adds the
+   switch that closes an article to everyone not on the list, taking a person off the list,
+   cancelling an invitation not yet taken up, and how the list sits beside a private link or a
+   public article that is also on.
 5. **AI for a sharee.** Each mode that spends has to be opened one at a time to somebody who does
-   not own the article: 58 call sites assume the owner. Then whose result is it (does a sharee's
-   glossary become the article's?), whose allowance and rate limit pays, and the cost record has to
-   carry both the person and the article, which it cannot today. The admin cost pages already
+   not own the article: the store assumes the owner throughout. Then whose result is it (does a
+   sharee's glossary become the article's, and what if two people start one at once?), whose
+   allowance and rate limit pays, and the cost record has to carry both the person and the
+   article, which it cannot today. Recording what a call cost us is one thing and charging it to
+   somebody's allowance is another, and both need deciding. The admin cost pages already
    group by person, so "who incurred which costs" would then be answerable.
 
-Items 1 to 3 are a medium piece of work. Item 4 is another defence. Item 5 is the largest part and
-has the most product questions in it. The recommendation is to decide on stage 3 after stage 1 and 2
+Items 1 to 4 are a medium to large piece of work. Item 5 is the largest part and has the most
+product questions in it. The recommendation is to decide on stage 3 after stage 1 and 2
 have been used, and to leave sharee AI until last.
 
 ## Questions for Greg
@@ -254,19 +310,28 @@ have been used, and to leave sharee AI until last.
 ### Q-share-v1: which to build first?
 
 Sharing with some people can mean a link anyone can open, or a list of people who must sign in.
+Your second report says commenting and highlighting matter most, so the options differ on that too.
 
-- **A. The private link (stage 1 above). Recommended.** You press *Create a link*, send it however
-  you like, and they read. No sign-in, no AI, not listed, and you can turn it off. One session.
-  It gives up control over who reads: a link can be forwarded.
-- **B. The email list first (stage 3, without AI).** You type addresses, we email them, they sign
-  in, and only they can read. Nobody else can get in with a forwarded link. Several sessions: the
-  people list, the invitation email and its limits, matching an address to an account, and a new
-  signed-in read path. It also makes everyone create an account before reading a word.
-- **C. Neither yet.**
+- **A. The private link, reading only (stage 1 above), then comments next. Recommended.** You
+  press *Create a link*, send it however you like, and they read. No sign-in, no AI, and you can
+  turn it off. **The people you send it to cannot comment or highlight yet.** One or two sessions,
+  and something usable at the end of it. Comments (stage 2) follow as their own piece of work once
+  Q-share-comments is answered. It gives up control over who reads: a link can be forwarded.
+- **B. The private link with comments and highlights for signed-in people, in one go (stages 1 and
+  2 together).** Nothing ships until both are done, which is several sessions, because letting a
+  second person write on an article is the hard part. Choose this if a link people can only read
+  is not worth having on its own.
+- **C. The email list first (stage 3, without AI).** You type addresses, we email them, they sign
+  in, and only they can read. Nobody else can get in with a forwarded link. The most sessions of
+  the three: the people list, the invitation email and its limits, matching an address to an
+  account, and a signed-in way to read. Anyone without an account has to make one before reading
+  a word.
+- **D. Neither yet.**
 
 What decides it: whether "they could forward it" is acceptable for the articles you want to share
-now. If it is, A is most of the value for a fraction of the work, and B can still follow on top of
-it. If you need to be sure only named people read, it has to be B.
+now, and whether a read-only link is useful to you on its own. If both, A gets something into your
+hands soonest and nothing in it is thrown away by B or C. If you need to be sure only named people
+read, it has to be C.
 
 ### Q-share-comments: when a signed-in person comments on an article shared with them, who sees it?
 
@@ -277,18 +342,22 @@ Ann highlights a sentence and writes a note.
   see the highlight in the margin, labelled *Ann*. This is the shared-discussion version, and
   what "multiple people can comment" reads as. It needs a display name for each person (asked for
   once, at their first comment), and you can remove anyone's comment. People who only have the
-  link and are not signed in see the text and your comments, not Ann's.
+  link and are not signed in see the text and your comments, not Ann's. Note that "everyone who
+  has joined" includes anyone the link was forwarded to who then signs in.
 - **B. Only you and Ann see it.** Each sharee is giving feedback to you, privately. No names shown
   between sharees. Simpler to get right, and less of a conversation.
-- **C. Only Ann sees it.** It is her private notebook on your article. This is the smallest to
-  build, and it is not really commenting *with* you.
+- **C. Only Ann sees it.** It is her private notebook on your article: her own highlights and
+  notes, which you cannot see or remove. This is the smallest to build, and it is not really
+  commenting *with* you.
 
 What decides it: whether this is for discussing a piece together (A), collecting feedback (B), or
 letting people keep their own notes (C).
 
 ### Q-share-price: does a link-shared article count against your allowance as private, or as public?
 
-A public article counts half, to encourage sharing that everybody can find.
+This is about how much of the article allowance an article uses up. A public article counts half,
+to encourage sharing that everybody can find. An article that is public and also has a private
+link stays at the public rate either way.
 
 - **A. As private, full rate. Recommended.** A private link benefits a few people, not everyone,
   and this keeps billing untouched.
@@ -320,4 +389,23 @@ A public article counts half, to encourage sharing that everybody can find.
 
 ## Review
 
-GPT Sol's plan review: see the section added below once it has run.
+GPT Sol reviewed commit `8207bf800` on 2026-10-05, read-only:
+[the prompt](261005e-share-an-article-with-some-people-review-prompt.md),
+[the review](261005e-share-an-article-with-some-people-review-sol.md). Verdict: *sound with the
+listed changes*. One round; each finding was checked against the source before it was taken.
+
+| | Finding | What was done |
+|---|---|---|
+| F1 | P1. Feedback sends the page URL, so the key, to our table, Sentry and the admin email | Checked (`FeedbackButton.tsx` records `location.href`). Stage 1 strips the key in the browser and on the server, with a test |
+| F2 | P1. Public and link together was undefined | § What the owner sees now says public wins, and the predicate is *public or this key* |
+| F3 | P1. The browser's article and image requests carry no key | Added to § What it is, underneath, and to the tests |
+| F4 | P1. The HTML page answers 404 for a private article even with a right key | Checked (`decidePublicPage`). The page's behaviour is now specified, and the chat-app sentence narrowed |
+| F5 | P1. "Our tables hold no email addresses" was false | Corrected in three places; the voucher code is named as the precedent for matching an address |
+| F6 | P1. Stage 2 already needs a signed-in read path, and leaves open what happens to people who have joined when the link is turned off | Moved from stage 3 to stage 2; stage 3's list extended; stage 1's size is now "one or two sessions" |
+| F7 | P2. The test table missed several guards | Added; the claim about `public-imports` kept, with the leaf-closure assertion |
+| F8 | P2. "Hashing protects nothing" overstated | Rewritten as a trade-off, with the hash option named |
+| F9 | P2. The stage 2 sketch prescribed a primary-key change it does not need | Removed; left to that stage's own plan |
+| F10 | P1. Q-share-v1 did not offer the link with comments first | Added as option B, and stage 1 now says plainly it is reading only |
+| F11 | P3. Three loose wordings in § What exists today | Tightened |
+
+Nothing was overruled.

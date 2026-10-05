@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-04 · spya-hwdefp and spya-v322fd (SPIDERYARN-READING2-D7) · sharing an article with some
+  people: not built, because Greg asked to discuss first and every version changes who may read
+  an article, a listed defence. Three stages, three questions. Recommended: a private link first
+  (anyone holding it reads, no AI, not listed, can be turned off; one or two sessions), then
+  comments and highlights for signed-in people who have it, and named email addresses with
+  invitations and sharee AI only after those have been used · qi-98933vdd ·
+  [261005e § Questions for Greg](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md#questions-for-greg) ·
+  [note](261004_2030-share-an-article-with-some-people.md)
+
 - 2026-10-04 · SPIDERYARN-READING2-BX (spya-mdp0em) · topic pills on the public shelf
   (`/read/public`): not built, because every way of showing them edits a listed security defence,
   and that shelf has 6 articles, under the 8 the pills need. Four options, A to D. Recommended:
