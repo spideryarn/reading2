@@ -93,7 +93,8 @@ const NAV_DEPTH_ATTR = "data-nav-depth";
  *  - a row the page cannot bring to the reading line (the last rows of an
  *    article, where the scroll is clamped) settles with the measurement still
  *    naming the row before it. The page has not moved, so ↓ goes on and ↑ steps
- *    back from the aim;
+ *    back from the aim (↑ / ↓ then decline to advance the aim through rows that
+ *    cannot move the page — `useArrowNav` § `step`);
  *  - a wheel, a scrollbar, the browser restoring a position, another feature's
  *    jump: the pixel changes, and the next press measures.
  *
@@ -159,7 +160,11 @@ export function chainedRow(chain: Chain | null, checkLayout = false): number | n
     const held = chain.layout;
     if (!held?.element.isConnected || isFolded(chain.blockId)) return null;
     const { top, bottom } = held.element.getBoundingClientRect();
-    if (top !== held.top || bottom !== held.bottom || readingLine() !== held.line) return null;
+    /* By a pixel or more, not exactly: a browser re-rounds a row's edge by a
+       fraction of a pixel with nothing a reader could see having moved, and an
+       exact comparison threw a good aim away for it (Sol D-1, plan 261005h). */
+    const moved = (a: number, b: number) => Math.abs(a - b) >= 1;
+    if (moved(top, held.top) || moved(bottom, held.bottom) || moved(readingLine(), held.line)) return null;
   }
   return chain.row;
 }
@@ -649,7 +654,11 @@ export function useArrowNav(
         const id = blocks[row]?.id;
         return id === undefined || !isFolded(id);
       });
-      const target = stepTarget(starts, chainedRow(chain.current, true) ?? measureRow(), dir);
+      /* The aim this press steps from, if one still stands — kept so a ↓ that
+         moves nothing can put it back, below. */
+      const before = chainedRow(chain.current, true) === null ? null : chain.current;
+      const fromY = window.scrollY;
+      const target = stepTarget(starts, before?.row ?? measureRow(), dir);
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
       // keypress goes back to the browser, so ↓ on the last paragraph still
@@ -661,7 +670,29 @@ export function useArrowNav(
          to cancel ends *its* chain and not this one. */
       const mine = startChain(target, block.id);
       chain.current = mine;
-      scrollToBlock(block.id, "smooth", () => endChain(mine));
+      scrollToBlock(block.id, "smooth", (outcome) => {
+        endChain(mine);
+        /* **A ↓ that settled without moving the page does not replace the aim
+           it stepped from.** At the end of an article several rows begin inside
+           the last screenful, and none of them can be brought to the reading
+           line. These keys show no cursor: the page moving is the only sign of
+           a press. If each ↓ there advanced the aim, ↑ would have to walk it
+           back through those rows with nothing happening — nine dead presses
+           on a 93-block article, in a browser, 2026-10-05. So the aim stays on
+           the last row that moved the page, and the first ↑ moves it.
+
+           Only ↓, and only `settled`. ↑ adopts its aim even when nothing moved:
+           an aim can already be deep in the last screen (several quick ↓, each
+           cancelling the one before), and an ↑ that put the old aim back would
+           ask for the same unmovable row for ever. And only while this press is
+           still the newest (`chain.current === mine`).
+
+           Not in the Diagram's step, which shows its rung and its readout
+           (DiagramPanel.tsx § `stepTo`). */
+        if (dir === 1 && outcome === "settled" && window.scrollY === fromY && chain.current === mine) {
+          chain.current = before;
+        }
+      });
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });

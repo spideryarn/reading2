@@ -77,11 +77,15 @@ const realMatchMedia = window.matchMedia;
 const setScrollY = (y: number) =>
   Object.defineProperty(window, "scrollY", { value: y, writable: true, configurable: true });
 
+/** Pixels added to a row's height after it was laid out: a reflow that moves no top. */
+const grown = new Map<number, number>();
+
 /**
  * Lay the article out: one `<tr data-block>` per entry of `tops`, each at that
  * distance down the document, on a page that can scroll no further than `max`.
  */
 function layOut(tops: number[], max: number): void {
+  grown.clear();
   const tbody = document.createElement("tbody");
   tops.forEach((_top, i) => {
     const tr = document.createElement("tr");
@@ -91,7 +95,8 @@ function layOut(tops: number[], max: number): void {
     tr.append(td);
     tr.getBoundingClientRect = () => {
       const t = tops[i]! - window.scrollY;
-      return { top: t, bottom: t + 20, height: 20 } as DOMRect;
+      const h = 20 + (grown.get(i) ?? 0);
+      return { top: t, bottom: t + h, height: h } as DOMRect;
     };
     tbody.append(tr);
   });
@@ -334,6 +339,85 @@ describe("↑ / ↓ over the real scroll", () => {
       await aLongRenderPasses();
       await key("ArrowUp");
       expect(stepped).toEqual([id(2), id(1)]);
+    });
+
+    it("keeps the aim when the row's layout shifts by a fraction of a pixel (Sol D-1)", async () => {
+      /* A browser re-rounds a row by a sixty-fourth of a pixel for reasons no
+         reader could see. Compared exactly, that discarded the aim and ↓
+         repeated row 2. */
+      await mount(SHORT, 300, 200);
+      await key("ArrowDown");
+      await land();
+      grown.set(2, 1 / 64);
+      await key("ArrowDown");
+      expect(stepped).toEqual([id(2), id(3)]);
+    });
+
+    it("drops the aim when the row's layout shifts by a whole pixel", async () => {
+      await mount(SHORT, 300, 200);
+      await key("ArrowDown");
+      await land();
+      grown.set(2, 1);
+      await key("ArrowDown");
+      expect(stepped, "a real reflow means measuring, and the measurement says row 1").toEqual([id(2), id(2)]);
+    });
+  });
+
+  describe("↓ pressed past the point where the page can move (found in a browser, 2026-10-05)", () => {
+    /* Ten rows 200 apart on a page that scrolls no further than 1000, so rows
+       5 to 9 all begin inside the last screenful. ↑ / ↓ show no cursor: the
+       only sign of a press is the page moving. If every ↓ at the bottom went
+       on advancing the aim, ↑ would have to walk it back through rows that
+       cannot move, and each of those presses would look broken. */
+    const LAST_SCREEN = Array.from({ length: 10 }, (_, i) => i * 200);
+    const down = async (times: number) => {
+      for (let i = 0; i < times; i++) {
+        await key("ArrowDown");
+        await land();
+      }
+    };
+
+    it("↑ moves the page on its first press after many ↓ at the clamped end", async () => {
+      await mount([0, 200, 400, 600], 300, 200);
+      await down(8);
+      expect(window.scrollY).toBe(300);
+      await key("ArrowUp");
+      await land();
+      expect(window.scrollY, "the first ↑ was a dead press").toBe(200);
+      expect(stepped.at(-1)).toBe(id(1));
+    });
+
+    it("↑ steps back from the last aim that moved the page, not from the last row asked for", async () => {
+      await mount(LAST_SCREEN, 1000, 600);
+      await down(6);
+      expect(window.scrollY).toBe(1000);
+      await key("ArrowUp");
+      await land();
+      expect(stepped.at(-1)).toBe(id(4));
+      expect(window.scrollY).toBe(800);
+    });
+
+    it("↑ still adopts an aim that moved nothing, so it walks out of the last screen rather than repeating", async () => {
+      /* How an aim gets deep into the last screen at all: four ↓ in quick
+         succession, each cancelling the one before, and the last glide lands
+         on the clamp with the aim on row 7. Rows 6 and 5 cannot move the page
+         either. If ↑ put the old aim back as ↓ does, it would ask for row 6
+         for ever. */
+      await mount(LAST_SCREEN, 1000, 600);
+      for (let i = 0; i < 4; i++) {
+        await key("ArrowDown");
+        await frame(20);
+      }
+      await land();
+      expect(stepped).toEqual([id(4), id(5), id(6), id(7)]);
+      expect(window.scrollY).toBe(1000);
+      stepped.length = 0;
+      for (let i = 0; i < 3; i++) {
+        await key("ArrowUp");
+        await land();
+      }
+      expect(stepped).toEqual([id(6), id(5), id(4)]);
+      expect(window.scrollY).toBe(800);
     });
   });
 });

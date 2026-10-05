@@ -298,3 +298,37 @@ control returned two nodes. The public route converts that exception to HTTP 500
 visitor tests prove safety for a delivered malformed payload, not an end-to-end visitor read from
 malformed storage. This and the already-noted `src/section-path.ts` server Skim walker remain outside
 the client stage's fix.
+
+## After the review (2026-10-05)
+
+- **Both of those server readers were then fixed**, `529d038ae`, red first: `publicTree` and
+  `sectionNodesOf` treat a node with no list as a leaf. A grep found more server readers of a
+  stored tree's `children` (`src/skim.ts` § `topLevelSections`, `src/tree-parts.ts`,
+  `structure-flatten.ts`, `live-gpt.ts`, `sketch.ts`, `arc.ts`, `labels.ts`, `structure-slices.ts`,
+  `structure.ts`, `supplement.ts`, `tree-invariants.ts`). None was traced; they are reported to the
+  Overseer. The right fix there is probably the client's: one mend where the server reads a tree
+  from the store.
+- **Round two** ([review](261005h-three-robustness-bugs-code-review-2-sol.md)): ship, both commits.
+  D-1 (P2): the exact rectangle comparison dropped a clamped aim for a 1/64 px change. Now "by a
+  pixel or more". D-2 (P3): the five-second grace bounds the wait and cannot guarantee the reload;
+  accepted as it is.
+- **The browser check** (Sonnet, Playwright, 1440 / 820 / 390, commits `26b87446f` to `529d038ae`):
+  stepping by key, mouse and touch at gaps of 50 to 1,500 ms, reduced motion and 6× throttle all
+  matched a one-press-at-a-time reference; the reading view painted in every mode; labels and maths
+  were right. Not run: keys on the long article at 390, the long article's end of page, the Referee
+  panels (a paid run).
+- **It found one regression, and it is fixed.** At the end of an article several rows begin inside
+  the last screenful. Each ↓ there advanced the aim though the page could not move, so ↑ had to
+  walk it back: after twelve ↓, nine ↑ did nothing. The timer used to forget. Now a ↓ that settles
+  without moving the page does not replace the aim it stepped from (`useArrowNav` § `step`; not the
+  Diagram, which shows its rung). **What is left:** several quick ↓, each cancelling the one
+  before, can still leave the aim a row or two into the last screen, and ↑ then has that many dead
+  presses. And a ↓ at the very end is now always taken by us rather than handed to the browser,
+  which on a page at its maximum scroll changes nothing visible. This fix was made after round two
+  and has not had a review of its own; D-1 and it are P2-sized, so the two-round rule does not ask
+  for one.
+- **A judgement, for whoever reads this next.** Stage C began as "replace a timer with a fact" for
+  a bug measured at 0 in 436. It ends as a pixel rule, a layout check, a one-pixel tolerance and a
+  clamped-end exception. Each part answers a reproduced case, but together they are more machinery
+  than the timer was. If it gives trouble, putting `CHAIN_MS` back is a small revert of
+  `9b71c5b54` and the Stage C parts of the two commits after it.
