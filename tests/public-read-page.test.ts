@@ -92,6 +92,7 @@ const HEAD: PublicHead = {
   title: "Café Society — naïveté, dénouement, 日本語",
   gist: "A short description with an em dash — and a curly quote's apostrophe.",
   canonical: "https://example.com/a-public-article",
+  authors: [],
 };
 
 /** The title of an article that is **not** shared. It must appear nowhere. */

@@ -598,8 +598,18 @@ Greg, 2026-08-30, on shared reading links: *"let's name those two preview bots"*
 `facebookexternalhit` and `Twitterbot` now have `Allow: /read/` groups of their
 own. Without them a link pasted into WhatsApp, Messenger, Facebook or Instagram
 shows a bare URL — those services fetch the page like any other crawler and were
-obeying the blanket `Disallow`. Slack was already unfurling, because Slackbot
-honours only rules that name it.
+obeying the blanket `Disallow`. Slack was already unfurling:
+[its fetchers ignore `robots.txt`](https://api.slack.com/robots).
+
+**Since 2026-10-05 it is seven robots and three paths**, in one group
+([261005f](../plans/261005f-link-previews-and-seo-for-shared-links.md); Greg, 2026-10-04: *"If I
+share a Spideryarn link (e.g. on X/Twitter, WhatsApp, Facebook, etc etc), make sure it looks
+nice"*). LinkedIn's, WhatsApp's, Telegram's, Discord's and Slack's fetchers are named beside the
+first two, and each may fetch `/read/`, `/og-card.png` (the picture every card carries, which a
+robot shut out by `Disallow: /` could not fetch) and `/$`, the homepage alone. Every other page has
+a card in its head too, but a robot that obeys this file is not let in to read it; adding a path is
+a line here, in `PREVIEW_ALLOWS` in `scripts/check-public-shell.ts`, and in the sentence on
+`/features/public-readable-sharing` that names the hole to authors.
 
 **A bot obeys exactly one group and inherits nothing from `*`**, so each named
 group carries its own `Disallow: /` as well. A named group without one is not a

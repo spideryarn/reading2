@@ -173,6 +173,47 @@ describe("the public-readable-sharing page", () => {
     expect(universal).toMatch(/^\s*Disallow:\s*\/\s*$/m);
   });
 
+  /**
+   * **The page names the hole in `robots.txt` to authors, robot by robot and
+   * path by path**, and the file can grow a name or a path without anybody
+   * opening the page. Red when it does. The map is spelled out, so a robot
+   * nobody has put a platform's name to fails too.
+   */
+  it("names every platform robots.txt lets in, and every path it lets them reach", () => {
+    const PLATFORM: Record<string, string> = {
+      facebookexternalhit: "Facebook",
+      twitterbot: "X,",
+      linkedinbot: "LinkedIn",
+      whatsapp: "WhatsApp",
+      telegrambot: "Telegram",
+      discordbot: "Discord",
+      slackbot: "Slack",
+    };
+    const lines = ROBOTS.split("\n").map((l) => l.replace(/#.*$/, "").trim());
+    const named = lines
+      .map((l) => /^User-agent:\s*(.+)$/i.exec(l)?.[1]?.toLowerCase())
+      .filter((a): a is string => a !== undefined && a !== "*");
+    expect(named.length).toBeGreaterThan(0);
+    for (const agent of named) {
+      const platform = PLATFORM[agent];
+      expect(platform, `robots.txt names ${agent}, and this test has no platform for it`).toBeDefined();
+      /* `X,` and not `X`: the page also says `X-Robots-Tag`. */
+      expect(PAGE).toContain(platform);
+    }
+    const SAYS: Record<string, RegExp> = {
+      "/read/": /\/read\//,
+      "/og-card.png": /picture of our own logo/,
+      "/$": /our homepage/,
+    };
+    const allowed = [...new Set(lines.map((l) => /^Allow:\s*(.+)$/i.exec(l)?.[1]).filter((p) => p !== undefined))];
+    expect(allowed.length).toBeGreaterThan(0);
+    for (const allowPath of allowed) {
+      const says = SAYS[allowPath];
+      expect(says, `robots.txt allows ${allowPath}, and the page does not say so`).toBeDefined();
+      expect(PAGE).toMatch(says as RegExp);
+    }
+  });
+
   it("claims a noindex header on every response, and vercel.json sets one", () => {
     expect(PAGE).toMatch(/X-Robots-Tag/);
     expect(PAGE).toMatch(/noindex/);

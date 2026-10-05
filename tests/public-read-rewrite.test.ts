@@ -33,6 +33,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { decidePublicPage } from "../src/public/page.js";
+import { OG_CARD } from "../src/public/page-head.js";
 import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
 import { redirectsToMetadata, viewFor } from "../src/read-address.js";
 import { modeParam } from "../src/web/params.js";
@@ -669,20 +670,36 @@ describe("public/robots.txt", () => {
   /* Mutation: drop either name and this reddens; that is the whole point of it,
      because losing a card is silent — the link still works, it just looks like
      nothing. */
-  it("names exactly the two preview bots and no others", () => {
+  /* Seven since 2026-10-05, where it was Meta's and X's alone: Greg asked for a
+     card on "X/Twitter, WhatsApp, Facebook, etc etc". None of these is a search
+     engine, and a search engine's name here is what this must refuse. */
+  const PREVIEW_BOTS = [
+    "facebookexternalhit",
+    "Twitterbot",
+    "LinkedInBot",
+    "WhatsApp",
+    "TelegramBot",
+    "Discordbot",
+    "Slackbot",
+  ];
+
+  it("names exactly the preview bots and no others", () => {
     const named = groups.flatMap((g) => g.agents).filter((a) => a !== "*");
-    expect(named.sort()).toEqual(["Twitterbot", "facebookexternalhit"]);
+    expect(named.sort()).toEqual([...PREVIEW_BOTS].sort());
   });
 
-  it.each(["facebookexternalhit", "Twitterbot"])(
-    "lets %s reach /read/ and nothing else",
+  it.each(PREVIEW_BOTS)(
+    "lets %s reach a shared article, the card's picture and the homepage, and nothing else",
     (agent) => {
       const group = groupFor(agent);
       expect(group).toBeDefined();
-      /* Both lines, in this order. `Allow` alone would be the open door, and
-         `Disallow` alone would be the hole closed again. */
+      /* All four lines. The `Allow`s alone would be the open door, because a
+         named group inherits nothing from `*`; `Disallow` alone would be the
+         hole closed again. `/$` is the homepage only: `$` ends the match. */
       expect(group?.rules).toEqual([
         { rule: "allow", path: "/read/" },
+        { rule: "allow", path: OG_CARD.path },
+        { rule: "allow", path: "/$" },
         { rule: "disallow", path: "/" },
       ]);
     },
