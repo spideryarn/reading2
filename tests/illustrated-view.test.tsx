@@ -135,6 +135,7 @@ interface Serving {
   jobs?: unknown[];
   /** The artefact the route answers with, when not `ILLUSTRATED`. */
   illustrated?: unknown;
+  profileChanged?: boolean;
 }
 
 /**
@@ -185,7 +186,7 @@ function serving(opts: Serving = {}) {
           illustrated: opts.illustrated ?? ILLUSTRATED,
           stale: false,
           outdated: false,
-          profileChanged: false,
+          profileChanged: opts.profileChanged ?? false,
         }),
         { status: 200 },
       );
@@ -772,7 +773,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
   const cases = [
     { name: "absent", sketch: null, says: "no Sketch of this article yet" },
     { name: "stale", sketch: { stale: true, profileChanged: false }, says: "out of date" },
-    { name: "profile-changed", sketch: { stale: false, profileChanged: true }, says: "reader profile you have since changed" },
+    { name: "profile-changed", sketch: { stale: false, profileChanged: true }, says: "before your profile said what it says now" },
   ] as const;
 
   for (const c of cases) {
@@ -1312,6 +1313,22 @@ describe("the reader's steering note", () => {
     expect(posted.length).toBe(1);
     expect(posted[0]?.force).toEqual(["illustrated"]);
     expect(posted[0]?.illustrationNote).toBe("A map, not a manuscript.");
+  });
+
+  it("redraws before repainting an existing picture when the reader first adds a profile", async () => {
+    serving({ illustrated: ILLUSTRATED, profileChanged: true });
+    await mount();
+    expect(posted).toEqual([]);
+    const redraw = buttonSaying("Draw the Sketch, then paint again") ?? buttonSaying("Paint again");
+    expect(redraw).toBeDefined();
+    await act(async () => {
+      redraw?.click();
+    });
+    await settle();
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.steps).toEqual(["sketch", "illustrated"]);
+    expect(posted[0]?.force).toEqual(["illustrated"]);
+    expect(host.textContent).toContain("The Sketch first: one model call");
   });
 
   it("will not paint with a note the server would refuse", async () => {

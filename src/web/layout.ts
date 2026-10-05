@@ -522,11 +522,32 @@ export interface FitInput {
 
 /**
  * **The marginalia column's width**: ~20 characters of note at its
- * narrowest, ~36 at its widest. Notes are a step smaller than the prose
+ * narrowest, ~36 at `MARG_IDEAL`, which is the most it ever takes room from
+ * the prose or a band for. Notes are a step smaller than the prose
  * (marginalia.css), so these are much narrower than a band.
  */
 export const MARG_MIN = 200; // 12.5rem
 export const MARG_IDEAL = 288; // 18rem
+/**
+ * **The widest the column gets, on a wide window** — Greg, 2026-10-05, about
+ * the chat card that lives here: *"it still seemed pretty narrow. Maybe if
+ * the screen is wide we allow the Marginalia column to be a bit wider"*.
+ * About 48 characters of note; past that a 13px line is too long to read.
+ */
+export const MARG_WIDE = 384; // 24rem
+
+/**
+ * **The column, widened into room that is already there.** `margW` is what the
+ * fit settled on (at most `MARG_IDEAL`) and `room` is everything right of the
+ * prose's right edge. The fit is finished before this is asked: nothing is
+ * reserved for the extra, so the prose and a band are exactly where they were,
+ * and a window with no spare room right of the column gets the column it
+ * always had. Whole pixels, because the room beside centred prose is a half
+ * as often as not.
+ */
+function widened(margW: number, room: number): number {
+  return Math.max(margW, Math.min(Math.floor(room), MARG_WIDE));
+}
 
 /**
  * **The prose with a column of notes to its right** — Marginalia mode.
@@ -537,7 +558,8 @@ export const MARG_IDEAL = 288; // 18rem
  *  1. **The prose stays where Plain puts it** — centred, at the Plain cap —
  *     while the room left beside it already holds the column. Nothing is
  *     reserved then (`margReserve` 0), so turning the mode on does not move a
- *     word of the article.
+ *     word of the article. When that room is more than the column, the column
+ *     grows into it, up to `MARG_WIDE` (`widened`).
  *  2. **Then the column pushes the centred prose left**, by reserving room on
  *     `.reader`'s right: the table is centred (`.text-alone`) in a content box
  *     `avail − margReserve` wide, so its right edge sits at
@@ -571,6 +593,7 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
   const margW = clamp(avail - PROSE_MIN, MARG_MIN, MARG_IDEAL);
   const proseW = Math.min(plainW, avail - margW);
   const margReserve = Math.max(0, 2 * margW + proseW - avail);
+  const margLeft = spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW;
   return {
     widths: [proseW],
     tableW: proseW,
@@ -579,9 +602,10 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
     spine,
     modeW: 0,
     alone: true,
-    margW,
+    /* Rule 1's room, when the centred prose leaves more than the column. */
+    margW: widened(margW, windowWidth - margLeft),
     margReserve,
-    margLeft: spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW,
+    margLeft,
   };
 }
 
@@ -627,7 +651,9 @@ function fitBoth(
     spine,
     modeW,
     alone: false,
-    margW,
+    /* Into the spare room the capped prose leaves right of the column — after
+       the band took its share around the unwidened one. */
+    margW: widened(margW, margReserve),
     margReserve,
     margLeft: spineWidth(spine) + modeW + proseW,
   };
@@ -912,7 +938,7 @@ function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
  * `--chat-dock-inset` so that this is the only copy. `CHAT_DOCK_GUTTER` is the
  * page kept between the panel and the window's right edge.
  */
-/* **Sized so that a full column is enough room.** The column is at most
+/* **Sized so that a full column is enough room.** The unwidened column is at most
    `MARG_IDEAL` (288px), and with a band open it is pressed against the
    window's edge, so the room there is 288 less the inset and the gutter. The
    first numbers (272, 10, 12) left 266 and the panel never docked beside a

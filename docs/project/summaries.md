@@ -206,8 +206,9 @@ So Summary's band has two presses that rewrite, and each is drawn only when its 
   missing, because it cannot check the fingerprint (`pg.ts` § `loadSimpleSummary`).
   *Profile changed* is the stored `profileHash`
   against the reader's profile now ([`profile.ts`](../../src/profile.ts) § `profileIsStale`).
-  Two cases are deliberately not a change there: the reader cleared their profile, and the summary
-  was written when there was no profile at all.
+  One case is deliberately not a change there: the reader cleared their profile. A summary written
+  when there was no profile at all is a change once the reader writes one (Greg, 2026-10-05;
+  [reader-profile.md § Provenance](reader-profile.md#provenance-what-was-this-written-with-and-is-it-still-true)).
 - **A rewrite already asked for is not a new offer.** While a forced run is under way the band
   shows its progress, and if it failed, the failure and **Retry**. That includes a Rerun pressed
   in Metadata while Summary is open. These follow a press the reader has made.

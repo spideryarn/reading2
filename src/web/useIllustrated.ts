@@ -123,6 +123,8 @@ export interface UseIllustrated {
    * change nothing. Safe to force because `illustrated` is in
    * `FORCE_ONLY_WHEN_NAMED` and is last in `STEP_ORDER`, so nothing else is
    * swept in with it.
+   * When the picture's profile has changed, includes an unforced Sketch first
+   * so the painting does not repeatedly refuse its old profile stamp.
    */
   regenerate(note?: string): Promise<void>;
   /**
@@ -311,9 +313,13 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   );
   const regenerate = useCallback(
     async (note?: string) => {
-      await queue.start({ force: true, ...withNote(note) });
+      await queue.start({
+        force: true,
+        ...(profileChanged ? { precededBy: ["sketch"] as const } : {}),
+        ...withNote(note),
+      });
     },
-    [queue],
+    [queue, profileChanged],
   );
   const drawThenPaint = useCallback(
     async (note?: string) => {

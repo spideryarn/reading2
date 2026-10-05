@@ -284,9 +284,9 @@ function OwnerSketch({
      profile icon in the bar says it, as it does in every other
      personalised mode, and its panel carries the redraw (plan 261002b). Two
      sentences for one fact would be one too many. */
-  const badge = view.profiled ? (
+  const badge = (
     <WrittenForYou
-      written
+      written={view.profiled}
       changed={view.profileChanged}
       slug={slug}
       regenerate={{
@@ -295,7 +295,7 @@ function OwnerSketch({
         refresh: () => view.refresh(),
       }}
     />
-  ) : null;
+  );
 
   /* **The two lines that are about a job rather than about a picture**, built
      here because this is where the job is. Both were inside the drawing until

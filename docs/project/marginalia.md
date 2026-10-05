@@ -87,6 +87,23 @@ room. The margin's *Question* line for that conversation is left out while its c
 room for a card, or with the trial's switch off, the panel docks over the lower part of the column
 or floats in the corner. [comments.md § Where the chat panel sits](comments.md#chat-dock).
 
+**The column is wider on a wide window.**
+
+> it still seemed pretty narrow. Maybe if the screen is wide we allow the Marginalia column to be a
+> bit wider
+>
+> — Greg, 2026-10-05, about the chat card
+
+It is 288px at most wherever it has to take room from the prose or a band, as before. Where
+the centred prose already leaves more than that to its right, the column grows into it, up to
+384px. With a 16px root, the rail on and no band, it is 310px in a 1440px window and reaches
+384px from about 1590px. Beside a band it grows only into room
+that was already spare right of the column. The prose and the band do not move or change width, and
+below about 1400px nothing changes at that root size. The chat card's own width did not change:
+it already took all the room right of the prose, up to 576px, so at 1440px it is still about 282px, and wider there would
+mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
+[`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
+
 **A lone question's line says its words once.** Opened, it shows only *Open the conversation*; the
 line itself un-truncates. Among several entries each keeps its own head, which is how they are told
 apart (report `spya-f6dpj5`).
