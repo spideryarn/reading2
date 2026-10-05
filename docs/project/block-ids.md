@@ -144,7 +144,10 @@ nothing will rewrite them.
 
 ### The freshness guard, and the two ways it was wrong
 
-`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) asks two things.
+`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) asks two things. Since
+2026-10-05 the asking is `blocksAreWhatTheirHtmlProduces` in [`src/blocks.ts`](../../src/blocks.ts),
+and the Metadata page calls it too (`isCurrent` in [`src/store/pg.ts`](../../src/store/pg.ts)), so
+the queue and the page give one answer about this step.
 
 1. **Every id in the blocks artefact is in the stamped HTML.** Cheap, and it settles the commonest
    failure — stage 2 re-ran and wiped the ids — before anything is parsed.
