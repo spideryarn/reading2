@@ -1009,6 +1009,13 @@
       "when": 1791197477254,
       "tag": "20261005105117_article_title_original",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1791213565901,
+      "tag": "20261005151925_bibliographic_records_cited_by_count",
+      "breakpoints": true
     }
   ]
 }
