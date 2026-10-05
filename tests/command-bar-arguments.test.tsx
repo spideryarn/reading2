@@ -301,6 +301,59 @@ describe("the glossary", () => {
   });
 });
 
+/* Plan 261005i, Part A (Greg's Q-bar-3, option B): a `find` in the bar offers
+   a quick search first and the exact words second. The quick row spends a
+   model call, so it carries the marker (GPT Sol's F1); the exact-words row is
+   the address it always was. */
+describe("search for X", () => {
+  const QUICK = "Quick search “the limits of free will”";
+  const EXACT = "Find “the limits of free will” in this article";
+  function withQuickSearch(): { exec: CommandExecutor; searched: string[] } {
+    const searched: string[] = [];
+    const quickSearch = (words: string) => {
+      searched.push(words);
+      return { kind: "close" } as const;
+    };
+    return { exec: { ...executor(), quickSearch }, searched };
+  }
+
+  it.each(["search for", "find", "does it mention"])("`%s …` offers a quick search first and the exact words second", (verb) => {
+    const { exec, searched } = withQuickSearch();
+    reading({ exec });
+    openBar();
+    type(`${verb}   the limits of  free will`);
+    expect(listed()).toEqual([QUICK, EXACT]);
+    expect(rows()[0]?.querySelector(".cmdbar-generates"), "a row that spends says so").not.toBeNull();
+    expect(rows()[1]?.querySelector(".cmdbar-generates")).toBeNull();
+    expect(rows()[0]?.id).not.toMatch(/\s/);
+    expect(rows()[0]?.id).not.toBe(rows()[1]?.id);
+    expect(searched, "drawn is not pressed").toEqual([]);
+  });
+
+  it("Enter runs the quick search once, with the cleaned words, and closes", async () => {
+    const { exec, searched } = withQuickSearch();
+    reading({ exec });
+    openBar();
+    type("search for   the limits of  free will");
+    press("Enter");
+    await settle();
+    expect(searched).toEqual(["the limits of free will"]);
+    expect(location.search).not.toContain("find=");
+    expect(dialog().open).toBe(false);
+  });
+
+  it("offers the exact words alone where nothing can run a quick search", () => {
+    reading({ exec: executor() });
+    openBar();
+    type("search for the limits of free will");
+    expect(listed()).toEqual([EXACT]);
+    metadataPage();
+    openBar();
+    type("search for the limits of free will");
+    expect(listed()).toEqual([EXACT]);
+  });
+});
+
 describe("tags", () => {
   it("adds the tag, as it will be stored, through the shelf row's controller", async () => {
     const edit = vi.fn(async () => ["reading group"]);

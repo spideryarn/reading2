@@ -446,6 +446,11 @@ at the scores that exist.
   component; the other four stay as they are.
 
 **4. What should happen to a paid answer when the reader leaves mid-stream?**
+**Decided 2026-10-04, built 2026-10-05:** the narrow step — Mirror stops, nothing else changes.
+Greg: *"Q-paid-streams ok, i don't have a strong view on this"*.
+[261005i](261005i-mirror-stops-its-model-call-when-the-referee-leaves.md). So four stop now and six
+run on; the text below is the question as it was asked.
+
 There are ten places where an answer streams in. If the reader closes the tab part-way, today:
 - **three stop the model call**;
 - **seven let it run to the end**: comment answers, glossary term lookups, Referee criteria,

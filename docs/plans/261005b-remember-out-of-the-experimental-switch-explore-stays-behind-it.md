@@ -130,3 +130,6 @@ article is added, like Glossary and Quotes are? Today they are written the first
 is pressed, which takes about a minute. Writing them up front costs one model call per article
 whether or not the reader ever opens the Quiz. Recommendation: leave it on the press, and revisit if
 the minute's wait is annoying in use.
+
+**Decided: A, on the press, as built** — Greg, 2026-10-05: "it's fine for them to only be written
+when you press Quiz".

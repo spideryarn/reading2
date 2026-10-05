@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import type { Article, Comment, Crossref, UnreadPaper } from "../../types.js";
 import { sanitizeArticle } from "../sanitize.js";
+import { withChildLists } from "../tree.js";
 import type { SavedSearch } from "../useSearch.js";
 import { apiFetch, detailsOf, readJson } from "../lib/api.js";
 import { takePreloaded } from "../lib/prefetch-article.js";
@@ -402,7 +403,15 @@ export async function resolveAccess(
              author's. */
           titleOverridden: false,
         };
-  const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
+  /* **The tree's door is this one too**, for the reason the sanitiser's is: it
+     is the one line both paths cross before anything is in component state.
+     The tree is stored JSON, and a node with no `children` list threw in
+     whichever walker met it first, taking the reading view with it. Mended
+     here, once, so no walker has to ask. The same tree back when nothing was
+     missing, and so the same payload. tree.ts § `withChildLists`. */
+  const listed = withChildLists(drawn.tree);
+  const whole: Article = listed === drawn.tree ? drawn : { ...drawn, tree: listed };
+  const presentable = await renderArticleMaths(sanitizeArticle(whole), {
     signal: load.signal,
   });
   const rehosted = await rehostImages(

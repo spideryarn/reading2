@@ -713,7 +713,8 @@ const SEARCH_KEYS = new Set(["mode", "match", "find", "run", "runs", "order", "c
  *
  * **Free and instant**, so `generates: false`: a words search is a literal
  * match in the browser. *Meaning* search is a model call and is pressed, not
- * arrived at, so this never opens that one.
+ * arrived at, so this never opens that one. The search that does call a model
+ * is a row of its own, in front of this one (`quickSearchRow` below).
  *
  * Built from the query rather than ranked against it — `argumentRows` below.
  * **A page row, not a runner**, and the one argument row that is: it is an
@@ -734,6 +735,39 @@ function findRow(article: CommandBarArticle, words: string): Command {
     description,
     aliases: [],
     generates,
+  };
+}
+
+/**
+ * **The quick search for the same words, drawn in front of the find row** —
+ * since 2026-10-05 (plan 261005i; Greg's Q-bar-3, option B: the bar opens
+ * quick search and the Dock's icon stays). `null` where nothing here can run
+ * one: a visitor, or the Metadata page, which has no band — the exact-words
+ * row is then alone, as it was.
+ *
+ * **First, so Enter runs it; exact words is one arrow-key down.** It runs the
+ * Enter of the Dock's own quick-search box (`CommandExecutor.quickSearch`), so
+ * the two ways in are one search.
+ *
+ * **It spends, so it says so** (`generates: true`, GPT Sol's F1 on the plan):
+ * a quick search is a model call and a saved row. And like every argument row
+ * it is drawn and pressed, never run from the words alone (`opensOnly: false`,
+ * plan 261003k F2) — which is what keeps a model's `find` answer a proposal.
+ */
+function quickSearchRow(article: CommandBarArticle, words: string): Command | null {
+  const quickSearch = article.executor?.quickSearch;
+  if (quickSearch === undefined) return null;
+  return {
+    kind: "action",
+    /* Unique per search and no whitespace: it ends up in an `id` attribute. */
+    id: `quick-search:${encodeURIComponent(words)}`,
+    label: `Quick search “${words}”`,
+    description: "Search mode, a fast first pass for the passages about this.",
+    aliases: [],
+    generates: true,
+    typedOnly: true,
+    opensOnly: false,
+    run: () => quickSearch(words),
   };
 }
 
@@ -759,7 +793,8 @@ export function findHref(slug: string, carried: string, words: string): string {
  * **this page can run**: the reading view's executor, plus the tags runners
  * from the shelf row on either page. A proposal with no runner here is no
  * row, never a row that fails — the Metadata page offers no jump and no
- * glossary (GPT Sol's F1).
+ * glossary (GPT Sol's F1). A `find` is the one proposal with two rows: a quick
+ * search in front of it, where one can be run (`quickSearchRow`).
  *
  * A refused row (an invalid tag, a term the glossary's ask would refuse) is
  * still drawn when its command is offered here, and its Enter keeps the bar
@@ -783,7 +818,12 @@ function argumentRowsFor(article: CommandBarArticle, queries: readonly ArgumentQ
     .flatMap((argument) => resolveArgument(argument, sources))
     .flatMap((row) => {
       const command = argumentCommand(article, runners, row);
-      return command === null ? [] : [command];
+      if (command === null) return [];
+      /* A `find` is two rows where a quick search can be run: that first, the
+         exact words second (`quickSearchRow`). */
+      const quick =
+        row.kind === "ready" && row.proposal.id === "find" ? quickSearchRow(article, row.proposal.words) : null;
+      return quick === null ? [command] : [quick, command];
     });
 }
 

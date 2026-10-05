@@ -1,0 +1,32 @@
+All three defects warrant fixes, but each stage needs changes before building. The most serious gap is the maths recovery’s potential to discard newly typed words.
+
+- **P-1 — P0, established by tracing: background maths recovery can lose drafts.** The plan returns the article immediately while `reloadIfStale()` checks `/build.json`. The reader can then type before that check completes. [CriteriaPanel.tsx:625](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/CriteriaPanel.tsx:625) keeps unsent criteria in local state, and [CommentDialog.tsx:1126](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/CommentDialog.tsx:1126) keeps uncommitted comment edits there too; neither registers with `safeToReload()`. Typing changes no address, so the address guard does not help. **Change:** await recovery before exposing the article, or extend the draft vetoes before permitting background reloads. Test a draft entered while the build check is pending.
+
+- **P-2 — P1, established by tracing: an abandoned maths load can reload another page.** Navigation aborts the article load, but dynamic import continues. If it rejects afterwards, the proposed catch starts `reloadIfStale()`, which [captures the address at invocation](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/stale-shell.ts:244)—now the reader’s new page. Its address comparison can therefore pass. **Change:** suppress recovery for an aborted load and carry that load’s validity through the asynchronous check. Test leaving before rejection and leaving while recovery is pending.
+
+- **P-3 — P1, established by tracing: Stage A’s inventory omits the provenance stamp lookup.** [MarginaliaColumn.tsx:544](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/marginalia/MarginaliaColumn.tsx:544) renders `PROVENANCE_WORD[note.provenance]`. Guarding the named `PROVENANCE_TIP` lookup still leaves an unknown stamp blank and `__proto__` rendering an object. **Change:** explicitly include `PROVENANCE_WORD`, with both stamp and tooltip covered by the unknown-value tests.
+
+- **P-4 — P3, established: the blind-spot symptom is misstated.** `map(...).join("; ")` converts an `undefined` entry to an empty segment; it does not print `"undefined"`. The fallback remains useful because the unknown blind spot otherwise disappears. **Change:** correct the description and assert that every supplied blind spot remains represented.
+
+- **P-5 — P1, established by reproduction: three guarded projections do not establish that the reading view paints.** In-memory probes reproduced additional failures in:
+  - `marginaliaNotes`: `root.children is not iterable`, called during Reader rendering when Marginalia has room;
+  - `isCrumbSection`: missing `node.children.length`, called during Reader rendering with Experimental features enabled;
+  - `whereForBlock`: missing `children.map`, reached by Skim.
+
+  [Marginalia’s traversal](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/marginalia/notes.ts:206) and [breadcrumb eligibility](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/crumbs.ts:37) are particularly direct counterexamples. `supplementIndex` already guards missing lists. **Change:** include these consumers in Stage B rather than reporting them as follow-ups. Test root and inner-node omissions with Marginalia and breadcrumbs enabled; three projection tests alone are insufficient.
+
+- **P-6 — P1, established by reproduction: clearing Diagram’s chain on every completion breaks rapid touch presses.** The scroll engine [cancels on every `touchstart`](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/scroll.ts:783), including a second tap inside `.diag-step`. That delivers `done("cancelled")` **before the second click creates its token**. The proposed completion handler clears the chain despite Diagram’s outside-gesture exception. My probe produced `cancelled` and a cleared chain before the second click. **Change:** preserve chaining across another step-button tap while still clearing it for genuine takeover. Exercise the real scroll engine in the touch test; the existing test’s `onFollow` only records IDs.
+
+- **P-7 — P1, established by reproduction: synchronous startup does not make `glideTarget()` a completion signal.** [Instant scrolling sets `aiming` to null](/home/greg/code/spideryarn2/.claude/worktrees/qi-three-robustness-bugs/src/web/scroll.ts:774) while its corrective frame remains pending. For a centred instant jump to row 4, my probe measured row 2 before that frame and row 4 after settlement created the arrival anchor. **Change:** choose completion forwarding, or expose a signal that includes pending instant corrections. Ensure the forwarding handles `beginJump`’s already-there branch, which currently returns without calling `scrollToBlock`. Cover reduced motion and no-op jumps.
+
+- **P-8 — P2, established by reproduction: the clamped-end branch is justified, and affects both directions.** With rows at document offsets 0, 200, 400 and 600, and maximum scroll 300, a top-aligned jump to row 2 reports `settled` but `measureRow()` returns row 1. Fresh measurement makes the next ↓ target row 2 again rather than row 3; ↑ targets row 0 rather than row 1. **Change:** take the plan’s conditional preservation branch for this case and pin both sequences. Diagram’s centred arrival anchor already supplies the intended row.
+
+The own-key helper is appropriate. Showing an unknown display badge’s raw value with hyphens replaced by spaces is a reasonable fallback; omitting an explanation the client cannot supply is also sound. The existing session claim prevents repeated reloads for the same live build.
+
+The 2026-08-31 comment does not establish a gap **after smooth settlement today**: the final frame moves the page before delivering `done`, and `measureRow()` reads layout synchronously. The real remaining gap is the instant correction described in P-7.
+
+Validation: `npm test -- --project unit tests/diagram-step.test.tsx` passed **16/16**. Additional probes ran in memory, without network or Postgres. No files changed.
+
+**Stage A: build with changes.**  
+**Stage B: build with changes.**  
+**Stage C: build with changes.**

@@ -162,5 +162,10 @@ article that opens in Summary and Marginalia by default has no relation words un
 turned off and on. Built: on import. Reversing it is one line and one exception in
 `src/web/auto-modes.ts`.
 
+**Decided: when Marginalia is opened** — Greg, 2026-10-05: "generate linking words when Marginalia
+mode is opened". Dispatched to session `relations-on-open`.
+
 **[Q-relations-backfill]** Articles added before this have no relation words until their owner
 presses the toggle. Leave it, or make them for existing articles in one paid sweep?
+
+**Decided: leave it** — Greg, 2026-10-05: "yes leave that for now".

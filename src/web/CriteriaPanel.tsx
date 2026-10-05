@@ -121,6 +121,7 @@ import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
 import {
   directionWords,
@@ -1231,7 +1232,9 @@ function CriterionRow({
       )}
 
       <p className="crit-meta">
-        <span className="crit-kind">{KIND_LABEL[row.config.kind]}</span>
+        {/* A saved row's kind comes off the wire, unlike the form's above, so
+            a kind from a newer server shows as its own word: lib/own-label.ts. */}
+        <span className="crit-kind">{ownLabel(KIND_LABEL, row.config.kind) ?? plainWords(row.config.kind)}</span>
         {row.stale && (
           <span className="crit-stale"> · answered about an earlier version of this paper</span>
         )}

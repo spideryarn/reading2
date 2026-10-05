@@ -63,13 +63,16 @@
  * The scan is string work over text nodes. temml, its stylesheet and its one
  * font are a dynamic `import()` taken only when a block has a span, and a load
  * that fails leaves the TeX as it was — the state before this file existed, so
- * not an error and nothing in the console.
+ * not an error and nothing in the console. Before it does, it asks whether the
+ * chunk is missing because a newer build is live (`renderArticleMaths` § When
+ * temml will not load).
  */
 
 import { findMathSpans, MATHS_SKIP_TAGS, temmlRenderer, type RenderTex } from "../maths-tex.js";
 import type { Article, Block } from "../types.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 import { sanitizeBlockHtml } from "./sanitize.js";
+import { RELOAD_GRACE_MS, reloadIfStale } from "./stale-shell.js";
 
 /* The provenance mark this module writes onto a block it drew maths into, and
    the one question anybody else asks of it — in a module of their own, so a
@@ -210,12 +213,46 @@ export function renderBlockMaths(html: string, render: RenderTex): string {
  * span never downloads temml. Each changed block goes through the policy again
  * and then gets its new-tab links back (F3); every other block keeps its
  * identity.
+ *
+ * ## When temml will not load
+ *
+ * Usually that is being offline, and the TeX stays. But a copy opened from a
+ * home-screen icon outlives several deploys, and after one the chunk it asks
+ * for no longer exists. Only a new shell knows the new chunk's name, so the
+ * recovery is the lazy routes' (LazyPage.tsx § `orReloadIfStale`): ask whether
+ * a different build is live and reload once if so. Three things about it are
+ * deliberate, and tests/maths-stale-chunk.test.ts holds each:
+ *
+ *  - **It is awaited before the article is handed back.** Nothing of the
+ *    article is on screen yet, so there is nothing to type into. Handed back
+ *    first, the reader could start a comment or a criterion, which
+ *    `safeToReload` does not know about, and the reload would land on it. A
+ *    requested reload gets the lazy routes' grace period too: asking the
+ *    browser to leave does not mean it has already replaced this document.
+ *  - **A load whose signal is already aborted asks nothing.** The import goes
+ *    on after the reader has left, and a check begun then would read the
+ *    address of the page they went to and could reload that one. Leaving
+ *    while the check is pending is guarded by both the signal and
+ *    `reloadIfStale`'s address comparison, because a different reader or a
+ *    retry can replace the load without changing the address.
+ *  - **Only the default loader gets it by default.** A caller that passes its
+ *    own `load` passes `recover` too if it wants one.
+ *
+ * The check failing is not a failure: the TeX stays, as before.
  */
 export async function renderArticleMaths(
   article: Article,
-  opts: { load?: () => Promise<RenderTex>; signal?: AbortSignal } = {},
+  opts: {
+    load?: () => Promise<RenderTex>;
+    signal?: AbortSignal;
+    /** What to try when `load` rejects. `true` means a reload was requested. */
+    recover?: (signal?: AbortSignal) => Promise<unknown>;
+  } = {},
 ): Promise<Article> {
   const { load = loadTemml, signal } = opts;
+  const recover = opts.recover ?? (opts.load === undefined
+    ? (active?: AbortSignal) => reloadIfStale(undefined, active)
+    : undefined);
   const withMaths = new Set<Block>(article.blocks.filter((b) => blockHasMaths(b.html)));
   if (withMaths.size === 0 || signal?.aborted) return article;
 
@@ -223,6 +260,15 @@ export async function renderArticleMaths(
   try {
     render = await load();
   } catch {
+    if (recover && !signal?.aborted) {
+      try {
+        if (await recover(signal) === true && !signal?.aborted) {
+          await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
+        }
+      } catch {
+        /* The TeX stays, as it does for any load that failed. */
+      }
+    }
     return article;
   }
   if (signal?.aborted) return article;

@@ -1347,7 +1347,7 @@ export function fitSignature(
   /**
    * **Whether the quick-search control is drawn** (plan 261002h,
    * DockQuickSearch.tsx) — a 14rem box at rung 0 is the widest thing in the
-   * row. Which of its box and its ⚡ shows follows the rung (CSS) and `mode`
+   * row. Whether its box, its ⚡ or nothing shows follows the rung (CSS) and `mode`
    * (already here). The one thing this string cannot see is the box keeping
    * its width while it has focus in Search mode; that only ever makes the row
    * narrower when focus leaves, so the cost is a label dropped with room to
@@ -2287,8 +2287,9 @@ export function Dock({
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
         )}
 
-        {/* **Quick search, from anywhere** (plan 261002h): a box, or a ⚡ where
-            a box does not fit or is not wanted — DockQuickSearch.tsx. In the
+        {/* **Quick search, from anywhere** (plan 261002h): a box where
+            there is room for one, a ⚡ while Search mode is open, and nothing
+            on a narrow bar or a touch screen — DockQuickSearch.tsx. In the
             bar's slack, between the modes and the article's other views. */}
         {hasQuickSearch(view, isVisitor ? null : own, onMode) && (
           <DockQuickSearch

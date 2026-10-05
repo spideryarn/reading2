@@ -312,7 +312,12 @@ function publicTree(tree: Tree): Tree {
       id: node.id,
       depth: node.depth,
       parent: node.parent,
-      children: [...node.children],
+      /* **`?? []`: a node with no list is a leaf, and goes out with an empty
+         one.** The tree is JSON out of the store and its type is a claim, not
+         a check; spreading a list that is not there throws, and the public
+         route answers a visitor with a 500. The same rule as the client's
+         mend, src/web/tree.ts § `withChildLists`. tests/public-dto.test.ts. */
+      children: [...(node.children ?? [])],
       range: [node.range[0], node.range[1]],
       title: node.title,
       ...opt(node, "gist"),

@@ -50,10 +50,17 @@ import { type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
+import { ownLabel, plainWords } from "../lib/own-label.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
 
+/* An idea's provenance and a Debate row's relation (`RELATION_WORD`, below)
+   come off the wire, so these tables are read through `ownLabel`
+   (lib/own-label.ts). A value from a newer server is stamped as its own word,
+   and the sentence explaining it is left out of the card: this copy cannot
+   say what it means. A bare lookup of `__proto__` threw, and the slot's
+   boundary then dropped every note beside that block. */
 const PROVENANCE_WORD = { assumed: "assumes", introduced: "introduces" } as const;
 const PROVENANCE_TIP = {
   assumed: "The piece takes this for granted rather than arguing for it.",
@@ -366,6 +373,7 @@ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
   corroborates: "agrees",
   unclear: "discusses",
 };
+const relationWord = (relation: string): string => ownLabel(RELATION_WORD, relation) ?? plainWords(relation);
 
 /** A page's headline is its own, unless the model read one off it (`titleIsAI`,
     as the band's `dbt-title-ai`); a page's own words are third party, so ours. */
@@ -376,7 +384,7 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
   return (
     <ShutNote
       kind="debate"
-      stamp={only ? RELATION_WORD[only.relation] : "Debate"}
+      stamp={only ? relationWord(only.relation) : "Debate"}
       tip="debate"
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
       lineVoice={only ? headlineVoice(only) : "ui"}
@@ -384,7 +392,7 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
       {items.map((row) => (
         <div key={row.id} className="marg-open-item">
           <p className="marg-open-head">
-            {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
+            {!only && <span className="marg-stamp">{relationWord(row.relation)}</span>}{" "}
             <a href={row.url} target="_blank" rel="noreferrer noopener" className={voiceClass(headlineVoice(row))}>
               {rowWork(row).headline}
             </a>
@@ -520,6 +528,7 @@ function entryVoice(e: MarginEntry): Voice {
  */
 function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }) {
   const [open, setOpen] = useState(false);
+  const provenanceTip = ownLabel(PROVENANCE_TIP, note.provenance);
   return (
     <Tooltip
       placement="bottom"
@@ -530,7 +539,7 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
         <>
           <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
           <p className="marg-idea-statement">{note.statement}</p>
-          <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
+          {provenanceTip !== undefined && <p className="tip-soon-how">{provenanceTip}</p>}
           <p className="tip-soon-how">{IDEA_ORIGIN}</p>
         </>
       }
@@ -541,7 +550,9 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        <span className="marg-stamp">{PROVENANCE_WORD[note.provenance]}</span>{" "}
+        <span className="marg-stamp">
+          {ownLabel(PROVENANCE_WORD, note.provenance) ?? plainWords(note.provenance)}
+        </span>{" "}
         <span className="marg-idea-name">{note.name}</span>
       </button>
     </Tooltip>
