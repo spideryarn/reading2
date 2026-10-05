@@ -665,9 +665,14 @@ describe("what a revision with no metadata hashes to", () => {
  * `structure` is deliberately not required here: it has no `stamp`, on purpose
  * (src/pipeline.ts § `structure` says why at length), and its case exists for a
  * different reason.
+ *
+ * **A `stamp` or an `isDone`, since 2026-10-05.** `blocks` decides with an
+ * `isDone` and no stamp, so the stamp-only rule could not see it: it sat in
+ * `default: true` while the queue re-ran it. Either hook means the pipeline can
+ * answer "not current", so either needs an arm.
  */
 describe("the metadata page and the pipeline agree about which steps can be current", () => {
-  it("has a case for every stamped step", async () => {
+  it("has a case for every step with a stamp or an isDone", async () => {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const source = await readFile(path.join(root, "src", "store", "pg.ts"), "utf-8");
 
@@ -681,7 +686,11 @@ describe("the metadata page and the pipeline agree about which steps can be curr
     });
     const body = source.slice(from, to);
 
-    const missing = STEP_ORDER.filter((name) => STEPS[name].stamp && !body.includes(`case "${name}"`));
+    const decides = STEP_ORDER.filter((name) => STEPS[name].stamp || STEPS[name].isDone);
+    /* The premise: `blocks` is the one step that decides by `isDone` alone, and
+       a filter that had stopped seeing it would pass on the stamped steps. */
+    expect(decides).toContain("blocks");
+    const missing = decides.filter((name) => !body.includes(`case "${name}"`));
     expect(missing).toEqual([]);
   });
 });

@@ -35,7 +35,7 @@ const { handleApi } = await import("../src/routes.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  leaves.begin.mockImplementation(async (_slug, criterion: string, kind: SearchKind) => ({
+  leaves.begin.mockImplementation(async (_slug, _sourceHash: string, criterion: string, kind: SearchKind) => ({
     run: { id: "spya-run002", criterion, kind, createdAt: "2026-10-02T00:00:00.000Z", status: "pending", hits: [] },
     attempt: "attempt-1",
   }));

@@ -36,6 +36,10 @@ loadEnvLocal();
 const SLUG = "store-searches-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000d0";
 const NONE: ReadonlySet<string> = new Set();
+/** The fingerprint a caller hands `begin`: of the blocks it is sending. This
+    fixture has none, so any string stands in; the cases that are about the
+    hash pass their own. */
+const HASH = "feedfacefeedface";
 
 /**
  * Every literal id this file hands to the store, checked against the real
@@ -98,7 +102,7 @@ describe("the Postgres searches store", () => {
   });
 
   it("records a pending run before the model is called", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     expect(run.status).toBe("pending");
     expect(run.hits).toEqual([]);
     // Absent, not null: the wire form of `{model: null}` is not `{}`.
@@ -111,7 +115,7 @@ describe("the Postgres searches store", () => {
   it("keeps carried writable fields on either terminal status", async () => {
     // A variable can satisfy SearchFinish structurally with additional fields.
     // Tightening that type must not change which defined fields reach the store.
-    const failed = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const failed = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     const failure = {
       status: "error" as const,
       error: "failed",
@@ -122,17 +126,17 @@ describe("the Postgres searches store", () => {
     expect(error?.model).toBe("failure-model");
     expect(error?.hits).toEqual(failure.hits);
 
-    const begun = await pgSearchStore.begin(SLUG, "about space", "meaning");
+    const begun = await pgSearchStore.begin(SLUG, HASH, "about space", "meaning");
     const answer = { status: "done" as const, hits: [], error: "carried error" };
     const done = await pgSearchStore.finish(SLUG, begun.run.id, answer, begun.attempt);
     expect(done?.error).toBe("carried error");
   });
 
   it("resets a failed run rather than minting a second one — all three conditions", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runaa2");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", "spya-runaa2");
     await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "the model fell over" }, attempt);
 
-    const again = await pgSearchStore.begin(SLUG, "about time", "meaning", run.id);
+    const again = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", run.id);
     expect((await pgSearchStore.load(SLUG)).length).toBe(1);
     expect(again.run.id).toBe(run.id);
     expect(again.run.status).toBe("pending");
@@ -148,15 +152,15 @@ describe("the Postgres searches store", () => {
   });
 
   it("does not reset a run that is done, or one asking a different question", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runbb2");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", "spya-runbb2");
     await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
 
     // A double-clicked POST, or a stale tab retrying after another tab won.
-    const second = await pgSearchStore.begin(SLUG, "about time", "meaning", run.id);
+    const second = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", run.id);
     expect(second.run.id).not.toBe(run.id);
 
     // Same id, different question: still a collision, still a new id.
-    const third = await pgSearchStore.begin(SLUG, "about something else", "meaning", run.id);
+    const third = await pgSearchStore.begin(SLUG, HASH, "about something else", "meaning", run.id);
     expect(third.run.id).not.toBe(run.id);
     expect((await pgSearchStore.load(SLUG)).find((r) => r.id === run.id)?.status).toBe("done");
   });
@@ -165,10 +169,10 @@ describe("the Postgres searches store", () => {
     /* Plan 261002e. Read back through `load`, so the column, the insert and
        `toRun` are all in the path — a store that dropped the kind on either
        write or read would bring the run back as the column default. */
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "minds are not software", "quick");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "minds are not software", "quick");
     expect(run.kind).toBe("quick");
     await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "Jev fell over" }, attempt);
-    const again = await pgSearchStore.begin(SLUG, "minds are not software", "quick", run.id);
+    const again = await pgSearchStore.begin(SLUG, HASH, "minds are not software", "quick", run.id);
     expect(again.run.id).toBe(run.id);
     expect(again.run.kind).toBe("quick");
     expect((await pgSearchStore.load(SLUG)).find((r) => r.id === run.id)?.kind).toBe("quick");
@@ -177,9 +181,9 @@ describe("the Postgres searches store", () => {
   it("does not reset a failed quick run for a retry that names the other kind", async () => {
     /* Plan 261002e, F5: `withRun` decides it and the UPDATE repeats the
        predicate, so both halves are in this path. */
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "quick", "spya-runkq2");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "quick", "spya-runkq2");
     await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "Jev fell over" }, attempt);
-    const other = await pgSearchStore.begin(SLUG, "about time", "meaning", run.id);
+    const other = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", run.id);
     expect(other.run.id).not.toBe(run.id);
     expect(other.run.kind).toBe("meaning");
     const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
@@ -189,11 +193,12 @@ describe("the Postgres searches store", () => {
 
   describe("revising a quick search in place (plan 261002h)", () => {
     it("re-asks the same row with the new words, and fences the superseded attempt", async () => {
-      const first = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-runqq2");
+      const first = await pgSearchStore.begin(SLUG, HASH, "why replic", "quick", "spya-runqq2");
       await pgSearchStore.recolour(SLUG, first.run.id, 5);
 
       const revised = await pgSearchStore.begin(
         SLUG,
+        HASH,
         "why replication fails",
         "quick",
         first.run.id,
@@ -230,9 +235,9 @@ describe("the Postgres searches store", () => {
     });
 
     it("revises a finished row too, clearing its answer", async () => {
-      const { run, attempt } = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-runqq2");
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "why replic", "quick", "spya-runqq2");
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [], model: "jev" }, attempt);
-      const revised = await pgSearchStore.begin(SLUG, "why replicas", "quick", run.id, undefined, {
+      const revised = await pgSearchStore.begin(SLUG, HASH, "why replicas", "quick", run.id, undefined, {
         revises: true,
       });
       expect(revised.run.id).toBe(run.id);
@@ -242,10 +247,10 @@ describe("the Postgres searches store", () => {
     });
 
     it("never recreates a deleted row: a revision of an absent id mints a new one (Sol C7)", async () => {
-      const { run, attempt } = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-rundd2");
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "why replic", "quick", "spya-rundd2");
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
       await pgSearchStore.remove(SLUG, run.id);
-      const again = await pgSearchStore.begin(SLUG, "why replicas", "quick", run.id, undefined, {
+      const again = await pgSearchStore.begin(SLUG, HASH, "why replicas", "quick", run.id, undefined, {
         revises: true,
       });
       expect(again.run.id).not.toBe(run.id);
@@ -254,9 +259,9 @@ describe("the Postgres searches store", () => {
     });
 
     it("does not revise a meaning row: the meaning row stands and a new one is minted", async () => {
-      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runmm2");
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", "spya-runmm2");
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
-      const other = await pgSearchStore.begin(SLUG, "about space", "quick", run.id, undefined, {
+      const other = await pgSearchStore.begin(SLUG, HASH, "about space", "quick", run.id, undefined, {
         revises: true,
       });
       expect(other.run.id).not.toBe(run.id);
@@ -270,7 +275,7 @@ describe("the Postgres searches store", () => {
     /* The CHECK is the last line: a caller that bypassed the type would
        otherwise write a third kind that every reader then has to guess at. */
     await expect(
-      pgSearchStore.begin(SLUG, "about time", "fuzzy" as unknown as "quick"),
+      pgSearchStore.begin(SLUG, HASH, "about time", "fuzzy" as unknown as "quick"),
     ).rejects.toThrow();
   });
 
@@ -283,7 +288,7 @@ describe("the Postgres searches store", () => {
     const ids: string[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
       const at = () => new Date(start + i * 60_000).toISOString();
-      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, "meaning", undefined, at);
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, `criterion ${i}`, "meaning", undefined, at);
       // Finished, because a `pending` run is never trimmed — see below.
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
       ids.push(run.id);
@@ -301,7 +306,7 @@ describe("the Postgres searches store", () => {
     const ids: string[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
       const at = clockFrom(Date.parse("2026-08-01T00:00:00.000Z") + (MAX_RUNS + 3 - i) * 60_000);
-      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, "meaning", undefined, at);
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, `criterion ${i}`, "meaning", undefined, at);
       ids.push(run.id);
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
       // The run just written is always still there, whatever its timestamp.
@@ -319,12 +324,12 @@ describe("the Postgres searches store", () => {
        out deleted it. Its fenced `finish` then updated nothing and the reader's
        paid answer was gone. docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
     const start = Date.parse("2026-08-01T00:00:00.000Z");
-    const slow = await pgSearchStore.begin(SLUG, "the slow one", "meaning", undefined, () =>
+    const slow = await pgSearchStore.begin(SLUG, HASH, "the slow one", "meaning", undefined, () =>
       new Date(start).toISOString(),
     );
     for (let i = 1; i <= MAX_RUNS + 3; i++) {
       const at = () => new Date(start + i * 60_000).toISOString();
-      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, "meaning", undefined, at);
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, `criterion ${i}`, "meaning", undefined, at);
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
     }
     const kept = await pgSearchStore.load(SLUG);
@@ -341,7 +346,7 @@ describe("the Postgres searches store", () => {
     expect(landed?.status).toBe("done");
 
     // Once it has finished, the next search trims it like any other.
-    const next = await pgSearchStore.begin(SLUG, "one more", "meaning", undefined, () =>
+    const next = await pgSearchStore.begin(SLUG, HASH, "one more", "meaning", undefined, () =>
       new Date(start + (MAX_RUNS + 4) * 60_000).toISOString(),
     );
     await pgSearchStore.finish(SLUG, next.run.id, { status: "done", hits: [] }, next.attempt);
@@ -360,7 +365,7 @@ describe("the Postgres searches store", () => {
     await expect(pgSearchStore.sweepPending(SLUG, { keep: NONE, graceMs: 1000 })).resolves.toEqual(
       [],
     );
-    const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await expect(
       pgSearchStore.sweepPending(SLUG, { keep: NONE, graceMs: 60_000 }),
     ).resolves.toHaveLength(1);
@@ -368,7 +373,7 @@ describe("the Postgres searches store", () => {
   });
 
   it("spares a young attempt from another process, and buries an old one", async () => {
-    const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
 
     // Young: some other process may still be on it. This is the case the
     // filesystem store gets wrong, and the reason `graceMs` exists.
@@ -392,7 +397,7 @@ describe("the Postgres searches store", () => {
   });
 
   it("spares this process's own work however old it is", async () => {
-    const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await getDb()
       .update(searchRuns)
       .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
@@ -414,14 +419,14 @@ describe("the Postgres searches store", () => {
          4. A's model call finally returns
        Step 4 must not land. Fenced on identity alone it would, and the reader
        would watch their retry be replaced by the answer that already failed. */
-    const first = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const first = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await getDb()
       .update(searchRuns)
       .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
       .where(eq(searchRuns.articleId, ARTICLE_ID));
     await pgSearchStore.sweepPending(SLUG, { keep: NONE, graceMs: 60_000 });
 
-    const retried = await pgSearchStore.begin(SLUG, "about time", "meaning", first.run.id);
+    const retried = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", first.run.id);
     expect(retried.attempt).not.toBe(first.attempt);
 
     const late = await pgSearchStore.finish(
@@ -458,7 +463,7 @@ describe("the Postgres searches store", () => {
     /* Accepting `undefined` HERE would put the whole cross-process race
        back for any caller that dropped the token — silently, which is the
        failure mode this migration keeps meeting. */
-    const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await expect(
       untyped.finish(SLUG, run.id, { status: "done", hits: [] }),
     ).rejects.toThrow(/needs the attempt/);
@@ -469,7 +474,7 @@ describe("the Postgres searches store", () => {
     /* The attempt is released whatever the patch says, so a patch leaving the
        run `pending` would strip the fence off a row still waiting for an
        answer — and anybody's late write could then land on it. */
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await expect(
       untyped.finish(SLUG, run.id, { hits: [] }, attempt),
     ).rejects.toThrow(/must end a run/);
@@ -498,7 +503,7 @@ describe("the Postgres searches store", () => {
     const permanent = providerHttpFailure(402);
     expect(worthRetrying(permanent.message)).toBe(false); // before the round trip
 
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "does this survive a write", "meaning");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "does this survive a write", "meaning");
     await pgSearchStore.finish(
       SLUG,
       run.id,
@@ -513,7 +518,7 @@ describe("the Postgres searches store", () => {
   });
 
   it("still offers another go for a transient one, after a round trip", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "and the other direction", "meaning");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "and the other direction", "meaning");
     await pgSearchStore.finish(
       SLUG,
       run.id,
@@ -525,7 +530,7 @@ describe("the Postgres searches store", () => {
   });
 
   it("never lets a patch rename a run or change its question", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
     await pgSearchStore.finish(
       SLUG,
       run.id,
@@ -547,8 +552,8 @@ describe("the Postgres searches store", () => {
        still passed, in insertion order. Now insertion order and id order
        disagree, and only the tie-break gives the right answer. */
     const fixed = () => "2026-08-01T00:00:00.000Z";
-    await pgSearchStore.begin(SLUG, "second", "meaning", "spya-zzz002", fixed);
-    await pgSearchStore.begin(SLUG, "first", "meaning", "spya-aaa002", fixed);
+    await pgSearchStore.begin(SLUG, HASH, "second", "meaning", "spya-zzz002", fixed);
+    await pgSearchStore.begin(SLUG, HASH, "first", "meaning", "spya-aaa002", fixed);
     const order = (await pgSearchStore.load(SLUG)).map((r) => r.id);
     expect(order).toEqual(["spya-aaa002", "spya-zzz002"]);
   });
@@ -571,7 +576,7 @@ describe("the Postgres searches store", () => {
    */
   describe("the colour the reader picked", () => {
     it("stores it, and clears it back to absent rather than to null", async () => {
-      const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+      const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
       const set = await pgSearchStore.recolour(SLUG, run.id, 5);
       expect(set.find((r) => r.id === run.id)?.colour).toBe(5);
 
@@ -584,7 +589,7 @@ describe("the Postgres searches store", () => {
     });
 
     it("keeps slot 0, which every truthiness check in this feature would drop", async () => {
-      const { run } = await pgSearchStore.begin(SLUG, "the first hue", "meaning");
+      const { run } = await pgSearchStore.begin(SLUG, HASH, "the first hue", "meaning");
       const set = await pgSearchStore.recolour(SLUG, run.id, 0);
       expect(set.find((r) => r.id === run.id)?.colour).toBe(0);
     });
@@ -593,7 +598,7 @@ describe("the Postgres searches store", () => {
       /* The one write in this file with no fence on it, deliberately: a colour
          is not part of the answer, so recolouring a `pending` row must not
          make the model call that is in flight unfinishable. */
-      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
       await pgSearchStore.recolour(SLUG, run.id, 2);
       const done = await pgSearchStore.finish(
         SLUG,
@@ -606,7 +611,7 @@ describe("the Postgres searches store", () => {
     });
 
     it("shrugs at a run that is not there", async () => {
-      const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+      const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
       // A second tab can have deleted it. The list that comes back says so.
       await expect(pgSearchStore.recolour(SLUG, "spya-zzzzzz", 4)).resolves.toHaveLength(1);
       expect((await pgSearchStore.load(SLUG))[0]?.id).toBe(run.id);
@@ -617,11 +622,11 @@ describe("the Postgres searches store", () => {
          rebuilds the run field by field and was dropping the colour, while this
          one simply does not name the column and kept it. Pinned on both sides
          so a future tidy-up of either cannot quietly restore the divergence. */
-      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runab2");
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", "spya-runab2");
       await pgSearchStore.recolour(SLUG, run.id, 4);
       await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "fell over" }, attempt);
 
-      const again = await pgSearchStore.begin(SLUG, "about time", "meaning", run.id);
+      const again = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning", run.id);
       expect(again.run.id).toBe(run.id);
       expect(again.run.status).toBe("pending");
       expect(again.run.colour).toBe(4);
@@ -634,7 +639,7 @@ describe("the Postgres searches store", () => {
          filesystem store answers with a 400, and two stores disagreeing about
          what a bad request *is* is exactly what a parity test on the happy path
          never sees. */
-      const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+      const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
       for (const bad of [64, -1, 2.5]) {
         await expect(pgSearchStore.recolour(SLUG, run.id, bad)).rejects.toThrow(
           /storable colour/,
@@ -647,7 +652,7 @@ describe("the Postgres searches store", () => {
          the second line rather than the first — and it is worth having anyway,
          because the import path writes this column too and does not go through
          a route. The bound is loose on purpose: see drizzle/0016_search_colour.sql. */
-      const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
+      const { run } = await pgSearchStore.begin(SLUG, HASH, "about time", "meaning");
       /* Straight at the table, going round `recolour`'s own guard on purpose.
          The store refuses these first (the test above), so the only way to see
          whether the constraint is really there is to write past it — and it has
@@ -670,19 +675,67 @@ describe("the Postgres searches store", () => {
       expect(await pgSearchStore.sourceHash(SLUG)).toBeUndefined();
     });
 
-    it("leaves the key off a run it could not fingerprint", async () => {
-      // Absent, not null. Postgres answers `null` where the file simply had no
-      // key, and `exactOptionalPropertyTypes` makes those different types — the
-      // same trap `model` and `error` are checked for above.
-      const { run } = await pgSearchStore.begin(SLUG, "no blocks to hash", "meaning");
-      expect("sourceHash" in run).toBe(false);
+    it("stores exactly the hash its caller hands begin, on a mint, a retry and a revision", async () => {
+      /* Plan 261005i § D. The store used to read the fingerprint itself; this
+         article has no blocks, so a hash that comes back at all is the
+         caller's. A different one each time, so a write that kept the previous
+         attempt's would show. */
+      const minted = await pgSearchStore.begin(SLUG, "hash-of-the-mint", "about time", "meaning");
+      expect(minted.run.sourceHash).toBe("hash-of-the-mint");
+
+      await pgSearchStore.finish(SLUG, minted.run.id, { status: "error", error: "no" }, minted.attempt);
+      const retried = await pgSearchStore.begin(
+        SLUG,
+        "hash-of-the-retry",
+        "about time",
+        "meaning",
+        minted.run.id,
+      );
+      expect(retried.run.id).toBe(minted.run.id);
+      expect(retried.run.sourceHash).toBe("hash-of-the-retry");
+
+      const quick = await pgSearchStore.begin(SLUG, "hash-of-the-first-words", "abo", "quick");
+      const revised = await pgSearchStore.begin(
+        SLUG,
+        "hash-of-the-revision",
+        "about",
+        "quick",
+        quick.run.id,
+        undefined,
+        { revises: true },
+      );
+      expect(revised.run.id).toBe(quick.run.id);
+      expect(revised.run.sourceHash).toBe("hash-of-the-revision");
+
+      const stored = await pgSearchStore.load(SLUG);
+      expect(stored.map((r) => r.sourceHash).sort()).toEqual([
+        "hash-of-the-retry",
+        "hash-of-the-revision",
+      ]);
+    });
+
+    it("leaves the key off a row that was stored without a fingerprint", async () => {
+      /* A row from before the column, or an import. Absent, not null: Postgres
+         answers `null` where the file simply had no key, and
+         `exactOptionalPropertyTypes` makes those different types — the same
+         trap `model` and `error` are checked for above. Written straight into
+         the table, since `begin` now always has a hash to write. */
+      await getDb().insert(searchRuns).values({
+        articleId: ARTICLE_ID,
+        id: "spya-runbb2",
+        ownerId: currentOwnerId(),
+        criterion: "older than the column",
+        status: "done",
+        hits: [],
+      });
+      const [stored] = await pgSearchStore.load(SLUG);
+      expect(stored && "sourceHash" in stored).toBe(false);
     });
 
     it("reads a stored fingerprint back off the row", async () => {
-      /* Written straight into the table rather than through `begin`, because
-         this fixture has no blocks for `begin` to hash — what is under test is
-         `toRun`, which is the half that would silently drop the column while
-         every write test stayed green. */
+      /* Written straight into the table rather than through `begin`: what is
+         under test is `toRun` on a row some other writer left, the half that
+         would silently drop the column. */
       const hash = "0123456789abcdef";
       await getDb().insert(searchRuns).values({
         articleId: ARTICLE_ID,
@@ -719,7 +772,7 @@ describe("the Postgres searches store", () => {
     const clock = clockFrom(Date.parse("2026-08-01T00:00:00.000Z"));
 
     // 1. begin — pending, and nothing an answer would have put there.
-    const first = await pgSearchStore.begin(SLUG, "mentions of arches", "meaning", "spya-runaa2", clock);
+    const first = await pgSearchStore.begin(SLUG, HASH, "mentions of arches", "meaning", "spya-runaa2", clock);
     expect(first.run.id).toBe("spya-runaa2");
     expect(first.run.criterion).toBe("mentions of arches");
     expect(first.run.status).toBe("pending");
@@ -734,7 +787,7 @@ describe("the Postgres searches store", () => {
     expect(done?.hits).toEqual([]);
 
     // 3. begin another — a second row, and the first is not disturbed.
-    const second = await pgSearchStore.begin(SLUG, "mentions of vaults", "meaning", undefined, clock);
+    const second = await pgSearchStore.begin(SLUG, HASH, "mentions of vaults", "meaning", undefined, clock);
     expect(second.run.id).not.toBe(first.run.id);
     const both = await pgSearchStore.load(SLUG);
     expect(both.length).toBe(2);
@@ -749,7 +802,7 @@ describe("the Postgres searches store", () => {
     expect((await pgSearchStore.load(SLUG)).find((r) => r.id === first.run.id)?.model).toBe("m");
 
     // 5. retry — same row reset, not a third one, and the error gone with it.
-    const retried = await pgSearchStore.begin(SLUG, "mentions of vaults", "meaning", second.run.id, clock);
+    const retried = await pgSearchStore.begin(SLUG, HASH, "mentions of vaults", "meaning", second.run.id, clock);
     expect(retried.run.id).toBe(second.run.id);
     expect(retried.run.status).toBe("pending");
     expect("error" in retried.run, "the failed attempt's error survived the reset").toBe(false);

@@ -186,9 +186,23 @@ after the quick answer lands, at once on Enter. Shorter feels more immediate and
 for words you were still typing ($0.06 each time). Recommended: leave it, and change the one
 constant if it feels slow.
 
+**Decided: 2 s, as built** — Greg, 2026-10-05:
+
+> ok let's go with 2s and see how it feels
+
 **[Q-orphan] If you change the words while a thorough search is out, its answer is thrown away
 when it lands.** Built that way because you asked earlier that obsolete rows not pile up. The other
 choice is to keep it as an unticked saved row, since it was paid for. Recommended: as built.
+
+**Decided: thrown away, as built** — Greg, 2026-10-05:
+
+> yes throw it away, as built
+
+**[Q-reload] A reload or leaving Search mode mid-search leaves both rows.** Greg, 2026-10-05:
+
+> I do find having a quick and a thorough next to each other slightly annoying, but I can live with it if it gets tidied up after leaving Search mode
+
+So the pair is to be tidied once you have left Search mode; dispatched to session `search-pair-tidy`.
 
 ## Log
 

@@ -404,6 +404,8 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 - **`src/ai-call.ts` § `classifyEnd`** — deciding whether a stream finished or merely stopped
   ([ai-gateway.md § How a stream ends](ai-gateway.md#stream-end)).
 - **`src/routes.ts` § `sse`** — writing server-sent events from a route, with the heartbeat.
+- **[`src/live-keys.ts`](../../src/live-keys.ts) § `liveKeys`** — count the requests holding a
+  key so abandonment sweeps spare a row while any of its handlers is still running.
 - **`src/parse-json.ts` § `parseJsonAnswer`** — a model's JSON answer, fences and trailing commas
   included. **`src/anthropic-call.ts` § `anthropicCallFailed`** — an SDK error turned into a stage
   failure.

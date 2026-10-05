@@ -254,7 +254,7 @@ yet), F7 (the probe's whole lifecycle), F8 (the sentences).
   small option Greg chose. The guarantee is stated at its true strength in § What this does not
   fix. Opus added that the 700 ms pause puts a write in flight more often than 2 s does, so the
   exposure rises slightly, and that aborting the older write at `pagehide` would only narrow the
-  window. Reported to Greg as [Q-purpose-write-order].
+  window. Reported to Greg as [Q-purpose-write-order]. **Decided: leave it** — Greg, 2026-10-05: "leave it, doesn't sound that important".
 - **F6's second half** (P1): *Back to the shelf* is not stopped over unsaved words. Overruled:
   once the row exists, unmount waits for a write in flight and then sends the newest text, in
   order; blocking app navigation is a mechanism no other box has. Before the row exists the words
