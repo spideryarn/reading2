@@ -26,7 +26,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
+import type { Article, BlockId, CitedWork, GlossaryEntry, ThreadOrigin } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
@@ -78,7 +78,7 @@ import {
   ConversationBand,
   RememberBand,
 } from "../modes/conversation/ConversationModes.js";
-import { askAboutSummaryParagraph, askAboutTerm } from "../chat-handoff.js";
+import { askAboutSummaryParagraph, askAboutTerm, askToCheckClaim } from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -916,11 +916,20 @@ export function Reader({
   /* The one body both senders share: the text is ready-made, and the handoff
      and the mode are set in one event so they arrive in one commit. */
   const handToChat = useCallback(
-    (question: string) => {
-      setChatHandoff({ slug, question });
+    (question: string, origin?: ThreadOrigin) => {
+      setChatHandoff({ slug, question, ...(origin ? { origin } : {}) });
       showBand("chat");
     },
     [slug, showBand],
+  );
+  /* **A third sender since 2026-10-05, and the first whose conversation
+     remembers where it was started**: Debate's *Check this claim in chat*. The
+     claim travels twice, as words in the question and as the `origin` the
+     thread will store, so the claim can find its chat again
+     (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
+  const checkClaimInChat = useCallback(
+    (origin: ThreadOrigin) => handToChat(askToCheckClaim(origin.quote), origin),
+    [handToChat],
   );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
   const askAboutSummary = useCallback(
@@ -2270,6 +2279,49 @@ export function Reader({
   );
 
   /**
+   * **The summaries are asked for again when the reader leaves Chat.** Chat's
+   * band tells `useChatAnchors` nothing, so a conversation started, continued
+   * or deleted there is not in the list a caller mode draws its mark from, and
+   * `overlay` above has nothing to open `?thread=` with. The hook keeps what
+   * is on screen until the answer lands, and keeps its guards
+   * (useChatAnchors.ts § Since 2026-10-05). Plan 261005i, F1.
+   */
+  const refreshChats = owner?.chatAnchors.refresh;
+  const modeWas = useRef(mode);
+  useEffect(() => {
+    if (modeWas.current === "chat" && mode !== "chat") refreshChats?.();
+    modeWas.current = mode;
+  }, [mode, refreshChats]);
+
+  /**
+   * **Open the conversation a claim's mark names, beside the mode.** Only
+   * `?thread=` changes, so the reader stays in Debate and `overlay` draws the
+   * conversation in `ChatDialog`: docked in the right-hand column when that
+   * column is open and the window is wide enough, floating otherwise — the
+   * block chat's rule, unchanged (plan 261005i, D3).
+   *
+   * And the summaries are asked for again: an answer that finished after the
+   * reader left Chat is in nobody's list until something asks.
+   */
+  const openClaimChat = useCallback(
+    (threadId: string) => {
+      setChatDraft(null);
+      void setNote(null);
+      void setThread(threadId);
+      setChatReopen((n) => n + 1);
+      refreshChats?.();
+    },
+    [setNote, setThread, refreshChats],
+  );
+  /* What Debate's claims are handed (DebatePanel.tsx § `DebateClaimChats`).
+     Memoised on the summaries, so the band re-renders when a chat appears or
+     its latest line changes and not otherwise. */
+  const claimChats = useMemo(
+    () => ({ summaries: chatSummaries, onCheck: checkClaimInChat, onOpen: openClaimChat }),
+    [chatSummaries, checkClaimInChat, openClaimChat],
+  );
+
+  /**
    * **One press, one model call, and the reader keeps reading.**
    *
    * The "?" beside a paragraph. Everything about it is the same conversation
@@ -2929,6 +2981,7 @@ export function Reader({
               onScreen={chatOnScreen}
               handoff={chatHandoff}
               onHandoffTaken={handoffTaken}
+              onSettled={refreshChats}
             />
           </ChatCommands>
         ) : null;
@@ -3181,6 +3234,7 @@ export function Reader({
             blockOrder={blockOrder}
             publishedAt={publishedAt}
             articleTitle={article.meta.title}
+            claimChats={claimChats}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
@@ -3863,6 +3917,7 @@ export function Reader({
             reopen={chatReopen}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
+            onSettled={owner.chatAnchors.refresh}
           />
         </ChatCommands>
       )}

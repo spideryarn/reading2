@@ -101,6 +101,69 @@ describe("the other three things it holds", () => {
   });
 });
 
+/**
+ * **Where a handed-over conversation was started from**, kept beside its
+ * words (plan 261005i, F5). It is not part of
+ * the words: typing does not touch it, and it follows the conversation's id.
+ */
+describe("a conversation's pending origin", () => {
+  const CLAIM = { mode: "debate", blockId: "spya-bbbbbb", quote: "a claim" } as const;
+  const OTHER = { mode: "debate", blockId: "spya-cccccc", quote: "another claim" } as const;
+
+  it("is kept under the conversation's id, and two conversations do not share one", () => {
+    const d = createChatDrafts();
+    expect(d.origin(A)).toBeUndefined();
+    d.setOrigin(A, CLAIM);
+    d.setOrigin(B, OTHER);
+    expect(d.origin(A)).toEqual(CLAIM);
+    expect(d.origin(B)).toEqual(OTHER);
+  });
+
+  it("is untouched by typing, by clearing the box and by a submission", () => {
+    const d = createChatDrafts();
+    d.setOrigin(A, CLAIM);
+    d.setThread(A, "the seed");
+    d.setThread(A, "the seed, edited");
+    d.setThread(A, "");
+    d.submitted(A);
+    expect(d.origin(A)).toEqual(CLAIM);
+  });
+
+  it("moves with the words to the conversation begun in their place", () => {
+    const d = createChatDrafts();
+    d.setThread(A, "the seed");
+    d.setOrigin(A, CLAIM);
+    d.moveThread(A, B);
+    expect(d.origin(B)).toEqual(CLAIM);
+    expect(d.origin(A)).toBeUndefined();
+  });
+
+  it("moves even when no words were written, and a move without one leaves the target's alone", () => {
+    const d = createChatDrafts();
+    d.setOrigin(A, CLAIM);
+    d.moveThread(A, B);
+    expect(d.origin(B)).toEqual(CLAIM);
+    d.moveThread("spya-dra003", B);
+    expect(d.origin(B)).toEqual(CLAIM);
+  });
+
+  it("goes when the conversation is dropped, and when its id is replaced", () => {
+    const d = createChatDrafts();
+    d.setOrigin(A, CLAIM);
+    d.dropThread(A);
+    expect(d.origin(A)).toBeUndefined();
+    d.setOrigin(B, OTHER);
+    d.clearOrigin(B);
+    expect(d.origin(B)).toBeUndefined();
+  });
+
+  it("does not count as unsent words", () => {
+    const d = createChatDrafts();
+    d.setOrigin(A, CLAIM);
+    expect(d.holdsWords()).toBe(false);
+  });
+});
+
 describe("one store per article, for as long as the page lives", () => {
   it("hands back the same store for the same article and another for another", () => {
     const first = chatDraftsFor("a-piece");

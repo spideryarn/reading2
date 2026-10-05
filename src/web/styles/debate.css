@@ -189,6 +189,76 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* **A claim's chat** (DebatePanel.tsx § ClaimsList, plan 261005i): the owner's
+   button that starts one, and the mark that reopens one already started.
+
+   The button is the shared ghost icon button, as the Summary paragraph's is
+   (summary.css § `.simple-ask`), so its box, hover wash and focus ring are
+   that component's. Two things are set here: it is centred on the heading's
+   first line, since an icon has no baseline to sit on, and it gives back the
+   height it adds, so a claim's heading is no taller for having it. Quiet until
+   the pointer is on the claim or the keyboard is on the button; where nothing
+   can hover it is drawn at a strength a finger can find. Its size on a coarse
+   pointer is at the call site (`tw:pointer-coarse:size-10`). */
+.dbt-claim-check {
+  align-self: center;
+  margin-block: -0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.dbt-claim-check:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  .dbt-group-claim:hover .dbt-claim-check { opacity: 1; }
+}
+@media (hover: none) {
+  .dbt-claim-check { opacity: 0.8; }
+}
+/* The mark takes a line of its own under the claim, so the opening of the
+   chat's latest answer has the width: the heading wraps for it and for
+   nothing else, since the quotation has no minimum width and its neighbours
+   are small. Indented past the disclosure triangle, and one line, cut with an
+   ellipsis. The words are the model's and take its face from voices.css
+   (`.voice-ai`); the count and "No answer yet" are ours. */
+.dbt-group-claim { flex-wrap: wrap; }
+.dbt-group-claim > .dbt-claim-chat {
+  flex: 0 1 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 1.2rem;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+.dbt-claim-chat > svg { flex: none; }
+.dbt-claim-chat:hover { color: var(--ink); }
+.dbt-claim-chat:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.dbt-claim-chat-count {
+  flex: none;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.dbt-claim-chat-count::after { content: " ·"; }
+.dbt-claim-chat-line,
+.dbt-claim-chat-waiting {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbt-claim-chat-waiting { font-family: var(--font-ui); font-style: italic; }
+@media (pointer: coarse) {
+  /* A finger's height (docs/project/touch.md), without widening the row. */
+  .dbt-group-claim > .dbt-claim-chat { min-height: 2.5rem; }
+}
+
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or
