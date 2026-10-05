@@ -26,8 +26,8 @@ export const WPM = 238;
 /**
  * The ends of the range the same paper gives: "most adults fall in the range of
  * 175 to 300 wpm" for non-fiction. The card that explains the estimate says
- * this range out loud (src/web/ReadTimeCard.tsx), because the spread between
- * readers is as large as anything the text itself does to the number.
+ * this range out loud (src/web/ReadTimeCard.tsx), because reading pace varies
+ * between readers as well as between texts.
  */
 export const WPM_QUICK = 300;
 export const WPM_SLOW = 175;

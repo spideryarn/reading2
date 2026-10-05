@@ -13,6 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readingMinutes, readingRange, WPM, WPM_QUICK, WPM_SLOW } from "../src/reading-time.js";
+import { deriveLibraryScalars, describeArticle } from "../src/library-scalars.js";
 import type { Article } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -101,6 +102,8 @@ describe("readingRange", () => {
 
   it("is measured at Brysbaert's figure for non-fiction", () => {
     expect(WPM).toBe(238);
+    expect(WPM_QUICK).toBe(300);
+    expect(WPM_SLOW).toBe(175);
     expect(readingMinutes(2380)).toBe(10);
   });
 });
@@ -117,12 +120,26 @@ describe("the reading-time card", () => {
     expect(said).toContain("11,900 words");
     expect(said).toContain(`${WPM} words a minute`);
     const { quick, slow } = readingRange(11_900);
-    expect(said).toContain(`between ${quick} and ${slow} minutes`);
+    expect(said).toContain(`about ${quick}–${slow} minutes`);
   });
 
   it("says plainly that it does not know how hard the piece is, or who is reading", () => {
     expect(text(11_900)).toContain("does not know how hard this piece is, or who is reading it");
     expect(text(11_900)).toContain(`between ${WPM_SLOW} and ${WPM_QUICK} words a minute`);
+  });
+
+  it("qualifies the population range and makes its conversion conditional", () => {
+    const said = text(11_900);
+    expect(said).toContain("reading English non-fiction silently. Most adults read such text at between");
+    expect(said).toContain("which would be about");
+    /* The floor is explained only where it shows. */
+    expect(said).not.toContain("less than a minute");
+  });
+
+  it("explains why a one-word piece still says one minute", () => {
+    const said = text(1);
+    expect(said).toContain("1 word at 238 words a minute");
+    expect(said).toContain("Never shown as less than a minute");
   });
 
   it("drops the range when it would be one number, and says a minute in the singular", () => {
@@ -179,26 +196,64 @@ describe("where the card is shown", () => {
     expect(card.textContent).toContain("2,400 words of notes");
   });
 
-  it("opens from the metadata page's Read time tile by keyboard, saying the same thing", async () => {
-    const a = article(11_900, 2_400);
-    await act(async () => {
-      root.render(createElement(Masthead, { article: a, slug: SLUG }));
+  it.each([
+    { words: 1, notes: 0, minutes: 1, owner: false },
+    { words: 11_900, notes: 2_400, minutes: 50, owner: true },
+    { words: 123_456, notes: 20_000, minutes: 519, owner: false },
+  ])("agrees across the shelf, masthead and Metadata ($words words, masthead owner=$owner)", async ({ words, notes, minutes, owner }) => {
+    const a = article(words, notes);
+    const shelf = describeArticle({
+      slug: SLUG,
+      revisionId: "r1",
+      meta: a.meta,
+      scalars: deriveLibraryScalars({ blocks: a.blocks, tree: a.tree }),
+      comments: 0,
+      addedAt: "2026-10-05T00:00:00Z",
+      sourceReusable: true,
+      tags: [],
     });
-    await act(async () => (host.querySelector(".read-time-trigger") as HTMLElement).focus());
-    const fromMasthead = (document.querySelector(".tooltip.tip-soon") as HTMLElement).textContent;
+    expect(shelf.minutes).toBe(minutes);
+    await act(async () => {
+      root.render(createElement(Masthead, { article: a, slug: SLUG, ...(owner ? { onRenamed: () => {} } : {}) }));
+    });
+    const trigger = host.querySelector(".read-time-trigger") as HTMLElement;
+    expect(trigger.textContent).toBe(`~${minutes} min`);
+    // The separator belongs to the outer fact, outside the underline.
+    expect(trigger.parentElement?.parentElement?.className).toBe("facts");
+    await act(async () => trigger.focus());
+    const mastheadTip = document.getElementById(trigger.getAttribute("aria-describedby") ?? "");
+    expect(mastheadTip?.getAttribute("role")).toBe("tooltip");
+    const fromMasthead = mastheadTip?.querySelector(".tip-soon")?.textContent;
+    expect(fromMasthead).toContain(`About ${minutes} ${minutes === 1 ? "minute" : "minutes"} to read`);
     await act(async () => root.unmount());
     root = createRoot(host);
 
     await act(async () => {
+      // Metadata is an owner page; the public reader gets the same Masthead.
       root.render(createElement(Metadata, { article: a, slug: SLUG, onRenamed: () => {}, onVisibility: () => {} }));
     });
     const tile = [...host.querySelectorAll<HTMLElement>("[tabindex='0']")].find((el) =>
       el.textContent?.includes("Read time"),
     ) as HTMLElement;
     expect(tile).toBeDefined();
+    expect(tile.lastElementChild?.textContent).toBe(`${minutes} min`);
     await act(async () => tile.focus());
-    const card = document.querySelector(".tooltip.tip-soon") as HTMLElement;
+    const metadataTip = document.getElementById(tile.getAttribute("aria-describedby") ?? "");
+    expect(metadataTip?.getAttribute("role")).toBe("tooltip");
+    const card = metadataTip?.querySelector(".tip-soon");
     expect(card).not.toBeNull();
-    expect(card.textContent).toBe(fromMasthead);
+    expect(card?.textContent).toBe(fromMasthead);
+
+    if (owner) {
+      const tiles = [...(tile.parentElement?.children ?? [])] as HTMLElement[];
+      expect(tiles).toHaveLength(6);
+      for (const stat of tiles) {
+        expect(stat.tabIndex).toBe(0);
+        await act(async () => stat.focus());
+        const tip = document.getElementById(stat.getAttribute("aria-describedby") ?? "");
+        expect(tip?.getAttribute("role")).toBe("tooltip");
+        expect(tip?.textContent?.trim().length).toBeGreaterThan(0);
+      }
+    }
   });
 });

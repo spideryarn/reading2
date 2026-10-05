@@ -44,14 +44,17 @@ export function ReadTimeCard({
       <p>
         {words.toLocaleString()} {words === 1 ? "word" : "words"} at {WPM} words a minute, the average for an
         adult reading English non-fiction silently.
+        {/* Only where the arithmetic would otherwise look wrong: a one-word
+            piece at 238 a minute is not a minute. GPT Sol, code review. */}
+        {words < WPM / 2 && " Never shown as less than a minute."}
       </p>
       {/* The rates, not "most adults would take": the range is what is known
           about readers in general, and nothing here has measured this piece.
           GPT Sol, plan review, 2026-10-05. */}
       {quick < slow && (
         <p>
-          Most adults read between {WPM_SLOW} and {WPM_QUICK} words a minute, so between {quick} and {slow}{" "}
-          minutes here.
+          Most adults read such text at between {WPM_SLOW} and {WPM_QUICK} words a minute, which would be
+          about {quick}–{slow} minutes.
         </p>
       )}
       <p>

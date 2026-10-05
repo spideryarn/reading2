@@ -1018,7 +1018,7 @@ the estimate cannot see, and the notes it left out. The working is
 what was put to Greg is
 [261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
 The spine's reading-time chart keeps its own 230 on purpose ([reading-time.md](reading-time.md)): it
-is the unit of a brightness scale, not an estimate.
+is the unit of a brightness scale and also supplies the gutter card's estimate for a single block.
 
 **A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
 the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks

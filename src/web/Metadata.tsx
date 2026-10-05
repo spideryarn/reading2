@@ -59,7 +59,7 @@
  *    scan down. The 4-column table also needed `overflow-x` on a narrow window;
  *    rows that wrap do not.
  *  - **Tooltips that say what a number means.** Read time is the clearest case:
- *    ours is words ÷ 230, and the reader has no way to know that. Dotted
+ *    ReadTimeCard.tsx explains the flat rate and what it cannot see. Dotted
  *    underline, `cursor-help`, same convention theirs used.
  *
  * What did **not** come across, deliberately: their gradient icon chips and
@@ -3462,10 +3462,10 @@ function Stat({
     >
       {/* Focusable since 2026-10-05: the card is the only place the
           explanation is, and a keyboard had no way to it (GPT Sol, plan 261005c). */}
-      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: focus is how a keyboard opens the card; pressing does nothing, so it is not a button */}
       <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the explanation; pressing does nothing
         tabIndex={0}
-        className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40 tw:focus-visible:border-highlight/40`}
+        className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40 tw:focus-visible:border-highlight-text`}
       >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
