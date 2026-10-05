@@ -445,6 +445,18 @@ export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
 export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What rates how hard a piece is to read**, its language and its ideas each
+ * 1 to 5, from a sample of it (src/reading-difficulty.ts). The same cheap model
+ * as `PAPER_METADATA_MODEL` above, on the same zero-retention route
+ * (`reading-difficulty` in src/ai-call.ts), chosen for plan
+ * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+ *
+ * Its own constant, though the string is the same: the two jobs were chosen
+ * separately, and moving one to another model must not move the other.
+ */
+export const READING_DIFFICULTY_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
  * model that answers typed questions with probabilities rather than writing
  * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
@@ -871,6 +883,10 @@ export type NonTaskAiJob =
   /* **A batch-added paper's title, authors and abstract** —
      src/paper-metadata.ts, on `PAPER_METADATA_MODEL` below. */
   | "paper-metadata"
+  /* **How hard a piece is to read, rated from a sample of it** —
+     src/reading-difficulty.ts, on `READING_DIFFICULTY_MODEL` below. Not
+     `difficulty`: that word is already a field on FAQ and glossary items. */
+  | "reading-difficulty"
   /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
      (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
      is not a tier decision and must not be overridable. It is always the
@@ -1392,6 +1408,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "shelf-topics": "chat",
   /* A strict JSON schema back, on chat/completions. src/paper-metadata.ts. */
   "paper-metadata": "chat",
+  /* A strict JSON schema back, on chat/completions. src/reading-difficulty.ts. */
+  "reading-difficulty": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
@@ -1632,7 +1650,8 @@ export const DISPLAY_NAME: Record<string, string> = {
      until plan 260930k — so /privacy was never required to name it. */
   "google/gemini-3.1-flash-image": "gemini-3.1-flash-image",
   "openai/gpt-6-luna": "gpt-6-luna",
-  /* The batch import's metadata reader, `PAPER_METADATA_MODEL`. */
+  /* The batch import's metadata reader, `PAPER_METADATA_MODEL`, and the
+     reading-difficulty rater, `READING_DIFFICULTY_MODEL`. */
   "deepseek/deepseek-v4.1-flash": "deepseek-v4.1-flash",
   /* Quick search's scorer, `QUICK_SEARCH_MODEL`. */
   "typesafe/jev-1.13": "jev-1.13",
@@ -1669,6 +1688,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
+  { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },

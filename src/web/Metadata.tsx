@@ -59,7 +59,8 @@
  *    scan down. The 4-column table also needed `overflow-x` on a narrow window;
  *    rows that wrap do not.
  *  - **Tooltips that say what a number means.** Read time is the clearest case:
- *    ReadTimeCard.tsx explains the flat rate and what it cannot see. Dotted
+ *    ReadTimeCard.tsx explains the rate, any difficulty adjustment and what
+ *    the estimate cannot see. Dotted
  *    underline, `cursor-help`, same convention theirs used.
  *
  * What did **not** come across, deliberately: their gradient icon chips and
@@ -1094,7 +1095,13 @@ export function Metadata({
                    Metadata"* — and it already was, right here. The same card
                    as the masthead's minutes since 2026-10-05 (spya-jew7ds):
                    ReadTimeCard.tsx. */
-                card={<ReadTimeCard words={stats.words} supplementWords={stats.supplementWords} />}
+                card={
+                  <ReadTimeCard
+                    words={stats.words}
+                    supplementWords={stats.supplementWords}
+                    difficulty={stats.difficulty}
+                  />
+                }
               />
               <Stat
                 icon={Blocks}

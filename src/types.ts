@@ -26,10 +26,14 @@
  * src/ids.ts — `decodeFeedbackCursor` below needs them, and src/ids.ts imports
  * nothing at all, so it costs the browser bundle nothing and keeps this file
  * from becoming the sixth copy of the uuid regex.
+ *
+ * A fourth, of types again: the difficulty rating's shapes belong to
+ * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
 import type { FailureKind, PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -1595,9 +1599,50 @@ export interface Author {
   affiliations: string[];
 }
 
+/**
+ * **The `readingDifficulty` artefact, as it is stored**: the rating a screen
+ * shows (`RatedDifficulty`, src/reading-time.ts) plus which model made it and
+ * when, or the plain statement that the piece is not rated.
+ *
+ * Two members rather than a bag of optionals, because a rating with a level
+ * and no sentence is not a thing: the table refuses one too
+ * (`article_revisions_reading_difficulty_all_or_none`, src/db/schema.ts).
+ * `{ rated: false }` is a real value the `blocks` step writes, and it clears
+ * all five columns, so a piece whose text changed never keeps a rating of the
+ * old text.
+ * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+ */
+export type StoredReadingDifficulty =
+  | {
+      rated: true;
+      language: DifficultyLevel;
+      ideas: DifficultyLevel;
+      /** The model's one sentence. Never blank. */
+      reason: string;
+      /** The model's id as the gateway named it. Never sent to a screen. */
+      model: string;
+      /** When the rating was made, ISO 8601. */
+      ratedAt: string;
+    }
+  | { rated: false };
+
 export interface Meta {
   slug: string;
   title: string;
+  /**
+   * **How hard the piece is to read, when a model has rated it**: language and
+   * ideas, 1 to 5 each, and one sentence saying why. The reading-time estimate
+   * is multiplied by it (src/reading-time.ts) and the card under the minutes
+   * shows it. Absent on every piece not rated, which then reads at the flat
+   * rate.
+   *
+   * **Put here by the reads a screen is drawn from** (`metaFrom`,
+   * src/store/pg.ts), from columns the `blocks` step writes as an artefact of
+   * its own. It is not part of the `meta` artefact: the pipeline's own `Meta`
+   * never carries it and a `meta` write ignores it, so re-running `metadata`
+   * or `extract` cannot clear a rating of text that has not changed.
+   */
+  readingDifficulty?: RatedDifficulty;
   /**
    * **The title as it arrived, when import tidied it** — all capitals made
    * title case, a trailing footnote marker taken off (`tidyTitle`,

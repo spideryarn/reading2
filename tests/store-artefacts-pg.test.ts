@@ -1144,7 +1144,7 @@ describe("writing artefacts into a draft", () => {
   const begun = async (
     tx: Tx,
     claimed: JobDraftRef,
-    step: "structure" | "arc" | "blocks" | "fetch" | "extract",
+    step: "structure" | "arc" | "blocks" | "fetch" | "extract" | "metadata",
   ) => {
     await beginStepRun(
       { revisionId: claimed.revisionId, stepName: step, job: { id: claimed.jobId, attemptId: claimed.attemptId } },
@@ -1332,6 +1332,143 @@ describe("writing artefacts into a draft", () => {
     /* And each alone goes in, so the refusals above are about the pair and the bounds. */
     expect(await refusedBy({ publishedAt: null, publishedYear: 2011 })).toBeUndefined();
     expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: null })).toBeUndefined();
+  });
+
+  /* Plan 261005j: the difficulty rating, an artefact of its own beside the
+     blocks, held in five columns. The reads that show it are in
+     tests/reading-difficulty-pg.test.ts. */
+  describe("the reading-difficulty rating", () => {
+    const RATED = {
+      rated: true,
+      language: 2,
+      ideas: 4,
+      reason: "Short sentences, but each paragraph asks you to hold a new idea.",
+      model: "test/rater-1",
+      ratedAt: "2026-10-05T09:30:00.000Z",
+    } as const;
+
+    const columns = async (tx: Tx, revisionId: string) => {
+      const [row] = await tx
+        .select({
+          language: articleRevisions.readingLanguage,
+          ideas: articleRevisions.readingIdeas,
+          reason: articleRevisions.readingDifficultyReason,
+          model: articleRevisions.readingDifficultyModel,
+          ratedAt: articleRevisions.readingDifficultyRatedAt,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, revisionId));
+      return row;
+    };
+
+    it("writes a rating into its five columns and reads the same artefact back", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        expect(await columns(tx, claimed.revisionId)).toEqual({
+          language: 2,
+          ideas: 4,
+          reason: RATED.reason,
+          model: "test/rater-1",
+          ratedAt: new Date(RATED.ratedAt),
+        });
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual(RATED);
+      });
+    });
+
+    it("nulls all five when the step writes unrated, and reads back as unrated", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: { rated: false } }, {});
+        expect(await columns(tx, claimed.revisionId)).toEqual({
+          language: null,
+          ideas: null,
+          reason: null,
+          model: null,
+          ratedAt: null,
+        });
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual({ rated: false });
+      });
+    });
+
+    it("is left alone by a metadata-only write, which owns none of its columns", async () => {
+      /* GPT Sol's F2 on the plan: every `meta` write clears every column it
+         owns, so a rating kept among them would be wiped by an administrator
+         running `metadata` alone over an article whose body has not changed. */
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        await begun(tx, claimed, "metadata");
+        await writeArtefacts(claimed, tx, SLUG, "metadata", { meta: { slug: SLUG, title: "A new title" } }, {});
+        await begun(tx, claimed, "extract");
+        await writeArtefacts(
+          claimed,
+          tx,
+          SLUG,
+          "extract",
+          { meta: { slug: SLUG, title: "Another title" }, extractedHtml: "<p>x</p>" },
+          {},
+        );
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual(RATED);
+        // And the pipeline's own `Meta` does not grow the rating: it is not `meta`'s.
+        expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).not.toHaveProperty("readingDifficulty");
+      });
+    });
+
+    it("refuses a rating that is not one, before anything is written", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        for (const bad of [
+          { ...RATED, language: 6 },
+          { ...RATED, ideas: 2.5 },
+          { ...RATED, reason: "  " },
+          { ...RATED, model: "" },
+          { ...RATED, ratedAt: "yesterday" },
+          { rated: true },
+        ]) {
+          await expect(
+            writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: bad as never }, {}),
+          ).rejects.toThrow(/reading-difficulty/);
+        }
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual({ rated: false });
+      });
+    });
+
+    it("is refused half-written, or out of range, by the table itself", async () => {
+      const whole = {
+        readingLanguage: 2,
+        readingIdeas: 4,
+        readingDifficultyReason: "Because.",
+        readingDifficultyModel: "test/rater-1",
+        readingDifficultyRatedAt: new Date("2026-10-05T09:30:00.000Z"),
+      };
+      const refusedBy = async (set: Partial<Record<keyof typeof whole, number | string | Date | null>>): Promise<string | undefined> => {
+        try {
+          await getDb().transaction(async (tx) => {
+            await tx.update(articleRevisions).set(set as never).where(eq(articleRevisions.id, ref.revisionId));
+            throw new RollBack();
+          });
+          return undefined;
+        } catch (err) {
+          if (err instanceof RollBack) return undefined;
+          const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+          expect(cause?.code).toBe("23514");
+          return cause?.constraint;
+        }
+      };
+      // The positive control: all five together go in.
+      expect(await refusedBy(whole)).toBeUndefined();
+      for (const missing of Object.keys(whole) as (keyof typeof whole)[]) {
+        expect(await refusedBy({ ...whole, [missing]: null }), missing).toBe(
+          "article_revisions_reading_difficulty_all_or_none",
+        );
+      }
+      expect(await refusedBy({ ...whole, readingLanguage: 0 })).toBe("article_revisions_reading_language");
+      expect(await refusedBy({ ...whole, readingLanguage: 6 })).toBe("article_revisions_reading_language");
+      expect(await refusedBy({ ...whole, readingIdeas: 0 })).toBe("article_revisions_reading_ideas");
+      expect(await refusedBy({ ...whole, readingIdeas: 6 })).toBe("article_revisions_reading_ideas");
+    });
   });
 
   it("replaces the blocks wholesale, in the order it was given", async () => {

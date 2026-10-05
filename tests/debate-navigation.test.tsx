@@ -73,6 +73,7 @@ function publish(debate: Debate): PublicDebate {
   const payload = publicArticle({
     slug: SLUG, title: "The shared piece", byline: null, siteName: null, lang: null,
     excerpt: null, journal: null, publishedAt: null, publishedYear: null,
+    readingLanguage: null, readingIdeas: null, readingDifficultyReason: null,
     headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,

@@ -336,6 +336,11 @@ describe("the public article payload", () => {
     journal: "Noema Journal",
     publishedAt: "2026-01-14T09:00:00+00:00",
     publishedYear: null,
+    /* A whole rating, so the key-set assertion sees the three fields a
+       visitor is sent and would see a fourth (plan 261005j). */
+    readingLanguage: 3,
+    readingIdeas: 4,
+    readingDifficultyReason: "Ordinary prose about an unfamiliar argument.",
     headingTitle: "The mythology of conscious AI",
     /* **A real address, not `null`**, for the same reason `assets` below is a
        real manifest: with `null` in, the whole-key-set assertion never sees
@@ -422,6 +427,12 @@ describe("the public article payload", () => {
         "meta.journal",
         "meta.lang",
         "meta.published",
+        /* The difficulty rating, since 2026-10-05: the two levels and the
+           model's sentence, and not which model or when (plan 261005j). */
+        "meta.readingDifficulty",
+        "meta.readingDifficulty.ideas",
+        "meta.readingDifficulty.language",
+        "meta.readingDifficulty.reason",
         "meta.siteName",
         "meta.slug",
         "meta.title",
@@ -560,6 +571,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [HEADING, BLOCK],
@@ -656,6 +670,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
@@ -706,6 +723,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [
@@ -757,6 +777,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -792,6 +815,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -818,6 +844,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: "From the article's own h1",
       finalUrl: null,
       blocks: [BLOCK],
@@ -843,6 +872,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -852,6 +884,66 @@ describe("the public article payload", () => {
       ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
+  });
+
+  /**
+   * **How hard the piece is to read**, for a visitor: the owner's two levels
+   * and the model's sentence, or nothing. Plan 261005j. That the real reader
+   * selects the columns is tests/reading-difficulty-pg.test.ts.
+   */
+  describe("the difficulty rating", () => {
+    const rated = (over: {
+      readingLanguage: number | null;
+      readingIdeas: number | null;
+      readingDifficultyReason: string | null;
+    }) =>
+      publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: null,
+        publishedAt: null,
+        publishedYear: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...over,
+      }).meta;
+
+    it("sends the two levels and the sentence, and nothing else", () => {
+      expect(
+        rated({ readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "Plain words, hard ideas." }),
+      ).toEqual({
+        slug: "noema",
+        title: "T",
+        readingDifficulty: { language: 2, ideas: 5, reason: "Plain words, hard ideas." },
+      });
+    });
+
+    it("has no key for an unrated piece", () => {
+      const out = rated({ readingLanguage: null, readingIdeas: null, readingDifficultyReason: null });
+      expect(Object.keys(out)).toEqual(["slug", "title"]);
+    });
+
+    it("sends nothing rather than part of a rating, or a level that is not one", () => {
+      for (const bad of [
+        { readingLanguage: 2, readingIdeas: null, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: null },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "   " },
+        { readingLanguage: 0, readingIdeas: 5, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 6, readingDifficultyReason: "Why." },
+        { readingLanguage: 2.5, readingIdeas: 3, readingDifficultyReason: "Why." },
+      ]) {
+        expect(Object.keys(rated(bad)), JSON.stringify(bad)).toEqual(["slug", "title"]);
+      }
+    });
   });
 
   /**
@@ -874,6 +966,9 @@ describe("the public article payload", () => {
         journal: null,
         publishedAt: null,
         publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
         headingTitle: null,
         finalUrl: null,
         blocks: [BLOCK],
@@ -939,6 +1034,9 @@ describe("the public article payload", () => {
         journal: "Entropy",
         publishedAt: "2024-05-31T09:00:00+02:00",
         publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
         headingTitle: null,
         finalUrl: null,
         blocks: [BLOCK],
@@ -1481,6 +1579,9 @@ describe("the artefacts a shared link carries", () => {
     journal: null,
     publishedAt: null,
     publishedYear: null,
+    readingLanguage: null,
+    readingIdeas: null,
+    readingDifficultyReason: null,
     headingTitle: null,
     finalUrl: null,
     blocks: [BLOCK],
@@ -2347,6 +2448,9 @@ describe("the artefacts a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2389,6 +2493,9 @@ describe("the artefacts a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2432,6 +2539,9 @@ describe("the source URL a stranger receives", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [HEADING, BLOCK],
@@ -2642,6 +2752,9 @@ describe("the debate a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [BLOCK],
@@ -2891,6 +3004,9 @@ describe("the debate a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],

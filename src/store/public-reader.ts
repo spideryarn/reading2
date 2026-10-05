@@ -295,6 +295,13 @@ const PUBLIC_PROJECTIONS = {
     journal: articleRevisions.journal,
     publishedAt: articleRevisions.publishedAt,
     publishedYear: articleRevisions.publishedYear,
+    /* How hard a model judged the piece to read, since 2026-10-05 (plan
+       261005j): the two levels and its one sentence, so a visitor's minutes
+       are the owner's. `reading_difficulty_model` and `…_rated_at` are not
+       selected. */
+    readingLanguage: articleRevisions.readingLanguage,
+    readingIdeas: articleRevisions.readingIdeas,
+    readingDifficultyReason: articleRevisions.readingDifficultyReason,
     finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
@@ -872,6 +879,9 @@ export const pgPublicReader: PublicArticleReader = {
         journal: found.revision.journal,
         publishedAt: found.revision.publishedAt,
         publishedYear: found.revision.publishedYear,
+        readingLanguage: found.revision.readingLanguage,
+        readingIdeas: found.revision.readingIdeas,
+        readingDifficultyReason: found.revision.readingDifficultyReason,
         headingTitle: headingTitleOf(blocks),
         finalUrl: found.revision.finalUrl,
         blocks,

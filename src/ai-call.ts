@@ -824,6 +824,24 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
       allow_fallbacks: true,
     },
   },
+  /* **How hard a piece is to read** (src/reading-difficulty.ts) — the same
+     model as `paper-metadata` and the same promise, for the same reason: what
+     it sends is up to about 3,000 words of an article a reader added. Every
+     field is `paper-metadata`'s and that row says why each is what it is.
+     Written out, not shared through a constant, so a change to one job's
+     route is a decision about that job. tests/reading-difficulty.test.ts
+     asserts these bytes on the wire. */
+  "reading-difficulty": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
@@ -1060,6 +1078,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      judged DeepSeek against Luna ran at this setting:
      evals/results/paper-metadata-2026-10-01.md. */
   "paper-metadata": { effort: "none" },
+  /* Two numbers and a sentence, with a 300-token answer ceiling that thinking
+     would spend before the answer began. `none` is `paper-metadata`'s setting
+     on the same model, and the one the ratings were measured at:
+     evals/reading-time-difficulty/rate.ts. */
+  "reading-difficulty": { effort: "none" },
   /* Copying two words out of one sentence needs no thinking, and the reader
      is watching the bar. The setting every chat arm of the eval ran at, with
      no reasoning token spent on any of 600 answers

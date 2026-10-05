@@ -276,7 +276,10 @@ export function describeArticle(input: {
     ...(meta.publishedAt ? { publishedAt: meta.publishedAt } : {}),
     ...(meta.publishedYear !== undefined ? { publishedYear: meta.publishedYear } : {}),
     words: scalars.wordCount,
-    minutes: readingMinutes(scalars.wordCount),
+    /* With the article's difficulty rating when it has one, which is what the
+       masthead does with the same `Meta` (src/web/stats.ts): the two cannot
+       show different minutes for one piece. Plan 261005j. */
+    minutes: readingMinutes(scalars.wordCount, meta.readingDifficulty),
     blocks: scalars.blockCount,
     parts: scalars.partCount,
     sections: scalars.sectionCount,

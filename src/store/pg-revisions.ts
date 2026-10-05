@@ -271,6 +271,18 @@ export const REVISION_CARRY_POLICY: Record<
   extractedHtml: "carry",
   stampedHtml: "carry",
 
+  /* The difficulty rating, all five together (the table refuses a copy that
+     takes only some). It is a judgement of the blocks, and the blocks carry:
+     a revision that does not run `blocks` keeps the same text, so it keeps
+     the rating of that text. **The time carries too**, because making a
+     revision is not rating the piece again. A revision that does run `blocks`
+     overwrites all five, with a new rating or with nulls (plan 261005j). */
+  readingLanguage: "carry",
+  readingIdeas: "carry",
+  readingDifficultyReason: "carry",
+  readingDifficultyModel: "carry",
+  readingDifficultyRatedAt: "carry",
+
   /* `tree`, `labels` and `arc` carry too, and they are the uncomfortable case:
      a `{ steps: ["blocks"] }` job would publish new paragraphs under the
      previous tree, whose `range` pairs may name block ids that no longer exist.

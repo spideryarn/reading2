@@ -2196,6 +2196,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "which loads a corpus article into Postgres and reads no `data/` directory of its own; the " +
       "export it runs writes to a temporary directory it removes. Re-run witness 2 to confirm.",
   },
+  "tests/reading-difficulty-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for the five reading-difficulty columns " +
+      "on `article_revisions` " +
+      "(docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md): " +
+      "the owner's read, the shelf entry's minutes, the carry-forward, both exports and the visitor's " +
+      "read. It seeds through `scratchArticleInPg`, which loads a corpus article into Postgres and " +
+      "reads no `data/` directory of its own; the export it runs writes to a temporary directory it " +
+      "removes. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -3074,6 +3087,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
      one column read back through four reads. */
   "tests/title-original-pg.test.ts": "private-postgres",
+  /* New on 2026-10-05 (plan 261005j). Its own throwaway article per run, and
+     five columns read back through six reads. */
+  "tests/reading-difficulty-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the

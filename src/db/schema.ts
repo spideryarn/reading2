@@ -1235,10 +1235,46 @@ export const articleRevisions = spideryarn.table(
     sectionCount: integer("section_count"),
     rootGist: text("root_gist"),
 
+    /**
+     * **How hard the piece is to read, as a model judged it at import** — the
+     * `readingDifficulty` artefact (`StoredReadingDifficulty`, src/types.ts),
+     * taken apart. Language and ideas are each 1 to 5; the reading-time
+     * estimate is multiplied by what they stand for (src/reading-time.ts).
+     *
+     * **All five null, or all five set** (`…_reading_difficulty_all_or_none`).
+     * Null is "not rated": every revision from before 2026-10-05, and any
+     * whose rating call failed. The minutes are then the flat rate.
+     *
+     * Columns rather than one JSON document because the shelf's query reads
+     * the two levels for every card (docs/project/sql.md). Written by the
+     * `blocks` step and by nothing else, so the rating is always about the
+     * blocks beside it; it is not one of `meta`'s columns, because a `meta`
+     * write clears every column it owns.
+     * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+     */
+    readingLanguage: smallint("reading_language"),
+    readingIdeas: smallint("reading_ideas"),
+    /** The model's one sentence saying why. Shown to readers, in the model's face. */
+    readingDifficultyReason: text("reading_difficulty_reason"),
+    /** Which model rated it. For us and the export; never sent to a screen. */
+    readingDifficultyModel: text("reading_difficulty_model"),
+    /** When the rating was made. A later revision that carries it keeps this time. */
+    readingDifficultyRatedAt: timestamp("reading_difficulty_rated_at", { withTimezone: true }),
+
     createdAt: createdAt(),
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    /* The five levels of `DifficultyLevel` (src/reading-time.ts). A null level
+       is NULL here and passes, which is wanted: most rows are unrated. */
+    check("article_revisions_reading_language", sql`${t.readingLanguage} between 1 and 5`),
+    check("article_revisions_reading_ideas", sql`${t.readingIdeas} between 1 and 5`),
+    /* A rating with a level and no sentence, or a sentence and no model, is a
+       value the stored type cannot express. */
+    check(
+      "article_revisions_reading_difficulty_all_or_none",
+      sql`num_nonnulls(${t.readingLanguage}, ${t.readingIdeas}, ${t.readingDifficultyReason}, ${t.readingDifficultyModel}, ${t.readingDifficultyRatedAt}) in (0, 5)`,
+    ),
     check("article_revisions_authors_array", sql`jsonb_typeof(${t.authors}) = 'array'`),
     /* The bounds `publishedYearOf` (src/types.ts) reads by. A null year is
        NULL here and passes, which is wanted: most rows have none. */

@@ -438,7 +438,11 @@ function articleSteps(
         extractedHtml: html,
         meta: { slug, title: "A fixture article" },
       }),
-      blocks: returningStep("blocks", { blocks: { blocks }, stampedHtml: html }),
+      blocks: returningStep("blocks", {
+        blocks: { blocks },
+        stampedHtml: html,
+        readingDifficulty: { rated: false },
+      }),
       structure: returningStep(
         "structure",
         { tree: treeFor(slug, blocks), labels: labelsFor(slug, blocks), blocks: { blocks } },

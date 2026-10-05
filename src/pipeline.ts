@@ -2624,7 +2624,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * would redo stage 3 every time, and `{ steps: ["blocks"] }` could never
      * skip itself.
      */
-    produces: ["blocks", "stampedHtml"],
+    /* And the difficulty rating, since 2026-10-05: an artefact of its own
+       beside the blocks it is about, so re-splitting the piece always replaces
+       it and nothing else can (plan 261005j). */
+    produces: ["blocks", "stampedHtml", "readingDifficulty"],
     /* Presence is not enough here, and this is the only step where that is
        true for a reason other than cost — see `blocksMatchTheirHtml`. */
     isDone: (ctx, store) => blocksMatchTheirHtml(ctx, store),
@@ -2792,8 +2795,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          blocks cleaned by the current sanitiser policy from blocks cleaned by
          nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
          every article read back as *predates the sanitiser* for ever. */
+      /* **`readingDifficulty` is always "unrated" for now.** The step has to
+         return every kind it declares (`checkProduct`, src/store/session.ts),
+         and the model call that rates the blocks above is not wired in yet:
+         it is stage 3 of plan 261005j, and replaces this literal. Until then
+         a re-split piece is left unrated, which is also what every piece is
+         today. */
       return {
-        parts: { blocks: blocksArtefact(run.blocks), stampedHtml: run.html },
+        parts: {
+          blocks: blocksArtefact(run.blocks),
+          stampedHtml: run.html,
+          readingDifficulty: { rated: false },
+        },
         detail: `${total} blocks, ${minted} new ids (${kept} kept)`,
       };
     },

@@ -160,7 +160,10 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
 
   it("stage 3 splits it and puts every id it minted into the HTML it returns", async () => {
     const parts = await runStep("blocks");
-    expect(Object.keys(parts).sort()).toEqual(["blocks", "stampedHtml"]);
+    expect(Object.keys(parts).sort()).toEqual(["blocks", "readingDifficulty", "stampedHtml"]);
+    /* Stage 1 of plan 261005j: the step says "unrated" beside the blocks. The
+       model call that can say otherwise is wired in by stage 3. */
+    expect(parts.readingDifficulty).toEqual({ rated: false });
 
     const stored = await store.read(SLUG,"blocks", "blocks");
     firstIds = (stored?.blocks ?? []).map((b) => b.id);

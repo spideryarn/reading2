@@ -269,6 +269,16 @@ async function readArtefact(
   step: StepName,
   kind: ArtifactKind,
 ): Promise<unknown | null> {
+  /* **No fixture holds a difficulty rating, and one that has blocks reads as
+     unrated** — the answer Postgres gives for a revision with blocks and
+     nothing in its five rating columns (src/store/artifacts-pg.ts §
+     `readReadingDifficulty`). Without it `copyArtefacts` would refuse every
+     fixture as holding some but not all of what `blocks` produces. Absent when
+     the blocks are, so a slug the fixture has never heard of still copies
+     nothing. Plan 261005j. */
+  if (step === "blocks" && kind === "readingDifficulty") {
+    return (await readArtefact(at, step, "blocks")) === null ? null : { rated: false };
+  }
   const where = LAYOUT[step][kind];
   if (!where) throw new Error(`${step} does not produce ${kind}`);
   const file = where(at);

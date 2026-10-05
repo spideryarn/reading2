@@ -232,7 +232,13 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
       placement="bottom"
       keepSide
       className="tip-soon"
-      content={<ReadTimeCard words={stats.words} supplementWords={stats.supplementWords} />}
+      content={
+        <ReadTimeCard
+          words={stats.words}
+          supplementWords={stats.supplementWords}
+          difficulty={stats.difficulty}
+        />
+      }
     >
       {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
       <span className="read-time-trigger" tabIndex={0}>

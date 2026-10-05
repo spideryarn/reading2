@@ -86,6 +86,21 @@ describe("describeArticle", () => {
     expect(entry.minutes).toBe(readingMinutes(1000));
   });
 
+  it("multiplies the minutes by a rated article's difficulty, and leaves the words alone", () => {
+    /* Literals worked out by hand (plan 261005j): 1,000 words is 4.2 minutes
+       flat, shown as 4; language 5 and ideas 5 multiply to 1.404, so 5.9,
+       shown as 6. A card that ignored the rating would say 4. */
+    const rated = describeArticle({
+      ...base,
+      meta: { ...base.meta, readingDifficulty: { language: 5, ideas: 5, reason: "Dense." } },
+    });
+    expect(describeArticle(base).minutes).toBe(4);
+    expect(rated.minutes).toBe(6);
+    expect(rated.words).toBe(1000);
+    // The model's sentence is for the article's own card, not the shelf's.
+    expect(JSON.stringify(rated)).not.toContain("Dense.");
+  });
+
   it("prints parts and sections, which are counted by depth and not by position", () => {
     const entry = describeArticle(base);
     expect(entry.parts).toBe(1);
