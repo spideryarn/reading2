@@ -1147,7 +1147,7 @@ export interface Quote {
  * outline, and the test has not been re-run on fills.)
  *
  * `1` is the light fill, `2` the heavy one. The stylesheet owns their strengths
- * (0.20 and 0.32, styles/annotations.css § quote fills); this is an ordinal so
+ * (`--quote-fill-light` and `--quote-fill-heavy`, per theme, styles/tokens.css); this is an ordinal so
  * that the design values stay in the design layer, exactly as `data-hues` keeps
  * a count here and the colours next door.
  *

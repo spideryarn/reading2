@@ -80,8 +80,10 @@ import {
   sortDirParam,
 } from "./params.js";
 import { chosenTopics, isArchived, narrowShelf, tagFacets, topicCountsForVisible, topicMembers } from "./shelf-narrow.js";
+import { ArticleTopicsContext, ShelfRowTopics } from "./ShelfRowTopics.js";
 import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
 import { ShelfTagFilter } from "./ShelfTagFilter.js";
+import { articleTopics } from "./article-topics.js";
 import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
@@ -214,7 +216,12 @@ export function Library({
      prints a relative date — see useNow.ts for both halves of why. */
   const now = useNow();
 
-  const columns = useMemo(() => libraryColumns(shelf, now, archivedOn), [shelf, now, archivedOn]);
+  /* `ShelfRowTopics` is one stable component, reading its topics from context,
+     so the topics answer landing does not rebuild these (plan 261005a). */
+  const columns = useMemo(
+    () => libraryColumns(shelf, now, archivedOn, ShelfRowTopics),
+    [shelf, now, archivedOn],
+  );
   const natural = useMemo(() => naturalDirections(columns), [columns]);
   /* `DEFAULT_BY` as the fallback: a URL naming nothing we recognise lands on
      the ordinary shelf rather than on an unsorted list with no chip pressed.
@@ -248,6 +255,10 @@ export function Library({
     drop: dropTopics,
   });
   const { terms, inArchive, topics, members } = shelfTopics;
+  /* Each topic's hue and each article's topics, once per answer, for the
+     Topics row and for the pills on every card and table row
+     (article-topics.ts). */
+  const topicsOfArticles = useMemo(() => articleTopics(terms.data?.terms ?? []), [terms.data?.terms]);
 
   /* **The scope: one list.** The active shelf, and — with the Archived chip on
      and the archive loaded — the archived articles in the same array, each
@@ -790,6 +801,7 @@ export function Library({
           entryOf={shelfTopics.entryOf}
           inScope={shelfTopics.inScope}
           archived={archivedOn}
+          articleTopics={topicsOfArticles}
         />
       )}
 
@@ -857,7 +869,7 @@ export function Library({
           nothing else, so a capped view without its button is not a shape this
           JSX can take. */}
       {sorted.length > 0 && (
-        <>
+        <ArticleTopicsContext.Provider value={topicsOfArticles}>
           {view === "table" ? (
             /* **One `TooltipGroup` for the whole table**, so running the pointer
                down the titles opens each row card instantly after the first,
@@ -877,6 +889,7 @@ export function Library({
                     shelf={shelf}
                     note={note(row.original, now)}
                     archivedShown={archivedOn}
+                    topics={<ShelfRowTopics slug={row.original.slug} className="tw:mt-1.5" />}
                     readThis={
                       row.original.processing === "minimal" ? (
                         <ReadThisButton slug={row.original.slug} />
@@ -896,7 +909,7 @@ export function Library({
           {capped.revealTotal !== null && (
             <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
           )}
-        </>
+        </ArticleTopicsContext.Provider>
       )}
 
       {/* The passages obey the Unread chip too. Without that, turning Unread on
