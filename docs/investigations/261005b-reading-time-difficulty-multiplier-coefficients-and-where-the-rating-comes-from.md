@@ -9,7 +9,8 @@ Done 2026-10-05. Three questions: how much do harder language and harder ideas s
 our own recorded reading times agree; and which model call should produce the rating.
 
 **What was measured, and what was not.** The rating call was run for real, twice each on 24 local
-articles (§ 4): it works, it repeats itself, and it costs about seven hundredths of a cent. What
+articles (§ 4): it returns ratings, its paired ratings stay within one level, and the latest run
+cost about six hundredths of a cent per call. What
 nothing here shows is that a model's rating tracks how long anyone takes to read. The table in § 1
 comes from other people's studies of other readers.
 
@@ -66,11 +67,12 @@ derived from them.** No source gives five levels, and none is about a model's ra
 - **The neutral case is language 3, ideas 2**: ordinary adult non-fiction that explains a few ideas
   as it goes, read by a curious adult who has not studied the field. That is what we take 238 to
   describe. It is an assumption about what Brysbaert's pooled texts were like.
-- **The hardest corner, 1.40, is fixed by totals that were measured.** The hardest texts anyone
-  timed came out at 1.19× the time at 238 (Carver's hardest passages, 200 words a minute, with word
+- **The hardest corner, 1.40, was chosen in light of measured totals.** The hardest texts in the
+  studies used here came out at 1.19× the time at 238 (Carver's hardest passages, 200 words a minute, with word
   length and the learning step both in it) and 1.31× (Britton's hard texts, 182). Our own papers
-  are at 1.19× (§ 2). Wake Forest's 1.39× for "some new concepts" is the same neighbourhood; its
-  1.83× for "many" is reading to study, and nothing timed supports it for reading an article.
+  are at 1.19× (§ 2). Wake Forest's estimates for reading to understand are 1.32× for "some new
+  concepts" and 1.83× for "many", relative to 238. Those are stipulated rates, not timed totals.
+  None of these sources derives our 1.40 corner.
 - Language 5 is Britton's hard texts as word length alone predicts them (1.17). 2 is fiction's word
   length (0.91). 1 is a little below that; Carver's easiest passages (0.74) are children's text,
   which an article here rarely is.
@@ -86,12 +88,15 @@ derived from them.** No source gives five levels, and none is about a model's ra
   the 25 pairs today; it is there so an edit to one cell cannot take the estimate outside what was
   argued for here.
 
-**The first table was wrong, and the paid run is what showed it.** It had language up to 1.20 and
+**The first table had an unsupported total, made conspicuous by the paid ratings.** It had language up to 1.20 and
 ideas up to 1.40, each column argued from a source, and a corner of 1.68. Each column looked
-defensible. But Carver's 1.3× step and his 1.19× total are the same passages, so stacking a full
-language column on a full ideas column counted his slowdown twice. On the 24 articles in § 4 it
-put every research paper at 1.4× to 1.7×, which is more than any timed total. A column can be
-right and the product wrong.
+defensible. But Carver's 1.19× actual-word total already includes the slowdown whose 1.3× ratio
+appears in the standard-word curve. Using that total as a language-only factor and then multiplying
+the residual slowdown again counts that component twice. The problem is using a total as a
+component, not multiplying separate language and ideas factors. On the first run's 24 articles
+in § 4 it put every research paper at 1.4× to 1.7×, above the timed totals cited here. A column can be
+right and the product wrong. The paid run measured ratings, not reading time; it did not prove
+that either coefficient table predicts readers' pace.
 
 **What these numbers are not.** They are from college students reading short passages in a lab.
 None of them is about a model's rating. A rating of "ideas 4" is not Carver's "Grades 16 to 18";
@@ -135,12 +140,13 @@ paragraphs. Most of it is agents' browser tests scrolling a page, so it was not 
   window (0.5× to 3×) that by construction returns something near 1.
 - It does not contradict the language column: papers with long words were read about a fifth
   slower than the flat estimate, which is what word length predicts.
-- It shows no extra slowdown for ideas beyond what word length predicts. One reading of that is
+- The observed 1.19 is above word length's predicted 1.13, but this sample cannot establish an
+  extra slowdown for ideas, or its absence. One possible explanation is
   Carver's: the reader may know these fields, so the text is not harder than him. The sample cannot
   show that, and it cannot justify any cell of the table. Greg raised the reader's profile in the
   same report; the plan leaves it open.
-- The spread between articles (0.72 to 2.42) is far wider than any table here would predict. Most
-  of that is how the piece was read, not what it is.
+- The spread between articles (0.72 to 2.42) is far wider than any table here would predict. These
+  measurements cannot separate text difficulty from pauses, familiarity and how the piece was read.
 
 ## 3. Which call makes the rating
 
@@ -180,44 +186,49 @@ npx tsx evals/reading-time-difficulty/rate.ts --paid
 ```
 
 24 local articles of 400 body words or more, spread evenly across mean word length (4.2 to 5.9
-letters), each rated twice with prompt `reading-difficulty/1`. Results:
+letters), each rated twice. Latest results, using prompt `reading-difficulty/2`:
 [`evals/results/reading-time-difficulty-2026-10-05.json`](../../evals/results/reading-time-difficulty-2026-10-05.json).
+The first run, using `reading-difficulty/1`, is kept in
+[`…-prompt-1.json`](../../evals/results/reading-time-difficulty-2026-10-05-prompt-1.json).
 The bar was written into the plan before the run.
 
-| what was asked | bar | seen |
-|---|---|---|
-| calls that returned a rating | 95% | 48 of 48 |
-| two runs within one level, language | 90% | 24 of 24 (19 identical) |
-| two runs within one level, ideas | 90% | 24 of 24 (20 identical) |
-| language rises with word length (rank correlation) | 0.4 | 0.56 |
-| spend, as the ledger recorded it | — | $0.0330, so $0.0007 a call |
+| what was asked | bar | first run, prompt 1 | latest run, prompt 2 |
+|---|---|---|---|
+| calls that returned a rating | 95% | 48 of 48 | 48 of 48 |
+| two runs within one level, language | 90% | 24 of 24 (19 identical) | 24 of 24 (20 identical) |
+| two runs within one level, ideas | 90% | 24 of 24 (20 identical) | 24 of 24 (17 identical) |
+| language rises with word length (rank correlation) | 0.4 | 0.56 | 0.76 |
+| spend, as the collector recorded it | — | $0.0330, so $0.0007 a call | $0.0281, so $0.0006 a call |
 
-**Read by a person.**
+**Spot checks of the latest saved ratings.** These describe the outputs; neither results file
+records an independent person's judgement of whether a rating is sensible.
 
-- The order is sensible. Short personal essays are 2–3 on both scales; short encyclopedia entries are 3
-  and 3; long reports and humanities papers are 4 and 4; research papers are 4–5 and 5.
-- **Plain words for hard ideas does show up**: two essays came back language 3, ideas 4, both
-  times, with reasons that say so ("The prose is clear and conversational, but the reader must
-  follow a long argument built from several linked abstract ideas…").
-- **The same text can get two answers.** One paper is in the corpus twice, as two imports. One copy
-  was rated 4 and 4 on both runs, the other 5 and 5 on both. That is one level on each scale, and
-  with the table above it is 1.21× against 1.40×: about ten minutes on a fifty-minute paper. Two runs on
+- Personal essays are language 2–3 and ideas 2–4. The encyclopedia entries in this run are
+  language 4 and ideas 3–5; the academic pieces are mostly language 4–5 and ideas 4–5.
+- **Plain words for hard ideas does show up**: *Lies We Tell Kids* and *Distributed
+  Representations: Composition & Superposition* came back language 3, ideas 4, both times.
+  Their reasons describe conversational prose carrying abstract arguments.
+- **Two imports of one paper can get different ratings.** One paper is in the corpus twice. One copy
+  was rated 4 and 5 on both attempts, the other 4 and 4 on both. With the table above that is
+  1.296× against 1.2096×: about four minutes on a fifty-minute paper. In the first run the copies
+  were 4 and 4 versus 5 and 5, a difference of about ten minutes. Two runs on
   one copy agreeing does not mean the rating is stable against small changes in the sample.
-- **Nothing was rated 1 on either scale**, and a 2 turned up on only three pieces. The local corpus has no
-  story, no children's text and no news item, so the easy end of both scales is untested.
-- The largest gap between two runs of one article is 0.13 of a multiplier.
+- **Nothing was rated 1 on either scale**, and a 2 turned up on four pieces. The chosen set has
+  no story or children's text, so the easiest end of both scales is untested.
+- The largest gap between two attempts of one article is 0.108 of a multiplier (0.13 in the first run).
 
-**A second run, the same evening**, after the code review changed how a piece made of very long
-paragraphs is sampled (prompt `reading-difficulty/2`; the first run's file is kept as
-`…-prompt-1.json`). 24 of 24 rated again; the two runs within one level on all 24, identical on 20
-for language and 17 for ideas; rank correlation with word length 0.76; $0.0281. The local corpus
-had moved, so 16 articles are in both runs. Of those, 9 got exactly the first run's rating and
-none moved more than one level on either scale. **So a rating is good to within one level, and
-about half the time a fresh rating of the same piece lands one level away on one scale.** With the
-table above one level is 4% to 9% of the minutes.
+**Why there was a second run, the same evening.** The code review changed how a piece made of
+very long paragraphs is sampled, so the call was checked again with prompt `reading-difficulty/2`.
+The local corpus had moved, so 16 articles are in both runs. Of those, 9 got exactly the first run's rating and
+none moved more than one level on either scale, comparing attempt A between runs. This is
+agreement on this small overlapping set, not accuracy against a known difficulty or a guarantee
+for a fresh rating. With the table above one level on one scale is about 4% to 9% of the minutes;
+movement on both scales compounds.
 
-**What it means for the minutes.** Nine of the 24 came back 3 and 3, which is 1.05×. So most
-essays gain about five percent, and most papers gain twenty to forty.
+**What it means for the minutes.** In the latest run, six of the 24 were 3 and 3 on attempt A,
+and only two stayed 3 and 3 on both attempts (nine and six respectively in the first run).
+That pair gives 1.05×; the 4–5 language and 4–5 ideas pairs give roughly 1.21× to 1.40×. These
+are the table's adjustments, not measured slowdowns.
 
 ## What is still to do
 

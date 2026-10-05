@@ -585,8 +585,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      so the paid chunks are banked — but a wasted lease window is still a wasted
      lease window, and `REQUEUE_BUDGET` above allows two of them. */
   extract: 700_000,
-  /* GUESS, generous. Deterministic, no model call. */
-  blocks: 5_000,
+  /* A CEILING for the call, a GUESS for the rest. Splitting is deterministic
+     and was given a generous 5 s. Since 2026-10-05 the step ends with one
+     model call that rates how hard the piece is to read, and that call gives
+     up after `TIMEOUT_MS` in src/reading-difficulty.ts, 15 s. So 5 + 15, and
+     5 more for the write. Admitted with less, a slow rating would meet the
+     claim's deadline before its own, and a cancelled step is the one thing
+     that call lets fail an import. GPT Sol, code review of plan 261005j. */
+  blocks: 25_000,
   /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
      ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
 

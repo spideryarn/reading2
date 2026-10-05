@@ -8,7 +8,8 @@ put the question to Greg · Research:
 
 **Status:** plan, 2026-10-05, reviewed by GPT Sol
 ([prompt](261005j-reading-time-difficulty-plan-review-prompt.md),
-[answer](261005j-reading-time-difficulty-plan-review-sol.md)). Being built.
+[answer](261005j-reading-time-difficulty-plan-review-sol.md)). Built, 2026-10-05, on `dev`; see the
+Log for what is not done.
 
 > yes, either difficult language and/or difficult ideas both slow down reading time. the research
 > will hopefully provide evidence to figure out the numbers/coefficients/etc . Piggyback on an
@@ -218,3 +219,19 @@ If it fails these, the wiring in stage 3 does not land.
   criteria written before the paid run (F8); privacy, export and the cached shelf named (F10).
   Changed in scope: the backfill write is out of this work and queued, because doing it safely is
   a piece of work of its own (F9).
+- 2026-10-05: built. The paid check ran on 24 local articles and met its bar (all rated, the two
+  runs never more than a level apart, $0.03). **Reading its results changed the table**: the first
+  one put every research paper at 1.4× to 1.7×, and no timed total is that high, so the top was
+  cut back to 1.40. The investigation says what the mistake was.
+- 2026-10-05: GPT Sol's code review
+  ([prompt](261005j-reading-time-difficulty-code-review-prompt.md),
+  [answer](261005j-reading-time-difficulty-code-review-sol.md)). Its first start was killed by the
+  box's memory guard with no verdict; the one fix it had made, the sampler reaching the end of a
+  piece made of very long paragraphs, was kept, and the paid check run again on it. The second
+  start found no storage defect by reading. Taken: `blocks` still reserved 5 seconds in
+  `STEP_BUDGET_MS` though it now ends with a 15-second call, so a slow rating could meet the
+  claim's deadline first and cancel the import; now 25. It also corrected the investigation where
+  it mixed the two paid runs and where it called agreement accuracy.
+- 2026-10-05: **status.** On `dev`, not deployed. New imports are rated; articles already here are
+  not, and say so. Not done: the backfill script; a browser look at the card (the box was short of
+  memory all evening); the easy end of both scales, which the local corpus cannot test.
