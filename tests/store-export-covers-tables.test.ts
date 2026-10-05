@@ -677,6 +677,9 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     id: "An internal uuid naming nothing else in the zip; `shortId` is the reader-facing one.",
     currentRevisionId: "An internal uuid, and the zip holds exactly that revision already.",
     fixture: "Says this is the shipped demo article — about our deployment, not the reader's data.",
+    shareToken:
+      "The key of the article's private link: a credential, and a zip gets forwarded " +
+      "(src/store/export-bundle.ts § `shareToken`). `shareTokenAt` is kept.",
   },
   article_revisions: {
     id: "An internal uuid. `basedOnRevisionId` is kept because lineage is a fact about the piece.",

@@ -38,6 +38,18 @@ const LOOKED_AT: Record<string, string> = {
   /* Beside the *Ask what you meant* button, and hidden under `pointer: coarse`
      — tests/command-bar-pick.test.tsx § the button that asks. */
   'CommandBar.tsx › "or press Enter"': "the button beside it",
+  /* The three below are the command bar's microphone, around a double press on
+     Stop (plan 261005a). In all three it is the app that presses Enter, on the
+     reader's behalf, and none asks the reader for a key —
+     tests/command-bar-double-stop.test.tsx clicks the button and reads each.
+
+     This one is the *name of the microphone button itself* during the moment
+     a second press counts: it says what pressing that button will do. */
+  'DictationStrip.tsx › "Press Enter when the words arrive"': "the microphone button this names, a second time",
+  /* The same button's name once the second press is taken, and the strip's
+     sentence beside it: a report of what is about to happen. */
+  'DictationStrip.tsx › "Turning your words into text, then pressing Enter"': "nothing: the second press was already taken",
+  'DictationStrip.tsx › "Turning that into text, then pressing Enter…"': "nothing: the second press was already taken",
   /* The tooltip on the Dock's own command button. Every row the bar then
      draws is pressed with a finger (tests/command-bar.test.tsx). */
   'Dock.tsx › "Type the name of a mode, a page or a thing to do, and press Enter — or ⌘K / Ctrl-K, which opens the same box"':
