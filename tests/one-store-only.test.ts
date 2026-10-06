@@ -200,23 +200,17 @@ async function sourcesUnder(dir: string): Promise<string[]> {
  * Every file this guard reads, repo-relative — code with its comments stripped,
  * and the two in `NOT_CODE` exactly as they are written.
  */
-async function scanned(): Promise<[string, string][]> {
+async function scanned(files: readonly string[] = FILES): Promise<[string, string][]> {
   const code: string[] = [];
   for (const dir of DIRS) code.push(...(await sourcesUnder(path.join(ROOT, dir))));
-  for (const file of FILES) code.push(path.join(ROOT, file));
+  for (const file of files) code.push(path.join(ROOT, file));
 
   const out: [string, string][] = [];
   const add = async (full: string, strip: boolean): Promise<void> => {
     const rel = path.relative(ROOT, full);
     if (rel === SELF) return;
-    try {
-      const text = await readFile(full, "utf8");
-      out.push([rel, strip ? stripComments(text) : text]);
-    } catch {
-      /* A file that is not there is not a violation. (Written for the
-         store-migration witness's own vitest config, which went on
-         2026-10-06.) */
-    }
+    const text = await readFile(full, "utf8");
+    out.push([rel, strip ? stripComments(text) : text]);
   };
 
   for (const full of code) await add(full, true);
@@ -225,6 +219,14 @@ async function scanned(): Promise<[string, string][]> {
 }
 
 describe("the store flag is a dead name, and this is what stops it coming back", () => {
+  it("fails when a required root file cannot be read", async () => {
+    const missing = "__one_store_missing_root__.ts";
+    await expect(scanned([...FILES, missing]).then(() => "scan succeeded")).rejects.toMatchObject({
+      code: "ENOENT",
+      path: path.join(ROOT, missing),
+    });
+  });
+
   /**
    * **The scan found something**, before any assertion about what it did not
    * find. A collector that matches nothing passes every "is it empty" assertion

@@ -94,9 +94,39 @@ Everything else in the brief held when re-run.
   than this cluster's. Worth its own item.
 - **The file is still called `store-migration-registry`** while what is live in it is the lane map.
   A rename touches `vitest.config.ts` and about twenty comments.
-- **`tests/one-store-only.test.ts` still swallows a missing file** in its root list. That was written
-  for the config deleted here. With it gone, a renamed `vite.config.ts` would be skipped in silence.
-  Changing it is a behaviour change outside this cluster.
+- **The source guard's missing-file exception was removed in review**, as recorded below.
+
+## Review fixes, 2026-10-06
+
+The missing-file exception in `tests/one-store-only.test.ts` predates this cluster
+(`1481e1969`). Its remaining root files are required, so review added a regression that
+first failed because a scan with a missing required file resolved successfully, then removed
+the swallowed read error. The earlier example of `vite.config.ts` was wrong: an explicit
+assertion already requires it. `vitest.config.ts` and `package.json` had no such assertion.
+
+Two comments in `src/web/PricingPage.tsx` counted the deleted plan arm; their numerical wording
+was removed. No reader-facing copy changed. All four surviving lane cases were mutated to
+fail for their intended reasons (missing assignment, invalid exemption, wrong shared lane,
+missing owner verdict), then restored. The retired import walk checked `STORE_MIGRATION`
+membership, not lane routing; today's lane map and poisoned unit environment remain independent.
+
+An injected `off` plan falls through the copy functions to `undefined`. The client validates
+only `purchase`, so an unexpected plan kind could still reach rendering; this broader boundary
+weakness is reported without changing `useBilling.ts`. No current producer or persisted
+`ReaderPlan` supplies `off`, and billing responses are served with `private, no-store`.
+
+## Review
+
+[GPT Sol's code review](261006j-sixth-sweep-s1-code-review-sol.md) of `e6a1cf04d`
+([the prompt](261006j-sixth-sweep-s1-code-review-prompt.md)). Verdict: **ship with these fixes
+(applied)**. The fixes are Sol's; the section above is its own record of them.
+
+- **C1, fixed by Sol.** `tests/one-store-only.test.ts` swallowed read errors, so a missing required
+  root file escaped the scan. A regression was added and the catch removed.
+- **C2, fixed by Sol.** Two comments in `src/web/PricingPage.tsx` still counted the removed plan arm.
+- **C3, reported, not fixed.** `src/web/useBilling.ts` § `checkedSummary` accepts an unknown plan
+  kind, and the copy functions then return `undefined`. No server sends one today. It goes to the
+  umbrella's list.
 
 ## Proof the surviving checks can fail
 

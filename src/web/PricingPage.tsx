@@ -769,9 +769,9 @@ function useBuyIntent(billing: UseBilling): void {
  *
  * **And the headline is printed as it stands, with no sentence built around
  * it.** The obvious framing — *"You are on {headline}"* — works for the two
- * states anybody thinks of and is broken English in the other four: *"You are
+ * states anybody thinks of and is broken English in other cases: *"You are
  * on We could not confirm your plan just now"*, *"You are on Your plan has
- * ended"*. `describePlan` returns six headlines in three grammatical shapes, so
+ * ended"*. `describePlan` returns headlines in three grammatical shapes, so
  * the only safe thing to add around one is nothing. `/profile` prints it bare
  * for the same reason.
  *
