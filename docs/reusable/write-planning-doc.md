@@ -81,6 +81,10 @@ already ([260903b](../investigations/260903b-facts-that-were-wrong.md)). *(This 
 - Provide a brief 1-sentence summary for each of what it's about/why it's relevant
 - Roughly prioritise most important/relevant/useful references at the top, e.g. high-level docs, key
   functions, etc
+- Linking to `## Stage 3 — the dashboard`? This repo's link checker expects
+  `#stage-3-the-dashboard`, with **one** hyphen where GitHub uses two.
+  `tests/doc-links.test.ts` suggests that correction when the hyphen-run match is unique.
+  *(This repo's addition.)*
 
 ### Principles, key decisions
 
