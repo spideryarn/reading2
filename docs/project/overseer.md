@@ -620,6 +620,15 @@ the work delegated, a GPT Sol review at the end of each stage — and its own wo
 server and one box. Beyond three the suites go red for reasons that are nobody's bug, and you will
 spend the evening investigating the box.
 
+**Every new session counts against what the box can carry, whoever asked for it.** Work started for
+an answer Greg has just given is not exempt. On 2026-10-05 about fifteen sessions were started in
+two hours, one per answer. With about twenty running, up to eight `tsc` runs at once (1–3 GB each),
+dev servers and browser agents, load reached about 170 and swap 31 of 32 GB; Greg's ssh crawled and
+peers' gates were killed. The 30 GB box fits about six to eight active sessions. So when Greg
+answers several questions at once, record the decisions straight away, put the work at the front of
+the queue, and release it as sessions finish. Check load, memory and swap before **any**
+`gjd-remote new-claude`, not only before a release from the queue.
+
 **Use waves to keep two agents off the same ground.** `--wait 5h --no-attach` creates the session now
 and starts it later, so the whole queue goes out in one pass. Two jobs touching the same mode, the
 same prompt or the same file belong in different waves.
