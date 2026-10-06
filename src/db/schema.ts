@@ -3398,8 +3398,10 @@ export const aiCalls = spideryarn.table(
      */
     attempt: smallint("attempt"),
     /**
-     * `before_answer` or `mid_answer`, on a row whose `outcome` is `error`;
-     * null on an `ok` row, on an `aborted` one and on every older row. The
+     * `before_answer` or `mid_answer`, on a row whose `outcome` is `error`,
+     * and since 2026-10-06 on an `aborted` row a gateway wrote, where it is
+     * how far the call had got when it was stopped. Null on an `ok` row, on
+     * an `aborted` one from the realtime wire and on every older row. The
      * boundary is each seam's own acceptance boundary and is stated on
      * `FailurePhase` in src/call-failure.ts.
      */

@@ -162,5 +162,22 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
   F15 (P1, two per-call deadlines the mapping missed), F16 and F17 (P2, the Messages wire), F18 and
   F19 (P3) all taken, as marked above. **F20 is wrong**: it says `e5a9c07a7` is on `origin/main`;
   `merge-base --is-ancestor e5a9c07a7 origin/main` exits 1 here, so the sentence stands.
-- [ ] Stage 1
+- [x] Stage 1. Built as designed: `StallReached`, `CallDeadlineReached` and `abortClass` in
+  `src/call-failure.ts`; the eight runners; both wires (`Meter.stopped` is the one place the
+  OpenRouter wire makes an abort; the Messages wire takes the class in its `abort` listener, F17,
+  and its retry loop tests the outcome, F16); the log line. A source scan in
+  `tests/call-failure.test.ts` fails if a runner aborts with a plain `Error("stalled")` again.
+  Three things learned:
+  - **"`AbortSignal.any` passes on the reason of whichever fired first" needs a caveat.** On Node
+    26 a composite nobody is listening to settles its reason when first read, from the first
+    aborted source in *list order*. A call in flight always has a listener, so the exposure is the
+    gap between two of them. Said on `abortClass`.
+  - **The PDF figure budget is a step's clock, not one call's**, and F15 has it recorded as
+    `deadline` while the job deadline in `src/jobs.ts` stays `abort`. The line between them is
+    not principled: the first was one line in a file that already made its own reason, the second
+    is a private class with its own argued design whose reason crosses many layers. Left, and the
+    page says the job deadline is not recognised.
+  - The aborted arm of both unions is narrowed to the three abort labels, so an abort carrying
+    `refused` does not compile.
+  Until stage 2 lands, a reader's Stop shows in the causes table (F19); the two are pushed together.
 - [ ] Stage 2

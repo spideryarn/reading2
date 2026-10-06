@@ -67,7 +67,15 @@ import {
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
-import { type CallFailure, networkClass, providerEventClass, thrownClass } from "./call-failure.js";
+import {
+  type AbortClass,
+  type CallFailure,
+  abortClass,
+  networkClass,
+  providerEventClass,
+  stoppedByOurClock,
+  thrownClass,
+} from "./call-failure.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
 import { MODEL_REFUSED, NOT_CONFIGURED } from "./messages.js";
@@ -646,7 +654,16 @@ export function streamMessage(
        with `attempt > 1` is a retry that really started. `begun` is this
        wire's acceptance boundary, `message_start`: a failure before it is
        `before_answer`, one after it `mid_answer`. */
-    const attempt = { stream, meter, callId, startedAt, begun: false, n };
+    const attempt = {
+      stream,
+      meter,
+      callId,
+      startedAt,
+      begun: false,
+      n,
+      /** Who stopped this stream, set as the SDK reports its abort. See the `abort` listener below. */
+      stoppedBy: null as AbortClass | null,
+    };
     stream.on("streamEvent", (event) => {
       if (attempt.begun || event.type !== "message_start") return;
       attempt.begun = true;
@@ -673,7 +690,16 @@ export function streamMessage(
        that method is never called) without also leaking a process-level
        rejection. The abort event follows the same SDK rule. */
     stream.on("error", () => {});
-    stream.on("abort", () => {});
+    /* **Who stopped it is taken here, as the SDK says the stream was aborted,
+       and not when the row is written.** The row is written when
+       `finalMessage()` is awaited, which can be later, and the caller's signal
+       can have fired in between: a stream the SDK aborted by itself would then
+       be recorded under a deadline that did not stop it. A signal that has not
+       fired by now did not do this, and that is `abort`. GPT Sol, plan 261006d
+       finding F17. */
+    stream.on("abort", () => {
+      attempt.stoppedBy = abortClass(options.signal?.aborted ? options.signal.reason : undefined);
+    });
     return attempt;
   };
   /* Opened here, not on the first `finalMessage()`: the request has always gone
@@ -702,8 +728,10 @@ export function streamMessage(
           record(task, model, meter, message.usage, startedAt, { outcome: "ok" }, callId, message.model, attempt);
           return message;
         } catch (err) {
-          const failure = recordFailure(err);
-          const aborted = failure === null;
+          const end = recordFailure(err);
+          /* **Asked of the outcome, not of whether there are failure fields**:
+             an abort has them too, and is still never asked again. */
+          const aborted = end.outcome === "aborted";
           /* **The transport retry `messagesClient` § `maxRetries` promised and
              nothing built until 2026-10-03** (plan 261003m, report spya-x4zut6:
              one dropped connection, 595 ms in, failed an import). The attempt
@@ -724,7 +752,7 @@ export function streamMessage(
           /* Logged as the retry starts, not when the failure was seen: a Stop
              in the wait above means there is no retry, and this line has to
              agree with the ledger, where a retry is a row with `attempt > 1`. */
-          log("model").warn(failureFields(task, model, attempt + 1, failure), "ai transport retry");
+          log("model").warn(failureFields(task, model, attempt + 1, end.failure), "ai transport retry");
           current = open(attempt + 1);
           attempts += 1;
         }
@@ -734,11 +762,12 @@ export function streamMessage(
   };
 
   /**
-   * Write the failed attempt's row, and hand back how it failed: `null` for an
-   * abort, which says nothing more (see `SpendRecord.failure`).
+   * Write the row of an attempt that did not answer, and hand back how it
+   * ended: an `error`, or an `aborted` that says who stopped it. Both carry
+   * failure fields, so the caller tells them apart by the outcome.
    */
-  const recordFailure = (err: unknown): CallFailure | null => {
-    const { stream, meter, startedAt, callId, begun, n } = current;
+  const recordFailure = (err: unknown): UnansweredEnd => {
+    const { stream, meter, startedAt, callId, begun, n, stoppedBy } = current;
     /* **An aborted or failed call has usually still cost money.** Recording
        it with a non-`ok` outcome is the honest answer: a row saying "this
        happened, and here is what we know about what it cost" is something a
@@ -767,15 +796,34 @@ export function streamMessage(
     const aborted = stream.aborted || isAbort(err, options.signal);
     /* The status off the stream's own response, when one arrived: an error
        that came in-band, or a body that broke, carries none itself. */
-    const failure = aborted ? null : failureOf(err, begun, stream.response?.status ?? null);
+    const status = stream.response?.status ?? null;
+    const end: UnansweredEnd = aborted
+      ? {
+          outcome: "aborted",
+          failure: {
+            /* The same boundary an error is placed by. */
+            phase: begun ? "mid_answer" : "before_answer",
+            /* What the `abort` listener saw. Where the SDK reported no abort
+               the error is itself the signal's abort, seen here for the first
+               time, so the reason is read now. */
+            class: stoppedBy ?? abortClass(isAbort(err, options.signal) ? options.signal?.reason : undefined),
+            status,
+          },
+        }
+      : { outcome: "error", failure: failureOf(err, begun, status) };
     /* **One line for a call that died after its answer began** — the failure
        the retry above does not cover, and the one plan 261006b exists to
-       count. */
-    if (failure?.phase === "mid_answer") {
-      log("model").warn(failureFields(task, model, n, failure), "ai call died part-way");
+       count. An error only: a call somebody stopped part-way did not die. */
+    if (end.outcome === "error" && end.failure.phase === "mid_answer") {
+      log("model").warn(failureFields(task, model, n, end.failure), "ai call died part-way");
     }
-    record(task, model, meter, null, startedAt, failure ? { outcome: "error", failure } : { outcome: "aborted" }, callId, null, n);
-    return failure;
+    /* **And one for a call our own clock stopped**, at either phase. Not for
+       `abort`: a reader pressing Stop is not news. Plan 261006d. */
+    if (end.outcome === "aborted" && stoppedByOurClock(end.failure)) {
+      log("model").warn(failureFields(task, model, n, end.failure), "ai call stopped by our clock");
+    }
+    record(task, model, meter, null, startedAt, end, callId, null, n);
+    return end;
   };
 
   return {
@@ -854,13 +902,22 @@ function failureOf(err: unknown, begun: boolean, responseStatus: number | null):
   return { phase, class: providerEventClass(err.type), status: responseStatus };
 }
 
-/** What both of this wire's log lines about a failure carry, and nothing else. The same six as ai-call.ts. */
+/** What each of this wire's log lines about a failure carries, and nothing else. The same six as ai-call.ts. */
 function failureFields(task: Task, model: string, attempt: number, failure: CallFailure): Record<string, unknown> {
   return { job: task, wire: "messages", model, attempt, class: failure.class, status: failure.status };
 }
 
-/** How one attempt ended. An `error` has to say how; see `CallEnd` in ai-call.ts. */
-type AttemptEnd = { outcome: "ok" } | { outcome: "aborted" } | { outcome: "error"; failure: CallFailure };
+/**
+ * How one attempt ended. An `error` has to say how, and an `aborted` has to
+ * say who stopped it; see `CallEnd` in ai-call.ts.
+ */
+type AttemptEnd =
+  | { outcome: "ok" }
+  | { outcome: "aborted"; failure: CallFailure & { class: AbortClass } }
+  | { outcome: "error"; failure: CallFailure };
+
+/** An attempt that did not answer. Both arms carry failure fields; only the outcome says which it was. */
+type UnansweredEnd = Exclude<AttemptEnd, { outcome: "ok" }>;
 
 /**
  * **Was this error the abort itself?** — the same question
@@ -921,7 +978,7 @@ function record(
       ms: Date.now() - startedAt,
       outcome: end.outcome,
       attempt,
-      failure: end.outcome === "error" ? end.failure : null,
+      failure: end.outcome === "ok" ? null : end.failure,
     },
     callId,
   );

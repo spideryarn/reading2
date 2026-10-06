@@ -96,9 +96,15 @@ export const PROVIDER_EVENT_TYPES = [
  * - `other` — none of the above. A count of these that grows is a label
  *   missing from this file.
  *
- * `stall`, `deadline` and `abort` are in the plan and **not here**: an
- * `aborted` row carries no failure fields at all, because the gateway cannot
- * tell our own stall clock from a reader's Stop. See the plan § Stalls.
+ *
+ * And the three an `aborted` row carries, which say who stopped the call
+ * (`abortClass` below picks between them):
+ *
+ * - `stall` — our stall clock: the provider sent nothing for too long.
+ * - `deadline` — our deadline: the whole call took too long.
+ * - `abort` — anything else, a reader's Stop among them. Recorded rather than
+ *   left null on purpose: it says the row was written by code that could tell
+ *   the three apart, so an `aborted` row with no class is one that could not.
  */
 export type FailureClass =
   | "refused"
@@ -108,11 +114,18 @@ export type FailureClass =
   | "in_band"
   | "unfinished"
   | "unreadable"
-  | "other";
+  | "other"
+  | AbortClass;
+
+/** Who stopped a call that was aborted. See `FailureClass` and `abortClass`. */
+export type AbortClass = "stall" | "deadline" | "abort";
 
 /**
- * What a failed attempt's row says about the failure. On a `SpendRecord` this
- * is `null` for a call that answered and for one that was aborted.
+ * What a failed or aborted attempt's row says about how it ended. On a
+ * `SpendRecord` this is `null` for a call that answered.
+ *
+ * On an `aborted` row the class is one of `AbortClass`, and the phase and the
+ * status mean what they mean on an error: how far the call had got.
  */
 export interface CallFailure {
   phase: FailurePhase;
@@ -123,6 +136,71 @@ export interface CallFailure {
    * number, which is why it needs no list.
    */
   status: number | null;
+}
+
+/**
+ * **What a stall clock aborts with**: no chunk arrived for as long as the
+ * runner was willing to wait. A class rather than a plain `Error`, because a
+ * gateway is handed one signal made of the reader's, a deadline and a stall
+ * clock, and the reason is all it has to tell them apart by. A plain `Error`
+ * is what a reader's Stop looks like.
+ *
+ * The message is the one the plain `Error` had. Every runner with a stall
+ * clock aborts with this; tests/call-failure.test.ts scans `src/` for one
+ * that does not.
+ */
+export class StallReached extends Error {
+  constructor() {
+    super("stalled");
+    this.name = "StallReached";
+  }
+}
+
+/**
+ * **What a per-call deadline aborts with when it is a `setTimeout` and a
+ * controller** rather than an `AbortSignal.timeout`, whose own reason
+ * `abortClass` already recognises. For one call's clock only: a budget for a
+ * whole job (`DeadlineReached` in src/jobs.ts) is not a verdict on any one
+ * call, and is recorded as `abort`.
+ */
+export class CallDeadlineReached extends Error {
+  constructor(message = "the call's deadline passed") {
+    super(message);
+    this.name = "CallDeadlineReached";
+  }
+}
+
+/**
+ * **Who stopped an aborted call**, from the reason its signal carries.
+ * `AbortSignal.any` passes on the reason of whichever signal fired first, so
+ * this is the first clock or person to stop the call, and nothing later.
+ *
+ * **First, as long as something was listening.** On Node 26 a composite with
+ * no `abort` listener settles its reason when it is first read, from the first
+ * aborted source in list order: two sources that both fired before anybody
+ * looked give the earlier one in the list, not the earlier one in time. A
+ * call in flight always has a listener (`fetch`, `sseChunks`, the SDK,
+ * `waitOrStop`), so this is the gap between two of them and no wider.
+ *
+ * Tested, never stored, and tested by what the reason *is*: a plain
+ * `Error("stalled")` and an object that merely has `name: "TimeoutError"` are
+ * both `abort`. A deadline is any `AbortSignal.timeout` on the signal,
+ * whoever set it; every one in `src/` that reaches a gateway is ours.
+ */
+export function abortClass(reason: unknown): AbortClass {
+  if (reason instanceof StallReached) return "stall";
+  if (reason instanceof CallDeadlineReached) return "deadline";
+  if (reason instanceof DOMException && reason.name === "TimeoutError") return "deadline";
+  return "abort";
+}
+
+/**
+ * Whether an aborted attempt was stopped by our stall clock or our deadline.
+ * Those two get a log line on both wires (`ai call stopped by our clock`); a
+ * reader's Stop does not.
+ */
+export function stoppedByOurClock(failure: CallFailure): boolean {
+  return failure.class === "stall" || failure.class === "deadline";
 }
 
 /** How far down a `cause` chain to look. The deepest real one is the SDK's, at two. */

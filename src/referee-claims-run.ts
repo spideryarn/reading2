@@ -91,6 +91,7 @@
  * evidence. Read the reasoning lines; the counters are a prompt to look.
  */
 
+import { StallReached } from "./call-failure.js";
 import { classifyEnd, effortOf, openRouterStream, ProviderRefused } from "./ai-call.js";
 import {
   articleWithIds,
@@ -426,7 +427,7 @@ export async function* runClaimsStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   const started = Date.now();

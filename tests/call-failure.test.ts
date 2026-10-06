@@ -9,10 +9,15 @@
  * pass every positive case here, which is why half of these hand the function
  * something that looks safe and assert it comes back as the fallback.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CallDeadlineReached,
   NETWORK_CODES,
   PROVIDER_EVENT_TYPES,
+  StallReached,
+  abortClass,
   isErrorEnvelope,
   networkClass,
   providerEventClass,
@@ -125,5 +130,97 @@ describe("isErrorEnvelope", () => {
     expect(isErrorEnvelope(null)).toBe(false);
     expect(isErrorEnvelope("error")).toBe(false);
     expect(isErrorEnvelope([{ error: "x" }])).toBe(false);
+  });
+});
+
+/* Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md. */
+describe("abortClass", () => {
+  it("is `stall` for the reason every stall clock aborts with", () => {
+    expect(abortClass(new StallReached())).toBe("stall");
+  });
+
+  it("is `deadline` for what `AbortSignal.timeout` aborts with, and for a hand-written per-call clock", async () => {
+    const signal = AbortSignal.timeout(1);
+    await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+    expect(abortClass(signal.reason)).toBe("deadline");
+    expect(abortClass(new DOMException("took too long", "TimeoutError"))).toBe("deadline");
+    expect(abortClass(new CallDeadlineReached())).toBe("deadline");
+    expect(abortClass(new CallDeadlineReached("pdf figures budget spent"))).toBe("deadline");
+  });
+
+  it("keeps the winning reason through `AbortSignal.any`, which is how a gateway sees it", () => {
+    const reader = new AbortController();
+    const stall = new AbortController();
+    const signal = AbortSignal.any([reader.signal, stall.signal]);
+    /* As `fetch`, `sseChunks` and `waitOrStop` all do while a call is in
+       flight. It is not decoration: on Node 26 a composite nobody is
+       listening to works its reason out when it is first read, from the first
+       aborted source in list order, and this test without the listener says
+       `abort`. */
+    signal.addEventListener("abort", () => {});
+    stall.abort(new StallReached());
+    reader.abort(new Error("the reader pressed Stop"));
+    expect(abortClass(signal.reason)).toBe("stall");
+  });
+
+  it("is `abort` for a reader's Stop, for an abort with no reason given, and for no reason at all", () => {
+    const stop = new AbortController();
+    stop.abort();
+    expect(abortClass(stop.signal.reason)).toBe("abort");
+    expect(abortClass(new Error("the reader pressed Stop"))).toBe("abort");
+    expect(abortClass(undefined)).toBe("abort");
+    expect(abortClass(null)).toBe("abort");
+    expect(abortClass("stall")).toBe("abort");
+  });
+
+  it("is `abort` for anything that only looks like one of ours", () => {
+    /* The reason a stall had before it had a class. */
+    expect(abortClass(new Error("stalled"))).toBe("abort");
+    /* A name is a writable property; only a real `DOMException` counts. */
+    expect(abortClass({ name: "TimeoutError" })).toBe("abort");
+    expect(abortClass(Object.assign(new Error("slow"), { name: "TimeoutError" }))).toBe("abort");
+    expect(abortClass({ name: "StallReached", message: "stalled" })).toBe("abort");
+    expect(abortClass(new DOMException("stopped", "AbortError"))).toBe("abort");
+  });
+
+  it("leaves the message as it was, for anything that reads it", () => {
+    expect(new StallReached().message).toBe("stalled");
+    expect(new StallReached()).toBeInstanceOf(Error);
+    expect(new CallDeadlineReached("pdf figures budget spent").message).toBe("pdf figures budget spent");
+  });
+});
+
+describe("every stall clock aborts with the shared class", () => {
+  /** Every `.ts` and `.tsx` file under `dir`. */
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return sources(path);
+      return /\.tsx?$/.test(entry.name) ? [path] : [];
+    });
+  const root = join(import.meta.dirname, "..", "src");
+  const files = sources(root);
+  const holding = (needle: RegExp): string[] =>
+    files.filter((path) => needle.test(readFileSync(path, "utf8"))).map((path) => path.slice(root.length + 1));
+
+  /* A plain `Error("stalled")` is recorded as `abort`, the same as a reader's
+     Stop, so a ninth runner written the old way would be a stall nobody
+     counts. A source scan, because the source is the only place that shows. */
+  it("no file under src/ aborts with a plain `Error(\"stalled\")`", () => {
+    expect(files.length).toBeGreaterThan(100);
+    expect(holding(/new Error\(\s*["'`]stalled["'`]\s*\)/)).toEqual([]);
+  });
+
+  it("the eight runners with a stall clock use `StallReached`", () => {
+    expect(holding(/\.abort\(new StallReached\(\)\)/).sort()).toEqual([
+      "converse.ts",
+      "link-summary.ts",
+      "quiz-mark.ts",
+      "referee-claims-run.ts",
+      "referee-criteria-run.ts",
+      "referee-mirror.ts",
+      "search.ts",
+      "stream-run.ts",
+    ]);
   });
 });
