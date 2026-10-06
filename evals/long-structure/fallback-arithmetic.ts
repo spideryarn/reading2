@@ -30,15 +30,17 @@ const RATES = [0.01, 0.03, 0.1];
 const SLICES = [4, 8, 20, 45];
 
 const today = (p: number, n: number): number => 1 - (1 - p) ** (n + 1);
-const after = (p: number, n: number): number => 1 - (1 - p * p) ** n * (1 - p);
+const slicesOnly = (p: number, n: number): number => 1 - (1 - p * p) ** n * (1 - p);
+/* With the root asked for once more too (2026-10-06): every question gets two tries. */
+const after = (p: number, n: number): number => 1 - (1 - p * p) ** (n + 1);
 const percent = (x: number): string => `${(100 * x).toFixed(1)}%`;
 
-console.log("Share of long documents left wholly plain: today -> after stage 1a.");
+console.log("Share of long documents left wholly plain: before -> slices asked twice -> the root too.");
 console.log("Arithmetic about assumptions, not a measurement. Each slice pass and the root");
 console.log("question are assumed to fail independently with the same probability.\n");
 console.log(`| assumed per-pass failure | ${SLICES.map((n) => `${n} slices`).join(" | ")} |`);
 console.log(`|---|${SLICES.map(() => "---").join("|")}|`);
 for (const p of RATES) {
-  console.log(`| ${percent(p)} | ${SLICES.map((n) => `${percent(today(p, n))} -> ${percent(after(p, n))}`).join(" | ")} |`);
+  console.log(`| ${percent(p)} | ${SLICES.map((n) => `${percent(today(p, n))} -> ${percent(slicesOnly(p, n))} -> ${percent(after(p, n))}`).join(" | ")} |`);
 }
-console.log("\nWithin this model, the root failure rate is a floor on the second figure.");
+console.log("\nWithin this model, the root failure rate was a floor on the second figure; it is not on the third.");

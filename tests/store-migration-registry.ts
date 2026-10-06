@@ -3030,6 +3030,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/illustrated-route.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/job-failure.test.ts": "private-postgres",
+  /* Plan 261005j, stage C of the rest of 1a: a structure step whose slices run
+     out of time hands its job back for another window, through the real
+     `enqueue`, claim, walk, draft, publication and cost ledger. */
+  "tests/job-hands-back-for-another-window.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from what a single
      case writes: a seeded article, a `jobs` row against it, and then a **real
      `blocks` stage committing through `pgStoreSession`** — so one run of it

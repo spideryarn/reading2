@@ -10,7 +10,10 @@
  * for in two halves; the root call is asked for once more too. A slice or a
  * root call that still fails, and the caller returns the tree built from the
  * document's headings instead
- * (src/heading-tree.ts § `buildBoundedHeadingTree`).
+ * (src/heading-tree.ts § `buildBoundedHeadingTree`). Running out of time is
+ * the one failure the caller may not end on: while the queue has another lease
+ * window to give, it hands the job back and the next window starts from the
+ * answers saved here (src/another-window.ts).
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md
  * docs/plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md § Stage 1a
  *
@@ -67,7 +70,11 @@ export const ROOT_GIST_MAX_WORDS = 40;
  */
 const NAMESPACE = "structure-whole-document" as const;
 
-/** Why the slices path gave up and the headings tree was returned. */
+/**
+ * Why the slices path gave up. The caller returns the headings tree for each,
+ * except that `out-of-time` with a lease window left is a hand-back to the
+ * queue and no tree at all (src/structure.ts § `generateStructure`).
+ */
 export type SlicesFailure =
   | "could-not-plan"
   /* A slice failed in both passes, or was refused or cut short and could not
@@ -357,7 +364,9 @@ export function acceptRoot(raw: string, question: SliceDeps["question"]): RootAn
  * When the slices path must have finished asking: the earlier of the step's
  * own budget and the queue's deadline, less the finish reserve. The queue ends
  * a job as interrupted if its own deadline fires, even when this step then
- * returns the headings tree, so this path stops itself first.
+ * returns the headings tree, so this path stops itself first. Stopping itself
+ * is also what lets the caller ask for another window with every call settled
+ * and counted (src/another-window.ts).
  */
 export function slicesDeadline(started: number, stepBudgetMs?: number, deadlineAt?: number): number {
   return (

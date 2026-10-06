@@ -82,6 +82,7 @@ import { log } from "./log.js";
 /* Values flow one way: that file takes this one's helpers as `SliceDeps`. */
 import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailure } from "./structure-slices.js";
 import { plainWords } from "./plain-words.js";
+import { type LeaseWindow, NeedsAnotherWindow } from "./another-window.js";
 import { paperwork } from "./paperwork.js";
 
 /**
@@ -2560,6 +2561,13 @@ export async function generateStructure(opts: {
    * reads it, to stop itself before the queue would.
    */
   stepBudgetMs?: number;
+  /**
+   * Which lease window of the job this is, and whether the queue would grant
+   * one more (src/another-window.ts). Only the slices path reads it: out of
+   * time with a window left, it throws `NeedsAnotherWindow` and returns no
+   * tree. Absent (a command line, a test) it never throws that.
+   */
+  window?: LeaseWindow;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
   /**
@@ -2678,6 +2686,28 @@ export async function generateStructure(opts: {
       );
       return fromHeadings({ by: "headings", reason: "answer-too-long", slicesFailed }, spent, bounded);
     };
+    /* **Out of time with a window left: hand the job back, and return no tree.**
+       The answers bought are in checkpoints and are read before any deadline
+       is consulted, so the next window asks only for what is missing. The
+       headings tree here would be a finished step, and the reader would lose
+       every gist to a clock. Only `out-of-time`: the other failures have had
+       their second ask, or would fail the same way again. `runSlices` returns
+       once every call it started has settled, and throws a reader's Stop
+       itself, so neither reaches this line. src/another-window.ts. */
+    if (!sliced.ok && sliced.failure === "out-of-time" && opts.window?.anotherAvailable === true) {
+      log("pipeline").info(
+        {
+          slug,
+          blocks: body.length,
+          slices: sliced.slices,
+          calls: sliced.spend.calls,
+          resumed: sliced.spend.resumed,
+          window: opts.window.number,
+        },
+        "the slices ran out of time; asking the queue for another window",
+      );
+      throw new NeedsAnotherWindow();
+    }
     if (!sliced.ok) return giveUp(sliced.failure);
     /* One build over the whole body, as for any answer, then the same checks. */
     const built = emptyBuildReport();

@@ -223,6 +223,7 @@ import {
   type StepStamp,
 } from "./store/artifacts.js";
 import { checkCoverage, generateStructure, type StructureSource } from "./structure.js";
+import type { LeaseWindow } from "./another-window.js";
 import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
@@ -700,6 +701,14 @@ export interface StepContext {
    * itself inside it. `undefined` from a command line or a test.
    */
   stepBudgetMs?: number;
+  /**
+   * Which lease window of its job this step is running in, and whether the
+   * queue would grant one more (src/another-window.ts § `LeaseWindow`). Absent
+   * from a command line or a test, which reads as no further window. The
+   * structure step's slices are the only reader: out of time with a window
+   * left, they hand the job back and do not settle for the headings tree.
+   */
+  window?: LeaseWindow;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -3122,6 +3131,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            it changes nothing at all. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
         ...(ctx.stepBudgetMs !== undefined ? { stepBudgetMs: ctx.stepBudgetMs } : {}),
+        /* Lets the slices ask for another window when they run out of time.
+           `generateStructure` then throws `NeedsAnotherWindow` and nothing
+           below this line runs: src/another-window.ts. */
+        ...(ctx.window !== undefined ? { window: ctx.window } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -3137,6 +3150,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              every value so the rate of the fallback can be read off the log:
              src/structure.ts § `StructureSource`. */
           source: run.source.by,
+          /* Which lease window of the job this ran in: 2 or 3 is a structure
+             that needed a hand-back to finish. `null` with no queue. A window
+             that ended in a hand-back does not reach this line; it is logged
+             in src/structure.ts and by the walk in src/jobs.ts. */
+          window: ctx.window?.number ?? null,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
           /* The slices path: how many, how many re-asked, refilled and asked
              for in a second pass, whether the root was asked for twice, or

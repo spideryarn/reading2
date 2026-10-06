@@ -14,6 +14,7 @@ let product: StepProduct | undefined;
 let context: StepContext | undefined;
 let modelCalls = 0;
 let hang = false;
+let pauses = 0;
 vi.mock("../src/store/pg-jobs.js", () => ({ pgJobStore: {
   settleExpired: async () => [],
   claim: async () => { job.status = "running"; return { kind: "claimed", job }; },
@@ -21,6 +22,13 @@ vi.mock("../src/store/pg-jobs.js", () => ({ pgJobStore: {
   get: async () => job,
   requestCancel: async () => { job.cancelling = true; return job; },
   trimFinished: async () => {},
+  /* The store's answer for a live claim with budget left: back to `queued`, one requeue spent. */
+  pauseForDeadline: async () => {
+    pauses++;
+    job = { ...job, status: "queued", requeues: (job.requeues ?? 0) + 1,
+      steps: job.steps.map((s) => ({ name: s.name, label: s.label, status: "pending" as const })) };
+    return { kind: "requeued", job };
+  },
 } }));
 vi.mock("../src/store/ai-calls.js", async (original) => ({
   ...(await original<typeof import("../src/store/ai-calls.js")>()),
@@ -44,7 +52,7 @@ vi.mock("../src/messages-stream.js", async (original) => ({
   },
 }));
 
-const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, STEP_BUDGET_MS } = await import("../src/jobs.js");
+const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, REQUEUE_BUDGET, STEP_BUDGET_MS } = await import("../src/jobs.js");
 const { STEPS } = await import("../src/pipeline.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { SLICE_CALL_CAP_MS } = await import("../src/structure-slices.js");
@@ -91,6 +99,7 @@ beforeEach(() => {
   context = undefined;
   modelCalls = 0;
   hang = false;
+  pauses = 0;
   job = { id: "queue-job", ownerId: OWNER, slug: "queue", status: "queued", createdAt: new Date().toISOString(),
     steps: [{ name: "structure", label: STEPS.structure.label, status: "pending", force: true }] };
 });
@@ -98,6 +107,9 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe("stage E through the queue without a database", () => {
   it("passes the structure budget and returns D before a short queue deadline", async () => {
+    /* 2026-10-06: the last window. With one left, out of time is a hand-back
+       and not D (src/another-window.ts); the case below this block holds that. */
+    job.requeues = REQUEUE_BUDGET;
     const out = await advance(DEADLINE_MARGIN_MS + 300_000);
     expect(context!.stepBudgetMs).toBe(STEP_BUDGET_MS.structure);
     expect(out).toMatchObject({ done: true, job: { status: "done" } });
@@ -109,6 +121,8 @@ describe("stage E through the queue without a database", () => {
   });
 
   it("a capped call returns D and commits before the queue aborts", async () => {
+    /* 2026-10-06: the last window, for the same reason as the case above. */
+    job.requeues = REQUEUE_BUDGET;
     hang = true;
     const going = advance(DEADLINE_MARGIN_MS + 340_000);
     await vi.advanceTimersByTimeAsync(SLICE_CALL_CAP_MS);
@@ -129,6 +143,22 @@ describe("stage E through the queue without a database", () => {
     const out = await going;
     expect(out).toMatchObject({ done: true, job: { status: "cancelled" } });
     expect(product).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  /* Stage C of plan 261005j's rest of stage 1a. The same on Postgres, with the
+     draft and the ledger, is tests/job-hands-back-for-another-window.test.ts. */
+  it("out of time with a window left, the job is put down and no structure product is committed", async () => {
+    hang = true;
+    const going = advance(DEADLINE_MARGIN_MS + 340_000);
+    await vi.advanceTimersByTimeAsync(SLICE_CALL_CAP_MS);
+    const out = await going;
+    expect(context!.window).toEqual({ number: 1, anotherAvailable: true });
+    expect(pauses, "the walk did not ask the store for the pause").toBe(1);
+    expect(out).toMatchObject({ done: false, busy: false, job: { status: "queued", requeues: 1 } });
+    expect(product, "the headings tree was committed with two windows still to use").toBeUndefined();
+    /* The step stopped itself: the queue's own deadline never fired. */
+    expect(context!.signal!.aborted).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
