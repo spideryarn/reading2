@@ -860,6 +860,28 @@ interface RawResponse {
 }
 
 /**
+ * What a HEAD request adds, so that curl reports the bytes that really followed
+ * the headers — none, from a correct server.
+ *
+ * `--request HEAD` changes the word on the request line and nothing else: curl
+ * still expects a GET's response, so given `Content-Length: 11300` it waits for
+ * 11300 bytes a HEAD response never sends, and exits 28 at `--max-time`. That
+ * failed this check against a healthy production on 2026-10-06. So: ask the
+ * server to close after this response, and tell curl to read until it does
+ * rather than believe the header. A body sent after a HEAD then lands in the
+ * `-o` file, which is what `judgeHeadMatchesGet`'s last line looks at.
+ * `--raw` because curl otherwise decodes a transfer encoding first, and an
+ * empty chunked body (`0\r\n\r\n`) is five bytes that decode to none.
+ *
+ * Not `--head`: with `-o` it writes the headers into the body file, and with
+ * `-o /dev/null` it stops reading at the end of the headers by design, so "no
+ * body" would be true whatever the server sent. A server that ignores
+ * `Connection: close` costs the full `--max-time` and fails with curl's own
+ * message — loud. docs/plans/261006f-check-public-shell-head-request-waits-for-a-body.md.
+ */
+const HEAD_READS_TO_CLOSE = ["-H", "Connection: close", "--ignore-content-length", "--raw"] as const;
+
+/**
  * `curl`, not `fetch` — deliberately. `fetch`'s `Headers` collapses repeated
  * header names into one comma-joined value (or silently keeps only one,
  * depending on the name), which is precisely the evidence checks 6 and 7 need
@@ -867,8 +889,11 @@ interface RawResponse {
  * match docs/plans/260828ao-public-read-only-stage2-input-sol.md § 3 exactly:
  * `--http1.1 --path-as-is -H 'Accept-Encoding: identity'`, and never
  * `--compressed` — check 6 hashes exact bytes.
+ *
+ * `maxTimeSeconds` is a parameter only so tests/check-public-shell-head.test.ts
+ * can watch a request time out in five seconds rather than thirty.
  */
-function curlRequest(url: string, method: "GET" | "HEAD" | "POST" = "GET"): RawResponse {
+export function curlRequest(url: string, method: "GET" | "HEAD" | "POST" = "GET", maxTimeSeconds = 30): RawResponse {
   const dir = mkdtempSync(path.join(tmpdir(), "spideryarn-check-public-shell-"));
   const headersFile = path.join(dir, "headers");
   const bodyFile = path.join(dir, "body");
@@ -880,13 +905,14 @@ function curlRequest(url: string, method: "GET" | "HEAD" | "POST" = "GET"): RawR
       "Accept-Encoding: identity",
       "-sS",
       "--max-time",
-      "30",
+      String(maxTimeSeconds),
       "-D",
       headersFile,
       "-o",
       bodyFile,
       "--request",
       method,
+      ...(method === "HEAD" ? HEAD_READS_TO_CLOSE : []),
       url,
     ];
     const r = spawnSync("curl", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -1266,6 +1292,18 @@ function runSelfTest(): void {
   check("judgeHeadMatchesGet: catches a wrong content-length", wrongLengthProblems.length > 0, wrongLengthProblems);
   const headWithBody = { head: headOk.head, bodyBuffer: Buffer.from("oops") };
   check("judgeHeadMatchesGet: catches HEAD returning a body", judgeHeadMatchesGet(getOk, headWithBody).length > 0);
+  const headWrongStatus = {
+    head: parseHeaderDump(dump("HTTP/1.1 404 Not Found", { "x-spideryarn-shell-sha256": goodShaHeaders, "content-length": String(Buffer.byteLength(goodBody)) })),
+    bodyBuffer: Buffer.alloc(0),
+  };
+  const wrongStatusProblems = judgeHeadMatchesGet(getOk, headWrongStatus);
+  check("judgeHeadMatchesGet: catches a status that differs, and nothing else", wrongStatusProblems.length === 1 && wrongStatusProblems[0]!.startsWith("status differs"), wrongStatusProblems);
+  const headWrongSha = {
+    head: parseHeaderDump(dump("HTTP/1.1 200 OK", { "x-spideryarn-shell-sha256": "0".repeat(64), "content-length": String(Buffer.byteLength(goodBody)) })),
+    bodyBuffer: Buffer.alloc(0),
+  };
+  const wrongShaProblems = judgeHeadMatchesGet(getOk, headWrongSha);
+  check("judgeHeadMatchesGet: catches a shell hash that differs, and nothing else", wrongShaProblems.length === 1 && wrongShaProblems[0]!.startsWith("x-spideryarn-shell-sha256 differs"), wrongShaProblems);
 
   /* ---- judgeShellHashMatches ---- */
   const indexBytes = Buffer.from("<html>the real shell</html>");
