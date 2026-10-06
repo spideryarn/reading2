@@ -28,7 +28,7 @@ import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { useCopy } from "./useCopy.js";
@@ -204,12 +204,13 @@ export function CommentDialog({
      string comparison, and because a reader who navigates while the dialog is
      open should not have a stale slug in the next request. */
   const route = parseRoute(location.pathname);
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: followUp,
     onChange: setFollowUp,
     box: followUpBox,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
-    transcribe: sendForTranscription,
+    transcribe,
     /* One box per comment, as the follow-up itself is. */
     keep: keepDictation(`comment:${comment.id}`),
     /* A double press on Stop also asks (dictation.md § A double press). */

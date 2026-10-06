@@ -121,7 +121,7 @@ import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
@@ -681,12 +681,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * reader's own profile prose. A third `Where` kind for feedback would buy
    * nothing these two do not already give.
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: body,
     onChange: setBody,
     box,
     context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
-    transcribe: sendForTranscription,
+    transcribe,
     /* **Only while open.** This dialog is mounted on every page whether or not
        it is showing, so a keeper here while shut would let any background tab
        claim a recording left from a closed one — and hold it where nobody can

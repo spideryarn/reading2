@@ -78,6 +78,7 @@ import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { CHAT_CARD_HOST_ATTR } from "./layout.js";
 import type { LinkPreview } from "./link-preview.js";
@@ -350,6 +351,24 @@ function applyShelf(): Promise<boolean> {
   });
 }
 
+/**
+ * **Forget the shelf, because it was the last reader's.** Called when the
+ * tab's reader changes (the bottom of this file).
+ *
+ * A fence as well as a clear, as `forgetSummaries` is: a read still out for
+ * the last reader was sent with their token, and landing late it would
+ * install their shelf for the next one. Moving `shelfInstalled` past every
+ * read already started refuses those; the next read started is level with it
+ * and installs.
+ */
+function forgetShelf(): void {
+  shelf = undefined;
+  shelfPending = null;
+  shelfFailed = false;
+  shelfInstalled = shelfRead + 1;
+  for (const wake of [...shelfWatchers]) wake();
+}
+
 function loadShelf(): Promise<void> {
   if (shelf || shelfFailed) return Promise.resolve();
   /* **A failure is recorded rather than dressed up as an empty shelf**, and
@@ -362,11 +381,17 @@ function loadShelf(): Promise<void> {
      offline for one hover keeps the plain card until they reload, which is
      the cost of not having a card that re-asks on every hover of every
      link in a long article. */
-  shelfPending ??= applyShelf().then((ok) => {
+  if (shelfPending) return shelfPending;
+  const mine: Promise<void> = applyShelf().then((ok) => {
+    /* Only while this is still the load in hand: one overtaken by
+       `forgetShelf` was refused on purpose, and must not tell the next
+       reader that their shelf could not be read. */
+    if (shelfPending !== mine) return;
     if (!ok && shelf === undefined) shelfFailed = true;
     for (const wake of [...shelfWatchers]) wake();
   });
-  return shelfPending;
+  shelfPending = mine;
+  return mine;
 }
 
 /**
@@ -1107,3 +1132,11 @@ export function useLinkFacts(
         : null,
   };
 }
+
+/* **Both are one reader's**: which pages are on their shelf, and summaries
+   written from their profile. Wikipedia and the fetched preview are about the
+   address and are kept. docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+forgetOnReaderChange(() => {
+  forgetShelf();
+  forgetSummaries();
+});

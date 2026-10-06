@@ -528,3 +528,187 @@ describe("a request made for one reader", () => {
     });
   });
 });
+
+/**
+ * **Every request is bound to the reader the tab held when it was made** —
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md.
+ * The callers here name nobody, which is nearly every caller in the app. The
+ * session is the thing faked: `announce` is what the tab has been told, and
+ * `getSession` is the lookup that can answer late.
+ */
+describe("a request that names no reader", () => {
+  const as = (id: string, token = `TOKEN-${id}`) => ({ access_token: token, user: { id } });
+  const answering = (id: string) => ({ data: { session: as(id) } });
+  const outcome = (p: Promise<Response>) => p.then((r) => r.status as unknown, (e: unknown) => e);
+
+  beforeEach(() => {
+    announce("SIGNED_OUT", null);
+  });
+
+  it("is not sent when the token lookup straddled a change of reader", async () => {
+    announce("SIGNED_IN", as("A"));
+    let answer: (value: unknown) => void = () => {};
+    getSession.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const calls = stubFetch(ok());
+    const sent = outcome(apiFetch("/api/comments/a-paper", { method: "POST", body: "{}" }));
+    /* Another tab signs in as B while the lookup is out. */
+    announce("SIGNED_IN", as("B"));
+    answer(answering("B"));
+    const err = await sent;
+    expect(err).toBeInstanceOf(NotThisReader);
+    expect(statusOf(err)).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is not sent when the lookup answers as another reader before the tab has been told", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/reader", { method: "PATCH", body: "{}" }))).toBeInstanceOf(
+      NotThisReader,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is bound when it is made, not when the caller's promise is first awaited", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+    const pending = apiFetch("/api/reader", { method: "PATCH", body: "{}" });
+    /* The tab hears about B only after the call was made for A. */
+    announce("SIGNED_IN", as("B"));
+    expect(await outcome(pending)).toBeInstanceOf(NotThisReader);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is sent as the reader the tab holds, the ordinary case", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue(answering("A"));
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A");
+  });
+
+  it("is sent for the next reader once the tab has been told about them", async () => {
+    announce("SIGNED_IN", as("A"));
+    announce("SIGNED_IN", as("B"));
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-B");
+  });
+
+  it("is sent after a token refresh for the same reader", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue({ data: { session: as("A", "TOKEN-A2") } });
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A2");
+  });
+
+  /** Nobody is not a reader: only a known reader binds a request. */
+  it("is sent when the tab held nobody as it was made, whoever answers", async () => {
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("goes without a token, for the server to refuse, when the reader signed out meanwhile", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue({ data: { session: null } });
+    const calls = stubFetch(unauthorised());
+    expect(await outcome(apiFetch("/api/library"))).toBe(401);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBeNull();
+  });
+
+  it("is sent when the session that answers names nobody", async () => {
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  /** A caller that names its reader is believed over the tab. */
+  it("leaves a named reader's request to the name", async () => {
+    announce("SIGNED_IN", as("B"));
+    getSession.mockResolvedValue(answering("A"));
+    const calls = stubFetch(ok());
+    expect(await outcome(apiFetch("/api/jobs", {}, "A"))).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  /**
+   * **A refusal must not become a stuck page.** The lookup answered as B
+   * while the tab still held A: storage has moved on and the SDK's event has
+   * not arrived. The request that noticed is still refused, since it was made
+   * for A; but the tab is told, so the screen redraws for B and B's own
+   * requests go. lib/session.ts § `sessionObserved`; plan 261006f § Stage 1.
+   */
+  it("tells the tab when a lookup answers as another reader, so the next request is theirs", async () => {
+    const { onSession, heldReader } = await import("../src/web/lib/session.js");
+    announce("SIGNED_IN", as("A"));
+    const told: (string | null)[] = [];
+    const stop = onSession((session) => told.push(session?.user?.id ?? null));
+    told.length = 0;
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+
+    expect(await outcome(apiFetch("/api/library"))).toBeInstanceOf(NotThisReader);
+    expect(calls).toHaveLength(0);
+    expect(told).toEqual(["B"]);
+    expect(heldReader()).toBe("B");
+
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-B");
+    expect(told, "and an equal session is not news").toEqual(["B"]);
+    stop();
+  });
+
+  it("does not sign the tab out, or in, on a lookup's word", async () => {
+    const { onSession, heldReader } = await import("../src/web/lib/session.js");
+    const told: unknown[] = [];
+    /* Nobody held: a lookup that names B is not adopted. */
+    getSession.mockResolvedValue(answering("B"));
+    stubFetch(ok());
+    const stop = onSession((session) => told.push(session));
+    told.length = 0;
+    await outcome(apiFetch("/api/library"));
+    expect(heldReader()).toBeNull();
+    /* A held: a lookup with no session, or one that names nobody, changes nothing. */
+    announce("SIGNED_IN", as("A"));
+    told.length = 0;
+    getSession.mockResolvedValue({ data: { session: null } });
+    await outcome(apiFetch("/api/library"));
+    getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
+    await outcome(apiFetch("/api/library"));
+    expect(heldReader()).toBe("A");
+    expect(told).toEqual([]);
+    stop();
+  });
+
+  it("does not adopt a lookup's answer that an event has already overtaken", async () => {
+    const { heldReader } = await import("../src/web/lib/session.js");
+    announce("SIGNED_IN", as("A"));
+    let answer: (value: unknown) => void = () => {};
+    getSession.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    stubFetch(ok());
+    const pending = outcome(apiFetch("/api/library", {}, "C"));
+    /* The SDK says C while the lookup, which read storage a moment earlier, is still out. */
+    announce("SIGNED_IN", as("C"));
+    answer(answering("B"));
+    await pending;
+    expect(heldReader()).toBe("C");
+  });
+
+  it("records the refusal, with no query string, where a bug report can see it", async () => {
+    const { readLogBuffer } = await import("../src/web/log-buffer.js");
+    announce("SIGNED_IN", as("A"));
+    getSession.mockResolvedValue(answering("B"));
+    stubFetch(ok());
+    await outcome(apiFetch("/api/reader?slug=a-paper", { method: "PATCH", body: "{}" }));
+    const last = readLogBuffer().filter((e) => e.kind === "api").at(-1);
+    expect(last).toMatchObject({ outcome: "not-sent", method: "PATCH", path: "/api/reader" });
+  });
+});

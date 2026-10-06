@@ -109,7 +109,7 @@ function mount(v: FeedbackVariant): void {
   variant = v;
   act(() =>
     root.render(
-      <FeedbackHost>
+      <FeedbackHost readerId="reader-a">
         <FeedbackTrigger variant={v} />
       </FeedbackHost>,
     ),

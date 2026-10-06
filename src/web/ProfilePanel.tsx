@@ -135,6 +135,7 @@ import { Button } from "@/components/ui/button";
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import { type SaveState, useAutosavedText } from "./useAutosavedText.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -447,13 +448,21 @@ function PanelBody({
   /* The same two saves the two pages make — `/profile`'s and Metadata's — so
      the panel is a third place to edit each string, not a third way of
      storing it. */
-  const about = useAutosavedText({ save: saveProfile, leave: leaveProfile });
+  /* **All four writes name the reader the panel was mounted for**
+     (lib/made-for.ts): the unmount save is fired by the reading view going,
+     and a change of reader is one reason it goes. Unnamed, `leaveProfile`
+     wrote this reader's description over the next one's. Plan 261006f § Stage 2. */
+  const madeFor = useMadeFor();
+  const about = useAutosavedText({
+    save: (text) => saveProfile(text, madeFor),
+    leave: (text) => leaveProfile(text, madeFor),
+  });
   const purpose = useAutosavedText({
     /* The server's answer, not what was typed, and an empty box clears — as
        Metadata.tsx's box. Seeded from this opening's read, so an empty box is
        one the reader can see is empty. */
-    save: async (text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
-    leave: (text) => leavePurpose(slug, text),
+    save: async (text) => (await savePurpose(slug, text === "" ? null : text, madeFor)) ?? "",
+    leave: (text) => leavePurpose(slug, text, madeFor),
   });
   const seedAbout = about.seed;
   const seedPurpose = purpose.seed;

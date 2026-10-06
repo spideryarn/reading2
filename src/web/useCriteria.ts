@@ -34,6 +34,7 @@ import { isStale } from "../search-stale.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
@@ -83,6 +84,8 @@ const url = (slug: string) => `/api/referee/criteria/${encodeURIComponent(slug)}
 const one = (slug: string, id: string) => `${url(slug)}/${encodeURIComponent(id)}`;
 
 export function useCriteria(slug: string): CriteriaApi {
+  // A queued colour or a stream's re-delete can run after the session changes.
+  const madeFor = useMadeFor();
   const [rows, setRows] = useState<SavedCriterion[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -181,12 +184,12 @@ export function useCriteria(slug: string): CriteriaApi {
         // `fetchOk`, not `apiFetch`: a DELETE that 500s used to remove the row
         // from the screen and say nothing, so the referee saw it gone and found
         // it back after a reload. The omission has happened twice already.
-        await fetchOk(one(slug, id), { method: "DELETE" });
+        await fetchOk(one(slug, id), { method: "DELETE" }, madeFor);
       } catch (e) {
         setError(describeFetchFailure(e as Error));
       }
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -223,7 +226,7 @@ export function useCriteria(slug: string): CriteriaApi {
                 ? { poles: config.poles, scale: config.scale }
                 : {}),
             }),
-          });
+          }, madeFor);
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is
              the stream simply ending, handled below. */
@@ -298,7 +301,7 @@ export function useCriteria(slug: string): CriteriaApi {
         }
       })();
     },
-    [slug, put, forget],
+    [slug, put, forget, madeFor],
   );
 
   const ask = useCallback(
@@ -339,7 +342,7 @@ export function useCriteria(slug: string): CriteriaApi {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ colour }),
-          });
+          }, madeFor);
         } catch (e) {
           setError(describeFetchFailure(e as Error));
         }
@@ -362,7 +365,7 @@ export function useCriteria(slug: string): CriteriaApi {
       patching.current.set(id, next);
       void next;
     },
-    [slug],
+    [slug, madeFor],
   );
 
   const remove = useCallback(

@@ -175,14 +175,33 @@ export function useFeedbackOpen(): ((request?: FeedbackPrefill) => void) | null 
  * so a navigation inside the app — including the reading view's article →
  * metadata → tweets loop, which unmounts the `Dock` — leaves the dialog and its
  * draft exactly where they were.
+ *
+ * **Until the reader changes** (`readerId`). Another tab signing in as
+ * somebody else changes this tab's session without replacing the page, and
+ * this host is above everything that unmounts for it, so a half-written
+ * report stayed in the box, open or closed, for the next reader to read and
+ * to send as themselves. The box is closed, a pending prefill is dropped,
+ * and the dialog is keyed on the reader so its draft goes with it. **The
+ * dialog and not the host**: the host wraps every page, and keying it would
+ * remount all of them. Required, so the compiler asks whoever mounts a host.
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2.
  */
-export function FeedbackHost({ children }: { children: ReactNode }) {
+export function FeedbackHost({ children, readerId }: { children: ReactNode; readerId: string }) {
   const route = useRoute();
   const [open, setOpen] = useState(false);
   /* **The last request, kept rather than cleared.** The dialog applies each id
      once (FeedbackDialog.tsx § `applied`), so holding it costs nothing and
      clearing it would be a second state change to keep in step with this one. */
   const [prefill, setPrefill] = useState<FeedbackPrefill | null>(null);
+  /* Reset during render and not in an effect, so the render that first sees
+     the next reader already draws the box shut: an effect would run after
+     the last reader's words had been on screen once. */
+  const [heldFor, setHeldFor] = useState(readerId);
+  if (heldFor !== readerId) {
+    setHeldFor(readerId);
+    setOpen(false);
+    setPrefill(null);
+  }
   /* **Stable**, so that opening the box does not re-render the bar and every
      button in it. Both setters are themselves stable, so an empty dependency
      list is honest rather than a lie the linter happens to accept. */
@@ -231,6 +250,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
           reads `useRoute()` once, so two triggers on one page cannot disagree
           about which article a report is against. */}
       <FeedbackDialog
+        key={readerId}
         open={open}
         prefill={prefill}
         onClose={() => setOpen(false)}

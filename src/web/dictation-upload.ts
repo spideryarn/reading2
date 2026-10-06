@@ -14,8 +14,11 @@
  * changed: it is the same `Blob` in the same request either way.
  */
 import { MAX_AUDIO_BYTES, formatOf, tooLongMessage } from "../dictation-limits.js";
-import { apiFetch, failure } from "./lib/api.js";
-import type { TranscriptionResult } from "./transcriber.js";
+import { useCallback } from "react";
+import { apiFetch, failure, NotThisReader } from "./lib/api.js";
+import { heldReader } from "./lib/session.js";
+import { useMadeFor } from "./lib/made-for.js";
+import type { Transcriber, TranscriptionResult } from "./transcriber.js";
 
 export type { TranscriptionResult };
 
@@ -66,12 +69,29 @@ function base64(bytes: Uint8Array): string {
  */
 const CLIENT_TIMEOUT_MS = 120_000;
 
+/* A retry uses the same recorded part. Keep its first reader with the blob,
+   so neither asynchronous conversion nor a later retry can adopt a new one.
+   Weak keys let discarded recordings and their bindings be collected. */
+const recordingReaders = new WeakMap<Blob, string | null>();
+
+/** The mounted box owns the audio even when tape draining starts the upload late. */
+export function useReaderTranscriber(): Transcriber<DictationContext> {
+  const reader = useMadeFor();
+  return useCallback(
+    (blob, mimeType, context, signal) => sendForTranscription(blob, mimeType, context, signal, reader ?? undefined),
+    [reader],
+  );
+}
+
 export async function sendForTranscription(
   blob: Blob,
   mimeType: string,
   context: DictationContext,
   signal?: AbortSignal,
+  reader: string | null = heldReader(),
 ): Promise<TranscriptionResult> {
+  if (!recordingReaders.has(blob)) recordingReaders.set(blob, reader);
+  const madeFor = recordingReaders.get(blob) ?? null;
   const format = formatOf(mimeType);
   if (!format) {
     /* The same browser will encode the same way next time. */
@@ -106,7 +126,7 @@ export async function sendForTranscription(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ audio, format, context }),
       signal: give_up,
-    });
+    }, madeFor);
     if (!res.ok) {
       const err = await failure(res);
       /* **From the status, not from the sentence.** A 429 is a service that is
@@ -138,6 +158,9 @@ export async function sendForTranscription(
     const json = (await res.json()) as { text?: unknown };
     return { ok: true, text: typeof json.text === "string" ? json.text : "" };
   } catch (err) {
+    if (err instanceof NotThisReader) {
+      return { ok: false, abandoned: true, retryable: false, message: "" };
+    }
     /* An abort is the reader moving on, not a fault. Told apart here rather
        than at the call site, because every caller would otherwise need to know
        what `AbortError` is called on three engines. */

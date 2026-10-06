@@ -391,10 +391,11 @@ message. The **×** on the audio row takes the error with it too.
 
 ```tsx
 const box = useRef<HTMLTextAreaElement>(null);
+const transcribe = useReaderTranscriber();
 const dictate = useDictationField({
   value, onChange, box,
   context: { kind: "article", slug },
-  transcribe: sendForTranscription,
+  transcribe,
   keep: keepDictation(`chat:${slug}`), // names this box; § A closed tab
 });
 
@@ -403,8 +404,10 @@ const dictate = useDictationField({
 <DictationStrip dictation={dictate.dictation} />
 ```
 
-`transcribe` is always `sendForTranscription` from
-[`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app, and it is a parameter rather
+`transcribe` comes from `useReaderTranscriber` in
+[`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
+reader the box was mounted for, before recording, tape draining or retries can outlive an account
+change. Each recording retains its first reader across retries. It is a parameter rather
 than something the hook imports — see [The hook does not know which server it is talking
 to](#the-hook-does-not-know-which-server-it-is-talking-to) below.
 

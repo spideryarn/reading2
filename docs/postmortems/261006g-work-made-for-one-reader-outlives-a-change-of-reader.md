@@ -104,6 +104,27 @@ problem, and three in a row on the add page did not.
 
 ## What is still open
 
+**Both items below were taken up on 2026-10-06 by
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md).** The text is
+kept as it was written. What that plan landed, and what it did not:
+
+- **The first item is built**: every `apiFetch` is bound to the reader the tab held as it was
+  made. Its first version could refuse a reader's own request, because the screen and the fence
+  each asked the SDK who was signed in and could be told different readers; both now read one
+  held session (`src/web/lib/session.ts`).
+- **The reading view was looked at, and its leaks are fenced**: the writes it owes as it unmounts,
+  the module-level stores, the Feedback dialog, and two things found outside it, `/profile` and
+  the retry of a spoken exchange.
+- **The built-code review found more delayed work**: comment PATCH queues and late deletions,
+  search revisions and search/criteria colour queues, audio conversion/retries, and live startup
+  and provider callbacks. They need
+  the same original-reader fence. It also found two stale-session orderings: a late initial SDK
+  snapshot, and a lookup overtaken by A → signed out → A. One subscription removes disagreement
+  between subscribers; a revision fence is additionally needed to reject an overtaken lookup.
+  The fixes and regression tests are recorded in [261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md).
+- **Still open**: none of it has been checked in a browser; and `spya.lastView.<slug>` in
+  browser storage carries no reader.
+
 **A plain `apiFetch` that names nobody, begun under A, whose token lookup straddles the change, is
 still sent as B.** That is every page not listed in 2 above: over a hundred call sites in
 `src/web`. The window is small, a pending token lookup rather than a timer, but the hole is the class.

@@ -13313,6 +13313,507 @@
     "exercised": false
   },
   {
+    "fixture": "winehq-anubis",
+    "arm": "shipped",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 1,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
+      }
+    },
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "raw-body",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 17,
+        "detail": "17 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 25,
+        "detail": "25 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 17,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 25,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"You are seeing this because the administrator of this website has set up Anubis\"",
+      "kept excluded text: \"Anubis uses a Proof-of-Work scheme in the vein of Hashcash\"",
+      "this page is not an article and the extractor did not refuse it — it returned 1217 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 1216,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "first-20-percent",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "article-plus-rail",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 1,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 5,
+        "detail": "5 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 8,
+        "detail": "8 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 5,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 8,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 81,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "restore-everything",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 16,
+        "detail": "16 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 24,
+        "detail": "24 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 16,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 24,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"You are seeing this because the administrator of this website has set up Anubis\"",
+      "kept excluded text: \"Anubis uses a Proof-of-Work scheme in the vein of Hashcash\"",
+      "this page is not an article and the extractor did not refuse it — it returned 1206 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 1206,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "drop-every-short-block",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "needle-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "region-padded-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "drop-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "repeat-one-generated-node",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "reverse-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "region-padding-only",
+    "exercised": false
+  },
+  {
+    "fixture": "winehq-anubis",
+    "arm": "duplicate-paragraph",
+    "exercised": false
+  },
+  {
     "fixture": "negative-controls",
     "arm": "shipped",
     "tier": "manifest",

@@ -125,8 +125,11 @@ const DETAILED = new Set(["ar5iv-attention", "wiki-gdp-table", "plos-biology", "
 /** The two pages that are a bot wall rather than an article, in both arms — refused by the floor. */
 const WALLS = ["medium-about", "pmc-article"];
 
-/** The one that is long enough to clear the floor, and is refused by its own markup instead. */
-const CHALLENGES = ["hal-anubis"];
+/**
+ * The two that are long enough to clear the floor, and are refused by their own
+ * markup instead: one Anubis page of each shape src/challenge-page.ts reads.
+ */
+const CHALLENGES = ["hal-anubis", "winehq-anubis"];
 
 /**
  * **A digest, so "byte-identical" is a comparison of bytes rather than of
@@ -167,7 +170,7 @@ async function armOf(html: string, url: string, slug: string, keepHtml: boolean)
 }
 
 /**
- * **Both arms of all 36 fixtures, run once and in sequence.**
+ * **Both arms of all 37 fixtures, run once and in sequence.**
  *
  * Sequence is required rather than tidy: `withProtectionDisabled` is module
  * state, so two extractions in flight at once in different arms would see each
@@ -799,9 +802,10 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
    */
   it("stamps exactly four fixtures and leaves the other thirty-one alone", async () => {
     const corpus = await CORPUS;
-    /* 36 since 2026-10-06: `hal-anubis` joined, and it is refused, so it moves
-       neither the four stamped nor the twenty-nine compared. */
-    expect(corpus.size).toBe(36);
+    /* 37 since 2026-10-06: `hal-anubis` and then `winehq-anubis` joined, and
+       both are refused, so they move neither the four stamped nor the
+       twenty-nine compared. */
+    expect(corpus.size).toBe(37);
     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
     expect(stamped.map(([n]) => n).sort()).toEqual([
       "ar5iv-attention",
@@ -880,7 +884,8 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
       expect(r.onRefusal, name).toBeInstanceOf(ChallengePage);
       expect(r.offRefusal, name).toBeInstanceOf(ChallengePage);
     }
-    /* And those three are every refusal in the corpus. */
+    expect(CHALLENGES).toHaveLength(2);
+    /* And those four are every refusal in the corpus. */
     const refused = [...corpus].filter(([, r]) => r.kind === "refused").map(([n]) => n);
     expect(refused.sort()).toEqual([...WALLS, ...CHALLENGES].sort());
   });

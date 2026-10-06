@@ -98,7 +98,8 @@ import {
 } from "../session-shared.js";
 import { stallOf, type LiveStall } from "../stall.js";
 import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveStep, LiveToolRun } from "../useLiveConversation.js";
-import { apiWiring } from "../wiring.js";
+import { apiWiringFor } from "../wiring.js";
+import { useMadeFor } from "../../lib/made-for.js";
 import { ownLabel } from "../../lib/own-label.js";
 import { DelegationLoop, type DelegationEffect } from "./delegations.js";
 import { GptLiveMeter, backendReport, voiceReport, type GptLiveUsageReport } from "./meter.js";
@@ -210,6 +211,8 @@ const wordsIn = (text: string): number => text.split(/\s+/).filter(Boolean).leng
 const notOffered = (): void => {};
 
 export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
+  const madeFor = useMadeFor();
+  const defaultWiring = useRef(apiWiringFor(madeFor)).current;
   const [phase, setPhase] = useState<LivePhase>("idle");
   /**
    * Which connecting step this call is on, for LiveStatus. This engine's order
@@ -585,7 +588,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
     try {
       const out = await Promise.race([
-        (wired.current.wiring ?? apiWiring).runTool(slug, name, args, request.signal),
+        (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
         new Promise<never>((_, reject) => {
           request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
         }),
@@ -598,7 +601,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       clearTimeout(timeout);
       if (toolRequests.current.get(callId) === request) toolRequests.current.delete(callId);
     }
-  }, [slug]);
+  }, [slug, defaultWiring]);
 
   /**
    * Do what the delegation loop said. The loop decides; this only acts.
@@ -1014,7 +1017,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
 
     void (async () => {
       try {
-        const wiring = wired.current.wiring ?? apiWiring;
+        const wiring = wired.current.wiring ?? defaultWiring;
         if (!wiring.session || !wiring.gptLiveUsage) {
           throw new Error("This page cannot start a GPT-Live call. [live-not-set-up]");
         }
@@ -1216,7 +1219,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         setPhase("failed");
       }
     })();
-  }, [onEvent, slug, refreshLines, failSession, enableAudio, checkStall]);
+  }, [onEvent, slug, refreshLines, failSession, enableAudio, checkStall, defaultWiring]);
 
   const say = useCallback((text: string) => {
     const trimmed = text.trim();

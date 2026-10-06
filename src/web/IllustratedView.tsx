@@ -62,7 +62,7 @@ import type { Block, BlockId } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { JobProgress } from "./JobProgress.js";
 import { apiFetch } from "./lib/api.js";
 /* The Sketch's own wait, imported rather than restated — see
@@ -348,12 +348,13 @@ function useSteerNote(slug: string, painted: string | undefined): SteerNote {
     setNote(next);
   }, []);
   const box = useRef<HTMLTextAreaElement | null>(null);
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: note,
     onChange: change,
     box,
     context: { kind: "article", slug },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`illustrated:${slug}`),
   });
   const tooLong = note.trim().length > MAX_ILLUSTRATION_NOTE_CHARS;
