@@ -26,6 +26,7 @@ import {
   worthAskingAgain,
 } from "../src/ai-call.js";
 import { type SpendReport, collectSpend } from "../src/ai-spend.js";
+import { CallDeadlineReached, StallReached } from "../src/call-failure.js";
 import { EmbeddingFailure, embedBatch } from "../src/embeddings.js";
 import type { StreamEnd } from "../src/openrouter-stream.js";
 import { openRouterFigureLocator } from "../src/pdf-figure-locate.js";
@@ -737,6 +738,23 @@ const droppedWith = (code: unknown) =>
 
 const WHOLE = SEAMS.filter((s) => s.name !== "openRouterStream");
 
+/**
+ * What a signal can be aborted with, and the label each is recorded under.
+ * The last three only look like one of our clocks. `AbortSignal.timeout`
+ * itself is on a real clock this file fakes; the `DOMException` here is what
+ * it aborts with, and tests/call-failure.test.ts checks that against the
+ * real thing.
+ */
+const STOPS: { name: string; reason: () => unknown; cls: "stall" | "deadline" | "abort" }[] = [
+  { name: "a stall clock", reason: () => new StallReached(), cls: "stall" },
+  { name: "an AbortSignal.timeout", reason: () => new DOMException("the reader asked about badgers", "TimeoutError"), cls: "deadline" },
+  { name: "a hand-written per-call clock", reason: () => new CallDeadlineReached("the reader asked about badgers"), cls: "deadline" },
+  { name: "a reader's Stop", reason: () => new Error("the reader asked about badgers"), cls: "abort" },
+  { name: "a plain Error that says stalled", reason: () => new Error("stalled"), cls: "abort" },
+  { name: "an Error renamed TimeoutError", reason: () => Object.assign(new Error("slow"), { name: "TimeoutError" }), cls: "abort" },
+  { name: "an object named TimeoutError", reason: () => ({ name: "TimeoutError" }), cls: "abort" },
+];
+
 describe.each(SEAMS)("$name — every attempt's row says which go it was, and how it failed", (seam) => {
   it("a blip then an answer is (1, error, before_answer) and (2, ok)", async () => {
     script(dropped(), seam.good);
@@ -798,15 +816,18 @@ describe.each(SEAMS)("$name — every attempt's row says which go it was, and ho
     expect(JSON.stringify(run.report.calls)).not.toContain("reader_search_term");
   });
 
-  it("says nothing about why on an abort, and still counts the go", async () => {
+  /* Plan 261006d: an `aborted` row says who stopped the call. The label is
+     picked from the reason and nothing of the reason is kept. */
+  it.each(STOPS)("an abort before any response is aborted / before_answer / $cls: $name", async ({ reason, cls }) => {
     const stop = new AbortController();
-    const reason = new Error("the reader pressed Stop");
+    const why = reason();
     vi.stubGlobal("fetch", async () => {
-      stop.abort(reason);
-      throw reason;
+      stop.abort(why);
+      throw why;
     });
     const run = await drive(() => seam.ask({ signal: stop.signal }));
-    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+    expect(said(run.report)).toEqual([[1, "aborted", beforeAnswer(cls)]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
   });
 
   it("is `other` for a failure it cannot place, and keeps none of its words", async () => {
@@ -845,6 +866,46 @@ describe.each(WHOLE)("$name — the acceptance boundary is the 2xx headers", (se
     script(brokenBody(200, Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" })), seam.good);
     const run = await drive(() => seam.ask({}));
     expect(said(run.report)).toEqual([[1, "error", midAnswer("network:UND_ERR_SOCKET")]]);
+  });
+
+  it.each(STOPS)("an abort while the 200's body is read is aborted / mid_answer / $cls: $name", async ({ reason, cls }) => {
+    const stop = new AbortController();
+    const why = reason();
+    script(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          text: async () => {
+            stop.abort(why);
+            throw why;
+          },
+        }) as unknown as Response,
+    );
+    const run = await drive(() => seam.ask({ signal: stop.signal }));
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer(cls)]]);
+  });
+
+  it("an abort while a refusal's body is read is before_answer, with the status", async () => {
+    const stop = new AbortController();
+    const why = new StallReached();
+    const t = script(
+      () =>
+        ({
+          ok: false,
+          status: 503,
+          headers: new Headers(),
+          text: async () => {
+            stop.abort(why);
+            throw why;
+          },
+        }) as unknown as Response,
+      seam.good,
+    );
+    const run = await drive(() => seam.ask({ signal: stop.signal }));
+    expect(t.sent()).toBe(1);
+    expect(said(run.report)).toEqual([[1, "aborted", beforeAnswer("stall", 503)]]);
   });
 });
 
@@ -939,6 +1000,37 @@ describe("openRouterStream — a death after the 200 is mid_answer, and says whi
     };
   }
 
+  /** A 200 that yields `parts` and then says nothing until `signal` fires, when the read rejects with its reason. */
+  function hangs(signal: AbortSignal, ...parts: string[]): () => Response {
+    return () => {
+      const encoder = new TextEncoder();
+      let i = 0;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: new ReadableStream<Uint8Array>({
+          pull(c) {
+            if (i < parts.length) {
+              c.enqueue(encoder.encode(parts[i++] as string));
+              return;
+            }
+            return new Promise<void>((resolve) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  c.error(signal.reason);
+                  resolve();
+                },
+                { once: true },
+              );
+            });
+          },
+        }),
+      } as unknown as Response;
+    };
+  }
+
   const open = (opts: { signal?: AbortSignal; malformedFrames?: "throw"; onActivity?: () => void } = {}) =>
     openRouterStream(
       "chat",
@@ -952,7 +1044,9 @@ describe("openRouterStream — a death after the 200 is mid_answer, and says whi
     );
 
   /** Drain the way every real consumer does: throw on an in-band error chunk. */
-  function consume(opts: { signal?: AbortSignal; onChunk?: () => void; malformedFrames?: "throw" } = {}) {
+  function consume(
+    opts: { signal?: AbortSignal; onChunk?: () => void; onActivity?: () => void; malformedFrames?: "throw" } = {},
+  ) {
     return async () => {
       for await (const c of open(opts)) {
         if (c.error) throw new Error("the provider stopped mid-answer");
@@ -1023,19 +1117,117 @@ describe("openRouterStream — a death after the 200 is mid_answer, and says whi
     expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
   });
 
-  it("a consumer that simply stops is still `aborted`, with nothing said about why", async () => {
+  it("keeps an observed in-band error when it is our own stall clock that stops the later read", async () => {
+    const stop = new AbortController();
+    script(streamed(ERROR_CHUNK, WORD, DONE));
+    let reads = 0;
+    const run = await drive(async () => {
+      for await (const _ of open({
+        signal: stop.signal,
+        onActivity: () => {
+          if (++reads === 2) stop.abort(new StallReached());
+        },
+      })) {
+        /* Read on until the stall lands on the next body read. */
+      }
+    });
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+  });
+
+  /* No signal fired, so nobody's clock did this: `abort`. */
+  it("a consumer that simply stops is aborted / mid_answer / abort", async () => {
     script(streamed(WORD, WORD, DONE));
     const run = await drive(async () => {
       for await (const _ of open()) break;
     });
-    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer("abort")]]);
   });
 
-  it("a Stop mid-answer is `aborted`, with nothing said about why", async () => {
+  it("a consumer that stops while a clock that has not fired is on the signal is still `abort`", async () => {
+    script(streamed(WORD, WORD, DONE));
+    const run = await drive(async () => {
+      for await (const _ of open({ signal: new AbortController().signal })) break;
+    });
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer("abort")]]);
+  });
+
+  /* The clean-end race: `sseChunks` cancels the reader on abort, the
+     cancelled read resolves `done`, and the loop ends without throwing. The
+     row has to say who stopped it all the same. */
+  it.each(STOPS)("a stop after a chunk, ending the loop cleanly, is aborted / mid_answer / $cls: $name", async ({ reason, cls }) => {
     const stop = new AbortController();
     script(streamed(WORD, WORD, DONE));
-    const run = await drive(consume({ signal: stop.signal, onChunk: () => stop.abort(new Error("stop")) }));
-    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+    const run = await drive(consume({ signal: stop.signal, onChunk: () => stop.abort(reason()) }));
+    expect(run.outcome.ok).toBe(true);
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer(cls)]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
+  });
+
+  /* The other way an abort ends a stream: the loop throws the signal's own
+     reason, here because the signal fired while a chunk was being read. */
+  it.each(STOPS)("a stop that the stream throws is aborted / mid_answer / $cls: $name", async ({ reason, cls }) => {
+    const stop = new AbortController();
+    const why = reason();
+    script(streamed(WORD, WORD, DONE));
+    let reads = 0;
+    const run = await drive(
+      consume({
+        signal: stop.signal,
+        onActivity: () => {
+          if (++reads === 2) stop.abort(why);
+        },
+      }),
+    );
+    expect(errorOf(run.outcome)).toBe(why);
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer(cls)]]);
+  });
+
+  /* This seam's boundary is a `2xx` with a body in hand, so a provider that
+     answers `200` and then says nothing has been accepted: `mid_answer`. */
+  it("a stall after the 200 and before the first chunk is mid_answer / stall", async () => {
+    const stop = new AbortController();
+    script(hangs(stop.signal));
+    const run = await drive(async () => {
+      setTimeout(() => stop.abort(new StallReached()), 50);
+      await consume({ signal: stop.signal })();
+    });
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer("stall")]]);
+  });
+
+  it("a stall while the request is still waiting for headers is before_answer / stall, and is not asked again", async () => {
+    const stop = new AbortController();
+    const why = new StallReached();
+    let sent = 0;
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      sent += 1;
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+    });
+    const run = await drive(async () => {
+      setTimeout(() => stop.abort(why), 50);
+      await consume({ signal: stop.signal })();
+    });
+    expect(sent).toBe(1);
+    expect(errorOf(run.outcome)).toBe(why);
+    expect(said(run.report)).toEqual([[1, "aborted", beforeAnswer("stall")]]);
+  });
+
+  /* What a runner really hands the gateway: the reader's signal, a deadline
+     and a stall clock, as one. */
+  it("tells the stall from the reader through the composite signal a runner builds", async () => {
+    const reader = new AbortController();
+    const stall = new AbortController();
+    const deadline = new AbortController();
+    const signal = AbortSignal.any([reader.signal, deadline.signal, stall.signal]);
+    script(hangs(signal, WORD));
+    const run = await drive(async () => {
+      setTimeout(() => stall.abort(new StallReached()), 50);
+      /* The reader leaving afterwards does not rewrite who stopped it. */
+      setTimeout(() => reader.abort(new Error("the reader left")), 60);
+      await consume({ signal })();
+    });
+    expect(said(run.report)).toEqual([[1, "aborted", midAnswer("stall")]]);
   });
 
   it("a frame that is not JSON, where the caller asked for that to throw, is unreadable", async () => {

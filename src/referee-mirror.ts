@@ -168,6 +168,7 @@ import {
   providerFailedMidAnswer,
   stoppedByReader,
 } from "./openrouter-stream.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import {
@@ -1550,7 +1551,7 @@ export async function* mirrorStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   /* Our own clock, never anything the provider reports — see explain.ts for the

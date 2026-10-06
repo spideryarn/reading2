@@ -75,6 +75,7 @@ import {
   providerFailedMidAnswer,
   stoppedByReader,
 } from "./openrouter-stream.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { plainWords } from "./plain-words.js";
@@ -570,7 +571,7 @@ export async function* findPassagesStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   /* Our own clock rather than anything the provider reports — see explain.ts

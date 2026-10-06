@@ -36,6 +36,7 @@
  * the reader's selection, the answer, or a cited URL** — see `onDroppedCitation`.
  */
 import type { Citation, SearchEvidence } from "./types.js";
+import { StallReached } from "./call-failure.js";
 import { since } from "./log.js";
 import {
   type SearchUsagePath,
@@ -172,7 +173,7 @@ export async function* runStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   /* Our own clock, deliberately, rather than any timing the provider reports.
