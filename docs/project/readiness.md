@@ -67,6 +67,7 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-git.ts` | the tree stamps and the dev snapshot, bounded and off the request path |
 | `tools/fleet/readiness-parse.ts` | reading a check's own output back |
 | `tools/fleet/readiness-backfill.ts` | the tmux-log scan, recomputed per collection and never stored |
+| `tools/fleet/build-files.ts` | the fleet bundle's manifest, and the check that the bundle on disk is the one a build wrote |
 | `tools/fleet/readiness-verdict.ts` | the conjunction above, as one pure function |
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
@@ -87,6 +88,19 @@ derived state up to date:
 - **Exit 0 treated as "the artefact is fresh".** An inherited `npm_config_dry_run=true` made `npm ci`
   succeed without installing, and a stale `dist/index.html` was accepted because it existed.
   [260909c](../postmortems/260909c-artifact-provenance-after-successful-commands.md).
+
+A fourth review, of the fix for that last one, found the fix had the same shape, and the answer was
+to stop guessing (2026-10-06,
+[261006h](../plans/261006h-readiness-runner-round-3-fleet-bundle-provenance-and-npm-ignore-scripts.md)):
+
+- **A list of inputs stood in for the artefact.** The fleet client was rebuilt only when a diff
+  touched a hand-kept list of paths, and the list had already missed one. The runner now builds it
+  once per commit itself, never reuses a bundle it found on disk, and checks the result against
+  `build-files.json` — every file the build wrote, with its hash — and the stamp's sha.
+- **One environment variable pinned at a time.** `--dry-run=false` answered one inherited npm
+  setting; `ignore_scripts` and `script_shell` did the same damage. The runner's children now start
+  with every `npm_config_*` variable removed. A setting in a user-level npmrc is still not covered,
+  beyond `dry-run` and `ignore-scripts`.
 
 ## Not built
 
