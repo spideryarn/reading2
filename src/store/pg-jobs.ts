@@ -995,9 +995,9 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  *
  * **Cancelled — the reader asked.** Back to `pending`, `startedAt` dropped,
  * and no sentence: nothing failed, and the step is simply one the reader chose
- * not to run. That is exactly what `sweepStopped` (src/store/jobs-fs.ts)
- * writes for a step whose process went away, so this is mechanisms agreeing
- * rather than a new rule.
+ * not to run. That is exactly what the filesystem adapter's `sweepStopped`
+ * wrote for a step whose process went away (src/store/jobs-fs.ts, deleted
+ * 2026-09-05), so this was mechanisms agreeing rather than a new rule.
  *
  * **Interrupted — nobody asked.** `error`, carrying `INTERRUPTED.message` and
  * a `finishedAt`, exactly as `runStep` records a step that threw. The first
@@ -1428,8 +1428,9 @@ const rawPgJobStore: JobStore = {
         .set({
           status: "queued",
           /* The *cancelled* shape of `settledSteps`, which is the same shape
-             `settleExpired`'s requeue writes and the same shape `sweepStopped`
-             has always written: the running step back to `pending` with its
+             `settleExpired`'s requeue writes, and the one the filesystem
+             adapter's `sweepStopped` wrote until that adapter went on
+             2026-09-05: the running step back to `pending` with its
              `startedAt` dropped and no sentence on it.
 
              **Derived from the row rather than taken from the caller**, and
@@ -1675,10 +1676,11 @@ const rawPgJobStore: JobStore = {
        * **First, the jobs that get another go — back to `queued` on their own
        * row.**
        *
-       * This is the Postgres answer to `sweepStopped` (src/store/jobs-fs.ts),
-       * which has always turned a restart into a *pause* rather than an
-       * abandoned ingest: running steps back to `pending`, the job back to
-       * `queued`, the row otherwise untouched. Postgres had no equivalent, so on
+       * This is the Postgres answer to the filesystem adapter's `sweepStopped`
+       * (src/store/jobs-fs.ts, deleted 2026-09-05), which turned a restart
+       * into a *pause* rather than an abandoned ingest: running steps back to
+       * `pending`, the job back to `queued`, the row otherwise untouched.
+       * Postgres had no equivalent, so on
        * the store we actually ship a deploy landing mid-ingest ended the job —
        * and the reader's only door out of that was a Retry that, until
        * 2026-09-03, minted a new article and threw away every chunk they had
@@ -1712,9 +1714,9 @@ const rawPgJobStore: JobStore = {
                 /* The *cancelled* shape of `settledSteps`: the running step back
                    to `pending` with its `startedAt` dropped and no sentence on
                    it. Nothing failed — the job is going back into the line — and
-                   this is exactly what `sweepStopped` writes for a step whose
-                   process went away, so the two mechanisms agree rather than
-                   inventing a third answer. */
+                   this is what `pauseForDeadline` writes too, so the two
+                   requeues agree. (The filesystem adapter's `sweepStopped`,
+                   gone 2026-09-05, wrote the same.) */
                 steps: settledSteps(sql`true`),
                 attemptId: null,
                 leaseExpiresAt: null,
@@ -2142,10 +2144,10 @@ const rawPgJobStore: JobStore = {
   },
 
   /**
-   * **The retention rule, written out here and cited from the filesystem
-   * adapter** (src/store/jobs-fs.ts § `trimFinished`), which implements the
-   * same thing in JavaScript. It used to be spelled out at length on both
-   * sides, and that is how they drifted.
+   * **The retention rule, written out here and nowhere else.** Until
+   * 2026-09-05 a filesystem adapter (src/store/jobs-fs.ts § `trimFinished`)
+   * implemented the same thing in JavaScript and cited this; before that the
+   * rule was spelled out at length on both sides, which is how they drifted.
    *
    * Rank each terminal job **within its own kind** — `done` on one side,
    * everything that is not a success on the other — most recently finished
@@ -2169,8 +2171,8 @@ const rawPgJobStore: JobStore = {
    * ending** — `noteEnded` trims immediately after every finish (src/jobs.ts).
    * Ranked by finish time it is rank 1 of its kind, because nothing has ended
    * since. `nulls last` puts a legacy or malformed terminal row at the back of
-   * its kind, which is the conservative answer; every terminal transition on
-   * both adapters stamps the column.
+   * its kind, which is the conservative answer; every terminal transition
+   * stamps the column.
    *
    * **What depends on this.** The client learns a job finished by polling for a
    * terminal row (`recordCompletions`, src/web/jobEngine.ts) — so the
@@ -2185,7 +2187,7 @@ const rawPgJobStore: JobStore = {
    * docs/plans/260903h-keep-a-fresh-success-out-of-the-retention-sweep.md.
    *
    * `id` is the last key because neither timestamp is a total order, and
-   * without it the two adapters answer from different accidents.
+   * without it two jobs with equal timestamps are ranked by accident.
    *
    * **No lock.** Two endings each trimming this one owner see a consistent
    * snapshot, and overlapping deletes only make one of the returned counts

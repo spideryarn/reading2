@@ -91,8 +91,10 @@ describe("the job lease and the platform's kill", () => {
    *
    * The costs are measurements, not guesses, and each is the worst observed:
    * `structure` from the ledger, `assets` from a real run against the 10-image
-   * article (7.1s measured, but its 180s cap is what bounds it), and the three
-   * cheap steps rounded generously upward.
+   * article (7.1s measured; the number used is `collectAssets`'s 180s cap plus
+   * unwinding, which is not the whole step for a PDF — src/jobs.ts § `LEASE_MS`
+   * says what is and is not a bound here), and the three cheap steps rounded
+   * generously upward.
    */
   /* **"Fits one invocation" is about elapsed time, not about how many requests
      it actually takes** — and since 2026-09-04 those are different answers. The

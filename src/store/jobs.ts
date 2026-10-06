@@ -1,5 +1,7 @@
 /**
- * **Where an ingest job is written down**, as a contract with two adapters.
+ * **Where an ingest job is written down**, as a contract. It has one
+ * implementation, `pgJobStore` (src/store/pg-jobs.ts); a filesystem adapter
+ * shared it until 2026-09-05.
  *
  * A job used to live in one process's `Map` and a JSON file beside it. That is
  * exactly right for one process and there is more than one: `POST /api/jobs`
@@ -20,9 +22,10 @@
  * ## A claim covers a whole job, and there are three ways to put it down
  *
  * `claim` → run every step → `finish`. It covered **one step** until
- * 2026-08-30, and that shape cannot finish an ingest on a serverless host at
- * all: the next request lands on a different instance and step 2 finds nothing
- * step 1 wrote. `walkClaim` (src/jobs.ts) is where the argument lives.
+ * 2026-08-30, and while artefacts were files that shape could not finish an
+ * ingest on a serverless host at all: the next request landed on a different
+ * instance and step 2 found nothing step 1 wrote. `walkClaim` (src/jobs.ts) is
+ * where the argument lives, and what is left of it now that they are rows.
  *
  * What survives from the one-step design is that a claim must never *outlive*
  * the claimant. A claim held open by a process that has stopped leaves the job
@@ -35,15 +38,22 @@
  *
  * ## What an expired lease means, and what it deliberately does not
  *
- * It means *nobody is coming back*, and the job is settled so a reader can
- * press Retry — as `error` ordinarily, or as `cancelled` if they had already
- * pressed Stop (`settleExpired`). It does **not** mean another claimant may
- * take the job over. That
- * would be safe only if every durable write were fenced, and the artefacts are
- * still files: a stage writes its output and *then* calls `finishStep`, so a
- * stale claimant's files land before its token is refused, and `beginStep`'s own
- * comment says it is not a lock. Auto-takeover becomes available the day the
- * artefact writes are transactional and not before.
+ * It means *nobody is coming back*, and `settleExpired` moves the row: back
+ * to `queued` with its draft kept while the job has requeue budget left, so
+ * the next claimant carries on; and once the budget is spent, settled so a
+ * reader can press Retry — as `error` ordinarily, or as `cancelled` if they
+ * had already pressed Stop.
+ *
+ * Handing a lapsed job to another claimant is safe because every durable write
+ * is fenced: artefacts, the step's completion and the job's move commit in one
+ * transaction that checks the live attempt (src/store/pg-session.ts,
+ * src/store/job-fence.ts), so a claimant whose lease has lapsed cannot write.
+ *
+ * This section said the opposite until 2026-10-07: that an expired lease does
+ * **not** let another claimant take the job, because "the artefacts are still
+ * files" and a stale claimant's files land before its token is refused. That
+ * was true until the transactional session (2026-09-01); the requeue followed
+ * on 2026-09-03, and the files went on 2026-09-05.
  *
  * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
@@ -640,10 +650,13 @@ export interface JobStore {
   /**
    * A step ran, the job is not over: record it and **let the claim go**.
    *
-   * Fenced on all three of id, attempt and `status = 'running'`. The third is
-   * the one this project has now dropped twice — a terminal row keeps its
-   * token, so id-and-attempt alone lets a job already marked `error` accept its
-   * own former claimant's write and report one row affected.
+   * Fenced on `liveAttempt` (src/store/job-fence.ts), which is four
+   * conditions: id, attempt, `status = 'running'`, and a lease that has not
+   * expired. The third is the one this project has dropped twice — a terminal
+   * row keeps its token, so id-and-attempt alone lets a job already marked
+   * `error` accept its own former claimant's write and report one row
+   * affected. The fourth was missing everywhere until 2026-09-01, and this
+   * comment went on saying "all three" after it was added.
    */
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job>;
 
@@ -702,17 +715,17 @@ export interface JobStore {
    * A step is **still running**: write what the card should say, keep the claim.
    *
    * The one write that is neither a release nor a finish, and it exists for the
-   * reader rather than for the queue. A step is one HTTP request and a model
-   * call inside it can take half a minute; without this, a poll during that
-   * half-minute sees the step still `pending` and the card says nothing is
-   * happening. `ingest-queue.md` spends a section on why the label is in the
+   * reader rather than for the queue. One HTTP request walks several steps
+   * and a step can take minutes; without this, a poll during those minutes
+   * sees the step still `pending` and the card says nothing is happening. `ingest-queue.md` spends a section on why the label is in the
    * present tense — "Extracting the article" — and a label nobody is shown is
    * not a label.
    *
-   * Same three-condition fence as `releaseStep`, and deliberately **does not
-   * touch the lease**. Renewing here would be a heartbeat, and a heartbeat is
-   * what makes an expired lease mean "probably dead" instead of "definitely
-   * over its own deadline" — see the header on why takeover is out. The
+   * Same fence as `releaseStep` (`liveAttempt`, four conditions), and
+   * deliberately **does not touch the lease**. Renewing here would be a
+   * heartbeat, and a heartbeat is what makes an expired lease mean "probably
+   * dead" instead of "definitely over its own deadline", which is the reading
+   * the requeue in `settleExpired` depends on (the header, above). The
    * claimant's own timer is the thing that has to fire first, and it cannot if
    * progress keeps pushing the lease away from it.
    *

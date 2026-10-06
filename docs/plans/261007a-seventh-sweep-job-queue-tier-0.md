@@ -1,7 +1,8 @@
 # Seventh sweep: the job queue's tier 0
 
-Status as of 2026-10-07: being built, one commit per item. Each item below says what landed and
-what it rests on; an item with no "Landed" paragraph has not.
+Status as of 2026-10-07: built and committed in a worktree, five commits; not pushed, and not yet
+reviewed by GPT Sol. Evidence: the cases in `tests/jobs-walk.test.ts` § *the exits of a claim*,
+each red before its fix and red again under the mutation listed at the foot.
 
 ## Goal
 
@@ -251,4 +252,96 @@ inside the step's commit, which is a change to `session.commit`'s `keep` transit
 
 **What the investigation got wrong.** The Opus doc's heading says three of the four ways a claim
 is put down lose the title; the Sol review is right that it is two (pause and lapse).
+
+### PQ4 + PQO4: the comments that describe a queue and a store that are gone
+
+- [x] Each comment checked against the code and corrected. Comments only.
+
+**Evidence:** C, by reading each against the code it sits beside.
+**Files:** `src/jobs.ts` (30 edits), `src/store/jobs.ts` (6), `src/store/pg-jobs.ts` (7),
+`src/pipeline.ts` (11), `tests/jobs-lease-budget.test.ts` (1).
+
+**Done when** no comment in those files says, in the present tense, that there is a filesystem
+store, a second adapter, a scratch directory, or one step per request; and the two "≤" lease
+numbers say what they are.
+
+**That it is comments only** was checked, not assumed: each file at `HEAD` and in the working tree
+was compiled with `esbuild --minify`, which drops every comment, and the two outputs compared.
+Identical for all five.
+
+**How the comments were found.** Every row of the two investigations' tables, then a grep of the
+four files for a fixed list of terms (`filesystem`, `jobs-fs`, `sweepStopped`, `scratch`,
+`both adapters`, `two adapters`, `either store`, `both stores`, `_jobs`, `STORE`, `one step per`,
+`exactly one`, `per HTTP request`, `runJob`, `three-condition`, `all three of`, `on disk`,
+`not built`, `≤`), reading each hit. That is a sweep by term, not a line-by-line read of 13,500
+lines, so a false comment that uses none of those words is not found by it.
+
+**A comment that records history stayed**, as the brief says: anything dated, or in the past
+tense about the store that went on 2026-09-05. Where a comment was false only in its tense, the
+tense and the date were what changed.
+
+**The two lease numbers.** `fetch ≤110s` and `assets ≤185s` in `LEASE_MS`'s arithmetic are no
+longer written as bounds, and the note beside them, and beside each row of `STEP_BUDGET_MS`, says
+what each is: 110 s is one `fetchDocument`, and since 261006i the step can make several; 185 s is
+`collectAssets`'s cap, and for a PDF the step goes on to `recoverPdfFigures` with a second 180 s
+cap. **No number was changed.**
+
+**Reported, not changed: `STEP_BUDGET_MS.assets` looks too small.** It is 185 s and the step's
+real ceiling for a PDF is about 360 s, so the walk can start `assets` with less deadline left than
+it may need. Since the PQO1 fix above that is a pause and a re-run, not a lost job; but each
+re-run spends one of the job's three windows, and a second 180 s collection. Raising the number is
+a behaviour change with its own cost (a PDF import hands back before `assets` more often) and
+wants a measurement of what `recoverPdfFigures` really takes. `STEP_BUDGET_MS.fetch` (150 s) is
+in the same position against a paper source with several candidates, with less at stake.
+
+**Left, and why.**
+
+- `src/pipeline.ts` § `UNCONVERTED_STEPS` and `StepProduct` still describe "the filesystem
+  session" in the present tense. That is true of code that exists: `fsStoreSession`
+  (`src/store/session.ts`) is still there, reached by one test. Deleting it is PQO3, another
+  cluster's, and those comments go with it.
+- `src/store/jobs.ts` § `DraftGoneError`, "The filesystem session has no such fence": the same.
+- `src/jobs.ts` § `claimSession` says "every one of the thirteen steps"; there are 23 now. It is a
+  sentence about 2026-09-01 and not about the store or the one-step queue, so it was left.
+- Artefact nicknames such as `blocks.json` and `meta.json` throughout `src/pipeline.ts`. They
+  name an artefact by what its file used to be called, and correcting several dozen is a rename
+  of a vocabulary, not a false statement about the queue.
+
+**What the investigation got wrong.** The Opus doc counts fourteen comments "in the queue files";
+the Sol review is right that it is fourteen groups across four files. Its `pump` row is right but
+its `AdvanceParts` row understates it: three paragraphs there described choosing a store. And
+neither doc lists the false sentences this found in the same files: `LEASE_MS`'s "it only
+re-runs on a cold instance" family (`STEP_BUDGET_MS`'s header, twice), `stillForced`'s and
+`runStep`'s `runJob`, the import cycle that named a deleted `fs.ts`, and eight in
+`src/pipeline.ts` beyond the one about `assets`.
+
+## Mutations
+
+Each fix was put back to what it was, `tests/jobs-walk.test.ts` run (29 cases), and the fix
+restored. Every mutation reddened the cases written for it and no others.
+
+| Mutation, in `src/jobs.ts` | Red |
+|---|---|
+| the freshness read's failure is rethrown where it happens | 1: *ends the job … when the freshness read fails* |
+| `note` rethrows every failure | 4: *progress write 1*, *2*, *3*, and *the progress write for a skipped step* |
+| `note` swallows a `StaleAttemptError` too | 1: *still stands down … when a progress write says the claim has moved* |
+| the deadline branch returns `interruptedEnding` again | 1: *puts the job down with its draft …* |
+| the `busy` branch casts its read to `Job` again | 1: *answers null for a job that does not exist …* |
+| `note` passes no title | 1: *keeps the title across a mid-step hand-back* |
+| the title is lifted from `extract` only | 1: *gives a job whose only title comes from the metadata step a title* |
+
+The two Stop characterisation cases were green before any change and stayed green throughout,
+which is what they are for.
+
+## What is left
+
+- **Greg's:** the Stop question above.
+- **Reported:** `STEP_BUDGET_MS.assets` and `.fetch` against their steps' real ceilings.
+- **Not closed in PQ1:** a failure of the write that settles the job (`pauseForDeadline`, or
+  `settleJob` after a cancel or a failure) still leaves the row to the lease. Closing it needs a
+  fourth storage-failure door and a sentence for the reader's card.
+- **Not closed in PQO2:** a claimant that dies between `extract`'s commit and the next progress
+  write.
+- **Another cluster's:** PQ3, PQO3, PQO5.
+- A GPT Sol review of these commits, which the orchestrating agent runs before pushing.
 
