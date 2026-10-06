@@ -3592,7 +3592,7 @@ export function Reader({
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
           "--marg-w": `${fit.margW}px`,
           "--marg-reserve": `${fit.margReserve}px`,
-          "--marg-title-reserve": `${margTitleReserve(fit, windowWidth)}px`,
+          "--marg-title-reserve": `${margTitleReserve(fit)}px`,
           "--marg-left": `${fit.margLeft}px`,
         } as CSSProperties
       }
