@@ -6532,7 +6532,7 @@ const REMOVE_WORKTREE_WIRE = {
   label: "Remove worktree",
   summary: "Delete this agent's working tree, after the check that git cannot do.",
   needsConfirm: true,
-  gate: "npm run worktree:check must exit 0 inside the tree first. git status is not that check.",
+  gate: "worktree:check must exit 0 for the tree first. git status is not that check.",
 } satisfies ActionWire;
 
 const KILL_SUITES_WIRE = {

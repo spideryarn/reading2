@@ -218,7 +218,9 @@ without touching the config, so nothing in the tree records that it happened. Me
 `biome check --write --formatter-enabled=true` reflowed **205 lines, of which 8 were the author's**
 — in a tree several agents have edits in flight in, which is the whole reason the formatter is off.
 There is no undo: the recovery is `git show HEAD:<file> >` the file and re-apply your own change by
-hand, which is only possible because the other 197 lines were committed. Wrap by hand instead.
+hand, which is only possible because the other 197 lines were committed. Look at
+`git diff HEAD --word-diff -- <file>` first and confirm the only content changes in the file are yours: a peer's
+uncommitted edit in it would be overwritten too. Wrap by hand instead.
 
 ## What the first run found
 

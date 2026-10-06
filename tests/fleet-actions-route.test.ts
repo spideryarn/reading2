@@ -150,8 +150,10 @@ function asPlanned(step: Step): StepRun {
  * its position: the removal plan grew a step on 2026-10-05, and every test that
  * had written "the second step is the check" was then failing the wrong gate.
  */
+const isCheckStep = (step: Step): boolean => step.argv[1] === `${PRIMARY}/scripts/worktree-check.ts`;
+
 function checkSaysNo(step: Step): StepRun {
-  return step.argv[2] === "worktree:check" ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : asPlanned(step);
+  return isCheckStep(step) ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : asPlanned(step);
 }
 
 /** The box, as a recorder. Nothing it is asked to do actually happens. */
@@ -1236,10 +1238,10 @@ describe("POST /api/actions/session — enacted", () => {
     expect(steps.map((s) => s.argv)).toEqual([
       ["git", "worktree", "list", "--porcelain", "-z"],
       ["git", "-C", WORKTREE, "rev-parse", "--abbrev-ref", "HEAD"],
-      ["npm", "run", "worktree:check"],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", WORKTREE],
       [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
     ]);
-    expect(steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, WORKTREE, WORKTREE]);
+    expect(steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, WORKTREE]);
     expect(ran).toEqual([]);
   });
 
@@ -1259,10 +1261,10 @@ describe("POST /api/actions/session — enacted", () => {
       expect(ran.map((x) => x.argv)).toEqual([
         ["git", "worktree", "list", "--porcelain", "-z"],
         ["git", "-C", tree, "rev-parse", "--abbrev-ref", "HEAD"],
-        ["npm", "run", "worktree:check"],
+        [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", tree],
         [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
       ]);
-      expect(ran.map((x) => x.cwd)).toEqual([PRIMARY, PRIMARY, tree, tree]);
+      expect(ran.map((x) => x.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, tree]);
     }
   });
 
@@ -1353,8 +1355,8 @@ describe("POST /api/actions/session — enacted", () => {
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
     // THE ASSERTION THIS WHOLE FILE IS FOR: the sweep was never invoked.
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", "npm"]);
-    expect(ran[2]?.argv[2]).toBe("worktree:check");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
     const run = r.json.run as { steps: { status: string }[]; stoppedAt: number };
     expect(run.stoppedAt).toBe(2);
     expect(run.steps.map((s) => s.status)).toEqual(["passed", "passed", "failed"]);
@@ -1366,8 +1368,8 @@ describe("POST /api/actions/session — enacted", () => {
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(200);
     expect(r.json.op).toBe("ran");
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", "npm", `${PRIMARY}/node_modules/.bin/tsx`]);
-    expect(ran[2]?.argv[2]).toBe("worktree:check");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
     expect(ran[3]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-remove.ts`);
   });
 
@@ -1424,8 +1426,8 @@ describe("POST /api/actions/session — enacted", () => {
     await call(routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: id } }));
     const again = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(again.status).toBe(200);
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", "npm", `${PRIMARY}/node_modules/.bin/tsx`]);
-    expect(ran[2]?.argv[2]).toBe("worktree:check");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
     expect(ran[3]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-remove.ts`);
   });
 
@@ -2026,7 +2028,7 @@ describe("what a refusal says about delivery, and what a page may conclude from 
     );
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", "npm"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`]);
     expect(r.json).not.toHaveProperty("delivery");
   });
 
@@ -2419,7 +2421,7 @@ describe("a refusal that carried a plan run reaches the card", () => {
     // And the heading cannot be read on its own: the step that stopped it is
     // named, with the gate's verdict, and the last is absent because it never
     // ran.
-    expect(text).toContain("worktree:check");
+    expect(text).toContain("scripts/worktree-check.ts --root");
     expect(text).toContain("STOPPED THE PLAN");
     expect(text).not.toContain("worktree-remove.ts");
   });

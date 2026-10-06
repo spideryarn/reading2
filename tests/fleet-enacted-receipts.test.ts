@@ -43,6 +43,7 @@ const WORKTREE = `${PRIMARY}/.claude/worktrees/wf-enacted`;
 const BRANCH = "worktree-wf-enacted";
 const VITEST_ARGS = `${PRIMARY}/node_modules/.bin/vitest run`;
 const OK_STEP: StepRun = { code: 0, stdout: "", stderr: "", timedOut: false, spawnError: null };
+const isCheckStep = (step: { argv: readonly string[] }): boolean => step.argv[1] === `${PRIMARY}/scripts/worktree-check.ts`;
 
 function requestId(tag: string): string {
   return `rq-${NOW.toString(36)}-${tag.padEnd(16, "0")}`;
@@ -293,7 +294,7 @@ describe("an enacted session run writes its receipt around the plan", () => {
     // The gate is found by what it runs, not by where it sits: `worktree:check` is k = 2.
     const box = fakeIo({
       step: (step) =>
-        step.argv[2] === "worktree:check"
+        isCheckStep(step)
           ? { ...OK_STEP, code: 1, stderr: "unpushed work" }
           : step.pass.kind === "stdout-has-record"
             ? { ...OK_STEP, stdout: `${step.pass.record}\0` }

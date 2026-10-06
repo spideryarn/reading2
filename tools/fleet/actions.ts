@@ -378,7 +378,7 @@ const ENACTED: readonly EnactedAction[] = [
     summary: "Delete this agent's working tree, after the check that git cannot do.",
     needsConfirm: true,
     gate:
-      "npm run worktree:check must exit 0 inside the tree first. git status is not that check: data/ and .env.local are gitignored, so a clean status reports 'safe' over the top of work nothing else has a copy of, and git worktree remove refuses over modified and untracked files but not over ignored ones.",
+      "worktree:check must exit 0 for the tree first. git status is not that check: data/ and .env.local are gitignored, so a clean status reports 'safe' over the top of work nothing else has a copy of, and git worktree remove refuses over modified and untracked files but not over ignored ones.",
   },
   {
     effect: "enacted",
@@ -716,7 +716,12 @@ function looksLikeBranch(branch: string): boolean {
  * untracked files but NOT over ignored ones, so for the case that matters most
  * nothing else is looking. It exits 0 for safe, 1 for blocked, 2 for "could not
  * even look", and all three are handled by `exit-zero`: an unknown is a
- * blocker, which is the check's own rule.
+ * blocker, which is the check's own rule. **It is the primary's copy, run with
+ * `--root <tree>`** since 2026-10-05 (qi-k2jjejb2): `npm run worktree:check`
+ * standing in the tree needed the tree's own `tsx`, and a tree under the
+ * external root that was never set up has none, so the plan stopped here and
+ * the page could not remove it. `--root` refuses anything that is not the top
+ * of one of this repository's work trees, and step 1 has already asked git.
  *
  * Step 4 is `scripts/worktree-remove.ts` standing in that directory, with no
  * branch selector: two registrations can share a branch, and a branch can move
@@ -775,9 +780,9 @@ export function planRemoveWorktree(
           pass: { kind: "stdout-has-line", line: input.branch },
         },
         {
-          argv: ["npm", "run", "worktree:check"],
-          cwd: tree,
-          why: "Is anything in here that exists nowhere else? git status cannot answer this: data/ and .env.local are gitignored, and an unknown counts as a blocker.",
+          argv: [`${primaryDir}/node_modules/.bin/tsx`, `${primaryDir}/scripts/worktree-check.ts`, "--root", tree],
+          cwd: primaryDir,
+          why: "Is anything in there that exists nowhere else? git status cannot answer this: data/ and .env.local are gitignored, and an unknown counts as a blocker. It is the primary checkout's copy of worktree:check, told which tree: one that was never set up has no dependencies to run its own.",
           pass: { kind: "exit-zero" },
         },
         {

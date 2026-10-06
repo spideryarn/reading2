@@ -1,0 +1,15 @@
+**Verdict: three findings fixed within the stage; one wider P1 remains. No commit made.** My complete changes are in the [review-only diff](/tmp/worktree-check-review-fixes.patch).
+
+1. **CR1 — P1, fixed — [worktree-check.ts:1077](/var/tmp/spideryarn-worktrees/worktree-check-takes-a-root/scripts/worktree-check.ts:1077).** No arguments bypassed every target check. Borrowing a landed sibling’s `.git` pointer made a target with an unlanded empty commit return **0 / SAFE**. Default invocation now undergoes the same validation as `--root`.
+
+2. **CR2 — P1, fixed — [worktree-port.ts:227](/var/tmp/spideryarn-worktrees/worktree-check-takes-a-root/scripts/worktree-port.ts:227).** Every `.git` directory was accepted as primary metadata. A copied administration directory with a matching `commondir` returned **0 / SAFE** despite being unregistered. `checkTarget` now requires linked metadata under the repository’s worktree registrations. The shared pointer helper remains unchanged.
+
+3. **CR3 — P2, fixed — [worktree-check.test.ts:81](/var/tmp/spideryarn-worktrees/worktree-check-takes-a-root/tests/worktree-check.test.ts:81).** The negative listener case assumed PID 1’s cwd was `/`. Here it shares the checkout’s cwd. The test now creates a child with a known outside directory.
+
+4. **CR4 — P1, wider, not fixed — [worktree-remove.ts:343](/var/tmp/spideryarn-worktrees/worktree-check-takes-a-root/scripts/worktree-remove.ts:343), [routes-actions.ts:1428](/var/tmp/spideryarn-worktrees/worktree-check-takes-a-root/tools/fleet/routes-actions.ts:1428).** The remover still inherits Git location overrides. With two clean trees A/B on the same branch, poisoned `GIT_DIR`/`GIT_WORK_TREE` let dashboard gates pass for A, then made the remover select B. A scratch dry run reproduced this; only liveness was injected as idle. This needs target binding and consistent environment handling beyond this stage.
+
+The other checks found no caller dependency broken by `gitEnv`, heavy imports, cycles, or production matcher tied to the old argv. Deploy uses its own helper. Ten pointer states produced byte-for-byte identical runner messages. I found no changed assertion unable to fail.
+
+I first ran `node --import tsx node_modules/vitest/vitest.mjs run tests/worktree-check.test.ts`; fixture setup hit sandbox `EPERM`. Using the [file-output workaround](/tmp/worktree-review-file-stdio.cjs), which preserves subprocess status and errors, both new regressions failed with actual code **0**, then passed after correction. All **893 tests across seven focused files**, typechecking, lint and cycle checks passed. Ordinary typechecking hit the sandbox’s socket restriction.
+
+Dropping stage 2 fairly addresses F4/F5’s expanded scope. I corrected the plan’s overstatement: isolated creation and branch-validation tests can run without stopping the live loop.

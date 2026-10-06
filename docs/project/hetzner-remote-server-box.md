@@ -59,7 +59,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) is deliberately off it. `SUPABASE_ACCESS_TOKEN` (can delete the production
   Supabase project) was too, until Greg put it on, 2026-10-01: *"I know there is risk, but I think
-  it'll be fine."* Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+  it'll be fine."* **Its being on the box is not permission to use it.** It went on for one run of
+  `scripts/supabase-auth-config.ts templates`, and Greg, the same day: *"You have my permission
+  this time to run the command … But going forwards, you still need to ask my permission for any
+  action that involves SUPABASE_ACCESS_TOKEN."* So every action that uses it, by any session, needs
+  a fresh yes from him for that action. Do not pass an earlier yes to a peer as though it were
+  standing, and never print the value.
+  Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
 - [`scripts/gjd-remote-upload.ts`](../../scripts/gjd-remote-upload.ts) — putting a file on the box:
   where `upload` sends it, the local paths whose basename would escape that folder, and
   `remoteWriteScript`, the one `sh` recipe behind **every** `writeRemote` — prompts and job scripts
@@ -963,8 +969,9 @@ Two things worth knowing:
   finished (`--kill` reaps only those), judging by the transcript's last message rather than tmux's
   activity time or the file's mtime, both of which move on idle sessions.
   The script is not in this repo and nothing under `infra/hetzner/` installs it: `~/gjd-remote` on
-  the box is a drop directory, so it survives a rebuild only because `/home` does. `--selftest`
-  checks its classifier.
+  the box is a drop directory, so it survives a rebuild only because `/home` does. The Overseer's
+  notes of 2026-08-31 say its source is on Greg's laptop; nobody has checked that from the box.
+  `--selftest` checks its classifier.
 - **The file being right and the keyboard being right are two facts.** A tmux server reads its
   config once, at start, and the box's server outlives provisioning by weeks — so provisioning
   rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
@@ -1197,10 +1204,16 @@ form.
   `/var/tmp/spideryarn-worktrees/` since then —
   [worktrees.md § Where a worktree's bytes live](worktrees.md#where-a-worktrees-bytes-live). Anything
   else large and disposable belongs on `/` too.
+- **Do not retry a command the classifier has just refused.** Whether it runs is not the agent's
+  call. Try a read of real reader data at most once from an unattended session. If it is refused,
+  write the one-command read-only script for Greg to run, do not plan an eval around a real shelf,
+  and say plainly in the report that the data was not looked at.
 - **`gh` is installed and not logged in.** `gh auth status` answers *"You are not logged into any
   GitHub hosts"* and `GH_TOKEN` is unset (2026-09-02, unchanged 2026-10-05). `git` push and fetch to
   `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
-  settings, Actions.
+  settings, Actions. Run `gh auth status` before promising a step that needs the API, not after
+  doing everything around it. Then do every part that does not need it, and tell Greg which one
+  piece is his; he can run `gh auth login` in the session if he would rather it were done there.
 - **The `Write` tool refuses a path outside the session's working directories.** `/tmp/foo.txt`
   comes back as *"Path is outside allowed working directories"*, and in an unattended session that
   refusal is final, because it counts as a permission request nobody can answer (2026-09-22). Bash
@@ -1209,7 +1222,9 @@ form.
 - **`npm run <script> <word>` passes the word to the script, with no `--`** (npm 11). On 2026-09-09
   `npm run fleet:restart go`, typed to find out whether npm forwards a bare argument, restarted the
   live fleet dashboard. The header of [`scripts/fleet-restart.ts`](../../scripts/fleet-restart.ts)
-  has the story, and it is why that script has no default mode.
+  has the story, and it is why that script has no default mode. Never find out how a script
+  handles its arguments by passing a word that does something: use `--help`, a nonsense word, or
+  read the script.
 - **Holding the production credential is not being allowed to read with it.** On 2026-10-03 the
   auto-mode classifier refused an unattended feedback session three reads of real shelf data: a
   read-only dump of production ("Production Reads"), `evals/shelf-topics/build-cases.ts` against

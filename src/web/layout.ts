@@ -535,6 +535,10 @@ export const MARG_IDEAL = 288; // 18rem
  * About 48 characters of note; past that a 13px line is too long to read.
  */
 export const MARG_WIDE = 384; // 24rem
+/** The window width from which the prose moves left for the chat card, and the
+    most it moves: `shiftForCard`. */
+export const PROSE_SHIFT_FROM = 1600;
+export const PROSE_SHIFT_MAX = 100;
 
 /**
  * **The column, widened into room that is already there.** `margW` is what the
@@ -559,7 +563,9 @@ function widened(margW: number, room: number): number {
  *     while the room left beside it already holds the column. Nothing is
  *     reserved then (`margReserve` 0), so turning the mode on does not move a
  *     word of the article. When that room is more than the column, the column
- *     grows into it, up to `MARG_WIDE` (`widened`).
+ *     grows into it, up to `MARG_WIDE` (`widened`). **From `PROSE_SHIFT_FROM`
+ *     the prose does move**, left by up to `PROSE_SHIFT_MAX`, for the chat
+ *     card: `shiftForCard`.
  *  2. **Then the column pushes the centred prose left**, by reserving room on
  *     `.reader`'s right: the table is centred (`.text-alone`) in a content box
  *     `avail − margReserve` wide, so its right edge sits at
@@ -592,7 +598,12 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
   }
   const margW = clamp(avail - PROSE_MIN, MARG_MIN, MARG_IDEAL);
   const proseW = Math.min(plainW, avail - margW);
-  const margReserve = Math.max(0, 2 * margW + proseW - avail);
+  const columnReserve = Math.max(0, 2 * margW + proseW - avail);
+  /* The table is centred in what the reserve leaves, so reserving twice the
+     shift moves it left by the shift. */
+  const beside = (avail - columnReserve - proseW) / 2;
+  const margReserve =
+    columnReserve + 2 * shiftForCard(windowWidth, beside, beside + columnReserve, rootFontPx);
   const margLeft = spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW;
   return {
     widths: [proseW],
@@ -607,6 +618,38 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
     margReserve,
     margLeft,
   };
+}
+
+/**
+ * **How far the prose moves left of centre on a wide window, so the chat card
+ * in the column has more room.** Greg, 2026-10-06: *"re wider margin for chat
+ * card: B give it more room on wide windows"*. B was: from about 1600px, shift
+ * the prose left a little, keeping its width, so the margin and the card get
+ * about 100px more. The prose is no longer centred there.
+ *
+ * `left` and `right` are the page either side of the prose before the shift.
+ * Three limits: `PROSE_SHIFT_MAX`; what the card can use, since it stops at
+ * `CHAT_CARD_MAX` (so at 1920px the shift is 54px, and from about 2030px the
+ * prose is centred again); and half of `left`, which only binds at a large
+ * root and keeps the prose clear of the rail.
+ *
+ * **A step at `PROSE_SHIFT_FROM`**: the prose jumps 100px as a window is
+ * dragged across it. Below it nothing changes, which is what was asked.
+ *
+ * Only with no band (`fitMargin`). Beside a band the prose is not centred and
+ * the band has already taken the page left of it.
+ */
+function shiftForCard(windowWidth: number, left: number, right: number, rootFontPx: number): number {
+  if (windowWidth < PROSE_SHIFT_FROM) return 0;
+  const cardFull = CHAT_CARD_MAX + MARG_GAP_REM * rootFontPx + CHAT_DOCK_GUTTER;
+  return Math.max(0, Math.min(PROSE_SHIFT_MAX, cardFull - right, left / 2));
+}
+
+/** Keep the title over the shifted prose on wide windows only. The older
+ * title alignment below the threshold must stay unchanged. Use the fitted
+ * page width: a media query includes the scrollbar and cannot see the notch. */
+export function margTitleReserve(fit: Fit, windowWidth: number): number {
+  return fit.alone && windowWidth >= PROSE_SHIFT_FROM ? fit.margReserve : 0;
 }
 
 /**

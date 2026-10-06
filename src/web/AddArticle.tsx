@@ -27,7 +27,7 @@
  * See docs/project/ingest-queue.md.
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Circle, Link2, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import {
@@ -35,18 +35,25 @@ import {
   displayJob,
   driverStalled,
   elapsedLabel,
+  isImportJob,
   KEEP_A_TAB_OPEN,
 } from "../job-state.js";
-import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
+import {
+  ADDING_SENDS_TEXT_AWAY,
+  IMPORT_LINK_COPY_FAILED,
+  IMPORT_LINK_COPY_TIP,
+} from "../messages.js";
 import { mintId } from "../ids.js";
 import { isWebUrl } from "../urls.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import { importProblemReport } from "./import-report.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { exactly, relativeAgo } from "./relative-time.js";
-import { addHref, navigate } from "./router.js";
+import { addHref, navigate, readHref } from "./router.js";
 import { isMinimalJob } from "./read-this.js";
+import { TipNote, Tooltip } from "./Tooltip.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
+import { useCopy } from "./useCopy.js";
 import { useNow } from "./useNow.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
@@ -592,12 +599,54 @@ export function JobCard({
     if (replacement) onRetried?.(replacement);
   };
 
+  /**
+   * **The address this import's article will have, before it has one to
+   * open.** Greg, 2026-10-05 (spya-h7skj5): *"While I'm importing a paper, I
+   * don't know what the permalink will be, so I have to wait for it to be
+   * finished to be able to bookmark or send it to someone."* The slug is
+   * minted when the job is queued, so the address is known from the first
+   * poll. Plan 261005l § 1.
+   *
+   * - **An import job only** (`isImportJob`): a mode job is about an article
+   *   that already has its address everywhere.
+   * - **Not on a failed or stopped one**, whose address leads nowhere.
+   * - **`job.slug`, read each render**, so a Retry that comes back under
+   *   another slug (`slugForRetry`, src/jobs.ts) copies the new one.
+   *
+   * `useCopy` owns the write. A tick goes after 1.5 seconds; a failure stays
+   * until a later press settles, because it shows the address to copy by
+   * hand, and a reader is part-way through doing that (`CopyLink`,
+   * AccessSharing.tsx, has the same two timings for the same reason).
+   */
+  const offersLink = isImportJob(job) && job.status !== "error" && job.status !== "cancelled";
+  /* A function, so `location` is read at the press and never during a render:
+     the card is also drawn to a string in node (tests/job-failure.test.ts). */
+  const link = (): string => `${location.origin}${readHref(job.slug)}`;
+  const { state: copied, copy } = useCopy({ copiedMs: 1500, failedMs: null });
+
   return (
     <div className="tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3">
       <div className="tw:mb-2 tw:flex tw:items-baseline tw:gap-2">
         <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:text-foreground">
           {job.title ?? job.slug}
         </span>
+        {offersLink && (
+          <Tooltip placement="bottom" content={<TipNote>{IMPORT_LINK_COPY_TIP}</TipNote>}>
+            {/* An icon until it has something to say. The name is on the
+                button for a screen reader, which the tip does not reach. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size={copied === "copied" ? "sm" : "icon-sm"}
+              data-copy-import-link=""
+              aria-label={copied === "copied" ? undefined : "Copy the link this article will have"}
+              onClick={() => copy(link())}
+            >
+              {copied === "copied" ? <Check size={13} /> : <Link2 size={13} />}
+              {copied === "copied" && "Copied"}
+            </Button>
+          </Tooltip>
+        )}
         {busy ? (
           <Button
             type="button"
@@ -680,6 +729,31 @@ export function JobCard({
       </div>
 
       <SourceLine job={job} now={now} />
+
+      {/* Always mounted, so assistive technology hears it change. A failure
+          is drawn, with the address: this card has no box holding the link to
+          select instead. */}
+      {offersLink && (
+        <p
+          data-copy-status=""
+          aria-live="polite"
+          className={
+            copied === "failed"
+              ? "tw:-mt-1 tw:mb-2 tw:text-xs tw:text-destructive"
+              : "tw:sr-only"
+          }
+        >
+          {copied === "failed" ? (
+            <>
+              {IMPORT_LINK_COPY_FAILED} <span className="tw:break-all tw:select-all">{link()}</span>
+            </>
+          ) : copied === "copied" ? (
+            "Link copied."
+          ) : (
+            ""
+          )}
+        </p>
+      )}
 
       <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0">
         {job.steps.map((step) => (

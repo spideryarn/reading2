@@ -70,7 +70,7 @@ export { ArticleNotFound };
 import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
-import { isThreadKind } from "../types.js";
+import { storedThreadKind } from "../types.js";
 import { originFromColumns } from "../thread-origin.js";
 
 const logger = log("store");
@@ -655,8 +655,15 @@ export async function exportArticle(
         /* The stored kind whenever it is one we know — Candidates and Tutorial
            were exported as chats until 2026-10-02, because this was a
            Remember-or-chat ternary. GPT Sol's plan review of 261002i. Explore
-           (2026-10-03) rides through `isThreadKind` with nothing to do here. */
-        kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
+           (2026-10-03) rode through `isThreadKind` with nothing to do here.
+
+           **A kind this code does not know fails the export** (2026-10-06); it
+           was written as `"chat"` until then, which is a rollback file that
+           restores a Recall conversation as a chat. src/types.ts
+           § storedThreadKind, and
+           docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+           stage 0. */
+        kind: storedThreadKind(thread.kind),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,

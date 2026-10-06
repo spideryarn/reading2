@@ -58,6 +58,13 @@ landed would still make sense.
 asked. In a shared tree, name your files on both commands —
 [git-commit-changes.md](git-commit-changes.md).
 
+**Before starting a slice a plan doc has queued for anyone, say so.** A queue that several sessions
+read is an invitation to all of them at once: on 2026-09-07 two sessions built the same slice from
+the same plan eleven minutes apart, and the merge kept both. Send one message to the live peers
+asking whether anyone is on it, and write *"Claimed, <date>, by <session>"* into the plan. When a
+peer asks you first, answer on timing, not ownership: a slice you reserved and are not working on
+is worth less than the same work done tonight by someone who is awake.
+
 ## GPT Sol
 
 - **At the very beginning**, on the plan itself, while the shape is still soft.
@@ -111,7 +118,8 @@ plan review stays read-only (`--sandbox review`) — there is nothing to fix but
 
 ## Delegate
 
-The orchestrator should do **little of the implementation**. Always the latest version of each
+The orchestrator should do **little of the implementation**. Delegate to ordinary subagents, not a
+multi-agent workflow, unless Greg asks for a workflow (2026-10-06). Always the latest version of each
 family — never pin a version number here:
 
 - **Opus** — the main work, and anything advanced on the Claude side, arbitration included.
@@ -137,6 +145,26 @@ reviews were right about, and the commits.
 A subagent starts with nothing but your prompt. Name the files, say what the stage excludes as well
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
+
+**Grep every load-bearing claim in a brief before you send it.** The builder's only source for the
+reasoning is the brief, so a fact asserted there comes back quoted in a source comment, a doc
+paragraph and a test header at once, and each copy then reads as separately established. Three
+false ones in one plan in September 2026 each cost a review cycle: a named caller, a "nothing loads
+this file", a "this file calls that function". The same goes for a fact you took from a review
+finding or from another session's message. Give the builder the grep rather than the conclusion,
+and **end the brief with *"say which claims in this brief turned out to be false"*** — on
+2026-09-08 two wrong instructions stayed out of the tree because both implementers reported the
+problem instead of complying. When a claim does turn out wrong, find every copy of it, as you would
+for a rename.
+
+**A brief that adds a refusal carries its own retreat.** For a `throw`, a 4xx or any hard refusal on
+a path a reader can reach, write two things before the work starts: the fallback, in one sentence,
+as a decision already taken (*"if any ordinary request reaches the throw, do not keep it: log a
+warning and return null"*), and an instruction to test the mechanism the "this cannot happen"
+argument rests on, naming it. On 2026-09-07 the builder found the stated mechanism was the wrong
+one, the reviewer found the replacement argument was false too, and because the fallback was
+already written a P0 was a one-line decision. When the fallback fires, the plan says *documented*,
+not *closed*.
 
 **Parallel subagents share one scratchpad.** The directory is per *session*, and subagents inherit
 the parent's path, so "session-specific, isolated" is true of the session and false of the agents

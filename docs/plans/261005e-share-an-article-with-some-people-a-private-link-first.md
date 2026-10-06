@@ -1,11 +1,11 @@
 # Share an article with some people: a private link first
 
-**Status as of 2026-10-05: stage 1 is built and on `dev`, not deployed. Stages 2 and 3 are written
+**Status as of 2026-10-06: stage 1 is built and on `dev`, not deployed. Stages 2 and 3 are written
 up below and not built.** Evidence: `src/store/link-shared-slug.ts`, `src/store/pg-share-link.ts`,
 `src/web/PrivateLink.tsx` and `drizzle/20261005184047_article_share_link.sql` exist. GPT Sol
 reviewed the plan (*sound with the listed changes*, § Review) and then the code (§ What was built,
-and its review). **Not done: the full suite and a real browser**, both for reasons of the box on
-the day, said in § What was built.
+and its review). A real browser was driven on 2026-10-06 and it passed. **Not done: the full
+suite**, for reasons of the box on the day, said in § What was built.
 Reports `spya-hwdefp` and `spya-v322fd`, both Greg's (admin, proved by `feedback-reporter.ts`).
 Queue item `qi-98933vdd`.
 
@@ -309,10 +309,27 @@ only one were left standing.
 the database ones included, run one batch at a time. Mutations of the finished server code (the
 predicate ignoring the key, the export keeping the token, feedback keeping the key) turned 17
 tests red. **The full suite was not run**: the box was overloaded and the Overseer barred full
-suites that day. **A real browser was not driven**: the shared local database refused every
-migration over another session's renumbered one, so no dev server could serve the new columns.
-The browser check, as owner and as a signed-out visitor with the link and after turning it off, is
-still owed before this is deployed.
+suites that day.
+
+**A real browser, 2026-10-06** (Playwright on the box, a Sonnet subagent, article
+`planimeter-spya-yh4khx` on the local database). As the owner: the card off, the confirmation with
+its tick-box, the card on with the same link after a reload, the masthead mark and the shelf badge
+saying *Private link*, and no sideways scroll at 390 px. As a signed-out visitor with the link: the
+text, the notice saying it is a private link, 40 picture requests each carrying the key and each a 200, only
+GETs, no `Authorization`, the key kept across a mode change and the details page, and the article
+absent from `/api/public/library`. After *Turn off*: the old link shows what an article that does
+not exist shows, and the API and a picture address answer 404. A second link had a different key
+and the first stayed dead. The article was left private with no link.
+
+Two things that check could not see or did not like:
+
+- **The HTML page's own 404 for a wrong or missing key** cannot be seen on a dev server, where
+  Vite answers every path with the app. `tests/public-read-page.test.ts` and
+  `tests/share-link-pg.test.ts` hold it; the first deploy is where to look at it for real.
+- **While the details page is still loading, both sharing controls show the sentence for a failed
+  inventory** (*"We could not work out what a shared link would carry…"*) for a few seconds. The
+  public control did this before this work, and the private one copied it, so it now shows twice.
+  Not fixed here: telling *still loading* from *failed* is a change to the older control too.
 
 ## Stage 2: signed-in people with the link can comment and highlight (written up, not built)
 

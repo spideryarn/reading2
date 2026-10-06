@@ -24,6 +24,10 @@ out for yourself. A plan and its review artefacts share one letter, so they sort
 - **A status line has to rest on something.** *Decided, not built — evidence: no hit for
   `realtime_sessions` outside prose.* A plan that says "done" with nothing behind it is prose, and
   prose cannot fail ([written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md)).
+- **A survey of the tree carries the sha it was taken at, in its heading.** On 2026-09-08 a 29-row
+  census took ninety minutes to land, `dev` moved 52 commits meanwhile, and a peer had shipped the
+  stage one of its main findings called missing. Before landing one, re-check the rows the next
+  stages depend on, and say that the others were not re-checked.
 - **A plan is a record, not the documentation.** When a decision in it becomes how the thing works,
   write that into the `docs/project/` doc that owns it. The plan keeps the history; the doc keeps the
   fact.

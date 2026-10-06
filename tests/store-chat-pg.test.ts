@@ -669,9 +669,10 @@ describe("the Postgres chat store", () => {
 
   it("keeps a thread's kind across a second turn that does not mention it", async () => {
     /* A client continuing a conversation sends no kind — the thread already has
-       one. This checks the **column**, not the loaded object, because
-       `threadsFor` normalises anything unexpected to `"chat"` and would hide a
-       write that had blanked it.
+       one. This checks the **column**, not the loaded object, so the claim is
+       about what was written. (`threadsFor` used to turn anything unexpected
+       into `"chat"` and would have hidden a blanked write; since 2026-10-06 it
+       throws instead, tests/unknown-stored-thread-kind.test.ts.)
 
        Be exact about what this does NOT catch, because the first version of
        this comment claimed otherwise and was wrong: naming `kind` in
