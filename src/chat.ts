@@ -36,7 +36,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isSingleThreadKind, isThreadKind, sameOrigin } from "./types.js";
+import { isSingleThreadKind, isThreadKind, sameAnchor, sameOrigin } from "./types.js";
 import { titleFrom, titleFromOrigin } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
@@ -182,14 +182,15 @@ export interface Turn {
    * The passage this conversation is about — **only meaningful when this turn
    * creates the thread**, which is the only branch `withTurn` applies it on.
    *
-   * The route rejects an anchor sent for a thread that already exists rather
-   * than letting it fall through and be ignored here.
+   * A different anchor sent for a thread that already exists is refused, not
+   * ignored: by the route first, and by `withTurn` again inside the store's
+   * transaction. The identical one passes.
    */
   anchor?: ChatAnchor;
   /**
    * The item in another mode this conversation was started from — **only
    * meaningful when this turn creates the thread**, like `anchor` above, and
-   * the route refuses a different one sent for a thread that already exists.
+   * refused in the same two places when it differs from the stored one.
    * See `ThreadOrigin` in src/types.ts.
    */
   origin?: ThreadOrigin;
@@ -212,7 +213,8 @@ export interface Turn {
   /**
    * The reader pressed the "?" beside a paragraph rather than typing this
    * question — **only meaningful when this turn creates the thread**, in the
-   * sense that the "?" only ever sends a first question. But unlike `anchor` and
+   * sense that the "?" only ever sends a first question, and `withTurn` refuses
+   * it on a thread that exists (`ChatTurnRefused`, a 400). But unlike `anchor` and
    * `kind` above, it does **not** belong to the thread: it is written onto the
    * **user message** this turn creates, so that a retry or an edit of that
    * question inherits it without anybody arranging it.
@@ -286,6 +288,28 @@ export function withTurn(
   if (existing && origin && !(existing.origin && sameOrigin(existing.origin, origin))) {
     throw new ChatConflict("That conversation was not started from that item");
   }
+  /* **A thread is anchored once**, and **a "?" press creates a conversation**:
+     the route's other two rules about a turn that meets an existing thread,
+     decided again here for the reason just above. Until 2026-10-07 they were
+     route-only, so a second server's first send was appended under the first
+     one's anchor, or stored a press on a follow-up and had it answered with
+     the teaching prompt. Seventh sweep, SV3 = SVO4; the class is
+     docs/postmortems/261005h-a-per-process-origin-check-leaves-the-transaction-accepting-another-origin.md.
+
+     The route's own predicate and sentences (`sameAnchor`, src/types.ts), so
+     the two cannot disagree about a request: an identical anchor resent
+     passes, and a follow-up that offers none is not asked. Help is a 400 as it
+     is there (`ChatTurnRefused`), the anchor a 409.
+
+     `existing` can be a thread the turn did not name (`targetOf`), but only
+     for a single-thread kind, and the route refuses an anchor or a help flag
+     with any kind but chat before it reads anything. */
+  if (existing && anchor && !sameAnchor(existing.anchor, anchor)) {
+    throw new ChatConflict(ANCHORED_ELSEWHERE);
+  }
+  if (existing && help) {
+    throw new ChatTurnRefused(HELP_NOT_FIRST);
+  }
   const user: ChatMessage = {
     id: mintUniqueId(ids),
     role: "user",
@@ -333,8 +357,9 @@ export function withTurn(
        An anchor arriving for a thread that already exists is not silently
        dropped here — that would append a question about passage B to a thread
        the database says is about passage A, with nothing anywhere disagreeing.
-       The route refuses it before we are reached. See `answerChat` in
-       src/routes.ts and docs/plans/260826ab-chat-as-gateway.md § Set once.
+       A different one was refused above, and by the route before that. See
+       `streamChat` in src/routes.ts and
+       docs/plans/260826ab-chat-as-gateway.md § Set once.
 
        Conditional spread, never `anchor: undefined`: `exactOptionalPropertyTypes`
        is on and the two stores are compared field for field, where an explicit
@@ -586,6 +611,37 @@ export class ChatConflict extends Error {
     this.name = "ChatConflict";
   }
 }
+
+/**
+ * A new turn whose body claims something the stored thread rules out, where
+ * the claim is **a client's bug rather than a stale view**: a 400, where
+ * `ChatConflict` is a 409.
+ *
+ * One rule throws it today: `help: true` on a thread that already exists
+ * (`withTurn`). The route answers that with a 400 and its own sentence, on the
+ * grounds that the request would not have been right against any conversation,
+ * and the refusal inside the store's transaction has to arrive as the same
+ * status. So the status rides on the error, which is what `serveApi` reads
+ * first and what lets it through `guardDbStore` (`mayPassThrough`, src/store/db-errors.ts:
+ * anything with a numeric `status`). A `ChatConflict` here would have turned
+ * the same refusal into a 409 whenever the store gave it instead of the route.
+ */
+export class ChatTurnRefused extends Error {
+  readonly status = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatTurnRefused";
+  }
+}
+
+/**
+ * The two sentences the route and `withTurn` both give, so the same refusal
+ * reads the same whichever of them gets there first. Fixed strings: neither
+ * carries a word of the reader's.
+ */
+export const ANCHORED_ELSEWHERE = "That conversation is already about a different passage";
+export const HELP_NOT_FIRST =
+  'A "?" press starts a conversation; a later question in one is not one';
 
 /** What both chat sweeps write. One constant, so they cannot drift. */
 export const CHAT_SWEPT = "The server stopped before this answer finished.";

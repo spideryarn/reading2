@@ -81,7 +81,15 @@ import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, isSpokenKind, requireTail, withEdit, withRetry } from "./chat.js";
+import {
+  ANCHORED_ELSEWHERE,
+  ChatConflict,
+  HELP_NOT_FIRST,
+  isSpokenKind,
+  requireTail,
+  withEdit,
+  withRetry,
+} from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -448,6 +456,7 @@ import {
   MAX_ORIGIN_NAME_CHARS,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
+  sameAnchor,
   sameOrigin,
   THREAD_KINDS,
 } from "./types.js";
@@ -3116,7 +3125,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      retry or an edit may not carry one; only a chat has one; and the shape is
      checked here, before anything is read or written. That the block is this
      article's is checked after `loadArticle`, and that an existing thread has
-     the same origin is checked under `inTurnOrder`.
+     the same origin is checked under `inTurnOrder` and again by `withTurn`.
      docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1. */
   if (origin !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An origin can only be sent with a new question");
@@ -3144,9 +3153,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      All three are checked here, before `loadArticle` and before anything is
      written, so a bad body is an ordinary JSON 400 rather than an `error` frame
      inside a 200 stream — and the first of them is stated a second time under
-     `inTurnOrder`, where the read is safe from a thread appearing between the
-     look and the write. `help === true` is the only truthy value that can reach
-     here.
+     `inTurnOrder`, and decided by `withTurn` in the store's transaction, which
+     is the only one of the three a thread cannot appear in front of.
+     `help === true` is the only truthy value that can reach here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
      src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
@@ -3160,13 +3169,13 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `storedKind` is defined for exactly the threads that exist, and it was
        loaded a few dozen lines up for the character cap, so this costs nothing.
 
-       **Checked again under `inTurnOrder` below**, and that is not belt and
+       **Checked again under `inTurnOrder` below, and a third time by
+       `withTurn` inside the store's transaction**, and that is not belt and
        braces: this read is outside the lock, so a thread can be created between
-       it and the write. Here for the sentence and the fast refusal; there for
-       the guarantee — the division `withTurn`'s own kind check already
-       describes. */
+       it and the write, and the lock is this process's alone. Here for the
+       sentence and the fast refusal; `withTurn` for the guarantee. */
     if (storedKind !== undefined) {
-      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+      throw httpError(400, HELP_NOT_FIRST);
     }
     /* Absent means chat — the default `withTurn` applies to a thread it is
        creating — so the effective kind is what is checked, not the field. And
@@ -3250,81 +3259,75 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          src/chat.ts. */
       await settleThread(slug, threadId);
     }
-    /* **A thread is anchored once.** Reached only for an ordinary send, and
-       only when one was offered — `withTurn` applies an anchor solely on the
-       branch that builds a new thread, so without this the second question of
-       an anchored conversation could carry a different passage and be accepted
-       in silence. What the reader would then have is a conversation the
-       database says is about passage A holding a question about passage B, with
-       nothing anywhere disagreeing.
+    /* **Four rules about a send that meets a thread which already exists**,
+       read off one look at it. Each is reached only for an ordinary send (a
+       retry or an edit was refused the field far above, before anything was
+       read), and only when the send carries the field, so a plain follow-up
+       reads nothing here.
 
-       Read under `inTurnOrder`, so the thread cannot be created between the
-       look and the write.
+       **These are the sentence and the fast refusal, not the guarantee.** The
+       look is under `inTurnOrder`, which orders this process's requests for
+       one conversation and nothing else. Another server can create the thread
+       after it, so `withTurn` decides all four again from the snapshot
+       `chatStore.begin` reads under the article's row lock, before it mints
+       either message. Kind has been there since Learn mode, origin since
+       2026-10-05, anchor and help since 2026-10-07 (seventh sweep, SV3). The
+       same predicates and the same statuses, so which of the two answers is
+       not something a client can tell.
 
-       An identical anchor is allowed through, which is what makes a retried
-       send — the same request arriving twice — harmless rather than a 409 the
-       reader has to understand. */
-    if (wanted) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && !sameAnchor(existing.anchor, wanted)) {
-        throw httpError(409, "That conversation is already about a different passage");
+       One read, where until 2026-10-07 each rule made its own (SVO9): four
+       loads of every conversation of the article for a send carrying all four.
+       Nothing is written between them, and what a single look can miss is
+       exactly what `withTurn` is there for. */
+    const existing =
+      wanted || wantedOrigin || beginKind || help === true
+        ? (await chatStore.load(slug)).find((t) => t.id === threadId)
+        : undefined;
+    if (existing) {
+      /* **A thread is anchored once.** `withTurn` applies an anchor solely on
+         the branch that builds a new thread, so without a refusal the second
+         question of an anchored conversation could carry a different passage
+         and be accepted in silence: a conversation the database says is about
+         passage A holding a question about passage B, with nothing anywhere
+         disagreeing.
+
+         An identical anchor is allowed through, which is what makes a retried
+         send (the same request arriving twice) harmless rather than a 409 the
+         reader has to understand. */
+      if (wanted && !sameAnchor(existing.anchor, wanted)) {
+        throw httpError(409, ANCHORED_ELSEWHERE);
       }
-    }
-    /* **A thread's origin is set once**: the anchor's rule just above, and
-       read under the same lock. A thread that exists and was started from
-       somewhere else, or from nowhere, is refused; the identical origin
-       resent is let through, so a repeated send is harmless. */
-    if (wantedOrigin) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
+      /* **A thread's origin is set once**: the anchor's rule. A thread that
+         was started from somewhere else, or from nowhere, is refused; the
+         identical origin resent is let through. */
+      if (wantedOrigin && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
         throw httpError(409, "That conversation was not started from that item");
       }
-    }
-    /* **A thread is one kind for life**, and this is the same shape as the
-       anchor check above it: read under `inTurnOrder` so the thread cannot be
-       created between the look and the write, and an *identical* kind passes so
-       that a retried send is harmless rather than a 409 nobody can act on.
+      /* **A thread is one kind for life**, and an *identical* kind passes for
+         the reason an identical anchor does.
 
-       Reached only on an ordinary send — a retry or an edit was refused a
-       `kind` far above, before anything was read. That ordering is the point:
-       both of those call `settleThread`, which stops a live answer in this
-       thread, and a request rejected *after* that has aborted the answer
-       another tab's reader was watching and told them they stopped it. That
-       exact bug has been fixed here once already (docs/plans/260826a-chat-mode.md).
-
-       `withTurn` refuses it again inside the store's transaction, because
-       `inTurnOrder` is per-process and this one is not. Here for the status
-       code and the sentence; there for the guarantee. */
-    if (beginKind) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && existing.kind !== beginKind) {
+         That a retry or an edit never gets here is the point of refusing
+         their `kind` so early: both call `settleThread`, which stops a live
+         answer in this thread, and a request rejected *after* that has
+         aborted the answer another tab's reader was watching and told them
+         they stopped it (docs/plans/260826a-chat-mode.md; and again for a
+         stale tail, above). */
+      if (beginKind && existing.kind !== beginKind) {
         throw httpError(409, "That conversation is already a different kind");
       }
-    }
-    /* **And a "?" press CREATES a conversation**, read again under the lock.
+      /* **And a "?" press CREATES a conversation.** The same rule refused
+         this request far above, before `loadArticle`, off a load taken outside
+         the turn order; this one sees a thread this process created since.
 
-       The same rule refused this request far above, before `loadArticle`, off a
-       load taken outside `inTurnOrder`. That one is the sentence a reader's
-       client gets and the reason nothing was loaded for a request that was
-       never going to run; this one is the guarantee, and it is here for the
-       reason the two checks above it give — the thread cannot be created
-       between the look and the write. Same division as `kind`, whose store-side
-       twin is inside `withTurn`'s transaction.
+         A later question in an existing conversation is the reader typing. A
+         flag saying otherwise puts a press in the database that nobody made
+         **and** answers an ordinary follow-up with the teaching prompt.
 
-       A later question in an existing conversation is the reader typing. A flag
-       saying otherwise puts a press in the database that nobody made **and**
-       answers an ordinary follow-up with the teaching prompt.
-
-       400 rather than 409, unlike its two neighbours: they describe a request
-       that would have been fine against a different conversation, and this one
-       is a client sending a field it has no business sending at all. */
-    if (help === true) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing) {
-        throw httpError(
-          400,
-          'A "?" press starts a conversation; a later question in one is not one',
-        );
+         400 rather than 409, unlike its neighbours: they describe a request
+         that would have been fine against a different conversation, and this
+         one is a client sending a field it has no business sending at all. */
+      if (help === true) {
+        throw httpError(400, HELP_NOT_FIRST);
       }
     }
     return wantsRetry
@@ -4732,23 +4735,6 @@ function parseLens(lens: unknown): string {
     throw httpError(413, `An origin's lens may be at most ${MAX_LENS_CHARS} characters`);
   }
   return words;
-}
-
-/**
- * Are these the same anchor?
- *
- * A thread with no anchor is **not** the same as one with any anchor: a send
- * offering a passage for an unanchored conversation is still trying to change
- * what that conversation is about, and it is refused. `undefined` on both sides
- * cannot reach here — the caller only asks when it has one.
- */
-function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
-  if (!stored) return false;
-  if (stored.blockId !== wanted.blockId) return false;
-  const a = "quote" in stored ? stored : null;
-  const b = "quote" in wanted ? wanted : null;
-  if (!a || !b) return a === b; // both block-only, or one of each
-  return a.quote === b.quote && a.start === b.start;
 }
 
 /**

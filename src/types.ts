@@ -4215,6 +4215,25 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
+ * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
+ * inside the store's transaction both ask, so there is one answer. It lived in
+ * src/routes.ts, private, until 2026-10-07.
+ *
+ * A thread with no anchor is **not** the same as one with any anchor: a send
+ * offering a passage for an unanchored conversation is still trying to change
+ * what that conversation is about, and it is refused. `undefined` on both sides
+ * cannot reach here: a caller only asks when it has one to offer.
+ */
+export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
+  if (!stored) return false;
+  if (stored.blockId !== wanted.blockId) return false;
+  const a = "quote" in stored ? stored : null;
+  const b = "quote" in wanted ? wanted : null;
+  if (!a || !b) return a === b; // both block-only, or one of each
+  return a.quote === b.quote && a.start === b.start;
+}
+
+/**
  * Are these the same origin? What the route's 409 and the caller's way back
  * both ask, so there is one answer. Exact: a claim reworded by a new search is
  * a different claim. **A claim and a lens are never the same**, whatever their

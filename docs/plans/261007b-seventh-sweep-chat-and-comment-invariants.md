@@ -76,3 +76,59 @@ an edit that sends no tail is not guarded.
 
 The control (*an edit that names the real tail still stops the live answer and replaces it*) was
 green before and after, as it should be.
+
+### B. SV3 = SVO4, and SVO9
+
+Reproduced, pure and through Postgres. Red, before the fix (12 tests; the accepting cases and the
+ordinary requests were green):
+
+```text
+tests/chat-anchor-transaction.test.ts
+× refuses another block                  (and five more shapes of "a different anchor")
+× refuses a help flag when another process has created the thread, as a 400
+tests/chat-anchor-route.test.ts, through chatStore.begin and Postgres
+× a different anchor is a ChatConflict, and nothing is appended
+AssertionError: expected 'accepted' to be an instance of ChatConflict
+× a help flag on a thread that exists is a 400, and no press is recorded
+AssertionError: expected 'accepted' not to be 'accepted'
+```
+
+Fixed in `src/chat.ts` § `withTurn`, beside the origin check and before either message is minted.
+
+- `sameAnchor` moved from `src/routes.ts` to `src/types.ts`, beside `sameOrigin`. One predicate,
+  imported by the route and by `withTurn`.
+- **Statuses, checked rather than assumed:** the route's anchor refusal is a 409 and its help
+  refusal a 400, as the brief said. The anchor refusal in `withTurn` is a `ChatConflict` (409).
+  Help could not be one, so there is a small new class, `ChatTurnRefused`, carrying `status = 400`;
+  the numeric status is what `serveApi` reads first and what `guardDbStore` lets through. The two
+  sentences are constants in `chat.ts` (`ANCHORED_ELSEWHERE`, `HELP_NOT_FIRST`) used by both
+  layers. No new validator.
+- **Two existing tests asserted the defect.** `tests/chat-anchor.test.ts` § *does not re-anchor a
+  thread that already exists* and *does not grow an anchor on a thread that never had one* called
+  `withTurn` with a different anchor and expected the question to be appended with the anchor
+  ignored. They now expect the refusal, and still assert what they were for: the stored anchor does
+  not move. Neither investigation mentioned them.
+
+**The retreat rule: not triggered.** The argument that an ordinary request cannot reach either
+refusal rests on three things, each read or tested:
+
+1. *The route and `withTurn` ask the same question of the same thread.* Same predicate, same
+   loader. `withTurn` can pick a thread the request did not name (`targetOf`), but only for a
+   single-thread kind, and the route refuses an anchor or a help flag with any kind but chat before
+   it reads anything.
+2. *What the client sends.* An anchor and `help` leave the browser from one place,
+   `src/web/ChatDialog.tsx` § `ask`, which calls `send(null, …)` and so mints a new thread id every
+   time. A follow-up (`onSend`, `send(thread.id, question, at)`) carries neither. Nothing resends a
+   chat POST of its own accord; `src/web/lib/api.ts` repeats one only after a 401, which never
+   reached the handler.
+3. *Tested through the route and Postgres:* first send, the same send again, a follow-up, a "?"
+   press and its follow-up all begin; a second "?" press on the same thread is the 400 it already
+   was (`tests/chat-anchor-route.test.ts` § *the requests one tab makes*).
+
+**SVO9, built.** Characterised first by counting `chatStore.load` calls up to `begin`: 1 for a plain
+send, 4 for anchor and origin, 5 with a help flag as well (the Sol review's numbers; the umbrella's
+"up to four" is the Opus document's "up to five" less the read outside the lock). The four checks
+now share one read, taken only when the send carries one of the four fields: 1, 2 and 2. It is safe
+because nothing is written between the four and, since this commit, `withTurn` decides all four
+again in the transaction, so a single look loses nothing a second look was guarding. The earlier
+read for the thread's kind stays where it is.
