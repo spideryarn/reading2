@@ -323,7 +323,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         if (!current()) return;
         const loaded = res.status === 404 ? null : await readJson<CitationsResponse | null>(res);
         if (!current()) return;
-        if (!loaded) {
+        if (loaded === null) {
           /* The ordinary case, not a fault: nobody has asked for this
              article's citations yet, and the panel's button is for that. */
           setCitations(null);
@@ -332,6 +332,11 @@ export function useCitationsRead(slug: string): CitationsRead {
           setError(null);
           setStatus("none");
           return;
+        }
+        /* Only an explicit null means none yet. Validate before publishing so
+           a broken revalidation leaves the list already on screen intact. */
+        if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
+          throw new ReaderFacingError("The server's reply did not contain a citations list. Try again.");
         }
         setCitations(loaded.citations);
         setStale(loaded.stale);

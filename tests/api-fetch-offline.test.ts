@@ -21,7 +21,7 @@
  * order of operations in `apiFetch`, not IndexedDB and not the SDK.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LibraryResponse } from "../src/types.js";
+import { NONE_YET_AS_NULL_HEADER, type LibraryResponse } from "../src/types.js";
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
@@ -391,6 +391,29 @@ describe("what gets written", () => {
       await settle();
       expect(writeCache).not.toHaveBeenCalled();
       expect(invalidateCache).not.toHaveBeenCalled();
+    });
+
+    it(`replays the earlier real copy of ${url} to an old tab after an opted-in null`, async () => {
+      const body = { artefact: "earlier real copy" };
+      readCache.mockResolvedValue({ body, savedAt: 123 });
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response("null", {
+        status: 200, headers: { "content-type": "application/json" },
+      })));
+      const none = await apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } });
+      expect(await none.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      const copy = await apiFetch(url);
+      expect(copy.headers.get("x-spideryarn-offline")).toBe("copy");
+      expect(await copy.json()).toEqual(body);
+    });
+
+    it(`${url} still fails offline when no copy was saved`, async () => {
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      await expect(apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } })).rejects.toThrow("offline");
     });
   }
 

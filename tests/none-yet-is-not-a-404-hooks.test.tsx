@@ -121,3 +121,53 @@ describe.each(ANSWERS)("%s is none yet", (_name, reply) => {
     expect(seen).toBeNull();
   });
 });
+
+const READERS = [
+  ["quiz", useQuizRead, { quiz: { batchId: "batch", slug: SLUG, questions: [] }, stale: false, outdated: false, profileChanged: false, attempts: [] }],
+  ["citations", useCitationsRead, { citations: { slug: SLUG, citations: [] }, stale: false, outdated: false }],
+] as const;
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+describe.each(READERS)("%s reads distinguish absence from a broken reply", (kind, use, body) => {
+  const artefact = (body as Record<string, unknown>)[kind];
+  it("accepts a real response", async () => {
+    answer = () => json(body);
+    await mount(use);
+    expect(seen).toMatchObject({ status: "ready", error: null, [kind]: artefact });
+  });
+
+  for (const malformed of [false, 0, "", {}, { [kind]: null }]) {
+    it(`reports ${JSON.stringify(malformed)} as a failed opening read`, async () => {
+      answer = () => json(malformed);
+      await mount(use);
+      expect(seen).toMatchObject({ status: "error", [kind]: null });
+      expect((seen as { error: unknown }).error).toBeTruthy();
+    });
+
+    it(`keeps a real response when revalidation returns ${JSON.stringify(malformed)}`, async () => {
+      answer = () => json(body);
+      await mount(use);
+      answer = () => json(malformed);
+      await act(async () => (seen as { refresh(): Promise<void> }).refresh());
+      await settle();
+      expect(seen).toMatchObject({ status: "ready", [kind]: artefact });
+      expect((seen as { error: unknown }).error).toBeTruthy();
+    });
+  }
+});
+
+it("crossrefs draws the real response's fresh links", async () => {
+  const links = [{ from: "spya-k3m9qt", to: "spya-p7w2dn", phrase: "see below" }];
+  answer = () => json({ crossrefs: { slug: SLUG, links }, stale: false, outdated: false });
+  await mount(useCrossrefs);
+  expect(seen).toEqual(links);
+});
+
+it.each([false, 0, "", {}, { crossrefs: null }])("crossrefs draws nothing for a malformed body %j", async (body) => {
+  answer = () => json(body);
+  await mount(useCrossrefs);
+  expect(seen).toBeNull();
+});

@@ -443,7 +443,7 @@ export function useQuizRead(slug: string): QuizRead {
       if (!current()) return;
       const loaded = res.status === 404 ? null : await readJson<QuizResponse | null>(res);
       if (!current()) return;
-      if (!loaded) {
+      if (loaded === null) {
         /* The ordinary case, and here the commonest by some distance: `quiz` is
            off `DEFAULT_INGEST_STEPS`, so most articles have never had questions
            written. This is what the panel's button is for. */
@@ -459,6 +459,9 @@ export function useQuizRead(slug: string): QuizRead {
         return;
       }
       /* Derive before publishing: a malformed revalidation keeps the old batch. */
+      if (!loaded?.quiz || !Array.isArray(loaded.quiz.questions) || typeof loaded.quiz.batchId !== "string") {
+        throw new ReaderFacingError("The server's reply did not contain quiz questions. Try again.");
+      }
       const profiled = loaded.quiz.profileHash != null;
       setQuiz(loaded.quiz);
       setStale(loaded.stale);

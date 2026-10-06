@@ -55,10 +55,12 @@ Cost named: one header name and one branch that outlive the old tabs. It can be 
 `200 null` unconditional, once a client-version boundary exists.
 
 **Scope: these three routes only.** About fifteen other artefact routes use the same 404-means-none
-convention (`useIdeas`, `useFaq`, `useTimeline`, …). They are read only when their mode is opened,
-so they are not on "ordinary page loads", and they are left alone here. The helper and the typed
-error are written so that moving another route over is two lines; whether to do all of them is a
-question for the debrief, not this stage.
+convention (`useIdeas`, `useFaq`, `useTimeline`, …), and they are left alone here. Some also read
+outside their mode: Glossary and Quotes on every owner view, and Ideas, FAQ, Timeline and Debate
+in Marginalia (`src/web/marginalia/MarginaliaColumn.tsx`). This stage removes the routine 404s
+from the three named routes; it does not establish that every ordinary page load has no 404s.
+The helper and the typed error support moving another route over; whether to do all of them is
+a question for the debrief, not this stage.
 
 ### The Quiz count (the "also low")
 
@@ -83,6 +85,41 @@ whenever `hiddenCount > 0`: move the existing sentence beside the count rather t
   buttons; an article that has them still shows them.
 - Docs: wherever a project doc states "404 means none yet" for these three routes is brought up to
   date.
+
+### Stage 1: what landed — 2026-10-06
+
+Built as planned in `480d208a8`, with GPT Sol's review fixes in the commit after it.
+
+- **Names.** The header is `x-spideryarn-none-yet-as-null` (`NONE_YET_AS_NULL_HEADER`,
+  `src/types.ts`); the route helper is `orNullWhenNotMadeYet` (`src/routes.ts`); the typed error is
+  `ArtefactNotMadeYet` (`src/store/artefact-not-made-yet.ts`), which `CitationsListNotFound` now
+  subclasses so chat's `instanceof` still holds.
+- **Quiz wording.** The (i) card: "12 questions in all." Under "Question 1 of 5", list open or
+  closed, whenever the filter hides some: "There are 12 in all: the other 7 are about passages you
+  have not read yet." The old sentence under the list is gone, not repeated.
+- **GPT Sol's code review** ([the answer](261006g-stage-1-code-review-sol.md)): land it with its
+  fixes. **F1 (P1), fixed by it:** the hooks tested `!loaded`, so `false`, `0` and `""` counted as
+  "none yet" as well as `null`, and a broken revalidation could have thrown away a quiz already on
+  screen. They now compare with `null` and check the body has its list before publishing it
+  ([postmortem](../postmortems/261006k-a-null-sentinel-is-widened-by-a-truthiness-check.md)). It
+  also added `tests/none-yet-catch-boundary.test.ts`, which the builder had left as "structural":
+  the real dispatcher with injected store outcomes, showing only the typed error becomes `null`.
+- **The scope paragraph above was wrong as first written, and is corrected (Sol F2, and the
+  browser check found the same thing independently).** It said the other artefact reads are asked
+  only when their mode is opened. Glossary and Quotes are read on every owner's article view, and
+  Ideas, FAQ, Timeline and Debate are read by Marginalia. So **an ordinary page load is clean only
+  for an article that has those made**, which an article imported in the ordinary way does. On an
+  article with nothing made, a load still shows 404s for `simple`, `ideas`, `faq`, `timeline`,
+  `debate`, `glossary` and `quotes`. Moving those over is the same two changes each, and is left as
+  a question in the debrief rather than done here.
+- **Browser check** (Playwright, local `dev-admin`, 1440 / 820 / 390): on an article with none of
+  the three made, the three reads answer `200`, body `null`, `private, no-store`, and carry the
+  header; without the header they answer 404; an unknown slug answers 404 either way; Quiz and
+  Citations show their ordinary "nothing yet" state and button. On an article with a quiz the new
+  line appears once, list open or closed, and the numbers add up (5 + 7 = 12). The check ran against
+  `480d208a8`, **before Sol's fixes to the two hooks**, which are covered by tests only. Not
+  checked: that no cross-reference underline is drawn (the selector used was a guess), and anything
+  behind a real proxy or on Vercel.
 
 ## Stage 2 — `qi-gwdj4gyj`: /admin/costs tables say when they scroll sideways
 

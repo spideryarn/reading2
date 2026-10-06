@@ -1395,6 +1395,11 @@ describe("only what you have read", () => {
     expect(host.textContent).toContain(
       "There are 3 in all: the other one is about a passage you have not read yet.",
     );
+    press("Next question");
+    expect(host.textContent).toContain("Question 2 of 2");
+    expect(host.textContent).toContain(
+      "There are 3 in all: the other one is about a passage you have not read yet.",
+    );
   });
 
   it("says nothing of the kind when the filter hides none", () => {
@@ -1736,6 +1741,8 @@ describe("an arrival from the prose", () => {
     paintAt(o, { batchId: PATH.batchId, questionId: third.id }, { readSoFar });
     expect(stem()).toBe(third.question);
     expect(box()?.checked, "the tick-box should say it gave way").toBe(false);
+    expect(host.textContent).toContain("Question 3 of 3");
+    expect(host.textContent).not.toContain("you have not read yet");
   });
 
   it("wins when the filter tries to move off that same unread opening question", () => {
