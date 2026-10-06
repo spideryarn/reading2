@@ -24,8 +24,10 @@
       "tests/**",
       // The test corpus the suite reads as its data root: under data/, whole
       // captured web pages (`raw.html`) and what the pipeline made of them;
-      // under output/, the rendered articles. Captured inputs and generated
-      // output, the same reasoning as the two exclusions below — 140 HTML a11y
+      // under output/, the rendered articles. Also in there: hand-written
+      // reader-state JSON (writes/comments.json, writes/chat.json). So this is
+      // captured pages, generated artefacts and authored data, and no
+      // executable source. Captured inputs and generated output, the same reasoning as the two exclusions below — 140 HTML a11y
       // findings about somebody else's markup, in a report people skim. The
       // folder's own code (build-corpus.ts) is still linted, which is why this
       // names the two subfolders and not data-root/**. The other fixtures under

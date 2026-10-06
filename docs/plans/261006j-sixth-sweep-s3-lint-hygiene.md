@@ -101,6 +101,27 @@ versions with the same `^` the neighbouring entries use, so each still moves wit
 brought it (`@supabase/auth-js` with `supabase-js`, and so on) rather than splitting into a second
 copy. The lockfile changed by those four lines and nothing else.
 
+## Review
+
+GPT Sol reviewed commit `b09f88aac` ([prompt](261006j-sixth-sweep-s3-code-review-prompt.md),
+[answer](261006j-sixth-sweep-s3-code-review-sol.md)). **Verdict: ship**, no changes. It re-ran lint
+and got the same 89 / 138 / 5,239, the same per-rule findings under the old and new `biome.jsonc`,
+the four lockfile lines, and no shipped runtime import of the four packages.
+
+- **C1, reported, not fixed here.** `tools/fleet/web/src/ReadinessPanel.tsx`'s polling effect
+  installs the 120-second default while `view` is still null, and never re-runs when the response
+  supplies `refreshMs`. Sol reproduced it with a fake-timer test. It predates this commit and gets
+  its own red-first fix as **cluster S8** of the umbrella. The comment there that justifies the
+  dependency list by a timer leak is inaccurate: the cleanup clears the timer, and a numeric
+  dependency changes only when its value does.
+- **C2, a scope caveat.** The fixture exclusion covers more than captured pages: also generated
+  artefacts and hand-written reader-state JSON under `tests/fixtures/data-root/`
+  (`writes/comments.json`, `writes/chat.json`). It excludes no executable source. The
+  `biome.jsonc` comment now says so.
+- **The index-key reason was overstated.** The suppression said an index could not come to mean a
+  different primitive. It can; the keys are safe because `Shape` is stateless and renders from its
+  props. The comment in `SketchView.tsx` now says that.
+
 ## Claims that turned out false
 
 - *"The hits are in `src/` and `tools/`."* Three of the four `noImplicitAnyLet` and one of the two

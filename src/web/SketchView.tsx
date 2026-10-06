@@ -1151,7 +1151,7 @@ function SketchBody({
               single thing to move.** */}
           <g ref={attachStage} className="sk-stage">
           {painted.behind.map((p, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes and an index cannot come to mean a different thing. Minting ids would be inventing identity to satisfy a rule about preserving it.
+            // biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes. An index can come to stand for a different primitive, and that is safe here because `Shape` is stateless and renders entirely from its props, so there is nothing for a reused position to carry over. Minting ids would be inventing identity to satisfy a rule about preserving it.
             <Shape key={`b${i}`} p={p} />
           ))}
           {painted.links.map((p, i) => (
