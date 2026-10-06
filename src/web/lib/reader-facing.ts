@@ -53,6 +53,28 @@ export class ReaderFacingError extends Error {
 }
 
 /**
+ * **A reply that arrived and is not the shape its reader needs** — a hook's
+ * way of refusing to publish it, so what is already on screen stays.
+ *
+ * Deliberately **not** a `ReaderFacingError`: a reply of the wrong shape is
+ * this app's bug, not something a reader can act on, so `describeFetchFailure`
+ * gives them `PAGE_FAULT` and reports it (tests/read-error-matrix.test.tsx).
+ * The message is a diagnostic for whoever reads the report, never shown.
+ *
+ * A class rather than a plain `Error` so the throw says which of the two it
+ * means: a file that describes its failures through `describeFetchFailure` may
+ * not `throw new Error(` at all, because a sentence thrown that way looks as
+ * if it will reach the reader and does not
+ * (tests/describe-fetch-failure.test.ts § every file that describes…).
+ */
+export class MalformedReply extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MalformedReply";
+  }
+}
+
+/**
  * Errors our own helpers saw come out of the transport — `fetch` rejecting, a
  * body that died mid-read. A brand rather than a wrapping class so the object is
  * untouched: its name, message, stack and `instanceof TypeError` are what they

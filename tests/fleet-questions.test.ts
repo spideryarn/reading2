@@ -437,7 +437,7 @@ describe("the production payload composition", () => {
   it("reads the checkpoint once and puts questions beside the exact attention reading from it", () => {
     let reads = 0;
     const stamp = new Date().toISOString();
-    const snapshot: FleetSnapshot = { rows: [], tmuxServerPid: 1, collectedAt: stamp, tookMs: 12 };
+    const snapshot: FleetSnapshot = { rows: [], tmuxServerPid: 1, selfCheck: { kind: "cannot-check", why: "a fixture" }, collectedAt: stamp, tookMs: 12 };
     const attentionFeed = published([], {
       coordinatorWrittenAt: stamp,
       list: { kind: "list", items: [], sessionsScanned: 3, sessionsUnreadable: 0, scannedAt: stamp },

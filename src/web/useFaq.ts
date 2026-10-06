@@ -21,11 +21,13 @@
  * docs/project/faq.md, docs/plans/260916d-faq-mode.md.
  */
 import { useCallback, useEffect, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Faq, FaqResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type FaqStatus = "loading" | "none" | "ready" | "error";
@@ -106,9 +108,17 @@ export function useFaqRead(slug: string): FaqRead {
   const load = useCallback(
     async (current: () => boolean) => {
       try {
-        const res = await apiFetch(`/api/faq/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+           is still read the same way, for a server that has not heard of the
+           header — the minutes of a deploy. */
+        const res = await apiFetch(`/api/faq/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<FaqResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case, not a fault: nobody has asked for this
              article's FAQ yet, and the panel's button is for that. */
           setFaq(null);
@@ -118,8 +128,13 @@ export function useFaqRead(slug: string): FaqRead {
           setStatus("none");
           return;
         }
-        const loaded = await readJson<FaqResponse>(res);
-        if (!current()) return;
+        /* Only an explicit `null` means none yet, and a reply without its
+           artefact is published nowhere: a `MalformedReply`, so the reader gets
+           `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+           stays. */
+        if (typeof loaded?.faq !== "object" || loaded.faq === null) {
+          throw new MalformedReply("the FAQ reply has no FAQ");
+        }
         setFaq(loaded.faq);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);

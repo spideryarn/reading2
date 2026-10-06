@@ -44,7 +44,8 @@ export function describeFetchFailure(error: Error): string {
      (`HttpError`), or one the client wrote at the throw site. The class is the
      claim; see src/web/lib/reader-facing.ts. */
   if (error instanceof ReaderFacingError) return error.message;
-  /* Anything else is an exception nobody wrote for a reader: React's own
+  /* Anything else is an exception nobody wrote for a reader — a
+     `MalformedReply` among them, which is thrown to get exactly this: React's own
      `Minified React error #185` reached one here on 2026-09-12, printed as a
      chat answer's failure after the server had finished it. Its words go to the
      console and to Sentry (whose scrubber withholds an unauthored message);

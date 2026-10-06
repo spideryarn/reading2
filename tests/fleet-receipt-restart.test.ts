@@ -209,6 +209,7 @@ function snapshot(rows: FleetRow[], generation: number | null = GENERATION): Fle
     collectedAt: "2026-09-10T10:01:00.000Z",
     tookMs: 1,
     tmuxServerPid: generation,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
   };
 }
 

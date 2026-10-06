@@ -656,24 +656,29 @@ Three kinds of site deliberately do **not**:
 - **A response about to be streamed.** `if (!r.ok || !r.body)` asks a second
   question, and a stream can end by simply stopping, which looks exactly like
   finishing. `useComments` § `answer`, `useSearch` § `run`, `chat/effects.ts`.
-- **A status that is an answer.** A 404 from `/api/ideas/:slug` means nobody has
-  asked for ideas yet; a 409 from the chat stream means somebody else is already
+- **A status that is an answer.** A 404 from `/api/tweets/:slug` means nobody has
+  asked for a thread yet; a 409 from the chat stream means somebody else is already
   answering; `/api/public/…` answers 404 for a piece that is not shared. Those
   callers read the status before deciding, and throwing would report an ordinary
   state as a fault.
-  **Three reads no longer get that 404**: `useQuizRead`, `useCitationsRead` and `useCrossrefs` are
-  mounted on every owner's article view whichever mode is open, "not made yet" is their usual
-  answer, and a browser prints every 4xx in red — three failures that were not failures on every
-  ordinary page load. They send `NONE_YET_AS_NULL_HEADER` (`src/types.ts`) and the server answers
-  `200` with a `null` body (`orNullWhenNotMadeYet`, `src/routes.ts`), which each reads as it read
-  the 404 — and still reads a 404 the same way, for the minutes of a deploy. Without the header
-  the answer is the 404 it always was, because a tab left open across the deploy would show an
-  error for a `null`; "no such article" is a 404 either way. `apiFetch` does not keep the `null`
-  for offline, as it never kept the 404. Other artefact reads still use the 404, including
-  Glossary and Quotes on every owner view and the reads in Marginalia; this change covers only
-  these three routes. Moving another over is the typed error at its loader's throw and the
-  helper at its route.
-  [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md).
+  **Ten artefact reads no longer get that 404.** "Not made yet" is their usual answer, and a browser prints every 4xx
+  in red: failures that were not failures on every ordinary page load. The ten are quiz, citations
+  and crossrefs (`useQuizRead`, `useCitationsRead`, `useCrossrefs`, mounted on every owner's
+  article view whichever mode is open), then Simple, Ideas, FAQ, Timeline, Debate, Glossary and
+  Quotes (`useSimple`, `useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`,
+  `useGlossaryRead`, `useQuotesRead`). They send `NONE_YET_AS_NULL_HEADER` (`src/types.ts`) and the
+  server answers `200` with a `null` body (`orNullWhenNotMadeYet`, `src/routes.ts`), which each
+  reads as it read the 404 — and still reads a 404 the same way, for the minutes of a deploy.
+  Only a body that is exactly `null` is "none yet"; a reply without its artefact is a fault, and
+  does not replace what is on screen. Without the header the answer is the 404 it always was,
+  because a tab left open across the deploy would show an error for a `null`; "no such article"
+  is a 404 either way. `apiFetch` does not keep the `null` for offline, as it never kept the 404.
+  **Tweets, relations, Skim, Sketch and Arc still answer a plain 404.** Moving one over is three
+  places: the typed error at its loader's throw, the helper at its route, and its name in
+  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if the
+  last two disagree.
+  [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md),
+  [261006h](../plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md).
 - **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the
   Supabase settings probe in `lib/supabase.ts` both treat a non-2xx as *nothing
   to show*, which is not a thing to tell anybody about.

@@ -3669,12 +3669,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const glossary = found.revision.glossary as Glossary | null;
     if (!glossary) {
-      throw Object.assign(
-        new Error(
-          `No glossary for "${slug}" yet. Find one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No glossary for "${slug}" yet. Find one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
       );
     }
     const glossaryTree = found.revision.tree as Tree | null;
@@ -3762,12 +3759,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const quotes = found.revision.quotes as Quotes | null;
     if (!quotes) {
-      throw Object.assign(
-        new Error(
-          `No quotes for "${slug}" yet. Choose them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No quotes for "${slug}" yet. Choose them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
       );
     }
     const quotesTree = found.revision.tree as Tree | null;
@@ -3798,12 +3792,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const ideas = found.revision.ideas as Ideas | null;
     if (!ideas) {
-      throw Object.assign(
-        new Error(
-          `No ideas for "${slug}" yet. Find them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No ideas for "${slug}" yet. Find them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3846,12 +3837,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const timeline = found.revision.timeline as Timeline | null;
     if (!timeline) {
-      throw Object.assign(
-        new Error(
-          `No timeline for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No timeline for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3917,12 +3905,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const faq = found.revision.faq as Faq | null;
     if (!faq || !Array.isArray(faq.questions)) {
-      throw Object.assign(
-        new Error(
-          `No FAQ for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["faq"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No FAQ for "${slug}" yet. Build it with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["faq"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4026,12 +4011,9 @@ const rawPgArticleReader: ArticleReader = {
     /* The whole-artefact guard turns every `simple/1` row into this 404, even
        if an imported row happens to carry a valid-looking `levels` field. */
     if (!isUsableSimpleSummary(simpleSummary)) {
-      throw Object.assign(
-        new Error(
-          `No plain-words summary for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["simple"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No plain-words summary for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["simple"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4155,12 +4137,9 @@ const rawPgArticleReader: ArticleReader = {
        non-null JSONB unchecked until 2026-09-05, so a half-written document
        reached the panel here and was refused on the filesystem. */
     if (!debate || !isDebateDocument(debate)) {
-      throw Object.assign(
-        new Error(
-          `No debate for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No debate for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);

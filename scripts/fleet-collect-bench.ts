@@ -401,7 +401,13 @@ function livePayload(initial: FleetSnapshot, health: HealthReport | null): { ren
 
 /** A snapshot over the given rows, for a bench that has not collected one yet. */
 function snapshotOf(rows: FleetRow[]): FleetSnapshot {
-  return { rows, collectedAt: new Date().toISOString(), tookMs: 0, tmuxServerPid: null };
+  return {
+    rows,
+    collectedAt: new Date().toISOString(),
+    tookMs: 0,
+    tmuxServerPid: null,
+    selfCheck: { kind: "cannot-check", why: "the bench built this snapshot from rows without a tmux listing" },
+  };
 }
 
 /**
