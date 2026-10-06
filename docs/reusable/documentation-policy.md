@@ -98,6 +98,8 @@ will read is not doing its job, however true it is.
 
 ## Keeping it true
 
+- **Correct a stale or wrong code comment wherever you find it**, a config or unit file's included,
+  without asking (Greg, 2026-10-06: "always correct stale/incorrect comments").
 - **Fix a doc you find out of date, even one your change did not touch** — the standing permission
   and how to land it are in [engineering-manager.md § Along the way](engineering-manager.md#along-the-way).
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part
