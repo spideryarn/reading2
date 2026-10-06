@@ -60,3 +60,9 @@ a syntax error in code and invisible prose in markdown, and the second kind can 
 files git could not merge; it says nothing about the files it merged silently. Two new files never
 conflict — which is how a merged migration journal can leave a forked snapshot chain that every test
 still passes.
+
+The same holds inside a file that did conflict. When both sides added entries to one list, array
+or registry, git keeps both wherever the added lines did not collide, with no markers. A merge on
+2026-09-07 marked five hunks in a route table, all comment wording, and left every referee route
+declared twice. After a merge that touches a file holding a list, run that list's own test before
+anything else.
