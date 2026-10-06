@@ -1152,7 +1152,7 @@ describe("one claim walks the whole job", () => {
   /**
    * **The ways a claim was put down wrongly, or not put down at all** — the
    * seventh sweep's tier 0 for the queue
-   * (docs/plans/261007a-seventh-sweep-job-queue-tier-0.md). Each case was
+   * (docs/plans/261007b-seventh-sweep-job-queue-tier-0.md). Each case was
    * watched red against the code as it stood, and each fix was mutated back at
    * the end; the plan lists both.
    */

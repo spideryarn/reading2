@@ -1959,7 +1959,7 @@ finishes although Stop was pressed, the job ends `done` and published when the S
 by another server (`finishIn` clears the flag), and `cancelled` with the draft failed when it was
 answered by the claimant's own. Neither was changed; both are pinned as today's behaviour in
 `tests/jobs-walk.test.ts`, and
-[261007a § Left open](../plans/261007a-seventh-sweep-job-queue-tier-0.md#left-open-for-greg) has
+[261007b § Left open](../plans/261007b-seventh-sweep-job-queue-tier-0.md#left-open-for-greg) has
 the question.
 
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
@@ -2135,7 +2135,7 @@ Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
 **What is still left to the lease** is a failure of the write that *settles* the job
 (`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to
 fall back on. `tests/jobs-walk.test.ts` § *the exits of a claim* has the cases;
-[261007a](../plans/261007a-seventh-sweep-job-queue-tier-0.md) has the count.
+[261007b](../plans/261007b-seventh-sweep-job-queue-tier-0.md) has the count.
 
 ## The failures Retry is not offered under
 

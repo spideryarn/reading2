@@ -4,9 +4,12 @@ Status as of 2026-10-07: built and committed in a worktree, five commits; not pu
 reviewed by GPT Sol. Evidence: the cases in `tests/jobs-walk.test.ts` § *the exits of a claim*,
 each red before its fix and red again under the mutation listed at the foot.
 
+**The five commits are titled `261007a`**, which is what this file was called until `dev` was
+merged in and another plan turned out to hold that letter. It is `261007b`; the commits are these.
+
 ## Goal
 
-The seventh sweep (`261006m-seventh-codebase-sweep-depth-umbrella.md`) had two models read the
+The [seventh sweep](261006m-seventh-codebase-sweep-depth-umbrella.md) had two models read the
 import queue line by line and then review each other. This plan builds the cluster of findings that
 are live defects in [`src/jobs.ts`](../../src/jobs.ts), plus the false comments around them. Five
 items, in this order, each its own commit:

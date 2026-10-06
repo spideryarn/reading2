@@ -723,7 +723,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so the claimant's
      real worst case is about 360 s and this number is under it. Unchanged
      here; whether to raise it is reported in
-     docs/plans/261007a-seventh-sweep-job-queue-tier-0.md. A step that does
+     docs/plans/261007b-seventh-sweep-job-queue-tier-0.md. A step that does
      outlive the deadline is put down and run again, not ended. */
   assets: 185_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
@@ -2920,7 +2920,7 @@ async function walkClaim(
          Two answers to one question, known and left alone: which is right is
          a product decision that has not been made, and both are pinned as
          today's behaviour in tests/jobs-walk.test.ts.
-         docs/plans/261007a-seventh-sweep-job-queue-tier-0.md § Left open. */
+         docs/plans/261007b-seventh-sweep-job-queue-tier-0.md § Left open. */
       if (controller.signal.aborted) {
         markCancelled(job, "Cancelled");
         return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
