@@ -3969,7 +3969,7 @@ export const LEARN_STANCES: readonly LearnStance[] = [
  *
  * **And `remember` until 2026-10-06**, when the identifiers followed the
  * reader's word, Learn. The same one step:
- * drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql,
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql,
  * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
  *
  * **`candidates` is the third**, added 2026-09-01 — Referee mode's fourth

@@ -7,6 +7,7 @@
  * guard broken in the source, this file run, the named test failing, the guard
  * restored. The note on each `describe` says what was broken.
  */
+import type { CallFailure } from "../src/call-failure.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
@@ -388,6 +389,7 @@ describe("the budget", () => {
     cost: { source: "provider"; costNanos: number } | { source: "none" },
     outcome: "ok" | "error" | "aborted" = "ok",
     answered = outcome !== "error",
+    failure: CallFailure | null = null,
   ) =>
     recordSpend({
       job: "eval",
@@ -413,6 +415,7 @@ describe("the budget", () => {
       inferenceGeo: null,
       ms: 1,
       outcome,
+      failure,
     } as Parameters<typeof recordSpend>[0]);
 
   it("refuses before the call when the bound would pass the cap, and the call never runs", async () => {
@@ -489,6 +492,21 @@ describe("the budget", () => {
     });
     expect(budget.state().halted).toBeNull();
     expect(budget.state().settled[0]?.note).toMatch(/refused before answering/);
+  });
+
+  /* Seen red, 2026-10-06 (plan 261006b, review finding F10): a 2xx that would
+     not parse used to be an `ok` row and halted the budget. Recorded as an
+     `error` it matched the refusal rule above and settled at $0, though the
+     provider accepted the work and may have billed it. */
+  it("halts on a call the provider accepted and that then died with no cost reported", async () => {
+    const budget = openBudget(null, 10);
+    await expect(
+      paidStep(budget, { id: "a", label: "a", boundUsd: 0.1 }, {}, async () => {
+        record({ source: "none" }, "error", false, { phase: "mid_answer", class: "unreadable", status: 200 });
+        return null;
+      }),
+    ).rejects.toBeInstanceOf(BudgetHalted);
+    expect(budget.state().halted).toMatch(/no usable cost/);
   });
 });
 

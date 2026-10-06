@@ -13,7 +13,7 @@
  * make room for the duplicates the fold exists for.
  *
  * **This file keeps the word `remember`, on purpose.** The kind became `learn`
- * on 2026-10-06 (drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql,
+ * on 2026-10-06 (drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql,
  * tested in tests/learn-kind-migration.test.ts), but the SQL replayed here is
  * frozen: it selects `kind = 'remember'` and creates
  * `chat_threads_one_remember`. So the fixtures and the assertions keep the

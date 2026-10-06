@@ -1048,8 +1048,15 @@
     {
       "idx": 149,
       "version": "7",
-      "when": 1791248354519,
-      "tag": "20261006005914_rename_remember_thread_kind_to_learn",
+      "when": 1791250876486,
+      "tag": "20261006014116_ai_calls_attempt_and_failure",
+      "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1791258835782,
+      "tag": "20261006035355_rename_remember_thread_kind_to_learn",
       "breakpoints": true
     }
   ]

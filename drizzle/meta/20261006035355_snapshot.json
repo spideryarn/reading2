@@ -1,6 +1,6 @@
 {
-  "id": "c8b6323f-8e4e-4350-8cda-8a1f297a253d",
-  "prevId": "d82b9180-737d-4f52-913f-ced4d26dcd0e",
+  "id": "92e63e14-c001-4ac1-b6b3-3ba53a979854",
+  "prevId": "9d5ea028-e6c7-4a45-b576-abf8f14b51f6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -121,6 +121,30 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_phase": {
+          "name": "failure_phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_class": {
+          "name": "failure_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_status": {
+          "name": "failure_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "provider_account": {
           "name": "provider_account",
@@ -465,6 +489,10 @@
         "ai_calls_duration_known_off_realtime": {
           "name": "ai_calls_duration_known_off_realtime",
           "value": "\"spideryarn\".\"ai_calls\".\"duration_ms\" is not null or \"spideryarn\".\"ai_calls\".\"wire\" = 'realtime'"
+        },
+        "ai_calls_failure_phase_known": {
+          "name": "ai_calls_failure_phase_known",
+          "value": "\"spideryarn\".\"ai_calls\".\"failure_phase\" is null or \"spideryarn\".\"ai_calls\".\"failure_phase\" in ('before_answer','mid_answer')"
         },
         "ai_calls_costs_not_negative": {
           "name": "ai_calls_costs_not_negative",

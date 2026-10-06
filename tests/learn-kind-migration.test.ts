@@ -1,7 +1,7 @@
 /**
  * **The migration that renames the thread kind `remember` to `learn`**, in the
  * rows, the CHECK and the one-per-article index.
- * drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql.
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql.
  *
  * Against a real database, because what is being tested is SQL and its order:
  * a CHECK re-added before the rows move fails only where there are rows. The
@@ -39,7 +39,7 @@ afterAll(async () => {
 });
 
 const MIGRATION = readFileSync(
-  new URL("../drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql", import.meta.url),
+  new URL("../drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql", import.meta.url),
   "utf8",
 );
 /* Split exactly where the migrator splits. */

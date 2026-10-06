@@ -99,6 +99,12 @@ function fixtureRow(): AiCallRow {
     finishedAt: "2026-09-02T10:00:01.000Z",
     durationMs: 1000,
     outcome: "ok",
+    /* Null, as on every row no retry loop counted and every call that did not
+       fail: drizzle/20261006*_ai_calls_attempt_and_failure.sql. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: 1_000,
     byokUpstreamNanos: null,
     isByok: false,

@@ -2886,7 +2886,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      2026-10-06, and there is no alias for either: each rename moved the wire
      value, the CHECK constraint and the rows in one step
      (drizzle/0048_rename_review_thread_kind.sql, then
-     drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql), so an old
+     drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql), so an old
      client sending `review` or `remember` gets this 400 rather than a thread
      of the wrong kind. A tab left open across the deploy fails its next
      Recall turn until it reloads.
