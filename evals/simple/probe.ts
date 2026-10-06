@@ -11,7 +11,8 @@
  * npx tsx evals/simple/probe.ts report > evals/simple/results-260930.md    # free
  * ```
  *
- * `--power high` writes on the high-power model (plan 261001p), and
+ * A run writes on the high-power model, as a press does; `--power standard`
+ * writes on the other (plan 261001p; the default was `standard` until 2026-10-06), and
  * `--guard off` measures the writer alone; without `--guard` the probe does
  * what a press does, `SIMPLE_CHECK_ENABLED`.
  *
@@ -361,7 +362,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     const arm = flags.get("--arm");
     if (!arm) throw new Error("run needs --arm <effort>-<reader>");
-    const power = flags.get("--power") ?? "standard";
+    /* `high` unless told otherwise, since 2026-10-06: Summary is always
+       written on the high-power model (`ALWAYS_HIGH_POWER`, src/models.ts), and
+       a forgotten flag had ten writes measure a model no press uses (plan
+       261005b § Brief by band). */
+    const power = flags.get("--power") ?? "high";
     if (power !== "standard" && power !== "high") throw new Error("--power must be standard or high");
     const guardFlag = flags.get("--guard");
     if (guardFlag !== undefined && guardFlag !== "on" && guardFlag !== "off") throw new Error("--guard must be on or off");

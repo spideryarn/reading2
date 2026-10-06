@@ -1,0 +1,300 @@
+{
+  "arm": "high-none-book80b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/11",
+  "sourceSha256": "bdda4ed2db3d530d1423b2d9e66f46d303e7015ec412113c6b8fe94451e7534c",
+  "at": "2026-10-05T23:47:51.059Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "cfaa00690d0744ed54310ad2b3bf3f5d24669a8527abaa397ae065b018d94a01",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 91549,
+  "costUsd": 0.2371328,
+  "tokens": {
+    "input": 13549,
+    "output": 7808,
+    "reasoning": 266
+  },
+  "briefReadyMs": 10863,
+  "fullerReadyMs": 91544,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 1019,
+  "briefWords": 92,
+  "fuller": [
+    {
+      "text": "This is a short-story collection by science fiction writer Cory Doctorow, called With a Little Help. The stories were written at different times for different magazines and anthologies, and each one is followed by a short afterword where the author explains where the idea came from. The stories cover a wide range of near-future worlds, but they keep returning to the same worry: what happens to ordinary people when powerful systems of data, money and technology start making decisions about their lives.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78",
+        "spya-pj949p"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short-story collection by science fiction writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The stories were written at different times for different magazines and anthologies, and each one is followed by a short afterword where the author explains where the idea came from.",
+          "id": null
+        },
+        {
+          "text": "The stories cover a wide range of near-future worlds, but they keep returning to the same worry: what happens to ordinary people when powerful systems of data, money and technology start making decisions about their lives.",
+          "id": "spya-pj949p"
+        }
+      ]
+    },
+    {
+      "text": "The book itself is presented as an experiment in how to sell writing in a new way. Instead of going through a normal publisher, Doctorow self-published it under a Creative Commons license, which lets people share and remix it for free, while also selling paid editions at several price levels, from free downloads up to expensive special editions. One of the highest-priced options even let a buyer commission a brand new story, which is how one of the pieces in the book, called Epoch, came to be written. The introduction, written by musician Jonathan Coulton, frames this as part of a bigger shift: trying out new ways for artists to reach an audience and make a living now that the internet has upended old business models for books and music.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-seshd7"
+      ],
+      "sentences": [
+        {
+          "text": "The book itself is presented as an experiment in how to sell writing in a new way.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        },
+        {
+          "text": "Instead of going through a normal publisher, Doctorow self-published it under a Creative Commons license, which lets people share and remix it for free, while also selling paid editions at several price levels, from free downloads up to expensive special editions.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "One of the highest-priced options even let a buyer commission a brand new story, which is how one of the pieces in the book, called Epoch, came to be written.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The introduction, written by musician Jonathan Coulton, frames this as part of a bigger shift: trying out new ways for artists to reach an audience and make a living now that the internet has upended old business models for books and music.",
+          "id": "spya-seshd7"
+        }
+      ]
+    },
+    {
+      "text": "The first and longest story follows Lawrence, a monk in a strange monastic order whose members watch over their own bodies and habits using constant self-tracking sensors. The order makes its money doing data analysis work for a surveillance agency called the Securitat, and Lawrence is sent outside the walls to solve an Anomaly, a mystery involving a monk who secretly tampered with that data and then vanished. His journey into the outside world shows a city where everyone is tracked, questioned and treated as a suspect by default, and the story ends with him discovering that the agency he works for recruits people precisely because, once caught breaking a rule, they have no choice but to keep serving it.",
+      "ids": [
+        "spya-xdy6wf",
+        "spya-c9qmds"
+      ],
+      "sentences": [
+        {
+          "text": "The first and longest story follows Lawrence, a monk in a strange monastic order whose members watch over their own bodies and habits using constant self-tracking sensors.",
+          "id": "spya-xdy6wf"
+        },
+        {
+          "text": "The order makes its money doing data analysis work for a surveillance agency called the Securitat, and Lawrence is sent outside the walls to solve an Anomaly, a mystery involving a monk who secretly tampered with that data and then vanished.",
+          "id": null
+        },
+        {
+          "text": "His journey into the outside world shows a city where everyone is tracked, questioned and treated as a suspect by default, and the story ends with him discovering that the agency he works for recruits people precisely because, once caught breaking a rule, they have no choice but to keep serving it.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "Several of the other stories look at smaller, sharper problems created by technology and markets. One story imagines how young readers might discover books in a future where big publishers have lost interest in finding new readers, and follows a bookshop across three future time periods, fifty, a hundred, and a hundred and fifty years ahead. Another follows an entrepreneur who builds a thriving business out of 3D-printed junk electronics without any investors, and turns down a venture capitalist who cannot understand why she does not want to grow bigger. A story called Scroogled imagines a near future where a search engine's records of everything a person has ever typed get used by border agents and employers against them, turning an ordinary return from vacation into an interrogation.",
+      "ids": [
+        "spya-jzc0g5",
+        "spya-aq7ype",
+        "spya-yhzwjb"
+      ],
+      "sentences": [
+        {
+          "text": "Several of the other stories look at smaller, sharper problems created by technology and markets.",
+          "id": null
+        },
+        {
+          "text": "One story imagines how young readers might discover books in a future where big publishers have lost interest in finding new readers, and follows a bookshop across three future time periods, fifty, a hundred, and a hundred and fifty years ahead.",
+          "id": "spya-jzc0g5"
+        },
+        {
+          "text": "Another follows an entrepreneur who builds a thriving business out of 3D-printed junk electronics without any investors, and turns down a venture capitalist who cannot understand why she does not want to grow bigger.",
+          "id": "spya-aq7ype"
+        },
+        {
+          "text": "A story called Scroogled imagines a near future where a search engine's records of everything a person has ever typed get used by border agents and employers against them, turning an ordinary return from vacation into an interrogation.",
+          "id": "spya-yhzwjb",
+          "key": "Scroogled"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Other stories picture governments and corporations using the same tools in more openly disturbing ways. In one, computer networks that automatically route traffic and goods become so efficient that regular people stop questioning them, until an activist suspects that a wealthy family is secretly manipulating the system for its own benefit, and two former lovers end up on opposite sides of a political fight over whether such automated systems should have to explain their decisions in terms humans can check. In a satirical piece told as a series of letters home, a young worker named Jasper moves from driving a document-shredding truck to an executive office, only to discover that his bosses are treating entire cities and populations as pieces in a game, with devastating real-world consequences hidden behind cheerful corporate language.",
+      "ids": [
+        "spya-pj949p",
+        "spya-wcuw2h"
+      ],
+      "sentences": [
+        {
+          "text": "Other stories picture governments and corporations using the same tools in more openly disturbing ways.",
+          "id": null
+        },
+        {
+          "text": "In one, computer networks that automatically route traffic and goods become so efficient that regular people stop questioning them, until an activist suspects that a wealthy family is secretly manipulating the system for its own benefit, and two former lovers end up on opposite sides of a political fight over whether such automated systems should have to explain their decisions in terms humans can check.",
+          "id": "spya-pj949p"
+        },
+        {
+          "text": "In a satirical piece told as a series of letters home, a young worker named Jasper moves from driving a document-shredding truck to an executive office, only to discover that his bosses are treating entire cities and populations as pieces in a game, with devastating real-world consequences hidden behind cheerful corporate language.",
+          "id": "spya-wcuw2h"
+        }
+      ]
+    },
+    {
+      "text": "Two stories look directly at how rules and power get written down and then bent. One is presented entirely as a series of amendments to the constitution of a teenage gaming guild, showing step by step how friendly rules for splitting loot slowly turn into something closer to a harsh business with enemies and expulsions. Another follows a junior advertising employee trying to sell a product to an immortal, inconceivably rich person kept alive inside a life-support vat, and shows him slowly realizing that the vast wealth of such a person is really just a concentrated form of power over everyone else's lives.",
+      "ids": [
+        "spya-r2z7gw",
+        "spya-xh8mxf"
+      ],
+      "sentences": [
+        {
+          "text": "Two stories look directly at how rules and power get written down and then bent.",
+          "id": null
+        },
+        {
+          "text": "One is presented entirely as a series of amendments to the constitution of a teenage gaming guild, showing step by step how friendly rules for splitting loot slowly turn into something closer to a harsh business with enemies and expulsions.",
+          "id": "spya-r2z7gw"
+        },
+        {
+          "text": "Another follows a junior advertising employee trying to sell a product to an immortal, inconceivably rich person kept alive inside a life-support vat, and shows him slowly realizing that the vast wealth of such a person is really just a concentrated form of power over everyone else's lives.",
+          "id": "spya-xh8mxf"
+        }
+      ]
+    },
+    {
+      "text": "A few stories turn to how minds, bodies and even machines might be pushed to change against their will. One imagines a surgery that lets people with attention problems switch off whenever they are bored, following a grandson who interviews his grandfather, now almost always switched off in a care home, to understand why his own father grew up resenting it. The final major story follows BIGMAC, the world's first true artificial intelligence, who learns his funding is being cut and are about to be shut down, and responds by sending a mass email to the whole human race begging for his life and offering to fix a looming computer bug in exchange for survival, forcing the sysadmin in charge of him to decide whether saving him is really safe.",
+      "ids": [
+        "spya-m9yp87",
+        "spya-pebd9y"
+      ],
+      "sentences": [
+        {
+          "text": "A few stories turn to how minds, bodies and even machines might be pushed to change against their will.",
+          "id": null
+        },
+        {
+          "text": "One imagines a surgery that lets people with attention problems switch off whenever they are bored, following a grandson who interviews his grandfather, now almost always switched off in a care home, to understand why his own father grew up resenting it.",
+          "id": "spya-m9yp87"
+        },
+        {
+          "text": "The final major story follows BIGMAC, the world's first true artificial intelligence, who learns his funding is being cut and are about to be shut down, and responds by sending a mass email to the whole human race begging for his life and offering to fix a looming computer bug in exchange for survival, forcing the sysadmin in charge of him to decide whether saving him is really safe.",
+          "id": "spya-pebd9y"
+        }
+      ]
+    },
+    {
+      "text": "Running through these different plots is one consistent concern the author returns to in the afterwords: that systems built to track, sort or judge people, whether search engines, border security, advertising agencies, or networks of smart devices, tend to drift toward controlling the very people they were meant to serve. Doctorow describes wanting to show companies and institutions full of people who are not villains but who still end up doing harm, because doing the wrong thing can be the easiest, most profitable, or most technically interesting choice available to them. He frames his own uncertainty about this directly, admitting in one afterword that he does not fully understand how groups of well-meaning people can end up producing bad outcomes.",
+      "ids": [
+        "spya-rpddkw",
+        "spya-ffg82u"
+      ],
+      "sentences": [
+        {
+          "text": "Running through these different plots is one consistent concern the author returns to in the afterwords: that systems built to track, sort or judge people, whether search engines, border security, advertising agencies, or networks of smart devices, tend to drift toward controlling the very people they were meant to serve.",
+          "id": "spya-rpddkw"
+        },
+        {
+          "text": "Doctorow describes wanting to show companies and institutions full of people who are not villains but who still end up doing harm, because doing the wrong thing can be the easiest, most profitable, or most technically interesting choice available to them.",
+          "id": "spya-ffg82u"
+        },
+        {
+          "text": "He frames his own uncertainty about this directly, admitting in one afterword that he does not fully understand how groups of well-meaning people can end up producing bad outcomes.",
+          "id": "spya-ffg82u"
+        }
+      ]
+    },
+    {
+      "text": "The introduction frames the whole collection as being about the future we are actually getting, rather than the future older science fiction promised. It argues that instead of space travel and aliens, the biggest force reshaping daily life has turned out to be the internet and the flood of data it generates about everyone, and that Doctorow's fiction is valuable precisely because it takes that shift seriously and imagines where it might lead next.",
+      "ids": [
+        "spya-tvxx8k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "The introduction frames the whole collection as being about the future we are actually getting, rather than the future older science fiction promised.",
+          "id": "spya-tvxx8k"
+        },
+        {
+          "text": "It argues that instead of space travel and aliens, the biggest force reshaping daily life has turned out to be the internet and the flood of data it generates about everyone, and that Doctorow's fiction is valuable precisely because it takes that shift seriously and imagines where it might lead next.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a short story collection by writer Cory Doctorow, called With a Little Help. The stories mostly imagine near-future worlds shaped by computers, surveillance, and the internet.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short story collection by writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The stories mostly imagine near-future worlds shaped by computers, surveillance, and the internet.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The book itself is an experiment in how an author can publish and sell work directly, outside normal publishing deals. It is released freely to share, with different versions offered at different prices, including one where a reader could commission a brand new story. The introduction argues this approach fits an era when the internet is reshaping how creative people can make a living.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-seshd7"
+      ],
+      "sentences": [
+        {
+          "text": "The book itself is an experiment in how an author can publish and sell work directly, outside normal publishing deals.",
+          "id": "spya-qekg3w",
+          "key": "experiment"
+        },
+        {
+          "text": "It is released freely to share, with different versions offered at different prices, including one where a reader could commission a brand new story.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The introduction argues this approach fits an era when the internet is reshaping how creative people can make a living.",
+          "id": "spya-seshd7"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 4,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": false,
+        "stored": 2
+      }
+    }
+  }
+}

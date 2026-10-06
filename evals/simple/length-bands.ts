@@ -37,6 +37,9 @@
  * that sentence did not ship. Their Brief is the old prompt's. `pairs sentence` and
  * `score sentence` are the second round: Fuller with the sentence (`len2`)
  * against without (`len1`), and `len1a` against `len1b` as its control.
+ * `pairs brief` and `score brief` are the third: Brief asked for about 90 and
+ * about 100 words for every piece. `pairs book` and `score book` are the
+ * fourth, a book's Brief alone (`BOOK_ROUND`, below).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -65,8 +68,57 @@ const ARMS = [
   "brief90b",
   "brief100a",
   "brief100b",
+  /* Round four's mistake, on Sonnet: see `BOOK_ROUND`. */
+  "book80a",
+  "book80b",
+  "bookwholea",
+  "bookwholeb",
+  "bookwhole2a",
+  "bookwhole2b",
+  "bookwhole3a",
+  "opusbook80a",
+  "opusbook80b",
+  "opusbook3a",
+  "opusbook3b",
 ] as const;
 type Arm = (typeof ARMS)[number];
+
+/**
+ * Round four (Greg, 2026-10-06: short for most articles, slightly larger for a
+ * book): the two books, Brief alone. `opusbook3a|b` is the Brief that shipped
+ * for a book: about 100 words, and told what the second paragraph is for. The
+ * second book was in no earlier round, so its "before" is `opusbook80a|b`,
+ * written with Brief at about 80 words; the first book's is `len0a|b`, the
+ * same Brief prompt byte for byte. All on Opus, which is what a press uses.
+ *
+ * **`book80*` and `bookwhole*` are a mistake kept as a record**: the same
+ * question asked with the probe's default `--power standard`, which is Sonnet,
+ * and Summary is never written on Sonnet (`ALWAYS_HIGH_POWER`, src/models.ts).
+ * On Sonnet six writes of ten failed and the rest ran to 162 to 219 words.
+ * `pairs booksonnet` and `score booksonnet` are that round.
+ */
+const BOOKS = ["s3-gdl-45mb-spya-cc9kr8", "s3-doctorow-250p-spya-jg872v"] as const;
+type Book = (typeof BOOKS)[number];
+const BOOK_ROUND: Record<"-book" | "-booksonnet", { seed: number; before: Record<Book, readonly [Arm, Arm]>; after: Record<Book, readonly [Arm, Arm]> }> = {
+  "-book": {
+    /* The first seed from 261010 whose key puts the new side on A as often as
+       on B in the test pairs, chosen before any pair was judged. */
+    seed: 261011,
+    before: { "s3-gdl-45mb-spya-cc9kr8": ["len0a", "len0b"], "s3-doctorow-250p-spya-jg872v": ["opusbook80a", "opusbook80b"] },
+    after: { "s3-gdl-45mb-spya-cc9kr8": ["opusbook3a", "opusbook3b"], "s3-doctorow-250p-spya-jg872v": ["opusbook3a", "opusbook3b"] },
+  },
+  "-booksonnet": {
+    /* 261006 to 261009 gave 1 and 3, or 3 and 1. The "after" side is the four
+       writes of three wordings that were stored at all. The first book's
+       "before" is on Opus and its "after" on Sonnet, one more reason this
+       round decides nothing. */
+    seed: 261010,
+    before: { "s3-gdl-45mb-spya-cc9kr8": ["len0a", "len0b"], "s3-doctorow-250p-spya-jg872v": ["book80a", "book80b"] },
+    after: { "s3-gdl-45mb-spya-cc9kr8": ["bookwholeb", "bookwhole2a"], "s3-doctorow-250p-spya-jg872v": ["bookwhole2b", "bookwhole3a"] },
+  },
+};
+const isBookRound = (round: Round): round is "-book" | "-booksonnet" => round === "-book" || round === "-booksonnet";
+const TABLE_SLUGS = [...SLUGS, "s3-doctorow-250p-spya-jg872v"] as const;
 type Level = "brief" | "fuller";
 type Para = { text: string; ids: string[] };
 interface Run {
@@ -93,7 +145,7 @@ function load(arm: Arm, slug: string): Run | null {
 function table(): void {
   console.log("| piece | body words | arm | band asked | Brief words | Fuller words | Fuller paragraphs | wait to Brief s | wait to Fuller s | guard, Brief / Fuller | $ |");
   console.log("|---|---:|---|---|---:|---:|---:|---:|---:|---|---:|");
-  for (const slug of SLUGS) {
+  for (const slug of TABLE_SLUGS) {
     for (const arm of ARMS) {
       const r = load(arm, slug);
       if (!r) continue;
@@ -123,7 +175,7 @@ interface Pair {
   right: Arm;
 }
 
-type Round = "" | "-sentence" | "-brief";
+type Round = "" | "-sentence" | "-brief" | "-book" | "-booksonnet";
 const BRIEF_SEED = 261008;
 
 /** Round three's new arms: Brief asked for about 90 or about 100 words, where it was 80. */
@@ -163,6 +215,24 @@ async function pairs(round: Round): Promise<void> {
     }
     wanted.push({ kind: "control", slug, level: "brief", left: "len0a", right: "len0b" });
   }
+  /* Round four: a book's Brief of about 80 words against the book band's,
+     and old against old as the control. On Opus, the first book also has the
+     longer Brief with no sentence (`brief100a|b`, round three) against the
+     book band's: the same ask, with and without being told what it is for. */
+  if (isBookRound(round)) {
+    const plan = BOOK_ROUND[round];
+    for (const slug of BOOKS) {
+      const [a, b] = plan.before[slug];
+      const [newA, newB] = plan.after[slug];
+      wanted.push({ kind: "test", slug, level: "brief", left: a, right: newA });
+      wanted.push({ kind: "test", slug, level: "brief", left: b, right: newB });
+      wanted.push({ kind: "control", slug, level: "brief", left: a, right: b });
+    }
+    if (round === "-book") {
+      wanted.push({ kind: "whole", slug: "s3-gdl-45mb-spya-cc9kr8", level: "brief", left: "brief100a", right: "opusbook3a" });
+      wanted.push({ kind: "whole", slug: "s3-gdl-45mb-spya-cc9kr8", level: "brief", left: "brief100b", right: "opusbook3b" });
+    }
+  }
   /* The one question the dropped sentence leaves: with it or without. */
   if (round === "") wanted.push({ kind: "whole", slug: "s3-gdl-45mb-spya-cc9kr8", level: "fuller", left: "len1whole", right: "len1b" });
 
@@ -174,14 +244,22 @@ async function pairs(round: Round): Promise<void> {
      from the side counts alone, before any pair was judged. */
   const seedOverride = Number(process.env.LENGTH_BANDS_SEED);
   const coin = blindCoin(
-    Number.isInteger(seedOverride) && seedOverride > 0 ? seedOverride : round === "" ? 261005 : round === "-sentence" ? 261006 : BRIEF_SEED,
+    Number.isInteger(seedOverride) && seedOverride > 0
+      ? seedOverride
+      : round === ""
+        ? 261005
+        : round === "-sentence"
+          ? 261006
+          : isBookRound(round)
+            ? BOOK_ROUND[round].seed
+            : BRIEF_SEED,
   );
   const order = wanted.map((w) => ({ w, k: [coin(), coin(), coin(), coin(), coin(), coin(), coin(), coin()].join("") }));
   order.sort((x, y) => (x.k < y.k ? -1 : x.k > y.k ? 1 : 0));
 
   const sources = new Map<string, string>();
   await runAsOwner(environmentOwnerId(), async () => {
-    for (const slug of SLUGS) {
+    for (const slug of TABLE_SLUGS) {
       const article = await loadArticle(slug);
       const body = article.blocks.filter(isBodyEvidence);
       const words = body.reduce((n, b) => n + b.words, 0);
@@ -250,7 +328,7 @@ function score(round: Round): void {
   const QUESTIONS = ["pad", "bent", "omit", "coverage", "prefer"] as const;
   /* Round one: the banded prompt against the old. Round two: with the sentence against without. */
   const isNew = (arm: Arm) =>
-    round === "-brief" ? isBriefArm(arm) : round === "" ? arm === "len1a" || arm === "len1b" : arm === "len2a" || arm === "len2b";
+    isBookRound(round) ? arm.startsWith("bookwhole") || arm.startsWith("opusbook3") : round === "-brief" ? isBriefArm(arm) : round === "" ? arm === "len1a" || arm === "len1b" : arm === "len2a" || arm === "len2b";
   /* Round three tallies each ask apart, and the two long pieces apart from the
      rest: "for every piece, or only the long ones" is the question it answers. */
   const LONG = new Set(["race-human-categorization-spya-rpwc59", "s3-gdl-45mb-spya-cc9kr8"]);
@@ -264,7 +342,7 @@ function score(round: Round): void {
   const named = (verdict: string, k: (typeof key)[number]): string => {
     if (verdict !== "A" && verdict !== "B") return verdict;
     const arm = k[verdict];
-    return k.kind === "test" ? (isNew(arm) ? "new" : "old") : arm;
+    return k.kind === "test" || (k.kind === "whole" && isBookRound(round)) ? (isNew(arm) ? "new" : "old") : arm;
   };
   const tallies: Record<string, Record<string, number>> = {};
   console.log("| pair | kind | piece | level | A | B | pad | bent | omit | coverage | prefer |");
@@ -297,9 +375,10 @@ function score(round: Round): void {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cmd = process.argv[2];
-  const round: Round = process.argv[3] === "sentence" ? "-sentence" : process.argv[3] === "brief" ? "-brief" : "";
+  const round: Round =
+    process.argv[3] === "sentence" ? "-sentence" : process.argv[3] === "brief" ? "-brief" : process.argv[3] === "book" ? "-book" : process.argv[3] === "booksonnet" ? "-booksonnet" : "";
   if (cmd === "table") table();
   else if (cmd === "pairs") await pairs(round);
   else if (cmd === "score") score(round);
-  else throw new Error("usage: table | pairs [sentence|brief] | score [sentence|brief]");
+  else throw new Error("usage: table | pairs [sentence|brief|book|booksonnet] | score [sentence|brief|book|booksonnet]");
 }

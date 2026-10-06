@@ -7,7 +7,9 @@ taken) and the code. **What shipped is smaller than what was planned**: Fuller's
 the piece, Brief's does not, because the measurement said a banded Brief was worse.
 [§ What changed between the plan and what shipped](#what-changed-between-the-plan-and-what-shipped).
 **Later the same day Brief went from about 80 words to about 100**, still for every piece:
-[§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05).
+[§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05). **That was not what Greg had
+meant, and on 2026-10-06 it went back to about 80 for every piece but a book**:
+[§ Brief by band](#brief-by-band-2026-10-06).
 
 ## What it is for
 
@@ -194,6 +196,8 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
   but not much". Dispatched to session `brief-slightly-longer`.
   **Built**: about 100 words where it was about 80, for every piece.
   [§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05).
+  **Corrected by Greg, 2026-10-06**: short for most articles, slightly larger for a book.
+  [§ Brief by band](#brief-by-band-2026-10-06).
 
 ## Ledger
 
@@ -327,3 +331,62 @@ while blocked, from the files already here:
   Brief hash in `tests/simple-two-levels.test.ts` and the "Brief the same in every band"
   assertion in `tests/simple-length-bands.test.ts`. `SIMPLE_LIMITS.brief` (240 words) already
   clears it.
+
+### Brief by band (2026-10-06)
+
+Greg, 2026-10-06, of what the section above built:
+
+> Re longer Summary Brief - I wanted it to stay short for most articles, but allow it to go
+> slightly larger for really long ones (e.g. books). Is that what's been done?
+>
+> — Greg, 2026-10-06
+
+It was not: `/10` raised Brief to about 100 words for every piece. **Built: `simple-prompt/12`.
+Brief is asked for about 80 words and never more than 130 in the `short`, `standard` and `long`
+bands, the prompt `/7` to `/9` sent byte for byte, and for about 100 and never more than 150 in
+the `book` band, with one sentence saying what the second paragraph is for.** `BRIEF_LENGTH` is
+a table by band, as `FULLER_LENGTH` is; a `Length` may carry a `room` sentence, and only a
+book's Brief has one. Fuller's prompts are `/11`'s bytes in every band.
+
+| band | before (`/11`): asked, written | after (`/12`): asked, written |
+|---|---|---|
+| `short`, `standard`, `long` | about 100; 110 on average (91 to 137) | about 80; 97 on average (88 to 113) |
+| `book` | about 100; 116 and 122 | about 100 and the sentence; 108 on average (101 to 121) |
+
+**The rule set before the judge read anything**: ship the book band only if the judge prefers
+the new Brief in at least three of the four test pairs and does not call it padded more often
+than the old one. **It did not meet that rule, and it shipped.** The judge split two pairs to
+two, and called the new Brief the padded side in two pairs and the old in none.
+
+- **Why it shipped anyway.** The brief for this work said to go back to 80 everywhere "if the
+  longer book Brief still loses". It did not lose: it won both pairs on one book and lost both
+  on the other, and the control pairs moved by as much. Greg had asked for it in so many words.
+  The rule was this session's own, and stricter than the instruction. It is recorded as missed
+  and not reworded afterwards.
+- **What the split was.** For the survey the judge preferred the new Brief in both pairs, and
+  in both further pairs against round three's plain 100-word Brief, each time for saying what
+  the rest of the book does. For the story collection it preferred the 80-word Brief in both:
+  the new one spent a sentence reporting the introduction's praise, and a second paragraph
+  listing stories read as less clear than one saying what they share.
+- **The simpler option passed over** was 80 words for every piece, book included: one constant
+  and no table. It is what the declared rule pointed to. Going there is `book: BRIEF_USUAL`.
+- **A mistake in the measurement, kept in the record.** The first ten writes of this round ran
+  on Sonnet, the probe's default, and Summary is always written on Opus (`ALWAYS_HIGH_POWER`).
+  On Sonnet three wordings of the sentence failed six writes of ten and ran to 162 to 219
+  words, and for an hour this section said a longer Brief for a book could not be built. The
+  model in the result files gave it away. The arms are `book80*` and `bookwhole*`; nothing
+  rests on them.
+- **Cost**: $3.60 for the six Opus writes, $4.26 for the seven Sonnet writes the provider
+  priced, and five failed Sonnet writes it did not. The dev key had $30.08 left before and
+  $16.99 after, with other sessions spending from it too.
+- **Tests**: `tests/simple-length-bands.test.ts` § Brief pins both prompts' hashes, the book's
+  sentence, and that a book's LENGTH section is all that differs;
+  `tests/simple-two-levels.test.ts` and `tests/simple-summary.test.ts` pin the version and the
+  80.
+- **The write-up** is
+  [261005a § Short, and slightly longer for a book](../investigations/261005a-summary-length-bands-measured.md#short-and-slightly-longer-for-a-book-round-four).
+  The arms are `high-none-opusbook80a|b` and `high-none-opusbook3a|b`; the pairs, key, judge's
+  instructions and answers are `*-book.*` in `evals/results/simple/length-bands-261005b/`, and
+  the Sonnet round's are `*-booksonnet.*`.
+
+REVIEW_PLACEHOLDER
