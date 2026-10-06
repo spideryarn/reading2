@@ -27,6 +27,7 @@ import {
   PRIORITY_GATE,
   visibleEntries,
 } from "../../GlossaryPanel.js";
+import type { GlossaryEntryChats } from "../../OriginChat.js";
 
 /**
  * The glossary's jobs and verbs. The read itself belongs to `Reader`.
@@ -62,6 +63,7 @@ export function GlossaryBand({
   onJump,
   onSelected,
   onAskChat,
+  chats,
 }: {
   slug: string;
   /**
@@ -87,6 +89,15 @@ export function GlossaryBand({
    * `AskATerm` in GlossaryPanel.tsx.
    */
   onAskChat(term: string): void;
+  /**
+   * **A chat about one entry of the list**: the thread summaries `Reader`
+   * holds, the sender behind an entry's *Ask in chat*, and the handler that
+   * reopens a chat already started from one (OriginChat.tsx § `ItemChats`).
+   * Not `onAskChat` above, which is for a word the article does not contain.
+   * The owner's band only; `VisitorGlossaryBand` has no such prop.
+   * Plan 261006d.
+   */
+  chats?: GlossaryEntryChats;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
@@ -106,6 +117,7 @@ export function GlossaryBand({
         owner: glossary,
         glossary: glossary.glossary ? { entries: shown } : null,
         hidden,
+        ...(chats ? { chats } : {}),
       }}
       {...band}
       onJump={onJump}

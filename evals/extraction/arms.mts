@@ -66,7 +66,13 @@
  */
 import { JSDOM, VirtualConsole } from "jsdom";
 
-import { readArticleWithProvenance, sourceRefOf, withoutSourceRefs } from "../../src/extract.js";
+import {
+  ChallengePage,
+  TooLittleTextToRead,
+  readArticleWithProvenance,
+  sourceRefOf,
+  withoutSourceRefs,
+} from "../../src/extract.js";
 import { RESERVED_ATTRS, scrubReserved } from "../../src/reserved.js";
 import type { Candidate } from "./corruptions.mjs";
 import type { AssertionManifest } from "./manifest.mjs";
@@ -184,8 +190,18 @@ const shippedOf = (raw: string, url: string): Candidate => {
    * `refusal` and not `!article?.content`: Readability hands back a parse it has
    * disowned rather than nothing, so on `medium-about` the article is present,
    * titled "Medium", and 185 characters long.
+   *
+   * **A bot check is refused whether or not the floor is suspended**
+   * (src/challenge-page.ts, 2026-10-06). `withoutTheCapabilityFloor` below is a
+   * door past the *floor*, for a test that needs a short page's extraction; a
+   * `ChallengePage` is a finding about what the page is, and nothing here
+   * suspends it.
    */
-  if (!article?.content || (refusal && !floorSuspended)) {
+  if (
+    !article?.content ||
+    refusal instanceof ChallengePage ||
+    (refusal instanceof TooLittleTextToRead && !floorSuspended)
+  ) {
     return { html: "", title: null, byline: null, refused: true };
   }
   return {

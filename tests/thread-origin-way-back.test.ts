@@ -11,7 +11,15 @@
 import { describe, expect, it } from "vitest";
 
 import { originColumns, originFromColumns } from "../src/thread-origin.js";
-import { isLensOrigin, sameOrigin, type ThreadOrigin, type ThreadSummary } from "../src/types.js";
+import {
+  isClaimOrigin,
+  isLensOrigin,
+  MAX_ORIGIN_NAME_CHARS,
+  originName,
+  sameOrigin,
+  type ThreadOrigin,
+  type ThreadSummary,
+} from "../src/types.js";
 import { threadSource } from "../src/web/thread-source.js";
 import {
   anchored,
@@ -141,6 +149,84 @@ describe("a lens and a claim", () => {
     const list = [summary({ id: "spya-aaa444", origin: LENS })];
     expect(threadFor(list, BLOCK)).toBeUndefined();
     expect(anchored(list)).toEqual([]);
+  });
+});
+
+/**
+ * **A glossary entry and a cited work** (plan 261006d, D1). Each has a durable
+ * id, so the id is its identity and the name stored beside it is a snapshot
+ * for titles and tooltips. A regeneration that rewords the entry keeps the
+ * mark; that is the difference from a claim.
+ */
+describe.each(["glossary", "citations"] as const)("a %s entry's origin", (mode) => {
+  const item = (over: { itemId?: string; quote?: string } = {}): ThreadOrigin => ({
+    mode,
+    itemId: "spya-ttm222",
+    quote: "qualia",
+    ...over,
+  });
+  const ITEM = item();
+  const OTHER_MODE: ThreadOrigin = {
+    mode: mode === "glossary" ? "citations" : "glossary",
+    itemId: "spya-ttm222",
+    quote: "qualia",
+  };
+
+  it("is the same origin by mode and id alone, whatever the name says", () => {
+    expect(sameOrigin(ITEM, item())).toBe(true);
+    expect(sameOrigin(ITEM, item({ quote: "Qualia (the felt quality)" }))).toBe(true);
+    expect(sameOrigin(ITEM, item({ itemId: "spya-ttm333" }))).toBe(false);
+    expect(sameOrigin(ITEM, OTHER_MODE), "the same id in the other mode is another thing").toBe(false);
+    expect(sameOrigin(ITEM, CLAIM)).toBe(false);
+    expect(sameOrigin(CLAIM, ITEM)).toBe(false);
+    expect(sameOrigin(ITEM, LENS)).toBe(false);
+    expect(sameOrigin(LENS, ITEM)).toBe(false);
+  });
+
+  it("is neither a claim nor a lens", () => {
+    expect(isLensOrigin(ITEM)).toBe(false);
+    expect(isClaimOrigin(ITEM)).toBe(false);
+    expect(isClaimOrigin(CLAIM)).toBe(true);
+    expect(isClaimOrigin(LENS)).toBe(false);
+  });
+
+  it("still finds its conversation after the entry has been renamed", () => {
+    const list = [summary({ id: "spya-aaa333", origin: ITEM }), summary({ id: "spya-aaa444", origin: OTHER_MODE })];
+    expect(threadForOrigin(list, item({ quote: "a new name" }))?.id).toBe("spya-aaa333");
+    expect(threadForOrigin(list, item({ itemId: "spya-ttm999" }))).toBeUndefined();
+  });
+
+  it("is nobody's block chat", () => {
+    const list = [summary({ id: "spya-aaa333", origin: ITEM })];
+    expect(threadFor(list, BLOCK)).toBeUndefined();
+    expect(anchored(list)).toEqual([]);
+  });
+
+  it("goes to its own columns and back", () => {
+    const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null };
+    expect(originColumns(ITEM)).toEqual({ ...NONE, originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" });
+    expect(originFromColumns(originColumns(ITEM))).toEqual({ origin: ITEM });
+    /* Rows the new CHECK refuses: half of one is never read as the whole. */
+    expect(originFromColumns({ ...NONE, originMode: mode, originItemId: "spya-ttm222" })).toEqual({});
+    expect(originFromColumns({ ...NONE, originMode: mode, originQuote: "qualia" })).toEqual({});
+    expect(
+      originFromColumns({ ...NONE, originMode: mode, originItemId: "spya-ttm222", originQuote: "q", originBlockId: BLOCK }),
+    ).toEqual({});
+  });
+});
+
+describe("originName", () => {
+  it("leaves a short name alone but for its outer spaces", () => {
+    expect(originName("  qualia \n")).toBe("qualia");
+  });
+
+  it("cuts a long one to the cap, without half a surrogate pair at the end", () => {
+    expect(MAX_ORIGIN_NAME_CHARS).toBe(300);
+    expect(originName("x".repeat(301))).toHaveLength(300);
+    expect(originName("x".repeat(300))).toHaveLength(300);
+    const cut = originName(`${"x".repeat(299)}😀 tail`);
+    expect(cut.length).toBeLessThanOrEqual(300);
+    expect(cut).toBe("x".repeat(299));
   });
 });
 

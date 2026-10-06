@@ -39,8 +39,12 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
       return isLensOrigin(origin)
         ? { ...NO_ORIGIN, originMode: "debate", originLens: origin.lens }
         : { ...NO_ORIGIN, originMode: "debate", originBlockId: origin.blockId, originQuote: origin.quote };
+    case "glossary":
+    case "citations":
+      /* An id and a snapshot of the name; no block, no lens. */
+      return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
     default:
-      return origin.mode satisfies never;
+      return origin satisfies never;
   }
 }
 
@@ -48,14 +52,22 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  * The columns back as the union, **as a fragment to spread**, so a thread with
  * no origin gets no `origin` key at all rather than `origin: undefined`.
  *
- * A mode this code does not know (the CHECK allows three that are not built
- * yet) reads as no origin: the thread is still an ordinary chat. So does a
- * debate row that is neither shape exactly, which the CHECKs refuse
- * (`chat_threads_origin_debate`); half of one is never read as the whole.
+ * A mode this code does not know (the CHECK allows `summary`, which is not
+ * built) reads as no origin: the thread is still an ordinary chat. So does a
+ * row that is not one shape exactly, which the CHECKs refuse
+ * (`chat_threads_origin_debate`, `chat_threads_origin_item`); half of one is
+ * never read as the whole.
+ *
+ * **Not exhaustive by construction**: `originMode` is a string out of a
+ * database, so a new arm of the union has to be added here by hand.
  */
 export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin } {
+  const { originItemId: itemId, originBlockId: blockId, originQuote: quote, originLens: lens } = row;
+  if (row.originMode === "glossary" || row.originMode === "citations") {
+    if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
+    return { origin: { mode: row.originMode, itemId, quote } };
+  }
   if (row.originMode !== "debate") return {};
-  const { originBlockId: blockId, originQuote: quote, originLens: lens } = row;
   if (blockId !== null && quote !== null && lens === null) {
     return { origin: { mode: "debate", blockId, quote } };
   }

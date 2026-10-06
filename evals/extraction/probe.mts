@@ -57,7 +57,8 @@
  * [the plan](../../docs/plans/readability-repair-pass.md#what-the-ratio-is-and-is-not)
  * on why extracted-over-raw is not a quality score.
  */
-import { readArticle } from "../../src/extract.js";
+import type { ChallengeProvider } from "../../src/challenge-page.js";
+import { ChallengePage, TooLittleTextToRead, readArticle } from "../../src/extract.js";
 import { writeFile } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { compare, STRUCTURE } from "./inventory.mjs";
@@ -146,6 +147,13 @@ export interface Probe {
    * output. GPT Sol, reviewing C1a. src/extract.ts § `capabilityFloor`.
    */
   refusedAtChars: number | null;
+  /**
+   * **Or is it a site's bot check?** — stage 2's other refusal, which is about
+   * what the page is and not how much of it there is, so it has no count
+   * (src/challenge-page.ts). The provider, or `null`. When this is set
+   * `refusedAtChars` is `null` even on a short page: the bot check wins.
+   */
+  refusedAsBotCheck: ChallengeProvider | null;
 }
 
 /**
@@ -163,7 +171,12 @@ export interface Probe {
 function extract(
   rawHtml: string,
   url: string,
-): { html: string; title: string | null; refusedAtChars: number | null } {
+): {
+  html: string;
+  title: string | null;
+  refusedAtChars: number | null;
+  refusedAsBotCheck: ChallengeProvider | null;
+} {
   const { article, refusal } = readArticle(rawHtml, url);
   /* The extraction is still measured in full — the numbers are what a probe is
      for, and on a refused page they are the interesting ones. Only the verdict
@@ -171,12 +184,13 @@ function extract(
   return {
     html: article?.content ?? "",
     title: article?.title ?? null,
-    refusedAtChars: refusal?.chars ?? null,
+    refusedAtChars: refusal instanceof TooLittleTextToRead ? refusal.chars : null,
+    refusedAsBotCheck: refusal instanceof ChallengePage ? refusal.provider : null,
   };
 }
 
 export function probeHtml(rawHtml: string, url: string): Probe {
-  const { html, title, refusedAtChars } = extract(rawHtml, url);
+  const { html, title, refusedAtChars, refusedAsBotCheck } = extract(rawHtml, url);
   const cmp = compare(rawHtml, html, url);
 
   const structureLosses = STRUCTURE.map((tag) => ({
@@ -228,6 +242,7 @@ export function probeHtml(rawHtml: string, url: string): Probe {
     tinyExamples: show(tiny, 6),
     longestBlockChars: blocks.reduce((m, b) => Math.max(m, b.text.length), 0),
     refusedAtChars,
+    refusedAsBotCheck,
   };
 }
 
@@ -237,6 +252,7 @@ export async function probeUrl(url: string): Promise<Probe> {
     ratio: 0, droppedChars: 0, droppedBlocks: 0, biggestGap: null, structureLosses: [],
     blocks: 0, shatteredBlocks: 0, shatterExamples: [], markerBlocks: 0, markerExamples: [],
     refusedAtChars: null,
+    refusedAsBotCheck: null,
     tinyBlocks: 0, tinyExamples: [], longestBlockChars: 0,
   };
   let res: Response;
@@ -271,6 +287,12 @@ function line(p: Probe): string {
     parts.push(
       `      STAGE 2 REFUSES THIS PAGE — ${p.refusedAtChars} characters of article text, under ` +
         "the floor, so nothing below would ever reach a reader",
+    );
+  }
+  if (p.refusedAsBotCheck !== null) {
+    parts.push(
+      `      STAGE 2 REFUSES THIS PAGE — it is a bot check (${p.refusedAsBotCheck}), not the page ` +
+        "behind it, so nothing below would ever reach a reader",
     );
   }
   parts.push(

@@ -22,6 +22,7 @@
  * The final build over the whole body stays with the caller.
  */
 import type Anthropic from "@anthropic-ai/sdk";
+import { CallDeadlineReached } from "./call-failure.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { MAX_BATCH } from "./labels.js";
 import { log } from "./log.js";
@@ -609,14 +610,17 @@ export async function runSlices(opts: {
       const expiresAt = Date.now() + q.capMs;
       const own = new AbortController();
       active.set(own, expiresAt);
-      const onStop = (): void => own.abort();
-      if (signal?.aborted) own.abort();
+      /* Each abort carries its reason, because the reason is all the gateway
+         has to say who stopped the call: the caller's own is passed on as it
+         came, and the cap below is our deadline (`abortClass`). */
+      const onStop = (): void => own.abort(signal?.reason);
+      if (signal?.aborted) own.abort(signal.reason);
       else signal?.addEventListener("abort", onStop, { once: true });
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
         not(q, "out-of-time");
-        own.abort();
+        own.abort(new CallDeadlineReached());
       }, q.capMs);
       let message: Anthropic.Message;
       let call: ReturnType<typeof streamMessage> | undefined;

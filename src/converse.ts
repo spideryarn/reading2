@@ -65,6 +65,7 @@ import type {
   ThreadKind,
 } from "./types.js";
 import { ID_PATTERN } from "./ids.js";
+import { StallReached } from "./call-failure.js";
 import { errorFields, log, since } from "./log.js";
 import {
 
@@ -2575,7 +2576,7 @@ export async function* converse({
     let stallTimer: NodeJS.Timeout | undefined;
     const touch = () => {
       clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => roundStall.abort(new Error("stalled")), stallMs);
+      stallTimer = setTimeout(() => roundStall.abort(new StallReached()), stallMs);
     };
     const composite = AbortSignal.any(
       signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],

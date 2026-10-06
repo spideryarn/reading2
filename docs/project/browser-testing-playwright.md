@@ -72,6 +72,12 @@ died on `EADDRINUSE` because a peer already held its port, the launcher's readin
 from the peer's server, and sixteen screenshots came from another worktree's build. The server's own
 bind line in its log says which process took the port; a curl cannot.
 
+**Stop your server by the PID you started, never by pattern.** On 2026-10-06 a browser subagent
+tidied up with `pkill -f "node_modules/.bin/vite"`, which also matches `vitest`: it took down every
+dev server on the box (5173, 5174, 5273, 5274) and killed several sessions' test runs, which ended
+`143` and looked like failures of their changes. Note the PID when you start the server, kill that,
+and check its `cwd` is your own tree first.
+
 ## Signing in
 
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the

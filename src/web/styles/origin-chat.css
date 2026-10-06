@@ -1,0 +1,55 @@
+/* **The mark on an item a chat was started from** (OriginChat.tsx §
+   `OriginChatMark`): one of Debate's claims, a Glossary entry, a Citations
+   row. Plans 261005i (D4) and 261006d (D5).
+
+   A line of its own: an icon, the count of questions, and how the chat's
+   latest answer begins, on one line and cut with an ellipsis. It takes the
+   width it is given and never asks for more, so a long answer cannot push a
+   narrow band wide. The words are the model's and take their face from
+   voices.css (`.voice-ai`); the count and "No answer yet" are ours.
+
+   **Everything the mark needs to look right anywhere is here.** A caller's
+   sheet adds placement only: debate.css puts it on its own line of the
+   claim's heading, past the disclosure triangle. This sheet loads before
+   debate.css and citations.css so those placements win without a fight. */
+.origin-chat {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0.3rem 0 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+.origin-chat > svg { flex: none; }
+.origin-chat:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.origin-chat:active { color: var(--ink); }
+@media (hover: hover) {
+  .origin-chat:hover { color: var(--ink); }
+}
+.origin-chat-count {
+  flex: none;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.origin-chat-count::after { content: " ·"; }
+.origin-chat-line,
+.origin-chat-waiting {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.origin-chat-waiting { font-family: var(--font-ui); font-style: italic; }
+@media (pointer: coarse) {
+  /* A finger's height (docs/project/touch.md), without widening the row. */
+  .origin-chat { min-height: 2.5rem; }
+}

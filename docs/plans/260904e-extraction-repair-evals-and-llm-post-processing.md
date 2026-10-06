@@ -4,7 +4,8 @@
 Fable and GPT Sol and a re-measurement that found one of its six items already fixed and two of them
 misdescribed. On `dev`: C0.1 the order-gate fix, C0.2 the shape corpus, C1a the capability floor,
 C4a the narrow delete class, C5 the ArchWiki callout adapter. C1 is deferred until a long-wall
-fixture exists — C1a took its argument away, and its own § says so. **Left: C2, C3, C4b — and a
+fixture exists — C1a took its argument away, and its own § says so (one turned up, and C1's first
+entry landed on 2026-10-06: [261006c](261006c-a-bot-check-page-is-refused-by-its-own-markup.md)). **Left: C2, C3, C4b — and a
 review by Fable on 2026-09-07 argues none of the three is the right next thing**, recommending stage
 D instead (it improves the reading view, arc, Summaries, Outline, Structure and reading time
 together, where C2/C3 improve one page shape) and dropping C4b, whose cost this plan overstated: the
@@ -2166,6 +2167,11 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   narrative implies.
 
 - **C1 — the bot wall. REPRIORITISED 2026-09-06, after C1a landed and took its argument away.**
+  *Added 2026-10-06: the long wall turned up and the first entry landed —
+  [261006c](261006c-a-bot-check-page-is-refused-by-its-own-markup.md). It is **Anubis**
+  (hal.science, 1,034 characters, published for a month's worth of deferral), not the reCAPTCHA
+  entry imagined below, which the floor still refuses. Nobody ran the errand this entry names; an
+  unrelated eval found the page. What follows is as it was written.*
   It was *the biggest reader-visible win per hour*, on Fable's reasoning that **a published wall
   consumes a paying reader's slot** where a failed ingest is free
   ([billing.md](../project/billing.md)). **C1a now refuses both walls in the corpus**, so that

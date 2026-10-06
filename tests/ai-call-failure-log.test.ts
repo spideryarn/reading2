@@ -24,6 +24,7 @@ const HOISTED = vi.hoisted(() => {
 
 import { openRouterJson, openRouterStream } from "../src/ai-call.js";
 import { collectSpend } from "../src/ai-spend.js";
+import { CallDeadlineReached, StallReached } from "../src/call-failure.js";
 import { streamMessage } from "../src/messages-stream.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 
@@ -222,5 +223,121 @@ describe("ai call died part-way", () => {
       }
     });
     expect(stopped.lines).toEqual([]);
+  });
+});
+
+/* Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md. */
+describe("ai call stopped by our clock", () => {
+  /**
+   * A transport that hangs until the request's signal fires, as a real one
+   * does: before any response, or after a `200` that carried `frames`.
+   */
+  function hanging(frames?: string): { sent: () => number } {
+    let sent = 0;
+    vi.stubGlobal("fetch", (_url: unknown, init?: { signal?: AbortSignal }) => {
+      sent += 1;
+      const signal = init?.signal;
+      if (frames === undefined) {
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      }
+      let pulled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!pulled) {
+            pulled = true;
+            controller.enqueue(new TextEncoder().encode(frames));
+            return;
+          }
+          return new Promise<void>((resolve) => {
+            signal?.addEventListener(
+              "abort",
+              () => {
+                controller.error(signal.reason);
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }));
+    });
+    return { sent: () => sent };
+  }
+
+  /** A signal that fires with `reason` 20 ms from now. */
+  const stopsWith = (reason: unknown): AbortSignal => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(reason), 20);
+    return controller.signal;
+  };
+
+  const chatOn = (signal: AbortSignal) =>
+    drain(openRouterStream("chat", { model: "m", messages: [] }, { signal, onActivity: () => {}, end: { terminated: false } }));
+  const arcOn = (signal: AbortSignal) =>
+    streamMessage("arc", { max_tokens: 16, messages: [{ role: "user", content: "x" }] }, { power: "standard", signal }).finalMessage();
+
+  it("is one warn line when a stall clock stops a stream part-way, and it is not a death", async () => {
+    hanging(frame({ choices: [{ delta: { content: "hi" } }] }));
+    const { lines, all } = await linesSaying("ai call stopped by our clock", () => chatOn(stopsWith(new StallReached())));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.level).toBe("warn");
+    expect(ours(lines[0])).toEqual({ job: "chat", wire: "chat", model: "m", attempt: 1, class: "stall", status: 200 });
+    expect(all).not.toContain("died part-way");
+  });
+
+  it("is one line when a deadline stops a whole call before any answer, with none of the reason's words", async () => {
+    hanging();
+    const { lines, all } = await linesSaying("ai call stopped by our clock", () =>
+      openRouterJson("pdf", { model: "m", messages: [] }, { signal: AbortSignal.timeout(20) }),
+    );
+    expect(lines.map(ours)).toEqual([{ job: "pdf", wire: "chat", model: "m", attempt: 1, class: "deadline", status: null }]);
+    hanging();
+    const worded = await linesSaying("ai call stopped by our clock", () =>
+      openRouterJson("pdf", { model: "m", messages: [] }, { signal: stopsWith(new CallDeadlineReached(SECRET)) }),
+    );
+    expect(worded.lines.map(ours)).toEqual([{ job: "pdf", wire: "chat", model: "m", attempt: 1, class: "deadline", status: null }]);
+    expect(all + worded.all).not.toContain("badgers");
+  });
+
+  /* F16. Before the answer is where this wire would ask again, and an abort
+     that now carries failure fields must still not be taken for a failure. */
+  it("is one line on the Messages wire for a clock that fires before the answer, with one request and no retry", async () => {
+    const t = hanging();
+    const { lines, all } = await linesSaying("ai call stopped by our clock", () => arcOn(stopsWith(new StallReached())));
+    expect(t.sent()).toBe(1);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.level).toBe("warn");
+    expect(ours(lines[0])).toMatchObject({ job: "arc", wire: "messages", attempt: 1, class: "stall", status: null });
+    expect(Object.keys(ours(lines[0])).sort()).toEqual(["attempt", "class", "job", "model", "status", "wire"]);
+    expect(all).not.toContain("ai transport retry");
+    expect(all).not.toContain("died part-way");
+  });
+
+  it("is one line on the Messages wire for a deadline after message_start", async () => {
+    hanging(MESSAGE_START);
+    const { lines, all } = await linesSaying("ai call stopped by our clock", () => arcOn(AbortSignal.timeout(20)));
+    expect(lines.map(ours)).toMatchObject([{ job: "arc", wire: "messages", attempt: 1, class: "deadline", status: 200 }]);
+    expect(all).not.toContain("died part-way");
+  });
+
+  it("is not logged for a reader's Stop, on either wire, at either phase", async () => {
+    const stop = () => stopsWith(new Error(SECRET));
+    hanging();
+    const early = await linesSaying("ai call stopped by our clock", () => chatOn(stop()));
+    hanging(frame({ choices: [{ delta: { content: "hi" } }] }));
+    const late = await linesSaying("ai call stopped by our clock", () => chatOn(stop()));
+    hanging();
+    const earlyArc = await linesSaying("ai call stopped by our clock", () => arcOn(stop()));
+    hanging(MESSAGE_START);
+    const lateArc = await linesSaying("ai call stopped by our clock", () => arcOn(stop()));
+    for (const run of [early, late, earlyArc, lateArc]) {
+      expect(run.lines).toEqual([]);
+      expect(run.all).not.toContain("badgers");
+      expect(run.all).not.toContain("died part-way");
+      expect(run.all).not.toContain("ai transport retry");
+    }
   });
 });

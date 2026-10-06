@@ -15,6 +15,8 @@ let context: StepContext | undefined;
 let modelCalls = 0;
 let hang = false;
 let pauses = 0;
+/** What each hanging call's signal was aborted with, in order. */
+let stops: unknown[] = [];
 vi.mock("../src/store/pg-jobs.js", () => ({ pgJobStore: {
   settleExpired: async () => [],
   claim: async () => { job.status = "running"; return { kind: "claimed", job }; },
@@ -43,7 +45,10 @@ vi.mock("../src/messages-stream.js", async (original) => ({
       finalMessage: async () => {
         if (hang && !isRootCall(params)) {
           await new Promise<never>((_, reject) => {
-            opts.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+            opts.signal.addEventListener("abort", () => {
+              stops.push(opts.signal.reason);
+              reject(new Error("aborted"));
+            }, { once: true });
           });
         }
         return messageOf(isRootCall(params) ? ROOT_ANSWER : sectionsAnswer(askedIds(params)));
@@ -56,6 +61,7 @@ const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, REQUEUE_BUDGET, STEP_BUDG
 const { STEPS } = await import("../src/pipeline.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { SLICE_CALL_CAP_MS } = await import("../src/structure-slices.js");
+const { CallDeadlineReached, abortClass } = await import("../src/call-failure.js");
 const OWNER = "51ce5e0e-0000-4000-8000-0000000000e1" as OwnerId;
 const blocks = paragraphs(3000);
 
@@ -100,6 +106,7 @@ beforeEach(() => {
   modelCalls = 0;
   hang = false;
   pauses = 0;
+  stops = [];
   job = { id: "queue-job", ownerId: OWNER, slug: "queue", status: "queued", createdAt: new Date().toISOString(),
     steps: [{ name: "structure", label: STEPS.structure.label, status: "pending", force: true }] };
 });
@@ -132,6 +139,11 @@ describe("stage E through the queue without a database", () => {
     expect(context!.signal!.aborted).toBe(false);
     expect(Date.now()).toBeLessThan(context!.deadlineAt!);
     expect(vi.getTimerCount()).toBe(0);
+    /* Plan 261006d, F15: the per-call cap is our deadline, and the gateway can
+       only know that from the reason the call's signal carries. */
+    expect(stops.length).toBeGreaterThan(0);
+    expect(stops.map((reason) => reason instanceof CallDeadlineReached)).toEqual(stops.map(() => true));
+    expect(stops.map(abortClass)).toEqual(stops.map(() => "deadline"));
   });
 
   it("a reader Stop cancels the queue and commits no structure product", async () => {
@@ -144,6 +156,12 @@ describe("stage E through the queue without a database", () => {
     expect(out).toMatchObject({ done: true, job: { status: "cancelled" } });
     expect(product).toBeUndefined();
     expect(vi.getTimerCount()).toBe(0);
+    /* The caller's own reason reaches each call, not a fresh one made here:
+       whoever stopped the queue is who the call's row should name. */
+    expect(stops.length).toBe(3);
+    expect(context!.signal!.aborted).toBe(true);
+    expect(stops.map((reason) => reason === context!.signal!.reason)).toEqual([true, true, true]);
+    expect(stops.map(abortClass)).toEqual(["abort", "abort", "abort"]);
   });
 
   /* Stage C of plan 261005j's rest of stage 1a. The same on Postgres, with the
