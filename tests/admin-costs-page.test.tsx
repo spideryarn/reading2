@@ -280,13 +280,32 @@ describe("the default view", () => {
     expect(host.textContent).toContain("UTC");
   });
 
-  it("ranks users by recorded amount, and counts its rows off the table", async () => {
+  it("ranks users by total cost, largest first, and counts its rows off the table", async () => {
     await show();
     const rows = ranking();
     expect(rows.map((r) => r.label)).toEqual([ADMIN_EMAIL_LOCAL, BEN_EMAIL]);
     /* The + is the floor marker: one of his calls reported no cost. */
     expect(rows.map((r) => r.amount)).toEqual(["$5.00+", "$3.25"]);
     expect(host.querySelector("[data-row-count]")?.textContent).toBe("2 rows");
+  });
+
+  it("rests on total cost rather than a correlated count or pocket, and reverses from the header", async () => {
+    await show("", [
+      row({ calls: 20, creditsNanos: 3 * DOLLAR }),
+      row({ ownerId: BEN, calls: 1, creditsNanos: DOLLAR, byokNanos: 3 * DOLLAR }),
+    ]);
+    const sortedBy = [...host.querySelectorAll("[data-ranking] thead th[aria-sort]")].map((th) => [
+      (th.textContent ?? "").trim(),
+      th.getAttribute("aria-sort"),
+    ]);
+    expect(sortedBy).toEqual([["Total cost", "descending"]]);
+    expect(ranking().map((r) => [r.label, r.amount])).toEqual([
+      [BEN_EMAIL, "$4.00"],
+      [ADMIN_EMAIL_LOCAL, "$3.00"],
+    ]);
+
+    await click(host.querySelector('th[data-column-id="amount"] button'), "the Total cost header");
+    expect(ranking().map((r) => r.label)).toEqual([ADMIN_EMAIL_LOCAL, BEN_EMAIL]);
   });
 
   it("says what the money is and is not in the headline", async () => {
@@ -679,10 +698,15 @@ describe("what a narrow window needs", () => {
     expect(inner?.className).toMatch(/tw:max-w-/);
   });
 
-  it("orders the ranking label, recorded amount, share, bar, then the counts", async () => {
+  /* **Headed "Total cost"**, the words Greg asked for while this page's
+     column was headed "Recorded amount" (spya-h2dzab, 2026-10-06): beside
+     "Calls" and "Per priced call" the row's whole cost has to say it is one.
+     docs/plans/261006j-total-cost-column-on-admin-costs-and-metadata.md. */
+  it("orders the ranking label, total cost, share, bar, then the counts", async () => {
     await show();
     const head = [...host.querySelectorAll("[data-ranking] thead th")].map((th) => (th.textContent ?? "").trim());
-    expect(head).toEqual(["User", "Recorded amount", "Share", "", "Calls", "Per priced call", "Unpriced", "Failed"]);
+    expect(head).toEqual(["User", "Total cost", "Share", "", "Calls", "Per priced call", "Unpriced", "Failed"]);
+    expect(host.querySelector("[data-ranking] caption")?.textContent).toBe("Total cost by user");
     const first = host.querySelector("[data-ranking] tbody tr");
     const cells = [...(first?.children ?? [])];
     expect(cells[1]?.querySelector("[data-amount]")).not.toBeNull();
