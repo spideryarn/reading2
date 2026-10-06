@@ -11,8 +11,8 @@
  *
  * The error is surfaced rather than swallowed, and that is the load-bearing
  * part of a file this small: the one thing this endpoint can do that looks like
- * success is answer with an empty list — a permissions failure on `auth.users`,
- * or the filesystem store's 501, must reach the page as words rather than as a
+ * success is answer with an empty list — a permissions failure on `auth.users`
+ * must reach the page as words rather than as a
  * table with no rows in it. docs/reusable/silent-success.md.
  */
 import { useCallback, useEffect, useState } from "react";

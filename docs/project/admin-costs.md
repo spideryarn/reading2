@@ -46,7 +46,11 @@ Each of these was a way the first design was wrong
 
 - **"Recorded amount" is credits + BYOK upstream + our own arithmetic**, the three pockets
   [ai-gateway.md § What it cost](ai-gateway.md#what-it-cost) keeps apart. It is not cash:
-  "estimated cash" adds the credit-purchase fee to the credits pocket only.
+  "estimated cash" adds the credit-purchase fee to the credits pocket only. **The ranking heads its
+  column "Total cost"**, and it is this figure per row. Greg, 2026-10-06, from this page
+  while the column was headed "Recorded amount": *"please add a total-cost column … because that's what I
+  care about most! That's what we should sort by"*. It is the resting sort, largest first
+  ([261006j](../plans/261006j-total-cost-column-on-admin-costs-and-metadata.md)).
 - **An amount with an unpriced call behind it is a floor**, and is drawn with a `+`.
 - **Amount per call divides by priced calls**, never all calls.
 - **No token and no duration figure on the page.** The wires disagree about what an input token is,

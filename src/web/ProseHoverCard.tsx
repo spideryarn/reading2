@@ -103,6 +103,7 @@ import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
 import { Link } from "./Link.js";
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
@@ -1664,6 +1665,24 @@ export interface QuoteCardSource {
 }
 
 /**
+ * **What a quote is, in the card's first line.** Each claim is one the code
+ * keeps: *a passage*, not a line (src/quotes.ts § `SYSTEM`); *the AI picked
+ * out*, since only a model's quote reaches this card and a reader's own
+ * highlight is another mark; *the article's own words*, never "the author's"
+ * (mode-catalog.ts § quotes says why that cannot be claimed).
+ */
+export const QUOTE_CARD_SAYS = "A passage the AI picked out as worth keeping, in the article’s own words.";
+
+/**
+ * **What the strength of the purple means**, said only on a quote that has a
+ * score: beside *Not scored.* it would be a sentence about some other quote.
+ * `quoteTier` and `quoteAlpha` both read `priorityOf`, the higher of the
+ * scores the card prints below. True in this direction only: the fade has a
+ * floor, so two low scores can draw alike.
+ */
+export const QUOTE_CARD_PURPLE = "Stronger purple means a higher Importance or Striking score.";
+
+/**
  * **A quote, from the fill the reader is pointing at** — Greg, 2026-09-11
  * (spya-mtyquy): *"tooltip to show our quantitative scores and perhaps
  * Previous/Next icon-buttons to jump to the next Quote, and a button to open
@@ -1713,6 +1732,27 @@ function QuoteCard({
             {at + 1} of {source.listed.length}
           </span>
         )}
+      </p>
+      {/* **What a quote is**, first, because the fills are in the prose in
+          every mode and this card is where a reader who has never opened
+          Quotes meets one. Greg, 2026-10-06 (spya-tpmde9): *"so readers know
+          what they are"*. From the viewer's side, so it is true for a visitor
+          too. docs/plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md. */}
+      <p className="prose-card-meta prose-card-quote-what">
+        {scores.length > 0 ? `${QUOTE_CARD_SAYS} ${QUOTE_CARD_PURPLE}` : QUOTE_CARD_SAYS}{" "}
+        <Link
+          className="prose-card-quote-help"
+          href={helpHref(modeAnchor("quotes"))}
+          onClick={(event) => {
+            /* `Link` leaves a modified click to the browser so it can open Help
+               elsewhere. Close only when this tab is actually following it. */
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            onClose();
+          }}
+        >
+          More in Help →
+        </Link>
       </p>
       {scores.length > 0 ? (
         <dl className="prose-card-scores">

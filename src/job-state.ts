@@ -18,7 +18,7 @@
  * ## What is deliberately not an input
  *
  * **The lease.** `Job` on the wire carries none. `leaseExpiresAt` lives on the
- * Postgres row and in the filesystem adapter's `attempts` map and never
+ * Postgres row and never
  * reaches `publicJob`, so *running, and its claimant is dead* is invisible here
  * until the server reconciles it — `settleExpired`, called from `listJobs` in
  * src/jobs.ts. That is the design and not a gap: the lease is the correctness

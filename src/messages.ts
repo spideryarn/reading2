@@ -4555,7 +4555,7 @@ export const SHARING_CHECKING = "Checking who can read this…";
 /**
  * **We never found out**, and no write was attempted.
  *
- * The filesystem store has no column, or the page's metadata fetch failed. The
+ * The page's metadata fetch failed, or its answer carried no `sharing` block. The
  * second sentence is the load-bearing one and it is true *only* in this case:
  * nothing was asked of the server, so whatever was true before still is.
  */
@@ -5644,7 +5644,7 @@ export const DIRECT_ADD_SENT_TEXT_AWAY =
  * at all.
  *
  * No hedging, and it must not be styled as an alarm — see
- * src/web/styles.css § referee mode.
+ * src/web/styles/referee.css § referee mode.
  */
 export const REFEREE_TEXT_ALREADY_SENT =
   "This article's text has already been sent to a third-party model provider — that happened when " +
@@ -5732,11 +5732,13 @@ export const FEEDBACK_SEND_FAILED: ReaderFacingFailure = {
 /**
  * Feedback is asking for a database this deployment does not have.
  *
- * `ours`, not `retry`: the filesystem store answers this route with a 501 by
- * design (src/store/index.ts), so trying again is the one thing guaranteed not
- * to work. It is a developer-machine sentence rather than one a reader meets,
- * and it is written plainly anyway because the whole point of copy.md is that
- * we do not know in advance who is reading.
+ * `ours`, not `retry`: until 2026-09-05 the filesystem store answered this
+ * route with a 501 by design, so trying again was the one thing guaranteed not
+ * to work. Nothing in src/ sends a 501 since that store went; the dialog still
+ * maps one to this sentence (src/web/FeedbackDialog.tsx). It was a
+ * developer-machine sentence rather than one a reader meets, written plainly
+ * anyway because the whole point of copy.md is that we do not know in advance
+ * who is reading.
  */
 export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
   kind: "ours",

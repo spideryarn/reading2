@@ -130,6 +130,17 @@
 <p class="meta"><strong>8 minutes</strong> to skim · <strong>~30</strong> to read everything ·
 written 2026-08-30, against the tree at commit <code>80ff5b4</code></p>
 
+<div class="callout warn">
+  <span class="title">Written 2026-08-30. Since then the problem this page describes was solved.</span>
+  <p>Every step now writes to Postgres and Supabase Storage, so imports run on production. The
+  filesystem store went on 2026-09-05 and its <code>SPIDERYARN_STORE</code> flag on 2026-09-06;
+  <code>src/store/import.ts</code> and <code>npm run db:import</code> are gone, and the
+  <code>hierarchy</code> step is called <code>structure</code> since 2026-10-02. Read this page as
+  the history of why. For today: <a href="../project/ingest-queue.md">ingest-queue.md</a>,
+  <a href="../project/database.md">database.md</a> and
+  <a href="../project/architecture.md">architecture.md</a>.</p>
+</div>
+
 <h2 id="tldr">TL;DR</h2>
 
 <p>Pasting a URL creates a <strong>job</strong>: a list of six steps that run one at a time, each

@@ -46,13 +46,14 @@
  *
  * It is simpler, and for one reason worth stating plainly: **this view's hard
  * problem is horizontal and the bottom edge is vertical.** layout.ts spends its
- * whole length negotiating width — it shrinks the gist columns, and when that
- * is not enough it starts dropping levels. Anything permanent down the left
- * joins that negotiation: a new `--rail-w` term in five CSS rules, a new
+ * whole length negotiating width — between the prose, mode band and marginalia today,
+ * and until 2026-09-29 by shrinking the gist columns and then dropping
+ * levels. Anything permanent down the left joins that negotiation: a new
+ * `--rail-w` term in five CSS rules, a new
  * constant beside `SPINE_W`, a new interaction with the spine's on/off,
- * and a band of window widths where a column is dropped that used to fit. A bar
- * at the bottom takes height, and height is the axis where nothing is scarce —
- * the page simply scrolls. `fitView` never hears about this file.
+ * and changes to the widths where panels can sit beside the prose. A bar
+ * at the bottom takes height; the page can scroll vertically. `fitView` never
+ * hears about this file.
  *
  * Full reasoning, and the right-hand edge that was offered and turned down:
  * docs/plans/260825c-bottom-bar.md.
@@ -69,9 +70,9 @@
  * ## Three kinds of button, said out loud
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
- * `Tweets` and `Metadata` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Hierarchy` / `Summary` /
- * `Glossary` / `Search` / `Chat`
+ * `Metadata` navigates; `Comments` opens a drawer *on the
+ * reading view* and navigates everywhere else; the modes (`Summary`,
+ * `Glossary`, `Search`, `Chat` and the rest of `MODES_UI`)
  * choose what the middle of the page **is**. That is three real differences and
  * the markup has to tell the truth about each — a link gets
  * `aria-current="page"`, a drawer trigger gets `aria-expanded`, and the mode
@@ -85,7 +86,7 @@
  * twice.** What varies is whether a `drawer` was handed in. Only the reading
  * view has the comments, because only it pays for them: `useComments(slug)`
  * fetches on mount, and a visit to the metadata page should not buy a drawer
- * nobody opened. So off the reading view, Questions is a link back to it with
+ * nobody opened. So off the reading view, Comments is a link back to it with
  * `?panel=questions` — which is also where a question is worth opening, since
  * clicking one scrolls to the passage it is about.
  *
@@ -111,7 +112,8 @@
  * source of truth, and a literal-order test makes order changes deliberate. A
  * new mode goes there, and the compiler asks for it — a `Mode` with no row is a
  * typecheck error, not a button nobody notices is missing
- * (`ModesMissingFromDock`). Anything that is not a mode goes after them.
+ * (`ModesMissingFromDock`). Article actions follow the modes; the home link
+ * precedes them.
  *
  * **Since 2026-09-29 the modes are also in runs, with a line between runs** —
  * Greg reordered them and asked for *"subtle vertical separator lines between
@@ -701,11 +703,11 @@ interface ModeUi {
    * The labels are dropped as soon as the row stops fitting, and again when
    * even the icons are tight, because they are said twice — in the tooltip and
    * in the `aria-label` — so dropping them costs a sighted reader a hover and a
-   * screen-reader user nothing (dock-fit.ts, styles.css § the bar's fit
+   * screen-reader user nothing (dock-fit.ts, dock-fit.css § the bar's fit
    * ladder). Exactly one button is worth the width anyway: the one
    * that gets you *out*, which a reader is reaching for precisely when they do
-   * not want to hover ten icons to find it. So on a phone the row is thirteen
-   * glyphs and one word, and the word is the exit.
+   * not want to hover every icon to find it. In compact fits the other mode
+   * labels go and this word stays: it is the exit.
    */
   keepLabel?: true;
 }
@@ -730,10 +732,10 @@ const MODES_UI = [
      be, and the exit from the document is not one of them. See the header.
 
      Not drawn larger, and that is a deliberate departure from the ask. A
-     radiogroup of ten peers with one of them enlarged reads as a mistake before
+     radiogroup of peers with one of them enlarged reads as a mistake before
      it reads as emphasis. What it gets instead is its label, kept at narrow
-     widths where every other button loses one (styles.css § the bar's fit ladder) —
-     so on a phone the bar is eight icons and one word, and the word is the exit.
+     widths where every other button loses one (dock-fit.css § the bar's fit ladder) —
+     so the compact mode segment has icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
 
      **And since 2026-09-05 it is the only way out**, the `×` in the controls
@@ -747,8 +749,9 @@ const MODES_UI = [
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
      is exactly what an on-screen keyboard covers, and what slides away when you
-     scroll. The fix for that is in styles.css § a small device — the bars stay
-     while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
+     scroll. narrow-window.css § a small device keeps the dock visible while
+     a band covers the article; beside the article it can still hide on scroll.
+     docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
     group: "exit",
@@ -2464,7 +2467,7 @@ export function Dock({
             trailing padding out of its scrollable overflow, so the last button
             was free to sit in it — six pixels on a laptop, and `--safe-right`
             on a phone held landscape, which is the cutout the inset exists to
-            keep clear. styles.css § the floor, and dock-fit.ts. */}
+            keep clear. dock.css § `.dock` (horizontal overflow), and dock-fit.ts. */}
         <span className="dock-tail" aria-hidden="true" />
       </div>
     </>
@@ -2803,7 +2806,7 @@ function DockModes({
    * deliberate. Two reasons, and the second is why it could not wait:
    *
    * **The arrows already mean something on this page.** ↑ / ↓ step through the
-   * article and ← / → choose the granularity stride (keyboard.md), and this
+   * article and ← / → can belong to the active mode (keynav.ts), and this
    * handler called `stopPropagation`, so while focus was anywhere in the bar
    * all four keys stopped doing their job. Greg, 2026-08-31:
    *
@@ -2819,15 +2822,15 @@ function DockModes({
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *
-   * **The cost, which is real:** the segment goes from one tab stop to fourteen,
+   * **The cost, which is real:** the segment goes from one tab stop to one per visible mode,
    * so tabbing past the bar takes more presses. That is the price of every mode
    * staying reachable without arrows, and it is the right way round — a roving
-   * tabindex with no arrows would leave thirteen of the fourteen unreachable by
+   * tabindex with no arrows would leave all but the current mode unreachable by
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
-   * still true, still what the hairline frame says (styles.css § the modes
-   * segment), and not what the arrow keys were for.
+   * still true, still what the hairline frame says (dock-fit.css § the mode
+   * switch), and not what the arrow keys were for.
    *
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
@@ -3901,7 +3904,7 @@ function DockTab({
  * `aria-disabled` and a guarded handler rather than the `disabled` attribute. A
  * `disabled` button fires no pointer events in Chrome and takes no focus, so
  * the tooltip explaining *why it will not move* would be unreachable in exactly
- * the states that need explaining. styles.css § `.dock-btn.soon` was written
+ * the states that need explaining. dock.css § `.dock-btn.soon` was written
  * for this argument and this is its first user.
  *
  * Greg asked for it mid-run, 2026-09-03: *"show a button at the end of the bar

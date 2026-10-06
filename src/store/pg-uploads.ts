@@ -5,12 +5,12 @@
  * That is the whole reason this exists. `POST /api/uploads` and
  * `POST /api/jobs { uploadId }` are two HTTP requests, and on a serverless host
  * they may not run on the same machine, so a record on a function's local disk
- * is a record the second request cannot find. The filesystem adapter is not
- * wrong; it is right about one process and there is more than one.
+ * is a record the second request cannot find. The filesystem adapter was not
+ * wrong; it was right about one process and there is more than one.
  *
  * ## Every transition is a conditional UPDATE, and `rowCount` is the answer
  *
- * Not read-then-write anywhere, including where the filesystem adapter has to
+ * Not read-then-write anywhere, including where the filesystem adapter had to
  * read first. The predicate carries the precondition, so the database decides
  * the winner rather than the order two requests happened to arrive in — and a
  * losing caller learns it lost rather than overwriting somebody.
@@ -121,7 +121,7 @@ const rawPgUploadStore: UploadStore = {
   /**
    * One statement, and no marker file.
    *
-   * The filesystem adapter needs a create-only marker because read-then-write
+   * The filesystem adapter needed a create-only marker because read-then-write
    * has a gap in it. Here the precondition is the `WHERE`, so there is no gap
    * to have: `rowCount === 1` won the race and `0` lost it.
    *

@@ -132,7 +132,7 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
-       properties are declared on `.site` (styles.css § the site), so without it
+       properties are declared on `.site` (site.css § the site), so without it
        every `site-panel` on this page draws a transparent border over no fill
        and the ghost buttons lose their outline — a page that looks unstyled
        rather than broken, which is the version nobody reports. */

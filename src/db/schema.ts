@@ -2218,8 +2218,8 @@ export const comments = spideryarn.table(
      * see docs/plans/260828a-comments-and-bookmarks.md § There is deliberately no
      * foreign key. The short version: the link is advisory, a deleted thread
      * leaves a comment that is still the reader's mark, and a constraint
-     * Postgres can keep and the filesystem store cannot is exactly what
-     * tests/store-parity.test.ts exists to catch.
+     * Postgres can keep and the filesystem store (gone 2026-09-05) could not
+     * was exactly what tests/store-parity.test.ts existed to catch.
      */
     threadId: text("thread_id"),
     status: text("status").notNull(),
@@ -2687,14 +2687,14 @@ export const jobs = spideryarn.table(
 
     /**
      * **How many times this job has been given back to the queue after its
-     * claimant stopped answering.** The budget's counter, and nothing else reads
-     * it.
+     * claimant stopped answering or cooperatively paused at its deadline.**
+     * The budget's counter; it also crosses the wire as `Job.requeues`.
      *
      * `settleExpired` (src/store/pg-jobs.ts) used to end every lapsed claim
      * `error`, so a deploy landing during an ingest — or a step that overran its
      * lease — cost the reader their job and sent them to the Retry button. It
-     * now puts the job back to `queued` on **this same row** instead, which is
-     * what the filesystem store's `sweepStopped` has always done on restart, and
+     * now requeues an uncancelled job with budget left on **this same row**,
+     * which is what the filesystem store's `sweepStopped` had done on restart, and
      * what keeps the slug, the article and therefore the article's checkpoints —
      * and, since 2026-09-04, the **draft** as well, without which the block ids
      * those checkpoints are keyed on move and reaching them is not the same as
@@ -5573,9 +5573,9 @@ export const checkpoints = spideryarn.table(
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
-     * filesystem adapter turns this string into a **file name**. A key the
-     * database would take and the filesystem would not is a divergence that
-     * shows up as one store working and the other quietly not — and no dot is
+     * filesystem adapter (deleted 2026-09-01) turned this string into a **file
+     * name**. A key the database would take and the filesystem would not was a
+     * divergence that showed up as one store working and the other quietly not — and no dot is
      * allowed at all, so `..` is impossible by construction rather than by a
      * second check. Lower case only: macOS filesystems are case-insensitive, so
      * two keys differing only in case would be one file and two rows.

@@ -184,7 +184,7 @@ const DEFAULT_COLUMN = { sortUndefined: false } as const;
  * 16px against the two outer edges so the text is not sitting on the border.
  * It was a flat `px-2` (8px) until 2026-09-06 — which read as cramped only
  * *after* the vertical column rules stopped being drawn over the top of it
- * (styles.css § the head with no row). Research band for a dense table is
+ * (table.css § the head with no row). Research band for a dense table is
  * 12–16px horizontal against 8px vertical.
  */
 const CELL_X = "tw:px-3 tw:first:pl-4 tw:last:pr-4";

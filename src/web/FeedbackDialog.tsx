@@ -914,8 +914,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
         ),
       });
       if (!res.ok) {
-        /* 501 is this deployment having no database rather than anything the
-           reader did — src/store/index.ts. Everything else already carries a
+        /* 501 was this deployment having no database rather than anything the
+           reader did; nothing in src/ sends one since the filesystem store
+           went on 2026-09-05. Everything else already carries a
            sentence written for a reader, with an `[fb-…]` code on the end. */
         const message =
           res.status === 501 ? FEEDBACK_NOT_AVAILABLE.message : (await failure(res)).message;

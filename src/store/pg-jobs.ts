@@ -2,14 +2,14 @@
  * Ingest jobs in Postgres — the record both invocations can see, and the fence
  * that stops the wrong one writing.
  *
- * ## Every transition is one conditional statement, bar one
+ * ## Conditional writes enforce transitions
  *
  * The precondition lives in the `WHERE`, so the database decides rather than
  * the order two requests happened to arrive in, and a loser learns it lost
- * instead of overwriting a winner — where the filesystem adapter has to read
- * first, this file does not.
+ * instead of overwriting a winner. Some operations also lock and read rows to
+ * decide their outcome; the write still checks its precondition.
  *
- * **`pauseForDeadline` is the exception and it is deliberate.** Its caller does
+ * **`pauseForDeadline` locks before classifying, deliberately.** Its caller does
  * not want to know *whether* it moved the row, it wants to know **why not** —
  * Stop, a spent budget, or a lost claim, which want three different things and
  * which one row count cannot tell apart. So it locks the row, decides, and
@@ -244,10 +244,9 @@ export interface IngestProvenance {
  *
  * **Not on `Job` and not on the `JobStore` interface**, deliberately. `Job` is
  * serialised to the browser by `publicJob` (src/jobs.ts) and a ledger id is not
- * the reader's business; the interface is shared with the filesystem adapter,
- * where quota does not exist (docs/project/billing.md). So this is a Postgres
- * read with one Postgres-only caller — src/billing/admission.ts, which is
- * already behind that flag.
+ * the reader's business; the interface was shared with the filesystem adapter
+ * until 2026-09-05, where quota did not exist (docs/project/billing.md). So this is a Postgres
+ * read with one Postgres-only caller — src/billing/admission.ts.
  *
  * Owner-scoped, like `get`: somebody else's job is one that is not there.
  * Dismissed-scoped like `get`, too: otherwise a direct Retry can reserve a
@@ -1091,7 +1090,8 @@ async function settlingIfTerminal(transition: (tx: Tx) => Promise<Job>): Promise
       /* Off the row this transaction has just written and still holds, the same
          read `settleIn` does and for the same reason: `Job` deliberately does
          not carry the ledger id, and widening it to would push a Postgres-only
-         column through an interface the filesystem store shares. */
+         column through an interface the filesystem store shared when this was
+         written. */
       const [row] = await tx
         .select({ ingestEventId: jobs.ingestEventId })
         .from(jobs)
@@ -1312,7 +1312,7 @@ const rawPgJobStore: JobStore = {
 
       if (running >= maxRunning) {
         /* **Classify the job before blaming the cap** — `refusalFor` above says
-           why, and the filesystem adapter classifies first for the same reason.
+           why, and the filesystem adapter classified first for the same reason.
            **Not "N of N".** The cap can be lowered under jobs that are already
            running, so this really can read `already running 5 of 3` — which is a
            true account of a machine that is over its new limit and draining, and

@@ -487,11 +487,12 @@ describe('the "?"', () => {
        read address-then-mark while the eye read mark-then-address; a column that
        truncates cannot afford that, because the stylesheet now picks "the first
        k that fit" with `:nth-child`. So this assertion is load-bearing: move an
-       element in the JSX and you have changed the layout, not the tab order.
+       element in the JSX and you have changed the layout as well as tab order.
 
        The mark leads because it is the reader's own — Greg's call, asked
-       directly, 2026-09-05 — so a note is never the thing that falls off a short
-       paragraph. styles.css § the gutter has the table. */
+       directly, 2026-09-05 — so it gets the first visible slot whenever an
+       actual control fits. A one-slot row with multiple controls shows the
+       "…" instead, with the mark behind it. gutter.css § the gutter has the table. */
     paint([comment("c1", 5)]);
     /* The reading-time strip is a child too, and not a control: it is filtered
        out here and pinned last by the test below, because anywhere earlier it

@@ -101,8 +101,8 @@ type Db = ReturnType<typeof getDb>;
  * contracts.ts is explicit about why both are needed: `keep` alone is a
  * cross-process bug. Process B sees process A's live row in nobody's set and
  * errors an answer that is still arriving, which on Vercel is the ordinary shape
- * rather than an edge case. The filesystem store can live with one boolean
- * because two servers sharing one `data/` directory is a thing nobody does.
+ * rather than an edge case. The filesystem store could live with one boolean
+ * because two servers sharing one `data/` directory was a thing nobody did.
  *
  * So the window is applied **here**, in the store that has other processes to be
  * wrong about, rather than being pushed into a signature src/routes.ts would
@@ -329,7 +329,7 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
     }
 
     /* The run as it now stands, so a GET is one call — the filesystem store
-       answers the same way. */
+       answered the same way. */
     return runFor(articleId, db);
   },
 };
