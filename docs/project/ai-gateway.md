@@ -816,13 +816,15 @@ the names do not say:
 when a recognised deadline expired while the attempt was active, and `abort` for anything else,
 a reader's Stop included. A deadline can cap one call, a turn, a processing step or a whole
 pipeline job; it does not establish how long that particular provider request ran.
-`failure_phase` and `failure_status` are filled as on an error, and `outcome` stays `aborted`.
+On gateway rows, `failure_phase` and `failure_status` are filled as on an error, and `outcome`
+stays `aborted`.
 `abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things to
 know about what it tells apart:
 
 - **The pipeline's deadline on a whole job** (`DeadlineReached` in `src/jobs.ts`) is a `deadline`
   since [261006f](../plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md):
-  it extends `CallDeadlineReached`. Rows from before that say `abort`.
+  it extends `CallDeadlineReached`. Previously classified job-deadline stops say `abort`;
+  older rows can have no class.
 - **A `deadline` is any `AbortSignal.timeout` on the call's signal**, whoever set it, plus the
   clocks that say so by name (`CallDeadlineReached`, the job's among them). Every one that reaches
   a gateway today is ours; that is a convention, not a guarantee.
@@ -833,8 +835,9 @@ know about what it tells apart:
 `aborted` when OpenAI's status is `cancelled` or `incomplete`, and since 261006f it carries the
 class `abort` with no phase and no status: no timer of ours sends `response.cancel`, so a terminal
 event that arrived was the reader talking over the model, or the reply hitting its length cap or a
-content filter. A live conversation that our own time limits closed, or that went silent, usually
-leaves no row for the unfinished response, so it is in no count.
+content filter. An unfinished response without a terminal usage report has no response row.
+Our time limits and a lost connection can close a conversation without that report; closing it
+does not create a response row.
 
 On an OpenRouter stream, an in-band provider error already observed remains an error even if a
 later body read aborts (the F9 fix).

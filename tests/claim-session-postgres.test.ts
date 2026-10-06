@@ -603,7 +603,12 @@ describe("a claim under Postgres", () => {
   afterAll(async () => {
     const database = getDb();
     const slugs = Object.values(SLUGS);
-    for (const slug of slugs) await database.delete(jobsTable).where(eq(jobsTable.slug, slug));
+    for (const slug of slugs) {
+      /* A failed advance or assertion may never reach callsOf(). Ledger rows
+         survive job/article deletion, so sweep this suite's slugs explicitly. */
+      await database.delete(aiCalls).where(eq(aiCalls.articleSlug, slug));
+      await database.delete(jobsTable).where(eq(jobsTable.slug, slug));
+    }
     for (const slug of slugs) {
       const [row] = await database
         .select({ id: articles.id })
@@ -1537,6 +1542,7 @@ describe("a claim under Postgres", () => {
         label: STEPS[name].label,
         produces: STEPS[name].produces,
         async run(ctx: { signal: AbortSignal }): Promise<StepProduct> {
+          expect(ctx.signal.aborted, "the model call must start before the job stops it").toBe(false);
           const call = openRouterJson("pdf", { model: "m", messages: [] }, { signal: ctx.signal });
           call.catch(() => undefined);
           await during?.();
@@ -1574,7 +1580,9 @@ describe("a claim under Postgres", () => {
           power: async () => "standard",
           session: claimSession,
           steps: { ...STEPS, ...steps, extract: callingStep("extract", undefined, seen) } as never,
-          leaseMs: DEADLINE_MARGIN_MS + 1_500,
+          /* Session opening and step preflight share this budget. Leave them
+             ten seconds, and assert above that the call starts before it fires. */
+          leaseMs: DEADLINE_MARGIN_MS + 10_000,
         });
       } finally {
         restore();

@@ -133,4 +133,34 @@ of `/admin/costs` at 1440, 820 and 390 wide (the notes changed; the columns did 
   `extends Error`, `failureClass: null`, and dropping `this.name = "Error"` each turn a test red.
   The live limits went in as a note of their own in `FAILURE_NOTES`, not inside the stops note.
   `cost-tracking.md` and `live-conversation.md` said nothing this made false.
-- [ ] GPT Sol code review
+- [x] GPT Sol code review of `996ec16a0` ([the review](261006f-code-review-sol.md), *land it*, no
+  P0 or P1). It fixed five things itself, all checked and kept:
+  - F33 (P3): `AiCallRow`'s comment in `src/ai-spend.ts` and `ai-gateway.md` still said only a
+    gateway's aborted row carries failure fields.
+  - F34 (P3): the live note said a closed conversation "usually leaves no row". Earlier responses
+    of that conversation have rows; it is the unfinished response with no terminal usage report
+    that has none. Reworded on the page, in the comment and in the docs.
+  - F35 (P2): the job-deadline test could pass with the signal already aborted before the call
+    began. It now asserts the call starts first, and the lease allows ten seconds for setup, not
+    1.5, so the test takes about ten seconds.
+  - F36 (P2): a failed assertion skipped the test's ledger clean-up. The suite's teardown now
+    sweeps `ai_calls` for its own slugs.
+  - F37 (P3): `ai-gateway.md` said every earlier job-deadline row says `abort`; older ones have no
+    class.
+- [x] Browser check, by a Sonnet subagent: four `aborted` rows seeded in the local database (two
+  deadlines part-way, one stall, one live `abort` with no phase) and deleted afterwards;
+  `/admin/costs` at [1440](261006f-shot-1440.png), [820](261006f-shot-820.png) and
+  [390](261006f-shot-390.png) wide. Seven notes, none cut off; the page does not scroll sideways;
+  *Timed out* `2 (2 part-way)`, *Stalled* `1 (0 part-way)`, no stop left unclassified, and the
+  causes table lists the deadline and the stall and no `abort` row. At 390 the last columns start
+  off-screen inside the table's own scroll box with no cue, as 261006d already recorded.
+
+## Left for later
+
+- **F30: GPT-Live records a failed or incomplete backend response as `ok / completed`**
+  (`src/web/live/gpt-live/delegations.ts`, `backendReport`, `src/live.ts` near the
+  "Only `response.completed` is reported" comment). Its usage report carries no status. Found by
+  the plan review, already there before this work, and a change to what the browser reports and
+  what the server accepts. Reported to the Overseer.
+- Old rows are not rewritten: job-deadline stops from before this say `abort` or nothing, and live
+  stops from before this say nothing.

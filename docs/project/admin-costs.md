@@ -115,7 +115,7 @@ Two rules, both from GPT Sol's review of the plan
 
 What it does not count is said on the page itself, from `FAILURE_NOTES` in
 [`src/cost-cube.ts`](../../src/cost-cube.ts): the stops that do not say who stopped them, a live
-conversation that closed or went silent without leaving a row, and the PDF reader's and the
+response with no terminal usage report, and the PDF reader's and the
 embeddings' own retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is
 missing. The folds are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file,
 and `nothingMeasured` is the page and terminal's rule for folding a row away and showing the

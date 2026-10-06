@@ -679,7 +679,7 @@ export const FAILURE_NOTES: readonly string[] = [
   "Retries and give-ups are counted only on attempts our retry loop numbered. Part-way deaths are counted on any failed attempt that recorded where it failed, numbered or not. Where nothing shows a figure was being measured it reads not measured, which is not zero: that covers every call made before this was recorded.",
   "Stalls and timeouts are counted only on stopped attempts that say who stopped them. Attempts from before this was recorded do not say: where those are the only stops, the figure reads not measured, and where there are both, they are counted beside it as stops not classified.",
   "A timeout, which the causes table calls a deadline, means a recognised deadline expired while the attempt was active. It can cap one call, a turn, a processing step or a whole pipeline job, so it does not establish how long that attempt ran.",
-  "Live conversation's recorded stops are ordinary stops: the reader talking over the model, or the reply hitting its length cap or a content filter. A live conversation that our own time limits closed, or that went silent, usually leaves no row, so it is not counted here at all.",
+  "Live conversation's recorded stops are ordinary stops: the reader talking over the model, or the reply hitting its length cap or a content filter. An unfinished response without a terminal usage report has no response row. Our time limits and a lost connection can close a conversation without that report.",
   "A stopped call is not always recorded as a stop: if the provider had already sent an error, the row keeps that error.",
   "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
 ];

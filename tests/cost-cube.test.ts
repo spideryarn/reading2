@@ -578,7 +578,7 @@ describe("failures and retries", () => {
          response that left no row. */
       expect(notes).not.toContain("neither does live conversation");
       expect(notes).toContain("Live conversation's recorded stops are ordinary stops");
-      expect(notes).toContain("usually leaves no row");
+      expect(notes).toContain("unfinished response without a terminal usage report has no response row");
       expect(notes).toContain("a processing step or a whole pipeline job");
       expect(notes).not.toContain("is not recognised");
       expect(FAILURE_DEFINITIONS).toContain("a processing step or a whole pipeline job");

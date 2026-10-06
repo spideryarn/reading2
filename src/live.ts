@@ -1472,8 +1472,9 @@ export function acceptRealtimeUsage(opts: RealtimeAcceptance): AiCallRow | null 
     providerStatus: usage.status,
     /* **A stopped response is an ordinary stop, and says so.** No timer of ours
        sends `response.cancel`: our time limits close the whole conversation,
-       and a response unfinished then usually reports nothing. So a terminal
-       event that did arrive saying `cancelled` or `incomplete` was not made by
+       and closing it creates no response row for an unfinished response without
+       a terminal usage report. So a terminal event that did arrive saying
+       `cancelled` or `incomplete` was not made by
        our clock: it is the reader talking over the model, or the reply hitting
        its length cap or a content filter. `abort` rather than null, so the row
        does not read as a stop that might have been a stall. The phase and the

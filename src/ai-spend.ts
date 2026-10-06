@@ -555,7 +555,8 @@ export interface AiCallRow {
    * columns existed, so **a null here is "not said", never "did not fail"**:
    * `outcome` is what says whether a call failed. An `aborted` row has them
    * when a gateway wrote it on or after 2026-10-06 (class `stall`, `deadline`
-   * or `abort`) and not otherwise, so a phase here is not by itself a failure
+   * or `abort`). A stopped Realtime response carries class `abort` with no
+   * phase or HTTP status (src/live.ts). A phase here is not by itself a failure
    * either.
    */
   failurePhase: FailurePhase | null;
