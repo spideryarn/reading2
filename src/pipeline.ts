@@ -47,7 +47,7 @@ import {
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
-import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
+import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   cameFromAnUpload,
   decodeHtml,
@@ -193,6 +193,7 @@ import {
   articleHadNoText,
   codeOfMessage,
   documentHadTooLittleText,
+  documentIsABotCheck,
   documentHasNoArticle,
   FETCH_PAPER_MISSING,
   fetchFailed,
@@ -2704,6 +2705,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              stage 2 owns and this seam does not — so what travels to Sentry is
              the reader's coded sentence, and the log keeps the library's name.
              ⟨Sol, 2026-09-03⟩ */
+          /* **The third typed refusal, and the first one asked about**, though
+             the three are disjoint classes and the order here decides nothing:
+             the precedence is `runExtract`'s. `blocked` for the reason the two
+             below give — Retry would read the same stored copy — and the
+             diagnostic names the provider, which the reader's sentence
+             deliberately does not. src/challenge-page.ts. */
+          if (err instanceof ChallengePage) {
+            throw stageFailure(
+              documentIsABotCheck(origin),
+              `The document stage 1 stored is a bot check (${err.provider}), not the page behind it.`,
+            );
+          }
           if (err instanceof ReadabilityRefused) {
             throw stageFailure(
               documentHasNoArticle(origin),

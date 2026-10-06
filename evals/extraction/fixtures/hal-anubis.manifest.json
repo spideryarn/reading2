@@ -1,0 +1,17 @@
+{
+  "fixture": "hal-anubis",
+  "file": "hal_anubis.html",
+  "note": "NOT AN ARTICLE — an Anubis bot check, which is what hal.science answered a plain GET for https://hal.science/hal-05779468 with on 2026-10-06 (the paper's PDF address answers with the same page). It is the long wall 260904e § C1 was waiting for: 1,034 characters of it read as article text, twice the capability floor, so stage 2 published it as an article titled 'Making sure you're not a bot!' until src/challenge-page.ts recognised the page's own <script id=\"anubis_challenge\"> element. ONE EDIT TO THE BYTES: Anubis echoes the caller's IP address into that element's JSON as X-Real-Ip, and the value was replaced with 192.0.2.1 (a documentation address) before commit. The challenge is minted per request, so verify.mts --refetch will always report this page as changed. docs/plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md.",
+  "mustContain": [],
+  "mustNotContain": [
+    {
+      "text": "You are seeing this because the administrator of this website has set up Anubis",
+      "why": "the check's own explanation of itself — the opening of the article stage 2 used to publish"
+    },
+    {
+      "text": "Anubis uses a Proof-of-Work scheme in the vein of Hashcash",
+      "why": "the second paragraph of the same explanation; long, well-formed prose, which is why no rule about how much text there is can refuse it"
+    }
+  ],
+  "notAnArticle": true
+}
