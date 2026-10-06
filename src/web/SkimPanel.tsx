@@ -549,12 +549,11 @@ export function SkimPanel({ access, view, away }: Props) {
    * when focus is still where the press left it: a slow answer must not pull
    * a reader back from wherever they went meanwhile.
    */
-  const focusCurrentRow = () => {
+  const focusCurrentRow = (from: Element | null) => {
     const active = document.activeElement;
     const lost =
-      active === null ||
-      active === document.body ||
-      active.closest(".skim-term-tip, .skim-card") !== null;
+      from !== null &&
+      (active === from || (active === document.body && !from.isConnected));
     if (!lost) return;
     scroller.current
       ?.querySelector<HTMLButtonElement>('.skim-go[aria-current="step"]')
@@ -862,7 +861,7 @@ function StopCardView({
   /** `null` for a visitor. */
   termActions: TermActions | null;
   /** A term was hidden from its card, and its chip is gone or going. */
-  onHidden(): void;
+  onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
 }) {
@@ -977,10 +976,13 @@ function TermChip({
   onPress(): void;
   onUnpin(): void;
   actions: TermActions | null;
-  onHidden(): void;
+  onHidden(from: Element | null): void;
   onOpen: (() => void) | null;
 }) {
   const [held, setHeld] = useState(false);
+  const pointerType = useRef<string | null>(null);
+  const chip = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const open = held || pinned;
   const close = () => {
     setHeld(false);
@@ -993,8 +995,13 @@ function TermChip({
     stale: actions.stale,
     hiding: actions.hiding,
     setHidden: async (id, hidden) => {
+      /* Keep our actual focus owner, not the whole cluster: another term can
+         have focus by the time this write finishes. A mouse's Hide press may
+         also leave unrelated keyboard focus untouched. */
+      const active = document.activeElement;
+      const from = active === chip.current || card.current?.contains(active) ? active : null;
       await actions.setHidden(id, hidden);
-      onHidden();
+      onHidden(from);
     },
   };
   return (
@@ -1003,7 +1010,7 @@ function TermChip({
         /* Its own scroller, with a height tied to the window, so the row of
            buttons under a long entry can be reached on a short screen
            (skim.css § .skim-term-card; plan review F3). */
-        <div className="skim-term-card">
+        <div className="skim-term-card" ref={card}>
           <TermCard
             entry={entry}
             actions={acts}
@@ -1030,10 +1037,23 @@ function TermChip({
       onOpenChange={(next) => (next ? setHeld(true) : close())}
     >
       <button
+        ref={chip}
         type="button"
         className={`skim-chip${open ? " on" : ""}`}
+        onPointerDown={(event) => { pointerType.current = event.pointerType; }}
+        onPointerCancel={() => { pointerType.current = null; }}
+        onKeyDown={() => { pointerType.current = null; }}
         onClick={() => {
-          /* Already up by hover or focus: a click is not a second way to shut it. */
+          const touch = pointerType.current === "touch" || pointerType.current === "pen";
+          pointerType.current = null;
+          /* Focus can precede a tap's click. A finger still owns its pin and
+             dismissal, even if focus has already held the card open. */
+          if (touch) {
+            setHeld(false);
+            onPress();
+            return;
+          }
+          /* Already up by hover or focus: a mouse click does not pin it. */
           if (held && !pinned) return;
           onPress();
         }}

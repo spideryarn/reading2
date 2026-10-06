@@ -114,7 +114,9 @@ v2, the scrapbook, is built on top of that:
   - The card scrolls inside half the window's height, so the buttons under a long entry can be
     reached on a short screen (`.skim-term-card` in
     [`skim.css`](../../src/web/styles/skim.css)).
-  - After *Hide* the chip is gone, so keyboard focus moves to the stop's row.
+  - After *Hide* the chip is gone, so keyboard focus moves to the stop's row if it still belongs
+    to the control that started the hide or was lost when that control disappeared. A slow hide
+    preserves focus if the reader has moved on.
 
 Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 [plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):

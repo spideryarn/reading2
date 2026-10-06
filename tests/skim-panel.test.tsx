@@ -837,7 +837,8 @@ describe("the panel", () => {
 
   it("opens a term's card on a tap and keeps it until a tap elsewhere", async () => {
     await draw(owner(), view({ card: CARD, termActions: termActions() }));
-    /* A click with no hover and no focus before it: what a finger does. */
+    /* The click-only activation also works without a preceding focus. The
+       pointerdown/focus/click ordering is exercised separately below. */
     await act(async () => termChip().click());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(cardButtons()).toContain("Open glossary");
@@ -862,6 +863,92 @@ describe("the panel", () => {
     await act(async () => termChip().focus());
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
     expect(cardButtons()).toEqual(["Open glossary"]);
+  });
+
+  it("does not pull focus back from another term when a slow Hide completes", async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    function Hiding() {
+      const [card, setCard] = useState(CARD);
+      return createElement(SkimPanel, {
+        access: { kind: "owner", owner: owner() },
+        view: view({ card, termActions: termActions({ setHidden: async () => {
+          await pending;
+          setCard({ ...CARD, terms: CARD.terms.slice(1) });
+        } }) }),
+        away: false,
+      });
+    }
+    await act(async () => root.render(createElement(Hiding)));
+    await act(async () => termChip().focus());
+    await act(async () => cardButton("Hide").focus());
+    await act(async () => cardButton("Hide").click());
+    const next = host.querySelectorAll<HTMLButtonElement>(".skim-chip")[1]!;
+    await act(async () => next.focus());
+    expect(document.activeElement).toBe(next);
+    await act(async () => finish());
+    expect(document.activeElement, "the reader already moved on").toBe(next);
+    expect(next.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it.each(["touch", "pen"])("pins a %s tap even when focus opens the card before click, and a second tap closes it", async (pointerType) => {
+    await draw(owner(), view({ card: CARD }));
+    const touchDown = () => {
+      const event = new Event("pointerdown", { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      termChip().dispatchEvent(event);
+    };
+    await act(async () => touchDown());
+    await act(async () => termChip().focus());
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    await act(async () => touchDown());
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded"), "focus must not hold a dismissed tap open").toBe("false");
+  });
+
+  it("preserves unrelated keyboard focus when Hide is pressed from a hovered card", async () => {
+    vi.useFakeTimers();
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    const input = document.createElement("input");
+    host.append(input);
+    await act(async () => input.focus());
+    await act(async () => {
+      termChip().dispatchEvent(new MouseEvent("mouseenter"));
+      vi.advanceTimersByTime(500);
+    });
+    expect(cardButtons()).toContain("Hide");
+    /* A mouse click need not change focus (e.g. Safari). */
+    await act(async () => cardButton("Hide").click());
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("tabs into a term card, closes it with Escape, and reopens it with keyboard activation", async () => {
+    vi.useFakeTimers();
+    const settle = async () => {
+      for (const _ of [0, 1, 2]) await act(async () => { vi.advanceTimersByTime(500); });
+    };
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await act(async () => termChip().focus());
+    await settle();
+    /* jsdom does not implement Tab's default action; use the same portal
+       focus guard a browser's Tab reaches (tooltip-interactive.test.tsx). */
+    const guard = host.querySelector<HTMLElement>('.skim-chip ~ [data-type="outside"]')!;
+    expect(guard.getAttribute("data-type")).toBe("outside");
+    await act(async () => guard.focus());
+    await settle();
+    expect(document.activeElement).toBe(cardButton("Dig deeper"));
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await settle();
+    expect(termCard()).toBeNull();
+    expect(document.activeElement).toBe(termChip());
+    await act(async () => {
+      termChip().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      termChip().click();
+    });
+    await settle();
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    expect(cardButtons()).toContain("Open glossary");
   });
 
   it("draws a card with no way out when Glossary cannot be opened: no Open glossary, and no Dig deeper", async () => {
