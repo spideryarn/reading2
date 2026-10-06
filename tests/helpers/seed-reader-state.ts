@@ -94,7 +94,7 @@ import { currentOwnerId } from "../../src/owner.js";
 import { loadRuns } from "../../src/searches.js";
 import { loadShelf } from "../../src/shelf.js";
 import { originColumns } from "../../src/thread-origin.js";
-import { isClaimOrigin, isThreadKind } from "../../src/types.js";
+import { isClaimOrigin } from "../../src/types.js";
 
 /**
  * Find the article row for `slug`, or say which call was missing.
@@ -295,10 +295,10 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
       anchorBlockId: thread.anchor?.blockId ?? null,
       anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
       anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
-      /* A `chat.json` written before Learn mode has no `kind`, and the column
-         is `not null`. `"chat"` is the default `normaliseKind` applies in
-         src/chat.ts and the one the column declares. */
-      kind: isThreadKind(thread.kind) ? thread.kind : "chat",
+      /* `loadThreads` has already settled the kind (`kindFromFile` in
+         src/chat.ts: absent is a chat, a retired word is what it became,
+         anything else refused). Preserve it without another default. */
+      kind: thread.kind,
       /* Where it was started from. Named here or the restore drops it
          (tests/chat-origin-route.test.ts). */
       ...originColumns(thread.origin),
