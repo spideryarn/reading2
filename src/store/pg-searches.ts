@@ -12,8 +12,8 @@
  * ## The attempt fence
  *
  * A *run* is the reader's question. An *attempt* is one call to the model. The
- * filesystem store has only the first, and sweeps stale runs by asking an
- * in-process `Set` which ones it started — right for one server on one disk,
+ * filesystem store (gone 2026-09-05) had only the first, and swept stale runs by
+ * asking an in-process `Set` which ones it started — right for one server on one disk,
  * and wrong the moment two processes share a database:
  *
  * 1. Process A takes the POST and starts a run.
@@ -494,7 +494,7 @@ const rawPgSearchStore: SearchStore = {
        clock says, or a four-minute search gets killed by the same server that
        started it. The age check is for every other process: an attempt younger
        than the grace window might still be in flight somewhere else, and
-       burying it is what the filesystem store does wrong.
+       burying it is what the filesystem store did wrong.
 
        A `pending` row with no attempt at all is sweepable outright. That is an
        imported run, or one from before this column existed — either way the

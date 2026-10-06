@@ -139,8 +139,8 @@
       on the installed app: *"Most of the modes don't display correctly any more
       on mobile. When activated, they occlude the text (which you can see
       scrolling behind, peeking out at the top and bottom."*
-    - **Plain and Hierarchy, once the masthead has scrolled away** and the bar
-      has stuck. Same strip, same prose, and it was there first.
+    - **Plain (and Hierarchy, until 2026-09-29), once the masthead has
+      scrolled away** and the bar has stuck. Same strip, same prose, and it was there first.
 
    One backstop answers both, and it is a backstop rather than a taller bar for
    three reasons: it changes no layout, it does not need to know whether a
@@ -719,12 +719,13 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    phone the argument was that § a narrow window makes the band cover the whole
    article anyway, so the 44px was 44px of something already behind a panel. On a
    laptop neither half of that holds — but the bar is *empty* in a band mode (its
-   only content is Hierarchy's pills), so dropping the guard would slide a band
-   and every sticky gist to reclaim a blank strip. Reclaiming that strip properly
+   only content was Hierarchy's pills), so dropping the guard would slide a band
+   (and, then, every sticky gist) to reclaim a blank strip. Reclaiming that strip properly
    means not drawing it, which is
    docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
-   stage 3. So the rule reads: **the bar hides in Plain and Hierarchy, and stands
-   still wherever a band is anchored to it.**
+   stage 3. So the rule reads: **the bar hides in Plain (and hid in Hierarchy,
+   until that mode went on 2026-09-29), and stands still wherever a band is
+   anchored to it.**
 
    **In the guard rather than as a `:not()` on the rule above.**
    `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie with

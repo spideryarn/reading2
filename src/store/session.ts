@@ -366,9 +366,9 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  *    postcondition against the artefact the draft carried forward. The same hole
  *    as rule 2 through a different door.
  * 4. **And nothing it does not declare.** An extra kind is a caller error, and
- *    the store finds out about it half way through: the filesystem adapter
- *    writes the valid entries and then throws on the unknown `(step, kind)`
- *    pair, leaving a step that is neither written nor untouched.
+ *    a store finds out about it half way through: the filesystem adapter
+ *    (gone 2026-09-05) wrote the valid entries and then threw on the unknown
+ *    `(step, kind)` pair, leaving a step that was neither written nor untouched.
  *
  * `{}` is not "no parts". An empty object is truthy, has none of the declared
  * kinds, and would call `write` with nothing in it — so it goes through rule 3

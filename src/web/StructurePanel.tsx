@@ -23,8 +23,8 @@
  *
  * ## What it is not
  *
- * **Not a second tree.** It reads `buildSummaryTree`, which is what Outline
- * reads; Hierarchy goes through `buildGeometry`. Two projections, and **one
+ * **Not a second tree.** It reads `buildSummaryTree`, which is what Structure's
+ * list face reads; the reading table goes through `buildGeometry`. Two projections, and **one
  * stored `article.tree`** underneath both — that is the contract AGENTS.md and
  * docs/project/granularity-zoom.md state, and a third view of one artefact is
  * not a divergence.
@@ -515,8 +515,9 @@ export function StructurePanel({
 }: {
   root: SummaryNode | null;
   /**
-   * Which row the reader is at — `LiveContext.focusRow`, the same sampler the
-   * gist columns' context panels and Outline read, so the three views can never
+   * Which row the reader is at — `LiveContext.focusRow`, the same sampler
+   * Structure's list face reads (and the gist columns' context panels read,
+   * until 2026-09-29), so the views can never
    * disagree about which section is under the focus line. That agreement is not
    * a nicety: this mode exists to be flipped between the other two, and a second
    * answer to "where am I" would make the flip land somewhere else.

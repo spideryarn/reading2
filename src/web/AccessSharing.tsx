@@ -22,7 +22,7 @@
  * a reload.
  *
  * **The absence is still the important state.** `sharing` is optional and
- * absent means *this store cannot say* — the filesystem store has no column, and
+ * absent means *nobody could say* — the filesystem store had no column, and
  * `ArticleMetadata.sharing` says at length why it refuses rather than defaulting
  * to `private`. The card keeps the state it had for a failed probe: it says it
  * does not know, and offers no switch. A toggle that reads "not shared" because

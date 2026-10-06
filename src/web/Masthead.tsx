@@ -423,7 +423,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
  * The address is drawn host-first with the path faded after it, because the
  * host is the part that answers the question and the path is the part that
  * runs off the end of a narrow window. Truncation is the path's, in CSS, so
- * the host is never the thing that gets cut (styles.css § `.origin`).
+ * the host is never the thing that gets cut (shell.css § `.origin`).
  *
  * ## The link is for everybody; the *word* "uploaded" is not
  *

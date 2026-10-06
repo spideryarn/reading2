@@ -39,7 +39,7 @@
  *   through skew. `clock_timestamp()` is volatile, so Postgres re-reads it when
  *   it re-checks the qualifier after taking the lock.
  *
- * ## The boundary, and it agrees with the filesystem adapter
+ * ## The boundary, and it agreed with the filesystem adapter
  *
  * **Live is `lease > clock_timestamp()`; over is `lease <= clock_timestamp()`
  * or a lease that is missing altogether.** Exactly complementary, so there is
@@ -57,9 +57,9 @@
  * *live* is what `coalesce(…, false)` used to do in `requestCancel`, and it
  * leaves a corrupt row that no claimant can advance and no sweep can settle:
  * "Stopping…", disabled, for ever. Treating it as *over* makes the same corrupt
- * row recoverable by the machinery that already exists, and matches the
- * filesystem adapter, where *no entry in the `attempts` map at all* has always
- * meant lapsed. GPT Sol raised it as hardening, 2026-09-01; this is the choice.
+ * row recoverable by the machinery that already exists, and matched the
+ * filesystem adapter (gone 2026-09-05), where *no entry in the `attempts` map
+ * at all* had always meant lapsed. GPT Sol raised it as hardening, 2026-09-01; this is the choice.
  */
 
 import { and, eq, sql } from "drizzle-orm";

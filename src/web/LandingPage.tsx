@@ -142,7 +142,7 @@ export function LandingPage() {
 
           {/* The one picture above the fold. It arrives tilted and straightens
               as you scroll into it — a screenshot of a reading product held at
-              an angle is arguing against itself (styles.css § the tilt). */}
+              an angle is arguing against itself (site.css § the tilt). */}
           <div className="site-tilt-stage tw:mt-14 tw:sm:mt-16">
             <div className="site-tilt">
               <Frame shot={SHOTS.structure} hero />

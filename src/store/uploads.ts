@@ -14,10 +14,10 @@
  * spends model money. Read-then-write has a gap in it that is however long the
  * awaits take.
  *
- * On the filesystem that needs a create-only marker beside the record —
+ * On the filesystem that needed a create-only marker beside the record —
  * `open(…, "wx")`, atomic at the kernel, which is a definite answer rather than
  * a probable one. In Postgres it is one conditional `UPDATE` and `rowCount`
- * decides. The database makes the filesystem adapter's cleverest piece of
+ * decides. The database made the filesystem adapter's cleverest piece of
  * machinery disappear, which is worth noticing rather than glossing: it is the
  * clearest single argument for the move.
  *

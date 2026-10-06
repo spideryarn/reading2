@@ -1738,7 +1738,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * Asked for by accessible name rather than by class, because the name is what
    * decides whether a reader can reach it: `.block-chat` is hidden with
-   * `opacity` and never `display: none` (styles.css § the gutter), so a button
+   * `opacity` and never `display: none` (gutter.css § the gutter), so a button
    * nobody can see is still in the tab order and still announced.
    */
   it("draws no chat button beside a paragraph", async () => {

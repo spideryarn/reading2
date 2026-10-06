@@ -19,8 +19,8 @@
    -------------------------------------------------------- § structure mode --
 
    **The panel does not scroll**, the same rule and the same reason as Outline
-   and as the gist columns' context panels: a wheel over the band moves the
-   article, and the reader's scroll is never taken off it. `overflow: hidden`,
+   and as the gist columns' context panels (gone 2026-09-29): a wheel over the
+   band moves the article, and the reader's scroll is never taken off it. `overflow: hidden`,
    never `auto`. If the list overflows, the fit chose the wrong rung; the answer
    is a lower rung, never a scrollbar.
 

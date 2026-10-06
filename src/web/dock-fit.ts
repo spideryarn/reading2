@@ -3,7 +3,7 @@
  * rather than guessed.
  *
  * The bar drops its labels when the row will not fit — see Dock.tsx and
- * styles.css § the bar's fit ladder. It used to decide that at a pixel
+ * dock-fit.css § the bar's fit ladder. It used to decide that at a pixel
  * breakpoint (`@media (max-width: 1100px)`), and that number was measured once,
  * when there were six modes. There are thirteen. The row now wants **1416px**
  * with every label spelled out, so between 1101px and 1416px the bar showed its
@@ -44,7 +44,7 @@
  *    pointed out was the part I had waved through as cosmetic. It is a real
  *    child now (`.dock-tail`), so the measurement counts it.
  *  - **`flex-grow` does not fool it.** On a coarse pointer the buttons grow to
- *    share the bar (styles.css § a coarse pointer), so a fitting row fills its
+ *    share the bar (narrow-window.css § a coarse pointer), so a fitting row fills its
  *    content box exactly. A "needed width" computed from `scrollWidth` would
  *    then read as full and compact a tablet that has room to spare; the
  *    overflow question does not care, because growth only happens when there
@@ -131,12 +131,12 @@ import { onFontsChanged } from "./fonts.js";
  * decision rather than a consequence of how the selectors happened to be
  * written: rung 1 exists precisely because they are the words worth losing
  * first, so a rung below it that showed them again would be undoing its own
- * argument. styles.css § the bar's fit ladder spells every rung out.
+ * argument. dock-fit.css § the bar's fit ladder spells every rung out.
  *
  * Past the last rung the row simply overflows, and § a narrow window makes it
  * scroll rather than clip — the floor under this ladder, and deliberately so:
  * fifteen buttons cannot share a phone in portrait at a pressable size, and
- * Greg chose scrolling over shrinking further (styles.css § a coarse pointer).
+ * Greg chose scrolling over shrinking further (narrow-window.css § a coarse pointer).
  *
  * A new rung goes here and gets a rule in styles.css — **and if it goes in
  * anywhere but the bottom, that is a rename and it gets a rename's sweep.**
@@ -224,7 +224,7 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
  *    Measured, 2026-09-02 — pushing a three-digit count into the bar by hand,
  *    bypassing React, leaves 26px of overflow until something else re-measures.
  *    What makes that survivable rather than a second silent clip is the floor:
- *    `.dock` scrolls at every width now (styles.css § the floor under the fit
+ *    `.dock` scrolls at every width now (dock.css § the floor under the fit
  *    ladder), so the worst case is a row you can drag rather than buttons that
  *    are not there.
  *  - **When the fonts land.** Labels first measured in a fallback face are

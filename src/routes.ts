@@ -131,10 +131,10 @@ import { scanArticleSource } from "./source-scan.js";
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
 import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
-/* A pure predicate, so importing it here does not drag the filesystem store
-   into a file that must work with either one — the same rule the `withEdit` /
-   `withRetry` import above states. The palette's *size* is deliberately not in
-   it: see `SearchRun.colour`. */
+/* A pure predicate. It was imported this way so as not to drag the
+   filesystem store (gone 2026-09-05) into a file that had to work with either
+   one — the same rule the `withEdit` / `withRetry` import above states. The
+   palette's *size* is deliberately not in it: see `SearchRun.colour`. */
 import { isStorableColour } from "./searches.js";
 /* Through the store, so comments and articles stay together.
    They cannot be split: a comment anchors to a block id, and leaving the
@@ -1476,9 +1476,9 @@ const MAX_BODY_CHARS = 4000;
  * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
  * criterion belonging to somebody else — or to another article, or to nothing —
  * is refused rather than stored. `comments_criterion_fk` refuses it a second
- * time, but a foreign-key error is a 500 with a Postgres message in it, and the
- * filesystem store has no constraint at all: the two stores agree only because
- * this check is above both of them.
+ * time, but a foreign-key error is a 500 with a Postgres message in it. (The
+ * filesystem store, until 2026-09-05, had no constraint at all, and the two
+ * stores agreed only because this check was above both of them.)
  *
  * ## And it has to be a criterion with two ends
  *
@@ -2700,9 +2700,9 @@ if (CHAT_ORPHAN_GRACE_MS <= CHAT_TIMEOUT_MS) {
  * same 30s of room for the article read that happens after `begin`, the write
  * that happens after the model, and two processes' clocks.
  *
- * **The filesystem store ignores it entirely**, and that is today's behaviour
- * rather than an oversight: it errors any `pending` run this process did not
- * start, immediately. Only Postgres has other processes to be wrong about.
+ * **The filesystem store ignored it entirely** until it went on 2026-09-05:
+ * it errored any `pending` run this process did not start, immediately. Only
+ * Postgres has other processes to be wrong about.
  */
 export const SEARCH_ORPHAN_GRACE_MS = 90_000;
 
@@ -3799,9 +3799,10 @@ async function cancelChat(
 
     /* Abort and **wait**, before the delete rather than after it. A writer still
        running would otherwise `finish` into rows we are about to remove — on
-       Postgres that updates nothing, but the filesystem store would write the
-       whole thread list back from a snapshot taken before the delete, and the
-       conversation would be there again on the next read. */
+       Postgres that updates nothing, but the filesystem store (until
+       2026-09-05) wrote the whole thread list back from a snapshot taken
+       before the delete, and the conversation was there again on the next
+       read. */
     const live = streaming.get(`${slug}/${threadId}/${messageId}`);
     if (live && (typeof attempt !== "string" || attempt === live.attempt)) {
       live.stop.abort(new Error("cancelled by the reader"));
@@ -4541,7 +4542,7 @@ export function summarise(thread: ChatThread): ThreadSummary {
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
-       `?mode=hierarchy&thread=<a Learn thread>` would continue it as a chat. The
+       `?mode=structure&thread=<a Learn thread>` would continue it as a chat. The
        overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,

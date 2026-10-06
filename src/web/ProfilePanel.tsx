@@ -69,7 +69,7 @@
  * It was going to be. `Tooltip` cannot do it, and the reason is worth keeping
  * because the same mistake shipped once already.
  *
- * `.tooltip-anchor` is `pointer-events: none` (styles.css § tooltip) and
+ * `.tooltip-anchor` is `pointer-events: none` (tooltip.css § tooltip) and
  * `Tooltip` passes `handleClose: null` — every card in this app is *read*, never
  * entered. So **a control inside one cannot be pressed**, and the pointer cannot
  * travel to it in the first place. The `written for you` badge carried an

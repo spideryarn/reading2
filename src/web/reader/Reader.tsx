@@ -3573,7 +3573,7 @@ export function Reader({
          rather than leaving both against the left edge of a window neither
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
-         layout.ts § `Fit.alone`, styles.css § plain, centred. */
+         layout.ts § `Fit.alone`, narrow-window.css § `.reader.text-alone`. */
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
@@ -3592,7 +3592,7 @@ export function Reader({
          small-screen banner with `.band-covers:has(.mode-band, .marg-narrow)`
          (styles/narrow-window.css). So every rule keyed off this class also
          names what is lying over the prose: `.mode-band`, or there
-         `.marg-narrow` — styles.css § a band with no room,
+         `.marg-narrow` — narrow-window.css § a band with no room,
          tests/spine-width.test.ts, tests/layout-margin.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
@@ -3606,7 +3606,7 @@ export function Reader({
       /* `+ horizontalInset(...)`: `fit.minWidth` is the spine plus the table,
          computed from a width that already had the notch taken out of it, and
          `box-sizing: border-box` means this number has to cover `.reader`'s
-         padding too — which now includes those same insets (styles.css § shell).
+         padding too — which now includes those same insets (shell.css § shell).
          Without the term the table's last column is squeezed out of the content
          box and the page scrolls sideways by the notch. */
       style={
@@ -3620,8 +3620,8 @@ export function Reader({
              the layout and the bars, rather than CSS guessing it again. */
           "--page-w": `${windowWidth}px`,
           /* The table's own width, so the masthead can be as wide as the
-             reading column when it is centred over it (styles.css § plain,
-             centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
+             reading column when it is centred over it (narrow-window.css §
+             `.reader.text-alone`) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
           "--table-w": `${fit.tableW}px`,
           /* Marginalia's column, and the room `.reader` keeps for it on its
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
@@ -4262,8 +4262,8 @@ export function Reader({
 
       {/* **Over the top of the band, for three seconds after a press** —
           ModeHerald.tsx. After the band in source order so it paints above it
-          at the same z-index. Only while a band is open: Plain and Hierarchy
-          have no *"top of the mode column"* to stand on. */}
+          at the same z-index. Only while a band is open: Plain
+          has no *"top of the mode column"* to stand on. */}
       <ModeHerald
         press={bandOpen && !bandAway && herald !== null && herald.mode === mode ? herald : null}
         onDone={() => setHerald(null)}

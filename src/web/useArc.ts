@@ -26,7 +26,8 @@
  * > meantime the "Contents" mode would be in a "Loading" state (with a spinner
  * > etc).
  * >
- * > — Greg, 2026-08-29 (the mode is called Hierarchy now)
+ * > — Greg, 2026-08-29 (the mode became Hierarchy, which retired into
+ * > Structure on 2026-09-29)
  *
  * **On the owner opening the article, not on entering the mode.** Hierarchy
  * stopped being the default on 2026-08-31, but the arc is also read by

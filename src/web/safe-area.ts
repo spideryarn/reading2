@@ -5,7 +5,7 @@
  * `index.html` carries `viewport-fit=cover`, so the document is laid out across
  * the whole physical screen and the notch, the home indicator and (in the
  * installed app) the status bar all overlap it. Almost everything answers that
- * in the stylesheet with `env(safe-area-inset-*)` — styles.css § safe areas —
+ * in the stylesheet with `env(safe-area-inset-*)` — src/web/styles/tokens.css § safe areas —
  * and needs nothing from here. **Two things cannot:**
  *
  *  - `fitView` (layout.ts) divides up the window's width in pixels, and the
@@ -27,7 +27,7 @@
  * it with `@property` would fix that and cannot be done here: Vite's CSS
  * transform drops `@property` and bakes the `initial-value` into every
  * reference, which is the accident written up at length beside `--bar-bottom`
- * in styles.css § tokens.
+ * in src/web/styles/tokens.css § tokens.
  *
  * So the value is *measured*: one fixed, invisible element whose padding is the
  * four `env()`s, read back as resolved pixels. `getComputedStyle` returns

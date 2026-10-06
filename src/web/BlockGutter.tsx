@@ -44,7 +44,7 @@
  * one-line paragraph has room for one 24px target beside it, a two-line one for
  * two, a three-line one for three; the gutter is a size container and a
  * `@container` query draws the first however-many fit, with the last slot
- * becoming the "…" whenever something is left over. styles.css § the gutter has
+ * becoming the "…" whenever something is left over. gutter.css § the gutter has
  * the table and the arithmetic.
  *
  * **Source order is the priority order** — that is why the mark is first in
@@ -382,7 +382,7 @@ export function BlockGutter({
    *
    * **The row decides how many of these controls are drawn, and this is the way
    * to the rest of them.** A one-line paragraph has room for exactly one 24px
-   * target and a two-line one for two (styles.css § the gutter has the
+   * target and a two-line one for two (gutter.css § the gutter has the
    * arithmetic), so on a short row the last slot that fits becomes the "..."
    * and pressing it releases the gutter's own height. Greg, 2026-09-05:
    * *"for short paragraphs we simply show a `...` button that reveals them all?
@@ -778,7 +778,7 @@ export function BlockGutter({
 
           A one-line paragraph has room for one 24px target, a two-line one for
           two, a three-line one for three — measured, and the whole arithmetic is
-          in styles.css § the gutter. Until today the row was *stretched* to hold
+          in gutter.css § the gutter. Until today the row was *stretched* to hold
           the column, which cost every short paragraph 24px of the article's
           rhythm; Greg looked at that twice and then named the fix: *"for short
           paragraphs we simply show a `...` button that reveals them all? That

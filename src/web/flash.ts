@@ -18,10 +18,10 @@
  * every step, 2026-09-28 — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § 5a. It flashes the same way `beginJump` does, when the scroll settles.
  *
- * **What flashes is the verbatim cell**, `td.text`, never the gist columns: the
- * question is which paragraph, and the gist column already marks the current
- * row its own way. With the prose column off (`?text=0`) there is nothing to
- * flash and nothing is kept for later. **Skim narrows it to the quote's
+ * **What flashes is the verbatim cell**, `td.text`: the question is which
+ * paragraph. (It was never the gist columns, which marked the current row
+ * their own way until they went on 2026-09-29; `?text=0`, which turned the
+ * prose column off, went with them.) **Skim narrows it to the quote's
  * own words** (`FlashTarget.passage`, plan 260928a § 7b), because its stop is
  * a quote rather than a paragraph. **A citation chip whose sentence quotes the
  * article narrows it too**, by another route: it has words but no mark, so the

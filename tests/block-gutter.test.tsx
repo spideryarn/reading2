@@ -491,7 +491,7 @@ describe('the "?"', () => {
 
        The mark leads because it is the reader's own — Greg's call, asked
        directly, 2026-09-05 — so a note is never the thing that falls off a short
-       paragraph. styles.css § the gutter has the table. */
+       paragraph. gutter.css § the gutter has the table. */
     paint([comment("c1", 5)]);
     /* The reading-time strip is a child too, and not a control: it is filtered
        out here and pinned last by the test below, because anywhere earlier it

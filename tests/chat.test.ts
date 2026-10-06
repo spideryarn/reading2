@@ -292,7 +292,7 @@ describe("fitView in a mode — the band beside the prose", () => {
    *
    * `modeW: 0` is not a claim that there is no band — it is how much horizontal
    * room the band takes *from the table*, and a fixed full-screen panel takes
-   * none. layout.ts § fitMode, and styles.css § a narrow window.
+   * none. layout.ts § fitMode, and narrow-window.css § a band with no room.
    */
   it("gives the band the whole screen once the two no longer fit", () => {
     // 699 − 12 of rail = 687, one under `MODE_MIN + MODE_PROSE_FLOOR`. It was 843
@@ -309,7 +309,7 @@ describe("fitView in a mode — the band beside the prose", () => {
    * **The number the stylesheet used to have to agree with, and no longer
    * carries at all.**
    *
-   * styles.css § a band with no room widened the fixed `.mode-band` to the
+   * narrow-window.css § a band with no room widened the fixed `.mode-band` to the
    * window below `843px`, and this was the only thing keeping that literal
    * honest until 2026-08-28. They were out of step for a while and the failure
    * was total rather than untidy: `fitMode` handed the band `modeW: 0` from 855

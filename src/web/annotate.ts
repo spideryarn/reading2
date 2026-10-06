@@ -120,7 +120,7 @@ export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref";
  * number nobody had done.
  *
  * Six rather than eight because the band cannot grow: the stripes live in the
- * leading below the text (styles.css § stacked hues), and past 6px they reach
+ * leading below the text (annotations.css § stacked hues), and past 6px they reach
  * the line underneath. Six is where the stripes hit 1px, which is the last
  * width that is still a mark rather than a suggestion.
  *
@@ -934,7 +934,7 @@ export interface TermSelection {
  * the article, and the thing that arrives on the reader's initiative is the
  * hover card (ProseHoverCard.tsx) rather than the line itself. Two consequences
  * worth knowing: the mark had to get quieter (a wash behind every term in the
- * piece is a wash behind half the article — styles.css § mark.term), and the
+ * piece is a wash behind half the article — annotations.css § mark.term), and the
  * emphasis it used to carry moved onto `open`.
  *
  * Empty map for an article with no glossary, which is still the ordinary case,

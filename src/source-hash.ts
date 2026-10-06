@@ -55,7 +55,7 @@ import type { Block, Meta, Tree } from "./types.js";
  * finding no earlier review caught; docs/plans/260828o-footnotes.md § Reclassification
  * must invalidate the caches.
  *
- * `null` as well as `undefined` because the filesystem store carries an absent
+ * `null` as well as `undefined` because a `Block` carries an absent
  * field and Postgres carries a null column, and the two must hash identically —
  * see the normalisation in `hashBlocks`.
  *

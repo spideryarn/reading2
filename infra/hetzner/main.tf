@@ -7,7 +7,7 @@
 # Why that shape: CX53 is the top of Hetzner's CX line, so there is no rung
 # above 32GB on this plan. Growing means swapping the server out from under the
 # volume, which is only cheap if the server was never a pet.
-# See docs/research/remote-server-for-claude-code.md.
+# See docs/research/260831a-remote-server-for-claude-code.md.
 
 terraform {
   required_version = ">= 1.5"

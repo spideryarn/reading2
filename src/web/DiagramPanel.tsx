@@ -1469,7 +1469,8 @@ export function DiagramPanel({
    * reversible thing this app does — so following focus costs nothing and turns
    * the picture into something you can read the article *with* rather than
    * something you read and then leave. It is the documented follow-focus
-   * variant, and the pattern the gist columns beside this panel already use.
+   * variant, and the pattern the gist columns beside this panel used until
+   * they went on 2026-09-29.
    *
    * ← and → do **not** follow, on the two pictures where they mean open and
    * close: folding a part away is a statement about the picture and should not
@@ -2066,7 +2067,7 @@ export function DiagramPanel({
                 attribute the browser cannot parse falls back to *black*, and a
                 black arrowhead on a near-black page is an arrow that is simply
                 not there. One token shared with `.diag-link-sequence` cannot
-                fail that way. See styles.css § diagram mode. */}
+                fail that way. See diagram.css § diagram mode. */}
             <defs>
               <marker
                 id="diag-arrow"

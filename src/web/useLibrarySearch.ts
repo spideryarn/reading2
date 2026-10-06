@@ -30,10 +30,9 @@ const DEBOUNCE_MS = 250;
 /**
  * Below this we do not ask the server.
  *
- * One or two characters match nearly every article and rank nothing, and the
- * filesystem adapter drops such terms anyway (`MIN_TERM` in
- * src/library-search.ts) — so the request would reliably cost a walk over every
- * paragraph to return nothing.
+ * One or two characters match nearly every article and rank nothing
+ * (`MIN_TERM` in src/library-search.ts makes the same call for chat's search).
+ * The filesystem adapter, which went on 2026-09-05, dropped such terms outright.
  */
 export const MIN_QUERY = 3;
 

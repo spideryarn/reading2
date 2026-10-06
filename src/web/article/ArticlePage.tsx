@@ -346,8 +346,8 @@ function OwnedArticle({
    * is true (`WRITE_UNCERTAIN` there), and the honest thing for the masthead is
    * to stop claiming a state rather than keep the one from before the write. It
    * *removes* the key, because an absent `Article.visibility` already means
-   * *nobody could tell us* — the same thing the filesystem store's silence
-   * means (src/types.ts).
+   * *nobody could tell us* — the same thing a visitor's payload, which
+   * carries none, means (src/types.ts).
    *
    * The slug travels beside it for the reason it travels beside the title: the
    * `PUT` behind it resolves after the reader may have moved on.

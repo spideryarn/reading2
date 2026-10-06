@@ -860,8 +860,8 @@ const REVISION_READ_POLICY: Record<
      today".** Without the column here, `isCurrent` below falls to its
      `default: true` arm and a manifest built against paragraphs that have since
      changed reports itself current on the one page whose whole job is to say
-     otherwise — while the filesystem store, which asks the step's own `stamp`,
-     says the opposite about the same article.
+     otherwise — while the filesystem store, which asked the step's own `stamp`,
+     said the opposite about the same article.
 
      Not on the library: a card says nothing about images, and a presence flag
      nobody draws is a column in a query for no reason.
@@ -1655,9 +1655,9 @@ function cleanedForReading(blocks: Block[]): Block[] {
  * **No sanitiser, and the reason is a contract rather than a guess.**
  * `sanitizeStoredBlocks` *"does not touch `text`"* — its docstring says so and
  * its implementation only ever rewrites `html` (src/sanitize.ts). So the hash
- * over these rows is byte-identical to the one the filesystem store computes
- * over sanitised blocks, which is what keeps the two stores agreeing about
- * `stale`. That agreement is what tests/store-parity.test.ts exists for.
+ * over these rows is byte-identical to the one the filesystem store computed
+ * over sanitised blocks, which is what kept the two stores agreeing about
+ * `stale` until that store went on 2026-09-05.
  *
  * `order by ordinal` for the same reason `blocksFor` has it: block ids are
  * random and carry no position, so without it the rows arrive in whatever order
@@ -1795,7 +1795,7 @@ export function sourceHashQuery(
 /**
  * The hash of an article's current blocks, or `undefined` when it has none —
  * which every caller's `isStale` treats as stale, the same answer the
- * filesystem store gives for a `blocks.json` it cannot read.
+ * filesystem store gave for a `blocks.json` it could not read.
  */
 export async function sourceHashFor(
   articleId: string,
@@ -2865,7 +2865,7 @@ const rawPgArticleReader: ArticleReader = {
     const assets = found.revision.assets ?? undefined;
     return {
       /* Through `titleFor`, so the reading view's masthead calls a renamed
-         article what the shelf calls it. The filesystem store does the same at
+         article what the shelf calls it. The filesystem store did the same at
          the same seam; a review found this applied to the card only. */
       meta: withAuthors(
         titleFor(metaFrom(slug, found.revision, headingTitleOf(blocks)), shelfFrom(found.article)),
@@ -2895,7 +2895,8 @@ const rawPgArticleReader: ArticleReader = {
 
          Always a value here, never conditional on it being `public` — the
          mark has three states and one of them is *we could not say*, which is
-         what the filesystem store's absence means. `describeArticle` keeps the
+         what absence means (a visitor's payload today; the filesystem store
+         too, until 2026-09-05). `describeArticle` keeps the
          key only when it says `public` because the shelf has no private twin
          to draw (src/library-scalars.ts); this one draws a lock.
 
@@ -3498,11 +3499,12 @@ const rawPgArticleReader: ArticleReader = {
            sat in the `default` arm below with `fetch`, `extract` and `blocks`.
 
            It has to move out of that arm the moment the artefact gains a stamp,
-           for the reason `assets` is not in it either: the filesystem store now
+           for the reason `assets` is not in it either: the pipeline
            answers this question from `STEPS.arc.stamp`, and a `default: true`
            here would have the metadata page call an arc current while the same
-           article's ingest re-runs it. Two stores disagreeing about one article
-           is the failure this switch exists to prevent.
+           article's ingest re-runs it. (When this was written the filesystem
+           store answered from the stamp too, and two stores disagreeing about
+           one article was the failure this switch existed to prevent.)
 
            **Blocks, tree AND the three metadata fields**, because that is what
            `inputFingerprint` covers — the arc's prompt carries `TITLE:`, `BY:`
@@ -3599,8 +3601,8 @@ const rawPgArticleReader: ArticleReader = {
          this costs no query, no projection change, and no widening of
          `REVISION_READ_POLICY`.
 
-         **Present here and absent on the filesystem**, which is the whole point
-         of the block being optional: this store can answer and that one cannot.
+         **Always present here.** The block is optional in the type because
+         the filesystem store, which went on 2026-09-05, could not answer.
 
          See ArticleMetadata in src/types.ts for why the owner needs it at all —
          the card was asking the *public* endpoint about its own document, which

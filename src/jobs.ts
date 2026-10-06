@@ -8,8 +8,9 @@
  *
  * Two things live here — running a list of steps, and deciding *which* step and
  * *whether*. Where the job records live is no longer this file's business: they
- * are behind `JobStore` (src/store/jobs.ts), which has a filesystem adapter
- * writing the same `data/_jobs/<id>.json` as before and a Postgres one. The
+ * are behind `JobStore` (src/store/jobs.ts), which is Postgres
+ * (src/store/pg-jobs.ts); the filesystem adapter that wrote
+ * `data/_jobs/<id>.json` went on 2026-09-05. The
  * *pipeline* is src/pipeline.ts; this file knows how to run a list of steps and
  * nothing about what any of them do.
  *
@@ -345,7 +346,7 @@ class DeadlineReached extends CallDeadlineReached {
  * `settleExpired` used to end every lapsed claim outright, so a deploy landing
  * mid-ingest cost the reader their job and left them a Retry button. It now puts
  * the job back to `queued` on the same row, which is what the filesystem store's
- * `sweepStopped` has always done at restart, and which keeps the slug, the
+ * `sweepStopped` had always done at restart, and which keeps the slug, the
  * article, the article's checkpoints **and the draft** — the last of those since
  * 2026-09-04, because without it the next window re-mints every block id and the
  * checkpoints, though still there, name an identity that has moved. The contract
@@ -404,15 +405,12 @@ class DeadlineReached extends CallDeadlineReached {
  * Retry makes a *new* job with a fresh two — so the reader is the outer loop.
  * That is the same shape Stop has: the machine gives up before the person does.
  *
- * **The filesystem store counts this in memory, which is weaker parity and is
- * accepted.** `src/store/jobs-fs.ts` keeps the counter in a `Map` that a restart
- * empties, so a job that has spent its budget gets a fresh one after a
- * dev-server restart. The argument in that file is that a restart there *is*
- * `sweepStopped`, which requeues everything running with no budget at all — but
- * it does mean the cap is not durable locally, and locally is where paid
- * development happens. Not built on: there is no articles table under that store
- * to hang a durable count on, and Postgres is what ships
- * (docs/project/database.md). GPT Sol, reviewing the built stage 3, finding 2.
+ * **The filesystem store counted this in memory, which was weaker parity and
+ * was accepted** until that store went on 2026-09-05: `src/store/jobs-fs.ts`
+ * kept the counter in a `Map` that a restart emptied, so the cap was not
+ * durable locally. Postgres reads it off `jobs.requeues`, and Postgres is the
+ * only store (docs/project/database.md). GPT Sol, reviewing the built stage 3,
+ * finding 2.
  *
  * The ending when it is used up is `INTERRUPTED`, which is what a lapsed claim
  * has always written and is honest here: *"This stopped part-way through … the
@@ -1284,8 +1282,8 @@ async function runStep(
         jobId: job.id,
         stepName: step.name,
       },
-      /* An arrow rather than `costStore.record`, because the filesystem adapter's
-         methods call each other through `this`. */
+      /* An arrow rather than `costStore.record`, so the method keeps its `this`
+         (the filesystem adapter's methods called each other through it). */
       sink: (row) => costStore.record(row),
       /* `onDone` rather than the resolved value, because it fires on the failure
          path too: a step that threw had usually already paid for the call that

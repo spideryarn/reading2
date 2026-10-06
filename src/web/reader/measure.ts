@@ -20,7 +20,7 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * **`innerWidth` minus the notch, not `innerWidth`.** `index.html` carries
  * `viewport-fit=cover`, so on a notched phone in landscape the window is wider
  * than the part of it anything may be drawn in — and `.reader` spends the
- * difference on padding (styles.css § shell). Handing `fitView` the raw width
+ * difference on padding (shell.css § shell). Handing `fitView` the raw width
  * builds a table for a screen that is 47px wider than the one it has to fit in,
  * and the page then scrolls sideways by exactly the notch. Raised by GPT Sol
  * against the plan, 2026-08-28; see safe-area.ts for why this cannot be done in

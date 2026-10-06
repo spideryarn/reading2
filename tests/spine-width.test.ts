@@ -32,7 +32,7 @@
  * where `fitView` offers a gist column the stylesheet has already decided there
  * is no room for; move the mode query and leave `fitMode` behind and every mode
  * panel is a correctly-positioned element nought pixels wide, which is what
- * actually happened on 2026-08-27 (styles.css § a band with no room). Nothing
+ * actually happened on 2026-08-27 (narrow-window.css § a band with no room). Nothing
  * throws either way.
  *
  * This file is the check, and it is the same species as `tests/doc-links.test.ts`

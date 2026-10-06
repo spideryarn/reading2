@@ -1239,9 +1239,9 @@ function TableViewInner({
       /* `only-prose` — the article is the only column there is. It used to hide
          the table head as well, which was worth 40px of a 390px landscape
          viewport where a third of the height is already bars; the head has had
-         no height in any mode since 2026-09-05 (styles.css § the head with no
+         no height in any mode since 2026-09-05 (table.css § the head with no
          row), so that rule went and this class is now only what centres the
-         masthead over a centred column (styles.css § plain, centred).
+         masthead over a centred column (narrow-window.css § `.reader.text-alone`).
 
          Since the gist columns went on 2026-09-29 it is always true, and it
          stays because the stylesheet keys off it. */
@@ -1257,7 +1257,7 @@ function TableViewInner({
         ))}
       </colgroup>
       {/* **A head with no height**, kept for the screen reader's column
-          header and for the sticky offsets that measure it (styles.css § the
+          header and for the sticky offsets that measure it (table.css § the
           head with no row). The gist columns' headers went on 2026-09-29. */}
       <thead>
         <tr>
@@ -1565,7 +1565,7 @@ function TableViewInner({
                    is the 2026-09-05 change.** `gutter-pad` used to, flooring
                    every owner's row at three slots so nothing could hang below
                    it into the next paragraph. The gutter now measures the room
-                   the row already has and draws only what fits — styles.css §
+                   the row already has and draws only what fits — gutter.css §
                    the gutter — so *that* floor, the class and
                    `tests/gutter-pad-floor.test.tsx` have all gone, and a
                    one-line paragraph is 39.1px again rather than 87.1px. The

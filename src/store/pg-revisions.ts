@@ -1684,7 +1684,7 @@ export async function beginStepRun(
 /**
  * This step has ended, and only the attempt that started it may say so.
  *
- * One fenced `UPDATE`, which is what the filesystem adapter's own comment has
+ * One fenced `UPDATE`, which is what the filesystem adapter's own comment had
  * been asking for since it was written. Two conditions carry the whole
  * protocol, and they refuse different things:
  *

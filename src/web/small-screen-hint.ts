@@ -5,7 +5,7 @@
  * **The thing being explained is deliberate, not broken.** Past a crossover the
  * layout stops squeezing the article to make room for the mode band and lets
  * the band cover it instead — `bandCoversProse` in src/web/layout.ts, and
- * styles.css § a band with no room. On a laptop that crossover is never
+ * narrow-window.css § a band with no room. On a laptop that crossover is never
  * reached; on a phone it is where the reader lives, and they meet it as *the
  * text disappeared*. Greg, 2026-09-05:
  *

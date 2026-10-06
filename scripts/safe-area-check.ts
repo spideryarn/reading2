@@ -5,7 +5,7 @@
  *
  * `index.html` carries `viewport-fit=cover`, so on a phone the document is laid
  * out across the whole physical screen and every piece of fixed or sticky
- * chrome has to add back the edge it faces (`styles.css § tokens`). Those four
+ * chrome has to add back the edge it faces (`src/web/styles/tokens.css § tokens`). Those four
  * insets are **`0px` on every machine we develop on**, so a rule that forgets
  * one is invisible here and correct-looking in every screenshot. On 2026-09-03
  * that cost the mode band its top edge: `.controls` is `top: var(--safe-top)`,

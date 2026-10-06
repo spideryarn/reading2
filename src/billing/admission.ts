@@ -73,10 +73,8 @@
  * Quota is a Postgres feature (docs/project/billing.md § *Billing is a Postgres
  * feature*): the settlement joins the Postgres publish transaction, which has no
  * filesystem counterpart, and a second ledger would be two implementations of
- * one count. Under the filesystem store every function here is inert — it admits
- * without reserving, and nothing it would have called is reached. That cannot
- * leak into production, because src/store/index.ts refuses to boot there on a
- * filesystem store.
+ * one count. The filesystem store, which went on 2026-09-05, was the case in
+ * which every function here was inert.
  */
 
 import { isAdmin } from "../admin.js";
@@ -109,7 +107,7 @@ const logger = log("store");
 /**
  * The slot, shaped to be spread straight into an `EnqueueRequest`.
  *
- * **Empty whenever nothing was reserved** — a filesystem store, an
+ * **Empty whenever nothing was reserved** — an
  * administrator, a request that was never a new ingest — so the caller has one
  * expression rather than a branch, and cannot forget to carry it. An empty one
  * leaves `jobs.ingest_event_id` null, which is what "spends no quota" is.

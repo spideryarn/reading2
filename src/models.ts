@@ -1074,8 +1074,9 @@ export type AiJob =
  *   cannot. It is also the one a reader waits on with nothing on screen.
  * - **`labels`** is the biggest bill in the app by a distance — one gist per
  *   gistable block, every article — so it is where the tenth-of-the-price would
- *   actually be felt. It is also the core of the product: the gist columns *are*
- *   granularity zoom. Cheapest to move, most expensive to get wrong.
+ *   actually be felt. It is also close to the core of the product: the gists
+ *   are what granularity zoom shows (in Structure today; in the gist columns
+ *   until 2026-09-29). Cheapest to move, most expensive to get wrong.
  * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `structure`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.

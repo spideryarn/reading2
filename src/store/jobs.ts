@@ -246,8 +246,9 @@ export interface EnqueueTicket {
    *
    * The Postgres adapter writes it into the job's own INSERT — that atomicity is
    * the whole provenance argument, src/db/schema.ts § `ingest_events`. The
-   * filesystem adapter keeps the ticket and never reads this: quota is a
-   * Postgres feature (docs/project/billing.md), and there is no second ledger.
+   * filesystem adapter, until 2026-09-05, kept the ticket and never read this:
+   * quota is a Postgres feature (docs/project/billing.md), and there is no
+   * second ledger.
    */
   ingestEventId?: string;
   /**
@@ -508,7 +509,7 @@ export interface JobEnding {
  * `22P02` on the *claim* — the first statement of every advance.
  *
  * Which is exactly what `advanceJob` passed until 2026-08-27, and the reason
- * nothing caught it is worth more than the fix. The filesystem adapter takes any
+ * nothing caught it is worth more than the fix. The filesystem adapter took any
  * string, so the whole job suite was green. The parity suite exercised both
  * adapters, but it minted its own tokens with `crypto.randomUUID()` — so the
  * store was tested, the caller was tested, and *the value that travels between
@@ -733,14 +734,14 @@ export interface JobStore {
    * as `cancelled` instead, which makes three mechanisms agree rather than
    * adding a fourth: `releaseStepIn` already settles a live claimant's release
    * on a `cancelling` job as cancelled, and the filesystem adapter's
-   * `sweepStopped` does the same on restart.
+   * `sweepStopped` did the same on restart, until 2026-09-05.
    *
    * **The outcomes, not a count.** A sweep is the only account there is of a
    * claimant that stopped answering — the process that was inside the job is
    * gone and logged nothing on its way out — and `failed 1 job(s)` cannot be
-   * joined to anything, nor is it true of every row it counted. Both stores
-   * already have both fields in hand: the `UPDATE` returns them, and the
-   * filesystem adapter is looping over them. GPT Sol, 2026-08-30,
+   * joined to anything, nor is it true of every row it counted. The store
+   * already has both fields in hand: the `UPDATE` returns them (and the
+   * filesystem adapter, until 2026-09-05, was looping over them). GPT Sol, 2026-08-30,
    * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points,
    * and 2026-09-01 on the rename.
    *
@@ -771,11 +772,11 @@ export interface JobStore {
    * `queued` on its own row instead of ending**, and comes back in the answer
    * with `status: "queued"`.
    *
-   * That is what the filesystem adapter's `sweepStopped` has always done at
+   * That is what the filesystem adapter's `sweepStopped` had always done at
    * restart — running steps back to `pending`, the job back to `queued`, the row
-   * otherwise untouched — so a dev-server restart is a pause rather than an
+   * otherwise untouched — so a dev-server restart was a pause rather than an
    * abandoned ingest. Postgres had no equivalent and ended the job, which on the
-   * store we ship means a deploy landing mid-ingest costs the reader their job.
+   * store we ship meant a deploy landing mid-ingest cost the reader their job.
    * **The same row is the whole point**: the slug does not move, so the article
    * does not move, so the article's checkpoints (checkpoints.ts) are still
    * reachable. A new job could not have that.

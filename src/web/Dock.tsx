@@ -46,9 +46,10 @@
  *
  * It is simpler, and for one reason worth stating plainly: **this view's hard
  * problem is horizontal and the bottom edge is vertical.** layout.ts spends its
- * whole length negotiating width — it shrinks the gist columns, and when that
- * is not enough it starts dropping levels. Anything permanent down the left
- * joins that negotiation: a new `--rail-w` term in five CSS rules, a new
+ * whole length negotiating width — between the prose and the mode band today,
+ * and until 2026-09-29 by shrinking the gist columns and then dropping
+ * levels. Anything permanent down the left joins that negotiation: a new
+ * `--rail-w` term in five CSS rules, a new
  * constant beside `SPINE_W`, a new interaction with the spine's on/off,
  * and a band of window widths where a column is dropped that used to fit. A bar
  * at the bottom takes height, and height is the axis where nothing is scarce —
@@ -70,8 +71,8 @@
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
  * `Tweets` and `Metadata` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Hierarchy` / `Summary` /
- * `Glossary` / `Search` / `Chat`
+ * reading view* and navigates everywhere else; the modes (`Summary`,
+ * `Glossary`, `Search`, `Chat` and the rest of `MODES_UI`)
  * choose what the middle of the page **is**. That is three real differences and
  * the markup has to tell the truth about each — a link gets
  * `aria-current="page"`, a drawer trigger gets `aria-expanded`, and the mode
@@ -701,7 +702,7 @@ interface ModeUi {
    * The labels are dropped as soon as the row stops fitting, and again when
    * even the icons are tight, because they are said twice — in the tooltip and
    * in the `aria-label` — so dropping them costs a sighted reader a hover and a
-   * screen-reader user nothing (dock-fit.ts, styles.css § the bar's fit
+   * screen-reader user nothing (dock-fit.ts, dock-fit.css § the bar's fit
    * ladder). Exactly one button is worth the width anyway: the one
    * that gets you *out*, which a reader is reaching for precisely when they do
    * not want to hover ten icons to find it. So on a phone the row is thirteen
@@ -732,7 +733,7 @@ const MODES_UI = [
      Not drawn larger, and that is a deliberate departure from the ask. A
      radiogroup of ten peers with one of them enlarged reads as a mistake before
      it reads as emphasis. What it gets instead is its label, kept at narrow
-     widths where every other button loses one (styles.css § the bar's fit ladder) —
+     widths where every other button loses one (dock-fit.css § the bar's fit ladder) —
      so on a phone the bar is eight icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
 
@@ -747,7 +748,7 @@ const MODES_UI = [
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
      is exactly what an on-screen keyboard covers, and what slides away when you
-     scroll. The fix for that is in styles.css § a small device — the bars stay
+     scroll. The fix for that is in narrow-window.css § a small device — the bars stay
      while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
@@ -2464,7 +2465,7 @@ export function Dock({
             trailing padding out of its scrollable overflow, so the last button
             was free to sit in it — six pixels on a laptop, and `--safe-right`
             on a phone held landscape, which is the cutout the inset exists to
-            keep clear. styles.css § the floor, and dock-fit.ts. */}
+            keep clear. dock.css § the floor under the fit ladder, and dock-fit.ts. */}
         <span className="dock-tail" aria-hidden="true" />
       </div>
     </>
@@ -2826,8 +2827,8 @@ function DockModes({
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
-   * still true, still what the hairline frame says (styles.css § the modes
-   * segment), and not what the arrow keys were for.
+   * still true, still what the hairline frame says (dock-fit.css § the mode
+   * switch), and not what the arrow keys were for.
    *
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
@@ -3901,7 +3902,7 @@ function DockTab({
  * `aria-disabled` and a guarded handler rather than the `disabled` attribute. A
  * `disabled` button fires no pointer events in Chrome and takes no focus, so
  * the tooltip explaining *why it will not move* would be unreachable in exactly
- * the states that need explaining. styles.css § `.dock-btn.soon` was written
+ * the states that need explaining. dock.css § `.dock-btn.soon` was written
  * for this argument and this is its first user.
  *
  * Greg asked for it mid-run, 2026-09-03: *"show a button at the end of the bar

@@ -100,7 +100,7 @@ import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.
  * what "reading"/"outline" and the mode name were drawn with, so this read as
  * one more fact about the page rather than a new kind of thing. Those went on
  * 2026-09-05 (App.tsx § the controls bar) and this chip is now the class's only
- * consumer, which is why styles.css § `.mode` says so: nothing is left to
+ * consumer, which is why shell.css § `.mode` says so: nothing is left to
  * quietly change the shape from underneath it.
  */
 export function ViewOnlyChip({
@@ -121,7 +121,7 @@ export function ViewOnlyChip({
       {/* **The half of the unconfirmed-session state that has to survive a
           narrow window.** `SharedNotice` below carries the sentence and the
           action, and on a narrow window it is hidden whenever a mode band is
-          open (styles.css § a narrow window) — so at that width, with a
+          open (narrow-window.css § a band with no room) — so at that width, with a
           band open, this chip is the only thing left saying why the page has
           gone read-only, and *the action is not reachable at all*. That is a
           stated trade-off rather than an oversight: closing the band brings the
@@ -200,7 +200,7 @@ export function SharedNotice({
        view this box sits between the masthead and the controls bar, and on a
        narrow window `.reader:has(.mode-band) .masthead` is
        `display: none` — the band goes full width and the article's identity
-       goes with it (styles.css § a narrow window). Without the same rule here
+       goes with it (narrow-window.css § a band with no room). Without the same rule here
        the notice became the first element on the page, at `y: 0`, underneath
        the fixed corner logo: measured 2026-08-29 at 820px, logo `(0,0,136,44)`
        against notice `(32,0,768,66)`, both illegible where they crossed.

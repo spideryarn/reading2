@@ -30,8 +30,9 @@
    ## The breakpoint is derived, not chosen
 
    732px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (12)` — the exact width
-   at which layout.ts can still fit one gist column beside the prose. Below it
-   `fitView` shows no gist columns at all, so **the prose column IS the window**,
+   at which layout.ts could still fit one gist column beside the prose, while
+   there were gist columns (they went on 2026-09-29; `NARROW_WINDOW_MAX` in
+   layout.ts keeps the sum). Below it **the prose column IS the window**,
    and every horizontal luxury the reading view affords itself stops being free:
    136px reserved for a wordmark and 83px reserved for a block id are 21% and 35%
    of a 390px screen.
@@ -1299,9 +1300,9 @@
    table itself.** That is exactly when this bar and the reading cell are the
    same box — both start at `--spine-w + --mode-w` and both run to the right
    edge — which is the fact the arithmetic below depends on. In Hierarchy the
-   gist columns are in front of the prose, the two boxes are not the same, and
-   `:has` does not match: the title stays where the gists start, which is where
-   the reader's eye enters that view anyway. `.text-alone` is excluded because
+   gist columns were in front of the prose, the two boxes were not the same, and
+   `:has` did not match; since those columns went on 2026-09-29 the prose is
+   always the table's only column. `.text-alone` is excluded because
    the rule above already has that case and does it with the cap instead.
 
    **Not `margin-inline: auto`**, which is what the alone rule can afford, and

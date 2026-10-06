@@ -123,7 +123,7 @@ export function dockOffset(): number {
    * **How much of the bottom of the viewport the bar is covering** — not how
    * tall it is. The distinction is exactly `stickyOffset`'s, and it arrived
    * here for exactly the same reason: since 2026-08-28 the bar slides out of
-   * the way on a small device scrolled down through (styles.css § a small
+   * the way on a small device scrolled down through (narrow-window.css § a small
    * device), by `transform`, which moves where it is drawn and **does not
    * change what it measures**. Reading `.height` went on reporting a confident
    * 52 for a bar that was entirely off screen, so a centred jump would have
@@ -163,7 +163,7 @@ export function dockOffset(): number {
  *  - **It measures nothing now.** The head keeps its element — the fisheye
  *    panels take every column's rectangle from it (useColumnContext.ts) and a
  *    `<th scope="col">` is what names a column for a screen reader — and gives
- *    up its height (styles.css § the head with no row). A term that is always zero
+ *    up its height (table.css § the head with no row). A term that is always zero
  *    is not a term.
  *  - **The query had no scope on it.** An article's own prose can contain a
  *    `<table><thead><th>`, and it survives sanitising — checked by running
@@ -194,7 +194,7 @@ export function stickyOffset(): number {
    *
    * The height was right for as long as the bar could only ever be stuck at
    * `top: 0`. On a small device it now slides out of the way while you read
-   * forwards (styles.css § a small device) — by `transform`, which moves where
+   * forwards (narrow-window.css § a small device) — by `transform`, which moves where
    * it is drawn and **does not change what it measures**. (`getBoundingClientRect`
    * does include the transform, which is why reading `bottom` below works and
    * reading `height` would not.) So the old expression

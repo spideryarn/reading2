@@ -11,7 +11,7 @@
  * These run against fixtures, never against the real .env.local — a test that
  * reads Greg's file would pass or fail for reasons that have nothing to do with
  * the code. See scripts/gjd-remote-env.ts and
- * docs/plans/remote-box-dev-environment.md.
+ * docs/plans/260831x-remote-box-dev-environment.md.
  */
 import { describe, expect, it } from "vitest";
 import {

@@ -61,7 +61,7 @@ import type { Block } from "./types.js";
  * The two fields the policies read, in the shape a caller can actually supply.
  *
  * `null` as well as `undefined` for `treatment`, and that is not defensive
- * padding: the filesystem store carries an **absent** field and Postgres
+ * padding: a `Block` carries an **absent** field and Postgres
  * carries a **null** column, and there is one read — `scalarInputsQuery` in
  * src/store/pg.ts — that hands the raw aggregate straight to
  * `articleWordCounts` without going through a `Block` projection to normalise

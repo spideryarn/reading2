@@ -856,7 +856,7 @@ const Box = forwardRef<
  * these two is destructive and both are one press from undoing: a mis-hit marks
  * the wrong searches for as long as it takes to press the right thing. The
  * pixels still matter, so the box keeps its own padding rather than sharing the
- * row's (styles.css § .srch-saved-tick).
+ * row's (search.css § .srch-saved-tick).
  *
  * ## The dot is not the only thing saying which colour this is
  *
@@ -865,7 +865,7 @@ const Box = forwardRef<
  * the row is ticked (2026-10-03, `spya-fwcwun`). One is easy to
  * miss at 11px, and colour discrimination in a small field is exactly where
  * this fails first — the same reason the granularity columns' tints run down
- * lightness as well as chroma (styles.css § --depth-0). Neither is load-bearing
+ * lightness as well as chroma (src/web/styles/tokens.css § --depth-0). Neither is load-bearing
  * on its own: the criterion is printed in full beside them, so a reader who
  * cannot tell two hues apart has still lost nothing but a shortcut.
  */

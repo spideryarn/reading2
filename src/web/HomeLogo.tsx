@@ -22,7 +22,7 @@
  * structural reason rather than a lucky one: the spine is `position: fixed`
  * starting at `top: var(--bar-h)`, and the masthead and controls bar are both
  * inset by `left: calc(var(--spine-w) + var(--mode-w))`. Nothing is ever
- * painted there. styles.css § shell.
+ * painted there. shell.css § shell.
  *
  * **That argument no longer applies to this component, and the mechanism it
  * described is gone.** Both of those bars are on the reading view, and the
@@ -56,7 +56,7 @@
  * came out with this component, stage 2 of
  * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md,
  * and **`--logo-w` is now the width of this button and nothing else**
- * (styles.css § tokens). If a corner control is ever put back on a page with a
+ * (src/web/styles/tokens.css § tokens). If a corner control is ever put back on a page with a
  * sticky bar, this is the mechanism to put back with it.
  *
  * ## Where it is not rendered

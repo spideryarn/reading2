@@ -23,7 +23,7 @@
  * no measurement here.
  *
  * The measurement is a browser one and it lives in two places: the numbers
- * above and after, written into src/web/styles.css § referee mode beside the
+ * above and after, written into src/web/styles/referee.css § referee mode beside the
  * rules they justify, and docs/project/referee-mode.md § the band has to fit.
  *
  * ## What it can do, and why it is worth having anyway

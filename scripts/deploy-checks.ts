@@ -725,7 +725,7 @@ export function readLogQuery(exitCode: number, stdout: string, deploymentId: str
  *
  * The interim coupling to the old store layout is deliberately visible in the
  * path: underneath this directory sit a `data/` and an `output/` shaped exactly
- * like the ones the filesystem store still expects, so the gate can materialise
+ * like the ones the filesystem store expected, so the gate can materialise
  * both by copying. docs/plans/260901b-committed-fixture-corpus.md.
  */
 export const GATE_FIXTURE_ROOT = "tests/fixtures/data-root";

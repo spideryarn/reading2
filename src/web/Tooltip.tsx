@@ -15,7 +15,7 @@
  * side, shift along the edge), hover intent so sweeping the rail doesn't strobe,
  * and dismissal on escape. Floating UI is the engine Radix, Mantine and Tippy
  * all sit on, it is headless — it positions and it handles interaction, and
- * ships no styles, so the dark palette stays ours (styles.css § tooltip).
+ * ships no styles, so the dark palette stays ours (tooltip.css § tooltip).
  *
  * Two things about the DOM shape below are load-bearing:
  *
