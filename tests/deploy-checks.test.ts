@@ -18,7 +18,7 @@ import { parseSource, walkAst } from "./helpers/ts-ast.js";
 
 import {
   assetUrlsIn,
-  hasDisallowAll,
+  judgeServedRobots,
   bucketDrift,
   codeMayNotHaveShipped,
   declaredBuckets,
@@ -1526,33 +1526,40 @@ describe("GATE_TOOLING_BUILDS", () => {
 });
 
 /**
- * **A directive, not the word.** The check this replaced was `/disallow/i`
- * over the whole of `robots.txt`, and the file's comments say "Disallow"
- * several times. docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
+ * **What `scripts/deploy.ts` § `verifyRobots` says about the file a host
+ * served.** A crawler reads groups: a bot obeys the one naming it and inherits
+ * nothing from `*`. So a `Disallow: /` somewhere in the file says nothing about
+ * who it restricts. GPT Sol reproduced the first case on 2026-10-06, against
+ * the per-line check this replaced; the comments-only case is the control from
+ * docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
  */
-describe("hasDisallowAll", () => {
+describe("judgeServedRobots", () => {
   const shipped = readFileSync(path.resolve(import.meta.dirname, "..", "public", "robots.txt"), "utf8");
 
-  it("finds the directive in the file we ship", () => {
-    expect(hasDisallowAll(shipped)).toBe(true);
+  /* A stricter gate that rejected the real file would block every deploy. */
+  it("passes the file we ship, as Vercel serves it", () => {
+    expect(judgeServedRobots(200, "text/plain; charset=utf-8", shipped)).toEqual([]);
   });
 
-  /* The control that exposed it: every real directive gone, every comment
-     kept. The old check said yes to this. */
-  it("is not satisfied by comments that mention it", () => {
-    const commentsOnly = shipped
-      .split("\n")
-      .filter((line) => !/^Disallow:/i.test(line.trim()))
-      .join("\n");
+  it("fails a file that restricts one named bot and leaves every other crawler unrestricted", () => {
+    const twitterbotOnly = "User-agent: *\nAllow: /\n\nUser-agent: Twitterbot\nDisallow: /\n";
+    expect(judgeServedRobots(200, "text/plain", twitterbotOnly)).not.toEqual([]);
+    expect(judgeServedRobots(200, "text/plain", "User-agent: *\n\nUser-agent: Twitterbot\nDisallow: /\n")).not.toEqual([]);
+  });
+
+  it("fails the shipped file with the `*` group's own Disallow taken out, and says which group", () => {
+    const lines = shipped.split("\n");
+    lines.splice(lines.indexOf("Disallow: /"), 1);
+    const problems = judgeServedRobots(200, "text/plain", lines.join("\n"));
+    expect(problems.join("\n")).toMatch(/User-agent: \*/);
+  });
+
+  it("fails the SPA shell answering for it, a non-200, and comments that only mention the rule", () => {
+    expect(judgeServedRobots(200, "text/html; charset=utf-8", "<!doctype html><title>Spideryarn</title>")).not.toEqual([]);
+    expect(judgeServedRobots(200, "text/plain", "<!doctype html><title>Spideryarn</title>")).not.toEqual([]);
+    expect(judgeServedRobots(404, "text/plain", shipped)).toEqual(["answered 404"]);
+    const commentsOnly = shipped.split("\n").filter((line) => !/^Disallow:/i.test(line.trim())).join("\n");
     expect(commentsOnly).toMatch(/disallow/i);
-    expect(hasDisallowAll(commentsOnly)).toBe(false);
-  });
-
-  it("wants the whole site, and reads past a trailing comment", () => {
-    expect(hasDisallowAll("User-agent: *\nDisallow: /profile\n")).toBe(false);
-    expect(hasDisallowAll("User-agent: *\nDisallow:\n")).toBe(false);
-    expect(hasDisallowAll("User-agent: *\n# Disallow: /\n")).toBe(false);
-    expect(hasDisallowAll("User-agent: *\ndisallow: /   # everything\n")).toBe(true);
-    expect(hasDisallowAll("<!doctype html><title>Spideryarn</title>")).toBe(false);
+    expect(judgeServedRobots(200, "text/plain", commentsOnly)).not.toEqual([]);
   });
 });
