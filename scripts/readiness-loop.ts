@@ -468,7 +468,7 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * `tests/fleet-decisions-route.test.ts` imports `tools/fleet/server.ts`, and
  * that module refuses at startup unless `tools/fleet/web/dist/index.html`
  * exists. `check`'s build step is `build:client && build:api` — `build:fleet` is
- * in neither. So the test fails in any checkout where nobody happened to run
+ * in neither. So the test failed in any checkout where nobody happened to run
  * that by hand, which a machine-made worktree never does. Measured on
  * 2026-09-09: it failed in this runner's first recorded check and passed
  * immediately after `npm run build:fleet`.
@@ -482,9 +482,13 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * `api-dist` — *"npm run check was red on a clean checkout for everybody who had
  * not happened to run the API build by hand"* — recurring for the fleet client.
  * **The real repair is a step in `check.ts`**, so that every checkout gets it
- * rather than only this one; that file is not this work's to change, and the
- * finding is written up for whoever owns it. This is the local mitigation, and
- * it is deliberately not silent about being one.
+ * rather than only this one, and since 2026-10-06 it has one: `check` runs
+ * every `GATE_TOOLING_BUILDS` script above its test gate
+ * (docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md). This
+ * stays for the two things that step does not do: scripts/readiness-run.ts's
+ * `test` check runs a bare `npm test`, which builds nothing, and a build that
+ * fails here aborts the tick instead of being recorded as a red check. On a
+ * tick that prepares, the client is built twice, about 3 s.
  *
  * The output is gitignored (`dist/`, unanchored), so it does not dirty the tree
  * the record is about — verified, not assumed. A failed build aborts this tick

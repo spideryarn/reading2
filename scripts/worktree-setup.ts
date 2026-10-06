@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { TRUNK_BRANCH } from "./deploy-checks.js";
+import { buildForSuite, describeBuilds } from "./worktree-builds.js";
 import { alreadyInstalled } from "./worktree-deps.js";
 import { describeFreshen, freshenFromTrunk, freshenIsFatal } from "./worktree-freshen.js";
 import { inLinkedWorktree, PRIMARY_PORT } from "./worktree-port.js";
@@ -161,7 +162,25 @@ if (corpus.copied.length === 0) {
 ok(describeMaterialise(corpus));
 
 /* ------------------------------------------------------------------ */
-/* 5. What this script cannot fix, said out loud                       */
+/* 5. The build output the tests read                                  */
+/* ------------------------------------------------------------------ */
+
+/* Five test files fail without it, on purpose, and until 2026-10-06 that was
+   every new worktree's first `npm test`. Reported rather than fatal, so a
+   broken trunk still yields a tree to fix it in — scripts/worktree-builds.ts. */
+const builds = buildForSuite(ROOT, { note: info });
+if (builds.failed.length === 0) {
+  ok(describeBuilds(builds));
+} else {
+  bad(describeBuilds(builds));
+  for (const failure of builds.failed) {
+    info(`npm run ${failure.script}, the end of its output:`);
+    for (const line of failure.out.trimEnd().split("\n").slice(-12)) say(`         ${line}`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. What this script cannot fix, said out loud                       */
 /* ------------------------------------------------------------------ */
 
 if (existsSync(path.join(ROOT, ".env.local"))) {
@@ -174,14 +193,14 @@ if (existsSync(path.join(ROOT, ".env.local"))) {
 
 say();
 // What tells a new agent whether its own red is normal. It named a count, "2 of
-// 786" (measured 2026-09-07), and went stale twice: the "~14 of 477" before it,
-// then the three fleet files that want `build:fleet`, which it never mentioned
-// (2026-09-29). So it names the cause instead of a number: files whose own
-// failure message says which build to run. The deploy gate runs the ordinary
-// build plus the extra `build:fleet` entry in `GATE_TOOLING_BUILDS`;
-// tests/deploy-checks.test.ts keeps those level with the suite's messages.
-// docs/reusable/written-down-is-not-checked.md.
-info("npm test         — files asking for `npm run build` or `npm run build:fleet` are red until you run those");
+// 786" (measured 2026-09-07), and went stale twice, so it names the cause
+// instead: the builds above, which is what the red files' own messages ask for.
+// Since 2026-10-06 they have been run, so the ordinary line is about staleness.
+info(
+  builds.failed.length === 0
+    ? "npm test         — reads the build made just now; `npm run check` rebuilds, a bare `npm test` does not"
+    : `npm test         — files asking for ${builds.failed.map((f) => `\`npm run ${f.script}\``).join(" or ")} are red until that passes`,
+);
 info(`npm run dev      — walks up from ${PRIMARY_PORT}; a port outside the range warns at startup`);
 info("and read docs/project/worktrees.md before landing anything");
 say();

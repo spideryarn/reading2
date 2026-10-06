@@ -30,6 +30,7 @@ import {
   GATE_FIXTURE_ROOT,
   GATE_FIXTURES,
   GATE_TOOLING_BUILDS,
+  SUITE_BUILDS,
   judgeClientBuild,
   judgeDeployments,
   stagedTooLong,
@@ -1514,7 +1515,7 @@ describe("GATE_TOOLING_BUILDS", () => {
     expect(asked).toContain("build");
     expect(asked).toContain("build:fleet");
 
-    const run = new Set<string>(["build", ...GATE_TOOLING_BUILDS.map((b) => b.script)]);
+    const run = new Set<string>(SUITE_BUILDS);
     expect([...asked].filter((s) => !run.has(s))).toEqual([]);
   });
 
