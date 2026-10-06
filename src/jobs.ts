@@ -2232,6 +2232,12 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
        exists (`refuseOnAMinimalArticle` below); that job does not match this
        predicate and cannot create an article. Plan 261001m § The thin article. */
     ...(isMinimalJob(job.steps.map((s) => s.name)) ? { processing: "minimal" as const } : {}),
+    /* **The address the article is remembered by** (`articles.asked_url`), so a
+       short link that ended on a paper finds the paper on a second paste. Kept
+       only by the claim that creates the row, or that finds one with nothing
+       published and no address yet; a refresh's `url` is the article's own
+       `final_url` and is ignored there. An upload has none. Plan 261006i. */
+    ...(job.url !== undefined ? { askedUrl: job.url } : {}),
   });
 }
 

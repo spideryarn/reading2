@@ -358,6 +358,34 @@ export const articles = spideryarn.table("articles", {
    * sets it back.
    */
   processing: text("processing").notNull().default("full"),
+
+  /**
+   * **The address the reader pasted to make this article**, when that was an
+   * address at all. Null for an upload, and for every article made before
+   * 2026-10-06.
+   *
+   * It is a different fact from the revision's two addresses. `final_url` is
+   * where the bytes came from, and `requested_url` is what the fetch step asked
+   * for, which for a paper is an address we derived. A short link or a DOI that
+   * ends on a paper has the paper's address in both, so without this the link
+   * the reader actually holds would find nothing on a second paste, and they
+   * would import and pay for the same paper again.
+   *
+   * **Written once**, by the one line that creates the row
+   * (`lockOrCreateArticle`, src/store/pg-revisions.ts), which also fills a null
+   * on a row that has never published. Nothing changes it after that. It is on
+   * `articles` rather than on the revision because a revision is rewritten by
+   * every fetch, and a refresh's address is the article's `final_url`.
+   *
+   * **Read by one thing on purpose**: `slugForUrlKey`
+   * (src/store/find-article.ts), and only for an article that is a paper. It is
+   * the owner's own pasted string and can carry a token in its query, so it
+   * stays off every public and shared read. The owner's export keeps it
+   * (`article.json`). No index: the lookup compares `urlKey`s in JavaScript.
+   *
+   * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+   */
+  askedUrl: text("asked_url"),
 }, (t) => [
   /** The two states, and a third would be a row every guard reads as full. */
   check("articles_processing", sql`${t.processing} in ('minimal','full')`),

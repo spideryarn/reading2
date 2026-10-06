@@ -91,6 +91,8 @@ const SLUG = "store-export-bundle-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-00000000b0d1";
 /** A private link's key on the fixture: 22 base64url characters, which the column's CHECK requires. */
 const SHARE_TOKEN = "ExPoRtBuNdLeFiXtUrE_-0";
+/** A short link with something private in its query, as a pasted address can have. */
+const ASKED_URL = "https://bit.ly/s1ExportBundle?k=AsKeDuRlFiXtUrE";
 const REVISION_ID = "00000000-0000-4000-8000-00000000b0d2";
 /** Three blocks, deliberately inserted out of order — see the ordering test. */
 const BLOCKS = ["spya-bnd234", "spya-bne234", "spya-bnf234"] as const;
@@ -289,6 +291,8 @@ describe("the bundle is the faithful projection", () => {
         /* A private link on it, so the zip has a key to leave out (plan 261005e). */
         shareToken: SHARE_TOKEN,
         shareTokenAt: new Date(),
+        /* The address the reader pasted, which is theirs and does cross (plan 261006i). */
+        askedUrl: ASKED_URL,
       })
       .onConflictDoNothing();
     await db
@@ -532,6 +536,24 @@ describe("the bundle is the faithful projection", () => {
     }
     const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
     expect(shelf).not.toContain(SHARE_TOKEN);
+  });
+
+  /**
+   * **The address the reader pasted is theirs, so their own export keeps it**,
+   * in `article.json` and nowhere else. It arrives there with no line of code:
+   * `rowJson` ships every `articles` column nobody told it to drop. This pins
+   * that it was a decision (plan 261006i, GPT Sol's K7), and that the string,
+   * which can carry a token in its query, is not also copied into the page a
+   * reader opens or into the rollback's files.
+   */
+  it("keeps the address the article was asked for, in article.json alone", async () => {
+    expect(parsed("article.json").askedUrl).toBe(ASKED_URL);
+    for (const [file, text] of bundled) {
+      if (file === "article.json") continue;
+      expect(text, `${file} carries the asked-for address`).not.toContain("AsKeDuRlFiXtUrE");
+    }
+    const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
+    expect(shelf).not.toContain("AsKeDuRlFiXtUrE");
   });
 
   it("leaves out a file with nothing in it, and keeps the README", () => {

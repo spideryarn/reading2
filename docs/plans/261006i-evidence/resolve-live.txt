@@ -1,0 +1,42 @@
+resolve-live, 2026-10-06T14:52:58.925Z
+pasted address | source | candidates asked | what arrived | does urlKey of the address it ended on equal the paper's key
+
+ok      NBER landing page
+        https://www.nber.org/papers/w30000
+        source nber; key nber.org/papers/w30000; slug nber-w30000
+        asked 1 of 1
+        pdf 1077387 bytes; ended on https://www.nber.org/system/files/working_papers/w30000/w30000.pdf; urlKey(end) === key: true
+ok      NBER by its DOI
+        https://doi.org/10.3386/w30000
+        source nber; key nber.org/papers/w30000; slug nber-w30000
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 1077387 bytes; ended on https://www.nber.org/system/files/working_papers/w30000/w30000.pdf; urlKey(end) === key: true
+
+the redirect look: a link no source recognises, the step's own fetchByAddress, the real fetcher
+
+ok      ACL's old host, to a landing page
+        https://www.aclweb.org/anthology/N19-1423
+        the link's own fetch went https://www.aclweb.org/anthology/N19-1423 -> https://aclanthology.org/N19-1423 -> https://aclanthology.org/N19-1423/
+        source acl; key aclanthology.org/N19-1423
+        candidates consulted 1 of 1; fetches made after the link's own: 1 (https://aclanthology.org/N19-1423.pdf)
+        pdf 786279 bytes; ended on https://aclanthology.org/N19-1423.pdf; urlKey(end) === key: true
+ok      doi.org on www., to arXiv's abstract page
+        https://www.doi.org/10.48550/arXiv.1706.03762
+        the link's own fetch went https://www.doi.org/10.48550/arXiv.1706.03762 -> https://doi.org/10.48550/arXiv.1706.03762 -> https://arxiv.org/abs/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762
+        candidates consulted 1 of 2; fetches made after the link's own: 1 (https://arxiv.org/html/1706.03762)
+        html 188707 bytes; ended on https://arxiv.org/html/1706.03762; urlKey(end) === key: true
+ok      NBER's old host, to a landing page
+        https://papers.nber.org/papers/w30000
+        the link's own fetch went https://papers.nber.org/papers/w30000 -> https://www.nber.org/papers/w30000
+        source nber; key nber.org/papers/w30000
+        candidates consulted 1 of 1; fetches made after the link's own: 1 (https://www.nber.org/system/files/working_papers/w30000/w30000.pdf)
+        pdf 1077387 bytes; ended on https://www.nber.org/system/files/working_papers/w30000/w30000.pdf; urlKey(end) === key: true
+ok      NBER's old host, to the PDF itself
+        https://papers.nber.org/papers/w30000.pdf
+        the link's own fetch went https://papers.nber.org/papers/w30000.pdf -> https://www.nber.org/papers/w30000.pdf -> https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+        source nber; key nber.org/papers/w30000
+        candidates consulted 1 of 1; fetches made after the link's own: 0
+        pdf 1077387 bytes; ended on https://www.nber.org/system/files/working_papers/w30000/w30000.pdf; urlKey(end) === key: true
+
+6 cases, 6 ok, 0 not ok

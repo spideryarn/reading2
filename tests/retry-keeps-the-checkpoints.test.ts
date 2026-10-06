@@ -176,7 +176,7 @@ afterAll(async () => {
  */
 async function articleForSlug(slug: string): Promise<string> {
   return await runAsOwner(OWNER, async () =>
-    getDb().transaction(async (tx) => (await lockOrCreateArticle(tx, slug)).id),
+    getDb().transaction(async (tx) => (await lockOrCreateArticle(tx, slug, { askedUrl: null })).id),
   );
 }
 

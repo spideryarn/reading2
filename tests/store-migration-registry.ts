@@ -2720,6 +2720,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* Plan 261006i. Claims jobs through the real `claimSession` and reads
+     `articles.asked_url` straight back; two cases assert a null stayed null. */
+  "tests/asked-url-claim-session.test.ts": "private-postgres",
   /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
      their manifests; the bucket is a temp directory, mocked at the `blobStore()`
      selector exactly as `illustrated-route` mocks it, so nothing here touches

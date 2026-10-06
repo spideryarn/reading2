@@ -20,6 +20,10 @@
  * docs/research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md,
  * plus `EXTRA` below: the shapes that measurement did not cover (GPT Sol's G9).
  *
+ * NBER joined on 2026-10-06 (`--only=nber`), and so did `REDIRECTS` below
+ * (`--only=redirect`): links no source recognises that redirect to one that
+ * does, put through `fetchByAddress`, the step's redirect look.
+ *
  * Exit code 1 when any row does not end on the paper (a document one of its
  * candidates promised) with the key check true.
  */
@@ -31,11 +35,15 @@ import { urlKey } from "../../src/ingest.js";
 import { declaredFailure } from "../../src/job-failure.js";
 import { codeOfMessage } from "../../src/messages.js";
 import { resolvePaperSource } from "../../src/paper-sources.js";
-import { fetchFirstCandidate } from "../../src/pipeline.js";
+import { fetchByAddress, fetchFirstCandidate } from "../../src/pipeline.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const out = process.argv.find((a) => a.startsWith("--out="))?.slice(6);
-const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7);
+/** Source names, and `redirect` for the redirect look's cases; several with commas. */
+const only = process.argv
+  .find((a) => a.startsWith("--only="))
+  ?.slice(7)
+  .split(",");
 
 /** cases.json's name for a source → the registry's. */
 const MEASURED: Record<string, string> = {
@@ -79,6 +87,26 @@ const EXTRA: Case[] = [
   { label: "PMLR flat layout, by its PDF", wants: "pmlr", url: "https://proceedings.mlr.press/v37/ioffe15.pdf" },
   { label: "JMLR on www.", wants: "jmlr", url: "https://www.jmlr.org/papers/v12/pedregosa11a.html" },
   { label: "JMLR numbered name", wants: "jmlr", url: "https://jmlr.org/papers/v22/20-1061.html" },
+  { label: "NBER landing page", wants: "nber", url: "https://www.nber.org/papers/w30000" },
+  { label: "NBER by its DOI", wants: "nber", url: "https://doi.org/10.3386/w30000" },
+];
+
+/**
+ * Links no source recognises that end, after a redirect, on an address one
+ * does: the redirect look, `fetchByAddress` in src/pipeline.ts
+ * (docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+ * § Stage 2). Run with `--only=redirect`, or with everything else.
+ *
+ * None is a shortener: these are old or alternative hosts of the sources
+ * themselves, which redirect the same way and are ours to ask politely.
+ * `http://arxiv.org/abs/…` would not do, though it redirects: arXiv's source
+ * recognises it as pasted, so the redirect look is never reached.
+ */
+const REDIRECTS: Case[] = [
+  { label: "ACL's old host, to a landing page", wants: "acl", url: "https://www.aclweb.org/anthology/N19-1423" },
+  { label: "doi.org on www., to arXiv's abstract page", wants: "arxiv", url: "https://www.doi.org/10.48550/arXiv.1706.03762" },
+  { label: "NBER's old host, to a landing page", wants: "nber", url: "https://papers.nber.org/papers/w30000" },
+  { label: "NBER's old host, to the PDF itself", wants: "nber", url: "https://papers.nber.org/papers/w30000.pdf" },
 ];
 
 const measured = (
@@ -87,7 +115,7 @@ const measured = (
   .filter((c) => c.source in MEASURED)
   .map((c): Case => ({ label: c.label, wants: MEASURED[c.source] as string, url: c.landingUrl }));
 
-const cases = [...measured, ...EXTRA].filter((c) => only === undefined || c.wants === only);
+const cases = [...measured, ...EXTRA].filter((c) => only === undefined || only.includes(c.wants));
 
 const lastAsked = new Map<string, number>();
 const GAP_MS = 3_000;
@@ -98,7 +126,10 @@ async function politeFetch(url: string, options: { signal: AbortSignal }) {
   const wait = (lastAsked.get(host) ?? 0) + GAP_MS - Date.now();
   if (wait > 0) await new Promise((done) => setTimeout(done, wait));
   try {
-    return await fetchDocument(url, options);
+    const doc = await fetchDocument(url, options);
+    /* A redirect's last hop was a request to that host too. */
+    lastAsked.set(new URL(doc.url).host, Date.now());
+    return doc;
   } finally {
     lastAsked.set(host, Date.now());
   }
@@ -170,7 +201,62 @@ for (const c of cases) {
   lines.push(line);
 }
 
-const verdict = `\n${cases.length} cases, ${cases.length - bad} ok, ${bad} not ok`;
+/** An address without its query, which can be a signed one: the length is enough to know it was there. */
+function withoutQuery(address: string): string {
+  const u = new URL(address);
+  return `${u.origin}${u.pathname}${u.search === "" ? "" : ` [query: ${u.search.length} chars]`}`;
+}
+
+const redirects = REDIRECTS.filter(() => only === undefined || only.includes("redirect"));
+if (redirects.length > 0) {
+  const heading = "\nthe redirect look: a link no source recognises, the step's own fetchByAddress, the real fetcher";
+  console.log(heading);
+  lines.push(heading, "");
+}
+
+for (const c of redirects) {
+  const asked: string[] = [];
+  let linkChain: string[] = [];
+  let line: string;
+  if (resolvePaperSource(c.url) !== null) {
+    bad += 1;
+    line = `NOT OK  ${c.label}\n        ${c.url}\n        a source recognises this as pasted, so it is no test of the redirect look`;
+  } else {
+    try {
+      const { doc, paper, tried } = await fetchByAddress(
+        c.url,
+        { slug: "resolve-live", signal: new AbortController().signal },
+        async (url, options) => {
+          asked.push(url);
+          const fetched = await politeFetch(url, options);
+          if (asked.length === 1) linkChain = fetched.chain;
+          return fetched;
+        },
+      );
+      const bytes = doc.kind === "pdf" ? doc.bytes.byteLength : Buffer.byteLength(doc.text);
+      const same = paper !== null && urlKey(doc.url) === paper.key;
+      const ok = paper?.source === c.wants && same;
+      if (!ok) bad += 1;
+      line =
+        `${ok ? "ok    " : "NOT OK"}  ${c.label}\n` +
+        `        ${c.url}\n` +
+        `        the link's own fetch went ${linkChain.map(withoutQuery).join(" -> ")}\n` +
+        `        source ${paper?.source ?? "none: kept as it arrived"}; key ${paper?.key ?? "-"}\n` +
+        `        candidates consulted ${paper === null ? 0 : tried} of ${paper?.candidates.length ?? 0}; fetches made after the link's own: ${asked.length - 1}` +
+        `${asked.length > 1 ? ` (${asked.slice(1).map(withoutQuery).join(" ")})` : ""}\n` +
+        `        ${doc.kind} ${bytes} bytes; ended on ${withoutQuery(doc.url)}; urlKey(end) === key: ${same}`;
+    } catch (err) {
+      bad += 1;
+      const code = codeOfMessage(declaredFailure(err)?.message ?? "") ?? "undeclared";
+      line = `NOT OK  ${c.label}\n        ${c.url}\n        FAILED [${code}] ${(err as Error).message}; fetches made: ${asked.length}`;
+    }
+  }
+  console.log(line);
+  lines.push(line);
+}
+
+const total = cases.length + redirects.length;
+const verdict = `\n${total} cases, ${total - bad} ok, ${bad} not ok`;
 console.log(verdict);
 lines.push(verdict);
 if (out !== undefined) {

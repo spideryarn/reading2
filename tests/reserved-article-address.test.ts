@@ -209,10 +209,10 @@ describe("creating an article with the reserved name", { timeout: 20_000 }, () =
 
   it("is refused, and says which address it collides with", async () => {
     await expect(
-      inRolledBackTx((tx) => lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG)),
+      inRolledBackTx((tx) => lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG, { askedUrl: null })),
     ).rejects.toBeInstanceOf(PublishRefused);
     await expect(
-      inRolledBackTx((tx) => lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG)),
+      inRolledBackTx((tx) => lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG, { askedUrl: null })),
     ).rejects.toThrow(new RegExp(`/read/${PUBLIC_LIBRARY_SLUG}`));
   });
 
@@ -225,7 +225,7 @@ describe("creating an article with the reserved name", { timeout: 20_000 }, () =
    */
   it("while a name that merely starts the same way is created as usual", async () => {
     const slug = `public-notes-${randomUUID().slice(0, 8)}`;
-    const row = await inRolledBackTx((tx) => lockOrCreateArticle(tx, slug));
+    const row = await inRolledBackTx((tx) => lockOrCreateArticle(tx, slug, { askedUrl: null }));
     expect(row.slug).toBe(slug);
     expect(row.ownerId).toBe(currentOwnerId());
   });
@@ -248,7 +248,7 @@ describe("creating an article with the reserved name", { timeout: 20_000 }, () =
         slug: PUBLIC_LIBRARY_SLUG,
         shortId: mintId(),
       });
-      return lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG);
+      return lockOrCreateArticle(tx, PUBLIC_LIBRARY_SLUG, { askedUrl: null });
     });
     expect(row.slug).toBe(PUBLIC_LIBRARY_SLUG);
   });

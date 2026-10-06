@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FetchFailure, type FetchedDocument, type FetchOptions } from "../src/fetch.js";
 import { declaredFailure } from "../src/job-failure.js";
 import { codeOfMessage, FETCH_PAPER_MISSING, fetchFailed, kindOfMessage, worthRetrying } from "../src/messages.js";
-import { type FetchCandidate, fetchDetail, fetchFirstCandidate, STEPS } from "../src/pipeline.js";
+import { type FetchCandidate, fetchByAddress, fetchDetail, fetchFirstCandidate, STEPS } from "../src/pipeline.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 
@@ -298,6 +298,7 @@ describe("an address no source recognises", () => {
     expect(fetchDetail(312, null)).toBe("312 KB");
     expect(fetchDetail(1040, { source: "arxiv", format: "pdf" })).toBe("1040 KB, arXiv PDF");
     expect(fetchDetail(312, { source: "arxiv", format: "html" })).toBe("312 KB, arXiv HTML");
+    expect(fetchDetail(1052, { source: "nber", format: "pdf" })).toBe("1052 KB, NBER PDF");
   });
 });
 
@@ -389,6 +390,7 @@ describe("the fetch step itself", () => {
       ["https://proceedings.neurips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html", "neurips", 1],
       ["https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html", "cvf", 1],
       ["https://jmlr.org/papers/v15/srivastava14a.html", "jmlr", 1],
+      ["https://doi.org/10.3386/w30000", "nber", 1],
       ["https://huggingface.co/papers/1706.03762", "arxiv", 2],
       ["https://arxiv.org/abs/2608.13566", "arxiv", 2],
     ];
@@ -413,7 +415,7 @@ describe("the fetch step itself", () => {
         });
         /* No address, in the line or in what Sentry is sent. */
         const written = JSON.stringify(lines) + thrown.message;
-        for (const part of ["http", new URL(url).hostname, "radford", "2608", "1706", "703", "srivastava", "Residual", "3f5ee"]) {
+        for (const part of ["http", new URL(url).hostname, "radford", "2608", "1706", "703", "srivastava", "Residual", "3f5ee", "30000"]) {
           expect(written).not.toContain(part);
         }
       });
@@ -495,5 +497,234 @@ describe("the fetch step itself", () => {
     /* The fake PDF does not open, and the page count says so in a line of its own. */
     expect(warned.map((line) => line.message)).toEqual(["page count: test-fetch-candidates would not open"]);
     expect(warned.filter(aboutAPaperSource)).toEqual([]);
+  });
+
+  /* ----------------------------------------------------------------------
+     A link that is not a paper's address but ends on one: a short link, or a
+     DOI no source knows by its pattern.
+     docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+     § Stage 2: the redirect look.
+     ---------------------------------------------------------------------- */
+
+  describe("a link that redirects", () => {
+    const SHORT = "https://sho.rt/3xYz";
+    const ABS_ADDRESS = "https://arxiv.org/abs/2608.13566";
+    const ACL_PAGE = "https://aclanthology.org/N19-1423/";
+    const ACL_PDF = "https://aclanthology.org/N19-1423.pdf";
+    const ELSEWHERE = "https://example.com/why-trees";
+
+    const to = (location: string) => () => new Response(null, { status: 302, headers: { location } });
+
+    /**
+     * `fetchByAddress` over a scripted network; anything unscripted is a 404.
+     * `requested` is every address that reached the network, each hop of a
+     * redirect included, so an address asked for twice appears twice.
+     */
+    async function followed(url: string, script: Record<string, () => Response>) {
+      const requested: string[] = [];
+      network.seams = {
+        attempts: 1,
+        sleep: async () => {},
+        resolve: async () => ["93.184.216.34"],
+        fetchImpl: async (address) => {
+          requested.push(address);
+          return (script[address] ?? status(404))();
+        },
+      };
+      const outcome = await fetchByAddress(url, ctx(url)).then(
+        (got) => ({ got, thrown: null }),
+        (thrown: Error) => ({ got: null, thrown }),
+      );
+      return { ...outcome, requested, lines: warned.filter(aboutAPaperSource) };
+    }
+
+    /** What the job card would say of a fetch that worked. */
+    const detailOf = (got: Awaited<ReturnType<typeof fetchByAddress>> | null) =>
+      got === null ? null : fetchDetail(1, got.paper === null ? null : { source: got.paper.source, format: got.doc.kind });
+
+    it("ending on an arXiv abstract page asks arXiv for the paper's HTML, and that is the document", async () => {
+      const { got, requested } = await followed(SHORT, {
+        [SHORT]: to(ABS_ADDRESS),
+        [ABS_ADDRESS]: () => page(ERROR_PAGE),
+        [HTML_ADDRESS]: () => page(PAPER_PAGE),
+      });
+      expect(requested).toEqual([SHORT, ABS_ADDRESS, HTML_ADDRESS]);
+      expect(got?.doc.url).toBe(HTML_ADDRESS);
+      expect(got?.doc.kind === "html" && got.doc.text).toContain("ltx_document");
+      expect(got?.paper?.key).toBe("arxiv.org/abs/2608.13566");
+      expect(got?.tried).toBe(1);
+      expect(detailOf(got)).toBe("1 KB, arXiv HTML");
+    });
+
+    it("ending on arXiv's PDF, with no HTML to be had, keeps the PDF it holds and does not ask for it again", async () => {
+      const { got, requested } = await followed(SHORT, { [SHORT]: to(PDF_ADDRESS), [PDF_ADDRESS]: pdf });
+      expect(requested).toEqual([SHORT, PDF_ADDRESS, HTML_ADDRESS]);
+      expect(got?.doc.kind).toBe("pdf");
+      expect(got?.doc.url).toBe(PDF_ADDRESS);
+      expect(got?.doc.requestedUrl).toBe(SHORT);
+      expect(got?.tried).toBe(2);
+      expect(detailOf(got)).toBe("1 KB, arXiv PDF");
+    });
+
+    it("ending on arXiv's PDF still prefers the HTML when there is one: the held PDF is no HTML candidate", async () => {
+      const { got, requested } = await followed(SHORT, {
+        [SHORT]: to(PDF_ADDRESS),
+        [PDF_ADDRESS]: pdf,
+        [HTML_ADDRESS]: () => page(PAPER_PAGE),
+      });
+      expect(requested).toEqual([SHORT, PDF_ADDRESS, HTML_ADDRESS]);
+      expect(got?.doc.kind).toBe("html");
+      expect(got?.doc.url).toBe(HTML_ADDRESS);
+      expect(got?.tried).toBe(1);
+    });
+
+    it("holds the document it already has to its candidate's promise", async () => {
+      /* The PDF's address served a web page with a 200. It is the last
+         candidate and the wrong kind, so nothing is the paper. */
+      const wrongKind = await followed(SHORT, { [SHORT]: to(PDF_ADDRESS), [PDF_ADDRESS]: () => page(ERROR_PAGE) });
+      expect(wrongKind.got).toBeNull();
+      expect(codeOf(wrongKind.thrown as Error)).toBe("fetch-incomplete");
+      expect(wrongKind.requested).toEqual([SHORT, PDF_ADDRESS, HTML_ADDRESS]);
+      expect(wrongKind.lines.map((line) => line.fields)).toEqual([
+        { slug: "test-fetch-candidates", step: "fetch", source: "arxiv", tried: 2, code: "fetch-incomplete" },
+      ]);
+
+      /* The HTML's address served a page without LaTeXML's marker: on to the PDF. */
+      const noMarker = await followed(SHORT, {
+        [SHORT]: to(HTML_ADDRESS),
+        [HTML_ADDRESS]: () => page(ERROR_PAGE),
+        [PDF_ADDRESS]: pdf,
+      });
+      expect(noMarker.requested).toEqual([SHORT, HTML_ADDRESS, PDF_ADDRESS]);
+      expect(noMarker.got?.doc.kind).toBe("pdf");
+    });
+
+    it("ending on arXiv's HTML keeps it, with no request after the link's own", async () => {
+      const { got, requested } = await followed(SHORT, { [SHORT]: to(HTML_ADDRESS), [HTML_ADDRESS]: () => page(PAPER_PAGE) });
+      expect(requested).toEqual([SHORT, HTML_ADDRESS]);
+      expect(got?.doc.url).toBe(HTML_ADDRESS);
+      expect(detailOf(got)).toBe("1 KB, arXiv HTML");
+    });
+
+    describe("and the address it ended on is compared as a request, not as a string or a paper", () => {
+      /* Hand-written fetchers: the point is what the document says its address
+         is, and the real fetcher decides that for itself. */
+      const held = (url: string): FetchedDocument =>
+        ({ kind: "pdf", text: null, encoding: null, requestedUrl: SHORT, url, chain: [SHORT, url], bytes: new Uint8Array(4) }) as FetchedDocument;
+      const answering = (ended: string) => {
+        const asked: string[] = [];
+        return {
+          asked,
+          fetchDocument: async (url: string) => {
+            asked.push(url);
+            if (url === SHORT) return held(ended);
+            if (url === HTML_ADDRESS) throw new FetchFailure("not-found", url, "There's nothing at that address.", { status: 404 });
+            return held(url);
+          },
+        };
+      };
+
+      it("a fragment on the end is the same request, so the held PDF is used", async () => {
+        const net = answering(`${PDF_ADDRESS}#page=3`);
+        const got = await fetchByAddress(SHORT, ctx(SHORT), net.fetchDocument);
+        expect(net.asked).toEqual([SHORT, HTML_ADDRESS]);
+        expect(got.doc.url).toBe(`${PDF_ADDRESS}#page=3`);
+      });
+
+      it("another spelling of the paper's PDF is another request, and is asked for", async () => {
+        const net = answering(`${PDF_ADDRESS}.pdf`);
+        const got = await fetchByAddress(SHORT, ctx(SHORT), net.fetchDocument);
+        expect(net.asked).toEqual([SHORT, HTML_ADDRESS, PDF_ADDRESS]);
+        expect(got.doc.url).toBe(PDF_ADDRESS);
+      });
+
+      it("an address that did not move is not looked at again", async () => {
+        /* `%2E` is a dot to a server and not to the registry, so this address
+           names no paper, and the document came back from the same request. */
+        const spelled = "https://arxiv.org/abs/2608%2E13566";
+        const asked: string[] = [];
+        const got = await fetchByAddress(spelled, ctx(spelled), async (url) => {
+          asked.push(url);
+          return { ...held(ABS_ADDRESS), requestedUrl: spelled, chain: [spelled] };
+        });
+        expect(asked).toEqual([spelled]);
+        expect(got.paper).toBeNull();
+        expect(got.doc.url).toBe(ABS_ADDRESS);
+      });
+    });
+
+    it("ending on an ACL Anthology landing page fetches the PDF", async () => {
+      const { got, requested } = await followed(SHORT, {
+        [SHORT]: to(ACL_PAGE),
+        [ACL_PAGE]: () => page(ERROR_PAGE),
+        [ACL_PDF]: pdf,
+      });
+      expect(requested).toEqual([SHORT, ACL_PAGE, ACL_PDF]);
+      expect(got?.doc.kind).toBe("pdf");
+      expect(got?.doc.url).toBe(ACL_PDF);
+      expect(detailOf(got)).toBe("1 KB, ACL Anthology PDF");
+    });
+
+    it("ending anywhere else is kept as it is, with the one request it always was", async () => {
+      const { got, requested, lines } = await followed(SHORT, { [SHORT]: to(ELSEWHERE), [ELSEWHERE]: () => page(ERROR_PAGE) });
+      expect(requested).toEqual([SHORT, ELSEWHERE]);
+      expect(got?.doc.url).toBe(ELSEWHERE);
+      expect(got?.paper).toBeNull();
+      expect(got?.tried).toBe(1);
+      expect(detailOf(got)).toBe("1 KB");
+      expect(lines).toEqual([]);
+    });
+
+    it("passing through a paper's address on the way to somewhere else is not that paper", async () => {
+      const { got, requested } = await followed(SHORT, {
+        [SHORT]: to(ABS_ADDRESS),
+        [ABS_ADDRESS]: to(ELSEWHERE),
+        [ELSEWHERE]: () => page(ERROR_PAGE),
+      });
+      expect(requested).toEqual([SHORT, ABS_ADDRESS, ELSEWHERE]);
+      expect(got?.paper).toBeNull();
+    });
+
+    describe("and a failure after that is the paper source's", () => {
+      it("the last candidate absent: the paper is missing, and the log names the source and no address", async () => {
+        for (const [ended, source, tried] of [
+          [ACL_PAGE, "acl", 1],
+          [ABS_ADDRESS, "arxiv", 2],
+        ] as const) {
+          warned.length = 0;
+          const { thrown, lines } = await followed(SHORT, { [SHORT]: to(ended), [ended]: () => page(ERROR_PAGE) });
+          expect(declaredFailure(thrown)).toEqual(FETCH_PAPER_MISSING);
+          expect(lines.map((line) => line.fields)).toEqual([
+            { slug: "test-fetch-candidates", step: "fetch", source, tried, code: "fetch-paper-missing" },
+          ]);
+          const written = JSON.stringify(lines) + (thrown as Error).message;
+          for (const part of ["http", "sho.rt", "3xYz", "arxiv.org", "aclanthology", "N19", "2608"]) {
+            expect(written).not.toContain(part);
+          }
+        }
+      });
+
+      it("counts the document it held as an address asked, and forgets an earlier 404 once it has looked at it", async () => {
+        /* Held first, the wrong kind; then the second is absent: missing. */
+        const heldFirst = await followed(SHORT, { [SHORT]: to(PMLR_NESTED), [PMLR_NESTED]: () => page(ERROR_PAGE) });
+        expect(heldFirst.requested).toEqual([SHORT, PMLR_NESTED, PMLR_FLAT]);
+        expect(codeOf(heldFirst.thrown as Error)).toBe("fetch-paper-missing");
+        expect(heldFirst.lines[0]?.fields.tried).toBe(2);
+
+        /* The first absent; then held, the wrong kind: not what it promised, and not "missing". */
+        warned.length = 0;
+        const heldLast = await followed(SHORT, { [SHORT]: to(PMLR_FLAT), [PMLR_FLAT]: () => page(ERROR_PAGE) });
+        expect(heldLast.requested).toEqual([SHORT, PMLR_FLAT, PMLR_NESTED]);
+        expect(codeOf(heldLast.thrown as Error)).toBe("fetch-incomplete");
+        expect(heldLast.lines[0]?.fields.tried).toBe(2);
+      });
+    });
+
+    it("is what the step itself does", async () => {
+      const { thrown, requested, lines } = await stepFailure(SHORT, { [SHORT]: to(ABS_ADDRESS), [ABS_ADDRESS]: () => page(ERROR_PAGE) });
+      expect(requested).toEqual([SHORT, ABS_ADDRESS, HTML_ADDRESS, PDF_ADDRESS]);
+      expect(codeOf(thrown)).toBe("fetch-paper-missing");
+      expect(lines.map((line) => line.fields.source)).toEqual(["arxiv"]);
+    });
   });
 });
