@@ -33,7 +33,6 @@ import { useCitationsRead } from "../useCitations.js";
 import { useQuizRead } from "../useQuiz.js";
 import { useCrossrefs } from "../useCrossrefs.js";
 import type { SavedSearch } from "../useSearch.js";
-import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
 import { useReadingTime } from "../useReadingTime.js";
@@ -99,17 +98,6 @@ export function ArticlePage({
   readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
-  /* **Reopen this article where the reader left it.** Above the fetch, and
-     first, because its restore is a layout effect that settles the address
-     before anything paints — `useReadingPosition` then reads the `?at=` it put
-     back exactly as it reads a pasted one, and needs to know nothing about it.
-
-     Here rather than in main.tsx, which is where every other address rewrite
-     lives, because those run once per page load and the commonest way to reopen
-     an article is a click on the shelf — a client-side navigation that never
-     re-runs that file. src/web/last-view.ts has the whole of it, including why
-     a shared link always beats the memory. */
-  useLastView(slug, view);
   /* Bumped by the not-yet-read page once *Read this* is done, and by the
      still-being-added page once its import is, to load the article in place. */
   const [attempt, setAttempt] = useState(0);

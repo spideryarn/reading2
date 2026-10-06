@@ -31,6 +31,17 @@ forty before. With the paragraph, the giving-away is back at the old prompt's le
 misstatements are not. Aggregate route comparisons were similar to the control; this does not
 establish route invariance. Total spend $0.86.
 
+**Round three in one paragraph (2026-10-06, later the same day).** Greg asked for one measured
+round of a middle wording, between the shipped `skim/10` and round one's scene-on-every-cue. It
+was judged blind on 36 hand-marked dangling quotes and 50 ordinary ones from 23 articles, against
+`skim/10` run twice, by two judges. **It did not pass, and `skim/10` stays.** On the dangling
+quotes one judge preferred the shipped cue 19 to 11 and the other the candidate 14 to 11, where
+the shipped prompt against itself split 15 to 11. Against the second control run the candidate was
+also marked for more giveaways (21 to 17) and more misstatements (5 to 2). Nothing in `src/` changed.
+This is one candidate run, judged by models of the writer's family; the original strict-by-both
+subset also fails the rule. Spend $3.90.
+[Round three](#round-three-a-middle-wording-on-hand-marked-dangling-quotes) is at the end.
+
 ## What was asked
 
 Greg's report spya-jghnva:
@@ -471,7 +482,174 @@ lacks the paragraph.
 
 **Decision: B2 landed as `skim/10`, with the dangling gate recorded as not met.** It is preferred
 overall, gives away no more, fixes the reported example, changes no stored route and is one prompt
-section to revert. Whether to go further towards B is Greg's call.
+section to revert. Whether to go further towards B is Greg's call. He asked for one measured middle round;
+it did not pass ([round three](#round-three-a-middle-wording-on-hand-marked-dangling-quotes)).
+
+## Round three: a middle wording, on hand-marked dangling quotes
+
+Greg, 2026-10-06, on the open question B against B2:
+
+> use your judgment. don't change things too much - the Skim questions were mostly good
+
+and, on one more measured round of a middle wording: *"run spike, use your judgment"*. The rule
+he set: ship only if clearly better on the dangling quotes **and** no worse on giveaways and
+misstatements overall; otherwise keep `skim/10` and say so.
+
+### What the candidate was
+
+`skim/10` with three wording changes inside § 3
+(`evals/results/skim-cue-2026-10-06-r3-candidate.diff` is the whole diff):
+
+1. a leaning word may also be a short name the quote never explains ("the second group"), and a
+   scene may be a few words saying what the leaning word stands for, with one invented example
+   (*"'This rule' is the ban on night shifts for trainees. What do they say it cost?"*);
+2. a new paragraph, *check every quote for this before you write its cue*: read the quote as
+   somebody who has seen nothing else, and if a word points at something unnamed, name it first,
+   from the key ideas, the outline or the quotes around it; do not repeat the leaning word as if
+   the reader knew it;
+3. "the quote" became "the quotes" in what a cue's details may come from.
+
+**A first draft was dropped at the cheap screen, before any judging.** Its check paragraph ended
+"if there is no such word, the cue only points", and the model stopped asking questions: 8 cues
+of 439 had a question mark, against 134 and 199 in the two control runs. Greg had just said the
+questions were mostly good, so that draft was not judged. The second draft says "questions are as
+welcome as they were" and makes the new example a question; it asked 124. That second draft is
+the candidate below, module SHA-256 `b4be38d844b99e7d` (the first draft is `abacfc7a3ed33eb2`).
+
+### How it was run
+
+The method of rounds one and two, with these differences.
+
+- **23 articles, 438 paired quotes**: the five from before, and 18 more from the local database
+  (two more papers, Nagel's bat essay, a Victorian lecture, eight essays, six encyclopedia
+  articles). Chosen by quote count before any run. `--allow-outdated-ideas` as before.
+- **The control is `skim/10` twice** (A1, A2: module `3987d5b6e7ca598d`, the file on `dev`).
+- **Dangling quotes were marked by reading, not by rule.** Two Opus readers each marked all 439
+  quotes `strict`, `borderline` or `not` from sheets that held the quote and its paragraphs and
+  no cue. They gave the same mark on 414 of 438; neither marked `not` what the other marked
+  `strict`. **Dangling = strict by at least one reader: 36.** The script's header first said
+  "by both", which gives 24; it was widened to reach the forty or so Greg asked for, before any
+  pair was written, and the 24 are scored on their own line. This was a change after marking,
+  rather than the original definition. In these 438 paired quotes, 36 (8.2%, about one in twelve)
+  are strict by either reader, and 24 (5.5%, about one in eighteen) by both. This is not an estimate
+  for all articles or all offered quotes. The first draft paired 439; the second lost one cue,
+  on a quote both readers marked `not`, so it is left out of the comparisons.
+- **Ordinary = `not` by both readers** (300); 50 were sampled by a hash from the pooled quotes,
+  without balancing the number per article.
+- **Two judges for the candidate**: s2 is A1 against it, s3 is A2 against it, s1 is the control.
+  Three fresh Opus judges, the same page and the same three questions as before. Sides: 43/43,
+  42/44, 41/45.
+- **The rule as numbers was in the script before any pair was judged**
+  ([`skim-cue-round3.ts`](../../scripts/eval/skim-cue-round3.ts), its header): a sign test at
+  p < 0.05 for the candidate on the dangling pairs in both s2 and s3; and its giveaway and
+  misstatement flags at most the old arm's plus the larger of 2 and the control's own gap, over
+  all pairs and over the ordinary ones. The control must also have p >= 0.05 on dangling pairs.
+  The allowed flag gap is a tolerance for the shipping decision, not a test proving no regression.
+
+```
+npx tsx scripts/eval/skim-coverage-eval.ts --runs=1 --old-only --old=src/skim-v10-eval-tmp.ts --old-version=skim/10 --new-version=skim/10 --tag=r3-a1 $S   # and again, --tag=r3-a2
+npx tsx scripts/eval/skim-coverage-eval.ts --runs=1 --new-only --new-version=skim/11 --tag=r3-c2 $S
+npx tsx scripts/eval/skim-cue-round3.ts --a1=…-r3-a1.json --a2=…-r3-a2.json --c=…-r3-c2.json --out=evals/results/skim-cue-2026-10-06-r3
+```
+
+### The blind read
+
+| Comparison | pairs | (a) better prepared | (b) gives the finding away | (c) invents or misstates |
+|---|---|---|---|---|
+| A1 v A2 (control) | 86 | A1 30 · A2 25 · tie 31 | 19 · 17 | 4 · 3 |
+| **A1 v candidate** | 86 | A1 37 · C 31 · tie 18 | A1 29 · C 27 | A1 5 · C 4 |
+| **A2 v candidate** | 86 | A2 24 · C 22 · tie 40 | A2 17 · C 21 | A2 2 · C 5 |
+
+The 36 dangling quotes:
+
+| Comparison | (a) better prepared | (b) gives away | (c) misstates |
+|---|---|---|---|
+| A1 v A2 (control) | A1 15 · A2 11 · tie 10 | 9 · 9 | 1 · 1 |
+| **A1 v candidate** | **A1 19** · C 11 · tie 6 | A1 9 · C 14 | A1 2 · C 3 |
+| **A2 v candidate** | A2 11 · C 14 · tie 11 | A2 9 · C 12 | A2 2 · C 4 |
+
+Old arm first, on the 24 strict by both readers: control 8 to 9; A1 v candidate 12 to 8; A2 v
+candidate 8 to 9. On the 50 ordinary quotes: control 15 to 14; A1 v candidate 18 to 20; A2 v
+candidate 13 to 8.
+
+**The original strict-by-both definition would also reject it.** On those 24, the candidate's
+sign-test p values are 0.503 against A1 and 1.000 against A2 (control 1.000). If the overall check
+also drops the twelve added quotes, leaving 74 with the same 50 ordinary ones, giveaways pass
+but misstatements still fail against A2: C 5, A2 1, allowed gap 2.
+
+- **Clearly better on the dangling quotes: no.** One judge prefers the shipped cue, the other
+  the candidate by three. Neither sign test reaches p < 0.05: s2 p = 0.200, s3 p = 0.690,
+  control p = 0.557.
+- **No worse on giveaways and misstatements: not shown, and the rule's count says worse.**
+  Against A2 the candidate is over the allowed gap on both (21 to 17, 5 to 2); against A1 it is
+  under on both. On the dangling quotes both judges flag the candidate for more giveaways (14 to
+  9, 12 to 9), which is round one's fault again in small: a scene that restates the quote.
+- On the ordinary quotes neither comparison shows a clear preference, and both pass the rule's
+  giveaway and misstatement limits. This does not establish that nothing changed.
+
+### Screens
+
+| Arm | cues | length: median · mean · max | over 140 | two sentences | ask a question | cost, 23 routes | input / route | output / route |
+|---|---|---|---|---|---|---|---|---|
+| A1 `skim/10` | 438 | 92 · 92 · 145 | 1 | 79 | 134 | $0.958 | 9,635 | 2,236 |
+| A2 `skim/10` | 438 | 87 · 89 · 137 | 0 | 51 | 198 | $0.938 | 9,635 | 2,151 |
+| candidate | 438 | 87 · 88 · 136 | 0 | 38 | 124 | $1.015 | 9,956 | 2,421 |
+
+The candidate wrote *fewer* cues matching the two-sentence screen than either control run. This
+screen does not count scenes: a scene can fit in one sentence, and two sentences need not set one.
+
+### Examples
+
+1. **Where the candidate did what was wanted.** *"None need be surprised at the ultimate failure
+   of such persons to accomplish much in life."*
+   - A1: Notice what outcome is said to be unsurprising for the people just described.
+   - A2: Look for what outcome is said to be unsurprising given what precedes it.
+   - Candidate: People who work hard without good plans are meant here. Notice what is said of their eventual success.
+2. **And again.** *"I think what they really mean, in the latter case, is caring what random
+   people thought of them…"*
+   - A1: Notice what is said to really lie behind caring what other people think, and how adults differ in it.
+   - Candidate: The latter case concerns peer pressure. See what the author says it really amounts to caring about.
+3. **A near-identical cue.** *"This established his reputation as a geographer and explorer."*
+   - A1: Note what reputation his early travels earned him.
+   - Candidate: Notice what reputation his early travels earned him.
+4. **The scene as the quote restated.** *"It depicts a slimmer, brownish bird, and its
+   discoverer … regarded it as one of the most accurate depictions of the living dodo…"*
+   - A2: See what makes this particular picture stand out as unusually trustworthy.
+   - Candidate: A newly found depiction shows a slimmer, brownish bird. See why experts rate it unusually accurate.
+5. **Greg's complaint in miniature, unchanged.** *"7B (52.9% → 5.8% OK): the largest flow is OK → NOT_RUN (113 examples)."*
+   - A1: Note which direction of change dominates for this smaller model size.
+   - Candidate: Look at how one smaller model's correct-answer rate changed, and what kind of error dominated its failures.
+
+### What this round does and does not show
+
+- **Shown**: this candidate run did not demonstrate the required improvement on dangling quotes,
+  and its giveaway and misstatement counts failed the tolerance against A2.
+- **Not shown**: that no middle wording can. One candidate, one run of it. Three wordings have now
+  been judged (B, B2, this), plus this round's first draft dropped at a screen. That screen was a
+  check for lost questions, not evidence about how well either draft prepares the reader.
+- The readers and judges are models of the writer's family; no person has read the pairs. The
+  two judges disagree about direction on the dangling set. The comparisons share one candidate
+  draw and the same quotes; they are not two independent candidate runs. Differences between
+  judges and between control draws are not separated here. The sign test treats quote pairs as
+  independent, though several come from each article.
+- 36 dangling quotes, not 40, and 12 of them are strict to one reader only.
+- The five articles of rounds one and two had been read while writing the wording; they hold 10
+  of the 36. On the other 26 neither comparison shows the required clear improvement: the shipped
+  cue 15 to 6 from one judge, the candidate 10 to 8 from the other.
+
+### Cost, round three
+
+OpenRouter `limit_remaining`, recorded at run time but with no balance snapshot kept in these
+files: **$112.67** before, **$108.74** after, a drop of $3.93. The four
+runs' own totals: $0.958 + $0.938 + $0.991 (the dropped first draft) + $1.015 = **$3.90** for 92
+calls. Marking and judging cost nothing on OpenRouter.
+
+### Decision, round three
+
+**`skim/10` stays, unchanged.** The candidate failed both halves of Greg's rule. If this is picked
+up again, I suggest looking at the Quotes step before trying a fourth cue wording: could it choose
+a line that names its subject rather than one opening on "such persons"? That is an untested
+suggestion, not a finding that changing quote selection would work better.
 
 ## Files
 
@@ -480,7 +658,13 @@ section to revert. Whether to go further towards B is Greg's call.
 - `evals/results/skim-cue-2026-10-06-screens.md`, `-dangling.json`, and for each of `s1` (A1 v A2),
   `s2` (A1 v B), `s3` (A2 v C), `s4` (B v C), `s5` (A1 v B2), `s6` (B v B2): `-pairs-sN.md`,
   `-key-sN.json`, `-judgment-sN.json`.
+- Round three: `evals/results/skim-coverage-2026-10-06T14-29-39-r3-a1.json`, `…-r3-a2.json`,
+  `…T14-32-18-r3-c2.json` (the candidate), `…T14-30-06-r3-c.json` (the dropped first draft); and
+  `evals/results/skim-cue-2026-10-06-r3-` `candidate.diff`, `marking-m1.json`, `marking-m2.json`,
+  and for each of `s1`, `s2`, `s3`: `pairs-sN.md`, `key-sN.json`, `judgment-sN.json`. The marking
+  sheets are rewritten by the script on every run and are not kept.
 - Scripts: [`skim-coverage-eval.ts`](../../scripts/eval/skim-coverage-eval.ts) (gained
   `--old-only`, `--file=`, `--tag=`; `--context` came and went with arm C),
   [`skim-cue-pairs.ts`](../../scripts/eval/skim-cue-pairs.ts),
+  [`skim-cue-round3.ts`](../../scripts/eval/skim-cue-round3.ts),
   [`skim-inputs-from-production.ts`](../../scripts/eval/skim-inputs-from-production.ts).

@@ -34,7 +34,7 @@ import { adminOnly, parseRoute } from "../src/web/router.js";
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 vi.mock("../src/web/lib/supabase.js", () => ({

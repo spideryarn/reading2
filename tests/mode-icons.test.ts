@@ -47,6 +47,32 @@ describe("the icon each mode wears", () => {
     expect(rows).not.toMatch(/^\s+icon:/m);
   });
 
+  /* Greg, spya-vj7wv0: the gutter's chat button wore one bubble, which reads
+     as a comment, "change the comment icon to a chat icon (because that's
+     really what it is)". A chat is Chat's two bubbles wherever it is drawn
+     (docs/project/icons.md § A chat is two bubbles): the gutter's button,
+     both heads of the card it opens, and the marks that reopen a chat from a
+     mode. Each assertion is scoped to that control: merely having a different
+     two-bubble control elsewhere in the same file is not evidence. The
+     gutter's is also asked of the DOM, in block-gutter.test.tsx. Plan 261006i. */
+  it.each([
+    ["BlockGutter.tsx", 'className={`block-chat', "</button>"],
+    ["ChatDialog.tsx", 'className="chat-card-head"', "</span>"],
+    ["ChatDialog.tsx", 'className="chat-dialog-label"', "</span>"],
+    ["OriginChat.tsx", "export function OriginChatMark", "export function AskInChatButton"],
+    ["DebatePanel.tsx", 'className="dbt-angle"', "</button>"],
+    ["SimplePanel.tsx", 'className="simple-ask', "</Button>"],
+  ])("draws the chat at %s / %s as two bubbles", (file, start, end) => {
+    const source = read(file);
+    const from = source.indexOf(start);
+    const to = source.indexOf(end, from);
+    expect(from, `${file}: missing ${start}`).toBeGreaterThanOrEqual(0);
+    expect(to, `${file}: missing ${end} after ${start}`).toBeGreaterThan(from);
+    const site = source.slice(from, to);
+    expect(site).toMatch(/<MessagesSquare\b/);
+    expect(site).not.toMatch(/<MessageSquare\b/);
+  });
+
   it("is read by Chat's panel without importing the Dock", () => {
     const panel = read("ChatPanel.tsx");
     expect(panel).toContain('from "./mode-icons.js"');

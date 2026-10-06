@@ -45,8 +45,16 @@ import { supabase } from "./lib/supabase.js";
 export interface SessionState {
   session: Session | null;
   user: User | null;
-  /** True until the SDK has said anything at all. Not "no user". */
+  /** True until the SDK has said anything at all, or `SETTLE_MS` has passed. Not "no user". */
   loading: boolean;
+  /**
+   * The SDK has said who is signed in, or that nobody is. Not `!loading`:
+   * the deadline below ends `loading` without an answer, and `user` is then
+   * `null` because nobody knows, not because nobody is signed in. Anything
+   * that would treat the answer arriving afterwards as a change of reader
+   * asks this instead (App.tsx § `useLastView`).
+   */
+  known: boolean;
 }
 
 /**
@@ -73,6 +81,7 @@ export function useSession(): SessionState {
     session: null,
     user: null,
     loading: true,
+    known: false,
   });
 
   useEffect(() => {
@@ -90,7 +99,7 @@ export function useSession(): SessionState {
 
     const unsubscribe = onSession((session) => {
       clearTimeout(settle);
-      setState({ session, user: session?.user ?? null, loading: false });
+      setState({ session, user: session?.user ?? null, loading: false, known: true });
     });
 
     /* A page restored from the bfcache comes back with whatever it had when it

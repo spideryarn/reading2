@@ -19,12 +19,15 @@ import {
   claimFirstOpen,
   firstOpenHref,
   hasArticleState,
+  lastViewKey,
   readLastView,
   rememberableSearch,
   restoredHref,
 } from "../src/web/last-view.js";
 import { chatFromParam, learnInSearch, learnParam, modeParam } from "../src/web/params.js";
 import { PHRASES } from "../evals/command-pick/phrases.js";
+
+const A = "1a1a1a1a-1111-4111-8111-000000000004";
 import CATALOGUE from "../src/command-pick-catalogue.generated.json" with { type: "json" };
 
 const labels: Record<string, string> = MODE_LABEL;
@@ -134,7 +137,7 @@ describe("the command-pick eval's accept lists follow the id", () => {
 
 /** GPT Sol's PR-2 on 261006a: an old link is still a link, and the link wins. */
 describe("last-view: an old ?remember=<view> link is not a bare address", () => {
-  const KEY = "spya.lastView.x";
+  const KEY = lastViewKey("x", A);
 
   function storage(initial: Record<string, string> = {}) {
     const held = new Map(Object.entries(initial));
@@ -142,6 +145,7 @@ describe("last-view: an old ?remember=<view> link is not a bare address", () => 
       ({
         getItem: (key: string) => held.get(key) ?? null,
         setItem: (key: string, value: string) => void held.set(key, value),
+        removeItem: (key: string) => void held.delete(key),
       }) as unknown as Storage;
     return { held, source };
   }
@@ -159,11 +163,11 @@ describe("last-view: an old ?remember=<view> link is not a bare address", () => 
 
   it("is not taken for a first open, and gets no first-open default", () => {
     const s = storage();
-    expect(claimFirstOpen("x", "?remember=quiz", readLastView("x", s.source), s.source)).toBe(false);
+    expect(claimFirstOpen("x", A, "?remember=quiz", readLastView("x", A, s.source), s.source)).toBe(false);
     expect(s.held.has(KEY)).toBe(false);
     expect(firstOpenHref("x", "/read/x", "?remember=quiz", { signedIn: true }, "?mode=summary")).toBe(null);
     /* The control: a bare address is claimed and gets the default. */
-    expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(true);
+    expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
     expect(firstOpenHref("x", "/read/x", "", { signedIn: true }, "?mode=summary")).toBe("/read/x?mode=summary");
   });
 });

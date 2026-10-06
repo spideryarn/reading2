@@ -250,6 +250,14 @@ it gives up; then what would make you pick one over the other. A bare "A, B or C
 label each is the shape he cannot answer, and it will come back to you to be rewritten. How many to
 ask at once, which ones, and in what order: [ask-me-questions.md](docs/reusable/ask-me-questions.md).
 
+**When the right thing to do is obvious and unambiguous, do it; don't ask.** Fix a bug you are
+confident about, correct a stale or wrong comment or doc, make a change with no real trade-off —
+added complexity counts as a trade-off — and say in your report what you did. Ask Greg only when
+there is a genuine choice: a product trade-off, added complexity, anything destructive to production
+data, or the wording of a rule doc. Greg, 2026-10-04 and 2026-10-06: *"if you see bugs, fix them
+without asking me"*, *"always correct stale/incorrect comments"*, *"I don't want you to ask me when
+there's an obviously/unambiguously right thing to do"*.
+
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
 Anything that changes it — an insert, an update, a delete, any script pointed at the remote —

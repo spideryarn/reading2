@@ -284,7 +284,7 @@ bookmark. Greg, SPIDERYARN-READING2-9C:
 
 It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
 invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
-the AI about this…"*, and the gutter's speech bubble says *Chat with the AI*. Closing the dialog
+the AI about this…"*, and the gutter's chat button says *Chat with the AI*. Closing the dialog
 leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
 strength, the one filled glyph in the column.
 [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).

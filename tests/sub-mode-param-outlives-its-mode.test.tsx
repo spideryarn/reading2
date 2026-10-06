@@ -41,7 +41,7 @@ const who = vi.hoisted(() => {
 });
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: who.get(), loading: false }),
+  useSession: () => ({ session: null, user: who.get(), loading: false, known: true }),
 }));
 
 /* Hoisted: this file imports Dock.js statically, which subscribes at import. */

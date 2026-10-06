@@ -23,7 +23,8 @@ import {
   useLayoutEffect,
   useState,
 } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
@@ -242,6 +243,7 @@ function ShutNote({
   line,
   lineVoice,
   children,
+  lineOnly = false,
 }: {
   kind: string;
   stamp: string;
@@ -256,6 +258,13 @@ function ShutNote({
   lineVoice: Voice;
   /** The open half; null when there is nothing more to show than the line. */
   children: ReactNode | null;
+  /** **The line is the whole of it, and may be cut**: a press only lets it
+      wrap. A button with no panel, so there is no empty box to hide and
+      nothing for `aria-controls` or `aria-expanded` to describe. Assistive
+      technology already receives the full, unclipped line; this state is
+      visual only. A lone comment that is only its words (report spya-a0wpv4,
+      plan 261006i). `children` is not read. */
+  lineOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -265,6 +274,21 @@ function ShutNote({
       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
     </span>
   );
+  if (lineOnly) {
+    return (
+      <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
+        <button
+          type="button"
+          className="marg-shut-button"
+          data-marg-tip={tip}
+          onClick={() => setOpen((was) => !was)}
+        >
+          <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+          {label}
+        </button>
+      </div>
+    );
+  }
   if (children === null) {
     return (
       <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
@@ -458,6 +482,14 @@ function CommentNote({
   ]
     .filter(Boolean)
     .join(" · ");
+  /* **A lone comment's words are its line**, and the line un-truncates when
+     it opens (marginalia.css), so the open half must not print them again:
+     report spya-a0wpv4, the comment's half of the class spya-f6dpj5 named for
+     a question. What is left decides the shape. An answer: a panel holding
+     it. Only words: no panel, and the press just lets the line wrap. Neither
+     (a wordless *Ask AI*): nothing to open, so plain text. Plan 261006i. */
+  const lone = only && only.as !== "question" ? only.comment : undefined;
+  const loneShape = lone === undefined || lone.answer ? "panel" : lone.body ? "line" : "text";
   return (
     <ShutNote
       kind="comment"
@@ -465,8 +497,9 @@ function CommentNote({
       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
       line={only ? entryLine(only) : count}
       lineVoice={only ? entryVoice(only) : "ui"}
+      lineOnly={loneShape === "line"}
     >
-      {items.map((e) =>
+      {loneShape === "text" ? null : items.map((e) =>
         e.as === "question" ? (
           <div key={`q:${e.asked.id}`} className="marg-open-item">
             {/* **Only among several**, as a comment's head is: that is how
@@ -497,7 +530,7 @@ function CommentNote({
                 <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
               </p>
             )}
-            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
+            {!only && e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
             {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
           </div>
         ),
@@ -581,17 +614,7 @@ export function MarginaliaHead({
   arc: string | null;
 }) {
   useRenderCount("MarginaliaHead");
-  if (!room) {
-    return (
-      <aside className="marg-narrow" aria-label="Marginalia">
-        <p>
-          {beside
-            ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
-            : "The notes need a wider window — they sit to the right of the text."}
-        </p>
-      </aside>
-    );
-  }
+  if (!room) return <NarrowLine beside={beside} />;
   if (path.length === 0 && arc === null) return null;
   /* **Orientation, not a summary**: the arc cut at four (261002g), the whole of it in a
      card on hover, focus or tap. A head that grew to the arc's full six or
@@ -619,6 +642,63 @@ export function MarginaliaHead({
         </p>
       )}
       {arc !== null && <ArcLine arc={arc} />}
+    </aside>
+  );
+}
+
+/**
+ * **The line that says there is no room for the notes.** It goes by itself
+ * after a few seconds, or at once on its ×, because it sits over the foot of
+ * the article — Greg, spya-u264yb: *"there's no way to dismiss it, and it
+ * doesn't fade after a few seconds."*
+ *
+ * **Nothing is remembered.** "Gone" is this component's own state, so the line
+ * shows again each time it is mounted afresh: Marginalia switched off and on,
+ * the room found and lost again, or a covering band closed in a window still
+ * too narrow for the notes alone. That keeps its job — a mode that silently
+ * drew nothing would look broken.
+ *
+ * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
+ * the small-screen banner while this element exists
+ * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
+ * it would drop that banner into the top of the article mid-read. And the
+ * sentence is only made invisible, not hidden, when the clock runs out, so a
+ * screen reader still finds why there are no notes, as it did before this
+ * could fade. An explicit Dismiss does hide it from the accessibility tree:
+ * that control must do what its name says.
+ * docs/plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md
+ */
+function NarrowLine({ beside }: { beside: boolean }) {
+  const [gone, setGone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const reading = useGoesByItself(TOAST_MS, () => setGone(true));
+  return (
+    <aside
+      className={`marg-narrow${gone ? " is-gone" : ""}`}
+      aria-label="Marginalia"
+      aria-hidden={dismissed || undefined}
+      {...reading}
+    >
+      <p>
+        {beside
+          ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
+          : "The notes need a wider window — they sit to the right of the text."}
+      </p>
+      <button
+        type="button"
+        className="marg-narrow-close close-x"
+        aria-label="Dismiss"
+        onClick={(event) => {
+          /* Do not leave focus inside the subtree we are about to hide from
+             assistive technology. The visual close already loses focus when
+             visibility:hidden applies. */
+          event.currentTarget.blur();
+          setDismissed(true);
+          setGone(true);
+        }}
+      >
+        <X aria-hidden="true" />
+      </button>
     </aside>
   );
 }

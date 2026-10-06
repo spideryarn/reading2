@@ -419,8 +419,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           actually wrote.
         </p>
         <p>
-          On your own article, the small speech bubble at the end of a paragraph opens a new chat with
-          that paragraph quoted, ready for your question. Nothing is sent until you press Send.
+          On your own article, the small chat icon (two speech bubbles) beside a paragraph opens a new
+          chat with that paragraph quoted, ready for your question. Nothing is sent until you press
+          Send.
         </p>
         <p>
           If you have filled in your <HelpRef to="reader-profile">reader profile</HelpRef>, the

@@ -1,0 +1,610 @@
+{
+  "set": "s3",
+  "first": "A2",
+  "second": "C",
+  "seed": 26100633,
+  "key": [
+    {
+      "pair": 1,
+      "key": "2608-13566v1-spya-yurten/spya-uucbqb",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 2,
+      "key": "2608-13566v1-spya-yurten/spya-pwtvqw",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 3,
+      "key": "2608-13566v1-spya-yurten/spya-an0yqq",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 4,
+      "key": "2608-13566v1-spya-yurten/spya-dp566v",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 5,
+      "key": "2608-13566v1-spya-yurten/spya-epgykg",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 6,
+      "key": "entropy-24-00930-spya-pywwkq/spya-bd0msy",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 7,
+      "key": "entropy-24-00930-spya-pywwkq/spya-skhc7m",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 8,
+      "key": "entropy-24-00930-spya-pywwkq/spya-pghzsz",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 9,
+      "key": "entropy-24-00930-spya-pywwkq/spya-y4cdmx",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 10,
+      "key": "arxiv-2010-spya-tkm7nm/spya-ahg3nk",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 11,
+      "key": "arxiv-2010-spya-tkm7nm/spya-q3qdwd",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 12,
+      "key": "arxiv-2010-spya-tkm7nm/spya-kax8bt",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 13,
+      "key": "source-spya-furjgs/spya-ur90mw",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 14,
+      "key": "source-spya-furjgs/spya-gspp08",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 15,
+      "key": "source-spya-furjgs/spya-t8duv0",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 16,
+      "key": "cargocult-spya-rz663q/spya-zat4mm",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 17,
+      "key": "cargocult-spya-rz663q/spya-zhmerc",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 18,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-umjpkj",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 19,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-rh0mpq",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 20,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-p7q3bu",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 21,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-bruzmt",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 22,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-pvkv5d",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 23,
+      "key": "fd-src-s41598-023-33209-9-spya-hxekgz-spya-pwtq9e/spya-rg45m0",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 24,
+      "key": "fd-src-jco-2005-01-libre-spya-hk9cc7-spya-q6dbj3/spya-ve99yw",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 25,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-gy3d9j",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 26,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-rbtqc3",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 27,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-xegkam",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 28,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-a6435u",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 29,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-qeaabn",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 30,
+      "key": "fd-src-nagel-bat-spya-f5aw85/spya-ear47y",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 31,
+      "key": "fowler-phrenology/spya-ynmabn",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 32,
+      "key": "fowler-phrenology/spya-s4vjgu",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 33,
+      "key": "fowler-phrenology/spya-s34k64",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 34,
+      "key": "fowler-phrenology/spya-nukjxj",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 35,
+      "key": "fowler-phrenology/spya-f3h00g",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 36,
+      "key": "fowler-phrenology/spya-z5rebu",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 37,
+      "key": "fr-spya-z6hsdc/spya-hhxjbm",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 38,
+      "key": "fr-spya-z6hsdc/spya-equhp9",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 39,
+      "key": "fr-spya-z6hsdc/spya-zd85vp",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 40,
+      "key": "fr-spya-z6hsdc/spya-a6a3cm",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 41,
+      "key": "lies-spya-uq458d/spya-sc00yw",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 42,
+      "key": "lies-spya-uq458d/spya-r9xx2k",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 43,
+      "key": "lies-spya-uq458d/spya-bk4p2b",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 44,
+      "key": "lies-spya-uq458d/spya-sxda30",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 45,
+      "key": "francis-galton-spya-n64q2e/spya-vvrzhp",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 46,
+      "key": "francis-galton-spya-n64q2e/spya-du0t4d",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 47,
+      "key": "francis-galton-spya-n64q2e/spya-jtd39q",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 48,
+      "key": "francis-galton-spya-n64q2e/spya-fwz2nn",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 49,
+      "key": "francis-galton-spya-n64q2e/spya-eqwxhx",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 50,
+      "key": "francis-galton-spya-n64q2e/spya-q6y94x",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 51,
+      "key": "francis-galton-spya-n64q2e/spya-asuz8z",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 52,
+      "key": "francis-galton-spya-n64q2e/spya-mhjca4",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 53,
+      "key": "francis-galton-spya-n64q2e/spya-jpxfsn",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 54,
+      "key": "best-spya-ny2pgx/spya-hexppg",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 55,
+      "key": "best-spya-ny2pgx/spya-epp306",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 56,
+      "key": "love-spya-kwm06n/spya-fuvgnz",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 57,
+      "key": "love-spya-kwm06n/spya-vbjf36",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 58,
+      "key": "hs-spya-jffump/spya-xjzy35",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 59,
+      "key": "hs-spya-jffump/spya-eje6bb",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 60,
+      "key": "hs-spya-jffump/spya-uc3895",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 61,
+      "key": "ds-spya-me0d4g/spya-j7embu",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 62,
+      "key": "ds-spya-me0d4g/spya-x2c67x",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 63,
+      "key": "ds-spya-me0d4g/spya-ap74sa",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 64,
+      "key": "ds-spya-me0d4g/spya-ys4bgb",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 65,
+      "key": "dodo-spya-nyc4ud/spya-xvcuux",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 66,
+      "key": "dodo-spya-nyc4ud/spya-n9h6wf",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 67,
+      "key": "dodo-spya-nyc4ud/spya-j2xftg",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 68,
+      "key": "dodo-spya-nyc4ud/spya-xn42aa",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 69,
+      "key": "dodo-spya-nyc4ud/spya-fkxaz4",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 70,
+      "key": "dodo-spya-nyc4ud/spya-bz7vcj",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 71,
+      "key": "axolotl-spya-zj7m0z/spya-s8ju7c",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 72,
+      "key": "axolotl-spya-zj7m0z/spya-b2kn9a",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 73,
+      "key": "physiognomy-spya-nfvctu/spya-hyw46z",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 74,
+      "key": "physiognomy-spya-nfvctu/spya-f43ubp",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 75,
+      "key": "physiognomy-spya-nfvctu/spya-euwv5a",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 76,
+      "key": "physiognomy-spya-nfvctu/spya-kuqr7y",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 77,
+      "key": "physiognomy-spya-nfvctu/spya-trfw4m",
+      "kind": "dangling",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 78,
+      "key": "craniometry-spya-n0rdg6/spya-b79bpd",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 79,
+      "key": "craniometry-spya-n0rdg6/spya-arkces",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 80,
+      "key": "useful-spya-zu5r34/spya-vukwjb",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 81,
+      "key": "useful-spya-zu5r34/spya-b5spf3",
+      "kind": "dangling",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 82,
+      "key": "useful-spya-zu5r34/spya-rg6rs5",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    },
+    {
+      "pair": 83,
+      "key": "hwh-spya-ara60g/spya-w7swef",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 84,
+      "key": "hwh-spya-ara60g/spya-gr8say",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 85,
+      "key": "hwh-spya-ara60g/spya-ekacqt",
+      "kind": "ordinary",
+      "A": "C",
+      "B": "A2"
+    },
+    {
+      "pair": 86,
+      "key": "race-human-categorization-spya-rpwc59/spya-u608q6",
+      "kind": "ordinary",
+      "A": "A2",
+      "B": "C"
+    }
+  ]
+}

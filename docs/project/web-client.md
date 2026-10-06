@@ -113,6 +113,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/lib/reader-change.ts` § `forgetOnReaderChange`** — for a module-level store that
   holds one reader's words or data: register a function that empties it, at module scope, and it
   is emptied before anything is drawn for the next reader.
+- **`src/web/lib/storage-reader.ts` § `storageReader`** — for a `localStorage` record that is one
+  reader's own (their place in an article, the words they searched for): the word that names the
+  reader in its key or value, so two readers in one browser never read each other's.
+  [auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).
 - **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
   then exactly one `done` or `error`.
   The lower-level `readEvents` is what most older hooks loop over by hand —
@@ -156,7 +160,8 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   row's words and voice together ([fonts.md](fonts.md)).
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
-  passing confirmation.
+  passing confirmation, and its `useGoesByItself` for anything else that should go after a few
+  seconds but not while it has mouse hover or focus.
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
   and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its

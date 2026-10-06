@@ -31,7 +31,7 @@ import { NOT_FOUND_HEADING, NOT_FOUND_TO_HOME, NOT_FOUND_TO_SHELF } from "../src
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 vi.mock("../src/web/lib/supabase.js", () => ({

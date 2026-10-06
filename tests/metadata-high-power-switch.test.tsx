@@ -41,7 +41,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string } | null } = { user: null };
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 vi.mock("../src/web/useExperimental.js", () => ({
