@@ -605,7 +605,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     whenToUse: (
       <p>
         When you want to carry lines out of the piece in its own words — for notes, a review, or to see
-        what the author put best. Quotes is also what <HelpRef to="mode-skim">Skim</HelpRef> walks you
+        which passages are best put. Quotes is also what <HelpRef to="mode-skim">Skim</HelpRef> walks you
         through. <strong>Find more</strong> adds lines to the list rather than replacing it.
       </p>
     ),
@@ -627,15 +627,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             The AI gives a quote up to two scores: how much of the argument rests on it, and how
-            memorable and well put it is. Both are the AI’s judgement. A row shows both under{" "}
-            <strong>prioritised</strong>, one under <strong>most important</strong> or{" "}
-            <strong>most striking</strong>, and none under <strong>in order</strong>; the card on the
-            quote in the text always shows what it has.
+            memorable and well put it is. Both are the AI’s judgement. A row shows every available
+            score under <strong>prioritised</strong>, the relevant score under{" "}
+            <strong>most important</strong> or <strong>most striking</strong> when it has one, and none
+            under <strong>in order</strong>; the card on the quote in the text always shows what it has.
           </li>
           <li>
-            The <strong>(i)</strong> beside a row says why it was chosen. Press a row to jump to it in
-            the text. <kbd>‹</kbd> <kbd>›</kbd> under the list, or <kbd>←</kbd> <kbd>→</kbd> while
-            reading, step from quote to quote in the list’s order.
+            The <strong>(i)</strong> beside a row says why it was chosen when the AI gave one, and always
+            says who chose it and when. Press a row to jump to it in the text. <kbd>‹</kbd> <kbd>›</kbd>{" "}
+            under the list, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from quote to quote in the
+            list’s order.
           </li>
           <li>
             <strong>in order</strong> (the default) lists them as the article says them;{" "}

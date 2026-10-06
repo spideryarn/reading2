@@ -238,6 +238,20 @@ describe("the page", () => {
     expect(MODES.some((m) => MODE_CATALOG[m].experimental)).toBe(true);
   });
 
+  it("describes Quotes without promising scores or a reason that a row may not have", () => {
+    mountAt("/help#mode-quotes");
+    const words = host.querySelector("#mode-quotes")?.textContent ?? "";
+    expect(words).toMatch(/every available score under prioritised/i);
+    expect(words).toMatch(/when it has one/i);
+    expect(words).toMatch(/when the AI gave one/i);
+  });
+
+  it("does not attribute every quote to the article's author", () => {
+    mountAt("/help#mode-quotes");
+    const words = host.querySelector("#mode-quotes")?.textContent ?? "";
+    expect(words).not.toMatch(/author put best/i);
+  });
+
   it("names every reason Glossary can replace a list", () => {
     mountAt("/help#mode-glossary");
     const words = host.querySelector("#mode-glossary")?.textContent ?? "";

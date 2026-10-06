@@ -40,14 +40,16 @@ If Greg meant the strip in the spine, that is the deferred item below.
 
 ## The change
 
-**As built, after GPT Sol's plan review cut it down (§ Reviews).** Two small things in `QuoteCard`,
-and nothing anywhere else in the code:
+**As built, after GPT Sol's plan and code reviews (§ Reviews).** Two small things in `QuoteCard`,
+and nothing elsewhere in its behaviour:
 
 1. **One short paragraph under the label saying what a quote is and what the strength of the purple
    means** (`QUOTE_CARD_SAYS`):
 
-   > A passage the AI picked out as worth keeping, in the article's own words. The stronger the
-   > purple, the higher it scored.
+   > A passage the AI picked out as worth keeping, in the article's own words. Stronger purple
+   > means a higher Importance or Striking score.
+
+   The second sentence (`QUOTE_CARD_PURPLE`) is drawn only on a quote that has a score.
 
    Checked against the code, because a card's explanation is where a plausible invention goes
    ([tooltips.md](../project/tooltips.md) § `ControlTip`):
@@ -60,22 +62,24 @@ and nothing anywhere else in the code:
      ([quotes.md § What is stored is the article's characters](../project/quotes.md#what-is-stored-is-the-articles-characters-not-the-models)).
      It deliberately does not say "the author's words": the mode cannot tell a quotation the article
      left unmarked from its own prose (`MODE_CATALOG.quotes.how`).
-   - *the stronger the purple, the higher it scored*: `quoteTier` and `quoteAlpha` both read
-     `priorityOf`, the higher of the two scores printed just below. True in that direction only: the
-     fade has a floor, so two low scores can draw alike, and an unscored quote draws lightest and
-     the card says *Not scored.*
+   - *stronger purple means a higher Importance or Striking score*: `quoteTier` and `quoteAlpha`
+     both read `priorityOf`, the higher of the available scores printed just below. True in that
+     direction only: the fade has a floor, so two low scores can draw alike. **Not said on an
+     unscored quote**, where the card says *Not scored.* and a sentence about scores would be about
+     some other quote (Sol's F8; § Reviews says why this and not its longer wording).
    - It is from the viewer's side with no *you*, so it is true for a visitor on a shared article.
 
 2. **A *More in Help →* link at the end of that paragraph**, to `helpHref(modeAnchor("quotes"))`,
    the same words and the same helper the band's (i) uses. The card can already be entered by the
-   pointer (it holds buttons), so the link needs no new machinery. It closes the card when followed.
+   pointer (it holds buttons), so the link needs no new machinery. A plain activation closes the card
+   when this tab follows it; a modified click belongs to the browser and leaves this tab's card alone.
    `/help` is public, so a visitor can follow it.
 
 ```
 ❝ QUOTE                                3 of 14
 A passage the AI picked out as worth keeping, in
-the article's own words. The stronger the purple,
-the higher it scored. More in Help →
+the article's own words. Stronger purple means a
+higher Importance or Striking score. More in Help →
 
 Importance  ▓▓▓▓▓▓▓░░  0.85
 Striking    ▓▓▓░░░░░░  0.40
@@ -95,7 +99,7 @@ Chosen by the AI · 3 Oct 2026
   citation, for words (*Importance*, *Striking*) a reader can mostly guess. The meanings stay where
   they were, in the `title` on each score row, and are now a click away in Help.
 - **More complex: the explanation behind an (i) inside the card.** A tooltip inside a tooltip.
-- **Cost of the chosen one, named:** the card is about three lines taller on every quote, for
+- **Cost of the chosen one, named:** the card is three or four lines taller on every quote, for
   readers who already know what a quote is as well as those who do not. It opens only after the
   pointer has rested 900ms, so it is not in anyone's way.
 - **Not changed: `LABEL` in `QuotesPanel.tsx` still says "this line"**, as the prompt's own score
@@ -107,20 +111,27 @@ Chosen by the AI · 3 Oct 2026
 - [quotes.md § In the spine, on a card, and one at a time](../project/quotes.md#in-the-spine-on-a-card-and-one-at-a-time):
   the card's bullet says it now opens by saying what a quote is.
 - `/help`, `src/web/help/help-modes.tsx` § quotes: its sentence listing what the card shows gains
-  "what a quote is". Two sentences there were also false before this work and are corrected (Sol's
-  F2): the card does not always show two scores or a reason, the *open Quotes* button is absent
-  inside Quotes, and a row shows two numbers only under *prioritised* (`rowScores`).
+  "what a quote is". False promises there are corrected too: the card does not always show two
+  scores or a reason, the *open Quotes* button is absent inside Quotes, and `rowScores` may show
+  zero, one or two numbers under *prioritised*. The row's (i) always says who and when, but only says
+  why when the model supplied a reason. The page also no longer attributes every passage to the
+  article's author, which the mode cannot prove.
 - Nothing in [tooltips.md](../project/tooltips.md) changes: no new rule, no new mechanism.
 
 ## Tests
 
-`tests/quote-hover-card.test.tsx`, red first (3 failed before the change, 14 pass after):
+`tests/quote-hover-card.test.tsx`, red first (3 failed before the initial change, 18 pass after the
+code review fixes):
 
 - on a scored and on an unscored quote, the card's first line under the label says what a quote is
   (the four claims, matched separately, and no *you*), and it holds a link whose `href` is
   `helpHref(modeAnchor("quotes"))`;
 - the card stays open with the pointer on that link past the close delay, and closes when the link
-  is followed.
+  is followed in this tab;
+- ⌘-, Ctrl-, Shift- and Alt-click stay the browser's and do not close the card in this tab.
+
+`tests/help-page.test.tsx` pins the optional scores and reason, and the limit on what can be claimed
+about authorship.
 
 ## Done looks like
 
@@ -165,7 +176,27 @@ queue entry marked as needing Greg carries the question.
   - F5 (P2) the card has no height cap and can be stacked. **Answered by F3** (three lines, not
     five) and a short-window case in the browser check.
   - F6 (P2), F7 (P3) the table and two sentences in this plan overstated. **Corrected above.**
-- **Code review, GPT Sol**: (to be filled in)
+- **Code review, GPT Sol**, on commit `48b835bb5`, write-capable:
+  [prompt](261006j-quote-card-says-what-a-quote-is-code-review-prompt.md),
+  [answer](261006j-quote-card-says-what-a-quote-is-code-review-sol.md). Exit 0, verdict
+  *ship with the fixes I made*. It mutated the change four ways (paragraph deleted, moved below the
+  scores, `onClick` dropped, `href` changed) and the tests noticed each. Its diff was read as a
+  proposal and the gates re-run:
+  - F8 (P1) an unscored quote's card said "the higher it scored" beside *Not scored.* **Taken, with
+    a different repair.** Sol's wording was one 29-word sentence on every card (*"For scored quotes,
+    stronger purple means…; unscored quotes use the lightest purple."*). Instead the sentence about
+    the purple is shorter and is drawn only where there is a score. This repair was not in Sol's
+    snapshot, so it went back for a narrow check: (to be filled in)
+  - F9 (P1) Help promised both scores under *prioritised*; a quote may have one or none. **Taken.**
+  - F10 (P1) a ⌘/Ctrl/Shift/Alt-click on *More in Help →* closed the card in this tab although the
+    browser was opening Help elsewhere. **Taken**, with four tests. Graded high for what it is, but
+    the fix is small and tested.
+  - F11 (P1) Help said Quotes shows "what the author put best", which the mode cannot claim. **Taken**
+    (*"which passages are best put"*). Older than this work.
+  - F12 (P1) Help said every row's (i) says why it was chosen; the reason is optional. **Taken.**
+  - F13 (P3) quotes.md said "one sentence". **Taken.**
+- **Browser, Chrome on the box** (a Sonnet subagent, Playwright), article `fowler-phrenology` in
+  Citations mode: (to be filled in)
 
 ## What landed
 

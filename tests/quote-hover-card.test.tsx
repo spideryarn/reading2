@@ -231,7 +231,11 @@ describe("resting on a quote", () => {
     const text = what?.textContent ?? "";
     expect(text).toMatch(/passage the AI picked out/);
     expect(text).toMatch(/article’s own words/);
-    expect(text).toMatch(/stronger the purple/);
+    /* What the purple means is said only where there is a score to mean it:
+       beside *Not scored.* it would be a sentence about some other quote
+       (GPT Sol's F8, and the shorter of the two ways to close it). */
+    if (n === 0) expect(text).toMatch(/Stronger purple means a higher Importance or Striking score\./);
+    else expect(text).not.toMatch(/purple|scor/i);
     expect(text).not.toMatch(/\byou\b/i);
     expect(what?.previousElementSibling?.classList.contains("prose-card-label"), "not first under the label").toBe(
       true,
@@ -256,6 +260,20 @@ describe("resting on a quote", () => {
     });
     expect(card(), "the card stayed open over the Help page").toBe(null);
   });
+
+  it.each(["metaKey", "ctrlKey", "shiftKey", "altKey"] as const)(
+    "leaves a %s Help click to the browser without closing the article's card",
+    (modifier) => {
+      paint();
+      rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+      const help = card()?.querySelector<HTMLAnchorElement>("a.prose-card-quote-help");
+      expect(help).not.toBeNull();
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, [modifier]: true });
+      act(() => help!.dispatchEvent(click));
+      expect(click.defaultPrevented, "the app took over a modified click").toBe(false);
+      expect(card(), "opening Help in another tab closed the card in this one").not.toBe(null);
+    },
+  );
 
   it("waits longer than a word does before opening, because a reader rests in a passage", () => {
     paint();
