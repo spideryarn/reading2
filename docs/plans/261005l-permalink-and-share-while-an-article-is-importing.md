@@ -437,3 +437,32 @@ when the article publishes, the import fails, or sharing is turned off while it 
   one account to another with an add page still mounted, the purpose session, the High-powered
   AI intent and the remembered answer are not scoped to the reader (Sol's P1). The sharing
   controllers and the held job are.
+
+**Checked in a browser, 2026-10-06**, by the same Sonnet subagent with Playwright, at desktop
+1440, iPad 820 and phone 390, on a freshly started dev server. Eight screenshots, `s2-*` in
+[261005l-shots/](261005l-shots/).
+
+- **The card**: on six web imports it appeared with the link button and the Sharing row when the
+  POST answered, 2.9 to 7.4 seconds after navigation, with no need to slow the import down. Not
+  instant: the wait is now the POST itself, which was slow on a loaded box.
+- **The Sharing section**: shut by default at all three widths; both controls inside; no
+  sideways scroll; *Create the link* disabled until the rights box is ticked; the link box does
+  not widen a 390 page; all four summaries of the shut row seen; no way to shut it while a link
+  was being made. Not seen: what it does on a refusal or an unknown.
+- **A private link end to end** (desktop and phone): made during the import, Metadata then showed
+  the same link, a signed-out browser read the article through it with the private-link notice,
+  and the address without the key gave the landing page. Turned off from the add page, Metadata
+  showed no link.
+- **A visitor before publication** (one PDF import): signed out, the public address and the
+  private link each showed *Still being added*; the link without its key and an unshared import
+  showed the landing page. The public visitor's tab became the article by itself when the import
+  finished. The 409 body was the fixed sentence and the code, and the document's title was
+  `Spideryarn`. Not seen: the private-link visitor's tab turning into the article (it was read
+  in the moment the import ended), and a visitor arriving during a web import, which is too
+  fast to catch.
+- **No console line held `key=`.**
+- **Not rechecked this round**: the reload warning inside the new section.
+- **Seen and not explained, on Metadata and not in this change's code**: for some minutes after
+  an import finished, Access & sharing said *We could not check who can read this…*, and later
+  read correctly on reload. Seen on four articles while the box was also running the full suite.
+  Reported to the Overseer.
