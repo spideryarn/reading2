@@ -603,6 +603,12 @@ seven days ago, and the directories that leaves empty:
 day, half of it older than a week. A review's conclusions are in the repo's `*-sol.md` files.
 Claude's transcripts under `~/.claude/projects/` are **not** covered.
 
+**Old screenshots in the repo.** Greg, 2026-10-06: *"Yes, old screenshots (>1w) can be deleted - you
+have permission going forwards. Perhaps add this and other measures to keep the hard disk fullness
+down to some routine daemon/service"*. Image files under `docs/plans/` (and the other dated folders)
+last committed more than a week ago may be deleted from the tree in an ordinary commit; they stay in
+git history. A plan that links one is left with a dead image link, which is acceptable.
+
 ### Dispatching agents
 
 **The queue is the entry point for every new idea, Greg's included.** Greg, 2026-09-09: *"preferring
