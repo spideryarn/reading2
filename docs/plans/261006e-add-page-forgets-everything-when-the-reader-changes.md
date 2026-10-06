@@ -210,6 +210,35 @@ P1s, each fixed by the reviewer red first; its own write-up is
 
 F5 stays as *What is not promised* has it; the review raised no objection to that.
 
+GPT Sol then checked its own three fixes as somebody else's code, read-only
+([its answer](261006e-fix-check-sol.md)): all three correct, nothing that depended on the session
+effect being passive, no new findings.
+
+### Checked in a browser
+
+2026-10-06, by a Sonnet subagent with Playwright against system Chrome and the local stack, at
+desktop 1440, iPad 820 and phone 390. Two local readers; one browser context; tab 2 signs A out
+and B in while tab 1 stays on `/add/<url>` and is never reloaded. Screenshots in
+[261006e-shots/](261006e-shots/).
+
+- **A direct change**: at all three widths tab 1 became the stopped page. A's typed sentence was
+  in neither the page, its HTML nor the tab title, the address was not shown, and there was no
+  box, tick or card.
+- **Nothing started for B**: every non-GET request from tab 1 was sent before B signed in. After
+  it, none. B's shelf and B's job list had nothing of A's.
+- ***Back to the shelf*** opened B's shelf, and adding the same address from there ran a normal
+  add page for B with an empty purpose box.
+- **Signing out and in at the address** (desktop): the stopped page, and no request.
+- **Arriving signed out and signing in** (desktop): a normal add page that imports.
+- No sideways scroll and nothing clipped at any width.
+
+Not seen in the browser: a High-powered `PUT`, before or after the change, because the test
+imports failed before their articles existed; the unit tests cover it. Light against dark was not
+compared: the browser's colour-scheme emulation did not change the app's theme.
+
+**Left as it is**: the stopped page's tab title is the add page's generic *Adding an article*,
+over a heading that says the page has stopped. It carries nothing of the first reader's.
+
 ## Done looks like
 
 After a change of account on an open add page, direct or through signing out, B sees none of A's

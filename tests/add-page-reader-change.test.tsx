@@ -102,7 +102,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const SLUG = "a-paper";
 const ADDRESS = "https://example.com/a-paper";
-const UPLOAD_ID = "11111111-2222-4333-8444-555555555555";
+const UPLOAD_ID = "c4a1e6d2-7b3f-4e58-9a0c-261006e00001";
 const FILENAME = "reader-a-private-draft.pdf";
 const makeJob = (id: string, extra: Partial<Job> = {}): Job =>
   ({ id, slug: SLUG, status: "running", steps: [], ...extra }) as unknown as Job;
