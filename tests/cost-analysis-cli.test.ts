@@ -26,6 +26,7 @@ import {
 } from "../scripts/cost-analysis.js";
 import { type GenerationLookup, lookupGeneration } from "../scripts/openrouter-generation.js";
 import { analyseCosts, type CostAnalysis } from "../src/cost-analysis.js";
+import { failureCountsOf, type CostCubeGroup } from "../src/cost-cube.js";
 
 const NOW = new Date("2026-10-05T02:15:09.123Z");
 const ROOT = "/repo";
@@ -401,6 +402,28 @@ describe("the terminal summary", () => {
     stopsNotClassified: 0,
   } as const;
 
+  it.each(["abort", "stall", "deadline", null] as const)("prints isolated unnumbered %s stops rather than suppressing the breakdown", (failureClass) => {
+    const total = failureCountsOf([{ outcome: "aborted", failureClass, failurePhase: null, calls: 2, counted: 0, retries: 0, gaveUp: 0 } as CostCubeGroup]);
+    const group = { ...total, key: "2031-03-10", label: "2031-03-10" };
+    const text = summaryLines({ ...analysis, failures: {
+      total, byDay: [group], byTask: [{ ...group, key: "live", label: "live" }], causes: [], notes: [],
+    } }).join("\n");
+    expect(text).toMatch(/2031-03-10\s+counted 0\s+retries not measured/);
+    expect(text).toMatch(/live\s+counted 0\s+retries not measured/);
+    if (failureClass === null) expect(text).toMatch(/live\s+counted 0.*stops not classified 2$/m);
+    expect(text).toContain("0 other days had counted attempts and none of these; 0 days were not measured.");
+  });
+
+  it("does not call a mixed day quiet when unknown stops could hide clock failures", () => {
+    const total = { attempts: 4, counted: 4, retries: 0, gaveUp: 0, diedPartWay: 0, ...NO_STOPS, stopsClassified: 1, stopsNotClassified: 3 };
+    const group = { ...total, key: "2031-03-10", label: "2031-03-10" };
+    const text = summaryLines({ ...analysis, failures: {
+      total, byDay: [group], byTask: [], causes: [], notes: [],
+    } }).join("\n");
+    expect(text).toMatch(/2031-03-10\s+counted 4.*stalled 0\s+timed out 0\s+stops not classified 3$/m);
+    expect(text).toContain("0 other days had counted attempts and none of these; 0 days were not measured.");
+  });
+
   it("prints failures and retries as counts, with what was not measured said in words", () => {
     const group = (label: string, counted: number, retries: number | null, gaveUp: number | null, died: number | null) => ({
       key: label,
@@ -496,10 +519,10 @@ describe("the terminal summary", () => {
     /* A quiet day whose stops do not say is listed, so that "none of these" is never said of it. */
     expect(text).toMatch(/2031-03-12\s+counted 5.*stalled not measured\s+timed out not measured\s+stops not classified 2$/m);
     expect(text).toMatch(/2031-03-13\s+counted 0\s+retries not measured.*stalled 1 \(0 part-way\)\s+timed out 0$/m);
-    expect(text).not.toMatch(/2031-03-14\s/);
-    expect(text).toContain("0 other days had counted attempts and none of these; 1 day was not measured.");
+    expect(text).toMatch(/2031-03-14\s+counted 0.*stops not classified 3$/m);
+    expect(text).toContain("0 other days had counted attempts and none of these; 0 days were not measured.");
     expect(text).toMatch(/chat\s+counted 5.*stalled 3 \(2 part-way\)/);
-    expect(text).toContain("1 other mode or task was not measured.");
+    expect(text).toMatch(/live\s+counted 0.*stops not classified 3$/m);
   });
 
   it("prints not measured for stalls beside counted retries when no stop says who stopped it", () => {

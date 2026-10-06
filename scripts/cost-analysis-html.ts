@@ -35,6 +35,7 @@ import {
   OPENROUTER_CREDIT_FEE,
   type Stopped,
   failureSummary,
+  nothingMeasured,
   stoppedFigure,
 } from "../src/cost-cube.js";
 
@@ -518,7 +519,7 @@ function failureCounts(section: string, label: string, groups: readonly FailureG
  */
 function failures(a: CostAnalysis): Safe {
   const f = a.failures;
-  const anything = f.total.counted > 0 || f.causes.length > 0;
+  const anything = !nothingMeasured(f.total);
   return html`<section data-failures>
   <h2>Failures and retries</h2>
   <p data-failures-summary>${failureSummary(f.total)}</p>

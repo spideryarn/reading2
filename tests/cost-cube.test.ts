@@ -524,11 +524,28 @@ describe("failures and retries", () => {
       expect(tasks.map((t) => t.label)).toEqual(["chat", "structure"]);
     });
 
-    it("calls a group measured once a stop in it says who stopped it, and not before", () => {
-      expect(nothingMeasured(failureCountsOf([row({ calls: 2 }), stop(null, null)]))).toBe(true);
+    it("keeps a known count of stops even when their causes were not measured", () => {
+      expect(nothingMeasured(failureCountsOf([row({ calls: 2 }), stop(null, null)]))).toBe(false);
       expect(nothingMeasured(failureCountsOf([row({ calls: 2 })]))).toBe(true);
       expect(nothingMeasured(failureCountsOf([stop("abort", "before_answer")]))).toBe(false);
       expect(nothingMeasured(failureCountsOf([row({ calls: 2, counted: 2 })]))).toBe(false);
+    });
+
+    it("includes only errors and clock stops with a phase in causes", () => {
+      const rows = [
+        row({ outcome: "ok", failureClass: "stall", failurePhase: "mid_answer", calls: 9 }),
+        row({ outcome: "ok", failureClass: "refused", failurePhase: "before_answer", calls: 8 }),
+        stop("stall", null, 7),
+        stop("deadline", null, 6),
+        stop("abort", "mid_answer", 5),
+        stop(null, "mid_answer", 4),
+        row({ ...before, failureClass: "refused", calls: 3 }),
+        stop("stall", "mid_answer", 2),
+        stop("deadline", "before_answer"),
+      ];
+      expect(failureCauses(rows).map((c) => [c.failureClass, c.attempts])).toEqual([
+        ["refused", 3], ["stall", 2], ["deadline", 1],
+      ]);
     });
 
     it("lists a stall and a deadline among the causes, and never a reader's Stop", () => {

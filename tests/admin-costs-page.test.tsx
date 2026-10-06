@@ -818,15 +818,29 @@ describe("failures and retries", () => {
       ]);
     });
 
-    it("keeps a task whose only news is a stall, and folds one whose stops do not say", async () => {
+    it("keeps a task whose only news is a stall and the known count of unclassified stops", async () => {
       await show("", [
         stop("2033-05-02", "stall", "mid_answer"),
         row({ day: "2033-05-02", job: "quiz", stepName: null, outcome: "aborted", calls: 2 }),
       ]);
-      expect(stops("task")).toEqual([["chat", "0", "1 (1 part-way)", "0", "0"]]);
-      expect(section()?.querySelector('[data-failures-unmeasured="task"]')?.textContent).toBe(
-        "1 other modes or tasks: not measured.",
-      );
+      expect(stops("task")).toEqual([
+        ["chat", "0", "1 (1 part-way)", "0", "0"],
+        ["quiz", "not measured", "not measured", "not measured", "2"],
+      ]);
+      expect(section()?.querySelector('[data-failures-unmeasured="task"]')).toBeNull();
+    });
+
+    it.each([
+      ["abort", "mid_answer", "0", "0", "0"],
+      [null, null, "not measured", "not measured", "2"],
+      ["stall", null, "2 (0 part-way)", "0", "0"],
+      ["deadline", null, "0", "2 (0 part-way)", "0"],
+    ] as const)("shows isolated unnumbered %s stops in the day and task tables", async (failureClass, failurePhase, stalled, timedOut, unsaid) => {
+      await show("", [{ ...stop("2033-05-01", failureClass, failurePhase, 2), counted: 0 }]);
+      const figures = ["0", "not measured", "not measured", "not measured", stalled, timedOut, unsaid];
+      expect(failureTable("day")).toEqual([["2033-05-01", ...figures]]);
+      expect(failureTable("task")).toEqual([["chat", ...figures]]);
+      expect(failureTable("causes")).toEqual([]);
     });
   });
 

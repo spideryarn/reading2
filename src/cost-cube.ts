@@ -65,9 +65,9 @@ export interface CostCubeGroup extends MoneyPockets {
   /** `ok`, `error` or `aborted`. */
   outcome: string;
   /**
-   * `before_answer` or `mid_answer` on a failed row; null on an `ok` row, a
-   * stopped one, and every row from before the column. The three failure
-   * columns are src/call-failure.ts's.
+   * `before_answer` or `mid_answer` on an instrumented error or stopped row;
+   * null on an `ok` row and rows from before the column or the realtime wire.
+   * The three failure columns are src/call-failure.ts's.
    */
   failurePhase: string | null;
   /** A label from a closed list; never text from an error. */
@@ -517,7 +517,7 @@ export interface Stopped {
   partWay: number;
 }
 
-/** The two classes of `aborted` row that are our own clock's doing; `abort` is everybody else's. */
+/** The two recognised clock classes; `abort` includes unrecognised clocks such as the job deadline. */
 const OUR_CLOCK = { stall: "stalled", deadline: "timedOut" } as const;
 const isOurClock = (failureClass: string | null): failureClass is keyof typeof OUR_CLOCK =>
   failureClass === "stall" || failureClass === "deadline";
@@ -564,13 +564,14 @@ export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
 }
 
 /**
- * True when nothing in the group shows any of its figures was being measured:
- * no numbered attempt, no failure with a phase, no stop that says who stopped
- * it. Such a row is folded away rather than drawn. `stalled` alone cannot say
- * this, because it is also a zero where nothing was stopped.
+ * True when no coverage evidence or unclassified-stop count needs a row:
+ * no numbered attempt, no error with a phase, and no stopped attempt at all.
+ * Unknown causes do not erase the known number of stops. Such a row is folded
+ * away rather than drawn. `stalled` alone cannot say this, because it is also
+ * a zero where nothing was stopped.
  */
 export function nothingMeasured(c: FailureCounts): boolean {
-  return c.retries === null && c.gaveUp === null && c.diedPartWay === null && c.stopsClassified === 0;
+  return c.retries === null && c.gaveUp === null && c.diedPartWay === null && c.stopsClassified === 0 && c.stopsNotClassified === 0;
 }
 
 export interface FailureGroup extends FailureCounts {
@@ -672,7 +673,7 @@ export const FAILURE_NOTES: readonly string[] = [
   "These are counts, not rates. Each row of the ledger is one attempt, not one call: a call that was retried once is two rows.",
   "Retries and give-ups are counted only on attempts our retry loop numbered. Part-way deaths are counted on any failed attempt that recorded where it failed, numbered or not. Where nothing shows a figure was being measured it reads not measured, which is not zero: that covers every call made before this was recorded.",
   "Stalls and timeouts are counted only on stopped attempts that say who stopped them. Attempts from before this was recorded do not say, and neither does live conversation: where those are the only stops, the figure reads not measured, and where there are both, they are counted beside it as stops not classified.",
-  "A timeout, which the causes table calls a deadline, is any time limit on the call running out. The pipeline's limit on a whole job is a different clock: when it stops a call, the attempt is recorded as an ordinary stop, the same as a reader pressing Stop, and is in neither count.",
+  "A timeout, which the causes table calls a deadline, means a recognised deadline expired while the attempt was active. It can cap one call, a turn or a processing step, so it does not establish how long that attempt ran. The pipeline's limit on a whole job is not recognised: when it stops a call, the attempt is recorded as an ordinary stop, the same as a reader pressing Stop, and is in neither count.",
   "A stopped call is not always recorded as a stop: if the provider had already sent an error, the row keeps that error.",
   "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
 ];
@@ -683,7 +684,8 @@ export const FAILURE_DEFINITIONS =
   "A call gave up when its third and last go failed that way too; a call refused outright on an earlier go is in the causes table. " +
   "An attempt died part-way when it failed after the provider had accepted it, which can be before any of the answer arrived. " +
   "We do not ask again after that point, though the PDF reader's own loop may. " +
-  "An attempt stalled when we stopped it because the provider had sent nothing for too long, and timed out when we stopped it because the whole call had taken too long. " +
+  "An attempt stalled when we stopped it because the provider had sent nothing for too long, and timed out when a recognised deadline expired while it was active. " +
+  "That deadline can cap one call, a turn or a processing step; it does not establish how long that attempt ran. " +
   "Each is shown with how many were part-way, and neither is counted as died part-way.";
 
 /** What a null `FailureCounts` figure is drawn as. */

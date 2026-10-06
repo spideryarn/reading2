@@ -120,6 +120,8 @@ failure.
   file that should not import the ledger's vocabulary for this. Left, and said.
 - **A deadline is any `AbortSignal.timeout` on the signal**, whoever set it. Every one in `src/`
   that reaches a gateway is ours, so this is right today and is a convention, not a guarantee.
+  It can cap one call, a turn or a processing step; the label does not establish how long that
+  particular provider request ran (stage 1 review F22).
 - **Which clock fired first is all that is known.** A provider that sends an error at the moment a
   clock fires is recorded by whichever the code saw, as today.
 
@@ -180,7 +182,7 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
   - The aborted arm of both unions is narrowed to the three abort labels, so an abort carrying
     `refused` does not compile.
   Until stage 2 lands, a reader's Stop shows in the causes table (F19); the two are pushed together.
-- [ ] Stage 2. Built, not yet reviewed by GPT Sol or checked in a browser. The folds, the
+- [x] Stage 2. Built; the review's fixes and the browser check are below. The folds, the
   section, the three renderings of `cost:analyse` and the docs landed as designed: `FailureCounts`
   gains `stalled` and `timedOut` (each `{ attempts, partWay }`, or null for *not measured*) and the
   two counts of stops, classified and not; `failureCauses` takes an error, or a stop classed `stall`
@@ -191,7 +193,8 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
   - **Which rows are folded away has one rule now**, `nothingMeasured` in `src/cost-cube.ts`, shared
     by the page and the terminal. It had to change: a stall figure is a zero wherever nothing was
     stopped, so "has a figure that is not null" would have unfolded every task. A row is kept when
-    one of the first three figures was measured or a stop in it says who stopped it.
+    one of the first three figures was measured or it holds a stopped attempt, classified or not
+    (stage 2 review).
   - **A day with no stops reads `0` for stalls beside *not measured* for retries**, older days
     included. That is the plan's rule (no stopped row, nothing stopped) and it is true of an old
     day too, but it looks odd on the first screen, and the summary's opening words changed from
@@ -206,3 +209,57 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
   No class has a human label anywhere: the causes table prints `stall` and `deadline` as it prints
   `refused` and `in_band`, and the note says a timeout is what that table calls a deadline. The log
   lines are listed only in `ai-gateway.md`; `logging.md` and `/help` do not list them.
+
+### Stage 2 review fixes
+
+The review of `9b36535f4` found that classification coverage was being used to decide whether
+known stop counts deserved a row. The page, terminal and HTML now gate their breakdowns on the
+shared visibility rule, which retains classified and unclassified stops without numbered
+attempts. The terminal also retains mixed days with unknown stops instead of calling them quiet,
+and unnumbered ordinary-stop days instead of losing them from all three day groups. Timeout
+definitions now match F22: a recognised deadline may cover one call, a turn or a processing step.
+
+### The browser check
+
+A Sonnet subagent seeded eight `aborted` rows in the local database (four stalls, three of them
+part-way; one deadline, part-way; two reader stops; one with no class), opened `/admin/costs` at
+1440, 820 and 390 wide, and deleted the rows afterwards. The day and task rows read
+`4 (3 part-way) | 1 (1 part-way) | 1`, the causes table listed the stall and deadline rows and no
+`abort` row, the page did not scroll sideways and each table scrolled inside its own box
+([1440](261006d-shot-1440.png), [820](261006d-shot-820.png), [390](261006d-shot-390.png)).
+
+Two limits. It ran while the stage 2 review was still editing the folds, so the shots are of the
+tree part-way through that review; the review's later changes are to which rows are shown, not to
+the layout, and are covered by tests and not by a second browser run. And at 390 wide the three new
+columns start off-screen inside the scroll box, with nothing to say the table scrolls. That is how
+these tables already behaved with five columns; eight makes it matter more.
+
+## The reviews, and what each ended as
+
+IDs continue 261006b's chain. Reviews: [plan](261006d-plan-review-sol.md),
+[stage 1](261006d-stage-1-code-review-sol.md), [stage 2](261006d-stage-2-code-review-sol.md).
+
+| | | what happened |
+|---|---|---|
+| F15 | P1 | two deadlines that are a `setTimeout` and a controller would have been `abort`. Taken: `CallDeadlineReached` |
+| F16 | P2 | the Messages retry loop read a null failure as "aborted". Taken: it tests the outcome |
+| F17 | P2 | a later outside reason could claim an SDK abort. Taken, then tightened by F21 |
+| F18 | P3 | a null class is not only an old row; realtime writes them. Taken: "stops not classified" |
+| F19 | P3 | the causes filter was "has a phase". Taken, red first |
+| F20 | P3 | said 261006b was already on `origin/main`. **Wrong**; checked here, it is not |
+| F21 | P2 | the class is taken when the SDK's controller aborts, not at its later event. Fixed by the reviewer, red first |
+| F22 | P3 | comments said every deadline is one call's. Fixed by the reviewer |
+| F23 | P2 | nothing tested that a provider error beats a later clock on the Messages wire. Tests added by the reviewer |
+| F24 | P1 | the page's definition of *timed out* said the whole call had taken too long. Fixed by the reviewer |
+| F25 | P1 | page, terminal and HTML hid the breakdown for stops with no attempt number. Fixed by the reviewer, red first |
+| F26 | P1 | the fold-away rule hid known counts of unclassified stops. Fixed by the reviewer, red first; [its postmortem](../postmortems/261006d-visibility-borrows-another-measure-s-coverage.md) |
+| F27 | P1 | the terminal called a day quiet that held unclassified stops. Fixed by the reviewer, red first |
+| F28 | P2 | a mutation letting `ok` rows into the causes table survived. Test added by the reviewer |
+
+## Left for later
+
+- **The pipeline's whole-job deadline** is recorded as `abort`, so a provider that the job budget
+  cut off is in neither count. Said on the page.
+- **The live-conversation wire** (`src/live.ts`) still writes `aborted` rows with no class.
+- **A cue that the tables scroll at phone width.**
+- **One shared stall clock** in place of the eight hand-written timers.

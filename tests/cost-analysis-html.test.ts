@@ -33,7 +33,7 @@ import {
   writePrivateFile,
 } from "../scripts/cost-analysis-html.js";
 import { PRODUCTION_USERS_NOTE } from "../scripts/cost-analysis.js";
-import { type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
+import { type CostAnalysis, type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
 import { type CostCubeGroup, failureSummary } from "../src/cost-cube.js";
 import type { SpendDetailRow } from "../src/store/ai-calls-spend-pg.js";
 import { formatCostNanos } from "../src/web/admin-costs-view.js";
@@ -513,6 +513,31 @@ describe("the report: its figures are the analysis's", () => {
 });
 
 describe("the report: failures and retries", () => {
+  it.each([
+    ["abort", "mid_answer", "0", "0", "0"],
+    [null, null, "not measured", "not measured", "2"],
+    ["stall", null, "2 (0 part-way)", "0", "0"],
+    ["deadline", null, "0", "2 (0 part-way)", "0"],
+  ] as const)("shows isolated unnumbered %s stops from the JSON folds", (failureClass, failurePhase, stalled, timedOut, unsaid) => {
+    const detail = [call({ outcome: "aborted", failureClass, failurePhase }), call({ outcome: "aborted", failureClass, failurePhase })];
+    const analysis = analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null }));
+    const json: CostAnalysis = JSON.parse(JSON.stringify(analysis));
+    expect(json.failures.total).toMatchObject({
+      counted: 0, retries: null, gaveUp: null, diedPartWay: null,
+      stopsClassified: failureClass === null ? 0 : 2,
+      stopsNotClassified: failureClass === null ? 2 : 0,
+    });
+    const report = parse(renderCostReport(json, { commentary: null, chart: null, commit: null }));
+    const figures = ["0", "not measured", "not measured", "not measured", stalled, timedOut, unsaid];
+    for (const [section, label] of [["failures-days", "2031-03-10"], ["failures-tasks", "glossary"]]) {
+      const rows = [...report.querySelectorAll(`table[data-section="${section}"] tbody tr`)].map((tr) =>
+        [...tr.querySelectorAll("td")].map((td) => td.textContent ?? ""),
+      );
+      expect(rows).toEqual([[label, ...figures]]);
+    }
+    expect(report.querySelector('table[data-section="failures-causes"]')).toBeNull();
+  });
+
   it("shows zero deaths beside unmeasured retries on an unnumbered phase-recorded failure", () => {
     const detail = [call({ attempt: null, outcome: "error", failurePhase: "before_answer", failureClass: "refused", failureStatus: 503 })];
     const report = parse(renderCostReport(analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null })), {

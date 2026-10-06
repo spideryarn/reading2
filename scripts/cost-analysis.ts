@@ -534,15 +534,15 @@ function failureLines(f: CostAnalysis["failures"]): string[] {
     const width = Math.min(48, Math.max(8, ...groups.map((g) => g.label.length)));
     return groups.map((g) => `    ${g.label.slice(0, width).padEnd(width)}  ${failureFigures(g)}`);
   };
-  if (f.total.counted > 0 || f.causes.length > 0) {
+  if (!nothingMeasured(f.total)) {
     const hasEvents = (d: FailureCounts) =>
       (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) + (d.stalled?.attempts ?? 0) + (d.timedOut?.attempts ?? 0) > 0;
-    /* A measured day whose stops do not say who stopped them: not quiet, since a stall could be among them. */
-    const stopsUnsaid = (d: FailureCounts) => !nothingMeasured(d) && d.stalled === null;
+    /* Unknown stops prevent a quiet-day claim, even beside classified ordinary stops. */
+    const stopsUnsaid = (d: FailureCounts) => d.stopsNotClassified > 0;
     const unmeasured = f.byDay.filter(nothingMeasured).length;
     const quiet = f.byDay.filter((d) => d.counted > 0 && !hasEvents(d) && !stopsUnsaid(d)).length;
     const shownDays = f.byDay.filter(
-      (d) => hasEvents(d) || stopsUnsaid(d) || (d.counted === 0 && d.diedPartWay === 0),
+      (d) => hasEvents(d) || stopsUnsaid(d) || (d.counted === 0 && !nothingMeasured(d)),
     );
     if (shownDays.length > 0) lines.push("  By UTC day:", ...labelled(shownDays));
     lines.push(

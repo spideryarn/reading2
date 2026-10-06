@@ -1036,7 +1036,7 @@ const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; show: 
   {
     id: "timedOut",
     header: "Timed out",
-    hint: "Attempts we stopped because the whole call had taken too long, and how many of them the provider had already accepted. Not counted as died part-way",
+    hint: "Attempts stopped by a recognised deadline, which can cap one call, a turn or a processing step, and how many the provider had already accepted. This does not establish how long the attempt ran. Not counted as died part-way",
     show: (g) => (g.timedOut === null ? null : stoppedFigure(g.timedOut)),
   },
   {
@@ -1145,7 +1145,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
   );
   const byTask = useMemo(() => failureCountsBy(rows, "task"), [rows]);
   const causes = useMemo(() => failureCauses(rows), [rows]);
-  const anything = total.counted > 0 || causes.length > 0;
+  const anything = !nothingMeasured(total);
 
   return (
     <section data-failures="" aria-labelledby="failures-heading" className="tw:mt-8">

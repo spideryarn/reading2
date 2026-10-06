@@ -813,7 +813,9 @@ the names do not say:
 **An `aborted` row says who stopped it** (since 2026-10-06,
 [261006d](../plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md)). Its
 `failure_class` is `stall` when our stall clock stopped a provider that had gone silent, `deadline`
-when a time limit on the call ran out, and `abort` for anything else, a reader's Stop included;
+when a recognised deadline expired while the attempt was active, and `abort` for anything else,
+a reader's Stop included. A deadline can cap one call, a turn or a processing step; it does not
+establish how long that particular provider request ran.
 `failure_phase` and `failure_status` are filled as on an error, and `outcome` stays `aborted`.
 `abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things it
 does not tell apart:
