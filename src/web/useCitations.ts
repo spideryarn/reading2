@@ -61,7 +61,7 @@ import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
-import { ReaderFacingError } from "./lib/reader-facing.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
@@ -336,9 +336,9 @@ export function useCitationsRead(slug: string): CitationsRead {
         /* Only an explicit null means none yet. Validate before publishing so
            a broken revalidation leaves the list already on screen intact. */
         if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
-          /* A plain `Error`, so the reader gets `PAGE_FAULT`, as for every
+          /* A `MalformedReply`, so the reader gets `PAGE_FAULT`, as for every
              other malformed artefact (tests/read-error-matrix.test.tsx). */
-          throw new Error("the citations reply has no list");
+          throw new MalformedReply("the citations reply has no list");
         }
         setCitations(loaded.citations);
         setStale(loaded.stale);

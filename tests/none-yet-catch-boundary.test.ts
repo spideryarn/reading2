@@ -10,6 +10,8 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const stores = vi.hoisted(() => ({
   loadQuiz: vi.fn(), loadCrossrefs: vi.fn(), loadCitations: vi.fn(),
+  loadSimpleSummary: vi.fn(), loadIdeas: vi.fn(), loadFaq: vi.fn(), loadTimeline: vi.fn(),
+  loadDebate: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(),
   attempts: vi.fn(), candidates: vi.fn(), profile: vi.fn(),
 }));
 
@@ -18,6 +20,9 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
   const { guardDbStore } = await import("../src/store/db-errors.js");
   const loads = guardDbStore("none-yet-test", {
     loadQuiz: stores.loadQuiz, loadCrossrefs: stores.loadCrossrefs, loadCitations: stores.loadCitations,
+    loadSimpleSummary: stores.loadSimpleSummary, loadIdeas: stores.loadIdeas, loadFaq: stores.loadFaq,
+    loadTimeline: stores.loadTimeline, loadDebate: stores.loadDebate, loadGlossary: stores.loadGlossary,
+    loadQuotes: stores.loadQuotes,
   });
   return {
     ...actual, ...loads,
@@ -34,9 +39,19 @@ const RESPONSES = {
   quiz: { quiz: { slug: SLUG, batchId: "batch", questions: [] }, stale: false, outdated: false },
   crossrefs: { crossrefs: { slug: SLUG, links: [] }, stale: false, outdated: false },
   citations: { citations: { slug: SLUG, citations: [] }, stale: false, outdated: false },
+  simple: { simpleSummary: { slug: SLUG, profileHash: null }, stale: false, outdated: false },
+  ideas: { ideas: { slug: SLUG, ideas: [] }, stale: false, outdated: false },
+  faq: { faq: { slug: SLUG, questions: [] }, stale: false, outdated: false },
+  timeline: { timeline: { slug: SLUG, events: [] }, stale: false, outdated: false },
+  debate: { debate: { slug: SLUG, direct: { rows: [] }, claims: { rows: [] } }, stale: false, outdated: false },
+  glossary: { glossary: { slug: SLUG, entries: [] }, stale: false, outdated: false },
+  quotes: { quotes: { slug: SLUG, quotes: [] }, stale: false, outdated: false },
 };
 const READS = [
   ["quiz", stores.loadQuiz], ["crossrefs", stores.loadCrossrefs], ["citations", stores.loadCitations],
+  ["simple", stores.loadSimpleSummary], ["ideas", stores.loadIdeas], ["faq", stores.loadFaq],
+  ["timeline", stores.loadTimeline], ["debate", stores.loadDebate], ["glossary", stores.loadGlossary],
+  ["quotes", stores.loadQuotes],
 ] as const;
 
 beforeEach(() => {
@@ -80,6 +95,14 @@ describe.each(READS)("%s catch boundary", (kind, load) => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(stores.attempts).not.toHaveBeenCalled();
     expect(stores.candidates).not.toHaveBeenCalled();
+  });
+
+  it("keeps typed absence as a 404 without the opt-in header", async () => {
+    load.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+    const res = await get(kind, false);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
   for (const asks of [false, true]) {
@@ -128,3 +151,32 @@ it("a profile failure after a successful quiz load remains a failure", async () 
   expect(res.status).toBe(500);
   expect(JSON.parse(res.body)).toHaveProperty("error");
 });
+
+// These four added routes resolve the profile as well as loading the artefact.
+describe.each(READS.filter(([kind]) => ["simple", "ideas", "glossary", "quotes"].includes(kind)))(
+  "%s profile boundary", (kind, load) => {
+    for (const asks of [false, true]) {
+      it(`a profile failure after a made artefact stays a 500 (header=${asks})`, async () => {
+        stores.profile.mockRejectedValue(new Error("profile failed"));
+        const res = await get(kind, asks);
+        expect(res.status).toBe(500);
+        expect(JSON.parse(res.body)).toHaveProperty("error");
+      });
+
+      it(`absence retains precedence over a concurrent profile failure (header=${asks})`, async () => {
+        let rejectArtefact!: (error: Error) => void;
+        load.mockImplementation(() => new Promise((_, reject) => { rejectArtefact = reject; }));
+        stores.profile.mockRejectedValue(new Error("profile failed"));
+        const reading = get(kind, asks);
+        await vi.waitFor(() => expect(stores.profile).toHaveBeenCalled());
+        // The profile has failed before the later artefact absence arrives.
+        await Promise.resolve();
+        rejectArtefact(new ArtefactNotMadeYet("none yet"));
+        const res = await reading;
+        expect(res.status).toBe(asks ? 200 : 404);
+        if (asks) expect(res.body).toBe("null");
+        else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+      });
+    }
+  },
+);

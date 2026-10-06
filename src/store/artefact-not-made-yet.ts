@@ -13,10 +13,18 @@
  * sees exactly what it saw before, and so that `guardDbStore` lets it through
  * untranslated (src/store/db-errors.ts § Six things pass, the first).
  *
- * Thrown by `loadQuiz`, `loadCrossrefs` and `loadCitations` in src/store/pg.ts.
- * The other loaders still throw a plain error for the same fact; moving one
- * over is this class at its throw and the helper at its route.
- * docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md.
+ * Thrown by ten loaders in src/store/pg.ts: `loadQuiz`, `loadCrossrefs` and
+ * `loadCitations`, and since plan 261006h `loadSimpleSummary`, `loadIdeas`,
+ * `loadFaq`, `loadTimeline`, `loadDebate`, `loadGlossary` and `loadQuotes`.
+ * **"Not made" is each loader's own test**, and for three it is wider than an
+ * empty column: `loadFaq`, `loadSimpleSummary` and `loadDebate` throw this for
+ * a stored document they cannot use as well.
+ *
+ * The loaders for tweets, relations, Skim, Sketch and Arc still throw a plain
+ * error for the same fact; moving one over is this class at its throw, the
+ * helper at its route and its name in `NONE_YET_AS_NULL` (src/web/lib/api.ts).
+ * docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md,
+ * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md.
  */
 export class ArtefactNotMadeYet extends Error {
   readonly status = 404;

@@ -70,7 +70,13 @@ function report(): HealthReport {
 }
 
 function snap(): FleetSnapshot {
-  return { rows: [], tmuxServerPid: 1, collectedAt: "2026-09-08T12:00:00.000Z", tookMs: 12_000 };
+  return {
+    rows: [],
+    tmuxServerPid: 1,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
+    collectedAt: "2026-09-08T12:00:00.000Z",
+    tookMs: 12_000,
+  };
 }
 
 function deps(made: HealthRetention, over: Partial<RefreshDeps> = {}): RefreshDeps {

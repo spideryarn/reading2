@@ -63,7 +63,7 @@ import { useAutoRun } from "./useAutoRun.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
-import { ReaderFacingError } from "./lib/reader-facing.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream } from "./lib/sse.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -460,10 +460,10 @@ export function useQuizRead(slug: string): QuizRead {
       }
       /* Derive before publishing: a malformed revalidation keeps the old batch. */
       if (!loaded?.quiz || !Array.isArray(loaded.quiz.questions) || typeof loaded.quiz.batchId !== "string") {
-        /* A plain `Error`, so the reader gets `PAGE_FAULT` like every other
+        /* A `MalformedReply`, so the reader gets `PAGE_FAULT` like every other
            malformed artefact (tests/read-error-matrix.test.tsx): a reply of
            the wrong shape is this app's bug, not something to "try again". */
-        throw new Error("the quiz reply has no questions");
+        throw new MalformedReply("the quiz reply has no questions");
       }
       const profiled = loaded.quiz.profileHash != null;
       setQuiz(loaded.quiz);

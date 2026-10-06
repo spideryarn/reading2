@@ -44,11 +44,13 @@
  * See docs/project/quotes.md and src/quotes.ts.
  */
 import { useCallback, useEffect, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type QuotesStatus = "loading" | "none" | "ready" | "error";
@@ -207,16 +209,24 @@ export function useQuotesRead(slug: string): QuotesRead {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * The read itself — the parse, the 404 branch and the error copy, which are
+   * The read itself — the parse, the "none yet" branch and the error copy, which are
    * this mode's own. `current()` after every `await`, before any state is
    * set: false means this reply is about an article, or an artefact, the hook
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
     try {
-      const res = await apiFetch(`/api/quotes/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/quotes/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<QuotesResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
         setQuotes(null);
@@ -228,9 +238,13 @@ export function useQuotesRead(slug: string): QuotesRead {
         setStatus("none");
         return;
       }
-      const loaded = await readJson<QuotesResponse>(res);
-      if (!current()) return;
-      /* Derive before publishing: a malformed revalidation keeps the old list. */
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+         stays. */
+      if (typeof loaded?.quotes !== "object" || loaded.quotes === null) {
+        throw new MalformedReply("the quotes reply has no quotes");
+      }
       const profiled = loaded.quotes.profileHash != null;
       setQuotes(loaded.quotes);
       setStale(loaded.stale);
