@@ -297,15 +297,17 @@ export function App({
      this string, this is the line to add it to** — see fit.ts. */
   const { ref: dockRef, fitClass } = useDockFit(`${mode}:${needsYou}`);
 
-  return (
-    <div className="tw:min-h-dvh tw:bg-page">
-      <Header state={feed.state} fresh={fresh} onRefresh={refreshEverything} />
-
-      {/* The bottom padding is the bar's resting room plus a card's worth of
-          air, so the last session does not finish underneath the dock — which
-          does not look like a bug, it looks like the list ends there. */}
-      <main className={cx(SHELL, "tw:pt-3 tw:pb-[calc(var(--dock-space)+1rem)]")}>
-        {mode === "sessions" ? (
+  /* **ONE PANEL PER MODE, AND THE COMPILER COUNTS THEM.** An exhaustive switch
+     rather than a ternary per mode: a mode in `MODES` with no `case` here fails
+     `npm run typecheck` at the `never` below, where until 2026-10-06 it
+     compiled, drew its button, switched the hash, and showed an empty page.
+     Built inside the component, so every arm closes over the same props and
+     state it always did. docs/project/fleet-dashboard-modes.md § The
+     registrations. */
+  const panel = ((): ReactNode => {
+    switch (mode) {
+      case "sessions":
+        return (
           <>
             {/* **ABOVE THE LIST, because it is the answer and the list is the
                 material.** A `needs-you` badge means only that Claude Code says
@@ -364,16 +366,20 @@ export function App({
               onRefresh={feed.refresh}
             />
           </>
-        ) : null}
-        {mode === "messages" ? (
+        );
+      case "messages":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
-            {/* **THE REGISTRATION NOTHING CATCHES.** The four `Record<Mode, …>`
-                maps make a half-added mode a compile error; this arm does not,
-                because it is a ternary rather than an exhaustive switch. A mode
-                registered everywhere but here draws a button, switches the
-                hash, and shows an empty page. `tests/fleet-feed-panel.test.tsx`
-                asserts this tab renders its panel, which is the only thing that
-                would notice. */}
+            {/* **THE REGISTRATION NOTHING CAUGHT, UNTIL 2026-10-06.** The three
+                `Record<Mode, …>` maps make a half-added mode a compile error;
+                this arm did not, because it was a ternary rather than an
+                exhaustive switch. A mode registered everywhere but here drew a
+                button, switched the hash, and showed an empty page. It is a
+                `case` now, and the `never` in the switch's `default` makes a
+                MISSING arm a compile error too. What the compiler cannot see is
+                a WRONG arm — one that mounts another mode's panel, or nothing:
+                `tests/fleet-feed-panel.test.tsx` asserts this tab renders its
+                own panel, which is still the only thing that would notice. */}
             <FeedPanel
               api={feedApi}
               limit={limitFromParams(params)}
@@ -457,8 +463,9 @@ export function App({
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
-        ) : null}
-        {mode === "health" ? (
+        );
+      case "health":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <HealthPanel
               health={feed.state?.health ?? null}
@@ -477,14 +484,15 @@ export function App({
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
-        ) : null}
-        {/* **The same `UsageCard` the Overseer tab draws, mounted a second time
-            rather than copied.** If this tab and that card could disagree, one
-            of them would be a second interpretation of the same bytes — and the
-            whole point of the reading rules is that there is one. Both account
-            readings are in the component; the Codex one is selected once from
-            the history route above both mounts. */}
-        {mode === "usage" ? (
+        );
+      /* **The same `UsageCard` the Overseer tab draws, mounted a second time
+          rather than copied.** If this tab and that card could disagree, one
+          of them would be a second interpretation of the same bytes — and the
+          whole point of the reading rules is that there is one. Both account
+          readings are in the component; the Codex one is selected once from
+          the history route above both mounts. */
+      case "usage":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             {/* **THE PER-ACCOUNT SECTIONS COME FIRST, AND THAT ORDER IS THE
                 ANSWER TO THE QUESTION THE TAB EXISTS FOR.** *Which subscription
@@ -538,8 +546,9 @@ export function App({
               skew={feed.state?.clockSkew ?? CLOCK_SKEW_UNMEASURED}
             />
           </div>
-        ) : null}
-        {mode === "overseer" ? (
+        );
+      case "overseer":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <OverseerPanel
               actions={actions}
@@ -574,36 +583,39 @@ export function App({
             />
             <RecoveryPanel refreshNonce={refreshNonce} nowMs={now} />
           </div>
-        ) : null}
-        {/* **Deploys takes no snapshot props, and that is the shape rather than
-            an omission.** The deploy record is read on its own route, on its own
-            cadence, and costs nothing until somebody opens the tab — the rule in
-            fleet-dashboard-modes.md § Where the panel's data comes from: no read
-            inside the collection loop. All it needs from here is the page's
-            clock, so every age on screen is anchored to the same tick. */}
-        {mode === "ideas" ? (
+        );
+      case "ideas":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <QueuePanel api={queueApi} refreshNonce={refreshNonce} />
           </div>
-        ) : null}
-        {mode === "readiness" ? (
+        );
+      case "readiness":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <ReadinessPanel nowMs={now} skew={skew.current} refreshNonce={refreshNonce} />
           </div>
-        ) : null}
-
-        {mode === "decisions" ? (
+        );
+      case "decisions":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <DecisionsPanel api={decisionsApi} refreshNonce={refreshNonce} nowMs={now} />
           </div>
-        ) : null}
-
-        {mode === "deploys" ? (
+        );
+      /* **Deploys takes no snapshot props, and that is the shape rather than
+          an omission.** The deploy record is read on its own route, on its own
+          cadence, and costs nothing until somebody opens the tab — the rule in
+          fleet-dashboard-modes.md § Where the panel's data comes from: no read
+          inside the collection loop. All it needs from here is the page's
+          clock, so every age on screen is anchored to the same tick. */
+      case "deploys":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <DeploysPanel api={deploysApi} now={now} refreshNonce={refreshNonce} />
           </div>
-        ) : null}
-        {mode === "questions" ? (
+        );
+      case "questions":
+        return (
           <div className="tw:mx-auto tw:max-w-3xl">
             <QuestionsPanel
               view={questions}
@@ -619,7 +631,23 @@ export function App({
               now={now}
             />
           </div>
-        ) : null}
+        );
+      default: {
+        const never: never = mode;
+        return never;
+      }
+    }
+  })();
+
+  return (
+    <div className="tw:min-h-dvh tw:bg-page">
+      <Header state={feed.state} fresh={fresh} onRefresh={refreshEverything} />
+
+      {/* The bottom padding is the bar's resting room plus a card's worth of
+          air, so the last session does not finish underneath the dock — which
+          does not look like a bug, it looks like the list ends there. */}
+      <main className={cx(SHELL, "tw:pt-3 tw:pb-[calc(var(--dock-space)+1rem)]")}>
+        {panel}
       </main>
 
       <Dock

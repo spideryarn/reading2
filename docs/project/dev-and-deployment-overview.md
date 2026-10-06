@@ -103,7 +103,7 @@ reference, and is authoritative wherever the two disagree.
   deferred, one line each and the product question it waits on, so a lull has something queued and
   gate 3's "is it in the queue?" has a place to look. The Spideryarn product plan sits there whole.
 - **[fleet-dashboard-modes.md](fleet-dashboard-modes.md)** — the checklist for adding a tab to that
-  dashboard: six places across three files, two of which nothing checks; the end-to-end path for a
+  dashboard: five places across three files, each checked by the compiler; the end-to-end path for a
   datum depending on whether it rides the pushed snapshot or wants its own route; why an on-demand
   route may only block the event loop for work whose worst case it can state; and the etiquette for
   a night when several sessions are adding tabs at once.

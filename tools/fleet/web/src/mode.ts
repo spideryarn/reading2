@@ -36,6 +36,10 @@ export const MODES = ["sessions", "messages", "health", "usage", "readiness", "o
 
 export type Mode = (typeof MODES)[number];
 
+/** The mode an empty or unrecognised hash opens — the one line a different
+ *  landing tab would change. Not "the Sessions tab": `go("sessions", …)` means that. */
+export const DEFAULT_MODE: Mode = "sessions";
+
 export const MODE_LABELS: Record<Mode, string> = {
   sessions: "Sessions",
   messages: "Recent messages",
@@ -68,7 +72,7 @@ export function parseHash(hash: string): HashState {
   const body = hash.replace(/^#/, "");
   const cut = body.indexOf("?");
   const name = (cut === -1 ? body : body.slice(0, cut)).trim().toLowerCase();
-  const mode: Mode = (MODES as readonly string[]).includes(name) ? (name as Mode) : "sessions";
+  const mode: Mode = (MODES as readonly string[]).includes(name) ? (name as Mode) : DEFAULT_MODE;
   const params: Record<string, string> = {};
   if (cut !== -1) {
     for (const [key, value] of new URLSearchParams(body.slice(cut + 1))) {

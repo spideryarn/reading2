@@ -1,5 +1,5 @@
 /**
- * The bottom bar: the three modes, and the one control worth putting under a
+ * The bottom bar: the modes, and the one control worth putting under a
  * thumb.
  *
  * **PORTED FROM src/web/Dock.tsx**, whose 3,000 lines are mostly a drawer this
