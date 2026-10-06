@@ -1,0 +1,15 @@
+**ship with these fixes (applied)**
+
+- **C1 — P2 — `tests/one-store-only.test.ts:212` — reproduced, fixed.** The scanner swallowed read errors, allowing a missing required root file to escape inspection. This predates S1 (`1481e1969`); deleting the optional witness config exposes the obsolete exception. A new regression failed because scanning a missing file resolved successfully, then passed after removing the catch. The builder’s `vite.config.ts` example was incorrect: an existing assertion already requires it. Changed **`tests/one-store-only.test.ts`** and corrected the record in **`docs/plans/261006j-sixth-sweep-s1-filesystem-store-leftovers.md`**.
+
+- **C2 — P3 — `src/web/PricingPage.tsx:772` — reasoned, fixed.** Two comments still counted the removed plan arm (“other four”, “six headlines”). Removed their numerical wording. Changed **`src/web/PricingPage.tsx`**; recorded in the same builder doc. Reader-facing copy is unchanged.
+
+- **C3 — P3 — `src/web/useBilling.ts:92` — reproduced, reporting only.** The actual `checkedSummary` function accepts `{plan:{kind:"off"}, purchase:{kind:"none"}, manageable:false}`. The copy functions return `undefined`; dereferencing `headline` then throws. There is **no throwing `never` check**. Plan-kind validation is a broader boundary-hardening issue outside this cluster, so **`useBilling.ts` is unchanged**. No current producer supplies `off`: `ReaderPlan` is derived rather than persisted, responses use `private, no-store`, and the last producer disappeared in `1481e1969`. I found no supported current arrival path requiring the arm to remain.
+
+The retired import-graph gate required **migration-record membership**, not `TEST_LANES` membership or correct routing. Its surviving target was the live, store-independent `copy-artefacts.ts`. Removing that historical bookkeeping does not remove lane routing or the poisoned unit environment; no restoration is needed.
+
+All four surviving lane cases failed under targeted mutations: missing assignment, invalid exemption, wrong shared lane, and missing owner verdict. Mutations were restored. Searches across the requested source, tooling, configuration and project-doc locations found no live reference requiring a deleted file. The seven historical links converted to backticks and the three project-doc edits agree with the remaining code.
+
+Validation: **283 focused tests passed**, followed by a successful doc-links rerun. All four TypeScript projects passed using `node --import tsx scripts/typecheck.ts`; the npm launcher was blocked by sandbox IPC restrictions. Lint and diff checks passed. Knip reported no unused files, while retaining its advisory findings, including 538 unused exports. Two tests in the additional database-isolation file failed on sandbox socket restrictions.
+
+**Three files changed; nothing committed.**

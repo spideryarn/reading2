@@ -842,12 +842,12 @@ export type DebateAccess =
  */
 export interface DebateClaimChats {
   summaries: readonly ThreadSummary[];
-  /** Start a fresh chat about this claim. Goes to Chat with the question unsent; spends nothing. */
+  /** Start a fresh chat about this claim. Goes to Chat and sends the question: one press, one model call (plan 261006j). */
   onCheck(origin: ClaimOrigin): void;
   /**
    * Start a fresh chat that looks at the debate from this angle, the reader's
-   * own words. Goes to Chat with the question unsent, as `onCheck` does: no
-   * search runs and nothing is spent until they press Send there.
+   * own words. Goes to Chat and sends the question, as `onCheck` does, so
+   * the press is what starts the web search.
    */
   onLens(lens: string): void;
   /** Open a conversation already started from a claim or an angle, beside Debate. */
@@ -863,9 +863,9 @@ export const DEBATE_OPEN_CLAIM_CHAT = "Open the chat about this claim";
 export const DEBATE_LENS_LABEL = "Look at the debate from an angle";
 /** The box's button. The words Glossary's handoff to Chat already uses. */
 export const DEBATE_LENS_SEND = "Ask in chat";
-/** The button's tooltip: where a press goes, and that it sends and spends nothing. */
+/** The button's tooltip: where a press goes, and that it asks at once. */
 export const DEBATE_LENS_TIP =
-  "Opens Chat with a question about what others say on this, ready for you to edit. Nothing is sent until you press Send there.";
+  "Opens Chat and asks what others say on this straight away, with a web search.";
 /** The heading over the chats started from an angle. */
 export const DEBATE_ANGLES_HEAD = "Your angles";
 /** A line of *Your angles*: its accessible name. */
@@ -1369,9 +1369,9 @@ export function DebatePanel({
  *
  * **The box starts a chat; it does not steer the stored search.** Enter or
  * the button hands the words to `Reader`, which opens Chat on a fresh
- * conversation with the question in its box, unsent. So this component starts
- * no job and has no waiting state: there is nothing to wait for until the
- * reader presses Send in Chat. Why a chat and not a steered search is in
+ * conversation and sends the question (plan 261006j). So this component starts
+ * no job and has no waiting state: the answer arrives in Chat, which the
+ * reader is by then looking at. Why a chat and not a steered search is in
  * docs/project/debate.md § Look at the debate from an angle.
  *
  * **The list is the way back**, one line per chat started from an angle,
@@ -1400,7 +1400,7 @@ function Angles({ chats }: { chats: DebateClaimChats }) {
           e.preventDefault();
           if (words === "") return;
           chats.onLens(words);
-          /* The words are in Chat's box now, where they can still be edited. */
+          /* The words have become the fresh chat's first question. */
           setLens("");
         }}
       >

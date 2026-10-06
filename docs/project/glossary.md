@@ -959,7 +959,8 @@ started from:
 What the owner gets:
 
 - **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
-  after it. Nothing is sent until Send, so a press spends nothing, and Back returns to the Glossary.
+  after it, then sends that question. The press is the Send since 2026-10-06
+  ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
 - **A line under the buttons once a chat exists**: how many questions were asked, and how the
   chat's latest answer begins. Pressing it opens that conversation beside the Glossary
   (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
@@ -981,7 +982,7 @@ is this mode's own:
   when it is not, the line goes and the conversation stays in Chat's list.
 - **The name is cut to 300 characters before it is sent** (`originName`, `MAX_ORIGIN_NAME_CHARS`),
   because a glossary name has no length limit of its own and the route refuses a longer snapshot.
-  The question in the box uses the shared bounded quote (`fencedQuote` in `chat-handoff.ts`),
+  The question that is sent uses the shared bounded quote (`fencedQuote` in `chat-handoff.ts`),
   with a visible ellipsis for very long names so it still fits Chat's question limit.
 - **The server never looks the id up.** It checks the shape and nothing else, so a chat about an
   entry that has since been hidden or regenerated away is still a chat.
@@ -1072,11 +1073,14 @@ reported it. Each says what was established and what the reader can do about it:
 | the characters are there, but never with a boundary on both sides — *axiom* against *axiomatic* | `[gl-ask-part-word]` | try the words as the piece writes them; chat is still offered |
 | there is no prose to search at all | `[gl-ask-no-prose]` | **not a claim about the term** — the branch exists so an empty scan cannot be reported as an answer |
 
-**Ask in chat carries the question, and spends nothing.** Pressing it opens a **fresh** conversation
-in chat mode with an editable question about the term already in the box — *What does "axiom" mean,
-and does it have anything to do with what this article is saying?* — and the caret in it. Nothing is
-sent until the reader presses Send; the conversation that was open, and the floating panel's own
-draft about a passage, are left as they were.
+**Ask in chat asks the question.** Pressing it opens a **fresh** conversation in chat mode and
+sends a question about the term as its first — *What does "axiom" mean, and does it have anything
+to do with what this article is saying?* The conversation that was open, and the floating panel's
+own draft about a passage, are left as they were. Until 2026-10-06 the question waited in the box
+for Send; Greg, that day: *"When I click "ask in Chat" anywhere, automatically submit the input
+(rather than just prefilling the input box and waiting for me to hit send)"*. Which buttons send,
+and the two that still wait, are in
+[261006j](../plans/261006j-ask-in-chat-sends-the-question.md).
 
 > fresh
 >

@@ -19,7 +19,7 @@
  * 2026-08-26.
  *
  * This runs against the source of truth this test *can* see — the environment
- * and `dist/` if it has been built. The deployed bundle is checked separately
+ * and `dist/`, which has to have been built. The deployed bundle is checked separately
  * and from outside, by `npm run deploy -- --verify-only`, because a local
  * `dist/` is not what production is serving.
  */
@@ -69,15 +69,23 @@ describe("no secret reaches the browser", () => {
   });
 
   /**
-   * **Genuinely skipped, not quietly passed.**
+   * **A failure when there is no bundle, not a skip and not a quiet pass.**
    *
    * The first version returned early with a `console.warn` when `dist/` was
    * missing, which vitest reports as a green tick — a check that had nothing to
    * look at, reporting success, in the one file whose entire subject is checks
-   * that report success while doing nothing. `skipIf` makes the run say
-   * "skipped". GPT Sol, 2026-08-27.
+   * that report success while doing nothing. `skipIf` then made the run say
+   * "skipped" (GPT Sol, 2026-08-27), which was the honest answer while a
+   * checkout might not have been built. Since 2026-10-06 `npm run
+   * worktree:setup` builds, and `npm run check` and the deploy gate always did,
+   * so a missing `dist/` is a step somebody left out — the same answer
+   * tests/pdf-bundle-trace.test.ts gives about `api-dist/`.
    */
-  it.skipIf(!existsSync(DIST))("finds none in a built bundle, when there is one", () => {
+  const needsBuild =
+    "dist/ is missing — run `npm run build`. Without it there is no bundle to look in.";
+
+  it("finds none in a built bundle", () => {
+    expect(existsSync(DIST), needsBuild).toBe(true);
     const dist = DIST;
     const offenders = filesIn(dist)
       .filter((f) => /\.(js|mjs|css|html|map)$/.test(f))
@@ -93,12 +101,14 @@ describe("no secret reaches the browser", () => {
    * That is not nothing, but it is not what anybody reads it as.
    *
    * Only a warning when the build is stale, deliberately: `npm test` must not
-   * start demanding a build, or people will stop running one of them. What it
+   * start demanding a build of today's source, or people will stop running one
+   * of them. (A build at all is another matter, and is demanded above.) What it
    * must not do is stay silent. The real check on what production is actually
    * serving is `npm run deploy -- --verify-only`, which downloads the served
    * JavaScript — this can only ever be a local proxy for it.
    */
-  it.skipIf(!existsSync(DIST))("says so if that bundle is older than the source", () => {
+  it("says so if that bundle is older than the source", () => {
+    expect(existsSync(DIST), needsBuild).toBe(true);
     const newest = (dir: string) =>
       filesIn(dir).reduce((max, f) => Math.max(max, statSync(f).mtimeMs), 0);
     const built = newest(DIST);

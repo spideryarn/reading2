@@ -258,8 +258,8 @@ interface Props {
    *
    * **Given the term, and it goes with the reader.** Called with the term the
    * box actually sent (`UseGlossary.askTerm`); `Reader` turns it into a question
-   * in a fresh conversation's composer, sent only when the reader presses Send
-   * — Greg, 2026-09-11, *"fresh"*. Until then it was a bare mode switch and the
+   * and sends it as a fresh conversation's first (the press is the Send since
+   * 2026-10-06, plan 261006j) — Greg, 2026-09-11, *"fresh"*. Until then it was a bare mode switch and the
    * reader typed the word twice. `askAboutTerm` in src/web/chat-handoff.ts, and
    * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
    */
@@ -2087,8 +2087,8 @@ export function Looked({
         </button>
         {/* **Not disabled for a term the article never quotes**, unlike its
             neighbour: Dig deeper needs a passage to anchor to, a chat does
-            not. It spends nothing until Send, so it does not wait for a
-            running lookup either. It stays once a chat exists: a second one
+            not. It is its own conversation, so it does not wait for a
+            running lookup either. The press sends the question (plan 261006j). It stays once a chat exists: a second one
             can be started. */}
         {chats && (
           <AskInChatButton

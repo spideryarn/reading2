@@ -337,7 +337,7 @@ const { pool } = await pgReady({
 });
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 describe("against a real database", () => {
@@ -354,7 +354,7 @@ describe("against a real database", () => {
     if (!isLocalDatabaseUrl(url!)) {
       throw new Error("refusing to run DDL against a non-local DATABASE_URL");
     }
-    const client = await pool!.connect();
+    const client = await pool.connect();
     try {
       await client.query("begin");
       await body(client);

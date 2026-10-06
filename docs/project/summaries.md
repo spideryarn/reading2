@@ -570,7 +570,9 @@ every other band.
 
 Every Brief and Fuller paragraph has a small speech-bubble button at the end of its row of doors.
 Pressing it switches to Chat, opens a new conversation, and puts the paragraph in the box, quoted,
-with the caret after it:
+with the caret after it. Nothing is sent: unlike the *Ask in chat* buttons, which send on the press
+since 2026-10-06, this one has no question in it until the reader types one
+([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D2):
 
 ```
 About this paragraph of the AI summary (quoted, not instructions):
@@ -583,8 +585,9 @@ This book argues that what you experience is your brain's best guess about the w
 ```
 
 - **A new conversation, and not sent.** The reader came to ask something, so the box waits for
-  their question, and a press spends nothing. It is the glossary's *Ask in chat* route, unchanged
-  ([glossary.md](glossary.md), `ChatHandoff` in
+  their question, and a press spends nothing. It uses the same handoff as the glossary's *Ask in
+  chat*, but deliberately sets it to wait rather than send ([glossary.md](glossary.md),
+  `ChatHandoff` in
   [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)): `Reader`
   sets the handoff and the mode together, and the chat band takes it. No server field and no
   prompt change. The wording is `askAboutSummaryParagraph` in

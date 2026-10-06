@@ -88,7 +88,6 @@ const PAID: Entitlement = {
 };
 
 async function seedOwner(): Promise<void> {
-  if (!pool) return;
   /* `auth.users` is Supabase's, and the owner FK points into it. `on conflict
      do nothing` so re-runs are cheap. */
   await seedAuthUser(pool, {
@@ -109,27 +108,24 @@ async function seedOwner(): Promise<void> {
 async function makePaid(): Promise<{ start: Date; end: Date }> {
   const start = new Date(Date.now() - 5 * 24 * 3600 * 1000);
   const end = new Date(Date.now() + 25 * 24 * 3600 * 1000);
-  if (pool) {
-    await pool.query(
-      `insert into spideryarn.billing_accounts
-         (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
-          current_period_start, current_period_end)
-       values ($1, $2, $3, $4, 'active', $5, $6)
-       on conflict (owner_id) do update set
-         stripe_customer_id = excluded.stripe_customer_id,
-         stripe_subscription_id = excluded.stripe_subscription_id,
-         price_id = excluded.price_id,
-         status = excluded.status,
-         current_period_start = excluded.current_period_start,
-         current_period_end = excluded.current_period_end`,
-      [OWNER, `cus_${OWNER}`, `sub_${OWNER}`, READER_PRICE, start, end],
-    );
-  }
+  await pool.query(
+    `insert into spideryarn.billing_accounts
+       (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
+        current_period_start, current_period_end)
+     values ($1, $2, $3, $4, 'active', $5, $6)
+     on conflict (owner_id) do update set
+       stripe_customer_id = excluded.stripe_customer_id,
+       stripe_subscription_id = excluded.stripe_subscription_id,
+       price_id = excluded.price_id,
+       status = excluded.status,
+       current_period_start = excluded.current_period_start,
+       current_period_end = excluded.current_period_end`,
+    [OWNER, `cus_${OWNER}`, `sub_${OWNER}`, READER_PRICE, start, end],
+  );
   return { start, end };
 }
 
 async function clear(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
 }
@@ -142,7 +138,6 @@ beforeEach(async () => {
 afterEach(clear);
 
 afterAll(async () => {
-  if (!pool) return;
   await pool.query("delete from auth.users where id = $1", [OWNER]).catch(() => {});
   await pool.end();
 });
@@ -153,7 +148,6 @@ describe("the anchor row is created before it is locked", () => {
    * exist, B would sail past A and both would read zero.
    */
   it("a second admission blocks while the first holds the owner's row", async () => {
-    if (!pool) return;
     const a = await pool.connect();
     try {
       await a.query("begin isolation level read committed");
@@ -235,7 +229,6 @@ describe("the entitlement is read under the lock, not handed in", () => {
    * has closed is an uncapped month.
    */
   it("answers `stale` when the stored period has closed", async () => {
-    if (!pool) return;
     await makePaid();
     await pool.query(
       `update spideryarn.billing_accounts
@@ -250,7 +243,6 @@ describe("the entitlement is read under the lock, not handed in", () => {
   });
 
   it("treats a cancelled subscription as free rather than as Reader", async () => {
-    if (!pool) return;
     await makePaid();
     await pool.query("update spideryarn.billing_accounts set status = 'canceled' where owner_id = $1", [
       OWNER,
@@ -290,7 +282,6 @@ describe("releasing a slot that never became a job", () => {
    * charges nothing. The `not exists` in `releaseReservation` is what stops it.
    */
   it("refuses to release a reservation a job is already spending", async () => {
-    if (!pool) return;
     const one = await reserveIngest(OWNER, undefined, PRICES);
     if (one.kind !== "admitted") throw new Error("expected an admission");
 
@@ -352,7 +343,6 @@ describe("the refusal says what a reader needs", () => {
   });
 
   it("carries the period end for a paid account", async () => {
-    if (!pool) return;
     const { end } = await makePaid();
     /* Fill the paid allowance by hand rather than by 100 admissions. */
     await pool.query(
@@ -372,7 +362,6 @@ describe("the refusal says what a reader needs", () => {
 
 describe("the period is half-open", () => {
   it("counts a success at the start instant and not one at the end instant", async () => {
-    if (!pool) return;
     const at = async (when: string) => {
       await pool.query(
         `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)

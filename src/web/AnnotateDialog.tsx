@@ -24,8 +24,8 @@
  *
  * Select a sentence and this appears over the article: the words you chose, a
  * place to say something about them, and two buttons: **Save**, and **Ask AI**
- * if you also want the model's help. **Saving is free**, and so is pressing Ask
- * AI: it saves, and opens the chat composer on those words for you to send.
+ * if you also want the model's help. **Saving is free**. Ask AI saves first,
+ * then sends those words to a new chat as its first question.
  *
  * ## What it replaced, twice
  *
@@ -61,11 +61,13 @@
  * >
  * > — Greg, 2026-10-03 (spya-pnnamg)
  *
- * So the box ends in `Discard … [Ask AI] [Save]`. **Ask AI does exactly what
- * the ticked box plus Save did** — the comment is stored and the chat composer
- * opens pre-filled — and it spends nothing itself: the model is called when the
- * reader sends from that composer. Save is the only submit button, so no key
- * can press Ask AI by accident.
+ * So the box ends in `Discard … [Ask AI] [Save]`. **Ask AI stores the comment
+ * and asks**: the chat opens on the passage with what was written sent as its
+ * first question. Until 2026-10-06 it opened the composer pre-filled and
+ * spent nothing until the reader sent from there; Greg asked that day for
+ * *Ask in chat* everywhere to send on the press, and this is the same shape
+ * (docs/plans/261006j-ask-in-chat-sends-the-question.md, D6). Save is the
+ * only submit button, so no key can press Ask AI by accident.
  * docs/plans/261003i-the-comment-box-never-loses-a-draft-and-ask-ai-is-a-button.md.
  *
  * **Enter inserts a newline.** The old box sent on Enter, and rebinding that to
@@ -78,7 +80,8 @@
  * **An empty box is a bookmark, not an error.** Saving with nothing written is
  * the whole "just mark this passage" case, so the button is never disabled.
  * Ask AI with nothing written asks chat to explain the passage — which is what
- * the old ask box did with an empty composer.
+ * the old ask box did with an empty composer, and since 2026-10-06 it is sent
+ * like any other.
  *
  * ## And a fourth, since 2026-09-01: it is where a referee places a passage
  *
@@ -204,7 +207,7 @@ export interface AnnotateDraft {
   body: string;
   /**
    * **The Ask AI button was pressed.** The caller stores the comment either
-   * way, and opens the chat composer on it as well when this is true. False for
+   * way, and opens a chat on it and asks as well when this is true. False for
    * Save and for every automatic store: nothing but a press on the button that
    * says so may open a conversation.
    */
@@ -693,8 +696,8 @@ export function AnnotateDialog({
             {/* **`type="button"`, and it matters.** Enter in a form presses its
                 first submit button, and this one opens a conversation: the only
                 thing a key may press here is the free Save. It stores the
-                comment and opens the chat composer on it, pre-filled; it sends
-                nothing itself. */}
+                comment first, then sends the passage and those words to a new
+                chat. */}
             <button
               type="button"
               className="annotate-ask-ai"

@@ -202,8 +202,17 @@ export function probeOwner(deps: {
   now?: () => number;
   /** Reads `/proc/<pid>/stat`. Injected so the group-ownership proof can be tested. */
   readProcStat?: (pid: number) => string;
+  /**
+   * Sends a signal to a pid, or to a process group when the pid is negative.
+   * Injected so a test hears only its own owner's signals: a real child's
+   * SIGKILL sweep fires one grace after its exit, on a real timer, and a spy on
+   * the global `process.kill` in a later test heard it (two recorded failures of
+   * tests/fleet-child.test.ts, reproduced 2026-10-06).
+   */
+  kill?: (pid: number, signal: NodeJS.Signals) => void;
 } = {}): ProbeOwner {
   const spawn = deps.spawn ?? nodeSpawn;
+  const kill = deps.kill ?? ((pid: number, signal: NodeJS.Signals) => void process.kill(pid, signal));
   const now = deps.now ?? Date.now;
   const readProcStat = deps.readProcStat ?? ((pid: number) => readFileSync(`/proc/${pid}/stat`, "utf8"));
   const children = new Map<string, TrackedChild>();
@@ -223,7 +232,7 @@ export function probeOwner(deps: {
     // A listener suppresses Node's default termination, so remove it and
     // re-raise after the detached children have received the same signal.
     detachParentSignals();
-    process.kill(process.pid, requested);
+    kill(process.pid, requested);
   }
 
   const onParentInt = (): void => forwardParentSignal("SIGINT");
@@ -346,7 +355,7 @@ export function probeOwner(deps: {
     if (checked.kind === "gone") {
       if (entry.identity.kind === "known" && entry.identity.pgrp === entry.pid) {
         try {
-          process.kill(-entry.pid, requested);
+          kill(-entry.pid, requested);
           entry.signalled.push(requested);
           return (
             `/proc/${entry.pid}/stat no longer exists; sent ${requested} to process group ${entry.pid} ` +
@@ -371,7 +380,7 @@ export function probeOwner(deps: {
     // A negative pid addresses the group proved at spawn; the re-read above
     // proved that the pid still names the same process before we use it.
     try {
-      process.kill(-entry.pid, requested);
+      kill(-entry.pid, requested);
       entry.signalled.push(requested);
       return `sent ${requested} to child process group ${entry.pid} proved at spawn`;
     } catch (cause) {

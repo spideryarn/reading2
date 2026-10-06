@@ -259,21 +259,17 @@ const OWNER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
 /** A second, for the one case about a slug being global rather than an owner's. */
 const OWNER_B = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
 
-if (pool) {
-  await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
-  await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
-  for (const who of [OWNER, OWNER_B]) {
-    await seedAuthUser(pool, { id: who, email: `running-slot-${who}@example.invalid` });
-  }
+await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
+await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
+for (const who of [OWNER, OWNER_B]) {
+  await seedAuthUser(pool, { id: who, email: `running-slot-${who}@example.invalid` });
 }
 
 afterAll(async () => {
   await runLock?.release();
-  if (pool) {
-    await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
-    await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
-    await pool.end();
-  }
+  await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
+  await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
+  await pool.end();
 });
 
 const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "pending" }];
