@@ -495,6 +495,16 @@ cropped and truly described by their alt text, and the numbers in `shots.ts` rig
 
 It also checked the three-note reading of `combineEndings` and agreed with it.
 
+### The gate for stage 3
+
+**The full suite, green**: 1,723 files passed and 1 skipped, 38,360 tests passed and 46 skipped,
+`EXIT=0`, through `scripts/tmux-job.ts` after `npm run build` and `npm run build:fleet`, 72 minutes
+on a busy box (2026-10-06, 10:04 to 11:16 BST). It started on `03c95f935`; the review's fixes and
+the notes were written while it ran, and are docs, one word in a comment and the regenerated
+endings map. Those were covered by `doc-links`, `feedback-endings`, `landing-assets` and
+`learn-panel` run alone afterwards, and again after merging `origin/dev`, with `npm run typecheck`.
+This is also the full run stage 1's done-check asked for and never had on a merged tree.
+
 ### The plan review of stage 3, 2026-10-06 — build with changes
 
 [261005l-learn-stage-3-plan-review-sol.md](261005l-learn-stage-3-plan-review-sol.md), of commit
