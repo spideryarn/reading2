@@ -252,3 +252,21 @@ Sonnet subagent after stages 1 and 2 against a private port, never `:8787`.
   - Focus opens it in jsdom because Floating UI skips its `:focus-visible` test there. That a tap's
     focus does not open it in a real browser is therefore untested here, and is for the browser check
     — as is the placement over the detail pane at desktop and iPad widths.
+- 2026-10-06 — **Stage 2, after the code review and the browser check: F18, F19 and placement.**
+  `Tooltip` gained two optional props, `enabled` and `positionReference`; existing callers pass
+  neither. Tests added to `tests/fleet-session-preview.test.tsx`, none changed.
+  - **F19, focus lost when the two-pane detail closes** — fixed by identity
+    ([postmortem](../postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md)
+    § Fixed). `SessionsPanel` notes which title has focus as it renders and gives it back after the
+    commit if focus fell to `<body>`. Not by keeping the list mounted: the spread layout re-parents
+    cards regardless. The one-pane restore is unchanged and the two share only the lookup — its row
+    comes from what was opened, since at one pane the focused control is the Back button.
+  - **F18, the title button remounting** — `PreviewOn` passes `enabled={when}` instead of returning
+    the bare button. This supersedes the remount bullet in the entry above.
+  - **Placement.** The preview is positioned against the card, not the title button, and is
+    `right-start`: beside the left column, top level with the card. One width, `22rem`, by
+    `.tooltip.session-preview-card`. `Card` takes a `ref`.
+  - Red first: three focus tests (`expected <body> to be <button>`), node identity, `enabled`, and
+    position (`expected 10 to be 362`). The three "does not steal" tests were green from the start
+    and are held by mutation instead.
+  - Not checked in a real browser: all three.

@@ -34,4 +34,21 @@ but would not preserve it across replacement of the whole list.
    unchanged. Also reject extending saved scroll pixels to desktop: their validity is a separate
    question from which surviving row should receive focus.
 
+## Fixed, 2026-10-06
+
+Countermeasures 1 and 2, in `tools/fleet/web/src/SessionsPanel.tsx`. The panel reads which session's
+title has focus as it renders; after the commit, if focus has fallen to `<body>`, it goes back to the
+button with that `data-session`, without scrolling. It never takes focus from anything else, and it
+is separate from the one-pane pixel restore, which keeps its own rules.
+
+Countermeasure 3 was not taken. With nothing selected and more than one band, the list is dealt into
+columns, so cards change parent whatever the surrounding markup does. Keeping the subtree would have
+covered the reported case and left that one.
+
+The local remount went too: `Tooltip` has an `enabled` prop, so a card gaining or losing its preview
+keeps its title button.
+
+Held by `tests/fleet-session-preview.test.tsx` § "keyboard focus across a change of layout", seen red
+before the fix and again with the focus call removed. Not yet checked in a real browser.
+
 Up: [Postmortems](../project/postmortems.md)

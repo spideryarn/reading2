@@ -51,6 +51,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useState,
   type ReactElement,
   type ReactNode,
   type Ref,
@@ -172,33 +173,52 @@ export function headingFor(row: FleetRow): { kind: "own" | "generated" | "name";
  *
  * **`when` is false on a full-width card**, which already shows its option labels, **and
  * on the selected one**, whose detail is the whole right-hand pane. The second
- * is also what closes the preview when its session is clicked: the button loses
- * its `Tooltip`, so the card does not stay over the detail it was a preview of.
+ * is also what closes the preview when its session is clicked, so the card does
+ * not stay over the detail it was a preview of.
  *
- * **The cost, stated: `when` changing REMOUNTS the button**, because `Tooltip`
- * cannot be switched off in place. A selection
- * moves focus to the detail (§ `detailRef`), and closing one finds the row
- * again at one pane by `data-session` after the commit (§ `openFromList`). A ref held
- * to that node across a selection would point at a detached element.
+ * **`when` switches the `Tooltip` off; it does not take it away.** Until
+ * 2026-10-06 it returned the bare button, which moved the button in the tree
+ * and so rebuilt it every time a selection changed which cards were eligible
+ * (GPT Sol's F18). The button is now the same node either way.
  *
- * `placement="right"`: the column is at the left edge, and above or below
- * would cover the neighbouring cards the pointer is travelling along.
+ * **Beside the CARD, not beside the title.** The button is only as wide as its
+ * text, so a preview anchored to it opened over the middle of the card it
+ * describes and the two below it — measured in a browser at x 219–545 for a
+ * card spanning 12–352. `card` is the element it is drawn against; hover and
+ * focus are still the button's.
+ *
+ * `placement="right-start"`: the column is at the left edge, and above or below
+ * would cover the neighbouring cards the pointer is travelling along. `-start`
+ * so its top is level with the card's, whatever their two heights. It fits
+ * wherever it exists: two panes need 740px (fit.ts) and the card's right edge
+ * plus the gap, the preview and the margin is 724.
+ *
+ * `session-preview-card` is this card's width — tailwind.css, beside `.tooltip`.
  */
 function PreviewOn({
   row,
   heading,
   when,
+  card,
   children,
 }: {
   row: FleetRow;
   heading: string;
   when: boolean;
+  /** The session card's own element, once it is on the page. */
+  card: Element | null;
   /** The title button. `Tooltip` needs one element that takes a ref, which a `<button>` does. */
   children: ReactElement<Record<string, unknown>>;
 }): ReactNode {
-  if (!when) return children;
   return (
-    <Tooltip content={<SessionPreview row={row} heading={heading} />} placement="right" mouseOnly>
+    <Tooltip
+      content={<SessionPreview row={row} heading={heading} />}
+      placement="right-start"
+      mouseOnly
+      enabled={when}
+      positionReference={card}
+      className="session-preview-card"
+    >
       {children}
     </Tooltip>
   );
@@ -225,9 +245,13 @@ function SessionCard({
      and there is nothing to show rather than something to apologise for. */
   const dir = row.meta.version === 1 ? row.meta.dir : null;
   const heading = headingFor(row);
+  /* State rather than a ref object: the preview has to hear when the element
+     arrives, and a ref filling in tells nobody. § `PreviewOn`. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
 
   return (
     <Card
+      ref={setCard}
       className={cx(
         "session-card tw:mb-2 tw:border-l-4 tw:p-3",
         tone.edge,
@@ -265,7 +289,7 @@ function SessionCard({
       </div>
 
       <h3 className="tw:mt-1.5 tw:leading-snug tw:font-medium tw:break-words">
-        <PreviewOn row={row} heading={heading.text} when={compact && !selected}>
+        <PreviewOn row={row} heading={heading.text} when={compact && !selected} card={card}>
           <button
             type="button"
             className={cx(
@@ -281,8 +305,9 @@ function SessionCard({
               heading.kind === "name" && "tw:text-ink-faint",
             )}
             aria-current={selected ? "true" : undefined}
-            /* How the list finds this row again to hand focus back when the
-               one-pane detail closes — § `openFromList`. */
+            /* How the list finds this row again to hand focus back — when the
+               one-pane detail closes (§ `openFromList`), and when the list is
+               rebuilt under the reader (§ `titleButton`). */
             data-session={row.id}
             onClick={() => onSelect(row.id)}
           >
@@ -510,7 +535,23 @@ function ListControls({
   );
 }
 
-export type SessionsPanelHandle = { openFromList: (id: string) => void };
+/** A session's title button, wherever in the list it is drawn now. `SessionCard` writes the `data-session`. */
+function titleButton(id: string): HTMLElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>("button.session-open")).find(
+      (button) => button.dataset["session"] === id,
+    ) ?? null
+  );
+}
+
+/** The session whose title button has focus at this moment, if one does. */
+function focusedTitleId(): string | null {
+  const active = typeof document === "undefined" ? null : document.activeElement;
+  if (!(active instanceof HTMLElement) || !active.matches("button.session-open")) return null;
+  return active.dataset["session"] ?? null;
+}
+
+export type SessionsPanelHandle ={ openFromList: (id: string) => void };
 
 export function SessionsPanel({
   ref: selectionRef,
@@ -795,13 +836,55 @@ export function SessionsPanel({
     }
     if (selectedId !== null) return;
     listScroll.current = null;
-    const opener = Array.from(document.querySelectorAll<HTMLElement>("button.session-open"))
-      .find((button) => button.dataset["session"] === saved.id);
-    if (opener === undefined) return;
+    const opener = titleButton(saved.id);
+    if (opener === null) return;
     // An ordering or membership change invalidates pixels, not a surviving row's focus.
     opener.focus({ preventScroll: true });
     if (saved.listKey === listKey) window.scrollTo(0, saved.y);
   }, [selectedId, selectedPid, panes, listKey, tmuxServerPid]);
+
+  /**
+   * **A ROW THAT HAD FOCUS KEEPS IT WHEN THE LIST IS REBUILT UNDER IT.**
+   *
+   * The list is drawn in three places below — beside the detail, dealt into
+   * columns, or alone in one — and going from one to another gives every title
+   * button a new node. The reader's place is a session and survives; the
+   * browser's is a node and does not, so focus falls to `<body>` and the next
+   * Tab starts from the top of the page. Closing the two-pane detail with Back
+   * is the case that was found (GPT Sol's F19); a window crossing a column
+   * threshold is the same one.
+   * docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
+   *
+   * **By identity, and separate from the pixels above**, which belong to one
+   * width and ordering and are thrown away when either changes. Which row had
+   * focus has no such expiry.
+   *
+   * **It gives focus back; it never takes it.** Two conditions, both needed: a
+   * title had focus as this render began, and nothing has it once the commit is
+   * done. So a reader who moved to another control keeps it, and opening a
+   * session still ends in the detail — `detailRef` runs first, inside the same
+   * commit, and by then focus is not on `<body>`. It cannot meet the one-pane
+   * restore above either: that one runs when the list was NOT on the page, so no
+   * title could have been focused.
+   *
+   * **Read during render, because nothing later can know.** The alternative is
+   * a note kept by `focus` and `blur` listeners, and whether a node removed from
+   * the document is sent a `blur` is not something to build on: jsdom sends
+   * none, and a browser that did would clear the note at the one moment it is
+   * wanted, silently. What had focus just before React replaced it is only on
+   * record here.
+   *
+   * No dependency list: it has to run after every commit, since any of them may
+   * be the one that moved the list. A row that has left the list is not found,
+   * and focus stays where the browser put it.
+   */
+  const focusedTitle = focusedTitleId();
+  useLayoutEffect(() => {
+    if (focusedTitle === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    titleButton(focusedTitle)?.focus({ preventScroll: true });
+  });
 
   const detail =
     selectedId === null ? null : wrongWorld ? (

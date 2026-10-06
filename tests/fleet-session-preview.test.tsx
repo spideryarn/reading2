@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../tools/fleet/web/src/App";
 import type { FeedApi, FeedView } from "../tools/fleet/web/src/feed-client";
 import { PREVIEW_OPTION_CAP, PREVIEW_TEXT_CAP, SessionPreview } from "../tools/fleet/web/src/SessionPreview";
+import { Tooltip } from "../tools/fleet/web/src/Tooltip";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import { parseFleetState, type FleetRow, type FleetState } from "../tools/fleet/web/src/types";
 
@@ -460,5 +461,248 @@ describe("preview bounds at the complete surface", () => {
     contentHeight = 400;
     await act(async () => notify([], {} as ResizeObserver));
     expect(host.querySelector("[data-preview-overflow]")).not.toBeNull();
+  });
+});
+
+/** Navigate by the hash, which is what the browser's Back does to this page. */
+async function goTo(hash: string): Promise<void> {
+  await act(async () => {
+    window.location.hash = hash;
+    await tick();
+  });
+}
+
+/**
+ * **The reader's place in the list is a session, not a DOM node.**
+ *
+ * Closing the two-pane detail moves the list under a different ancestor, so
+ * every title button is a new node and the focused one takes focus to `<body>`
+ * with it. docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
+ */
+describe("keyboard focus across a change of layout", () => {
+  it("stays on the focused row when the two-pane detail closes", async () => {
+    pinWidth(1280);
+    await mountApp();
+    await click(rowButton("$a"));
+    const before = rowButton("$b");
+    await act(async () => before.focus());
+    expect(document.activeElement).toBe(before);
+
+    await goTo("#sessions");
+    // The premise: the detail is gone and the list was rebuilt, not merely kept.
+    expect(host.querySelector('section[aria-label="The selected session"]')).toBeNull();
+    expect(rowButton("$b")).not.toBe(before);
+    expect(document.activeElement).toBe(rowButton("$b"));
+  });
+
+  it("stays on the SELECTED row's title when its own detail closes", async () => {
+    pinWidth(1280);
+    await mountApp();
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$a").focus());
+
+    await goTo("#sessions");
+    expect(document.activeElement).toBe(rowButton("$a"));
+  });
+
+  it("stays on the focused row when the list is dealt into columns instead", async () => {
+    pinWidth(1280);
+    // Two bands, so with nothing selected the list is spread: a third ancestry.
+    await mountApp({ status: { kind: "needs-you" }, question: question(ASKING, LABELS) });
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$b").focus());
+
+    await goTo("#sessions");
+    expect(document.activeElement).toBe(rowButton("$b"));
+  });
+
+  it("does not take focus from a control the reader moved to", async () => {
+    pinWidth(1280);
+    await mountApp();
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$b").focus());
+    const order = host.querySelector<HTMLSelectElement>('select[aria-label="Order the session list"]');
+    if (order === null) throw new Error("no ordering control on the page");
+    await act(async () => order.focus());
+
+    await goTo("#sessions");
+    expect(document.activeElement).toBe(order);
+  });
+
+  it("does not put focus on a row when it was inside the detail that closed", async () => {
+    pinWidth(1280);
+    const push = await mountApp();
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$b").focus());
+    /* A poll lands while the row has focus, so the page has rendered with it
+       there — which is what a version that REMEMBERED the last focused row,
+       rather than asking which one has focus now, would need to go wrong. */
+    await act(async () => push([sessionRow("$a", "alpha"), sessionRow("$b", "beta")]));
+    expect(document.activeElement).toBe(rowButton("$b"));
+    const box = host.querySelector<HTMLElement>(
+      'section[aria-label="The selected session"] :is(button, textarea, input):not([disabled])',
+    );
+    if (box === null) throw new Error("the detail has no control to focus");
+    await act(async () => box.focus());
+    expect(document.activeElement).toBe(box);
+
+    await goTo("#sessions");
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("still moves focus INTO the detail when a focused row is opened", async () => {
+    pinWidth(1280);
+    await mountApp();
+    // From the full-width list: opening rebuilds the list under the two-pane grid.
+    await act(async () => rowButton("$b").focus());
+    await click(rowButton("$b"));
+    const region = host.querySelector<HTMLElement>('section[aria-label="The selected session"]');
+    expect(region).not.toBeNull();
+    expect(document.activeElement).toBe(region);
+
+    // And from the left-hand column, where nothing is rebuilt.
+    await act(async () => rowButton("$a").focus());
+    await click(rowButton("$a"));
+    expect(document.activeElement).toBe(region);
+  });
+
+  it("leaves focus alone, and does not throw, when the focused row has left the list", async () => {
+    pinWidth(1280);
+    const push = await mountApp();
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$b").focus());
+
+    await act(async () => {
+      push([sessionRow("$a", "alpha")]);
+      window.location.hash = "#sessions";
+      await tick();
+    });
+    expect(host.querySelectorAll("button.session-open")).toHaveLength(1);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("returns to the opened row at one pane, as it did, with the scroll put back", async () => {
+    pinWidth(390);
+    const scrollTo = vi.fn();
+    vi.stubGlobal("scrollTo", scrollTo);
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 640 });
+    try {
+      await mountApp();
+      await click(rowButton("$b"));
+      expect(host.querySelectorAll("button.session-open")).toHaveLength(0);
+
+      await goTo("#sessions");
+      expect(document.activeElement).toBe(rowButton("$b"));
+      expect(scrollTo).toHaveBeenCalledWith(0, 640);
+    } finally {
+      Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    }
+  });
+});
+
+describe("a card gaining or losing its preview", () => {
+  it("keeps the same title button node on both cards when the selection moves", async () => {
+    pinWidth(1280);
+    await mountApp({ status: { kind: "needs-you" }, question: question(ASKING, LABELS) });
+    await click(rowButton("$a"));
+    const alpha = rowButton("$a");
+    const beta = rowButton("$b");
+
+    // beta loses its preview and alpha gains one.
+    await click(beta);
+    expect(rowButton("$b").getAttribute("aria-current")).toBe("true");
+    expect(rowButton("$b")).toBe(beta);
+    expect(rowButton("$a")).toBe(alpha);
+
+    // …and the one that gained it has a working one, on the node it already had.
+    await hover(alpha);
+    expect(openPreview().textContent).toContain("alpha");
+  });
+
+  it("does not open on the selected card under hover or focus, and describes it by nothing", async () => {
+    pinWidth(1280);
+    await mountApp();
+    await click(rowButton("$a"));
+    await click(rowButton("$b"));
+    // alpha has been eligible and is not now; beta the reverse.
+    await click(rowButton("$a"));
+
+    const el = rowButton("$a");
+    await hover(el);
+    expect(preview()).toBeNull();
+    await act(async () => el.focus());
+    await wait();
+    expect(preview()).toBeNull();
+    expect(document.querySelector(".tooltip-anchor")).toBeNull();
+    expect(el.getAttribute("aria-describedby")).toBeNull();
+  });
+});
+
+describe("Tooltip § enabled", () => {
+  it("keeps the trigger's node and opens nothing while false, then works on the same node", async () => {
+    const render = (enabled: boolean): Promise<void> =>
+      act(async () =>
+        root.render(
+          <Tooltip content={<span className="probe">the card</span>} enabled={enabled}>
+            <button type="button">trigger</button>
+          </Tooltip>,
+        ),
+      );
+    await render(false);
+    const trigger = host.querySelector("button");
+    if (trigger === null) throw new Error("no trigger rendered");
+
+    await hover(trigger);
+    expect(document.querySelector(".tooltip")).toBeNull();
+    await act(async () => trigger.focus());
+    await wait();
+    expect(document.querySelector(".tooltip")).toBeNull();
+    expect(trigger.getAttribute("aria-describedby")).toBeNull();
+    await act(async () => trigger.blur());
+
+    await render(true);
+    expect(host.querySelector("button")).toBe(trigger);
+    await hover(trigger);
+    expect(document.querySelector(".tooltip .probe")).not.toBeNull();
+    expect(trigger.getAttribute("aria-describedby")).not.toBeNull();
+
+    // Switched off while open: it closes rather than staying up with no way to dismiss it.
+    await render(false);
+    await wait();
+    expect(document.querySelector(".tooltip")).toBeNull();
+    expect(trigger.getAttribute("aria-describedby")).toBeNull();
+    expect(host.querySelector("button")).toBe(trigger);
+  });
+});
+
+describe("where the preview is drawn", () => {
+  /**
+   * jsdom lays nothing out, so every box is 0×0 at the origin unless a test
+   * says otherwise. This one gives the CARD a box and leaves the title button
+   * without one, then reads where Floating UI put the panel: beside the card's
+   * right edge, level with its top. Anchored to the button it would be at
+   * x = 10 (the offset alone), which is what this was before.
+   */
+  it("sits beside the card's right edge and level with its top, not beside the title text", async () => {
+    pinWidth(1280);
+    const height = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+    Object.defineProperty(Element.prototype, "clientHeight", { configurable: true, get: () => 800 });
+    try {
+      await mountApp({ status: { kind: "needs-you" }, question: question(ASKING, LABELS) });
+      await click(rowButton("$a"));
+      const card = rowButton("$b").closest<HTMLElement>(".session-card");
+      if (card === null) throw new Error("the title is not inside a card");
+      card.getBoundingClientRect = () => new DOMRect(12, 100, 340, 80);
+
+      await hover(rowButton("$b"));
+      openPreview();
+      const anchor = document.querySelector<HTMLElement>(".tooltip-anchor");
+      const at = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(anchor?.style.transform ?? "");
+      if (at === null) throw new Error(`no position on the panel: ${anchor?.getAttribute("style")}`);
+      expect(Number(at[1])).toBe(12 + 340 + 10);
+      expect(Number(at[2])).toBe(100);
+    } finally {
+      if (height) Object.defineProperty(Element.prototype, "clientHeight", height);
+    }
   });
 });
