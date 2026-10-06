@@ -44,7 +44,8 @@ vi.mock("../src/web/lib/api.js", () => ({
   failure: async (res: Response) => new Error(await res.text()),
 }));
 
-vi.mock("../src/web/router.js", () => ({
+vi.mock("../src/web/router.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/web/router.js")>(),
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
   navigate: vi.fn(),
 }));
@@ -1679,6 +1680,8 @@ describe("the Earlier tab", () => {
     "/\t/elsewhere.example/read/x",
     "/\n/elsewhere.example/read/x",
     "/read/x\\..\\y",
+    "/read/x?mode=search",
+    "/read/x#spya-tgnssb",
     "javascript:alert(1)",
     "read/x",
     "",
@@ -1721,8 +1724,12 @@ describe("the Earlier tab", () => {
     const before = location.pathname + location.search;
     afterEach(() => history.replaceState(null, "", before));
 
-    it("closes the dialog and leaves the page where it is", async () => {
-      history.replaceState(null, "", "/read/why-trees-spya-k3m9qt?mode=glossary&at=spya-tgnssb");
+    it.each([
+      "/read/why-trees-spya-k3m9qt",
+      "/read/why-trees-spya-k3m9qt/",
+      "/read/%77hy-trees-spya-k3m9qt",
+    ])("closes the dialog and leaves the page where it is at %s", async (path) => {
+      history.replaceState(null, "", `${path}?mode=glossary&at=spya-tgnssb`);
       listAnswer = page(REPORTS);
       const harness = mountControlledHarness();
       click(tab("Earlier"));
@@ -1740,6 +1747,7 @@ describe("the Earlier tab", () => {
       ["another paragraph", "/read/why-trees-spya-k3m9qt?at=spya-k3m9qt"],
       ["no paragraph", "/read/why-trees-spya-k3m9qt"],
       ["another article", "/read/another-piece?at=spya-tgnssb"],
+      ["the article's metadata page", "/read/why-trees-spya-k3m9qt/metadata?at=spya-tgnssb"],
     ])("still follows the link from %s", async (_name, here) => {
       history.replaceState(null, "", here);
       listAnswer = page(REPORTS);

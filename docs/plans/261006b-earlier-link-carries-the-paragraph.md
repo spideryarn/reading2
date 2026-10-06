@@ -55,7 +55,7 @@ a newer tab during a rollback) reads as `at: null`, the way a missing `page` alr
 
 **A reader already on that page at that paragraph stays where they are** (added after the plan
 review, P1-F1 below). An ordinary click closes the dialog and does nothing else when the address
-bar's path is the row's `page` and its `at` is the row's `at`. Without this, the app's `navigate`
+bar names the row's reading page and its `at` is the row's `at`. Without this, the app's `navigate`
 scrolls to the top, and the reading view moves to `?at=` only when its value changes, so the link
 would lose the very place it names.
 
@@ -130,3 +130,38 @@ One stage, as planned, plus the stay-put rule from P1-F1.
   `at`; any page keeping it; the public shelf keeping it; the last repeated `at` winning; the
   client not checking `at`; the client allowing `at` with no page; the `href` dropping `at`; a
   missing `at` not read as null; the route not passing `at` on.
+
+## Code review corrections
+
+Review of `d00983da54590b62ec31c58b3eb9850225cc9d26`, 2026-10-06:
+
+- **C-F1 (P1, established, fixed):** the router recognises a trailing slash and an encoded slug
+  as the same article, but the address keeps that spelling. Comparing path text missed the
+  stay-put case. The click now asks `parseRoute` and `readHref` for reading-page identity.
+- **C-F2 (P2, established, fixed):** the client accepted a `page` containing `?` or `#`. The
+  server never emits these labels, but appending `?at=` to such a malformed answer would not
+  produce the intended reading-position query. The path validator now refuses both delimiters.
+
+Four added regression cases were observed failing before either fix: two malformed labels were
+rendered, and two equivalent current-page spellings called `navigate`. The tests also keep
+navigation from the article's Metadata page distinct from staying on its reading page.
+Root cause: [a URL guard checked spelling instead of its consumer's meaning](../postmortems/261006b-a-url-guard-checked-its-spelling-instead-of-the-consumers-meaning.md).
+
+**C-F3 (P1, reasoned, wider finding):** the stay-put rule still trusts the address's `at`, whose
+scroll write is debounced by 300 ms (`atParam` in `src/web/params.ts`). Crossing a section boundary
+and activating a matching Earlier link before that write lands can therefore close the dialog
+without returning to the named section. A fix would need the live reading position and must
+coordinate with its pending URL write; changing only this comparison does not settle both.
+This review did not reproduce that interaction with the real reading-position hook. The plan's
+intentional retention of the exact spot *within* a section is separate and remains intentional.
+
+**C-F3 is left as it is, and why.** Sol did not reproduce it and its verdict was *accept*. To reach
+it a reader must cross a section boundary, open the Feedback dialog, switch to Earlier, wait for the
+list to be read from the server and click a row whose `at` equals the stale address, all inside
+300 ms; and the dialog is modal, so the page does not scroll once it is open. If it ever happened
+the cost is that the reader stays where they are, one section on. The fix would tie the dialog to
+the reading view's live position, which is more parts than the case is worth.
+
+The fixes above are Sol's own (the code review ran write-capable); I read the diff, re-ran the four
+feedback test files, `tests/doc-links.test.ts` and the typecheck, and committed them. Its answer is
+[here](261006b-earlier-link-carries-the-paragraph-code-review-sol.md).

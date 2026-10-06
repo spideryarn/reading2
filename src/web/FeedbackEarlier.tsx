@@ -59,6 +59,7 @@ import {
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
+import { parseRoute, readHref } from "./router.js";
 
 export type EarlierState =
   | { kind: "idle" }
@@ -74,13 +75,14 @@ const IDLE: EarlierStates = { all: { kind: "idle" }, shipped: { kind: "idle" }, 
  * **A path on this site, and nothing a browser could read as leaving it** —
  * the page label is an `href` since spya-tqk7au. One leading slash, then no
  * second slash or backslash (`//host` and `/\host` are both another origin to
- * a browser), and no backslash, whitespace or control character anywhere. The
- * server only ever sends such a path (src/feedback-page.ts); this is the
+ * a browser), and no backslash, whitespace or control character anywhere.
+ * Query and fragment delimiters are refused too: `at` is added separately.
+ * The server only ever sends such a path (src/feedback-page.ts); this is the
  * second line, so a wrong value fails the answer instead of becoming a link.
  */
 function isSitePath(value: unknown): value is string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them is the point
-  return typeof value === "string" && /^\/(?![/\\])[^\\\s\u0000-\u001f\u007f]*$/.test(value);
+  return typeof value === "string" && /^\/(?![/\\])[^\\?#\s\u0000-\u001f\u007f]*$/.test(value);
 }
 
 /**
@@ -400,9 +402,13 @@ export function EarlierList({
                              moves to `?at=` only when it changes, so following
                              the link from here would lose the place it names
                              (GPT Sol's plan review of 261006b, P1-F1). */
+                          /* Ask the router which article this is: a trailing
+                             slash or an encoded slug is the same reading page. */
+                          const route = parseRoute(location.pathname);
                           if (
                             report.at !== null &&
-                            location.pathname === report.page &&
+                            route.kind === "read" && route.view === "article" &&
+                            readHref(route.slug) === report.page &&
                             new URLSearchParams(location.search).get("at") === report.at
                           ) event.preventDefault();
                         }}
