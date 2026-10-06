@@ -29,7 +29,7 @@
  * No animation under `prefers-reduced-motion`: the stylesheet only animates
  * inside `(prefers-reduced-motion: no-preference)` (feedback.css § the toast).
  */
-import { useEffect, useRef, useState } from "react";
+import { type FocusEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 
 /** About five seconds — long enough to read two short sentences. */
@@ -55,48 +55,63 @@ export function Toast({
   );
 }
 
-function ToastCard({ text, onDismiss }: { text: string; onDismiss(): void }) {
+/**
+ * **The clock of a thing that goes by itself, and not while it is being read.**
+ * It calls `onGone` after `ms`; it stops while a pointer is over the element
+ * or focus is inside it, and resumes with only the time that was left. Spread
+ * what it returns on the element.
+ *
+ * Shared by the toast and Marginalia's narrow-window line
+ * (marginalia/MarginaliaColumn.tsx § `NarrowLine`), so there is one clock.
+ *
+ * **Pointer events, and a finger does not count as hovering.** A tap fires the
+ * hover family too, and nothing need say it has left until the next tap
+ * elsewhere, so a touch that stopped the clock could stop it for good
+ * (docs/project/touch.md § a lift fires the hover events too; GPT Sol's F4 on
+ * plan 261006i). A finger that wants it gone has the close button.
+ */
+export function useGoesByItself(ms: number, onGone: () => void) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const paused = hovered || focused;
 
   /* The latest callback, so a parent re-rendering with a fresh closure does not
      restart the clock. */
-  const dismiss = useRef(onDismiss);
-  dismiss.current = onDismiss;
+  const gone = useRef(onGone);
+  gone.current = onGone;
 
   /** What is left on the clock; spent down each time it is paused. */
-  const remaining = useRef(TOAST_MS);
+  const remaining = useRef(ms);
   useEffect(() => {
     if (paused) return;
     const startedAt = Date.now();
-    const timer = setTimeout(() => dismiss.current(), remaining.current);
+    const timer = setTimeout(() => gone.current(), remaining.current);
     return () => {
       clearTimeout(timer);
       remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt));
     };
   }, [paused]);
 
+  return {
+    onPointerEnter: (e: PointerEvent<HTMLElement>) => {
+      if (e.pointerType !== "touch") setHovered(true);
+    },
+    onPointerLeave: () => setHovered(false),
+    onFocus: () => setFocused(true),
+    onBlur: (e: FocusEvent<HTMLElement>) => {
+      /* Focus moving between two things inside the element is not leaving it. */
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+    },
+  };
+}
+
+function ToastCard({ text, onDismiss }: { text: string; onDismiss(): void }) {
+  const reading = useGoesByItself(TOAST_MS, onDismiss);
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: the pointer and focus handlers only pause the clock while the card is being read; they do nothing a reader acts on, and the one control inside is a real button.
-    <div
-      className="toast"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(e) => {
-        /* Focus moving between two things inside the card is not leaving it. */
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
-      }}
-    >
+    <div className="toast" {...reading}>
       <Check className="toast-icon" size={16} aria-hidden="true" />
       <p className="toast-text">{text}</p>
-      <button
-        type="button"
-        className="toast-close"
-        aria-label="Dismiss"
-        onClick={() => dismiss.current()}
-      >
+      <button type="button" className="toast-close" aria-label="Dismiss" onClick={onDismiss}>
         <X size={14} aria-hidden="true" />
       </button>
     </div>

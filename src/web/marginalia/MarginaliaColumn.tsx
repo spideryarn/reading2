@@ -23,7 +23,8 @@ import {
   useLayoutEffect,
   useState,
 } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
@@ -581,17 +582,7 @@ export function MarginaliaHead({
   arc: string | null;
 }) {
   useRenderCount("MarginaliaHead");
-  if (!room) {
-    return (
-      <aside className="marg-narrow" aria-label="Marginalia">
-        <p>
-          {beside
-            ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
-            : "The notes need a wider window — they sit to the right of the text."}
-        </p>
-      </aside>
-    );
-  }
+  if (!room) return <NarrowLine beside={beside} />;
   if (path.length === 0 && arc === null) return null;
   /* **Orientation, not a summary**: the arc cut at four (261002g), the whole of it in a
      card on hover, focus or tap. A head that grew to the arc's full six or
@@ -619,6 +610,47 @@ export function MarginaliaHead({
         </p>
       )}
       {arc !== null && <ArcLine arc={arc} />}
+    </aside>
+  );
+}
+
+/**
+ * **The line that says there is no room for the notes.** It goes by itself
+ * after a few seconds, or at once on its ×, because it sits over the foot of
+ * the article — Greg, spya-u264yb: *"there's no way to dismiss it, and it
+ * doesn't fade after a few seconds."*
+ *
+ * **Nothing is remembered.** "Gone" is this component's own state, so the line
+ * shows again each time it is mounted afresh: Marginalia switched off and on,
+ * the room found and lost again, a covering band closed. That keeps its job —
+ * a mode that silently drew nothing would look broken.
+ *
+ * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
+ * the small-screen banner while this element exists
+ * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
+ * it would drop that banner into the top of the article mid-read. And the
+ * sentence is only made invisible, not hidden, so a screen reader still finds
+ * why there are no notes, as it did before this could fade.
+ * docs/plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md
+ */
+function NarrowLine({ beside }: { beside: boolean }) {
+  const [gone, setGone] = useState(false);
+  const reading = useGoesByItself(TOAST_MS, () => setGone(true));
+  return (
+    <aside className={`marg-narrow${gone ? " is-gone" : ""}`} aria-label="Marginalia" {...reading}>
+      <p>
+        {beside
+          ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
+          : "The notes need a wider window — they sit to the right of the text."}
+      </p>
+      <button
+        type="button"
+        className="marg-narrow-close close-x"
+        aria-label="Dismiss"
+        onClick={() => setGone(true)}
+      >
+        <X aria-hidden="true" />
+      </button>
     </aside>
   );
 }

@@ -73,11 +73,13 @@ describe("Toast", () => {
   it("waits while the pointer is over it, and only counts the time that is left", () => {
     render({ id: 1, text: "Thank you." });
     act(() => vi.advanceTimersByTime(2000));
-    act(() => card()?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    /* Pointer events since 261006i: the clock is `useGoesByItself`, which
+       ignores a finger (tests/marginalia-narrow-notice.test.tsx). */
+    act(() => card()?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })));
     act(() => vi.advanceTimersByTime(60_000));
     expect(dismissed, "it went while being read").toBe(0);
 
-    act(() => card()?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })));
+    act(() => card()?.dispatchEvent(new PointerEvent("pointerout", { bubbles: true, pointerType: "mouse" })));
     act(() => vi.advanceTimersByTime(TOAST_MS - 2000 - 1));
     expect(dismissed).toBe(0);
     act(() => vi.advanceTimersByTime(1));

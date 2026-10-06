@@ -1736,6 +1736,29 @@ describe("the notes beside a band", () => {
     expect(line()).toContain("swap them in for the panel");
   }, PHASE_MS);
 
+  /* The line can be dismissed and goes by itself (spya-u264yb, 261006i; its
+     clock is in tests/marginalia-narrow-notice.test.tsx). What only the page
+     can show is that it is drawn afresh, so shown again, when a band that
+     covered the window is closed: under a covering band there is no line at
+     all. 590px is under the 612 the notes need alone (GPT Sol's F2). */
+  it("shows the line again, with its Dismiss, when a covering band is closed", async () => {
+    await atWidth(590, "?margin=1");
+    const dismiss = host.querySelector<HTMLButtonElement>(".marg-narrow button[aria-label='Dismiss']");
+    expect(dismiss, "the line has no way to be dismissed").not.toBeNull();
+    await act(async () => dismiss?.click());
+    expect(host.querySelector(".marg-narrow.is-gone"), "Dismiss did nothing").not.toBeNull();
+
+    await press("glossary");
+    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+    expect(line(), "a line was drawn over a covering band").toBeNull();
+
+    /* A second press closes the band. Not Plain, which closes the notes too. */
+    await press("glossary");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(line()).toContain("they sit to the right of the text");
+    expect(host.querySelector(".marg-narrow.is-gone"), "the line came back already gone").toBeNull();
+  }, PHASE_MS);
+
   /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
      the other"*. Pressing a band already wins; this is pressing the notes
      (261001k). */

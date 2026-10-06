@@ -21,6 +21,9 @@ const CLOSES: ReadonlyArray<readonly [string, string]> = [
   ["FeedbackDialog.tsx", "fb-close"],
   ["Lightbox.tsx", "lightbox-close"],
   ["Dock.tsx", "dock-close"],
+  /* Not a modal or a panel, but a cross a finger has to hit at tablet widths
+     (GPT Sol's F5 on plan 261006i). */
+  ["marginalia/MarginaliaColumn.tsx", "marg-narrow-close"],
 ];
 
 /* Comments out, or the one above a rule becomes part of its selector. */

@@ -386,7 +386,10 @@ p.marg-shut {
   width: max-content;
   max-width: min(22rem, calc(100vw - 2rem));
   box-sizing: border-box;
-  padding: 0.4rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
   background: var(--page);
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -398,5 +401,34 @@ p.marg-shut {
   -webkit-user-select: none;
 }
 .marg-narrow p {
+  flex: 1;
   margin: 0;
+}
+/* Its size is `.close-x`'s (close.css), so a finger can hit it on an iPad,
+   which is where this line is mostly seen. tests/close-cross.test.ts. */
+.marg-narrow-close {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.marg-narrow-close:hover { color: var(--ink); }
+.marg-narrow-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
+/* **Gone after a few seconds, or on its ×** (MarginaliaColumn.tsx §
+   `NarrowLine`). The element stays, because narrow-window.css hides the
+   small-screen banner while it exists. The box is made invisible rather than
+   hidden, so a screen reader still finds the sentence; only the button, which
+   would otherwise be an invisible tab stop, is hidden outright. */
+.marg-narrow.is-gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.marg-narrow.is-gone .marg-narrow-close {
+  visibility: hidden;
+}
+/* The fade, only for a reader who has not asked for less movement
+   (feedback.css § the toast has the reason). */
+@media (prefers-reduced-motion: no-preference) {
+  .marg-narrow { transition: opacity 400ms ease-out; }
 }
