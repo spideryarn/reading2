@@ -1,11 +1,23 @@
 /** Guard the recording/counting claims corrected in the 261006b stage 2 review. */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FAILURE_NOTES } from "../src/cost-cube.js";
+import { FAILURE_DEFINITIONS, FAILURE_NOTES } from "../src/cost-cube.js";
 
 const doc = (name: string) => readFileSync(new URL(`../docs/project/${name}.md`, import.meta.url), "utf8").replace(/\s+/g, " ");
 
 describe("the failure docs' claims", () => {
+  it("does not equate a recognised deadline with this attempt's elapsed time", () => {
+    const copy = [FAILURE_DEFINITIONS, FAILURE_NOTES.join(" "), doc("admin-costs"), doc("ai-gateway")];
+    for (const text of copy) {
+      expect(text).not.toContain("the whole call had taken too long");
+      expect(text).not.toContain("any time limit on the call running out");
+      expect(text).not.toContain("a time limit on the call ran out");
+      expect(text).toContain("turn or a processing step");
+    }
+    const page = readFileSync(new URL("../src/web/AdminCostsPage.tsx", import.meta.url), "utf8");
+    expect(page).not.toContain("the whole call had taken too long");
+  });
+
   it("does not say every pre-answer failure is retried or every accepted failure is never retried", () => {
     const admin = doc("admin-costs");
     expect(admin).not.toContain("A call that fails before its answer began is asked again");

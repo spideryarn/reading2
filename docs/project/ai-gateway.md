@@ -74,7 +74,7 @@ having happened with a cost of `null`, and counted as unpriced rather than as fr
 is the whole point and an earlier version of this sentence lost it by saying "every one of them
 records what it cost" — which is the claim a spend report would then be built on.
 
-Since 2026-08-28 "recorded" also means **kept** — a row per call, in Postgres or in a JSONL file, and
+Since 2026-08-28 "recorded" also means **kept** — a row per call, in Postgres, and
 `npm run cost` reads them back. See [what every call is written down as](#what-every-call-is-written-down-as).
 
 > Presumably we want to do this in a way that's reusable (i.e. whenever we make an AI call, we do it
@@ -808,15 +808,34 @@ the names do not say:
   can sit in a table that holds no prose.
 
 **What the columns cannot say.** `attempt` is null on a call made with `retryTransport: false`
-(below), so the PDF reader's and the embeddings' own retries are not counted. And a stall is not
-told apart from a Stop: when our own clock stops a provider that has gone silent, the row is
-`aborted` with no failure fields when no provider error was already observed, because the stall
-reason is made in many runners and has the same shape as a reader's Stop. On an OpenRouter stream,
-an in-band provider error already observed remains an error even if a later body read aborts (the F9 fix).
+(below), so the PDF reader's and the embeddings' own retries are not counted.
+
+**An `aborted` row says who stopped it** (since 2026-10-06,
+[261006d](../plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md)). Its
+`failure_class` is `stall` when our stall clock stopped a provider that had gone silent, `deadline`
+when a recognised deadline expired while the attempt was active, and `abort` for anything else,
+a reader's Stop included. A deadline can cap one call, a turn or a processing step; it does not
+establish how long that particular provider request ran.
+`failure_phase` and `failure_status` are filled as on an error, and `outcome` stays `aborted`.
+`abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things it
+does not tell apart:
+
+- **The pipeline's deadline on a whole job** (`DeadlineReached` in `src/jobs.ts`) is our clock too,
+  and is recorded as `abort`.
+- **A `deadline` is any `AbortSignal.timeout` on the call's signal**, whoever set it, plus the two
+  clocks that say so by name (`CallDeadlineReached`). Every one that reaches a gateway today is
+  ours; that is a convention, not a guarantee.
+- **An `aborted` row with no class does not say.** It is a row from before this was recorded, or
+  one from the realtime wire (`src/live.ts`), which is not instrumented. The counts treat it as
+  *not classified*, never as "not a stall".
+
+On an OpenRouter stream, an in-band provider error already observed remains an error even if a
+later body read aborts (the F9 fix).
 The counts are on `/admin/costs` and in `npm run cost:analyse`:
-[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries). Each retry, and each
-call that dies part-way, also writes one `warn` line: `ai transport retry` and
-`ai call died part-way`.
+[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries). Each retry, each
+call that dies part-way, and each call a stall or a deadline stopped, also writes one `warn` line:
+`ai transport retry`, `ai call died part-way` and `ai call stopped by our clock`. A reader's Stop
+writes none.
 
 **Three failures were recorded as something else until 2026-10-06**, and are now `error` rows
 with `failure_phase = mid_answer`: an in-band error chunk on the OpenRouter stream (it was

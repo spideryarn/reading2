@@ -69,6 +69,7 @@ import {
   type ReaderFacingFailure,
   saidNothing,
 } from "./messages.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import {
   type StreamEnd,
@@ -583,7 +584,7 @@ export async function* markAnswerStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   const started = Date.now();

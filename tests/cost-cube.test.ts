@@ -22,6 +22,8 @@ import {
   failureCountsBy,
   failureCountsOf,
   failureSummary,
+  nothingMeasured,
+  stoppedFigure,
   filterRows,
   groupRows,
   modelOf,
@@ -326,6 +328,15 @@ describe("pivotRows", () => {
 describe("failures and retries", () => {
   const before = { outcome: "error", failurePhase: "before_answer" } as const;
   const partWay = { outcome: "error", failurePhase: "mid_answer" } as const;
+  /* No stopped row at all: nothing was stopped, by anyone, and that is a zero. */
+  const NO_STOPS = {
+    stalled: { attempts: 0, partWay: 0 },
+    timedOut: { attempts: 0, partWay: 0 },
+    stopsClassified: 0,
+    stopsNotClassified: 0,
+  } as const;
+  const stop = (failureClass: string | null, failurePhase: string | null, calls = 1) =>
+    row({ outcome: "aborted", failureClass, failurePhase, calls });
 
   /* One counted day and one that nothing counted. */
   const LEDGER: CostCubeRow[] = [
@@ -367,6 +378,11 @@ describe("failures and retries", () => {
       retries: 5,
       gaveUp: 2,
       diedPartWay: 2,
+      /* Its one stop does not say who stopped it. */
+      stalled: null,
+      timedOut: null,
+      stopsClassified: 0,
+      stopsNotClassified: 1,
     });
   });
 
@@ -378,6 +394,7 @@ describe("failures and retries", () => {
       retries: null,
       gaveUp: null,
       diedPartWay: null,
+      ...NO_STOPS,
     });
     expect(failureCountsOf([])).toMatchObject({ attempts: 0, counted: 0, retries: null });
   });
@@ -389,6 +406,7 @@ describe("failures and retries", () => {
       retries: 0,
       gaveUp: 0,
       diedPartWay: 0,
+      ...NO_STOPS,
     });
   });
 
@@ -400,6 +418,7 @@ describe("failures and retries", () => {
       retries: null,
       gaveUp: null,
       diedPartWay: 1,
+      ...NO_STOPS,
     });
   });
 
@@ -410,6 +429,7 @@ describe("failures and retries", () => {
       retries: null,
       gaveUp: null,
       diedPartWay: 0,
+      ...NO_STOPS,
     });
   });
 
@@ -427,18 +447,165 @@ describe("failures and retries", () => {
     expect(failureCountsOf([stopped]).diedPartWay).toBe(0);
   });
 
+  describe("the calls our own clock stopped", () => {
+    it("counts a stall part-way as stalled and as stalled part-way, and never as a death", () => {
+      const counts = failureCountsOf([stop("stall", "mid_answer", 2), stop("stall", "before_answer")]);
+      expect(counts.stalled).toEqual({ attempts: 3, partWay: 2 });
+      expect(counts.timedOut).toEqual({ attempts: 0, partWay: 0 });
+      /* Beside a real death, the two stay apart. */
+      expect(
+        failureCountsOf([stop("stall", "mid_answer", 2), row({ ...partWay, failureClass: "unfinished", calls: 1 })]),
+      ).toMatchObject({ diedPartWay: 1, stalled: { attempts: 2, partWay: 2 } });
+    });
+
+    it("counts a deadline as timed out, part-way or not", () => {
+      const counts = failureCountsOf([stop("deadline", "before_answer", 4), stop("deadline", "mid_answer")]);
+      expect(counts.timedOut).toEqual({ attempts: 5, partWay: 1 });
+      expect(counts.stalled).toEqual({ attempts: 0, partWay: 0 });
+    });
+
+    it("counts neither for a reader's Stop, and takes it as proof the row could have said", () => {
+      expect(failureCountsOf([stop("abort", "mid_answer", 3)])).toMatchObject({
+        stalled: { attempts: 0, partWay: 0 },
+        timedOut: { attempts: 0, partWay: 0 },
+        stopsClassified: 3,
+        stopsNotClassified: 0,
+      });
+    });
+
+    it("does not count an error that happens to carry one of the three classes", () => {
+      expect(failureCountsOf([row({ ...partWay, failureClass: "stall", calls: 1 })])).toMatchObject({
+        stalled: { attempts: 0, partWay: 0 },
+        stopsClassified: 0,
+        diedPartWay: 1,
+      });
+    });
+
+    it("says not measured where every stop is one that does not say who stopped it", () => {
+      /* An old row, or the live-conversation wire's. */
+      expect(failureCountsOf([row({ calls: 5, counted: 5 }), stop(null, null, 2)])).toMatchObject({
+        stalled: null,
+        timedOut: null,
+        stopsClassified: 0,
+        stopsNotClassified: 2,
+      });
+    });
+
+    it("says zero where nothing was stopped at all", () => {
+      expect(failureCountsOf([row({ calls: 5 })])).toMatchObject(NO_STOPS);
+      expect(failureCountsOf([])).toMatchObject(NO_STOPS);
+    });
+
+    it("gives the number and the stops it cannot speak for when a group holds both", () => {
+      expect(
+        failureCountsOf([stop("stall", "mid_answer"), stop("abort", "before_answer"), stop(null, null, 4)]),
+      ).toMatchObject({
+        stalled: { attempts: 1, partWay: 1 },
+        timedOut: { attempts: 0, partWay: 0 },
+        stopsClassified: 2,
+        stopsNotClassified: 4,
+      });
+    });
+
+    it("writes a figure as the count and how many of them were part-way", () => {
+      expect(stoppedFigure({ attempts: 3, partWay: 2 })).toBe("3 (2 part-way)");
+      expect(stoppedFigure({ attempts: 1200, partWay: 0 })).toBe("1,200 (0 part-way)");
+      expect(stoppedFigure({ attempts: 0, partWay: 0 })).toBe("0");
+    });
+
+    it("ranks a task with stalls above a quiet one", () => {
+      const tasks = failureCountsBy(
+        [
+          row({ calls: 9, counted: 9 }),
+          row({ job: "chat", stepName: null, outcome: "aborted", failureClass: "stall", failurePhase: "mid_answer" }),
+        ],
+        "task",
+      );
+      expect(tasks.map((t) => t.label)).toEqual(["chat", "structure"]);
+    });
+
+    it("keeps a known count of stops even when their causes were not measured", () => {
+      expect(nothingMeasured(failureCountsOf([row({ calls: 2 }), stop(null, null)]))).toBe(false);
+      expect(nothingMeasured(failureCountsOf([row({ calls: 2 })]))).toBe(true);
+      expect(nothingMeasured(failureCountsOf([stop("abort", "before_answer")]))).toBe(false);
+      expect(nothingMeasured(failureCountsOf([row({ calls: 2, counted: 2 })]))).toBe(false);
+    });
+
+    it("includes only errors and clock stops with a phase in causes", () => {
+      const rows = [
+        row({ outcome: "ok", failureClass: "stall", failurePhase: "mid_answer", calls: 9 }),
+        row({ outcome: "ok", failureClass: "refused", failurePhase: "before_answer", calls: 8 }),
+        stop("stall", null, 7),
+        stop("deadline", null, 6),
+        stop("abort", "mid_answer", 5),
+        stop(null, "mid_answer", 4),
+        row({ ...before, failureClass: "refused", calls: 3 }),
+        stop("stall", "mid_answer", 2),
+        stop("deadline", "before_answer"),
+      ];
+      expect(failureCauses(rows).map((c) => [c.failureClass, c.attempts])).toEqual([
+        ["refused", 3], ["stall", 2], ["deadline", 1],
+      ]);
+    });
+
+    it("lists a stall and a deadline among the causes, and never a reader's Stop", () => {
+      const causes = failureCauses([
+        stop("stall", "mid_answer", 2),
+        stop("deadline", "before_answer"),
+        stop("abort", "mid_answer", 7),
+        stop(null, null, 3),
+      ]);
+      expect(causes.map((c) => [c.phase, c.failureClass, c.attempts])).toEqual([
+        ["part-way through the answer", "stall", 2],
+        ["before the answer began", "deadline", 1],
+      ]);
+    });
+
+    it("says what a stall and a timeout are, and what these counts miss", () => {
+      const notes = FAILURE_NOTES.join(" ");
+      expect(notes).not.toContain("Stalls are not measured");
+      expect(notes).toContain("live conversation");
+      expect(notes).toContain("whole job");
+      expect(notes).toContain("if the provider had already sent an error, the row keeps that error");
+      expect(FAILURE_DEFINITIONS).toContain("stalled");
+      expect(FAILURE_DEFINITIONS).toContain("timed out");
+      expect(`${notes} ${FAILURE_DEFINITIONS}`).not.toMatch(/acceptance boundary|seam/);
+    });
+  });
+
   it("says the totals in one sentence each way, and never as a share", () => {
     expect(failureSummary(failureCountsOf(LEDGER))).toBe(
-      "Of 27 attempts, 18 were numbered by our retry loop: 5 retries and 2 calls that gave up after the last go. 2 attempts died part-way.",
+      "Of 27 attempts, 18 were numbered by our retry loop: 5 retries and 2 calls that gave up after the last go. 2 attempts died part-way. " +
+        "Stalls and timeouts are not measured: 1 stop does not say who stopped it.",
     );
-    expect(failureSummary({ attempts: 1, counted: 1, retries: 1, gaveUp: 1, diedPartWay: 1 })).toBe(
-      "Of 1 attempt, 1 was numbered by our retry loop: 1 retry and 1 call that gave up after the last go. 1 attempt died part-way.",
+    expect(failureSummary({ attempts: 1, counted: 1, retries: 1, gaveUp: 1, diedPartWay: 1, ...NO_STOPS })).toBe(
+      "Of 1 attempt, 1 was numbered by our retry loop: 1 retry and 1 call that gave up after the last go. 1 attempt died part-way. " +
+        "0 attempts stalled and 0 timed out.",
     );
-    expect(failureSummary({ attempts: 9, counted: 0, retries: null, gaveUp: null, diedPartWay: null })).toBe(
-      "Not measured: none of the 9 attempts was numbered by our retry loop.",
+    expect(failureSummary({ attempts: 9, counted: 0, retries: null, gaveUp: null, diedPartWay: null, ...NO_STOPS })).toBe(
+      "Retries, give-ups and part-way deaths are not measured: none of the 9 attempts was numbered by our retry loop. " +
+        "0 attempts stalled and 0 timed out.",
     );
-    expect(failureSummary({ attempts: 4, counted: 0, retries: null, gaveUp: null, diedPartWay: 1 })).toBe(
-      "None of the 4 attempts was numbered by our retry loop, so retries and give-ups are not measured. 1 attempt died part-way.",
+    expect(failureSummary({ attempts: 4, counted: 0, retries: null, gaveUp: null, diedPartWay: 1, ...NO_STOPS })).toBe(
+      "None of the 4 attempts was numbered by our retry loop, so retries and give-ups are not measured. 1 attempt died part-way. " +
+        "0 attempts stalled and 0 timed out.",
+    );
+    /* Classified and unclassified stops together: the number, and how many it cannot speak for. */
+    expect(
+      failureSummary({
+        attempts: 9,
+        counted: 9,
+        retries: 0,
+        gaveUp: 0,
+        diedPartWay: 0,
+        stalled: { attempts: 3, partWay: 2 },
+        timedOut: { attempts: 1, partWay: 0 },
+        stopsClassified: 5,
+        stopsNotClassified: 2,
+      }),
+    ).toBe(
+      "Of 9 attempts, 9 were numbered by our retry loop: 0 retries and 0 calls that gave up after the last go. 0 attempts died part-way. " +
+        "3 attempts stalled (2 part-way) and 1 timed out (0 part-way). 2 stops not classified.",
     );
     expect(failureSummary(failureCountsOf(LEDGER))).not.toContain("%");
   });

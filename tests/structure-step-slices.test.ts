@@ -232,7 +232,7 @@ describe("what a slice may contribute (review F15)", () => {
 describe("the slices path, when the model answers", () => {
   it("returns a finished tree under the model's name, and says how it was made", async () => {
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
     expect(out.parts.tree.provisional).toBeUndefined();
     expect(out.parts.tree.generator).toBe(generatorFor("standard"));
@@ -291,7 +291,7 @@ describe("a slice whose answer is a root and nothing else (review F15)", () => {
   it("is asked for once more, and the second answer is used", async () => {
     middleOnly(1);
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 0, rootAskedTwice: false });
     expect(out.wholeDocumentCalls).toBe(5);
     expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
   });
@@ -299,7 +299,7 @@ describe("a slice whose answer is a root and nothing else (review F15)", () => {
   it("twice, is asked for once more after the other slices, and that answer is used", async () => {
     middleOnly(2);
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 1 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 1, rootAskedTwice: false });
     expect(out.wholeDocumentCalls).toBe(6);
     expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
   });
@@ -333,7 +333,7 @@ describe("a top-level section that came back undivided", () => {
   it("over sixty blocks is asked for once as a slice of its own, and its sections replace it", async () => {
     undivided(130, (call) => sectionsAnswer(call.ids, 50));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(refills(130)).toHaveLength(1);
     expect(out.wholeDocumentCalls).toBe(5);
     const top = topLevel(out.parts.tree);
@@ -347,7 +347,7 @@ describe("a top-level section that came back undivided", () => {
       throw new Error("a small section was refilled");
     });
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(out.wholeDocumentCalls).toBe(4);
   });
 
@@ -363,7 +363,7 @@ describe("a top-level section that came back undivided", () => {
       calls = [];
       undivided(130, refill);
       const out = await run();
-      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
       expect(refills(130), "a refill is asked for once, never re-asked").toHaveLength(1);
       expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
       expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
@@ -375,7 +375,7 @@ describe("a top-level section that came back undivided", () => {
   it("is kept when the refill returns one valid section, including the same giant section", async () => {
     undivided(130, (call) => sectionsAnswer(call.ids, 500, true));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
     expect(refills(130)).toHaveLength(1);
   });
@@ -383,7 +383,7 @@ describe("a top-level section that came back undivided", () => {
   it("is not refilled a second time when the refill is itself undivided", async () => {
     undivided(200, (call) => sectionsAnswer(call.ids, 100, true));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(calls.filter((c) => !c.root && c.ids.length <= 200)).toHaveLength(1);
   });
 });
@@ -426,7 +426,7 @@ describe("a failure gives the headings tree, and says what was spent", () => {
       return answers(call);
     };
     const out = await run({ blocks: long });
-    expect(out.source).toEqual({ by: "slices", slices: 11, refilled: 0, reasked: 0, secondPass: 1 });
+    expect(out.source).toEqual({ by: "slices", slices: 11, refilled: 0, reasked: 0, secondPass: 1, rootAskedTwice: false });
     /* Eleven slices, the first one again, and the root. */
     expect(calls).toHaveLength(13);
     expect(out.wholeDocumentCalls).toBe(13);
@@ -451,7 +451,7 @@ describe("a failure gives the headings tree, and says what was spent", () => {
       calls = [];
       respond = (call) => (call.n === 1 ? messageOf(sectionsAnswer(call.ids), stop) : answers(call));
       const out = await run();
-      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
       /* Three slices, the refused one's two halves, and the root. */
       expect(calls.map((c) => c.root)).toEqual([false, false, false, false, false, true]);
       expect(calls[3]!.ids.concat(calls[4]!.ids)).toEqual(calls[1]!.ids);
@@ -462,7 +462,10 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     }
   });
 
-  it("when the root call fails", async () => {
+  /* The root is asked for once more before the run gives up (plan 261005j,
+     stage B), so each of the next two tests counts one more call than it did
+     until 2026-10-06: 5 for 4 here, and 3 root calls and 6 in all for 2 and 5. */
+  it("when the root call fails, twice", async () => {
     respond = (call) => {
       if (call.root) throw new Error("the root call failed");
       return answers(call);
@@ -470,11 +473,12 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     const out = await run();
     expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "root-call-failed" });
     expectBoundedTree(BLOCKS, out.parts.tree);
-    expect(out.wholeDocumentCalls).toBe(4);
+    expect(calls.filter((c) => c.root)).toHaveLength(2);
+    expect(out.wholeDocumentCalls).toBe(5);
     expect(out.inputTokens).toBe(3 * USAGE.input_tokens);
   });
 
-  it("when the root answer fails its gate twice", async () => {
+  it("when the root answer fails its gate twice, and again on its second chance", async () => {
     for (const bad of [
       { gist: "  ", question: "Topic — why?" },
       { gist: Array.from({ length: 41 }, () => "word").join(" "), question: "Topic — why?" },
@@ -485,8 +489,8 @@ describe("a failure gives the headings tree, and says what was spent", () => {
       respond = (call) => (call.root ? JSON.stringify(bad) : answers(call));
       const out = await run();
       expect(out.source, JSON.stringify(bad)).toMatchObject({ by: "headings", slicesFailed: "root-call-failed" });
-      expect(calls.filter((c) => c.root)).toHaveLength(2);
-      expect(out.wholeDocumentCalls).toBe(5);
+      expect(calls.filter((c) => c.root)).toHaveLength(3);
+      expect(out.wholeDocumentCalls).toBe(6);
     }
   });
 
@@ -499,13 +503,18 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     expect(out.outputTokens).toBe(4 * USAGE.output_tokens);
   });
 
-  it("when the labels step could not ask about the stitched tree (forced: wiring only)", async () => {
-    forceUnaskable = true;
-    const out = await run();
-    expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "labels-could-not-ask" });
-    expectBoundedTree(BLOCKS, out.parts.tree);
-    expect(out.wholeDocumentCalls).toBe(4);
-  });
+});
+
+/* **Reversed 2026-10-06.** This was the last "falls back" case: with
+   `unaskableBatches` forced to answer "one", the stitched tree was thrown away
+   (`slicesFailed: "labels-could-not-ask"`). The labels planner now cuts such a
+   section's call into windows, so the structure step no longer asks, and the
+   same forcing must change nothing. Stage A of plan 261005j. */
+it("the stitched tree is kept whatever `unaskableBatches` would say of it (forced: wiring only)", async () => {
+  forceUnaskable = true;
+  const out = await run();
+  expect(out.source).toMatchObject({ by: "slices" });
+  expect(out.parts.tree.provisional).toBeUndefined();
 });
 
 describe("checkpoints (review F18)", () => {
@@ -627,7 +636,7 @@ describe("the deadline (review F16)", () => {
     const going = run({ stepBudgetMs: JUST_ENOUGH });
     await vi.advanceTimersByTimeAsync(1000);
     const out = await going;
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: false });
     expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
   });
 

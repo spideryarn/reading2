@@ -1,12 +1,13 @@
 /**
  * **One failed call no longer costs a long document its whole table of
- * contents.** Three behaviours of `runSlices` (src/structure-slices.ts), and
+ * contents.** The behaviours of `runSlices` (src/structure-slices.ts), and
  * the rules they must not loosen:
  *
  * - a failed refill keeps the section it was meant to divide;
  * - a slice whose answer is refused or cut short is asked for in two halves,
  *   and that decision is remembered;
- * - a slice that failed is asked for once more before the run gives up.
+ * - a slice that failed is asked for once more before the run gives up;
+ * - and so is the root call, the one question every slice's answer depends on.
  *
  * docs/plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md
  * § Stage 1a, and § The plan review (F3, F4). No network: `streamMessage` is
@@ -315,7 +316,7 @@ describe("a slice that failed is asked for once more before the run gives up", (
       return call.root ? ROOT_ANSWER : sectionsAnswer(call.ids);
     };
     const out = await generateStructure({ power: "standard", blocks: long, slug: SLUG, articleTitle: "A long piece", checkpoints: checkpoints() });
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 1 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 1, rootAskedTwice: false });
     expect(out.wholeDocumentCalls).toBe(5);
   }, 60_000);
 
@@ -446,4 +447,313 @@ describe("a slice that failed is asked for once more before the run gives up", (
     await expect(going).rejects.toThrow();
     expect(calls).toHaveLength(2);
   });
+});
+
+describe("a failed root call is asked for once more in the same run", () => {
+  const roots = (): Call[] => calls.filter((c) => c.root);
+  /** A root answer that parses and does not pass: its gist is empty. */
+  const BAD_ROOT = JSON.stringify({ gist: "", question: "Ownership — why does it keep failing?" });
+  const slicesOnce = (): void =>
+    expect([asked(0, 300), asked(300, 300)].map((c) => c.length), "a slice in hand is not asked for again").toEqual([1, 1]);
+
+  it("and one that does not come back once gives a finished tree, with exactly one extra call", async () => {
+    const store = checkpoints();
+    respond = counting((call) => {
+      if (call.root && roots().length === 1) throw new Error("the root call did not come back");
+      return good(call);
+    });
+    const out = await run({ checkpoints: store });
+    expect(out).toMatchObject({ ok: true, rootAskedTwice: true, secondPass: 0, reasked: 0 });
+    expect(roots()).toHaveLength(2);
+    slicesOnce();
+    expect(calls).toHaveLength(4);
+    expect(out.spend.calls).toBe(4);
+    /* The call that did not come back has no usage to read; the three that did are counted. */
+    expect(out.spend.usage.input_tokens).toBe(3 * USAGE.input_tokens);
+    expect(builds(out)).toBe(true);
+    /* The second answer is the one stored: a later run buys nothing. */
+    calls = [];
+    expect(await run({ checkpoints: store })).toMatchObject({ ok: true, rootAskedTwice: false, spend: { calls: 0 } });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("and one whose answer did not pass twice is asked a third time, once, and every answer is paid for", async () => {
+    respond = counting((call) => (call.root && roots().length <= 2 ? BAD_ROOT : good(call)));
+    const out = await run();
+    expect(out).toMatchObject({ ok: true, rootAskedTwice: true, reasked: 1 });
+    expect(roots()).toHaveLength(3);
+    slicesOnce();
+    expect(out.spend.calls).toBe(5);
+    expect(out.spend.usage).toEqual({ input_tokens: 5 * USAGE.input_tokens, output_tokens: 5 * USAGE.output_tokens });
+  });
+
+  it("and one that fails on its second chance too is the failure, with no fourth call", async () => {
+    respond = counting((call) => (call.root ? BAD_ROOT : good(call)));
+    const bad = await run();
+    expect(bad).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: true, reasked: 1 });
+    expect(roots(), "two with the re-ask, and the second chance is one call").toHaveLength(3);
+    expect(bad.spend.usage.input_tokens).toBe(5 * USAGE.input_tokens);
+
+    calls = [];
+    respond = (call) => {
+      if (call.root) throw new Error("the root call did not come back");
+      return good(call);
+    };
+    const gone = await run();
+    expect(gone).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: true });
+    expect(roots()).toHaveLength(2);
+    slicesOnce();
+    expect(gone.spend.calls).toBe(4);
+  });
+
+  it("counts every transport attempt of both root asks", async () => {
+    respond = (call) => {
+      if (call.root) {
+        call.attempts = 3;
+        if (roots().length === 1) throw new Error("three attempts, none came back");
+      }
+      return good(call);
+    };
+    const out = await run();
+    expect(out).toMatchObject({ ok: true, rootAskedTwice: true });
+    expect(out.spend.calls).toBe(1 + 1 + 3 + 3);
+  });
+
+  for (const stop of ["refusal", "max_tokens"]) {
+    it(`(${stop}) a refused or cut-short root answer is not asked for again`, async () => {
+      respond = counting((call) => (call.root ? messageOf(ROOT_ANSWER, stop) : good(call)));
+      const store = checkpoints();
+      const out = await run({ checkpoints: store });
+      expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: false });
+      expect(roots()).toHaveLength(1);
+      /* Two slices and the root, once each. A fourth would be a second ask
+         begun and then stopped by the run having ended, which looks the same
+         from the calls alone. */
+      expect(store.calls.reads, "a second ask of the root was begun").toBe(3);
+      expect(out.spend.usage.input_tokens, "the refused answer was paid for").toBe(3 * USAGE.input_tokens);
+    });
+  }
+
+  it("a refused root cannot be rescued by an answer another run checkpoints meanwhile", async () => {
+    const store = checkpoints();
+    const read = store.read;
+    let rootKey!: string;
+    store.read = async <T>(...args: Parameters<typeof store.read>) => {
+      const rows = await read<T>(...args);
+      if (store.calls.reads === 3) rootKey = args[2][0]!;
+      return rows;
+    };
+    respond = (call) => {
+      if (!call.root) return good(call);
+      /* A concurrent run buys a valid answer to the identical root request.
+         This run's refusal remains terminal even if a second read could hit. */
+      store.entries.set(`structure-whole-document/${rootKey}`, JSON.stringify({ fingerprint: rootKey, answer: ROOT_ANSWER }));
+      return messageOf(ROOT_ANSWER, "refusal");
+    };
+    const out = await run({ checkpoints: store });
+    expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(store.calls.reads).toBe(3);
+  });
+
+  it("a reader's Stop after the slices prevents the first root ask", async () => {
+    const stop = new AbortController();
+    await expect(run({ signal: stop.signal, onProgress: (detail) => {
+      if (detail.startsWith("2 of")) stop.abort();
+    } })).rejects.toThrow();
+    expect(roots()).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("admission can deny the first root ask after the slices resume, with no calls bought", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    const store = checkpoints();
+    await run({ checkpoints: store });
+    const rootEntry = [...store.entries].find(([, json]) => JSON.parse(json).answer === ROOT_ANSWER);
+    expect(rootEntry).toBeDefined();
+    store.entries.delete(rootEntry![0]);
+    calls = [];
+    const out = await run({ checkpoints: store, deadline: Date.now() + ROOT_CALL_CAP_MS - 1 });
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false,
+      spend: { calls: 0, resumed: 2, usage: { input_tokens: 0, output_tokens: 0 } } });
+    expect(calls).toHaveLength(0);
+    expect(store.calls.reads).toBe(6);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  for (const stop of ["refusal", "max_tokens"]) {
+    it(`a second root ask ending with ${stop} is terminal and counted`, async () => {
+      respond = (call) => {
+        if (!call.root) return good(call);
+        if (roots().length === 1) throw new Error("the first root transport failed");
+        return messageOf(ROOT_ANSWER, stop);
+      };
+      const out = await run();
+      expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: true, reasked: 0, secondPass: 0 });
+      expect(roots()).toHaveLength(2);
+      expect(out.spend.calls).toBe(4);
+      expect(out.spend.usage).toEqual({ input_tokens: 3 * USAGE.input_tokens, output_tokens: 3 * USAGE.output_tokens });
+    });
+  }
+
+  it("a second root ask reaching its cap is out of time, with rootAskedTwice true", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    respond = (call) => {
+      if (!call.root) return good(call);
+      if (roots().length === 1) throw new Error("the first root transport failed");
+      return hang(call);
+    };
+    const going = run();
+    await vi.advanceTimersByTimeAsync(ROOT_CALL_CAP_MS);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: true, secondPass: 0 });
+    expect(roots()).toHaveLength(2);
+    expect(out.spend.calls).toBe(4);
+    expect(out.spend.usage).toEqual({ input_tokens: 2 * USAGE.input_tokens, output_tokens: 2 * USAGE.output_tokens });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a reader's Stop during the second root ask throws and waits for its transport", async () => {
+    const stop = new AbortController();
+    let secondStarted!: () => void;
+    const started = new Promise<void>((resolve) => { secondStarted = resolve; });
+    let settled = false;
+    respond = async (call) => {
+      if (!call.root) return good(call);
+      if (roots().length === 1) throw new Error("the first root transport failed");
+      secondStarted();
+      try { return await hang(call); }
+      finally { settled = true; }
+    };
+    const going = run({ signal: stop.signal });
+    await started;
+    stop.abort();
+    await expect(going).rejects.toThrow();
+    expect(settled).toBe(true);
+    expect(roots()).toHaveLength(2);
+    expect(calls).toHaveLength(4);
+  });
+
+  it("a valid first root answer arriving late is saved under the same key and never re-asked", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    const store = checkpoints();
+    const read = store.read;
+    const keys: string[] = [];
+    store.read = async <T>(...args: Parameters<typeof store.read>) => {
+      keys.push(args[2][0]!);
+      return read<T>(...args);
+    };
+    respond = async (call) => {
+      /* Deliberately model a provider that settles after being aborted. */
+      if (call.root) await new Promise((resolve) => setTimeout(resolve, ROOT_CALL_CAP_MS + 1));
+      return good(call);
+    };
+    let returned = false;
+    const going = run({ checkpoints: store }).then((out) => { returned = true; return out; });
+    await vi.advanceTimersByTimeAsync(ROOT_CALL_CAP_MS);
+    expect(returned).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(out.spend.usage).toEqual({ input_tokens: 3 * USAGE.input_tokens, output_tokens: 3 * USAGE.output_tokens });
+    expect(store.entries.size).toBe(3);
+    const firstKeys = [...keys];
+    calls = [];
+    keys.length = 0;
+    expect(await run({ checkpoints: store })).toMatchObject({ ok: true, rootAskedTwice: false, spend: { calls: 0, resumed: 3, usage: { input_tokens: 0, output_tokens: 0 } } });
+    expect(keys).toEqual(firstKeys);
+    expect(calls).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a root call that runs past its cap is out of time, and is not asked for again", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    respond = (call) => (call.root ? hang(call) : good(call));
+    const going = run();
+    await vi.advanceTimersByTimeAsync(ROOT_CALL_CAP_MS);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(roots()[0]!.signal.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  for (const elapsed of [ROOT_CALL_CAP_MS, ROOT_CALL_CAP_MS + 1]) {
+    it(`a root transport failure at ${elapsed} ms cannot retry before the cap's timer is dispatched`, async () => {
+      vi.useFakeTimers({ now: 1_800_000_000_000 });
+      respond = (call) => {
+        if (call.root && roots().length === 1) {
+          /* The clock can reach the cap while the event loop has not dispatched
+             its timer. A rejection must check the clock just as an answer does. */
+          vi.setSystemTime(Date.now() + elapsed);
+          throw new Error("the root transport failed at its cap");
+        }
+        return good(call);
+      };
+      const store = checkpoints();
+      const out = await run({ checkpoints: store });
+      expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+      expect(roots()).toHaveLength(1);
+      expect(store.calls.reads).toBe(3);
+      expect(out.spend.calls).toBe(3);
+      expect(out.spend.usage).toEqual({ input_tokens: 2 * USAGE.input_tokens, output_tokens: 2 * USAGE.output_tokens });
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  }
+
+  it("is skipped, not started and killed, when its cap would not fit before the deadline", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    /* Every call ends inside its own cap: the slices after 200 s, the root's first ask after 50 s. */
+    respond = async (call) => {
+      await new Promise((resolve) => setTimeout(resolve, call.root ? 50_000 : 200_000));
+      if (call.root) throw new Error("the root call did not come back");
+      return good(call);
+    };
+    /* Room for the slices and then the root's cap, with 100 s over when the
+       root is first asked and 50 s when it has failed: less than its cap. */
+    const going = run({ deadline: Date.now() + SLICE_CALL_CAP_MS + ROOT_CALL_CAP_MS + 500 });
+    await vi.advanceTimersByTimeAsync(250_000);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(out.spend.calls).toBe(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a reader's Stop during the first root call throws, and no second is started", async () => {
+    const stop = new AbortController();
+    respond = (call) => (call.root ? hang(call) : good(call));
+    const going = run({ signal: stop.signal });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(roots()).toHaveLength(1);
+    stop.abort();
+    await expect(going).rejects.toThrow();
+    expect(roots()).toHaveLength(1);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("a reader's Stop between the two root asks throws, and no second is started", async () => {
+    const stop = new AbortController();
+    respond = (call) => {
+      if (!call.root) return good(call);
+      stop.abort();
+      throw new Error("the root call did not come back");
+    };
+    await expect(run({ signal: stop.signal })).rejects.toThrow();
+    expect(roots()).toHaveLength(1);
+  });
+
+  it("and the tree says so, through `generateStructure`", async () => {
+    const long = paragraphs(3000);
+    let rootCalls = 0;
+    respond = (call) => {
+      if (!call.root) return sectionsAnswer(call.ids);
+      if (rootCalls++ === 0) throw new Error("the root call did not come back");
+      return ROOT_ANSWER;
+    };
+    const out = await generateStructure({ power: "standard", blocks: long, slug: SLUG, articleTitle: "A long piece", checkpoints: checkpoints() });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0, rootAskedTwice: true });
+    expect(out.wholeDocumentCalls).toBe(5);
+  }, 60_000);
 });

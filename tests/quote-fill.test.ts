@@ -306,17 +306,30 @@ describe.each(THEMES)("the fill, on the %s page", (theme) => {
        "a dark grey with a little purple in it" (plan 261005f). The deeper
        purple is 0.099 there. This is the half of "hard to see" the distance
        above does not isolate, since a brighter grey also moves away from the
-       page. */
-    expect(chromaOf(faintest())).toBeGreaterThan(0.08);
+       page. The floor came down from 0.08 on 2026-10-06 with the fill itself
+       (the test below); it is still about 1.8 times the lavender's. */
+    expect(chromaOf(faintest())).toBeGreaterThan(0.065);
+  });
+
+  it.runIf(theme === "dark")("is not too saturated: under the purple of 2026-10-05, at both ends", () => {
+    /* Greg, 2026-10-06 (`spya-hsbz0z`), a day after the deeper purple: "Now
+       the purple Quote highlighting is a little toooo saturated. Just dial it
+       down a bit." That fill's chroma over the page was 0.099 at its faintest
+       and 0.156 at its strongest; this one's is 0.076 and 0.119, about a
+       quarter less (plan 261006e). With the floor above this is a band: the
+       lavender was too grey and that purple too much. */
+    expect(chromaOf(faintest())).toBeLessThan(0.09);
+    expect(chromaOf(strongest())).toBeLessThan(0.13);
   });
 
   it.runIf(theme === "dark")("is a deeper purple than the spine strip's, at the same hue", () => {
     /* Greg, 2026-10-05: "I don't mind if they're slightly different from the
        Spine". Slightly: the hue is the strip's, so the two still read as one
-       thing in two places. Deeper: darker and more saturated. */
+       thing in two places. Deeper: darker and more saturated. The margin was
+       0.05 until 2026-10-06, when the fill lost a fifth of its chroma. */
     const [prose, strip] = [proseRgb(theme), quoteRgb(theme)];
     expect(Math.abs(hueOf(prose) - hueOf(strip))).toBeLessThan(3);
-    expect(chromaOf(prose)).toBeGreaterThan(chromaOf(strip) + 0.05);
+    expect(chromaOf(prose)).toBeGreaterThan(chromaOf(strip) + 0.03);
     expect(luminance(prose)).toBeLessThan(luminance(strip));
   });
 

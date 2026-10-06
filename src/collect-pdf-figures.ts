@@ -95,6 +95,7 @@ import { createHash } from "node:crypto";
 
 import type { PdfFigureEntry, PdfFigureFailure, PdfFigureMarker } from "./assets.js";
 import { imageDimensions, sniffImage } from "./assets.js";
+import { CallDeadlineReached } from "./call-failure.js";
 import { describeStorageFailure } from "./collect-assets.js";
 import { readPdfPageLayouts } from "./pdf-figure-layout.js";
 import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure-page.js";
@@ -422,10 +423,15 @@ export async function collectPdfFigures(
    * down. Both mean the same thing to a figure that never got its turn, so both
    * arrive as `out-of-time`, and the two are never told apart by reading an
    * error.
+   *
+   * The reason is a `CallDeadlineReached` for the one reader that does look:
+   * the gateway under the locator's model call, which classes that call's
+   * `ai_calls` row `deadline` rather than `abort` from it (`abortClass` in
+   * src/call-failure.ts). Nothing in this file reads it.
    */
   const deadline = new AbortController();
   const timer = setTimeout(
-    () => deadline.abort(new Error("pdf figures budget spent")),
+    () => deadline.abort(new CallDeadlineReached("pdf figures budget spent")),
     options.budgetMs ?? PDF_FIGURES_BUDGET_MS,
   );
   const signal = options.signal
