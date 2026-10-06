@@ -423,7 +423,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
  * The address is drawn host-first with the path faded after it, because the
  * host is the part that answers the question and the path is the part that
  * runs off the end of a narrow window. Truncation is the path's, in CSS, so
- * the host is never the thing that gets cut (styles.css § `.origin`).
+ * the host is never the thing that gets cut (shell.css § `.origin`).
  *
  * ## The link is for everybody; the *word* "uploaded" is not
  *
@@ -794,24 +794,25 @@ export function addressParts(url: string): { host: string; rest: string } | null
  *
  * "The profile" is this article's **Metadata** page: `AccessSharing` is the
  * only control in the app that changes an article's visibility, and it lives in
- * that page's *Access & sharing* section — the third of eight, because Greg
- * asked for it to be moved up (Metadata.tsx).
+ * that page's *Access & sharing* section, which Greg asked to be moved up
+ * (Metadata.tsx).
  *
  * **The link stops at the page and does not aim at the section**, which was the
  * first design and is the one thing here that was cut rather than forgotten.
- * Aiming needs a place in the address for "which section", and this app took
+ * At the time, aiming needed a place in the address for "which section", and this app took
  * the fragment out on purpose: docs/project/url-state.md § Why the query string
  * and not the hash — one query string, one listener. Adding either a `#` or a
  * `?focus=` back is a new piece of URL state, a row in that doc's table and a
  * scroll that has to wait for a page that renders after its own fetch, to save
- * a reader half a screen of scrolling on arrival. Worth doing if the landing
- * turns out to feel wrong; not worth doing first.
+ * a reader scrolling on arrival. Metadata now supports `?section=` for other
+ * links, but this link still goes to the page without choosing a section.
  *
  * ## Absence is the third state, and it draws nothing
  *
- * `undefined` means *nobody could tell us*, never *private*. It is a visitor's
- * payload, which carries no `visibility` at all, and it was also the filesystem
- * store, which had no visibility column — that store went on 2026-09-05
+ * `undefined` means no owner-side visibility field, never *private*. A visitor's
+ * payload omits `visibility` and carries `sharedBy` instead (src/public-types.ts).
+ * The filesystem store could not answer at all — it had no visibility column
+ * and went on 2026-09-05
  * (docs/project/database.md) and the field is still optional, so the state is
  * still reachable and still has to draw nothing. Silent is the only honest
  * thing it can be: a lock is a claim, and a lock drawn over a source that was

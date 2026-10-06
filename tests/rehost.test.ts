@@ -1264,8 +1264,8 @@ describe("what a load owns", () => {
  * pinning rather than assuming.
  *
  * The wrapper is also what carries `--figure-sheet` — the light mat under every
- * figure, added after transparent PNGs rendered dark-on-dark (styles.css § the
- * figure sheet). These figures carry real alpha, so no wrapper would mean the
+ * figure, added after transparent PNGs rendered dark-on-dark (prose.css § figures, and
+ * the light sheet under them). These figures carry real alpha, so no wrapper would mean the
  * same failure again, and the wrapper is a fact this test can check even though
  * the paint is not.
  */

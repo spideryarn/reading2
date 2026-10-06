@@ -95,7 +95,7 @@ interface BoundaryProps {
  * **Reads the press, then renders the boundary.**
  *
  * The subscription lives here rather than in `Reader` so that it costs nothing
- * where there is no boundary — Plain and Hierarchy — and so that a press
+ * where there is no boundary — Plain — and so that a press
  * re-renders this component rather than the whole reading view.
  *
  * `pendingActivation` is the snapshot because it returns a **primitive** — a

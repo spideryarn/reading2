@@ -315,7 +315,7 @@ import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
  *
  * **`--dock-space`, not `--dock-h`.** The bar's own height is no longer the room
  * it takes: since 2026-08-28 it also carries the home indicator's inset as
- * padding (styles.css § tokens), and on an iPhone that inset is 34px against
+ * padding (src/web/styles/tokens.css § tokens), and on an iPhone that inset is 34px against
  * the 2rem of slack this line adds — so the last paragraph of this page would
  * have finished two pixels under the bar rather than clear of it. GPT Sol,
  * 2026-08-28.

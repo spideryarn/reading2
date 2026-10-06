@@ -322,7 +322,7 @@
 
      It goes global here anyway, and `base` is why that is safe: it sits below
      `app` and `utilities`, so every one of those forty-odd rules and every
-     utility still wins. styles.css § metadata keeps the diagnosis and points
+     utility still wins. feedback.css § metadata keeps the diagnosis and points
      here.
 
      **Two longhands and NOT `font: inherit`, which is what preflight uses and

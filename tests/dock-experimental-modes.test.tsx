@@ -359,7 +359,7 @@ describe("the fit signature", () => {
    *
    * The case above is a different *set* at the same size. This is the same set
    * with a different member selected, and it changed the row's width on
-   * 2026-09-05 with nothing watching: styles.css § the bar's fit ladder gives
+   * 2026-09-05 with nothing watching: dock-fit.css § the bar's fit ladder gives
    * the open mode its word back at rung 2, so Plain → Summary draws one more
    * label than it did. Both are ordinary modes, so `visibleModes` returns the
    * identical list for each — which is the point, and why the assertion checks

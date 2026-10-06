@@ -288,7 +288,7 @@ function makeRow(
      *
      * A row dropped for having no text keeps its siblings' numbers as they are.
      * Renumbering to close the gap would tell the reader the third part is the
-     * second one, while the spine, Outline and Hierarchy all still call it the
+     * second one, while the spine and Structure's list face still call it the
      * third.
      */
     number: supplement ? "" : entry.number,

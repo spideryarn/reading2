@@ -61,7 +61,7 @@ export function OfflineStrip() {
       /* `offline-strip` carries the geometry — where the bottom of the screen
          actually is, and where the bottom bar has left off — because that is
          three tokens' worth of arithmetic and none of it belongs in a utility
-         class. Everything visual stays here. See styles.css § the offline strip.
+         class. Everything visual stays here. See dock.css § the offline strip.
 
          **It used to be `bottom-0 z-50`, and both were wrong.** The dock is
          z-index 96, so a strip at 50 was drawn *underneath* it and simply could

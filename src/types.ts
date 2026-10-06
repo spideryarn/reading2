@@ -2067,7 +2067,7 @@ export interface Article {
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
    * so the masthead can say so without a request of its own.
    *
-   * The one field here that is not an artefact. It is on this payload rather
+   * A field about access, rather than an artefact. It is on this payload rather
    * than behind a route because it is a property of *the work* (src/routes.ts
    * § the sharing switch), because the Postgres store selects the `articles`
    * row anyway so it costs nothing, and because the alternative — a `GET`
@@ -2075,20 +2075,22 @@ export interface Article {
    * carry one enum that is already on the wire.
    * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
    *
-   * **Absent means *this store cannot say*, and never `private`.** The
-   * filesystem store has no visibility column — `visibilityStore.set` refuses
-   * with a 501 there (src/store/index.ts) — so absence is the only honest
-   * answer it has, and a `private` default would have the mark tell an owner
-   * that only they can read an article nobody ever asked about. That is the one
+   * **Absent means no owner-side visibility field, and never `private`.** The
+   * owner's read always sets it (src/store/pg.ts); a visitor's payload omits it
+   * and carries `sharedBy` instead, a `PublicArticle` drawn as an `Article`
+   * (src/web/article/access.ts, src/public-types.ts). Until 2026-09-05 absence
+   * also meant the filesystem store had no visibility column. A `private`
+   * default would have the mark tell an owner that only they can read an
+   * article nobody ever asked about. That is the one
    * sentence this control must not get wrong, and it is the same rule
    * `ArticleMetadata.sharing` follows for the same reason.
    * docs/reusable/silent-success.md.
    *
    * Optional rather than `Visibility | undefined`, unlike `assets` above:
    * `assets` is required-but-undefinable precisely so a store that forgets it
-   * is a type error, and here the *forgetting* is a legitimate answer one of
-   * the two stores gives on every article. There is nothing for a compiler to
-   * insist on.
+   * is a type error, and here leaving it out is a legitimate answer — the one
+   * a visitor's payload gives on every article. There is nothing for a
+   * compiler to insist on.
    */
   visibility?: Visibility;
   /** Owner-only sharing state. Absent means unknown; never contains the key. */
@@ -2249,13 +2251,13 @@ export interface LibraryEntry {
    * the visitor's side of the same fact is `ViewOnlyChip`
    * (src/web/PublicChrome.tsx) and says something different.
    *
-   * **Absent rather than `"private"`, and that is not a spelling choice.** The
-   * filesystem store has no visibility column at all — `visibilityStore.set`
-   * refuses with a 501 there (src/store/index.ts) — so absence is the only
-   * answer both stores can give about a document nobody has shared, and
-   * tests/store-parity.test.ts compares whole entries. A `"private"` from one
-   * store and an absence from the other would be two spellings of one fact and
-   * a parity failure about nothing.
+   * **Absent rather than `"private"`, and that is not a spelling choice.**
+   * `describeArticle` keeps the key only when the row says `public`
+   * (src/library-scalars.ts), so an unshared document has one spelling and not
+   * two. The rule dates from the filesystem store (gone 2026-09-05), which had
+   * no visibility column at all: absence was the only answer both stores could
+   * give about a document nobody had shared, and a `"private"` from one and an
+   * absence from the other would have been a parity failure about nothing.
    *
    * A badge, not a filter: there is deliberately no way to sort or narrow the
    * shelf by this until there is enough shared material for it to be worth
@@ -3005,30 +3007,29 @@ export interface ArticleMetadata {
    *
    * Inside a block it cannot happen: **the block being present is the store
    * saying it can answer**, so `personalised: []` is unambiguous. And "cannot
-   * say" has exactly one cause — the filesystem store has no column and no
-   * artefacts to read a hash off — so it is one fact about the store rather than
+   * say" is one fact — the block is missing — rather than
    * three independent unknowns. Two optionals would also admit a state where
    * visibility is known and personalisation is not, which cannot occur and which
    * the client would still have to branch for.
    *
    * ## Why absent rather than a default
    *
-   * The filesystem store has no `visibility` column and nowhere to put one, so
-   * it cannot answer. The first version of this was required and that store
-   * reported `private`, on the reasoning that nothing *can* be shared there so
-   * `private` is the truth.
+   * **The Postgres store always sends the block** (src/store/pg.ts §
+   * `sharing`), so today the field is optional for historical reasons. The
+   * filesystem store, which went on 2026-09-05, had no `visibility` column and
+   * nowhere to put one, so it could not answer. The first version of this was
+   * required and that store reported `private`, on the reasoning that nothing
+   * *could* be shared there so `private` was the truth.
    *
-   * That was wrong, and the argument against it is the one `requirePostgres`
-   * already makes on the public route: a store with no honest answer must
+   * That was wrong: a store with no honest answer must
    * **refuse to answer** rather than supply a plausible one. A required
-   * `private` is a claim the store is in no position to make, and the card
+   * `private` was a claim the store was in no position to make, and the card
    * would have drawn *"Only you can read this"* — confidently, and with no way
    * to be right — over every article in development.
    *
-   * Absent means *this store cannot say*. The card keeps its existing "we could
-   * not check" state, which is true, and nothing throws — a read must not refuse
-   * the way `visibilityStore.set` does, or the whole Metadata page goes down in
-   * dev to be principled about a field nobody can set there.
+   * Absent still means *nobody could say*. The card keeps its "we could not
+   * check" state for it (src/web/AccessSharing.tsx), which is true, and
+   * nothing throws.
    * docs/reusable/silent-success.md.
    */
   sharing?: ArticleSharing;
@@ -3674,11 +3675,9 @@ export interface Job {
    * about it is a copy decision with two renderers behind it (src/job-state.ts,
    * and `JobCard` against `JobProgress`) and is Greg's to make.
    *
-   * Postgres reads it off `jobs.requeues`. The filesystem adapter keeps the
-   * *budget's* count in memory — a restart empties it, deliberately, because a
-   * restart there is `sweepStopped`, which requeues everything with no budget at
-   * all — and writes this field alongside so the two stores hand the client the
-   * same shape. src/store/jobs-fs.ts says the rest.
+   * Postgres reads it off `jobs.requeues`. The filesystem adapter, which went
+   * on 2026-09-05, kept the *budget's* count in memory and wrote this field
+   * alongside so the two stores handed the client the same shape.
    */
   requeues?: number;
   /**

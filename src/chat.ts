@@ -445,8 +445,9 @@ export function isSpokenKind(value: unknown): value is SpokenKind {
  *
  * Live conversation's counterpart to `withTurn`, and pure for the same reason:
  * this is an invariant, and an invariant with two implementations is an
- * invariant with two behaviours. The filesystem store calls it inside its
- * mutex, the Postgres store inside its transaction, and neither owns the rule.
+ * invariant with two behaviours. The Postgres store calls it inside its
+ * transaction (the filesystem store, until 2026-09-05, inside its mutex), and
+ * does not own the rule.
  *
  * ## Why not `beginTurn` then `finishTurn`
  *

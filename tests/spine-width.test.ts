@@ -25,15 +25,12 @@
  * layout.ts and nothing in the stylesheet had to move with it. Had the query
  * still been there it would have been a fifth hand-copy to find.
  *
- * So there are four places one number lives — five until 2026-09-07 — no tool
- * checks any of them against the others, and **the failure is silent in the
- * direction that matters**. Move
- * `SPINE_W` and leave the stylesheet behind and there is a band of window widths
- * where `fitView` offers a gist column the stylesheet has already decided there
- * is no room for; move the mode query and leave `fitMode` behind and every mode
- * panel is a correctly-positioned element nought pixels wide, which is what
- * actually happened on 2026-08-27 (styles.css § a band with no room). Nothing
- * throws either way.
+ * The compiler cannot compare these copies, so this file checks them. The
+ * failure used to be silent: move `SPINE_W` and leave the stylesheet behind,
+ * and `fitView` could offer a gist column where CSS had decided there was no
+ * room. The gist columns went on 2026-09-29, but the narrow-window sum remains.
+ * The old mode-query drift also made panels nought pixels wide on 2026-08-27
+ * (narrow-window.css § a band with no room). Neither mismatch threw.
  *
  * This file is the check, and it is the same species as `tests/doc-links.test.ts`
  * — cheap, deterministic, and standing where a compiler cannot.

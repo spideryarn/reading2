@@ -60,7 +60,7 @@ describe("the article on its own stops at the measure", () => {
      is. It used to take the whole window and put a 738px measure in the left
      of it; on a 1600px screen that is 850px of empty page down one side. Greg,
      2026-09-03: "In Plain mode, can you centre the text on the page?" —
-     layout.ts § `proseAloneMaxPx`, and styles.css § plain, centred for the auto
+     layout.ts § `proseAloneMaxPx`, and narrow-window.css § `.reader.text-alone` for the auto
      margins that divide what this leaves over. */
   const alone = (windowWidth: number) => fit({ windowWidth });
 

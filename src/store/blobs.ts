@@ -154,8 +154,8 @@ export function projectMismatch(
   supabaseUrl: string | undefined,
 ): string | null {
   /* Neither configured, or only one: not this check's business. A missing
-     service key means the filesystem adapter, which src/store/index.ts refuses
-     separately and for a different reason. */
+     service key means the filesystem blob adapter, which `postgresBlobStore`
+     below refuses separately and for a different reason. */
   if (!databaseUrl || !supabaseUrl) return null;
 
   const db = hostAndRef(databaseUrl, databaseRef);

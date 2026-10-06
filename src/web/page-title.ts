@@ -542,7 +542,7 @@ export function host(text: string): string {
  * ## What is announced, and when
  *
  * **Everything but the app's name.** Not just the leading segment: switching
- * mode changes the tab from `… · Hierarchy` to `… · Glossary`, and announcing
+ * mode changes the tab from `… · Structure` to `… · Glossary`, and announcing
  * the first segment alone would repeat the article's title and say nothing
  * about what the reader had just pressed. And not the app's name either —
  * hearing *"· Spideryarn"* after every navigation is the audible version of the

@@ -75,7 +75,7 @@
  *
  * **The `site-*` classes work here even off a `.site` page**, and that took one
  * line of CSS rather than a second set of styles: the `--site-*` custom
- * properties are declared on `.plan-cards` as well as on `.site` (styles.css §
+ * properties are declared on `.plan-cards` as well as on `.site` (site.css §
  * the site), because `/profile` is the one caller that is not a marketing page
  * and `site-panel` without those values is a transparent border over no fill —
  * which reads as a class somebody forgot to define rather than as a bug.
@@ -404,7 +404,7 @@ function FinePrint({ tip, children }: { tip: ReactNode; children: ReactNode }) {
        than a width utility of this file's own. There is no preflight here, so a
        bare `<p>` inside the panel would arrive with the UA's 1em margins; that
        class carries `.tip-soon p` spacing and size, and its own `min()` width
-       clamp, which styles.css § tip-soon warns must not be overridden without
+       clamp, which dock.css § tip-soon warns must not be overridden without
        restating. */
     <Tooltip content={tip} placement="top" className="tip-soon">
       <button
