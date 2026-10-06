@@ -1158,7 +1158,7 @@ export function Metadata({
                 icon={BookOpen}
                 label="Parts"
                 value={stats.parts.toLocaleString()}
-                tip="The article's top-level divisions, and the rungs of the leftmost gist column."
+                tip="The article's top-level divisions."
               />
               <Stat
                 icon={List}
