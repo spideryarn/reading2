@@ -101,6 +101,11 @@ const ARTICLE: Article = {
 let sharing: unknown;
 /** Whether that request fails outright. The page's `provenance` then stays null. */
 let metadataFails = false;
+/** How many more reads fail before one succeeds; `metadataFails` is "all of them". */
+let metadataFailsFirst = 0;
+/** Set, and every metadata read waits on it: the request that is still out. */
+let metadataHeld: Promise<void> | null = null;
+let metadataCalls = 0;
 
 /**
  * **Typed as the wire rather than as `ArticleMetadata`**, and that is the point
@@ -132,10 +137,15 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sharing = undefined;
   metadataFails = false;
-  vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+  metadataFailsFirst = 0;
+  metadataHeld = null;
+  metadataCalls = 0;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/api/metadata/")) {
-      if (metadataFails) {
+      metadataCalls++;
+      if (metadataHeld) await metadataHeld;
+      if (metadataFails || metadataFailsFirst-- > 0) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: "the database went away" }), { status: 500 }),
         );
@@ -164,12 +174,44 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
 });
 
 /** The metadata page, settled, with nothing pressed. */
+/** A few turns of the event loop, for a response released after `open()`. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 0));
+    });
+  }
+}
+
+/** Move the faked clock on, and let whatever it fired land. */
+async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+/** `open()` waits on real timers; this is the same render under `vi.useFakeTimers()`. */
+async function openOnFakeTimers(): Promise<void> {
+  history.replaceState(null, "", `/read/${SLUG}/metadata`);
+  await act(async () => {
+    root.render(
+      createElement(
+        NuqsAdapter,
+        null,
+        createElement(Metadata, { slug: SLUG, article: ARTICLE, onRenamed: () => {}, onVisibility: () => {} }),
+      ),
+    );
+  });
+  await advance(10);
+}
+
 async function open(onPrivateLink?: (slug: string, on: boolean | null) => void): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}/metadata`);
   await act(async () => {
@@ -468,6 +510,91 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("could not check");
     // And no switch is offered, because we have no idea what it would toggle.
     expect(host.textContent).not.toContain("Share with anyone");
+  });
+
+  /**
+   * **Still asking is not the same as having failed to find out.**
+   *
+   * `provenance` is null both before the request lands and after it fails, and
+   * the card had one state for both — so every load drew *"We could not
+   * check"* for as long as the request was out (qi-jpqg6r3b, 2026-10-06).
+   */
+  it("says it is checking while the request is out, not that it could not check", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: [] };
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => {
+      release = go;
+    });
+
+    await open();
+
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).not.toContain("Only you can read this");
+
+    release();
+    await settle();
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.textContent).toContain("Only you can read this");
+  });
+
+  /**
+   * **One failed read used to be final.** `reload()` ran when the slug changed
+   * and never again, so a single 404 or dropped connection — easy to get in the
+   * seconds an import is still writing — left the sentence up until the reader
+   * reloaded (qi-kynm6gzc, 2026-10-06).
+   */
+  it("asks again after a failed read, and draws the switch when one lands", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: [] };
+    metadataFailsFirst = 1;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    expect(host.textContent).toContain("could not check");
+    expect(metadataCalls).toBe(1);
+
+    await advance(2_000);
+    expect(metadataCalls).toBe(2);
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).toContain("Only you can read this");
+
+    // And having found out, it stops asking.
+    await advance(120_000);
+    expect(metadataCalls).toBe(2);
+  });
+
+  /**
+   * A wait armed for one article must not fire a read for the next: the timer
+   * holds that article's `reload`. GPT Sol's plan review, 2026-10-06.
+   */
+  it("drops the wait when the page is taken down", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    expect(metadataCalls).toBe(1);
+    await act(async () => root.render(null));
+    await advance(10 * 60_000);
+
+    expect(metadataCalls).toBe(1);
+  });
+
+  it("gives up asking after four more tries, and goes on saying it could not check", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    /* One wait at a time: the next timer is set by an effect, which runs when
+       `act` returns, so one long advance would only ever fire the first. */
+    for (const wait of [2_000, 5_000, 15_000, 30_000]) {
+      await advance(wait);
+    }
+    expect(metadataCalls).toBe(5);
+    await advance(10 * 60_000);
+
+    expect(metadataCalls).toBe(5);
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Checking who can read this");
   });
 
   /**

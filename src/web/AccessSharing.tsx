@@ -56,6 +56,7 @@ import {
   SHARING_PERSONALISED,
   sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
+  SHARING_CHECKING,
   SHARING_UNKNOWN,
   SHARED_HEADING,
   SHARED_NOTE,
@@ -99,10 +100,16 @@ type Learned =
   | { kind: "pending"; to: "private" | "public" }
   | { kind: "unknown"; because: "unread" | "write" };
 
-type CardState = Learned;
+/**
+ * `checking` is the page's state and never the card's own: the metadata request
+ * is still out. It is not `unknown`, which says *we could not check* — a
+ * sentence that is false until the request has actually failed.
+ */
+type CardState = Learned | { kind: "checking" };
 
+const CHECKING: CardState = { kind: "checking" };
 const UNREAD: CardState = { kind: "unknown", because: "unread" };
-const WRITE_UNCERTAIN: CardState = { kind: "unknown", because: "write" };
+const WRITE_UNCERTAIN: Learned = { kind: "unknown", because: "write" };
 
 /**
  * `PUT …/visibility`'s reply, **checked rather than asserted.**
@@ -232,6 +239,7 @@ export function AccessSharing({
   sharing,
   onVisibility,
   privateLinkOn = false,
+  checking = false,
 }: {
   slug: string;
   title: string;
@@ -280,6 +288,8 @@ export function AccessSharing({
    * Absent when the card is mounted on its own, and then it reads as `false`.
    */
   privateLinkOn?: boolean | null;
+  /** The page's read of `sharing` is still out — neither landed nor failed. */
+  checking?: boolean;
 }) {
   /**
    * What this card has learned since the page loaded, or `null` for nothing.
@@ -311,7 +321,8 @@ export function AccessSharing({
    *   after the write leaves the write standing. Saying "unchanged" here told
    *   an owner their public article was private. GPT Sol, 2026-08-28.
    */
-  const card: CardState = acted ?? (sharing ? { kind: "known", state: sharing } : UNREAD);
+  const card: CardState =
+    acted ?? (sharing ? { kind: "known", state: sharing } : checking ? CHECKING : UNREAD);
   const shared = card.kind === "known" ? card.state.visibility === "public" : null;
   const publicAt = card.kind === "known" ? card.state.publicAt : null;
   /**
@@ -487,6 +498,8 @@ export function AccessSharing({
         /* No switch while one is out. The buttons are gone rather than
            disabled, so a second press has nothing to land on. */
         <p className="tw:m-0 tw:text-ink-faint">{sharingInFlight(card.to)}</p>
+      ) : card.kind === "checking" ? (
+        <p className="tw:m-0 tw:text-ink-faint">{SHARING_CHECKING}</p>
       ) : card.kind === "unknown" ? (
         <p className="tw:m-0 tw:text-ink-faint">
           {card.because === "write" ? SHARING_WRITE_UNCERTAIN : SHARING_UNKNOWN}
