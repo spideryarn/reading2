@@ -265,6 +265,18 @@ describe("structureSourceDetail", () => {
       ", from its headings (too long for one answer; there was not time to read it in parts)",
     );
   });
+
+  it("says what a sliced run had to ask for twice: parts, the top line, both or neither", () => {
+    const slices = { by: "slices", slices: 3, refilled: 0, reasked: 0 } as const;
+    expect(structureSourceDetail({ ...slices, secondPass: 0, rootAskedTwice: false })).toBe(", read in 3 parts");
+    expect(structureSourceDetail({ ...slices, secondPass: 1, rootAskedTwice: false })).toBe(", read in 3 parts (1 asked for twice)");
+    expect(structureSourceDetail({ ...slices, secondPass: 0, rootAskedTwice: true })).toBe(
+      ", read in 3 parts (the top line asked for twice)",
+    );
+    expect(structureSourceDetail({ ...slices, secondPass: 2, rootAskedTwice: true })).toBe(
+      ", read in 3 parts (2 and the top line asked for twice)",
+    );
+  });
 });
 
 describe("needsRealStructure", () => {

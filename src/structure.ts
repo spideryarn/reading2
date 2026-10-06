@@ -2226,7 +2226,8 @@ export interface StructureArtefacts {
  *   body was asked about in `slices` slices. `reasked` answers did not pass and
  *   were asked for again; `refilled` sections came back undivided and were
  *   divided by a call of their own; `secondPass` slices failed when first
- *   asked and were asked for once more.
+ *   asked and were asked for once more; `rootAskedTwice`, and so was the call
+ *   for the root's sentence and question.
  * - `answer-too-long`: the same document, where the slices did not make a
  *   tree; `slicesFailed` says which step gave out. What was asked for on the
  *   way is in the run's counts.
@@ -2245,7 +2246,7 @@ export interface StructureArtefacts {
  */
 export type StructureSource =
   | { by: "model" }
-  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number }
+  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number; rootAskedTwice: boolean }
   | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
   | { by: "headings"; reason: "before-structure" };
 
@@ -2663,7 +2664,16 @@ export async function generateStructure(opts: {
     };
     const giveUp = (slicesFailed: SlicesFailure, err?: unknown): StructureRun => {
       log("pipeline").warn(
-        { slug, blocks: body.length, slicesFailed, slices: sliced.slices, calls: sliced.spend.calls, err },
+        {
+          slug,
+          blocks: body.length,
+          slicesFailed,
+          slices: sliced.slices,
+          secondPass: sliced.secondPass,
+          rootAskedTwice: sliced.rootAskedTwice,
+          calls: sliced.spend.calls,
+          err,
+        },
         "the slices did not make a table of contents; building it from the document's headings",
       );
       return fromHeadings({ by: "headings", reason: "answer-too-long", slicesFailed }, spent, bounded);
@@ -2696,6 +2706,7 @@ export async function generateStructure(opts: {
         refilled: sliced.refilled,
         reasked: sliced.reasked,
         secondPass: sliced.secondPass,
+        rootAskedTwice: sliced.rootAskedTwice,
       },
       ...spent,
     });

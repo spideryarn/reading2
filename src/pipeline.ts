@@ -1050,9 +1050,15 @@ export function needsRealStructure(step: StepName): boolean {
 export function structureSourceDetail(source: StructureSource): string {
   if (source.by === "model") return "";
   if (source.by === "slices") {
-    /* A run that only finished on its second pass says so: one that became
-       common would otherwise read as an ordinary success (plan 261005j, 1a). */
-    const twice = source.secondPass > 0 ? ` (${source.secondPass} asked for twice)` : "";
+    /* A run that only finished on a second ask says so: one that became
+       common would otherwise read as an ordinary success (plan 261005j, 1a).
+       The parts by their number, and the root call as "the top line", the
+       words `SLICES_FAILED_WORDS` already uses for it. */
+    const what = [
+      ...(source.secondPass > 0 ? [String(source.secondPass)] : []),
+      ...(source.rootAskedTwice ? ["the top line"] : []),
+    ];
+    const twice = what.length > 0 ? ` (${what.join(" and ")} asked for twice)` : "";
     return `, read in ${source.slices} parts${twice}`;
   }
   switch (source.reason) {
@@ -3133,7 +3139,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           source: run.source.by,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
           /* The slices path: how many, how many re-asked, refilled and asked
-             for in a second pass, or why it gave way to the headings.
+             for in a second pass, whether the root was asked for twice, or
+             why it gave way to the headings.
              src/structure-slices.ts. */
           slices: run.source.by === "slices" ? run.source : null,
           slicesFailed:

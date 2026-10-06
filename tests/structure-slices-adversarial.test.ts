@@ -88,8 +88,9 @@ describe("stage E adversarial regressions", () => {
   it("F23 rejects a root statement rather than inventing its question mark", async () => {
     respond = (call) => call.root ? JSON.stringify({ gist: "The pieces share a worry.", question: "The document discusses ownership." }) : good(call);
     const out = await run();
-    expect(out).toMatchObject({ ok: false, failure: "root-call-failed" });
-    expect(calls.filter((c) => c.root)).toHaveLength(2);
+    expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: true });
+    /* Was 2 until 2026-10-06: the ask, its re-ask, and now one second chance (plan 261005j, stage B). */
+    expect(calls.filter((c) => c.root)).toHaveLength(3);
   });
 
   it("F24 a slice resolving after its cap is awaited and counted but cannot admit a root", async () => {

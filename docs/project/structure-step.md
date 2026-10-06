@@ -1180,6 +1180,12 @@ tree, and is an ordinary finished tree.
   the rest of the first pass. The second pass asks only for what is missing, once each, under the
   same deadline rules, and a slice that fails there is the end of the run. How many slices were
   actually asked in it is `secondPass` on `StructureSource`, in the step's log line and in its `detail`.
+- **The root call is asked for once more too.** If it does not come back, or its answer and the
+  one re-ask of it do not pass, it is asked a second time, one call, under the same deadline
+  rules; the slices and refills are in hand and are not asked again. A refused or cut-short root
+  answer is not asked for again, and neither is one that ran past its cap, which is out of time.
+  That a second ask was actually started is `rootAskedTwice` on `StructureSource`, in the step's
+  log line and in its `detail` ("the top line asked for twice").
 - **Slices, halves, refills and the root are each checkpointed** under their own request, so a
   second run on unchanged blocks asks for nothing. A refused or cut-short slice leaves a marker
   under its own key (an entry with `halve` and no `answer`), so a later run goes straight to the
@@ -1189,7 +1195,7 @@ tree, and is an ordinary finished tree.
   returned.
 - **On a failure it cannot get past, it stops starting calls, waits for the ones in flight, and
   falls back** to the tree below. A slice that failed in both passes, a slice refused or cut short
-  that could not be read in halves, a failed root call, a joined tree that will not build, or
+  that could not be read in halves, a root call that failed twice, a joined tree that will not build, or
   time running out, which stops both passes at once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
