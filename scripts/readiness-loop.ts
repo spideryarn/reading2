@@ -462,8 +462,8 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
 }
 
 /**
- * **`npm run check` has an undeclared prerequisite, and without this the runner
- * would record a permanent false red.**
+ * **Build the fleet client for the runner's bare test check, and abort
+ * preparation if that build fails.**
  *
  * `tests/fleet-decisions-route.test.ts` imports `tools/fleet/server.ts`, and
  * that module refuses at startup unless `tools/fleet/web/dist/index.html`
@@ -487,8 +487,9 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * (docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md). This
  * stays for the two things that step does not do: scripts/readiness-run.ts's
  * `test` check runs a bare `npm test`, which builds nothing, and a build that
- * fails here aborts the tick instead of being recorded as a red check. On a
- * tick that prepares, the client is built twice, about 3 s.
+ * fails here aborts the tick instead of being recorded as a red check. When
+ * preparation needs a fleet rebuild and then runs `check`, the client is built
+ * twice. Creating the runner also runs setup's builds first.
  *
  * The output is gitignored (`dist/`, unanchored), so it does not dirty the tree
  * the record is about — verified, not assumed. A failed build aborts this tick

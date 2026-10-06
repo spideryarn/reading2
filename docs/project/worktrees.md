@@ -300,11 +300,13 @@ re-measured, so the 95 above is still the 2026-09-01 figure and the two numbers 
 **And a second cause since** (seen 2026-09-29, not counted): the fleet tests that read the built
 dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — are red
 until `npm run build:fleet` runs, and say so.
-**Since 2026-10-06 `worktree:setup` runs both builds itself**, so after setup none of those five is
-red: every session had been reporting the same five, and noise that size hides a real red. It costs
+**Since 2026-10-06 `worktree:setup` runs both builds itself**, so successful builds remove the
+missing-output failures from those five files. Every session had been reporting the same five, and
+noise that size hides a real red. It costs
 about 19 s and 16 MB (measured at load 17: `build` 16.5 s, `build:fleet` 2.7 s). The list is
-`SUITE_BUILDS` (`scripts/deploy-checks.ts`), which the deploy gate and `npm run check` read too. A
-build that fails is printed as `FAIL` and setup carries on, so a broken trunk still gives you a tree
+`SUITE_BUILDS` (`scripts/deploy-checks.ts`): `build` followed by `GATE_TOOLING_BUILDS`, the extra
+builds the deploy gate and `npm run check` also run. A build that fails is printed as `FAIL` and
+setup carries on, so a broken trunk still gives you a tree
 to fix it in. **The output is only as new as that build**: a bare `npm test` does not rebuild, and
 `npm run check` does. The five files still fail with no build —
 [the plan](../plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md) has the run that shows it.

@@ -37,10 +37,12 @@ build:fleet` 2.7 s; 16 MB of output in all.
 
 ## The change
 
-**One list, three readers.** `scripts/deploy-checks.ts` gains `SUITE_BUILDS`: `"build"` followed by
-every `GATE_TOOLING_BUILDS` script, in order. It is "every npm script that has to have run before
+**A shared tooling list, with the product build first.** `scripts/deploy-checks.ts` gains
+`SUITE_BUILDS`: `"build"` followed by every `GATE_TOOLING_BUILDS` script, in order.
+It is "every npm script that has to have run before
 the suite can be green". The drift test in `tests/deploy-checks.test.ts` compares the suite's hints
-against that, so the three readers below cannot disagree with it or with each other.
+against that. Setup reads `SUITE_BUILDS`; check and deploy run the product build separately and
+read `GATE_TOOLING_BUILDS` for the rest. The check-order test holds check to that tooling list.
 
 1. **`scripts/check.ts`** adds one gate step per `GATE_TOOLING_BUILDS` entry, between `build` and
    `test`. `--fast` keeps them (2.7 s; and the test gate below reads the output, the same argument
@@ -111,8 +113,9 @@ again.
 - **F2, half taken.** `scripts/readiness-loop.ts` § `ensureFleetClient` is an earlier local
   mitigation whose comment names this change as the real repair. It stays, with its comment
   brought up to date: `scripts/readiness-run.ts`'s `test` check runs a bare `npm test`, and a
-  failed build there aborts the tick rather than recording a red. The cost is one 3 s double build
-  on a tick that prepares. **The "three places" above is not a full inventory**: that `test` check
+  failed build there aborts the tick rather than recording a red. When preparation needs a fleet
+  rebuild and then runs `check`, it builds that client twice; a newly created runner also builds
+  during setup first. **The "three places" above is not a full inventory**: that `test` check
   and `scripts/store-migration-witness.ts --full` also run the suite without building, and both
   rely on a tree that has been set up.
 - **F3, taken**: the claim about concurrent builds is narrowed above.

@@ -14,6 +14,8 @@
  * docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md.
  */
 import { spawnSync } from "node:child_process";
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -22,18 +24,41 @@ import { GATE_TOOLING_BUILDS } from "../scripts/deploy-checks.js";
 
 const REPO = path.resolve(import.meta.dirname, "..");
 
+// If --list regresses, fail before the execution loop can launch the real
+// checks (including this suite again). A timeout alone leaves grandchildren.
+const NO_CHECK_COMMANDS = `data:text/javascript,${encodeURIComponent(`
+  import childProcess from "node:child_process";
+  import { syncBuiltinESMExports } from "node:module";
+  childProcess.spawnSync = () => { throw new Error("check --list must not start child processes"); };
+  syncBuiltinESMExports();
+`)}`;
+
 function listed(...flags: string[]): string[] {
-  const run = spawnSync(process.execPath, ["--import", "tsx", "scripts/check.ts", "--list", ...flags], {
-    cwd: REPO,
-    encoding: "utf8",
-    timeout: 60_000,
-  });
-  expect(run.status, run.stderr).toBe(0);
-  return run.stdout.split("\n").filter((line) => line !== "");
+  // File-backed capture works where sandboxed synchronous pipes return EPERM
+  // even though the child exits 0 (see helpers/wrapper-env.ts).
+  const dir = mkdtempSync(path.join(tmpdir(), "check-list-"));
+  const stdout = path.join(dir, "stdout");
+  const stderr = path.join(dir, "stderr");
+  const out = openSync(stdout, "w");
+  const err = openSync(stderr, "w");
+  try {
+    const run = spawnSync(process.execPath, ["--import", "tsx", "--import", NO_CHECK_COMMANDS, "scripts/check.ts", "--list", ...flags], {
+      cwd: REPO,
+      stdio: ["ignore", out, err],
+      timeout: 60_000,
+    });
+    if (run.error) throw run.error;
+    expect(run.status, readFileSync(stderr, "utf8")).toBe(0);
+    return readFileSync(stdout, "utf8").split("\n").filter((line) => line !== "");
+  } finally {
+    closeSync(out);
+    closeSync(err);
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 describe("npm run check -- --list", () => {
-  for (const flags of [[], ["--fast"], ["--offline"]]) {
+  for (const flags of [[], ["--fast"], ["--offline"], ["--fast", "--offline"]]) {
     it(`runs every build the suite needs above the test gate ${flags.join(" ")}`.trim(), () => {
       const steps = listed(...flags);
       /* A control: a `--list` that printed nothing, or ran the checks instead,
