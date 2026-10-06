@@ -1082,7 +1082,9 @@ function stepPreviews(
  * and the endings that have no product go through `session.settleJob`.
  *
  * `decide` is the caller's, and it is called **immediately before** the commit
- * rather than after the step returns. That is the ordering the atomic boundary
+ * rather than after the step returns. It may throw `DeadlineReached` instead of
+ * answering, which is how a step that returned after the claimant's deadline
+ * is treated as one the deadline stopped: nothing is committed. That is the ordering the atomic boundary
  * needs: the job transition has to be known while there is still a transaction
  * to put it in. It sees this step already marked `done` in memory, and the title
  * already on the job, because both are inputs to what the transition says.
@@ -1339,7 +1341,13 @@ async function runStep(
        job, not about this step: `run` returned and its postcondition passed, so
        the work is real and paid for. Clearing the marker after the throw would
        leave a completed step looking interrupted, and the Retry that follows a
-       cancel would buy the same model call twice. */
+       cancel would buy the same model call twice.
+
+       **That argument is the reader's Stop only.** When the abort was our own
+       deadline, `decide` throws and the product is dropped on purpose; see
+       `transitionAfter`. And a Stop answered on this instance commits the
+       product into a draft that the `cancelled` ending then fails, so the
+       protection described above is not one that ending gives. */
     const transition = decide();
     /* **The settlement that happened, not the one that was asked for.** A
        release resolves to *cancelled* when a Stop landed while the step ran, and
@@ -2815,16 +2823,35 @@ async function walkClaim(
     const transitionAfter = (): JobTransition => {
       /* **Whose abort was it?** A step that watches its signal unwinds through
          `runStep`'s catch and never reaches here; a step that ignores it runs to
-         completion and lands exactly here — and if the thing that aborted was
-         our own deadline rather than the reader, calling it "cancelled" tells
-         them they stopped something they did not. GPT Sol found the
-         mislabelling; the deadline had a branch on the failure path and none on
-         the success path. */
+         completion and lands exactly here.
+
+         **Our own deadline: the product is not kept, and the job is put down.**
+         Thrown rather than returned, so it lands in `runStep`'s catch before
+         the commit and takes the path a step that *obeyed* the deadline takes:
+         `cancelled`, then the walk's `pauseForDeadline`, with all four of its
+         answers. Until 2026-10-07 this returned `interruptedEnding`, which
+         committed the finished product into a draft the same transaction then
+         failed, and ended the job `error` under a sentence saying finished
+         steps are kept. It was reachable: `assets` answers an abort by
+         returning, and can run about 360 s against a 185 s budget.
+
+         **Not kept, deliberately.** What such a step returns is what it had
+         when it was told to stop. `assets` returns a manifest whose unfetched
+         images are `failed: "network"`, stamped current, and committing that
+         would publish it. The step runs again in the next window; the steps
+         before it are already in the draft, which the pause keeps.
+         tests/jobs-walk.test.ts § the exits of a claim. */
+      if (overran()) throw controller.signal.reason;
+      /* **The reader's Stop, on this instance.** Ends `cancelled` with the
+         draft failed, where the same Stop answered by another instance leaves
+         the job to finish `done` and published (`finishIn` clears the flag).
+         Two answers to one question, known and left alone: which is right is
+         a product decision that has not been made, and both are pinned as
+         today's behaviour in tests/jobs-walk.test.ts.
+         docs/plans/261007a-seventh-sweep-job-queue-tier-0.md § Left open. */
       if (controller.signal.aborted) {
-        const ending = overran()
-          ? interruptedEnding(job)
-          : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
-        return { kind: "end", jobId: job.id, attempt, ending };
+        markCancelled(job, "Cancelled");
+        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
       }
       /* The step that has just finished is already `done` in memory, so this is
          the next one the walk would reach — and `undefined` means the job is

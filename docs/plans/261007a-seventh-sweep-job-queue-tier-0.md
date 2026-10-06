@@ -138,3 +138,41 @@ the ending for is not a job to report as ended"), and the lease is what covers i
 **What the investigation got wrong.** The first investigation named one exit; there were four. The
 Opus review's fix for the other three was a new door and a new sentence; a tolerant write needed
 neither.
+
+### PQO1, the deadline row: a step that returns after our deadline is put down, not ended
+
+- [x] Red, against real Postgres.
+- [x] Fix, in `src/jobs.ts` § `transitionAfter`.
+- [x] Today's two Stop endings pinned, labelled as an open question.
+- [x] `ingest-queue.md` says what happens.
+
+**Evidence:** R against Postgres (the Opus review reproduced it; rebuilt here as a case).
+**Files:** `src/jobs.ts` (`transitionAfter`, and two comments in `runStep`),
+`tests/jobs-walk.test.ts`, `docs/project/ingest-queue.md`.
+
+**Done when** a single-step job whose step sleeps past the deadline and returns its product goes
+back to `queued` with `requeues` 1, its step `pending` and its draft still a draft, and the next
+claim runs the step again and publishes.
+
+**Red.** With a 100 ms deadline and a step that sleeps 400 ms and ignores its signal:
+
+```
+× puts the job down with its draft, not ends it, when a step returns after our own deadline
+    AssertionError: there is still work to do: expected true to be false
+```
+
+**What landed.** `transitionAfter` throws the abort's reason when the abort was our deadline. That
+lands in `runStep`'s existing catch before the commit, so the product is **not committed**; the
+step is recorded as the deadline stopped it, and the walk's existing branch calls
+`pauseForDeadline`. All four of its answers apply unchanged: requeued with the draft, a Stop that
+wins, a stale claim, and a spent budget that ends `INTERRUPTED` as before. Work committed by
+earlier steps stays in the draft.
+
+The product is discarded, not kept, as both reviews and the orchestrator's correction say:
+`assets` would otherwise publish a manifest of unfetched images stamped current.
+
+**Stop is unchanged.** The two characterisation cases passed before the fix and after it.
+
+**What the investigation got wrong.** "`assets` is the last step of every import" (it is not the
+last step of a minimal one, as the Sol review says). Nothing else.
+

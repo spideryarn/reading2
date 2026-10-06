@@ -141,7 +141,9 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import {
   advanceJobWith,
+  cancelJob,
   claimSession,
+  DEADLINE_MARGIN_MS,
   LEASE_MS,
   STEP_BUDGET_MS,
   type AdvanceParts,
@@ -1154,6 +1156,8 @@ describe("one claim walks the whole job", () => {
    * the end; the plan lists both.
    */
   describe("the exits of a claim (seventh sweep, tier 0)", () => {
+    const sleep = (ms: number) => new Promise((go) => setTimeout(go, ms));
+
     /** The job row as stored, including the two columns `Job` does not carry. */
     async function rowOf(id: string) {
       const [row] = await getDb()
@@ -1290,6 +1294,96 @@ describe("one claim walks the whole job", () => {
          under a live lease and would hold one of the machine's slots against
          every case after it. */
       await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
+    });
+
+    /* ------------------------------------------------------------ PQO1 -- */
+
+    it("puts the job down with its draft, not ends it, when a step returns after our own deadline", async () => {
+      const slug = "test-walk-returns-after-deadline";
+      const { job, parts, fresh, made } = await fixture(slug, ["fetch"]);
+      let runs = 0;
+      let abortedWhenItReturned: boolean | undefined;
+      /* A step that ignores its signal, and is not marked fresh by a run the
+         queue did not keep: under the real reads the unfinished run's marker is
+         what says so, and `freshness()` has no marker. */
+      const ignoresItsSignal = {
+        name: "fetch",
+        label: STEPS.fetch.label,
+        produces: STEPS.fetch.produces,
+        async run(ctx: StepContext): Promise<StepProduct> {
+          runs += 1;
+          if (runs === 1) {
+            await sleep(400);
+            abortedWhenItReturned = ctx.signal.aborted;
+          } else {
+            fresh.note(slug, "fetch");
+          }
+          return made.fetch as StepProduct;
+        },
+      } as PipelineStep;
+      const withStep: AdvanceParts = {
+        ...parts,
+        steps: { ...parts.steps, fetch: ignoresItsSignal } as AdvanceParts["steps"],
+      };
+
+      const first = await advanceAsOwner(job.id, {
+        ...withStep,
+        leaseMs: DEADLINE_MARGIN_MS + 100,
+      });
+
+      expect(abortedWhenItReturned, "the deadline has to have fired while the step ran").toBe(true);
+      expect(first?.done, "there is still work to do").toBe(false);
+      expect(first?.busy).toBe(false);
+      expect(first?.job.status).toBe("queued");
+      expect(first?.job.requeues, "and it spent one window of the budget").toBe(1);
+      expect(first?.job.steps[0]?.status, "the step is to run again").toBe("pending");
+      const paused = await rowOf(job.id);
+      expect(paused?.draft, "the draft is kept").toBeTruthy();
+      expect(await revisionStatus(paused?.draft)).toBe("draft");
+
+      const second = await advanceAsOwner(job.id, withStep);
+
+      expect(runs, "the product the deadline overtook was not kept, so the step ran again").toBe(2);
+      expect(second?.job.status).toBe("done");
+      expect(await revisionStatus(paused?.draft)).toBe("published");
+    });
+
+    /**
+     * **Today's behaviour, pinned and not endorsed.** A step that finishes its
+     * work although Stop was pressed has two endings, and which one a reader
+     * gets depends on which server answered the Stop. It is an open product
+     * question for Greg (the plan's § Left open); these two cases exist so
+     * that nothing changes it by accident before he answers.
+     */
+    describe("Stop during a last step that finishes anyway — today's behaviour, an open question", () => {
+      async function stopDuringLastStep(slug: string, press: (id: string) => Promise<unknown>) {
+        let draft: string | null | undefined;
+        const { job, parts } = await fixture(slug, ["fetch"], {
+          fetch: async () => {
+            draft = (await rowOf(job.id))?.draft;
+            await press(job.id);
+          },
+        });
+        const advanced = await advanceAsOwner(job.id, parts);
+        return { advanced, draft: await revisionStatus(draft) };
+      }
+
+      it("pressed on another server: the job ends done and the article is published", async () => {
+        const { advanced, draft } = await stopDuringLastStep("test-walk-stop-remote-last", (id) =>
+          pgJobStore.requestCancel(id, OWNER),
+        );
+        expect(advanced?.job.status).toBe("done");
+        expect(draft).toBe("published");
+      });
+
+      it("pressed on the claimant's own server: the job ends cancelled and the draft is failed", async () => {
+        const { advanced, draft } = await stopDuringLastStep("test-walk-stop-local-last", (id) =>
+          runAsOwner(OWNER, () => cancelJob(id)),
+        );
+        expect(advanced?.job.status).toBe("cancelled");
+        expect(advanced?.job.steps[0]?.status, "the step is shown as finished").toBe("done");
+        expect(draft).toBe("failed");
+      });
     });
   });
 });

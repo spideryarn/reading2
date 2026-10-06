@@ -1935,6 +1935,25 @@ has the step's side;
 [261005j § Plan: the rest of stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)
 has the reasoning, stage C.
 
+**A step that returns after the deadline takes the same pause, since 2026-10-07.** A step that
+ignores its signal runs to the end and hands back a product. Until then that case alone *ended*
+the job: `transitionAfter` answered an `error` ending, the product was committed into a draft the
+same transaction failed, and the card said the finished steps were kept. It is reachable through
+`assets`, which answers an abort by returning and can run about 360 s against a 185 s budget. Now
+`transitionAfter` throws the deadline instead of answering, so nothing is committed and the walk
+reaches `pauseForDeadline` with its four answers, exactly as for a step that obeyed. **The product
+is dropped on purpose**: `assets` returns a manifest whose unfetched images are marked
+`failed: "network"` and stamped current, and keeping it would publish it. The step runs again in
+the next window, on a draft that still holds every step before it.
+
+**What Stop does in the same position is two things, and is an open question.** If the last step
+finishes although Stop was pressed, the job ends `done` and published when the Stop was answered
+by another server (`finishIn` clears the flag), and `cancelled` with the draft failed when it was
+answered by the claimant's own. Neither was changed; both are pinned as today's behaviour in
+`tests/jobs-walk.test.ts`, and
+[261007a § Left open](../plans/261007a-seventh-sweep-job-queue-tier-0.md#left-open-for-greg) has
+the question.
+
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
 the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate
