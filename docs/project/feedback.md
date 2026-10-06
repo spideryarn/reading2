@@ -166,7 +166,8 @@ first `await`, so a large pasted screenshot is stringified before React gets to 
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-3R)
 
 The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in reader's own reports,
-newest first — the date, problem or suggestion, the page it was filed from, and what they wrote —
+newest first — the date, problem or suggestion, the page it was filed from (and the paragraph, for
+its link), and what they wrote —
 read by `GET /api/feedback`, which is owner-scoped in the store like every other read and sends
 **those fields, whether it shipped, and nothing else**: not the email, the address, the diagnostics
 or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why). Fifty at
@@ -183,9 +184,17 @@ credentialled URL would be. The store makes it, so the address never leaves `lis
 surface-by-surface check.
 
 **And the label is a link to that page**, since 2026-10-05 (Greg, `spya-tqk7au`: *"Make it a
-link."*). It goes to the page, not to the paragraph or mode the report was filed in, because those
-were in the query string. The browser refuses any label that is not a plain path on this site, so
-a wrong value cannot become a link elsewhere. Following it in this tab closes the dialog and
+link."*). The browser refuses any label that is not a plain path on this site, so
+a wrong value cannot become a link elsewhere.
+
+**The link opens the article at the paragraph the report was filed at**, since 2026-10-06 (Greg,
+asked whether it should: *"B whatever's simplest"*). The server picks the `at` block id out of the
+stored address and sends it beside the label, only for an article's reading page and only when it
+has a block id's fixed shape, which is what makes it safe: a value that passes cannot be search
+terms. Nothing else from the query is sent, so the link does not restore the mode. The browser
+checks the shape again. A reader already on that page at that paragraph stays where they are, and
+the dialog just closes:
+[261006b](../plans/261006b-earlier-link-carries-the-paragraph.md). Following it in this tab closes the dialog and
 uses the app's router so an unsent Write draft survives on ordinary app pages; opening it in
 another tab leaves the dialog open:
 [261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md),

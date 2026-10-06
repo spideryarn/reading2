@@ -46,6 +46,7 @@
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isSpideryarnId } from "../ids.js";
 import { FEEDBACK_EARLIER_FAILED } from "../messages.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
@@ -109,6 +110,10 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
       (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
       typeof report.body === "string" &&
       (report.page === null || isSitePath(report.page)) &&
+      /* A block id or nothing, and never without a page to be at: it goes
+         into the same `href` (261006b). */
+      (report.at === null ||
+        (typeof report.at === "string" && isSpideryarnId(report.at) && report.page !== null)) &&
       typeof report.shipped === "boolean"
     );
   })) return false;
@@ -128,10 +133,11 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
 
 /**
  * A tab can outlive a deployment rollback: the new client then reads the old
- * server, whose otherwise-valid rows predate `page`. Treat that one absent
- * field as the same answer as `null`; a present malformed value still reaches
- * the validator above and fails closed. There is no service-worker copy of
- * this route — this is only wire compatibility across two live builds.
+ * server, whose otherwise-valid rows predate `page`, or `at` after it. Treat
+ * an absent one of those as the same answer as `null`; a present malformed
+ * value still reaches the validator above and fails closed. There is no
+ * service-worker copy of this route — this is only wire compatibility across
+ * two live builds.
  */
 function withLegacyPage(value: unknown): unknown {
   if (typeof value !== "object" || value === null) return value;
@@ -140,8 +146,12 @@ function withLegacyPage(value: unknown): unknown {
   return {
     ...answer,
     reports: answer.reports.map((report: unknown) => {
-      if (typeof report !== "object" || report === null || Object.hasOwn(report, "page")) return report;
-      return { ...report, page: null };
+      if (typeof report !== "object" || report === null) return report;
+      return {
+        ...report,
+        ...(Object.hasOwn(report, "page") ? null : { page: null }),
+        ...(Object.hasOwn(report, "at") ? null : { at: null }),
+      };
     }),
   };
 }
@@ -369,14 +379,15 @@ export function EarlierList({
                       sees that it did. The server's label, not the address
                       (src/feedback-page.ts): the path of a page this app
                       has, so it is its own link (spya-tqk7au, "Make it a
-                      link") — to the page, not to the paragraph or mode the
-                      report was filed in, which went with the query. */}
+                      link") — to the page, at the paragraph the report was
+                      filed at when the server could say (261006b), and not in
+                      the mode, which went with the rest of the query. */}
                   {report.page === null ? null : (
                     <>
                       {" · on "}
                       <Link
                         className="fb-earlier-page"
-                        href={report.page}
+                        href={report.at === null ? report.page : `${report.page}?at=${report.at}`}
                         onClick={(event) => {
                           if (event.defaultPrevented || event.button !== 0 || event.metaKey ||
                             event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -384,6 +395,16 @@ export function EarlierList({
                              Route inside the app so the hidden Write draft survives;
                              opening another tab leaves this dialog alone. */
                           event.currentTarget.closest("dialog")?.close();
+                          /* Already on that page at that paragraph: stay.
+                             `navigate` scrolls to the top and the reading view
+                             moves to `?at=` only when it changes, so following
+                             the link from here would lose the place it names
+                             (GPT Sol's plan review of 261006b, P1-F1). */
+                          if (
+                            report.at !== null &&
+                            location.pathname === report.page &&
+                            new URLSearchParams(location.search).get("at") === report.at
+                          ) event.preventDefault();
                         }}
                       >
                         {report.page}

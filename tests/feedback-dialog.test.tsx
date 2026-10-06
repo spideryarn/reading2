@@ -1436,6 +1436,8 @@ describe("the Earlier tab", () => {
         kind: "suggestion",
         body: "A tab of what I sent before.\nJust a list.",
         page: "/read/why-trees-spya-k3m9qt",
+        /* The paragraph it was filed at (261006b). */
+        at: "spya-tgnssb",
         shipped: true,
       },
       {
@@ -1445,6 +1447,7 @@ describe("the Earlier tab", () => {
         body: "The shelf is slow.",
         /* A report older than 2026-09-02, or one whose address did not parse. */
         page: null,
+        at: null,
         shipped: false,
       },
     ],
@@ -1565,10 +1568,10 @@ describe("the Earlier tab", () => {
     expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent).toContain(
       " · Suggestion · on /read/why-trees-spya-k3m9qt · Shipped",
     );
-    /* A link since spya-tqk7au ("Make it a link"), to the label itself: the
-       page, without the query it was filed with. */
+    /* A link since spya-tqk7au ("Make it a link"): to the page, and to the
+       paragraph the report was filed at (261006b), which the text leaves out. */
     const link = items[0]?.querySelector("a.fb-earlier-page");
-    expect(link?.getAttribute("href")).toBe("/read/why-trees-spya-k3m9qt");
+    expect(link?.getAttribute("href")).toBe("/read/why-trees-spya-k3m9qt?at=spya-tgnssb");
     expect(items[1]?.querySelector(".fb-earlier-meta a")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-page")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).not.toContain(" on ");
@@ -1577,7 +1580,8 @@ describe("the Earlier tab", () => {
   it("reads an old server's row without page as a report with no page label", async () => {
     const report = REPORTS.reports[0];
     if (!report) throw new Error("the fixture has no report");
-    const { page: _dropped, ...withoutPage } = report;
+    /* A server that old has no `at` either (261006b). */
+    const { page: _dropped, at: _alsoDropped, ...withoutPage } = report;
     listAnswer = page({ reports: [withoutPage], more: false, counts: { all: 1, shipped: 1, unshipped: 0 } });
     mount();
     click(tab("Earlier"));
@@ -1585,6 +1589,72 @@ describe("the Earlier tab", () => {
     expect(panelOf("Earlier").textContent).toContain(withoutPage.body);
     expect(panelOf("Earlier").querySelector(".fb-earlier-page")).toBeNull();
     expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+  });
+
+  /* docs/plans/261006b-earlier-link-carries-the-paragraph.md. */
+  it("links to the bare page when the report has no paragraph", async () => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], at: null }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").querySelector("a.fb-earlier-page")?.getAttribute("href")).toBe(
+      "/read/why-trees-spya-k3m9qt",
+    );
+  });
+
+  it("reads an old server's row without at as a report with no paragraph", async () => {
+    const report = REPORTS.reports[0];
+    if (!report) throw new Error("the fixture has no report");
+    const { at: _dropped, ...withoutAt } = report;
+    listAnswer = page({ reports: [withoutAt], more: false, counts: { all: 1, shipped: 1, unshipped: 0 } });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+    expect(panelOf("Earlier").querySelector("a.fb-earlier-page")?.getAttribute("href")).toBe(
+      "/read/why-trees-spya-k3m9qt",
+    );
+  });
+
+  /* The second line, as for the path: the server sends a block id or null
+     (src/feedback-page.ts), and anything else fails the answer instead of
+     becoming part of a link. */
+  it.each([
+    "spya-tgnssb&mode=search",
+    "spya-tgnssb#x",
+    "spya-tgnssb0",
+    "SPYA-TGNSSB",
+    "private words",
+    "",
+    7,
+    { id: "spya-tgnssb" },
+  ])("refuses an at that is not a block id: %j", async (bad) => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], at: bad }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    expect(panelOf("Earlier").querySelector("a.fb-earlier-page")).toBeNull();
+  });
+
+  it("refuses a paragraph on a report with no page to be at", async () => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], page: null }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
   });
 
   it("still refuses a present malformed page", async () => {
@@ -1636,11 +1706,51 @@ describe("the Earlier tab", () => {
     const event = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => link.dispatchEvent(event));
     expect(event.defaultPrevented, "a document navigation would discard the draft").toBe(true);
-    expect(navigate).toHaveBeenCalledWith("/read/why-trees-spya-k3m9qt");
+    expect(navigate).toHaveBeenCalledWith("/read/why-trees-spya-k3m9qt?at=spya-tgnssb");
     expect(harness.dialog.open).toBe(false);
     harness.show(true);
     expect(firstBox().value).toBe("Still writing this report.");
     expect(posts).toHaveLength(0);
+  });
+
+  /* GPT Sol's plan review of 261006b, P1-F1: `navigate` scrolls to the top, and
+     the reading view only moves to `?at=` when it *changes*. So following a
+     link to the paragraph the reader is already at, with anything else in the
+     address different, landed them at the top of the article. */
+  describe("when the reader is already on that page at that paragraph", () => {
+    const before = location.pathname + location.search;
+    afterEach(() => history.replaceState(null, "", before));
+
+    it("closes the dialog and leaves the page where it is", async () => {
+      history.replaceState(null, "", "/read/why-trees-spya-k3m9qt?mode=glossary&at=spya-tgnssb");
+      listAnswer = page(REPORTS);
+      const harness = mountControlledHarness();
+      click(tab("Earlier"));
+      await act(async () => {});
+      const link = panelOf("Earlier").querySelector("a.fb-earlier-page");
+      if (!link) throw new Error("no page link");
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+      act(() => link.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(true);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(harness.dialog.open).toBe(false);
+    });
+
+    it.each([
+      ["another paragraph", "/read/why-trees-spya-k3m9qt?at=spya-k3m9qt"],
+      ["no paragraph", "/read/why-trees-spya-k3m9qt"],
+      ["another article", "/read/another-piece?at=spya-tgnssb"],
+    ])("still follows the link from %s", async (_name, here) => {
+      history.replaceState(null, "", here);
+      listAnswer = page(REPORTS);
+      mountControlledHarness();
+      click(tab("Earlier"));
+      await act(async () => {});
+      const link = panelOf("Earlier").querySelector("a.fb-earlier-page");
+      if (!link) throw new Error("no page link");
+      act(() => link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+      expect(navigate).toHaveBeenCalledWith("/read/why-trees-spya-k3m9qt?at=spya-tgnssb");
+    });
   });
 
   it.each(["metaKey", "ctrlKey", "shiftKey", "altKey"])("leaves a %s page activation to the browser and keeps the dialog open", async (modifier) => {
