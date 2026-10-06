@@ -670,14 +670,10 @@ export function firstOpenHref(
 }
 
 /**
- * Both halves, wired to one article. Called near the top of `ArticlePage`.
- *
- * **In `ArticlePage` rather than in main.tsx**, which is where every other
- * address rewrite lives. Those run once per page load, and the commonest way to
- * reopen an article is a click on the shelf — a client-side `navigate()` that
- * never re-runs that file. This component mounts on a cold load, mounts again
- * on a navigation from the shelf, and changes its `slug` prop on a jump from
- * one article to another. One hook covers all three.
+ * Both halves, wired in `App` above its auth branches. A null slug means
+ * no article is on screen: advance the reader identity without reading,
+ * claiming or saving an article's view. This also covers client navigation;
+ * boot-time rewrites in main.tsx alone cannot do that.
  *
  * **A layout effect for the restore**, so the address is settled before
  * anything paints. `useReadingPosition`, which turns `?at=` into a scroll,
@@ -688,18 +684,17 @@ export function firstOpenHref(
  * **A passive effect for the save, and it holds no state**, which is why it
  * subscribes through `onAddressChange` rather than calling `useAddress()`:
  * `?at=` is rewritten about once a second while anybody scrolls, and a re-render
- * of `ArticlePage` on each of those would re-render the whole article.
+ * of `App` on each of those would re-render the whole article.
  *
  * ## A change of reader, with the article still on screen
  *
- * `readerId` is `ArticlePage`'s own prop, **not `useMadeFor()`**. That answer
- * is frozen at mount, which is its point, and `ArticlePage` is not remounted
- * when one signed-in reader becomes another (another tab signed in as somebody
- * else): only what is under its access gate is. With the frozen answer, B's
- * movements would be written under A's key (GPT Sol, plan 261006h, F1).
- * Between signed out and signed in the page *is* remounted, because `App`
- * draws those two from different places, so the case here is always one
- * reader to another.
+ * `readerId` comes from `App`'s current session, **not `useMadeFor()`**,
+ * whose answer is frozen at mount. The hook must outlive both signed-in
+ * account changes and sign-out/sign-in: `ArticlePage` remounts across the
+ * auth branches, but the old reader's address stays in this tab. Keeping
+ * the arrival ref inside that page loses the very identity needed to strip
+ * the old view. tests/last-view-app-reader-change.test.tsx exercises the
+ * real App boundary; plan 261006h code review C1.
  *
  * At that moment the address is A's view: A's section, A's mode, perhaps the
  * `?note=` or `?thread=` A had open. B did not open that link. So **the change
@@ -715,11 +710,11 @@ export function firstOpenHref(
  * `arrivedFor` for exactly that, or the bare address would be saved over A's
  * place on A's way out.
  */
-export function useLastView(slug: string, view: ArticleView, readerId: string | null): void {
+export function useLastView(slug: string | null, view: ArticleView, readerId: string | null): void {
   /* One decision per slug/view/reader arrival, including StrictMode replay. A
      view change can claim a first article open after metadata, but only a new
      slug or a new reader restores a saved view. */
-  const arrivedFor = useRef<{ slug: string; view: ArticleView; readerId: string | null } | null>(null);
+  const arrivedFor = useRef<{ slug: string | null; view: ArticleView; readerId: string | null } | null>(null);
   /* The slug and reader whose first open has been claimed and whose default
      is still to be applied — see the second effect. */
   const firstOpenFor = useRef<{ slug: string; readerId: string | null } | null>(null);
@@ -729,6 +724,10 @@ export function useLastView(slug: string, view: ArticleView, readerId: string | 
     const newReader = before !== null && before.readerId !== readerId;
     const restore = before?.slug !== slug || newReader;
     arrivedFor.current = { slug, view, readerId };
+    if (slug === null) {
+      firstOpenFor.current = null;
+      return;
+    }
     /* § A change of reader, above. Only while the address still names this
        article: one that has moved on is somewhere somebody chose to go. */
     const route = parseRoute(location.pathname);
@@ -772,7 +771,7 @@ export function useLastView(slug: string, view: ArticleView, readerId: string | 
   const { loaded, signedIn } = useExperimental();
   useLayoutEffect(() => {
     const claimed = firstOpenFor.current;
-    if (view !== "article" || !loaded || claimed?.slug !== slug || claimed.readerId !== readerId) return;
+    if (slug === null || view !== "article" || !loaded || claimed?.slug !== slug || claimed.readerId !== readerId) return;
     firstOpenFor.current = null;
     const href = firstOpenHref(
       slug,
@@ -785,6 +784,7 @@ export function useLastView(slug: string, view: ArticleView, readerId: string | 
   }, [slug, view, readerId, loaded, signedIn]);
 
   useEffect(() => {
+    if (slug === null) return;
     const save = () => {
       /* **Which article the address currently names, not which one this
          component was rendered for.** `navigate()` writes the new address

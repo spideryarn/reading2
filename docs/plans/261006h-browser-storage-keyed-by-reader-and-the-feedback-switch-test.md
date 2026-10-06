@@ -160,3 +160,9 @@ default. Signed-out visits are now recorded under `signed-out`, so the reader's 
 open gets the default, and does not inherit the place they reached signed out. It falls out of
 keying by reader; keeping the old behaviour needs a special case (adopt the `signed-out` entry on
 first sign-in), which reintroduces a small version of the leak this plan closes.
+
+**Code review C1:** keeping the hook in `ArticlePage` covered an in-place A→B switch but lost
+its arrival identity when sign-out/sign-in remounted the page. A real App test reproduced B
+inheriting A's URL and overwriting B's saved view. `useLastView` now lives in `App`, above both
+auth branches; a non-article route advances the reader identity without reading or saving a view.
+An explicit link opened after switching away from the article still wins.

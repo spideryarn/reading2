@@ -167,8 +167,9 @@ above, where the reader changes in another tab with no sign-out in this one.
 with `signed-out` for nobody. Two stores follow it:
 
 - **Where you were in an article** ([`last-view.ts`](../../src/web/last-view.ts)): the key is
-  `spya.lastViewFor.<reader>.<slug>`. The reader comes from `ArticlePage`'s own prop and not from
-  `useMadeFor`, because `ArticlePage` is not remounted when one signed-in reader becomes another.
+  `spya.lastViewFor.<reader>.<slug>`. `App` supplies the current session's reader, rather than
+  the frozen `useMadeFor`. The hook lives above the auth branches so its arrival identity survives
+  sign-out and sign-in, which remount `ArticlePage` while this tab keeps its address.
   When that happens with an article on screen, the address is the previous reader's view, so the
   article's parameters are taken off it and the new reader arrives as at a bare address. An old
   `spya.lastView.<slug>` key is adopted once, by the first signed-in reader with no entry of their

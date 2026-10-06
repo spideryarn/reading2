@@ -36,6 +36,7 @@ import { takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
+import { useLastView } from "./last-view.js";
 
 /**
  * **The three routes whose code is not in the reader's initial download.**
@@ -196,8 +197,8 @@ export function App() {
    * § the store listens for it itself.
    *
    * **And nothing here wakes it, either.** The store starts listening on its
-   * first subscriber and asks the server for nobody until then. `ArticlePage`
-   * subscribes through `useLastView`, before its article fetch finishes. The
+   * first subscriber and asks the server for nobody until then. This component
+   * subscribes through `useLastView`, before an article fetch finishes. The
    * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
    * in PublicPages.tsx — also call `useExperimental()` and hand the answer
    * down as a prop, because the bar is told rather than going and getting it
@@ -211,6 +212,15 @@ export function App() {
    * keep a trace assertion true, which is the wrong way round. What replaced it
    * is the real subscriber in `Reader`.
    */
+
+  /* Keep the arrival identity above the auth branches: signing out remounts
+     ArticlePage while this tab's address can still hold the previous reader's
+     view. A non-article route advances the identity without reading or saving. */
+  useLastView(
+    !loading && route.kind === "read" ? route.slug : null,
+    route.kind === "read" ? route.view : "article",
+    user?.id ?? null,
+  );
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the

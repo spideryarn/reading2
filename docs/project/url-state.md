@@ -684,8 +684,8 @@ piece was something to keep a copy of it and put it back. So: **the query string
 opens that article at an address that says nothing.** (Under the reader since 2026-10-06, because
 two readers can share a browser:
 [auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).) [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
-[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
+[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `App` above its auth branches
+([`src/web/App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
