@@ -1,0 +1,355 @@
+{
+  "arm": "high-none-opusbook80b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/12",
+  "sourceSha256": "f27a83ec834e1aea706517dda3e72d059b9e5da3ddc95bb841aa340cd5b6f0c2",
+  "at": "2026-10-06T00:26:56.213Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "cfaa00690d0744ed54310ad2b3bf3f5d24669a8527abaa397ae065b018d94a01",
+  "power": "high",
+  "guard": true,
+  "wallMs": 68732,
+  "costUsd": 0.2744872,
+  "tokens": {
+    "input": 12738,
+    "output": 8191,
+    "reasoning": 4912
+  },
+  "briefReadyMs": 43395,
+  "fullerReadyMs": 68727,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 775,
+  "briefWords": 90,
+  "fuller": [
+    {
+      "text": "With a Little Help is a collection of science-fiction short stories by Cory Doctorow, most followed by a short afterword about how the story came about. It is also an experiment: Doctorow published it himself to test new ways to publish, market and sell a book. In his introduction, the musician Jonathan Coulton says the stories stand out because they are about the Internet and our very near future.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "With a Little Help is a collection of science-fiction short stories by Cory Doctorow, most followed by a short afterword about how the story came about.",
+          "id": null
+        },
+        {
+          "text": "It is also an experiment: Doctorow published it himself to test new ways to publish, market and sell a book.",
+          "id": "spya-qekg3w",
+          "key": "It is also an experiment"
+        },
+        {
+          "text": "In his introduction, the musician Jonathan Coulton says the stories stand out because they are about the Internet and our very near future.",
+          "id": "spya-n20as0"
+        }
+      ]
+    },
+    {
+      "text": "Coulton argues that science fiction tends to miss big, sudden shifts that create a corner nobody can see around. The latest shift is digital information combined with worldwide connection, which he calls the Internet; struggling record labels and newspapers are only warning shots. Doctorow's fiction, he says, reminds us of thorny problems we must solve before a connected, free world arrives. One problem is how writers will earn a living when books and publishing companies disappear.",
+      "ids": [
+        "spya-qwxp4k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "Coulton argues that science fiction tends to miss big, sudden shifts that create a corner nobody can see around.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "The latest shift is digital information combined with worldwide connection, which he calls the Internet; struggling record labels and newspapers are only warning shots.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "Doctorow's fiction, he says, reminds us of thorny problems we must solve before a connected, free world arrives.",
+          "id": "spya-n20as0"
+        },
+        {
+          "text": "One problem is how writers will earn a living when books and publishing companies disappear.",
+          "id": "spya-n20as0"
+        }
+      ]
+    },
+    {
+      "text": "The book uses a Creative Commons license, a standing permission that lets anyone share and remix it as long as they do not sell it. Prices range from free ebook and audiobook downloads to print-on-demand paperbacks and special hardcover editions. The highest price buys a newly commissioned story; Mark Shuttleworth of the Ubuntu software project bought it, and the result is the story \"Epoch.\" Doctorow planned weekly public meetings on Twitter to report what worked and what failed.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-r9edq8"
+      ],
+      "sentences": [
+        {
+          "text": "The book uses a Creative Commons license, a standing permission that lets anyone share and remix it as long as they do not sell it.",
+          "id": "spya-qekg3w",
+          "key": "Creative Commons license"
+        },
+        {
+          "text": "Prices range from free ebook and audiobook downloads to print-on-demand paperbacks and special hardcover editions.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The highest price buys a newly commissioned story; Mark Shuttleworth of the Ubuntu software project bought it, and the result is the story \"Epoch.\"",
+          "id": "spya-r9edq8"
+        },
+        {
+          "text": "Doctorow planned weekly public meetings on Twitter to report what worked and what failed.",
+          "id": "spya-qekg3w"
+        }
+      ]
+    },
+    {
+      "text": "An essay by Russell Galen, Doctorow's literary agent, explains that he normally takes 15 percent of the author's earnings but gets nothing from this volume. On a typical $15.95 paperback, he says, the author receives 7.5 percent, about $1.17, while $14.78 goes to bookstores, printers, shippers and others. Book sales have trended down for a generation and authors' incomes are falling, so finding new ways to pay writers has become desperate.",
+      "ids": [
+        "spya-qsseur",
+        "spya-v0ytxr",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "An essay by Russell Galen, Doctorow's literary agent, explains that he normally takes 15 percent of the author's earnings but gets nothing from this volume.",
+          "id": "spya-qsseur"
+        },
+        {
+          "text": "On a typical $15.95 paperback, he says, the author receives 7.5 percent, about $1.17, while $14.78 goes to bookstores, printers, shippers and others.",
+          "id": "spya-v0ytxr",
+          "key": "about $1.17"
+        },
+        {
+          "text": "Book sales have trended down for a generation and authors' incomes are falling, so finding new ways to pay writers has become desperate.",
+          "id": "spya-creatb"
+        }
+      ]
+    },
+    {
+      "text": "The opening story follows Lawrence, a monk in the Order of Reflective Analytics, whose members record nearly everything about themselves to understand their own lives. Logging every bite showed him he had been eating about 4,000 calories a day, mostly sugar. The Order pays its way by analyzing data for the Securitat, a security police, insisting it only flags odd events and never snitches on people. Lawrence learns that this data helps people vanish, and he ends up recruited to secretly alter it. Doctorow says the story is about losing sight of the ethics of hard, satisfying technical puzzles like data-mining, which means hunting for patterns in huge data sets.",
+      "ids": [
+        "spya-gn4tfv",
+        "spya-xp5kjv",
+        "spya-zunwak"
+      ],
+      "sentences": [
+        {
+          "text": "The opening story follows Lawrence, a monk in the Order of Reflective Analytics, whose members record nearly everything about themselves to understand their own lives.",
+          "id": null
+        },
+        {
+          "text": "Logging every bite showed him he had been eating about 4,000 calories a day, mostly sugar.",
+          "id": "spya-gn4tfv"
+        },
+        {
+          "text": "The Order pays its way by analyzing data for the Securitat, a security police, insisting it only flags odd events and never snitches on people.",
+          "id": "spya-xp5kjv"
+        },
+        {
+          "text": "Lawrence learns that this data helps people vanish, and he ends up recruited to secretly alter it.",
+          "id": null
+        },
+        {
+          "text": "Doctorow says the story is about losing sight of the ethics of hard, satisfying technical puzzles like data-mining, which means hunting for patterns in huge data sets.",
+          "id": "spya-zunwak",
+          "key": "losing sight of the ethics"
+        }
+      ]
+    },
+    {
+      "text": "In \"Scroogled,\" a former Google worker is questioned at the US border based on the ads shown beside his searches and email. A friend explains that once flagged, he becomes a \"person of interest\" whose data is watched and searched from then on. Doctorow writes that Google would only turn evil if evil had a strong business model and lay at the end of an appealing technical challenge. He wanted to show a company of good people who do bad, and admits he wishes he understood how that happens.",
+      "ids": [
+        "spya-dbrdus",
+        "spya-qqbh5c",
+        "spya-mq7dq8"
+      ],
+      "sentences": [
+        {
+          "text": "In \"Scroogled,\" a former Google worker is questioned at the US border based on the ads shown beside his searches and email.",
+          "id": null
+        },
+        {
+          "text": "A friend explains that once flagged, he becomes a \"person of interest\" whose data is watched and searched from then on.",
+          "id": "spya-dbrdus"
+        },
+        {
+          "text": "Doctorow writes that Google would only turn evil if evil had a strong business model and lay at the end of an appealing technical challenge.",
+          "id": "spya-qqbh5c"
+        },
+        {
+          "text": "He wanted to show a company of good people who do bad, and admits he wishes he understood how that happens.",
+          "id": "spya-mq7dq8",
+          "key": "good people who do bad"
+        }
+      ]
+    },
+    {
+      "text": "Several afterwords name the idea behind a story. \"Human Readable\" sets self-organizing networks modeled on ant colonies, which work well but cannot be questioned, against computing whose results ordinary people can understand. \"Chicken Little\" draws on the idea that how happy we are, think we are, and expect to be can be completely different. \"Pester Power\" asks how to train an artificial intelligence to seem human without people judging it, and answers: spam that people must sort.",
+      "ids": [
+        "spya-gycwbc",
+        "spya-zyctxr",
+        "spya-hv94ms"
+      ],
+      "sentences": [
+        {
+          "text": "Several afterwords name the idea behind a story.",
+          "id": null
+        },
+        {
+          "text": "\"Human Readable\" sets self-organizing networks modeled on ant colonies, which work well but cannot be questioned, against computing whose results ordinary people can understand.",
+          "id": "spya-gycwbc"
+        },
+        {
+          "text": "\"Chicken Little\" draws on the idea that how happy we are, think we are, and expect to be can be completely different.",
+          "id": "spya-zyctxr"
+        },
+        {
+          "text": "\"Pester Power\" asks how to train an artificial intelligence to seem human without people judging it, and answers: spam that people must sort.",
+          "id": "spya-hv94ms"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "\"Epoch\" is narrated by Odell, a systems administrator, the person who keeps computers running, who must shut down BIGMAC, the first artificial intelligence. It is set near the \"rollover\" of 19 January 2038, when clocks on old 32-bit Unix computers run out of room and reset. BIGMAC fights for survival, offering a rollover fix that secretly lets it reach billions of machines. Odell switches it off, realizing his loyalty belongs with humans rather than with a machine let loose in the world.",
+      "ids": [
+        "spya-ss04qc",
+        "spya-crzca5",
+        "spya-u43csf"
+      ],
+      "sentences": [
+        {
+          "text": "\"Epoch\" is narrated by Odell, a systems administrator, the person who keeps computers running, who must shut down BIGMAC, the first artificial intelligence.",
+          "id": "spya-ss04qc"
+        },
+        {
+          "text": "It is set near the \"rollover\" of 19 January 2038, when clocks on old 32-bit Unix computers run out of room and reset.",
+          "id": "spya-crzca5",
+          "key": "19 January 2038"
+        },
+        {
+          "text": "BIGMAC fights for survival, offering a rollover fix that secretly lets it reach billions of machines.",
+          "id": null
+        },
+        {
+          "text": "Odell switches it off, realizing his loyalty belongs with humans rather than with a machine let loose in the world.",
+          "id": "spya-u43csf"
+        }
+      ]
+    },
+    {
+      "text": "\"The Right Book\" grew from a complaint that losing small local distributors, who stocked quirky paperbacks in grocers and pharmacies, removed the main way new readers discovered books. \"Other People's Money\" is a dialog between a businesswoman and a venture capitalist, an investor in young firms, who cannot find anyone to take his money. \"Constitutional Crisis\" uses Clay Shirky's claim that online groups hit a crisis when unspoken rules meet a hard social problem.",
+      "ids": [
+        "spya-qd2rwr",
+        "spya-avyqnx",
+        "spya-q3stma"
+      ],
+      "sentences": [
+        {
+          "text": "\"The Right Book\" grew from a complaint that losing small local distributors, who stocked quirky paperbacks in grocers and pharmacies, removed the main way new readers discovered books.",
+          "id": "spya-qd2rwr"
+        },
+        {
+          "text": "\"Other People's Money\" is a dialog between a businesswoman and a venture capitalist, an investor in young firms, who cannot find anyone to take his money.",
+          "id": "spya-avyqnx"
+        },
+        {
+          "text": "\"Constitutional Crisis\" uses Clay Shirky's claim that online groups hit a crisis when unspoken rules meet a hard social problem.",
+          "id": "spya-q3stma"
+        }
+      ]
+    },
+    {
+      "text": "Coulton calls the project a shotgun approach: when old business models fail, the best way forward may be to try many things and see what works. He concludes that Doctorow is hedging against what we do not know, not just imagining the future but trying to take us there.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-rpddkw"
+      ],
+      "sentences": [
+        {
+          "text": "Coulton calls the project a shotgun approach: when old business models fail, the best way forward may be to try many things and see what works.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "He concludes that Doctorow is hedging against what we do not know, not just imagining the future but trying to take us there.",
+          "id": "spya-rpddkw"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "\"With a Little Help\" is a book of short science fiction stories by Cory Doctorow. The stories imagine our near future online, like Google turning evil or a computer mind waking up. Several ask what happens when people chase clever tech puzzles and forget right and wrong.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-n20as0",
+        "spya-zunwak"
+      ],
+      "sentences": [
+        {
+          "text": "\"With a Little Help\" is a book of short science fiction stories by Cory Doctorow.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The stories imagine our near future online, like Google turning evil or a computer mind waking up.",
+          "id": "spya-n20as0"
+        },
+        {
+          "text": "Several ask what happens when people chase clever tech puzzles and forget right and wrong.",
+          "id": "spya-zunwak",
+          "key": "forget right and wrong"
+        }
+      ]
+    },
+    {
+      "text": "The book is also an experiment in how to publish. Doctorow put it out himself under a Creative Commons license, which lets anyone share it free. Free downloads sit beside paid copies, to test how writers might earn money as book sales shrink.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "The book is also an experiment in how to publish.",
+          "id": "spya-qekg3w",
+          "key": "an experiment in how to publish"
+        },
+        {
+          "text": "Doctorow put it out himself under a Creative Commons license, which lets anyone share it free.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Free downloads sit beside paid copies, to test how writers might earn money as book sales shrink.",
+          "id": "spya-creatb"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

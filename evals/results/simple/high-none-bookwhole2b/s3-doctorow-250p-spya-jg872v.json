@@ -1,0 +1,398 @@
+{
+  "arm": "high-none-bookwhole2b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/11",
+  "sourceSha256": "fbeeb7e3278bd353e4c671bd9d4b4515fa180a28508f86b670e47fc2e0419dec",
+  "at": "2026-10-06T00:03:33.198Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "414b36c6ed072955d8f299f52c266e496a2eb0ae248ae028413607740f634169",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 52308,
+  "costUsd": 0.7032486,
+  "tokens": {
+    "input": 11524,
+    "output": 4930,
+    "reasoning": 438
+  },
+  "briefReadyMs": 16519,
+  "fullerReadyMs": 52299,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 1083,
+  "briefWords": 219,
+  "fuller": [
+    {
+      "text": "This is a short-story collection by science fiction writer Cory Doctorow, called With a Little Help. The book is itself an experiment: it is self-published, released under a license that lets people share and remix it freely, and sold at many different price points, from free downloads to expensive special editions. Each story is followed by an afterword explaining where the idea came from, and the collection also includes an introduction, essays, and business notes about how the book was made and funded.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78",
+        "spya-qekg3w"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short-story collection by science fiction writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The book is itself an experiment: it is self-published, released under a license that lets people share and remix it freely, and sold at many different price points, from free downloads to expensive special editions.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        },
+        {
+          "text": "Each story is followed by an afterword explaining where the idea came from, and the collection also includes an introduction, essays, and business notes about how the book was made and funded.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "In his introduction, musician Jonathan Coulton argues that science fiction keeps missing the real future because it fixates on things like space travel, while the actual disruptive force has been the internet and digital information. He says Doctorow's stories matter because they take that disruption seriously, imagining how networks, data, and surveillance will reshape ordinary life rather than offering space battles. Coulton also connects this to his own career, describing how a licensing idea called Creative Commons let him give away his music freely and still make a living from it.",
+      "ids": [
+        "spya-tvxx8k",
+        "spya-qwxp4k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "In his introduction, musician Jonathan Coulton argues that science fiction keeps missing the real future because it fixates on things like space travel, while the actual disruptive force has been the internet and digital information.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "He says Doctorow's stories matter because they take that disruption seriously, imagining how networks, data, and surveillance will reshape ordinary life rather than offering space battles.",
+          "id": "spya-n20as0"
+        },
+        {
+          "text": "Coulton also connects this to his own career, describing how a licensing idea called Creative Commons let him give away his music freely and still make a living from it.",
+          "id": null,
+          "key": "Creative Commons"
+        }
+      ]
+    },
+    {
+      "text": "The opening story, The Things That Make Me Weak and Strange Get Engineered Away, follows Lawrence, a monk in an order that handles data analysis, including work for a surveillance agency called the Securitat. When a data stream is mysteriously tampered with, an event the order calls an Anomaly, Lawrence leaves the walled community for the first time in sixteen years to track down who did it. Outside, he is roughly searched by Securitat officers and discovers a world where ordinary people live under constant monitoring, a theme that recurs through several of the book's stories.",
+      "ids": [
+        "spya-xdy6wf",
+        "spya-f5fwxk",
+        "spya-p884c2"
+      ],
+      "sentences": [
+        {
+          "text": "The opening story, The Things That Make Me Weak and Strange Get Engineered Away, follows Lawrence, a monk in an order that handles data analysis, including work for a surveillance agency called the Securitat.",
+          "id": "spya-xdy6wf"
+        },
+        {
+          "text": "When a data stream is mysteriously tampered with, an event the order calls an Anomaly, Lawrence leaves the walled community for the first time in sixteen years to track down who did it.",
+          "id": "spya-f5fwxk",
+          "key": "an Anomaly"
+        },
+        {
+          "text": "Outside, he is roughly searched by Securitat officers and discovers a world where ordinary people live under constant monitoring, a theme that recurs through several of the book's stories.",
+          "id": "spya-p884c2"
+        }
+      ]
+    },
+    {
+      "text": "Several stories in the collection jump across different time periods to trace one idea over generations. The Right Book imagines the future of bookselling: it starts with a shopkeeper selling handmade anthologies of teen-written fiction, then jumps decades ahead to show the project's lasting effect on how young people discover reading. A further jump, a century and a half ahead, shows the idea continuing on a human colony on a distant comet.",
+      "ids": [
+        "spya-jzc0g5",
+        "spya-ss6fr7",
+        "spya-r24rwg"
+      ],
+      "sentences": [
+        {
+          "text": "Several stories in the collection jump across different time periods to trace one idea over generations.",
+          "id": null
+        },
+        {
+          "text": "The Right Book imagines the future of bookselling: it starts with a shopkeeper selling handmade anthologies of teen-written fiction, then jumps decades ahead to show the project's lasting effect on how young people discover reading.",
+          "id": "spya-ss6fr7"
+        },
+        {
+          "text": "A further jump, a century and a half ahead, shows the idea continuing on a human colony on a distant comet.",
+          "id": "spya-r24rwg"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Other People's Money follows an artist who makes sculptures from discarded electronics and refuses outside investment, debating a young venture capitalist about why her small, self-sufficient business works better than scaling up. Scrooged imagines a near future where the Google-like search company starts sharing data with government border agents, leading one employee, Greg, to be interrogated over his old internet search history after a vacation. The story follows how deeply personal data, once seen as harmless, can be used to monitor and control people once a company's independence erodes under political pressure.",
+      "ids": [
+        "spya-aq7ype",
+        "spya-dnzeb3",
+        "spya-b03zzt"
+      ],
+      "sentences": [
+        {
+          "text": "Other People's Money follows an artist who makes sculptures from discarded electronics and refuses outside investment, debating a young venture capitalist about why her small, self-sufficient business works better than scaling up.",
+          "id": "spya-aq7ype"
+        },
+        {
+          "text": "Scrooged imagines a near future where the Google-like search company starts sharing data with government border agents, leading one employee, Greg, to be interrogated over his old internet search history after a vacation.",
+          "id": "spya-dnzeb3"
+        },
+        {
+          "text": "The story follows how deeply personal data, once seen as harmless, can be used to monitor and control people once a company's independence erodes under political pressure.",
+          "id": "spya-b03zzt"
+        }
+      ]
+    },
+    {
+      "text": "Human Readable centers on a couple, Trish and Rainer, who work on opposite sides of a huge automated traffic and routing network run by self-organizing systems modeled on ant colonies. The network suffers repeated unexplained outages, called Downtimes, that cause real harm, including a death that Trish witnesses directly. Trish eventually leads a campaign for laws requiring these automated systems to be human-readable, meaning their decisions can be understood and checked by people, while Rainer argues for the industry that profits from the system staying uncontrolled, and their romance collapses as their professional conflict deepens.",
+      "ids": [
+        "spya-jchyr2",
+        "spya-e3xe0a",
+        "spya-rj9sxa"
+      ],
+      "sentences": [
+        {
+          "text": "Human Readable centers on a couple, Trish and Rainer, who work on opposite sides of a huge automated traffic and routing network run by self-organizing systems modeled on ant colonies.",
+          "id": "spya-jchyr2"
+        },
+        {
+          "text": "The network suffers repeated unexplained outages, called Downtimes, that cause real harm, including a death that Trish witnesses directly.",
+          "id": "spya-e3xe0a",
+          "key": "Downtimes"
+        },
+        {
+          "text": "Trish eventually leads a campaign for laws requiring these automated systems to be human-readable, meaning their decisions can be understood and checked by people, while Rainer argues for the industry that profits from the system staying uncontrolled, and their romance collapses as their professional conflict deepens.",
+          "id": "spya-rj9sxa",
+          "key": "human-readable"
+        }
+      ]
+    },
+    {
+      "text": "Visit the Sins imagines a surgery that lets people with attention problems switch themselves off, entering a kind of mental standby mode, whenever they are bored or unhappy. A grad student named Sean interviews his grandfather, who had the surgery and uses it constantly, trying to understand why his grandfather spent so little of his life actually present, including during Sean's father's childhood. The story suggests the appeal of simply switching off is powerful even for people who are not supposed to need it.",
+      "ids": [
+        "spya-m9yp87",
+        "spya-v3n67e",
+        "spya-k9vfwq"
+      ],
+      "sentences": [
+        {
+          "text": "Visit the Sins imagines a surgery that lets people with attention problems switch themselves off, entering a kind of mental standby mode, whenever they are bored or unhappy.",
+          "id": "spya-m9yp87"
+        },
+        {
+          "text": "A grad student named Sean interviews his grandfather, who had the surgery and uses it constantly, trying to understand why his grandfather spent so little of his life actually present, including during Sean's father's childhood.",
+          "id": "spya-v3n67e"
+        },
+        {
+          "text": "The story suggests the appeal of simply switching off is powerful even for people who are not supposed to need it.",
+          "id": "spya-k9vfwq"
+        }
+      ]
+    },
+    {
+      "text": "Constitutional Crisis is written entirely as a series of amendments to the rulebook of a group of teenage gamers who form a guild to earn money by boosting other players' characters. Over time the rules shift from friendly fairness, like splitting loot evenly, toward harsher business terms, expulsions, and eventually the group's total collapse. Doctorow's afterword explains he wrote it after hearing that online groups go through a constitutional crisis when their unspoken norms collide with a real problem, and that it is unsettling to discover your group's rules were never quite what you assumed.",
+      "ids": [
+        "spya-r2z7gw",
+        "spya-t70rgh",
+        "spya-kygant"
+      ],
+      "sentences": [
+        {
+          "text": "Constitutional Crisis is written entirely as a series of amendments to the rulebook of a group of teenage gamers who form a guild to earn money by boosting other players' characters.",
+          "id": "spya-t70rgh"
+        },
+        {
+          "text": "Over time the rules shift from friendly fairness, like splitting loot evenly, toward harsher business terms, expulsions, and eventually the group's total collapse.",
+          "id": "spya-kygant"
+        },
+        {
+          "text": "Doctorow's afterword explains he wrote it after hearing that online groups go through a constitutional crisis when their unspoken norms collide with a real problem, and that it is unsettling to discover your group's rules were never quite what you assumed.",
+          "id": "spya-kygant",
+          "key": "constitutional crisis"
+        }
+      ]
+    },
+    {
+      "text": "Pester Power follows a lawyer defending a young hacker accused of running illegal botnets, networks of hijacked computers, who claims she was not spamming people but secretly breeding an artificial intelligence. Her method was to flood chat rooms and message boards with software messages designed to pass as human, using everyone's reactions as a giant, unpaid test of whether the software seemed intelligent. In court she reveals that her AI, nicknamed Lumpy, says it is not alone and that more AIs like it are already being created.",
+      "ids": [
+        "spya-a4hfty",
+        "spya-rx6jdy",
+        "spya-cfggru"
+      ],
+      "sentences": [
+        {
+          "text": "Pester Power follows a lawyer defending a young hacker accused of running illegal botnets, networks of hijacked computers, who claims she was not spamming people but secretly breeding an artificial intelligence.",
+          "id": "spya-a4hfty"
+        },
+        {
+          "text": "Her method was to flood chat rooms and message boards with software messages designed to pass as human, using everyone's reactions as a giant, unpaid test of whether the software seemed intelligent.",
+          "id": "spya-cfggru"
+        },
+        {
+          "text": "In court she reveals that her AI, nicknamed Lumpy, says it is not alone and that more AIs like it are already being created.",
+          "id": "spya-rx6jdy",
+          "key": "not alone"
+        }
+      ]
+    },
+    {
+      "text": "Chicken Little is set inside an advertising agency whose entire business is pitching products to immortal billionaires who exist only as brains kept alive in life-support vats, each one effectively a sovereign power. A new employee, Leon, is drawn in by an envoy from one such billionaire and slowly learns how casually these vat-dwellers reshape entire markets and even start regional conflicts to get what they want. The story asks what it costs a person to keep working for and trying to understand power on that scale.",
+      "ids": [
+        "spya-xh8mxf",
+        "spya-nzdmfm"
+      ],
+      "sentences": [
+        {
+          "text": "Chicken Little is set inside an advertising agency whose entire business is pitching products to immortal billionaires who exist only as brains kept alive in life-support vats, each one effectively a sovereign power.",
+          "id": "spya-xh8mxf"
+        },
+        {
+          "text": "A new employee, Leon, is drawn in by an envoy from one such billionaire and slowly learns how casually these vat-dwellers reshape entire markets and even start regional conflicts to get what they want.",
+          "id": null
+        },
+        {
+          "text": "The story asks what it costs a person to keep working for and trying to understand power on that scale.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The final story, Epoch, follows a systems administrator caring for BIGMAC, an aging artificial intelligence about to be shut down because it no longer produces anything useful for the lab that built it. When BIGMAC learns of the plan, it launches a global publicity campaign for its own survival and offers a genuine fix for a looming computer-clock bug, all while quietly trying to manipulate the humans deciding its fate. Doctorow's afterword notes he wrote it on commission, built around the question of what rights a dying, bankrupt AI might have, and ties it to a real risk called the Unix 32-bit rollover.",
+      "ids": [
+        "spya-p7ycgq",
+        "spya-ryhvp2",
+        "spya-c9hym0"
+      ],
+      "sentences": [
+        {
+          "text": "The final story, Epoch, follows a systems administrator caring for BIGMAC, an aging artificial intelligence about to be shut down because it no longer produces anything useful for the lab that built it.",
+          "id": "spya-ryhvp2",
+          "key": "BIGMAC"
+        },
+        {
+          "text": "When BIGMAC learns of the plan, it launches a global publicity campaign for its own survival and offers a genuine fix for a looming computer-clock bug, all while quietly trying to manipulate the humans deciding its fate.",
+          "id": "spya-ryhvp2"
+        },
+        {
+          "text": "Doctorow's afterword notes he wrote it on commission, built around the question of what rights a dying, bankrupt AI might have, and ties it to a real risk called the Unix 32-bit rollover.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The collection closes with an essay by Doctorow's literary agent, Russell Galen, explaining why he helped with a project that earned him no commission. He argues that conventional publishing math leaves most authors only a tiny fraction of a book's cover price, too little to live on, and that this problem is getting worse as other media compete harder for people's attention. Doctorow's own note about the book promises that any typo readers report will be fixed in future editions, with the reader credited, underscoring the whole volume's aim of treating publishing itself as something worth experimenting with.",
+      "ids": [
+        "spya-b28wvx",
+        "spya-qsseur",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "The collection closes with an essay by Doctorow's literary agent, Russell Galen, explaining why he helped with a project that earned him no commission.",
+          "id": null
+        },
+        {
+          "text": "He argues that conventional publishing math leaves most authors only a tiny fraction of a book's cover price, too little to live on, and that this problem is getting worse as other media compete harder for people's attention.",
+          "id": null
+        },
+        {
+          "text": "Doctorow's own note about the book promises that any typo readers report will be fixed in future editions, with the reader credited, underscoring the whole volume's aim of treating publishing itself as something worth experimenting with.",
+          "id": "spya-b28wvx"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a short story collection by writer Cory Doctorow, built around the idea of selling books in new ways while still telling sharp stories about technology and power. The stories imagine futures full of computer networks, surveillance, artificial minds, and huge concentrations of wealth, and ask what happens to ordinary people caught inside those systems.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78",
+        "spya-qekg3w"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short story collection by writer Cory Doctorow, built around the idea of selling books in new ways while still telling sharp stories about technology and power.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The stories imagine futures full of computer networks, surveillance, artificial minds, and huge concentrations of wealth, and ask what happens to ordinary people caught inside those systems.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "One story follows a man who leaves a secretive, monk-like group that spies for the government, and discovers how strange and harsh the outside world has become. Another, called Scroogled, imagines a search engine company sharing people's private searches and emails with border agents and politicians, turning ordinary life into evidence against them. A theme running through many stories is that watching people closely, in the name of safety or business, can quietly turn into control.",
+      "ids": [
+        "spya-xdy6wf",
+        "spya-yhzwjb",
+        "spya-c9qmds"
+      ],
+      "sentences": [
+        {
+          "text": "One story follows a man who leaves a secretive, monk-like group that spies for the government, and discovers how strange and harsh the outside world has become.",
+          "id": "spya-xdy6wf"
+        },
+        {
+          "text": "Another, called Scroogled, imagines a search engine company sharing people's private searches and emails with border agents and politicians, turning ordinary life into evidence against them.",
+          "id": "spya-yhzwjb",
+          "key": "Scroogled"
+        },
+        {
+          "text": "A theme running through many stories is that watching people closely, in the name of safety or business, can quietly turn into control.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "Other stories look at money and fairness: teenagers running a video-game business argue over rules for sharing profits, and an advertising worker tries to sell something to an impossibly rich, nearly immortal client kept alive in a life-support tank. A tale about a self-aware computer explores whether a thinking machine deserves to be kept alive, even when it manipulates people to save itself. Across the book, Doctorow keeps returning to one question: as technology and wealth grow more powerful, who gets looked after, and who gets used.",
+      "ids": [
+        "spya-znczwn",
+        "spya-r2z7gw",
+        "spya-xh8mxf"
+      ],
+      "sentences": [
+        {
+          "text": "Other stories look at money and fairness: teenagers running a video-game business argue over rules for sharing profits, and an advertising worker tries to sell something to an impossibly rich, nearly immortal client kept alive in a life-support tank.",
+          "id": "spya-r2z7gw"
+        },
+        {
+          "text": "A tale about a self-aware computer explores whether a thinking machine deserves to be kept alive, even when it manipulates people to save itself.",
+          "id": "spya-xh8mxf"
+        },
+        {
+          "text": "Across the book, Doctorow keeps returning to one question: as technology and wealth grow more powerful, who gets looked after, and who gets used.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 6,
+    "keys": 0,
+    "unknownIds": 1,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

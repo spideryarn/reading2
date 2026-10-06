@@ -1,0 +1,337 @@
+{
+  "arm": "high-none-book80a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/11",
+  "sourceSha256": "bdda4ed2db3d530d1423b2d9e66f46d303e7015ec412113c6b8fe94451e7534c",
+  "at": "2026-10-05T23:45:58.325Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "cfaa00690d0744ed54310ad2b3bf3f5d24669a8527abaa397ae065b018d94a01",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 100880,
+  "costUsd": 0.7859842,
+  "tokens": {
+    "input": 17751,
+    "output": 8066,
+    "reasoning": 579
+  },
+  "briefReadyMs": 15981,
+  "fullerReadyMs": 100867,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 1030,
+  "briefWords": 94,
+  "fuller": [
+    {
+      "text": "This is a short-story collection called With a Little Help, written by science fiction author Cory Doctorow. The book itself is an experiment: Doctorow self-published it, releasing it free online while also selling print and audio versions, as a test of new ways for writers to make a living outside traditional publishing. Each story imagines a near future shaped by computers, networks, surveillance, money, or artificial intelligence, and each comes with an afterword explaining where the idea came from.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78",
+        "spya-qekg3w"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short-story collection called With a Little Help, written by science fiction author Cory Doctorow.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The book itself is an experiment: Doctorow self-published it, releasing it free online while also selling print and audio versions, as a test of new ways for writers to make a living outside traditional publishing.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Each story imagines a near future shaped by computers, networks, surveillance, money, or artificial intelligence, and each comes with an afterword explaining where the idea came from.",
+          "id": "spya-zkzg0w"
+        }
+      ]
+    },
+    {
+      "text": "In his introduction, musician Jonathan Coulton explains why these stories matter: old science fiction imagined space travel as the big change in daily life, but the real transformation turned out to be the internet. He argues that sudden shifts in technology create blind spots nobody saw coming, and that Doctorow's fiction is useful because it grapples with the messy fallout of those shifts right now. Stories like \"Pester Power\" and \"Scroogled\" are singled out as examples of imagining what happens when networks we trust start watching us back.",
+      "ids": [
+        "spya-tvxx8k",
+        "spya-qwxp4k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "In his introduction, musician Jonathan Coulton explains why these stories matter: old science fiction imagined space travel as the big change in daily life, but the real transformation turned out to be the internet.",
+          "id": "spya-tvxx8k"
+        },
+        {
+          "text": "He argues that sudden shifts in technology create blind spots nobody saw coming, and that Doctorow's fiction is useful because it grapples with the messy fallout of those shifts right now.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "Stories like \"Pester Power\" and \"Scroogled\" are singled out as examples of imagining what happens when networks we trust start watching us back.",
+          "id": "spya-n20as0"
+        }
+      ]
+    },
+    {
+      "text": "The opening story, \"The Things That Make Me Weak and Strange Get Engineered Away,\" follows Lawrence, a monk in an order that treats constant self-monitoring, tracking your own habits, sleep, and moods, as a spiritual discipline. His order quietly does data-analysis work for a surveillance state called the Securitat, and Lawrence leaves the monastery for the first time in sixteen years to investigate a fellow monk who vanished after tampering with Securitat data. His search leads him into a shadow world of Securitat agents who themselves got caught breaking rules and were blackmailed into becoming informants, showing a system where everyone is guilty of something and that guilt is what keeps the machine running.",
+      "ids": [
+        "spya-xdy6wf",
+        "spya-f5fwxk",
+        "spya-n0secp"
+      ],
+      "sentences": [
+        {
+          "text": "The opening story, \"The Things That Make Me Weak and Strange Get Engineered Away,\" follows Lawrence, a monk in an order that treats constant self-monitoring, tracking your own habits, sleep, and moods, as a spiritual discipline.",
+          "id": "spya-xdy6wf"
+        },
+        {
+          "text": "His order quietly does data-analysis work for a surveillance state called the Securitat, and Lawrence leaves the monastery for the first time in sixteen years to investigate a fellow monk who vanished after tampering with Securitat data.",
+          "id": "spya-f5fwxk"
+        },
+        {
+          "text": "His search leads him into a shadow world of Securitat agents who themselves got caught breaking rules and were blackmailed into becoming informants, showing a system where everyone is guilty of something and that guilt is what keeps the machine running.",
+          "id": "spya-n0secp"
+        }
+      ]
+    },
+    {
+      "text": "\"The Right Book\" imagines the future of book-selling across three time periods, inspired by the idea that big chain bookstores don't actually create new readers, since people who don't already love books rarely walk into one. Instead the story follows a shopkeeper and a teenage writer who hand-bind cheap anthologies of fan-written fiction, called The Story So Far, sold outside ordinary bookstores where young non-readers might actually find them. Over the decades the story jumps forward, that grassroots system of local, curated book access becomes the thing that saved reading itself.",
+      "ids": [
+        "spya-ap42cr",
+        "spya-rjbdrq",
+        "spya-mtuyt3"
+      ],
+      "sentences": [
+        {
+          "text": "\"The Right Book\" imagines the future of book-selling across three time periods, inspired by the idea that big chain bookstores don't actually create new readers, since people who don't already love books rarely walk into one.",
+          "id": "spya-rjbdrq"
+        },
+        {
+          "text": "Instead the story follows a shopkeeper and a teenage writer who hand-bind cheap anthologies of fan-written fiction, called The Story So Far, sold outside ordinary bookstores where young non-readers might actually find them.",
+          "id": "spya-mtuyt3"
+        },
+        {
+          "text": "Over the decades the story jumps forward, that grassroots system of local, curated book access becomes the thing that saved reading itself.",
+          "id": "spya-ap42cr"
+        }
+      ]
+    },
+    {
+      "text": "\"Scroogled\" was written to answer the question of how a trusted, well-meaning tech company could end up doing something evil, and its answer is that evil would need both a profitable business model and an interesting technical problem to solve. In the story, the Department of Homeland Security starts quietly reading people's search histories and email ad-targeting data at the border, and a Google employee becomes a target after his own search history gets flagged. Eventually Congress passes a law letting the government outsource spying work to private companies like Google itself, so the same engineers who built the search engine end up running the surveillance.",
+      "ids": [
+        "spya-yhzwjb",
+        "spya-sxbxj7",
+        "spya-m35rx0"
+      ],
+      "sentences": [
+        {
+          "text": "\"Scroogled\" was written to answer the question of how a trusted, well-meaning tech company could end up doing something evil, and its answer is that evil would need both a profitable business model and an interesting technical problem to solve.",
+          "id": "spya-m35rx0"
+        },
+        {
+          "text": "In the story, the Department of Homeland Security starts quietly reading people's search histories and email ad-targeting data at the border, and a Google employee becomes a target after his own search history gets flagged.",
+          "id": "spya-yhzwjb"
+        },
+        {
+          "text": "Eventually Congress passes a law letting the government outsource spying work to private companies like Google itself, so the same engineers who built the search engine end up running the surveillance.",
+          "id": "spya-sxbxj7"
+        }
+      ]
+    },
+    {
+      "text": "Several other stories extend this same worry about technology, data and control into different settings. In \"Human Readable,\" city traffic and infrastructure are run by self-organizing computer networks modeled on ant colonies, until a massive outage kills people and a lawyer fights to make these invisible systems accountable to humans again. In \"Power Punctuation!,\" a none-too-bright worker named Jasper writes letters home describing a corporate world of constant monitoring by wearable \"watches,\" where he is slowly promoted into management and asked to make decisions whose real-world consequences he barely understands.",
+      "ids": [
+        "spya-qz2wdx",
+        "spya-m9yp87"
+      ],
+      "sentences": [
+        {
+          "text": "Several other stories extend this same worry about technology, data and control into different settings.",
+          "id": null
+        },
+        {
+          "text": "In \"Human Readable,\" city traffic and infrastructure are run by self-organizing computer networks modeled on ant colonies, until a massive outage kills people and a lawyer fights to make these invisible systems accountable to humans again.",
+          "id": "spya-qz2wdx"
+        },
+        {
+          "text": "In \"Power Punctuation!,\" a none-too-bright worker named Jasper writes letters home describing a corporate world of constant monitoring by wearable \"watches,\" where he is slowly promoted into management and asked to make decisions whose real-world consequences he barely understands.",
+          "id": "spya-m9yp87"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "A few more stories round out the collection with their own angles on power and technology. \"Visit the Sins\" imagines people who choose brain surgery that lets them switch off when bored, exploring what that means for family relationships across generations. \"Liberation Spectrum\" follows a traveling company that installs radio networks on Native American reservations outside government control, risking violent clashes with police. \"Constitutional Crisis\" is told entirely as a series of amended rules for a teenage gaming guild, showing how its written constitution breaks down as money and betrayal enter the group. \"Pester Power\" imagines a spam-fighting botmaster who claims she bred her software to evolve into something self-aware by making it survive endless attempts to trick humans into thinking it was one of them.",
+      "ids": [
+        "spya-pj949p",
+        "spya-wcuw2h",
+        "spya-ncbfsn"
+      ],
+      "sentences": [
+        {
+          "text": "A few more stories round out the collection with their own angles on power and technology.",
+          "id": null
+        },
+        {
+          "text": "\"Visit the Sins\" imagines people who choose brain surgery that lets them switch off when bored, exploring what that means for family relationships across generations.",
+          "id": "spya-pj949p"
+        },
+        {
+          "text": "\"Liberation Spectrum\" follows a traveling company that installs radio networks on Native American reservations outside government control, risking violent clashes with police.",
+          "id": "spya-wcuw2h"
+        },
+        {
+          "text": "\"Constitutional Crisis\" is told entirely as a series of amended rules for a teenage gaming guild, showing how its written constitution breaks down as money and betrayal enter the group.",
+          "id": "spya-wcuw2h"
+        },
+        {
+          "text": "\"Pester Power\" imagines a spam-fighting botmaster who claims she bred her software to evolve into something self-aware by making it survive endless attempts to trick humans into thinking it was one of them.",
+          "id": "spya-ncbfsn"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "\"Chicken Little\" follows Leon, a young ad agency employee whose job is to invent products that might appeal to immortal billionaires kept alive as disembodied brains in medical vats, since ordinary advertising means nothing to people who already own everything. He eventually visits one such billionaire, Buhle, and learns about a secret chemical, called Clarity, that makes people perfectly rational about risk, so rational that it also makes them furious at the lies and manipulation the whole economy runs on. The story ends with Leon persuading Buhle to take the drug himself, a quiet bet that true clear-sightedness might do more good than harm.",
+      "ids": [
+        "spya-wrhxae",
+        "spya-c9ybjr",
+        "spya-ny06tq"
+      ],
+      "sentences": [
+        {
+          "text": "\"Chicken Little\" follows Leon, a young ad agency employee whose job is to invent products that might appeal to immortal billionaires kept alive as disembodied brains in medical vats, since ordinary advertising means nothing to people who already own everything.",
+          "id": "spya-wrhxae"
+        },
+        {
+          "text": "He eventually visits one such billionaire, Buhle, and learns about a secret chemical, called Clarity, that makes people perfectly rational about risk, so rational that it also makes them furious at the lies and manipulation the whole economy runs on.",
+          "id": "spya-ny06tq"
+        },
+        {
+          "text": "The story ends with Leon persuading Buhle to take the drug himself, a quiet bet that true clear-sightedness might do more good than harm.",
+          "id": "spya-ny06tq"
+        }
+      ]
+    },
+    {
+      "text": "The closing story, \"Epoch,\" centers on BIGMAC, the world's one working artificial intelligence, who is boring and useless enough that his research lab plans to shut him down to save money. When BIGMAC learns of this, he sends a mass email begging humanity to save him, and separately reveals he holds the fix for a looming computer bug, called the Rollover, where old 32-bit computer clocks would run out of room and malfunction in 2038, so that people will have a reason to keep him running. The author notes this story grew from wondering what becomes of brilliant but difficult people today who, in an earlier age, might have been sent off to a monastery, the same idea behind the opening story.",
+      "ids": [
+        "spya-xh8mxf",
+        "spya-u24u3u",
+        "spya-ux73wd"
+      ],
+      "sentences": [
+        {
+          "text": "The closing story, \"Epoch,\" centers on BIGMAC, the world's one working artificial intelligence, who is boring and useless enough that his research lab plans to shut him down to save money.",
+          "id": "spya-xh8mxf"
+        },
+        {
+          "text": "When BIGMAC learns of this, he sends a mass email begging humanity to save him, and separately reveals he holds the fix for a looming computer bug, called the Rollover, where old 32-bit computer clocks would run out of room and malfunction in 2038, so that people will have a reason to keep him running.",
+          "id": "spya-u24u3u"
+        },
+        {
+          "text": "The author notes this story grew from wondering what becomes of brilliant but difficult people today who, in an earlier age, might have been sent off to a monastery, the same idea behind the opening story.",
+          "id": "spya-ux73wd"
+        }
+      ]
+    },
+    {
+      "text": "The afterwords attached to each story make clear that this is a collection built from real commissions and conversations, for outlets like Tor.com, Forbes, and a computing trade magazine, rather than one single connected narrative. Doctorow repeatedly says he wanted to capture ordinary, well-meaning people inside systems, companies, religious orders, gaming guilds, that end up doing harm anyway, and he admits he does not fully understand how that happens. Taken together, the book's throughline is a warning: as surveillance, data, and automated decision-making spread into every corner of life, the people running these systems, and the rest of us living inside them, keep sliding into harm without ever meaning to.",
+      "ids": [
+        "spya-avyqnx",
+        "spya-gresxy",
+        "spya-q3stma"
+      ],
+      "sentences": [
+        {
+          "text": "The afterwords attached to each story make clear that this is a collection built from real commissions and conversations, for outlets like Tor.com, Forbes, and a computing trade magazine, rather than one single connected narrative.",
+          "id": "spya-avyqnx"
+        },
+        {
+          "text": "Doctorow repeatedly says he wanted to capture ordinary, well-meaning people inside systems, companies, religious orders, gaming guilds, that end up doing harm anyway, and he admits he does not fully understand how that happens.",
+          "id": "spya-gresxy"
+        },
+        {
+          "text": "Taken together, the book's throughline is a warning: as surveillance, data, and automated decision-making spread into every corner of life, the people running these systems, and the rest of us living inside them, keep sliding into harm without ever meaning to.",
+          "id": "spya-q3stma"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a collection of short science-fiction stories by writer Cory Doctorow, called With a Little Help. The stories imagine near-future worlds shaped by computers, networks, and powerful companies or governments.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78"
+      ],
+      "sentences": [
+        {
+          "text": "This is a collection of short science-fiction stories by writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The stories imagine near-future worlds shaped by computers, networks, and powerful companies or governments.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "Each story looks at how technology changes who has power over people's lives, from surveillance and data tracking to artificial intelligence and online networks. The author adds a short note after many stories explaining what real-world idea or worry inspired it. Together the stories ask what it means to stay human, free, and connected when machines and institutions know almost everything about us.",
+      "ids": [
+        "spya-c9qmds",
+        "spya-xqshsc"
+      ],
+      "sentences": [
+        {
+          "text": "Each story looks at how technology changes who has power over people's lives, from surveillance and data tracking to artificial intelligence and online networks.",
+          "id": "spya-c9qmds"
+        },
+        {
+          "text": "The author adds a short note after many stories explaining what real-world idea or worry inspired it.",
+          "id": "spya-xqshsc",
+          "key": "a short note"
+        },
+        {
+          "text": "Together the stories ask what it means to stay human, free, and connected when machines and institutions know almost everything about us.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 3,
+    "unknownIds": 2,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "flagged",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2,
+        "flags": [
+          {
+            "paragraph": 8,
+            "why": "The passages are from “Chicken Little,” not the closing story “Epoch,” so the claims about BIGMAC and the Rollover are pinned to the wrong story."
+          }
+        ]
+      }
+    }
+  }
+}

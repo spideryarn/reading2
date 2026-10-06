@@ -551,6 +551,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fetch-empty": "retry",
   "fetch-declined": "blocked",
   "fetch-incomplete": "retry",
+  /* Not one of the fetcher's codes: a paper source's own PDF address answered
+     that it has no such document. See `FETCH_PAPER_MISSING`. */
+  "fetch-paper-missing": "blocked",
   "up-pdf": "blocked",
   /* The page cap, as the *upload record* states it. The job card gets
      `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
@@ -2348,6 +2351,37 @@ const FETCH_INCOMPLETE: ReaderFacingFailure = {
     "The site did not send the whole page in a form this app could use. That can be passing, " +
     "so trying again is worth a go. If it keeps happening and the page opens in your browser, " +
     "save it as a PDF and upload the file. [fetch-incomplete]",
+};
+
+/**
+ * **A paper whose PDF is not where its source usually keeps it.**
+ *
+ * For a link a paper source recognises (src/paper-sources.ts) the fetch step
+ * asks for the paper's PDF at an address it worked out, never the page that
+ * was pasted. When the last of those addresses answers that it has no such
+ * document, `not-found`'s sentence would be wrong: it tells the reader to
+ * check their address for a slip, and their address is fine. What is missing is
+ * an address they never saw. ⟨GPT Sol's plan review, G12⟩
+ *
+ * `blocked`: the same address answers the same way next time. The way out is
+ * the one every `blocked` fetch names, an upload, and here the reader has a
+ * page in front of them with the PDF's real link on it.
+ *
+ * Raised by the pipeline's fetch step and nowhere else, and only for a paper
+ * source: an ordinary address that is absent still gets `[fetch-not-found]`.
+ *
+ * **Written without Greg**, on 2026-10-06, and recorded as his to change:
+ * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § What a wrong rule costs. It does not say "we found the page": the pasted
+ * page is never fetched. And it does say to check the link, because for a
+ * source whose rule is complete (arXiv) a missing paper is a mistyped id.
+ */
+export const FETCH_PAPER_MISSING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This site did not have the paper where it usually keeps it. Trying again will not help. " +
+    "Check the link is right, or download the PDF from the site and upload it here. " +
+    "[fetch-paper-missing]",
 };
 
 /**

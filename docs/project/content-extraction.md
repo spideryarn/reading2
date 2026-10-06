@@ -264,6 +264,47 @@ for relative links, which a PDF has not got. Asking for it up here made a missin
 thing an upload hit, three stages after the last thing that could have supplied one. The upload path
 is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
 
+## A LaTeXML page: arXiv's HTML
+
+arXiv renders most papers as HTML with LaTeXML, and since 2026-10-06 that rendering is what an
+arXiv link imports ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)).
+LaTeXML has shapes of its own that Readability and stage 3 misread, so
+[`src/latexml.ts`](../../src/latexml.ts) § `prepareLatexml` puts them into shapes the pipeline
+already reads. It runs in `prepareDocument`, before `canonicaliseMaths` and before Readability, and
+everything it makes is sanitised afterwards like the rest of the page.
+
+| LaTeXML writes | It arrived as | Now |
+|---|---|---|
+| an aligned equation as a table, one inline formula per cell | a fragment per cell, the number in the middle | one `\[\begin{aligned}…\end{aligned}\]`, its number beside it |
+| a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
+| a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
+| a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
+| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)) |
+
+**Every rewrite is narrow, and declines rather than guesses.** It applies only on a page fetched
+from arXiv's or ar5iv's `/html/` and beneath `article.ltx_document`: a stranger's page cannot opt
+in by borrowing the class names. It requires an exact shape of children and leaves the page as it
+was otherwise. It keeps the container's id and every id a link in the page points at, because
+stage 3 repoints cross-references by those. What it declines today, measured on five papers: an
+equation group in which several rows carry their own numbers, or with four formula cells; a cell
+with a row or column break at its top level; a listing whose lines hold maths (an algorithm); a
+boxed passage holding anything that fetches or runs.
+
+**A table standing in the middle of a list item was being thrown away by our own safety check**,
+not by Readability. The existing rule already rescued it; then `proseRetention`
+([`src/protect.ts`](../../src/protect.ts)) compared the item's prose with and without the rescue,
+found *"words before, words after"* missing from *"words before, the table's cells, words
+after"*, called the prose lost and withdrew the rescue. It now reads a missing run a second time
+with the tables taken out of the one prose element that holds them.
+
+**The line under the title names the people `meta.byline` names**, for every web page, since the
+same day: stage 2's page was being built from Readability's byline rather than the one chosen.
+
+What it still gets wrong is in
+[261005e § The re-run](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md#the-re-run-after-the-fixes-2026-10-06):
+the five declined equation groups read as fragments, an author block that is one long paragraph,
+and whatever arXiv's converter itself dropped, which nothing in the HTML reveals.
+
 ## Stage 2 and the document with no address
 
 **Since 2026-09-07 the uploaded document can be a web page**, and moving `requireUrl` inside the

@@ -244,7 +244,10 @@ describe("the corpus pages, through the real stage 2", () => {
     readFileSync(new URL(`../evals/extraction/fixtures/${name}.html`, import.meta.url), "utf-8");
 
   for (const [name, url, sourceExpected, extractedExpected] of [
-    ["ar5iv", "https://ar5iv.labs.arxiv.org/html/1706.03762", 142, 142],
+    /* 142 formulas in the source and, until 2026-10-05, 142 spans extracted.
+       138 now: stage 2 joins the page's two aligned equations (four cells and
+       two) into one display formula each before this pass runs (src/latexml.ts). */
+    ["ar5iv", "https://ar5iv.labs.arxiv.org/html/1706.03762", 142, 138],
     ["wiki_transformer", "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)", 188, 188],
     ["distill_momentum", "https://distill.pub/2017/momentum/", 268, 221],
   ] as const) {

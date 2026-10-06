@@ -1,0 +1,251 @@
+<!-- Cut from arxiv.org/html/2605.20355v1 (div.ltx_listing) by a scratch script, 2026-10-05. -->
+<div id="alg1.4" class="ltx_listing ltx_lst_numbers_left ltx_framed ltx_framed_topbottom ltx_listing">
+<div id="alg1.4.1" class="ltx_listingline">
+<span id="alg1.4.1.1" class="ltx_text">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<span id="alg1.4.1.1.1" class="ltx_listing ltx_listing">
+<span id="\algocf@printnl@i{{{2}}}alg1.l1" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="\algocf@printnl@i{{{2}}}alg1.l1.1" class="ltx_text">1:</span></span>
+                    
+                    
+                   <span id="\algocf@printnl@i{{{2}}}alg1.l1.5" class="ltx_text ltx_font_bold">Input:</span> Task environment with state space <math id="\algocf@printnl@i{{{2}}}alg1.l1.m1" class="ltx_Math" alttext="\mathcal{S}" display="inline" intent=":literal"><semantics><mi class="ltx_font_mathcaligraphic">𝒮</mi><annotation encoding="application/x-tex">\mathcal{S}</annotation></semantics></math>, action space <math id="\algocf@printnl@i{{{2}}}alg1.l1.m2" class="ltx_Math" alttext="\mathcal{A}" display="inline" intent=":literal"><semantics><mi class="ltx_font_mathcaligraphic">𝒜</mi><annotation encoding="application/x-tex">\mathcal{A}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l2" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l2.1" class="ltx_text">2:</span></span>
+                    
+                    
+                      Expert policy <math id="alg1.l2.m1" class="ltx_Math" alttext="\pi_{\mathrm{expert}}" display="inline" intent=":literal"><semantics><msub><mi>π</mi><mi>expert</mi></msub><annotation encoding="application/x-tex">\pi_{\mathrm{expert}}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l3" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l3.1" class="ltx_text">3:</span></span>
+                    
+                    
+                      Base shared policy <math id="alg1.l3.m1" class="ltx_Math" alttext="\pi_{\mathrm{shared}}" display="inline" intent=":literal"><semantics><msub><mi>π</mi><mi>shared</mi></msub><annotation encoding="application/x-tex">\pi_{\mathrm{shared}}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l4" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l4.1" class="ltx_text">4:</span></span>
+                    
+                    
+                      Assistance level <math id="alg1.l4.m1" class="ltx_Math" alttext="\alpha\in[0,1]" display="inline" intent=":literal"><semantics><mrow><mi>α</mi><mo>∈</mo><mrow><mo stretchy="false">[</mo><mrow><mn>0</mn><mo>,</mo><mn>1</mn></mrow><mo stretchy="false">]</mo></mrow></mrow><annotation encoding="application/x-tex">\alpha\in[0,1]</annotation></semantics></math>
+
+</span>
+<span id="alg1.l5" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l5.1" class="ltx_text">5:</span></span>
+                    
+                    
+                      Scoring weights <math id="alg1.l5.m1" class="ltx_Math" alttext="w_{1},w_{2}\in[0,1]" display="inline" intent=":literal"><semantics><mrow><msub><mi>w</mi><mn>1</mn></msub><mo>,</mo><mrow><msub><mi>w</mi><mn>2</mn></msub><mo>∈</mo><mrow><mo stretchy="false">[</mo><mrow><mn>0</mn><mo>,</mo><mn>1</mn></mrow><mo stretchy="false">]</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">w_{1},w_{2}\in[0,1]</annotation></semantics></math>
+
+</span>
+<span id="alg1.l6" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l6.1" class="ltx_text">6:</span></span>
+                    
+                    
+                      Planning horizon <math id="alg1.l6.m1" class="ltx_Math" alttext="T" display="inline" intent=":literal"><semantics><mi>T</mi><annotation encoding="application/x-tex">T</annotation></semantics></math>
+
+</span>
+<span id="alg1.l7" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l7.1" class="ltx_text">7:</span></span>
+                    
+                    
+                      Beam search size <math id="alg1.l7.m1" class="ltx_Math" alttext="B" display="inline" intent=":literal"><semantics><mi>B</mi><annotation encoding="application/x-tex">B</annotation></semantics></math>
+
+</span>
+<span id="alg1.l8" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l8.1" class="ltx_text">8:</span></span>
+                    
+                    
+                      Task reward function <math id="alg1.l8.m1" class="ltx_Math" alttext="R_{\mathrm{task}}" display="inline" intent=":literal"><semantics><msub><mi>R</mi><mi>task</mi></msub><annotation encoding="application/x-tex">R_{\mathrm{task}}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l9" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l9.1" class="ltx_text">9:</span></span>
+                    
+                    
+                   <span id="alg1.l9.5" class="ltx_text ltx_font_bold">Initialize:</span> Student policy <math id="alg1.l9.m1" class="ltx_Math" alttext="\pi_{\mathrm{student},0}" display="inline" intent=":literal"><semantics><msub><mi>π</mi><mrow><mi>student</mi><mo>,</mo><mn>0</mn></mrow></msub><annotation encoding="application/x-tex">\pi_{\mathrm{student},0}</annotation></semantics></math>, empty datasets <math id="alg1.l9.m2" class="ltx_Math" alttext="\mathcal{D}_{\mathrm{shared}}" display="inline" intent=":literal"><semantics><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>shared</mi></msub><annotation encoding="application/x-tex">\mathcal{D}_{\mathrm{shared}}</annotation></semantics></math> and <math id="alg1.l9.m3" class="ltx_Math" alttext="\mathcal{D}_{\mathrm{student}}" display="inline" intent=":literal"><semantics><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>student</mi></msub><annotation encoding="application/x-tex">\mathcal{D}_{\mathrm{student}}</annotation></semantics></math> , proximal state estimator <math id="alg1.l9.m4" class="ltx_Math" alttext="\phi_{\mathrm{zpd},t}" display="inline" intent=":literal"><semantics><msub><mi>ϕ</mi><mrow><mi>zpd</mi><mo>,</mo><mi>t</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{zpd},t}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l10" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l10.1" class="ltx_text">10:</span></span>
+                    
+                    
+                   <span id="alg1.l10.5" class="ltx_text ltx_font_bold">for</span> learning timestep <math id="alg1.l10.m1" class="ltx_Math" alttext="t" display="inline" intent=":literal"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math> <span id="alg1.l10.6" class="ltx_text ltx_font_bold">do</span>
+
+
+
+</span>
+<span id="alg1.l11" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l11.1" class="ltx_text">11:</span></span>
+                    
+                    
+                    <span id="alg1.l11.5" class="ltx_text ltx_font_italic">// Shared control execution</span>
+
+</span>
+<span id="alg1.l12" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l12.1" class="ltx_text">12:</span></span>
+                    
+                    
+                    <span id="alg1.l12.5" class="ltx_text ltx_font_bold">for</span> each encountered state <math id="alg1.l12.m1" class="ltx_Math" alttext="s" display="inline" intent=":literal"><semantics><mi>s</mi><annotation encoding="application/x-tex">s</annotation></semantics></math> <span id="alg1.l12.6" class="ltx_text ltx_font_bold">do</span>
+
+
+
+</span>
+<span id="alg1.l13" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l13.1" class="ltx_text">13:</span></span>
+                    
+                    
+                     <math id="alg1.l13.m1" class="ltx_Math" alttext="\alpha^{\prime}\leftarrow\alpha*(1-\phi_{\mathrm{zpd},t}(s))" display="inline" intent=":literal"><semantics><mrow><msup><mi>α</mi><mo>′</mo></msup><mo stretchy="false">←</mo><mrow><mi>α</mi><mo lspace="0.222em" rspace="0.222em">∗</mo><mrow><mo stretchy="false">(</mo><mrow><mn>1</mn><mo>−</mo><mrow><msub><mi>ϕ</mi><mrow><mi>zpd</mi><mo>,</mo><mi>t</mi></mrow></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow></mrow><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\alpha^{\prime}\leftarrow\alpha*(1-\phi_{\mathrm{zpd},t}(s))</annotation></semantics></math>
+
+</span>
+<span id="alg1.l14" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l14.1" class="ltx_text">14:</span></span>
+                    
+                    
+                     <math id="alg1.l14.m1" class="ltx_Math" alttext="\mathcal{B}_{t}(s)\leftarrow\textsf{BeamSearch}(\pi_{\mathrm{shared}(a|s,\alpha^{\prime})},s,T,B)" display="inline" intent=":literal"><semantics><mrow><mrow><msub><mi class="ltx_font_mathcaligraphic">ℬ</mi><mi>t</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow><mo stretchy="false">←</mo><mrow><mtext class="ltx_mathvariant_sans-serif">BeamSearch</mtext><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><msub><mi>π</mi><mrow><mi>shared</mi><mo>⁡</mo><mrow><mo stretchy="false">(</mo><mi>a</mi><mo lspace="0em" rspace="0em">|</mo><mrow><mi>s</mi><mo>,</mo><msup><mi>α</mi><mo>′</mo></msup></mrow><mo stretchy="false">)</mo></mrow></mrow></msub><mo>,</mo><mi>s</mi><mo>,</mo><mi>T</mi><mo>,</mo><mi>B</mi><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\mathcal{B}_{t}(s)\leftarrow\textsf{BeamSearch}(\pi_{\mathrm{shared}(a|s,\alpha^{\prime})},s,T,B)</annotation></semantics></math>
+
+</span>
+<span id="alg1.l15" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l15.1" class="ltx_text">15:</span></span>
+                    
+                    
+                     <span id="alg1.l15.5" class="ltx_text ltx_font_bold">for</span> each trajectory <math id="alg1.l15.m1" class="ltx_Math" alttext="\tau=(s_{0},a_{0},\ldots,s_{T-1})\in\mathcal{B}_{t}(s)" display="inline" intent=":literal"><semantics><mrow><mi>τ</mi><mo>=</mo><mrow><mo stretchy="false">(</mo><msub><mi>s</mi><mn>0</mn></msub><mo>,</mo><msub><mi>a</mi><mn>0</mn></msub><mo>,</mo><mi mathvariant="normal">…</mi><mo>,</mo><msub><mi>s</mi><mrow><mi>T</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo></mrow><mo>∈</mo><mrow><msub><mi class="ltx_font_mathcaligraphic">ℬ</mi><mi>t</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\tau=(s_{0},a_{0},\ldots,s_{T-1})\in\mathcal{B}_{t}(s)</annotation></semantics></math> <span id="alg1.l15.6" class="ltx_text ltx_font_bold">do</span>
+
+
+
+</span>
+<span id="alg1.l16" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l16.1" class="ltx_text">16:</span></span>
+                    
+                    
+                       <math id="alg1.l16.m1" class="ltx_Math" alttext="J_{t}(\tau)\leftarrow w_{1}\!\left(\frac{1}{T}\sum_{i=0}^{T-1}\phi_{\mathrm{zpd},t}(s_{i})\right)+w_{2}R_{\mathrm{task}}(\tau)" display="inline" intent=":literal"><semantics><mrow><mrow><msub><mi>J</mi><mi>t</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo></mrow></mrow><mo stretchy="false">←</mo><mrow><mrow><msub><mi>w</mi><mn>1</mn></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo>(</mo><mrow><mfrac><mn>1</mn><mi>T</mi></mfrac><mo lspace="0em" rspace="0em">​</mo><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>T</mi><mo>−</mo><mn>1</mn></mrow></msubsup><mrow><msub><mi>ϕ</mi><mrow><mi>zpd</mi><mo>,</mo><mi>t</mi></mrow></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><msub><mi>s</mi><mi>i</mi></msub><mo stretchy="false">)</mo></mrow></mrow></mrow></mrow><mo>)</mo></mrow></mrow><mo>+</mo><mrow><msub><mi>w</mi><mn>2</mn></msub><mo lspace="0em" rspace="0em">​</mo><msub><mi>R</mi><mi>task</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo></mrow></mrow></mrow></mrow><annotation encoding="application/x-tex">J_{t}(\tau)\leftarrow w_{1}\!\left(\frac{1}{T}\sum_{i=0}^{T-1}\phi_{\mathrm{zpd},t}(s_{i})\right)+w_{2}R_{\mathrm{task}}(\tau)</annotation></semantics></math>
+
+</span>
+<span id="alg1.l17" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l17.1" class="ltx_text">17:</span></span>
+                    
+                    
+                     <span id="alg1.l17.5" class="ltx_text ltx_font_bold">end</span> <span id="alg1.l17.6" class="ltx_text ltx_font_bold">for</span>
+</span>
+<span id="alg1.l18" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l18.1" class="ltx_text">18:</span></span>
+                    
+                    
+                     <math id="alg1.l18.m1" class="ltx_Math" alttext="\tau^{\star}\leftarrow\arg\max_{\tau\in\mathcal{B}_{t}(s)}J_{t}(\tau)" display="inline" intent=":literal"><semantics><mrow><msup><mi>τ</mi><mo>⋆</mo></msup><mo stretchy="false">←</mo><mrow><mrow><mi>arg</mi><mo lspace="0.167em">⁡</mo><msub><mi>max</mi><mrow><mi>τ</mi><mo>∈</mo><mrow><msub><mi class="ltx_font_mathcaligraphic">ℬ</mi><mi>t</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow></mrow></msub></mrow><mo lspace="0.167em" rspace="0em">​</mo><msub><mi>J</mi><mi>t</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\tau^{\star}\leftarrow\arg\max_{\tau\in\mathcal{B}_{t}(s)}J_{t}(\tau)</annotation></semantics></math>
+
+</span>
+<span id="alg1.l19" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l19.1" class="ltx_text">19:</span></span>
+                    
+                    
+                     <math id="alg1.l19.m1" class="ltx_Math" alttext="a_{\mathrm{PSN},t}(s)\leftarrow a_{0}(\tau^{\star})" display="inline" intent=":literal"><semantics><mrow><mrow><msub><mi>a</mi><mrow><mi>PSN</mi><mo>,</mo><mi>t</mi></mrow></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow><mo stretchy="false">←</mo><mrow><msub><mi>a</mi><mn>0</mn></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><msup><mi>τ</mi><mo>⋆</mo></msup><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">a_{\mathrm{PSN},t}(s)\leftarrow a_{0}(\tau^{\star})</annotation></semantics></math>
+
+</span>
+<span id="alg1.l20" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l20.1" class="ltx_text">20:</span></span>
+                    
+                    
+                     Add <math id="alg1.l20.m1" class="ltx_Math" alttext="(s,a_{\mathrm{PSN},t}(s),r,s^{\prime})" display="inline" intent=":literal"><semantics><mrow><mo stretchy="false">(</mo><mi>s</mi><mo>,</mo><mrow><msub><mi>a</mi><mrow><mi>PSN</mi><mo>,</mo><mi>t</mi></mrow></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow></mrow><mo>,</mo><mi>r</mi><mo>,</mo><msup><mi>s</mi><mo>′</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(s,a_{\mathrm{PSN},t}(s),r,s^{\prime})</annotation></semantics></math> to student experience
+
+</span>
+<span id="alg1.l21" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l21.1" class="ltx_text">21:</span></span>
+                    
+                    
+                    <span id="alg1.l21.5" class="ltx_text ltx_font_bold">end</span> <span id="alg1.l21.6" class="ltx_text ltx_font_bold">for</span>
+</span>
+<span id="alg1.l22" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l22.1" class="ltx_text">22:</span></span>
+                    
+                    
+                    <span id="alg1.l22.5" class="ltx_text ltx_font_italic">// Update proximal state estimator</span>
+
+</span>
+<span id="alg1.l23" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l23.1" class="ltx_text">23:</span></span>
+                    
+                    
+                    Collect assisted episodes: <math id="alg1.l23.m1" class="ltx_Math" alttext="\mathcal{D}_{\mathrm{shared}}\sim\pi_{\mathrm{shared}}" display="inline" intent=":literal"><semantics><mrow><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>shared</mi></msub><mo>∼</mo><msub><mi>π</mi><mi>shared</mi></msub></mrow><annotation encoding="application/x-tex">\mathcal{D}_{\mathrm{shared}}\sim\pi_{\mathrm{shared}}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l24" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l24.1" class="ltx_text">24:</span></span>
+                    
+                    
+                    Collect unassisted episodes: <math id="alg1.l24.m1" class="ltx_Math" alttext="\mathcal{D}_{\mathrm{student}}\sim\pi_{\mathrm{student},t}" display="inline" intent=":literal"><semantics><mrow><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>student</mi></msub><mo>∼</mo><msub><mi>π</mi><mrow><mi>student</mi><mo>,</mo><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\mathcal{D}_{\mathrm{student}}\sim\pi_{\mathrm{student},t}</annotation></semantics></math>
+
+</span>
+<span id="alg1.l25" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l25.1" class="ltx_text">25:</span></span>
+                    
+                    
+                    <math id="alg1.l25.m1" class="ltx_Math" alttext="\phi_{\mathrm{zpd},t}\leftarrow\textsf{UpdateZPD}(\mathcal{D}_{\mathrm{shared}},\mathcal{D}_{\mathrm{student}})" display="inline" intent=":literal"><semantics><mrow><msub><mi>ϕ</mi><mrow><mi>zpd</mi><mo>,</mo><mi>t</mi></mrow></msub><mo stretchy="false">←</mo><mrow><mtext class="ltx_mathvariant_sans-serif">UpdateZPD</mtext><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>shared</mi></msub><mo>,</mo><msub><mi class="ltx_font_mathcaligraphic">𝒟</mi><mi>student</mi></msub><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\phi_{\mathrm{zpd},t}\leftarrow\textsf{UpdateZPD}(\mathcal{D}_{\mathrm{shared}},\mathcal{D}_{\mathrm{student}})</annotation></semantics></math>
+
+</span>
+<span id="alg1.l26" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l26.1" class="ltx_text">26:</span></span>
+                    
+                    
+                    <span id="alg1.l26.5" class="ltx_text ltx_font_italic">// Update student policy</span>
+
+</span>
+<span id="alg1.l27" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l27.1" class="ltx_text">27:</span></span>
+                    
+                    
+                    <math id="alg1.l27.m1" class="ltx_Math" alttext="\pi_{\mathrm{student},t+1}\leftarrow\textsf{UpdatePolicy}(\pi_{\mathrm{student},t},\text{experience})" display="inline" intent=":literal"><semantics><mrow><msub><mi>π</mi><mrow><mi>student</mi><mo>,</mo><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></mrow></msub><mo stretchy="false">←</mo><mrow><mtext class="ltx_mathvariant_sans-serif">UpdatePolicy</mtext><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><msub><mi>π</mi><mrow><mi>student</mi><mo>,</mo><mi>t</mi></mrow></msub><mo>,</mo><mtext>experience</mtext><mo stretchy="false">)</mo></mrow></mrow></mrow><annotation encoding="application/x-tex">\pi_{\mathrm{student},t+1}\leftarrow\textsf{UpdatePolicy}(\pi_{\mathrm{student},t},\text{experience})</annotation></semantics></math>
+
+</span>
+<span id="alg1.l28" class="ltx_listingline">
+                    <span class="ltx_tag ltx_tag_listingline"><span id="alg1.l28.1" class="ltx_text">28:</span></span>
+                    
+                    
+                   <span id="alg1.l28.5" class="ltx_text ltx_font_bold">end</span> <span id="alg1.l28.6" class="ltx_text ltx_font_bold">for</span>
+</span>
+</span></span>
+</div>
+</div>

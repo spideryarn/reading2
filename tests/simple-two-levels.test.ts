@@ -302,11 +302,15 @@ describe("Brief's and Fuller's prompts", () => {
      from `/7` to `/9`) and Fuller's did not.
      `/11` (plan 261005h) is Fuller written for someone who has not read the
      piece: **Fuller's hash moved** (it was `740415e3…` from `/8` to `/10`)
-     and Brief's did not. */
-  it("are the bytes `simple-prompt/11` shipped, for a piece of standard length", () => {
+     and Brief's did not.
+     `/12` (plan 261005b § Brief by band) asks Brief for about 80 words again:
+     **Brief's hash is `/7` to `/9`'s once more** (it was `d31a28ec…` in `/10`
+     and `/11`) and Fuller's did not move. The book increase missed its
+     shipping rule; tests/simple-length-bands.test.ts pins 80 in every band. */
+  it("are the bytes `simple-prompt/12` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/11");
-    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d31a28ecc8d6977dfc7f4711bf18540059833dc62d9dc6a9ef4de4df87a8b308");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/12");
+    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
     expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("4e926dfd865ec4f38113261df9b2311717cee65fd1cd5a3c767183acaaee06a7");
   });
 

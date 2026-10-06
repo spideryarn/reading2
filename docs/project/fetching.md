@@ -52,8 +52,7 @@ doc.bytes     // always present, whatever the kind
 
 **`doc.url` is the URL to keep, not the one you asked for.** It is what relative links resolve
 against, and a `doi.org` or `t.co` address is not what anyone means by "where this article lives".
-Stage 2 currently passes the *requested* URL to Readability as its base — see
-[what's still loose](#whats-still-loose).
+Stage 2 resolves against it since 2026-10-05.
 
 A failure carries a `code` you can switch on, a message written for a person, `status` where there
 was one, and `retryable`. The codes are `invalid-url`, `unsupported-scheme`, `blocked-address`,
@@ -415,6 +414,143 @@ them.
 thing comparing what it writes against what `PATHS.fetch.raw` reads. It dies with the filesystem
 store.
 
+## A paper source: one paper, several addresses
+
+> If I include a link like this, the right move is to grab either the html or the pdf, rather than
+> reading in this exact link.
+>
+> — Greg, 2026-10-05, of an `arxiv.org/abs/…` link with tracking parameters on it
+
+Until 2026-10-05 that link imported arXiv's abstract page: 304 words under the paper's title, and
+nothing to say it was not the paper. Now the fetch step asks
+[`src/paper-sources.ts`](../../src/paper-sources.ts) first.
+
+`resolvePaperSource(url)` is pure string work. For an address a source recognises it answers with
+the paper's id, one key and one slug for every shape of its link, and **candidates**: the
+addresses to try, in order, each saying what kind of document it must be. For anything else it
+answers `null`, and the step makes the one request it always made.
+
+```
+ candidates = resolvePaperSource(url)?.candidates ?? [{ url }]
+ for each, in order:   doc = fetchDocument(candidate.url)        ← unchanged
+     the kind it promised (and, for HTML, carrying its marker)   → this is the document
+     a 404 or a 410, or the wrong kind, and another candidate    → try the next
+     anything else                                               → fail, as a pasted address does
+```
+
+Four things about it that are deliberate:
+
+- **`fetchDocument` is called exactly as before, once per candidate.** Every defence below runs on
+  every one, and a candidate's address is a fixed string built from the matched id, never text
+  copied from what was pasted.
+- **Only absence moves on.** A timeout, a rate limit, a blocked address or an oversized body is the
+  step's failure. Falling back past those would hide the cause and could quietly spend money on a
+  costlier rendering.
+- **The last candidate must be what it promised too.** A PDF address that serves an HTML error page
+  stores nothing and fails with `[fetch-incomplete]`, which offers Retry.
+- **It resolves in the step, from the job's own address**, so a retry and a refresh fetch the paper
+  too.
+
+**arXiv's candidates are its HTML rendering, then its PDF.** It recognises `abs`, `pdf`
+(with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
+`browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
+arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
+credentials in the address is not arXiv.
+
+> run evals to figure out whether html or pdf is better. Then even if someone gives us a link like
+> this, automatically download the actual paper (either html or pdf as you decide).
+>
+> — Greg, 2026-10-05
+
+The HTML goes first because reading it is free and takes seconds, where a model reading the PDF
+costs about ten cents and two minutes, and because on the five papers compared it was the better
+article once stage 2 knew LaTeXML's shapes
+([content-extraction.md](content-extraction.md#a-latexml-page-arxivs-html), and
+[261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md)
+for the comparison). arXiv has no HTML for a paper its converter could not handle and answers 404,
+which is what sends the step on to the PDF: 4 of 36 recent papers probed. The HTML candidate's
+marker is `ltx_document`, LaTeXML's own class, so an error page served with a 200 is not taken for
+the paper. **A `pdf/` link gets the HTML too**: the choice is about the paper, not about which
+button on arXiv's page the link was copied from.
+
+**Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
+read off the pasted address. A source only discovered after a fetch (a `doi.org` link that
+redirects to a publisher) does not fit and is not built.
+
+### The sources
+
+Since 2026-10-06 there are six, and two sites that are shapes of the first. Every one was chosen
+because its landing page imported as a stub of a few hundred words under the paper's title
+([261005e](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
+has the measurement and the ranking, and
+[the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
+which sources were left out and why).
+
+| Source | What it recognises | What it fetches, in order |
+|---|---|---|
+| `arxiv` | arXiv's own addresses, above. Also the pages *about* an arXiv paper: `huggingface.co/papers/<id>`, and `alphaxiv.org/abs/<id>` and `/overview/<id>` with or without `www.` | `arxiv.org/pdf/<id>` |
+| `acl` | `aclanthology.org/<id>`, with a trailing slash or `.pdf`; `doi.org/10.18653/v1/<id>` | `aclanthology.org/<id>.pdf` |
+| `pmlr` | `proceedings.mlr.press/v<N>/<name>.html`, `/v<N>/<name>.pdf`, `/v<N>/<name>/<name>.pdf` | `/v<N>/<name>/<name>.pdf`, then `/v<N>/<name>.pdf` |
+| `neurips` | `proceedings.neurips.cc` and `papers.nips.cc`: `/paper/<year>/hash/<hash>-Abstract[-<track>].html` and `/file/<hash>-Paper[-<track>].pdf`, with or without `/paper_files` in front | `proceedings.neurips.cc/paper_files/paper/<year>/file/<hash>-Paper[-<track>].pdf` |
+| `cvf` | `openaccess.thecvf.com/<collection>/html/<name>.html` and `/<collection>/papers/<name>.pdf`, the collection written `content_cvpr_2016` or `content/ICCV2021` | `/<collection>/papers/<name>.pdf` |
+| `jmlr` | `jmlr.org/papers/v<N>/<name>.html` and `/papers/volume<N>/<name>/<name>.pdf`, with or without `www.` | `jmlr.org/papers/volume<N>/<name>/<name>.pdf` |
+
+**A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
+exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
+opens arXiv. The three other places that ask "is this an arXiv paper?" ask the registry's
+`arxivIdOf` too (`identityOf` in `src/cited-in-spideryarn.ts`, `keysOf` in `src/citations.ts`,
+`arxivPdfUrl` in `src/paper-text.ts`), so a work an article cites by its Hugging Face page matches
+the arXiv article on the shelf and is read from arXiv's PDF.
+
+The rules every source follows, each held by `tests/paper-sources.test.ts` for every source:
+
+- **It matches an origin**: `http` or `https`, the named host exactly, no port, no credentials.
+- **A candidate is a fixed `https://` address on the source's own host**, built only from pieces
+  that a closed character class matched. No pattern lets through a dot segment, a percent sign, a
+  backslash or a doubled slash.
+- **The landing page, the PDF's own address and every candidate resolve to one paper.** The
+  article's address afterwards is the PDF's, and "do we already have this?" asks that address. A
+  source whose PDF ended somewhere its own pattern does not know would be imported, and paid for,
+  on every paste. `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last run is
+  [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt).
+- **Every candidate is the paper, as a PDF. The landing page is never one.** A stub stored under
+  the paper's key could not be replaced by pasting the PDF.
+- **The key holds the whole id and the slug is cut to 60 characters.** A CVF file name runs to 90.
+  The key is what `urlKey` gave the landing page before the source existed.
+- **A name keeps the case it was pasted in**, because these servers are case-sensitive. ACL's ids
+  are the exception: a DOI is case-insensitive, so `n19-1423` is spelled `N19-1423`.
+- **NeurIPS's ending is read off the link, never guessed.** The file is `-Paper.pdf` in some years
+  and `-Paper-Conference.pdf` or `-Paper-Datasets_and_Benchmarks.pdf` in others, and the abstract
+  page's own name carries the same ending.
+
+**What that costs.** Each of these serves the paper as a PDF only, and a PDF is read by a model:
+about ten US cents and one to three minutes, where the landing page took seconds and nothing. That
+is the price of the paper rather than its announcement, and the same as pasting the PDF's address.
+
+### A paper that is not where the rule says
+
+The grammars were learned from a few papers per site. When the last candidate answers 404 or 410,
+the import fails, where before 2026-10-06 it would have imported the abstract page. The card shows
+`FETCH_PAPER_MISSING` (`[fetch-paper-missing]`, `blocked`, no Retry): the site did not have the
+paper where it usually keeps it, so check the link, or download the PDF and upload it. It is not
+`[fetch-not-found]`, which says there is no page at the reader's address, because for these
+sources their address is usually fine and the missing one is ours. Nothing
+is charged: the fetch is the first step and a failed import releases its slot.
+
+Any other failure of a paper source keeps the sentence that failure always had. Either way
+`fetchFromPaperSource` in [`src/pipeline.ts`](../../src/pipeline.ts) writes one `warn` line: the
+source's name, how many candidates were asked, and the failure's bracketed code. A rule that keeps
+missing shows up as one source's name repeating. No address is logged. An address no source
+recognises fails exactly as it did, with no such line.
+
+**The article's address is the one its text came from.** `doc.url` of the candidate that was used
+is what the store keeps (`final_url`), so an arXiv article's source link opens arXiv's HTML (or
+its PDF, when that is what was read), not the abstract page. Keeping the abstract page's address
+as well would need a second address column, which is a question for Greg in
+[the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md). What makes that address and a freshly pasted `abs` link one article is `urlKey`,
+which answers with the source's key for every shape
+([ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)).
+
 ## Not everything gets fetched: `RawManifest` has an origin
 
 Since 2026-08-27 an article's raw document can also come off a **reader's own disk**
@@ -529,16 +665,13 @@ prefer long-lived, heavily-documented libraries, then write the decision down.
 
 Honest list, none of it blocking:
 
-1. **Stage 2 still uses the requested URL as Readability's base**, not `doc.url`. After a redirect
-   that resolves every relative link and image against the wrong origin.
-
-   This page first called that a one-line fix in someone else's stage, and that was wrong. The
-   convenience wrapper `fetchHtml` returns a string, so the final URL is **thrown away between step
-   1 and step 2** and there is nowhere for stage 2 to read it from. Fixing it means deciding where
-   the resolved URL is written down — the queue calling `fetchDocument` and passing `doc.url` on to
-   `runExtract` is the obvious answer, and it touches two stages this one doesn't own
-   ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
-   deliberately rather than quietly.
+1. ~~**Stage 2 still uses the requested URL as Readability's base**, not `doc.url`.~~ **Closed,
+   2026-10-05.** The `extract` step hands `runExtract` the manifest's final URL, which the store
+   keeps as `final_url`, and falls back to the job's address only for a manifest with none. It
+   became necessary rather than tidy when a paper source arrived: the job's address is whatever
+   was pasted, and arXiv's HTML names its figures relative to the address it is served from. It
+   changes an existing article only when it is refreshed, and then only one that was redirected
+   and uses relative links, where the old answer was wrong.
 2. ~~**The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.~~
    **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which stores the bytes for
    a PDF and the decoded string for HTML, and returns the manifest recording `kind`, the requested
