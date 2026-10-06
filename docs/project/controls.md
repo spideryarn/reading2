@@ -109,11 +109,12 @@ Found 2026-10-06, from Greg's report `spya-ar65p3`: *"Why are the fonts in this 
 the ones in the Skim mode are too big?"* On an iPhone in landscape, Skim's quote (`0.84rem`, 13.4px)
 measured 20.5px in his screenshot, beside an article at its own 17px.
 
-Preflight sets `-webkit-text-size-adjust: 100%` on `html`, and we set nothing. Without it Safari on
-an iPhone in landscape enlarges text block by block and holds back on short text, so the sizes in one band stop agreeing with each other and with the stylesheet. The
-rule is now in the same `@layer base` substitute. That reading of the screenshot is a strong
-inference rather than something reproduced. **Nothing on the box can show it**: Chrome has no
-such autosizing, so this one is checked on a real phone
+Preflight sets `-webkit-text-size-adjust: 100%` on `html`, and we had set nothing. Without it Safari
+on an iPhone in landscape enlarges text block by block and holds back on short text, so the sizes in
+one band stop agreeing with each other and with the stylesheet. The rule is now in the same
+`@layer base` substitute. That reading of the screenshot is a strong inference rather than
+something reproduced. **Nothing on the box can show it**: Chrome has no such autosizing, so this
+one is checked on a real phone
 ([phone-and-touch.md § Checking it](phone-and-touch.md#checking-it)).
 
 The checklist had looked only at `button`, so a property preflight sets on `html` was outside it. It

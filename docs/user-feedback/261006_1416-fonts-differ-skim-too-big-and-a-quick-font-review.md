@@ -23,7 +23,7 @@ What we did, in
 
 - **Read the screenshot** from the production row. It is an iPhone held sideways, with Skim's band
   beside the article. Skim's quote and section line are drawn about 1.5 times the size the
-  stylesheet asks for; the article and the buttons are at their own size.
+  stylesheet asks for; the article and the short one-line labels are at their own size.
 - **The cause is, as far as can be told from here, Safari's text autosizing on a landscape iPhone**, which the app never turned off.
   It is not Skim's own sizes, which are smaller than the article's. One rule on `html` turns it
   off for every band, and a test now keeps a decision for each thing Tailwind's reset sets there.

@@ -27,18 +27,19 @@
  *
  * It reads **Tailwind's own `preflight.css` out of `node_modules`** — the real
  * source of truth, which updates when the dependency does — pulls out every
- * property preflight sets on a `<button>`, and requires each one to be either
- * mirrored in our block or listed in `DECLINED` with a reason.
+ * property preflight sets on a bare `<button>` or `html`, and requires each one
+ * to be either mirrored in our block or listed in the element's decision list
+ * with a reason.
  *
  * That is deliberately not "our block is correct". Nothing here can know that.
  * What it can know is that **nobody has decided** about a property preflight
- * thinks a button needs — which is exactly the state all three findings above
- * were in. A new property in a Tailwind upgrade fails this test until somebody
- * reads it and either copies it or writes down why not.
+ * thinks either element needs — which is exactly the state all four findings
+ * above were in. A new property in a Tailwind upgrade fails this test until
+ * somebody reads it and either copies it or writes down why not.
  *
- * Buttons only, because buttons are what this app's substitute is for and what
- * all three findings were about. `input`, `select` and `textarea` share
- * preflight's rule and are deliberately not covered — see `DECLINED`.
+ * `button` and `html` only, because those are the elements whose missing
+ * preflight rules have caused bugs here. `input`, `select` and `textarea` share
+ * the button rule and are deliberately not covered — see `DECLINED`.
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
@@ -97,12 +98,18 @@ const DECLINED: Record<string, Declined | string> = {
  */
 const DECLINED_HTML: Record<string, string> = {
   "line-height": "`body` sets the app's own (styles/shell.css), and `.prose` the article's.",
-  "tab-size": "no bug seen; the only tabs we draw are in an article's own `<pre>`.",
+  "tab-size":
+    "keep the browser's tab width for preserved-whitespace article and model content; the app " +
+    "has made no four-column tab-width decision.",
   "font-family": "`body` names the app's face from the tokens, and the voices set theirs.",
-  "font-feature-settings": "no bug seen; nothing here reads a theme default for it.",
-  "font-variation-settings": "no bug seen; Geist Variable is driven by `font-weight` alone here.",
+  "font-feature-settings":
+    "the app defines no Tailwind default feature settings; its body and voice rules own the fonts.",
+  "font-variation-settings":
+    "the app sets no global variation coordinates: weights use `font-weight`, and Source Serif's " +
+    "optical sizing remains automatic.",
   "-webkit-tap-highlight-color":
-    "no bug seen, and nobody has looked at a phone with the tap flash gone; undecided, so left.",
+    "keep Safari's native tap feedback: the app does not supply an `:active` state for every link " +
+    "and button.",
 };
 
 /** Strip comments so a property named in prose is not read as a declaration. */
@@ -155,8 +162,7 @@ function htmlProps(css: string): string[] {
   for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const targetsHtml = (selector ?? "")
       .split(",")
-      .map((s) => s.trim().split(/\s+/).pop())
-      .some((s) => s === "html");
+      .some((s) => s.trim() === "html");
     if (!targetsHtml) continue;
     for (const decl of (body ?? "").split(";")) {
       const name = decl.split(":")[0]?.trim();

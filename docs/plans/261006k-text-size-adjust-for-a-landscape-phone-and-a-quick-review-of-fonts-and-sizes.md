@@ -54,8 +54,9 @@ block and holds back on short text, unless the page says `-webkit-text-size-adju
 `width=device-width` viewport does not turn it off
 ([Apple](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/AdjustingtheTextSize/AdjustingtheTextSize.html),
 [the CSS draft](https://drafts.csswg.org/css-size-adjust/)). No transform, zoom or larger size in
-the stylesheets explains a uniform 1.53 on two elements that ask for different sizes. Nothing in the app says it (`grep -r text-size-adjust src/web
-styles` is empty). Tailwind's preflight sets it on `html`, and
+the stylesheets explains a uniform 1.53 on two elements that ask for different sizes. Before this
+change, nothing in the app said it (`grep -r text-size-adjust src/web styles` was empty).
+Tailwind's preflight sets it on `html`, and
 [we deliberately do not import preflight](../project/controls.md). So this is the fourth gap in the
 hand-written substitute, after the button border, `img { height: auto }` and the button font
 (`tests/preflight-substitute.test.ts` lists the three). The fleet dashboard imports preflight whole,
@@ -91,16 +92,16 @@ reasonable, and it is the thing to look at on a real phone.
 **The simpler option passed over:** a rule on Skim's classes alone. It would fix the picture and
 leave every other band enlarged on the same phone.
 
-**The test**, red first: `tests/preflight-substitute.test.ts` gains two checks. One requires the
+**The test**, red first: `tests/preflight-substitute.test.ts` gains three checks. One requires the
 exact values, `-webkit-text-size-adjust: 100%` and `text-size-adjust: 100%`, on the bare `html`
 rule in `@layer base` (GPT Sol's F1: a check of names alone passes `auto`; seen red with `auto`).
-The other reads preflight's
-own `html` rule out of `node_modules`, and requires every property it sets there to be either in our
-base block's `html` rule or declined with a reason, the same shape the file already uses for
-`button`. That makes the next Tailwind upgrade's new `html` property a decision too. Of the seven
-properties preflight sets there today, we mirror one and decline six (line-height, tab-size, the
-font family and its two settings, the tap highlight), each of which the app already sets itself or
-has shown no bug for.
+The second reads preflight's own `html` rule out of `node_modules`, and requires every property it
+sets there to be either in our base block's `html` rule or declined with a reason, the same shape
+the file already uses for `button`. The third rejects a decline that preflight stopped setting or
+that our base rule now sets. That makes the next Tailwind upgrade's new `html` property a decision
+too. Of the seven properties preflight sets there today, we mirror one and decline six (line-height,
+tab-size, the font family and its two settings, the tap highlight), each with the decision in the
+test.
 
 **Docs:** a paragraph in [controls.md](../project/controls.md) beside the other three findings, and
 a line in [phone-and-touch.md](../project/phone-and-touch.md).
@@ -153,12 +154,12 @@ choices:
    line, a verbatim quote, a model's sentence, a small label, a count. Give each one size as a
    token, and move the modes' rules for those jobs onto it. *In use:* Quiz's question, Glossary's
    term and Skim's row become one size, somewhere between today's 14px and 16.5px, which is itself
-   a choice to look at. *Cost:* perhaps 100 to 150 rules, some rows rewrapping, a browser pass over
-   every mode at three widths; about a session. Everything else keeps its odd value.
+   a choice to look at. *Cost:* perhaps 100 to 150 declarations, some rows rewrapping, a browser
+   pass over every mode at three widths; about a session. Everything else keeps its odd value.
 2. **A full scale for everything**, headings, tiny labels and the one-off sizes included. *Gives:*
    one answer for any new text. *Cost:* it has to be designed first (which steps, which roles), then
-   all 566 rules moved; several sessions, and many small visible shifts. Not yet defined well enough
-   to build.
+   all 566 declarations audited and their numeric choices moved; several sessions, and many small
+   visible shifts. Not yet defined well enough to build.
 3. **Leave it.** Nothing is broken; a reader sees the drift only by comparing modes.
 
 *What would make you pick:* 1 if the modes looking like one product matters now; 3 if it does not
@@ -180,5 +181,6 @@ at one size on `/design`; if they look uneven, that becomes a question with a pi
 - [x] GPT Sol plan review: changes needed, six findings, all taken ([answer](261006k-plan-review-sol.md)). F1 the exact-value test; F2 the monospace question withdrawn for want of evidence; F3 the counts; F4 the question redrawn as three choices; F5 "inference, not proof"; F6 the trade-off named
 - [x] Test red, rule added, test green (names: red before the rule; value: red with `auto`). The rule is in the built `dist` stylesheet
 - [x] Docs
-- [ ] GPT Sol code review
-- [ ] Note, endings, queue
+- [x] GPT Sol code review: approve, eight findings, seven fixed by the reviewer ([findings](261006k-code-review-findings.md), [answer](261006k-code-review-sol.md)), its diff read and kept; the stage owner must make the note's
+  “on `dev`” claim true by pushing after review
+- [x] Note, endings, queue (`qi-f8h393sb` holds the question for Greg)

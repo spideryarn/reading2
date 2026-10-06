@@ -231,6 +231,7 @@ A phone-width desktop window is not a phone, and emulation has no real notch or 
 [touch.md § What only a real iPad can tell us](touch.md#what-only-a-real-ipad-can-tell-us) says
 what no emulation can show.
 
-**Text that is bigger than its stylesheet says, on an iPhone in landscape only**, is Safari's text
-autosizing, which no desktop browser has. `html { -webkit-text-size-adjust: 100% }` turns it off,
+**Text that is bigger than its stylesheet says on an iPhone in landscape** can be Safari's text
+autosizing. That is the strong but unreproduced diagnosis for report `spya-ar65p3`; the box's
+desktop Chrome cannot test it. `html { -webkit-text-size-adjust: 100% }` turns autosizing off,
 since 2026-10-06 ([controls.md § And a fourth](controls.md#and-a-fourth-a-phone-held-sideways)).
