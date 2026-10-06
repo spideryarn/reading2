@@ -70,9 +70,14 @@ const db = guardDbStore("find-article", {
    * Every article row this reader owns, with its published revision's URL and
    * the address the reader asked for when the article was made.
    */
-  articleUrls(): Promise<{ slug: string; url: string | null; askedUrl: string | null }[]> {
+  articleUrls(): Promise<{ slug: string; url: string | null; requestedUrl: string | null; askedUrl: string | null }[]> {
     return getDb()
-      .select({ slug: articles.slug, url: articleRevisions.finalUrl, askedUrl: articles.askedUrl })
+      .select({
+        slug: articles.slug,
+        url: articleRevisions.finalUrl,
+        requestedUrl: articleRevisions.requestedUrl,
+        askedUrl: articles.askedUrl,
+      })
       .from(articles)
       .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       .where(ownedByReader());
@@ -107,8 +112,12 @@ const db = guardDbStore("find-article", {
  * itself would otherwise find nothing, and pasting it twice would import and
  * charge for the paper twice. Plan 261006i.
  *
- * **Only when the article is a paper a source recognises**
- * (`resolvePaperSource` of its `final_url`). A link to an ordinary page may be
+ * **Only when the article came through a paper source**: either `final_url`
+ * or the published revision's `requested_url` resolves. A candidate may
+ * redirect to an address the registry does not recognise, while its requested
+ * address still identifies the source. Do not classify by `asked_url`: a
+ * paper-looking pasted address could have led to an ordinary page.
+ * A link to an ordinary page may be
  * one that is meant to move, like `example.com/latest`, and an article found
  * by it would be found for ever: Refresh reads `final_url` and never goes back
  * to the link. A paper's link does not move. GPT Sol's K3 on that plan;
@@ -132,7 +141,8 @@ export async function slugForUrlKey(key: string): Promise<string | undefined> {
     (row) =>
       row.url !== null &&
       row.askedUrl !== null &&
-      resolvePaperSource(row.url) !== null &&
+      (resolvePaperSource(row.url) !== null ||
+        (row.requestedUrl !== null && resolvePaperSource(row.requestedUrl) !== null)) &&
       urlKey(row.askedUrl) === key,
   )?.slug;
 }

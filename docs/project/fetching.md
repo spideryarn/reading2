@@ -514,8 +514,10 @@ The rules every source follows, each held by `tests/paper-sources.test.ts` for e
   backslash or a doubled slash.
 - **The landing page, the PDF's own address and every candidate resolve to one paper.** The
   article's address afterwards is the PDF's, and "do we already have this?" asks that address. A
-  source whose PDF ended somewhere its own pattern does not know would be imported, and paid for,
-  on every paste. `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last whole
+  source whose PDF ended somewhere its own pattern does not know would not be found by the
+  paper's other addresses. The original pasted address can still find it through `asked_url`
+  when the published revision's `requested_url` identifies the paper source.
+  `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last whole
   run is [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt), and
   NBER's is [`261006i-evidence/resolve-live.txt`](../plans/261006i-evidence/resolve-live.txt).
 - **Every candidate is the paper, as a PDF. The landing page is never one.** A stub stored under
