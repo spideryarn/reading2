@@ -107,3 +107,30 @@ GPT Sol, 2026-10-06, approve with changes
 - Four tests in `tests/metadata-sharing-card.test.tsx`. Red first, 2026-10-06, before any change
   to `src/`: *checking* → `expected '…We could not check who can read this…' to contain 'Checking
   who can read this'`; *asks again* → `expected 1 to be 2`; *gives up* → `expected 1 to be 5`.
+
+## The code review, and the browser check
+
+**GPT Sol, 2026-10-06** ([261006e-code-review-sol.md](261006e-code-review-sol.md)): approve, no P1
+or P2, production code unchanged. One P3, fixed by the reviewer: the recovery test said the switch
+came back and asserted only the sentence beside it, over a fixture that correctly withholds the
+button. It now asserts the button. It also added tests for a slug change, a late failure and
+`acted` over `checking`, and mutated the code under all four original tests: each went red,
+including the unmount test, which counted two reads with the cleanup removed. Its write-up of the
+test gap is
+[261006e-review-state-prose-can-pass…](../postmortems/261006e-review-state-prose-can-pass-with-the-promised-control-missing.md).
+
+**Browser, 2026-10-06**, Playwright on the box, at 1440, 820 and 390 wide, on an existing article
+with `/api/metadata` shaped by `page.route`:
+
+- **Read held 3 s**: *Checking who can read this…* and neither "could not" sentence; then the real
+  controls. All three widths.
+- **First read 503, then let through**: the failure sentence, a second request 2.2 s later, then
+  the real controls with no reload. All three widths.
+- **Every read 503**: five requests, gaps of 2.3, 5.2, 15.2 and 30.2 s, then none (watched for 54 s
+  at 390 and 22 s at 1440).
+- No horizontal scroll at 390, nothing clipped. The section grows by about 90 px when the controls
+  arrive, which moves what is below it. No console errors beyond the injected 503s.
+- Shots: `261006e-shot-checking-1440.png`, `-820.png`, `-390.png`.
+
+The postmortem for the bug itself is
+[261006g](../postmortems/261006g-a-read-still-out-drawn-in-the-words-of-a-read-that-failed-and-one-failure-final.md).

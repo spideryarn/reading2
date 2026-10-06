@@ -198,14 +198,20 @@ async function advance(ms: number): Promise<void> {
 }
 
 /** `open()` waits on real timers; this is the same render under `vi.useFakeTimers()`. */
-async function openOnFakeTimers(): Promise<void> {
-  history.replaceState(null, "", `/read/${SLUG}/metadata`);
+async function openOnFakeTimers(slug = SLUG, keyed = false): Promise<void> {
+  history.replaceState(null, "", `/read/${slug}/metadata`);
   await act(async () => {
     root.render(
       createElement(
         NuqsAdapter,
         null,
-        createElement(Metadata, { slug: SLUG, article: ARTICLE, onRenamed: () => {}, onVisibility: () => {} }),
+        createElement(Metadata, {
+          ...(keyed ? { key: slug } : {}),
+          slug,
+          article: { ...ARTICLE, meta: { ...ARTICLE.meta, slug } },
+          onRenamed: () => {},
+          onVisibility: () => {},
+        }),
       ),
     );
   });
@@ -520,7 +526,7 @@ describe("the sharing card, on the page that owns it", () => {
    * check"* for as long as the request was out (qi-jpqg6r3b, 2026-10-06).
    */
   it("says it is checking while the request is out, not that it could not check", async () => {
-    sharing = { visibility: "private", publicAt: null, personalised: [] };
+    sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
     let release = (): void => {};
     metadataHeld = new Promise((go) => {
       release = go;
@@ -531,11 +537,16 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("Checking who can read this");
     expect(host.textContent).not.toContain("could not check");
     expect(host.textContent).not.toContain("Only you can read this");
+    expect(host.textContent).not.toContain(SHARING_INVENTORY_UNKNOWN);
+    expect(host.textContent).not.toContain("Share with anyone");
+    expect(host.textContent).not.toContain("Create a link");
 
     release();
     await settle();
     expect(host.textContent).not.toContain("Checking who can read this");
     expect(host.textContent).toContain("Only you can read this");
+    expect(host.textContent).toContain("Share with anyone");
+    expect(host.textContent).toContain("Create a link");
   });
 
   /**
@@ -545,7 +556,7 @@ describe("the sharing card, on the page that owns it", () => {
    * reloaded (qi-kynm6gzc, 2026-10-06).
    */
   it("asks again after a failed read, and draws the switch when one lands", async () => {
-    sharing = { visibility: "private", publicAt: null, personalised: [] };
+    sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
     metadataFailsFirst = 1;
     vi.useFakeTimers();
 
@@ -553,10 +564,18 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("could not check");
     expect(metadataCalls).toBe(1);
 
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => { release = go; });
     await advance(2_000);
     expect(metadataCalls).toBe(2);
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("Share with anyone");
+    release();
+    await advance(0);
     expect(host.textContent).not.toContain("could not check");
     expect(host.textContent).toContain("Only you can read this");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.includes("Share with anyone"))).toBe(true);
 
     // And having found out, it stops asking.
     await advance(120_000);
@@ -595,6 +614,63 @@ describe("the sharing card, on the page that owns it", () => {
     expect(metadataCalls).toBe(5);
     expect(host.textContent).toContain("could not check");
     expect(host.textContent).not.toContain("Checking who can read this");
+  });
+
+  it("drops the old article's wait and gives the new article its own retry budget", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+    const requests: string[] = [];
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/metadata/")) requests.push(String(input));
+      return originalFetch(input, init);
+    });
+
+    await openOnFakeTimers(SLUG, true);
+    await advance(2_000);
+    expect(requests).toHaveLength(2);
+
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => { release = go; });
+    await openOnFakeTimers("another-piece", true);
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("could not check");
+    release();
+    await advance(0);
+    metadataHeld = null;
+    for (const wait of [2_000, 5_000, 15_000, 30_000]) await advance(wait);
+    await advance(120_000);
+
+    expect(requests).toEqual([
+      `/api/metadata/${SLUG}`, `/api/metadata/${SLUG}`,
+      ...Array<string>(5).fill("/api/metadata/another-piece"),
+    ]);
+  });
+
+  it("does not count a late failure from the previous slug against the new slug", async () => {
+    vi.useFakeTimers();
+    let release = (): void => {};
+    const oldRead = new Promise<void>((go) => { release = go; });
+    const originalFetch = fetch;
+    let newReads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (!url.startsWith("/api/metadata/")) return originalFetch(input, init);
+      if (url === `/api/metadata/${SLUG}`) await oldRead;
+      else newReads++;
+      return new Response('{"error":"read failed"}', { status: 500 });
+    });
+
+    // Keep the instance here to exercise current(), even though the app keys it.
+    await openOnFakeTimers();
+    await openOnFakeTimers("another-piece");
+    expect(newReads).toBe(1);
+    release();
+    await advance(0);
+    await advance(2_000);
+    expect(newReads).toBe(2);
+    await advance(5_000);
+    expect(newReads).toBe(3);
   });
 
   /**

@@ -165,13 +165,14 @@ afterEach(async () => {
  * the exact value a test is about is worse than no default; every caller says
  * what it means.
  */
-async function mount(sharing: ArticleSharing | undefined): Promise<void> {
+async function mount(sharing: ArticleSharing | undefined, checking = false): Promise<void> {
   await act(async () => {
     root.render(
       createElement(AccessSharing, {
         slug: SLUG,
         title: "A piece",
         sharing,
+        checking,
         onVisibility: (forSlug: string, visibility: Visibility | null) => {
           /* The slug is asserted rather than ignored: the callback resolves
              after the reader may have moved on, and the receiver keys on it. */
@@ -702,6 +703,35 @@ describe("when a write does not come back cleanly", () => {
  * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
  */
 describe("telling the rest of the page what changed", () => {
+  it("offers no control and reports no visibility while checking", async () => {
+    await mount(undefined, true);
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.querySelectorAll("button, input")).toHaveLength(0);
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).not.toContain("Shared since");
+    expect(reported).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("keeps a pending write and its answer ahead of a later checking prop", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await mount(undefined, true);
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.querySelectorAll("button, input")).toHaveLength(0);
+    expect(reported).toEqual(["private", null]);
+
+    release();
+    await settle();
+    expect(host.textContent).toContain(SHARING_ON);
+    expect(host.textContent).toContain("Stop sharing");
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(reported).toEqual(["private", null, "public"]);
+  });
+
   /**
    * **`reported` is asserted whole, as a sequence.**
    *
