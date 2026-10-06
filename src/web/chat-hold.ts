@@ -16,7 +16,7 @@
 
 /**
  * How far down the panel an answer may start before the question above it is
- * given up. A pasted passage or a Remember recall can be taller than the panel,
+ * given up. A pasted passage or a Learn recall can be taller than the panel,
  * and holding *its* top at the top would stream the answer below the fold.
  */
 export const LONG_QUESTION = 0.4;

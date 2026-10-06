@@ -93,7 +93,7 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * reaches the glossary because `terms` already reaches Glossary.
  *
  * Absent for the steps that are not a mode of their own: the arc (the
- * one-sentence gist on the masthead), the quiz (a sub-mode of Remember, whose
+ * one-sentence gist on the masthead), the quiz (a sub-mode of Learn, whose
  * own name is already the label), the sketch (one of Diagram's five pictures —
  * `rerun diagram` would be a guess about which), cross-references (links in the
  * prose), and **both of Summary's steps**: the plain-words lengths and the

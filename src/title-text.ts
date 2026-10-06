@@ -243,11 +243,11 @@ export const MODE_LABEL: Record<Mode, string> = {
   referee: "Referee",
   diagram: "Diagram",
   chat: "Chat",
-  /* Called Remember until 2026-10-05, when Greg renamed it (spya-mvmpks). Only
-     the word a reader sees changed: the mode id, `?mode=remember`, the thread
-     kind and every identifier still say `remember`.
+  /* Called Remember until 2026-10-05, when Greg renamed it (spya-mvmpks). The
+     mode id, `?mode=`, the thread kind and every identifier followed on
+     2026-10-06 (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md).
      docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
-  remember: "Learn",
+  learn: "Learn",
   debate: "Debate",
   structure: "Structure",
   citations: "Citations",

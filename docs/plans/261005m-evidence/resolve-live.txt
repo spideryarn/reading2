@@ -1,0 +1,120 @@
+resolve-live, 2026-10-05T23:15:42.178Z
+pasted address | source | candidates asked | what arrived | does urlKey of the address it ended on equal the paper's key
+
+ok      BART
+        https://aclanthology.org/2020.acl-main.703/
+        source acl; key aclanthology.org/2020.acl-main.703; slug acl-2020-acl-main-703
+        asked 1 of 1
+        pdf 322247 bytes; ended on https://aclanthology.org/2020.acl-main.703.pdf; urlKey(end) === key: true
+ok      ACL 2023 long 1
+        https://aclanthology.org/2023.acl-long.1/
+        source acl; key aclanthology.org/2023.acl-long.1; slug acl-2023-acl-long-1
+        asked 1 of 1
+        pdf 4602729 bytes; ended on https://aclanthology.org/2023.acl-long.1.pdf; urlKey(end) === key: true
+ok      CLIP
+        https://proceedings.mlr.press/v139/radford21a.html
+        source pmlr; key proceedings.mlr.press/v139/radford21a.html; slug pmlr-v139-radford21a
+        asked 1 of 2
+        pdf 3526772 bytes; ended on https://proceedings.mlr.press/v139/radford21a/radford21a.pdf; urlKey(end) === key: true
+ok      BatchNorm
+        https://proceedings.mlr.press/v37/ioffe15.html
+        source pmlr; key proceedings.mlr.press/v37/ioffe15.html; slug pmlr-v37-ioffe15
+        asked 2 of 2
+        pdf 318669 bytes; ended on https://proceedings.mlr.press/v37/ioffe15.pdf; urlKey(end) === key: true
+ok      Attention is all you need
+        https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html
+        source neurips; key proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html; slug neurips-2017-3f5ee243547dee91fbd053c1c4a845aa
+        asked 1 of 1
+        pdf 569417 bytes; ended on https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf; urlKey(end) === key: true
+ok      GPT-3
+        https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html
+        source neurips; key proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html; slug neurips-2020-1457c0d6bfcb4967418bfb8ac142f64a
+        asked 1 of 1
+        pdf 1283694 bytes; ended on https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf; urlKey(end) === key: true
+ok      ResNet
+        https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html
+        source cvf; key openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html; slug cvf-he-deep-residual-learning-cvpr-2016-paper
+        asked 1 of 1
+        pdf 603123 bytes; ended on https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf; urlKey(end) === key: true
+ok      Swin
+        https://openaccess.thecvf.com/content/ICCV2021/html/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.html
+        source cvf; key openaccess.thecvf.com/content/ICCV2021/html/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.html; slug cvf-liu-swin-transformer-hierarchical-vision-transformer-usi
+        asked 1 of 1
+        pdf 1387205 bytes; ended on https://openaccess.thecvf.com/content/ICCV2021/papers/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.pdf; urlKey(end) === key: true
+ok      Dropout
+        https://jmlr.org/papers/v15/srivastava14a.html
+        source jmlr; key jmlr.org/papers/v15/srivastava14a.html; slug jmlr-v15-srivastava14a
+        asked 1 of 1
+        pdf 2869095 bytes; ended on https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf; urlKey(end) === key: true
+ok      scikit-learn
+        https://jmlr.org/papers/v12/pedregosa11a.html
+        source jmlr; key jmlr.org/papers/v12/pedregosa11a.html; slug jmlr-v12-pedregosa11a
+        asked 1 of 1
+        pdf 42310 bytes; ended on https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf; urlKey(end) === key: true
+ok      Attention
+        https://huggingface.co/papers/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 1
+        pdf 2215244 bytes; ended on https://arxiv.org/pdf/1706.03762; urlKey(end) === key: true
+ok      DeepSeek-R1
+        https://huggingface.co/papers/2501.12948
+        source arxiv; key arxiv.org/abs/2501.12948; slug arxiv-2501-12948
+        asked 1 of 1
+        pdf 5034998 bytes; ended on https://arxiv.org/pdf/2501.12948; urlKey(end) === key: true
+ok      Attention
+        https://www.alphaxiv.org/abs/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 2215244 bytes; ended on https://arxiv.org/pdf/1706.03762; urlKey(end) === key: true
+ok      DeepSeek-R1
+        https://www.alphaxiv.org/abs/2501.12948
+        source arxiv; key arxiv.org/abs/2501.12948; slug arxiv-2501-12948
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 5034998 bytes; ended on https://arxiv.org/pdf/2501.12948; urlKey(end) === key: true
+ok      alphaXiv /overview/
+        https://www.alphaxiv.org/overview/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 2215244 bytes; ended on https://arxiv.org/pdf/1706.03762; urlKey(end) === key: true
+ok      ACL old-style id by its DOI
+        https://doi.org/10.18653/v1/N19-1423
+        source acl; key aclanthology.org/N19-1423; slug acl-n19-1423
+        asked 1 of 1
+        pdf 786279 bytes; ended on https://aclanthology.org/N19-1423.pdf; urlKey(end) === key: true
+ok      ACL old-style id, lower case
+        https://aclanthology.org/n19-1423/
+        source acl; key aclanthology.org/N19-1423; slug acl-n19-1423
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 786279 bytes; ended on https://aclanthology.org/N19-1423.pdf; urlKey(end) === key: true
+ok      NeurIPS 2023 -Conference
+        https://proceedings.neurips.cc/paper_files/paper/2023/hash/0001ca33ba34ce0351e4612b744b3936-Abstract-Conference.html
+        source neurips; key proceedings.neurips.cc/paper_files/paper/2023/hash/0001ca33ba34ce0351e4612b744b3936-Abstract-Conference.html; slug neurips-2023-0001ca33ba34ce0351e4612b744b3936
+        asked 1 of 1
+        pdf 4516021 bytes; ended on https://proceedings.neurips.cc/paper_files/paper/2023/file/0001ca33ba34ce0351e4612b744b3936-Paper-Conference.pdf; urlKey(end) === key: true
+ok      NeurIPS 2023 -Datasets_and_Benchmarks
+        https://proceedings.neurips.cc/paper_files/paper/2023/hash/00ba06ba5c324efdfb068865ca44cf0b-Abstract-Datasets_and_Benchmarks.html
+        source neurips; key proceedings.neurips.cc/paper_files/paper/2023/hash/00ba06ba5c324efdfb068865ca44cf0b-Abstract-Datasets_and_Benchmarks.html; slug neurips-2023-00ba06ba5c324efdfb068865ca44cf0b
+        asked 1 of 1
+        pdf 932346 bytes; ended on https://proceedings.neurips.cc/paper_files/paper/2023/file/00ba06ba5c324efdfb068865ca44cf0b-Paper-Datasets_and_Benchmarks.pdf; urlKey(end) === key: true
+ok      NeurIPS old host and path
+        https://papers.nips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html
+        source neurips; key proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html; slug neurips-2017-3f5ee243547dee91fbd053c1c4a845aa
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 569417 bytes; ended on https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf; urlKey(end) === key: true
+ok      PMLR flat layout, by its PDF
+        https://proceedings.mlr.press/v37/ioffe15.pdf
+        source pmlr; key proceedings.mlr.press/v37/ioffe15.html; slug pmlr-v37-ioffe15
+        asked 2 of 2 (the same candidates as a row above: not fetched again)
+        pdf 318669 bytes; ended on https://proceedings.mlr.press/v37/ioffe15.pdf; urlKey(end) === key: true
+ok      JMLR on www.
+        https://www.jmlr.org/papers/v12/pedregosa11a.html
+        source jmlr; key jmlr.org/papers/v12/pedregosa11a.html; slug jmlr-v12-pedregosa11a
+        asked 1 of 1 (the same candidates as a row above: not fetched again)
+        pdf 42310 bytes; ended on https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf; urlKey(end) === key: true
+ok      JMLR numbered name
+        https://jmlr.org/papers/v22/20-1061.html
+        source jmlr; key jmlr.org/papers/v22/20-1061.html; slug jmlr-v22-20-1061
+        asked 1 of 1
+        pdf 14798612 bytes; ended on https://jmlr.org/papers/volume22/20-1061/20-1061.pdf; urlKey(end) === key: true
+
+23 cases, 23 ok, 0 not ok

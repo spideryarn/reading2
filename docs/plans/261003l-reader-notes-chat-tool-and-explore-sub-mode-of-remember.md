@@ -1,8 +1,8 @@
 # A Chat tool that knows the reader's notes, and Explore, Remember's fourth sub-mode
 
 Up: [plans.md](../project/plans.md) · the tools: [chat-tools.md](../project/chat-tools.md) · the
-mode: [remember-mode.md](../project/remember-mode.md) · where it is going:
-[remembering-vision.md](../project/remembering-vision.md)
+mode: [remember-mode.md](../project/learn-mode.md) · where it is going:
+[remembering-vision.md](../project/learning-vision.md)
 
 Queue item `qi-pbskakrj`, the deferred half of report `spya-mtsf0y`
 ([feedback note](../user-feedback/261003_0936-tutorial-softer-blurb-quotes-in-situ-and-retention.md)).
@@ -256,7 +256,7 @@ Explore is built as Stage 2 and the review table say: a fifth `ThreadKind`, `EXP
 chip, the empty state with three starters, no Live (`OFFERS_LIVE`, a capability per kind), and the
 notes digest in the final user message of **every** Explore turn (`exploreNotes` in the route,
 `notesSection` in the builder). What it is and why is in
-[remember-mode.md § Explore, the fourth sub-mode](../project/remember-mode.md#explore-the-fourth-sub-mode).
+[remember-mode.md § Explore, the fourth sub-mode](../project/learn-mode.md#explore-the-fourth-sub-mode).
 
 Choices the plan left open:
 
@@ -284,7 +284,7 @@ Not done here: the eval and its investigation, the browser check, and the code r
 
 ### Stage 2, the eval
 
-[`evals/remember-explore.ts`](../../evals/remember-explore.ts) (`npm run eval:explore`), written up
+[`evals/remember-explore.ts`](../../evals/learn-explore.ts) (`npm run eval:explore`), written up
 in [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md). Built
 as PR-6 says: fixture notes and conversations through the production digest, `reader_notes`
 answered from the same fixtures through a new seam (`runToolWith` on `converse`'s request, which

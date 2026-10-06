@@ -411,7 +411,7 @@ describe("the quotes' marks", () => {
  * **What is deliberately not asserted: `key={mode}` on `ConversationBand`.** A
  * first draft of this block did assert it, on the strength of a mutation that
  * deleted the key and left every test green. GPT Sol showed the mutation was
- * green because the key is inert — chat and Remember return different top-level
+ * green because the key is inert — chat and Learn return different top-level
  * component types, so React discards the outgoing subtree either way — and a
  * guard on a no-op is a guard that will one day be defended for the wrong
  * reason. The history, and the condition that would make the key matter again,

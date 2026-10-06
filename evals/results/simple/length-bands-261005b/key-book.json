@@ -1,0 +1,66 @@
+[
+  {
+    "id": "P01",
+    "kind": "control",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P02",
+    "kind": "whole",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "opusbook3b",
+    "B": "brief100b"
+  },
+  {
+    "id": "P03",
+    "kind": "test",
+    "slug": "s3-doctorow-250p-spya-jg872v",
+    "level": "brief",
+    "A": "opusbook3b",
+    "B": "opusbook80b"
+  },
+  {
+    "id": "P04",
+    "kind": "whole",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "brief100a",
+    "B": "opusbook3a"
+  },
+  {
+    "id": "P05",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "opusbook3b",
+    "B": "len0b"
+  },
+  {
+    "id": "P06",
+    "kind": "test",
+    "slug": "s3-doctorow-250p-spya-jg872v",
+    "level": "brief",
+    "A": "opusbook80a",
+    "B": "opusbook3a"
+  },
+  {
+    "id": "P07",
+    "kind": "control",
+    "slug": "s3-doctorow-250p-spya-jg872v",
+    "level": "brief",
+    "A": "opusbook80b",
+    "B": "opusbook80a"
+  },
+  {
+    "id": "P08",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0a",
+    "B": "opusbook3a"
+  }
+]

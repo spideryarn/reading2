@@ -17,7 +17,7 @@ Status: **built and on `dev`, except the two screenshots and the browser pass** 
 Two things, then: **(a)** the mode a reader knows as *Remember* is called *Learn*; **(b)** Explore's
 remit widens from "your own ideas" to "deepening your thinking around the piece", which includes
 what might be wrong with it. Tutorial is described but not changed: it is already about the author's
-intent ([remember-mode.md § It is about the author first](../project/remember-mode.md)).
+intent ([remember-mode.md § It is about the author first](../project/learn-mode.md)).
 
 Prior work checked 2026-10-05 20:17 UTC: no plan, no note in `docs/user-feedback/`, nothing in
 `git log origin/dev`, and the only `gjd-remote` session on the subject is this one.

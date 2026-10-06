@@ -4,14 +4,14 @@
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D5.
  *
  * The rules are in one pure function, in this order: a stored origin, then a
- * Remember kind, then an anchor, then a plain chat. The order is what these
+ * Learn kind, then an anchor, then a plain chat. The order is what these
  * tests hold, because two of the rules can be true of one conversation.
  */
 import { describe, expect, it } from "vitest";
 
 import type { ChatAnchor, ThreadKind, ThreadOrigin } from "../src/types.js";
 import { CHAT_FROM_WORDS, chatFromParam } from "../src/web/params.js";
-import { REMEMBER_SUB_MODES } from "../src/web/sub-modes.js";
+import { LEARN_SUB_MODES } from "../src/web/sub-modes.js";
 import {
   CHAT_FROM_LABEL,
   chatFrom,
@@ -37,24 +37,24 @@ describe("threadSource", () => {
     });
   });
 
-  it("names Remember and its sub-mode for each of Remember's three kinds, in the sub-mode's own words", () => {
-    expect(threadSource(t("remember"))).toEqual({
-      from: "remember",
-      mode: "remember",
-      label: `From Learn › ${REMEMBER_SUB_MODES.recall.label}`,
-      remember: "recall",
+  it("names Learn and its sub-mode for each of Learn's three kinds, in the sub-mode's own words", () => {
+    expect(threadSource(t("learn"))).toEqual({
+      from: "learn",
+      mode: "learn",
+      label: `From Learn › ${LEARN_SUB_MODES.recall.label}`,
+      learn: "recall",
     });
     expect(threadSource(t("tutorial"))).toMatchObject({
-      from: "remember",
-      label: `From Learn › ${REMEMBER_SUB_MODES.tutorial.label}`,
-      remember: "tutorial",
+      from: "learn",
+      label: `From Learn › ${LEARN_SUB_MODES.tutorial.label}`,
+      learn: "tutorial",
     });
     expect(threadSource(t("explore"))).toMatchObject({
-      from: "remember",
-      label: `From Learn › ${REMEMBER_SUB_MODES.explore.label}`,
-      remember: "explore",
+      from: "learn",
+      label: `From Learn › ${LEARN_SUB_MODES.explore.label}`,
+      learn: "explore",
     });
-    expect(threadSource(t("remember"))?.label).toBe("From Learn › Recall");
+    expect(threadSource(t("learn"))?.label).toBe("From Learn › Recall");
   });
 
   it("says an anchored chat is about a passage, and quotes the passage when the anchor has its words", () => {
@@ -78,10 +78,10 @@ describe("threadSource", () => {
 
 describe("what Chat lists", () => {
   it("is every kind but Candidates", () => {
-    const listed = (["chat", "remember", "tutorial", "explore", "candidates"] as const).filter((kind) =>
+    const listed = (["chat", "learn", "tutorial", "explore", "candidates"] as const).filter((kind) =>
       listedInChat(t(kind)),
     );
-    expect(listed).toEqual(["chat", "remember", "tutorial", "explore"]);
+    expect(listed).toEqual(["chat", "learn", "tutorial", "explore"]);
   });
 });
 
@@ -90,25 +90,25 @@ describe("the filter", () => {
     { id: "a", ...t("chat") },
     { id: "b", ...t("tutorial") },
     { id: "c", ...t("chat", { origin: CLAIM }) },
-    { id: "d", ...t("remember") },
+    { id: "d", ...t("learn") },
     { id: "e", ...t("chat", { anchor: QUOTED }) },
   ];
 
-  it("puts each conversation under one word, and Remember's three kinds under the same one", () => {
-    expect(all.map(chatFrom)).toEqual(["chats", "remember", "debate", "remember", "passage"]);
-    expect(chatFrom(t("explore"))).toBe("remember");
+  it("puts each conversation under one word, and Learn's three kinds under the same one", () => {
+    expect(all.map(chatFrom)).toEqual(["chats", "learn", "debate", "learn", "passage"]);
+    expect(chatFrom(t("explore"))).toBe("learn");
   });
 
   it("offers the sources that are present, once each, in a fixed order", () => {
-    expect(sourcesIn(all)).toEqual(["chats", "debate", "remember", "passage"]);
-    expect(sourcesIn([all[1], all[3]].filter((x) => x !== undefined))).toEqual(["remember"]);
+    expect(sourcesIn(all)).toEqual(["chats", "debate", "learn", "passage"]);
+    expect(sourcesIn([all[1], all[3]].filter((x) => x !== undefined))).toEqual(["learn"]);
     expect(sourcesIn([])).toEqual([]);
   });
 
   it("narrows to one source, and to everything when there is no choice", () => {
     expect(narrowed(all, null).map((x) => x.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(narrowed(all, "chats").map((x) => x.id)).toEqual(["a"]);
-    expect(narrowed(all, "remember").map((x) => x.id)).toEqual(["b", "d"]);
+    expect(narrowed(all, "learn").map((x) => x.id)).toEqual(["b", "d"]);
     expect(narrowed(all, "debate").map((x) => x.id)).toEqual(["c"]);
     expect(narrowed(all, "passage").map((x) => x.id)).toEqual(["e"]);
   });
@@ -116,7 +116,7 @@ describe("the filter", () => {
   it("has a label for every word the URL can carry", () => {
     expect(Object.keys(CHAT_FROM_LABEL).sort()).toEqual([...CHAT_FROM_WORDS].sort());
     expect(CHAT_FROM_LABEL.chats).toBe("Chats");
-    expect(CHAT_FROM_LABEL.remember).toBe("Learn");
+    expect(CHAT_FROM_LABEL.learn).toBe("Learn");
     expect(CHAT_FROM_LABEL.debate).toBe("Debate");
   });
 

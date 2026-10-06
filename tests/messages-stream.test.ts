@@ -712,6 +712,8 @@ describe("messageText and finishedText", () => {
 /** One scripted answer per request, in order; the last repeats. */
 type Scripted =
   | { throws: string }
+  /** `fetch` rejecting with exactly this, so a test can put a `cause` on it. */
+  | { rejects: Error }
   | { status: number }
   | { body: string }
   /** A `200` whose stream carries these frames and then breaks. */
@@ -724,6 +726,7 @@ function scriptTransport(script: Scripted[]) {
     const step = script[Math.min(sent, script.length - 1)]!;
     sent += 1;
     if ("throws" in step) throw new TypeError(step.throws);
+    if ("rejects" in step) throw step.rejects;
     if ("status" in step) {
       return new Response(
         JSON.stringify({ type: "error", error: { type: "api_error", message: "upstream said no" } }),
@@ -917,6 +920,142 @@ describe("streamMessage — a transport blip is retried, and every attempt is co
       expect(report.calls.map((c) => c.outcome)).toEqual(["error"]);
     } finally {
       t.restore();
+    }
+  });
+});
+
+/* ── What each attempt's row says of itself (plan 261006b) ───────────────────
+
+   The retry above writes a row per attempt. These are about what a row can be
+   asked afterwards: which go it was, whether it failed before or after
+   `message_start`, and why, as a label from src/call-failure.ts. Each row is
+   compared whole. */
+
+describe("streamMessage — every attempt's row says which go it was, and how it failed", () => {
+  const savedKey = process.env.OPENROUTER_API_KEY;
+  beforeEach(() => { process.env.OPENROUTER_API_KEY = "sk-or-test-not-a-real-key"; });
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = savedKey;
+  });
+
+  const beforeAnswer = (cls: string, status: number | null = null) => ({ phase: "before_answer", class: cls, status });
+  const midAnswer = (cls: string, status: number | null = 200) => ({ phase: "mid_answer", class: cls, status });
+  const errorEvent = (error: unknown) => sse("error", { type: "error", error });
+  /** `fetch failed`, with the code where undici puts it: the SDK wraps this once more. */
+  const droppedWith = (code: unknown) =>
+    new TypeError("fetch failed", { cause: Object.assign(new Error("socket"), { code }) });
+
+  /** Run one call; hand back `[attempt, outcome, failure]` for every row, nothing defaulted. */
+  async function said(script: Scripted[], signal?: AbortSignal, during?: () => void): Promise<unknown[]> {
+    const t = scriptTransport(script);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", ...(signal ? { signal } : {}) });
+        const pending = call.finalMessage().catch(() => undefined);
+        during?.();
+        await pending;
+      });
+      expect(report.pending).toEqual([]);
+      expect(JSON.stringify(report.calls)).not.toContain("badgers");
+      return report.calls.map((c) => [c.attempt, c.outcome, c.failure]);
+    } finally {
+      t.restore();
+    }
+  }
+
+  it("a blip then an answer is (1, error, before_answer) and (2, ok)", async () => {
+    expect(await said([{ throws: "fetch failed" }, { body: cannedStream() }])).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "ok", null],
+    ]);
+  });
+
+  it("three failures end at attempt 3", async () => {
+    expect(await said([{ throws: "fetch failed" }])).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "error", beforeAnswer("network")],
+      [3, "error", beforeAnswer("network")],
+    ]);
+  });
+
+  it("a Stop during the backoff leaves one row, and no attempt 2", async () => {
+    const controller = new AbortController();
+    const rows = await said([{ throws: "fetch failed" }, { body: cannedStream() }], controller.signal, () => {
+      setTimeout(() => controller.abort(), 50);
+    });
+    expect(rows).toEqual([[1, "error", beforeAnswer("network")]]);
+  });
+
+  it("a refusal carries its status", async () => {
+    expect(await said([{ status: 503 }, { body: cannedStream() }])).toEqual([
+      [1, "error", beforeAnswer("refused", 503)],
+      [2, "ok", null],
+    ]);
+    expect(await said([{ status: 400 }])).toEqual([[1, "error", beforeAnswer("refused", 400)]]);
+  });
+
+  it("a stream that breaks after message_start is mid_answer", async () => {
+    expect(await said([{ breaksAfter: BEGUN_THEN_BROKEN }])).toEqual([[1, "error", midAnswer("network")]]);
+  });
+
+  it("finds a wrapped ECONNRESET, two causes down", async () => {
+    const rows = await said([{ rejects: droppedWith("ECONNRESET") }, { body: cannedStream() }]);
+    expect(rows[0]).toEqual([1, "error", beforeAnswer("network:ECONNRESET")]);
+  });
+
+  it("gives two different error events two different labels", async () => {
+    const overloaded = await said([
+      { body: errorEvent({ type: "overloaded_error", message: "the reader asked about badgers" }) },
+      { body: cannedStream() },
+    ]);
+    expect(overloaded).toEqual([
+      [1, "error", beforeAnswer("provider:overloaded_error", 200)],
+      [2, "ok", null],
+    ]);
+    const billing = await said([{ body: errorEvent({ type: "billing_error", message: "no credit for badgers" }) }]);
+    expect(billing).toEqual([[1, "error", beforeAnswer("provider:billing_error", 200)]]);
+  });
+
+  it("is `in_band` for an error event that names no type, or one nobody listed", async () => {
+    const untyped = await said([{ body: sse("error", { message: "badgers" }) }, { body: cannedStream() }]);
+    expect(untyped[0]).toEqual([1, "error", beforeAnswer("in_band", 200)]);
+    const odd = await said([{ body: errorEvent({ type: "reader_search_term", message: "badgers" }) }]);
+    expect(odd[0]).toEqual([1, "error", beforeAnswer("in_band", 200)]);
+    expect(JSON.stringify(odd)).not.toContain("reader_search_term");
+  });
+
+  it("keeps nothing of a cause code or an error name it was not told about", async () => {
+    const odd = Object.assign(droppedWith("reader_search_term"), { name: "reader_search_term" });
+    const rows = await said([{ rejects: odd }, { body: cannedStream() }]);
+    expect(rows[0]).toEqual([1, "error", beforeAnswer("network")]);
+    expect(JSON.stringify(rows)).not.toContain("reader_search_term");
+  });
+
+  it("an in-band error after message_start is mid_answer, under its own label", async () => {
+    const begun = sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } });
+    const rows = await said([{ body: begun + errorEvent({ type: "overloaded_error", message: "badgers" }) }]);
+    expect(rows).toEqual([[1, "error", midAnswer("provider:overloaded_error")]]);
+  });
+
+  it("says nothing about why on an abort, and still counts the go", async () => {
+    const controller = new AbortController();
+    const original = globalThis.fetch;
+    /* A request that hangs until the signal fires, as a real one would. */
+    globalThis.fetch = ((_input: unknown, init?: { signal?: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      })) as typeof globalThis.fetch;
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        const pending = call.finalMessage().catch(() => undefined);
+        setTimeout(() => controller.abort(), 20);
+        await pending;
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", null]]);
+    } finally {
+      globalThis.fetch = original;
     }
   });
 });

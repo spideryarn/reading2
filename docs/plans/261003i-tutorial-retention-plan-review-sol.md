@@ -20,7 +20,7 @@ Stage 2 cannot help a quotation with no chip.
 
 **PR-3 — P2: The proposed two-article eval does not yet have two-article reader inputs.**
 
-The existing readers name Seth’s simulation argument, biological naturalism, predictive processing and metabolic substrate ([evals/remember-tutorial.ts:45](/home/greg/code/spideryarn2/.claude/worktrees/fb-tutorial-2610/evals/remember-tutorial.ts:45)). Running those unchanged against Levin measures responses to misplaced premises, rather than the intended retention behaviour.
+The existing readers name Seth’s simulation argument, biological naturalism, predictive processing and metabolic substrate ([evals/remember-tutorial.ts:45](/home/greg/code/spideryarn2/.claude/worktrees/fb-tutorial-2610/evals/learn-tutorial.ts:45)). Running those unchanged against Levin measures responses to misplaced premises, rather than the intended retention behaviour.
 
 A “long, good, opinionated account” also cannot be generic in its substantive content: correctness against the article is what supposedly triggers premature climbing to *Doubt*.
 

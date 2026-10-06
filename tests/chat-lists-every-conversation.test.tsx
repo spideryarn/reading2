@@ -106,7 +106,7 @@ function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): C
    alphabet has no 1, i, l or o (src/ids.ts). One that fails to parse reads as
    no thread at all, and every case below about a pasted id would pass idly. */
 const CHAT = thread("spya-chat22", "chat");
-const REMEMBER = thread("spya-rem022", "remember");
+const LEARN = thread("spya-rem022", "learn");
 const TUTORIAL = thread("spya-tut023", "tutorial");
 const EXPLORE = thread("spya-exp024", "explore");
 const CANDIDATES = thread("spya-can025", "candidates");
@@ -191,16 +191,16 @@ function prop<T>(name: string): T {
 
 describe("what Chat lists", () => {
   it("lists Recall, Tutorial and Explore beside the chats, and never Candidates", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE, CANDIDATES];
+    stored = [CHAT, LEARN, TUTORIAL, EXPLORE, CANDIDATES];
     await mount("?mode=chat");
-    expect(ids("listed").sort()).toEqual([CHAT.id, REMEMBER.id, TUTORIAL.id, EXPLORE.id].sort());
+    expect(ids("listed").sort()).toEqual([CHAT.id, LEARN.id, TUTORIAL.id, EXPLORE.id].sort());
     for (const props of renders) expect(ids("listed", props)).not.toContain(CANDIDATES.id);
   });
 });
 
 describe("what Chat may open is only its own kind (F3)", () => {
   it("hands the panel only chat-kind conversations to open, on every render", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE, CANDIDATES];
+    stored = [CHAT, LEARN, TUTORIAL, EXPLORE, CANDIDATES];
     await mount("?mode=chat");
     expect(ids("threads")).toEqual([CHAT.id]);
     for (const props of renders) {
@@ -209,19 +209,19 @@ describe("what Chat may open is only its own kind (F3)", () => {
   });
 
   it("shows the list and clears a `?thread=` that names a Recall conversation, by replace", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    stored = [CHAT, LEARN];
+    await mount(`?mode=chat&thread=${LEARN.id}`);
     const before = history.length;
     await written();
     /* Never openable, at any point: the panel opens what `threadId` names
        among `threads`, and a Recall conversation is not among them. */
-    for (const props of renders) expect(ids("threads", props)).not.toContain(REMEMBER.id);
+    for (const props of renders) expect(ids("threads", props)).not.toContain(LEARN.id);
     expect(param("thread")).toBeNull();
     expect(last()?.threadId ?? null).toBeNull();
     expect(history.length, "clearing it was a step on the Back stack").toBe(before);
     /* The list is what is left, with the chat that was already there: no
        blank conversation was begun over it. */
-    expect(ids("listed").sort()).toEqual([CHAT.id, REMEMBER.id].sort());
+    expect(ids("listed").sort()).toEqual([CHAT.id, LEARN.id].sort());
     expect(ids("threads")).toEqual([CHAT.id]);
     expect(param("mode")).toBe("chat");
   });
@@ -235,7 +235,7 @@ describe("what Chat may open is only its own kind (F3)", () => {
   });
 
   it("leaves a `?thread=` naming a chat alone", async () => {
-    stored = [CHAT, REMEMBER];
+    stored = [CHAT, LEARN];
     await mount(`?mode=chat&thread=${CHAT.id}`);
     await written();
     expect(param("thread")).toBe(CHAT.id);
@@ -243,11 +243,11 @@ describe("what Chat may open is only its own kind (F3)", () => {
   });
 
   it("shows the list for a non-chat URL even when an older chat has unsent words", async () => {
-    stored = [CHAT, REMEMBER];
+    stored = [CHAT, LEARN];
     const drafts = chatDraftsFor(SLUG);
     drafts.setDestination(CHAT.id);
     drafts.setThread(CHAT.id, "A follow-up I have not sent");
-    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    await mount(`?mode=chat&thread=${LEARN.id}`);
     await written();
     expect(param("thread")).toBeNull();
     expect(last()?.threadId ?? null).toBeNull();
@@ -255,7 +255,7 @@ describe("what Chat may open is only its own kind (F3)", () => {
   });
 
   it.each([false, true])("keeps a missing origin draft on the list when a non-chat URL wins (submitted: %s)", async (submitted) => {
-    stored = [REMEMBER];
+    stored = [LEARN];
     const drafts = chatDraftsFor(SLUG);
     const was = "spya-draft2";
     const origin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "A claim to check" };
@@ -264,7 +264,7 @@ describe("what Chat may open is only its own kind (F3)", () => {
     drafts.setOrigin(was, origin);
     drafts.markFresh(was);
     if (submitted) drafts.submitted(was);
-    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    await mount(`?mode=chat&thread=${LEARN.id}`);
     await written();
     expect(param("thread")).toBeNull();
     expect(last()?.threadId ?? null).toBeNull();
@@ -287,8 +287,8 @@ describe("what Chat may open is only its own kind (F3)", () => {
 
   it("never sends a question into a conversation of another kind", async () => {
     drawPanel = true;
-    stored = [CHAT, REMEMBER];
-    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    stored = [CHAT, LEARN];
+    await mount(`?mode=chat&thread=${LEARN.id}`);
     /* Exercise the actual composer's wiring, rather than calling onSendNew
        directly: that callback mints regardless of what the panel opened. */
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
@@ -300,25 +300,25 @@ describe("what Chat may open is only its own kind (F3)", () => {
     await act(async () => box?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     await settle();
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.threadId).not.toBe(REMEMBER.id);
+    expect(posts[0]?.threadId).not.toBe(LEARN.id);
     /* Chat is the default kind and may go unsaid. */
     expect(posts[0]?.kind ?? "chat").toBe("chat");
   });
 });
 
-describe("an article whose only conversations are Remember's", () => {
+describe("an article whose only conversations are Learn's", () => {
   it("shows their rows and does not start a blank chat over them", async () => {
-    stored = [REMEMBER, TUTORIAL];
+    stored = [LEARN, TUTORIAL];
     await mount("?mode=chat");
     await written();
-    expect(ids("listed").sort()).toEqual([REMEMBER.id, TUTORIAL.id].sort());
+    expect(ids("listed").sort()).toEqual([LEARN.id, TUTORIAL.id].sort());
     for (const props of renders) expect(ids("threads", props), "a blank chat was begun").toEqual([]);
     expect(last()?.threadId ?? null).toBeNull();
     expect(param("thread")).toBeNull();
   });
 
   it("still starts a new chat when the reader asks for one", async () => {
-    stored = [REMEMBER];
+    stored = [LEARN];
     await mount("?mode=chat");
     await act(async () => prop<() => void>("onNew")());
     await settle();
@@ -326,7 +326,7 @@ describe("an article whose only conversations are Remember's", () => {
     expect(opened).toHaveLength(1);
     expect(opened[0]?.kind).toBe("chat");
     expect(last()?.threadId).toBe(opened[0]?.id);
-    expect(ids("listed")).toContain(REMEMBER.id);
+    expect(ids("listed")).toContain(LEARN.id);
   });
 
   it("an article with no conversation at all still opens a fresh chat on arrival", async () => {
@@ -339,62 +339,62 @@ describe("an article whose only conversations are Remember's", () => {
   });
 });
 
-describe("pressing a Remember row goes to Remember", () => {
+describe("pressing a Learn row goes to Learn", () => {
   it("keeps the row's id when pressed before a rejected URL has flushed", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL];
-    await mount(`?mode=chat&thread=${REMEMBER.id}`);
-    await act(async () => prop<(view: string, id: string) => void>("onOpenRemember")("tutorial", TUTORIAL.id));
+    stored = [CHAT, LEARN, TUTORIAL];
+    await mount(`?mode=chat&thread=${LEARN.id}`);
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("tutorial", TUTORIAL.id));
     await written();
-    expect(param("mode")).toBe("remember");
-    expect(param("remember")).toBe("tutorial");
+    expect(param("mode")).toBe("learn");
+    expect(param("learn")).toBe("tutorial");
     expect(param("thread")).toBe(TUTORIAL.id);
   });
 
   it("sets mode, sub-mode and thread in one navigation", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL];
+    stored = [CHAT, LEARN, TUTORIAL];
     await mount("?mode=chat");
     await written();
     const before = history.length;
-    await act(async () => prop<(view: string, id: string) => void>("onOpenRemember")("tutorial", TUTORIAL.id));
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("tutorial", TUTORIAL.id));
     await written();
-    expect(param("mode")).toBe("remember");
-    expect(param("remember")).toBe("tutorial");
+    expect(param("mode")).toBe("learn");
+    expect(param("learn")).toBe("tutorial");
     expect(param("thread")).toBe(TUTORIAL.id);
     expect(history.length, "one entry, so Back is one press").toBe(before + 1);
   });
 
   it("goes to Recall for a Recall conversation", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("?mode=chat&remember=quiz");
+    stored = [CHAT, LEARN];
+    await mount("?mode=chat&learn=quiz");
     await written();
-    await act(async () => prop<(view: string, id: string) => void>("onOpenRemember")("recall", REMEMBER.id));
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("recall", LEARN.id));
     await written();
-    expect(param("mode")).toBe("remember");
+    expect(param("mode")).toBe("learn");
     /* Recall is the default and is written as absent. */
-    expect(param("remember")).toBeNull();
-    expect(param("thread")).toBe(REMEMBER.id);
+    expect(param("learn")).toBeNull();
+    expect(param("thread")).toBe(LEARN.id);
   });
 });
 
 describe("the filter is a parameter of its own (F6)", () => {
   it("is All when the address says nothing", async () => {
-    stored = [CHAT, REMEMBER];
+    stored = [CHAT, LEARN];
     await mount("?mode=chat");
     expect(last()?.from ?? null).toBeNull();
   });
 
   it("comes back from the address after a reload", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("?mode=chat&chatfrom=remember");
+    stored = [CHAT, LEARN];
+    await mount("?mode=chat&chatfrom=learn");
     await written();
-    expect(last()?.from).toBe("remember");
-    expect(param("chatfrom")).toBe("remember");
+    expect(last()?.from).toBe("learn");
+    expect(param("chatfrom")).toBe("learn");
     /* The filter narrows what is drawn, not what is listed or may open. */
-    expect(ids("listed").sort()).toEqual([CHAT.id, REMEMBER.id].sort());
+    expect(ids("listed").sort()).toEqual([CHAT.id, LEARN.id].sort());
   });
 
   it("is written by a press, and removed by All", async () => {
-    stored = [CHAT, REMEMBER];
+    stored = [CHAT, LEARN];
     await mount("?mode=chat");
     await act(async () => prop<(from: string | null) => void>("onFrom")("chats"));
     await written();
@@ -406,25 +406,25 @@ describe("the filter is a parameter of its own (F6)", () => {
     expect(last()?.from ?? null).toBeNull();
   });
 
-  it("is still there after going to Remember and pressing Back", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("?mode=chat&chatfrom=remember");
+  it("is still there after going to Learn and pressing Back", async () => {
+    stored = [CHAT, LEARN];
+    await mount("?mode=chat&chatfrom=learn");
     await written();
-    await act(async () => prop<(view: string, id: string) => void>("onOpenRemember")("recall", REMEMBER.id));
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("recall", LEARN.id));
     await written();
-    expect(param("mode")).toBe("remember");
+    expect(param("mode")).toBe("learn");
     await act(async () => {
       history.back();
       await new Promise((go) => setTimeout(go, 50));
     });
     await written();
     expect(param("mode")).toBe("chat");
-    expect(param("chatfrom")).toBe("remember");
-    expect(last()?.from).toBe("remember");
+    expect(param("chatfrom")).toBe("learn");
+    expect(last()?.from).toBe("learn");
   });
 
   it("is replaced with All when this article has no conversation from that source", async () => {
-    stored = [CHAT, REMEMBER];
+    stored = [CHAT, LEARN];
     await mount("?mode=chat&chatfrom=debate");
     const before = history.length;
     await written();
@@ -434,9 +434,9 @@ describe("the filter is a parameter of its own (F6)", () => {
   });
 
   it("is not thrown away before the list has answered", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("?mode=chat&chatfrom=remember");
+    stored = [CHAT, LEARN];
+    await mount("?mode=chat&chatfrom=learn");
     /* Every render, the unloaded first one included, kept the choice. */
-    for (const props of renders) expect(props.from).toBe("remember");
+    for (const props of renders) expect(props.from).toBe("learn");
   });
 });

@@ -34,7 +34,7 @@
  *   captured in real Chrome at commit
  *   `6dacbd2e84ff0fd52df91c5464d0911541260dff`, **before** the migration.
  * - **Read from the pre-migration source.** Every `aria-label` (the baseline
- *   recorded geometry, not accessible names), the `REMEMBER` shape, and the
+ *   recorded geometry, not accessible names), the `LEARN` shape, and the
  *   `SEARCH_VISITOR` and `CHAT_LIST` shapes are transcribed from the panels as
  *   they were at `369699af~1`, the commit before the migration. That is weaker
  *   evidence than a measurement and stronger than reading the code that was just
@@ -128,7 +128,7 @@
  * - the **ordered list of direct element children** is the check that catches a
  *   wrapper, since a wrapper changes `children` to one element while leaving
  *   every `querySelector` in the app satisfied;
- * - Chat is checked in **both** of its shapes, `chat` and `chat remember`,
+ * - Chat is checked in **both** of its shapes, `chat` and `chat learn`,
  *   because `feature` is a space-separated string built by a ternary and a
  *   dropped conditional class is exactly the sort of thing a migration loses in
  *   silence.
@@ -422,20 +422,20 @@ const CHAT: BandShape = {
 };
 
 /**
- * Remember is the same band wearing one more class and a different name.
+ * Learn is the same band wearing one more class and a different name.
  *
  * Not measured separately in Chrome — the baseline captured Chat — but the two
  * strings are `ChatPanel`'s own conditionals, and they are the thing a migration
  * onto a `feature: string` prop drops. Kept as literals here for the same reason
  * as the rest.
  */
-const REMEMBER: BandShape = {
-  className: "mode-band chat remember has-about",
+const LEARN: BandShape = {
+  className: "mode-band chat learn has-about",
   label: "Remember what you took from this article",
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
-     since plan 261001m (2026-10-01), no "All conversations" close: Remember is
+     since plan 261001m (2026-10-01), no "All conversations" close: Learn is
      one conversation and has no list to close back to. `subMode` renders
      nothing for this fixture. */
   headChildren: ["h2", "button.chat-icon.danger[title,type]"],
@@ -668,7 +668,7 @@ async function mountSearchVisitor(): Promise<void> {
 
 const AT = "2026-09-06T00:00:00.000Z";
 
-function thread(kind: "chat" | "remember"): ChatThread {
+function thread(kind: "chat" | "learn"): ChatThread {
   return {
     id: "spya-k3m9qt",
     title: "About block dfqq59",
@@ -689,7 +689,7 @@ function thread(kind: "chat" | "remember"): ChatThread {
  * `.chat-composer` on screen; left null, the band draws the thread list instead
  * and this file would be checking a different band.
  */
-async function mountChat(kind: "chat" | "remember"): Promise<void> {
+async function mountChat(kind: "chat" | "learn"): Promise<void> {
   const open = thread(kind);
   await act(async () => {
     root.render(
@@ -771,12 +771,12 @@ describe("the migrated bands render the DOM the baseline recorded", () => {
     expectShape(CHAT);
   });
 
-  it("keeps Remember's extra class and its own name", async () => {
+  it("keeps Learn's extra class and its own name", async () => {
     /* The conditional half of `feature`. A migration that passed `"chat"`
-       unconditionally would leave every Remember rule in the stylesheet
+       unconditionally would leave every Learn rule in the stylesheet
        matching nothing, and every test above would still be green. */
-    await mountChat("remember");
-    expectShape(REMEMBER);
+    await mountChat("learn");
+    expectShape(LEARN);
   });
 
   it("draws Search's band for a visitor, without the box an owner gets", async () => {
@@ -1635,7 +1635,7 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
 /**
  * Quiz, always with a `subMode` control.
  *
- * `RememberBand` (src/web/modes/conversation/ConversationModes.tsx) passes
+ * `LearnBand` (src/web/modes/conversation/ConversationModes.tsx) passes
  * one on every render, so a Quiz band with an
  * empty header is not a state a reader can reach — but the prop is optional, so
  * one *is* a state a refactor can create by accident. **`QUIZ_NO_SUBMODE` is
@@ -1958,7 +1958,7 @@ const QUIZ_SHAPE: BandShape = {
  * fragment was written to prevent, and it was unpinned. GPT Sol F25,
  * 2026-09-07.
  *
- * Not a state a reader reaches — `RememberBand` always passes one — but very
+ * Not a state a reader reaches — `LearnBand` always passes one — but very
  * much a state the next refactor can create, which is what this file is for.
  */
 const QUIZ_NO_SUBMODE: BandShape = {

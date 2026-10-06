@@ -292,8 +292,8 @@ const SEARCH_CRITERION = "wherever the piece leans on an unnamed source";
 const CRITERION_TEXT = "every claim that rests on a single study";
 const CHAT_TITLE = "Why the instrument comes first";
 const CHAT_ANSWER = "Because the measurement is doing the arguing.";
-const REMEMBER_TITLE = "What I took from the middle section";
-const REMEMBER_ANSWER = "You held on to the calibration and lost the caveat.";
+const LEARN_TITLE = "What I took from the middle section";
+const LEARN_ANSWER = "You held on to the calibration and lost the caveat.";
 
 const GLOSSARY: Glossary = {
   version: "test",
@@ -646,12 +646,12 @@ const CHAT_THREAD: Seeded = {
   ],
 };
 
-const REMEMBER_THREAD: Seeded = {
+const LEARN_THREAD: Seeded = {
   id: "spya-thr235",
-  title: REMEMBER_TITLE,
+  title: LEARN_TITLE,
   createdAt: "2026-09-04T11:00:00.000Z",
   updatedAt: "2026-09-04T11:01:00.000Z",
-  kind: "remember",
+  kind: "learn",
   turns: 1,
   messages: [
     {
@@ -664,7 +664,7 @@ const REMEMBER_THREAD: Seeded = {
     {
       id: "spya-msg237",
       role: "assistant",
-      text: REMEMBER_ANSWER,
+      text: LEARN_ANSWER,
       createdAt: "2026-09-04T11:01:00.000Z",
       status: "done",
     },
@@ -860,7 +860,7 @@ function reply(url: string, method: string, body: string | null): Response {
   if (url === "/api/jobs") return json({ jobs: [] });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/"))
-    return json({ threads: fixtures === "populated" ? [CHAT_THREAD, REMEMBER_THREAD] : [] });
+    return json({ threads: fixtures === "populated" ? [CHAT_THREAD, LEARN_THREAD] : [] });
   if (url.startsWith("/api/search/"))
     return json({ runs: fixtures === "populated" ? SEARCHES : [] });
   if (url.startsWith("/api/referee/criteria/"))
@@ -1271,7 +1271,7 @@ const SPENDS: Record<Mode, Spend> = {
     kind: "none",
     why: "opens on Criteria, which has nothing to run until the referee has written one",
   },
-  remember: {
+  learn: {
     kind: "none",
     why: "opens on Recall, which waits on the reader's own words before there is anything to say",
   },
@@ -1519,15 +1519,15 @@ const DRAWS: Record<Mode, Draws> = {
      Criteria, so this is the sub-mode a press actually lands on. */
   referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: "corner" },
   /* **The two conversation bands share a component and a class**, so the
-     negation is what keeps these two rows apart: Remember's band carries
-     `remember` as well as `chat`, and without `:not()` a Remember panel drawn
+     negation is what keeps these two rows apart: Learn's band carries
+     `learn` as well as `chat`, and without `:not()` a Learn panel drawn
      in Chat's place would satisfy this row. */
-  chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE, about: "corner" },
-  /* Recall, which is the half Remember opens on — and since plan 261001m it
-     opens the reader's one Remember conversation rather than a list, under a
-     header that says "Remember", so the thing to find is the answer in it
+  chat: { kind: "band", where: ".mode-band.chat:not(.learn)", says: CHAT_TITLE, about: "corner" },
+  /* Recall, which is the half Learn opens on — and since plan 261001m it
+     opens the reader's one Learn conversation rather than a list, under a
+     header that says "Learn", so the thing to find is the answer in it
      rather than the thread's title. */
-  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_ANSWER, about: "corner" },
+  learn: { kind: "band", where: ".mode-band.learn", says: LEARN_ANSWER, about: "corner" },
 };
 
 describe("phase B — what each mode's real controller drew", () => {

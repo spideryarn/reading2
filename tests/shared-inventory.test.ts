@@ -209,7 +209,7 @@ describe("the sweep over the modes", () => {
      shared link should carry them, and search crossed because *reading* a
      saved run costs nothing — the model call is in creating one, which is
      still the owner's alone. */
-  const OWNERS_ONLY: Mode[] = ["chat", "remember", "referee"];
+  const OWNERS_ONLY: Mode[] = ["chat", "learn", "referee"];
   it.each(OWNERS_ONLY)("keeps %s with the owner whatever exists", (mode) => {
     expect(keys(sharedInventory(NOTHING).withheld)).toContain(mode);
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);

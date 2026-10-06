@@ -37,10 +37,18 @@ import {
   type CubeFilters,
   type CubeGroup,
   type CubeTotals,
+  FAILURE_DEFINITIONS,
+  FAILURE_NOTES,
+  type FailureGroup,
+  NOT_MEASURED,
   type OwnerEmails,
   amountPerPricedCall,
   dimensionValue,
   estimatedCashNanos,
+  failureCauses,
+  failureCountsBy,
+  failureCountsOf,
+  failureSummary,
   filterRows,
   groupRows,
   totalsOf,
@@ -463,6 +471,8 @@ function Explorer({
           drill={drill}
         />
       )}
+
+      {visible.length > 0 && <Failures rows={visible} />}
     </>
   );
 }
@@ -982,5 +992,199 @@ function OverTime({
       </figure>
       <PivotTable pivot={pivot} rowDim="day" colDim={stack} drill={drill} />
     </>
+  );
+}
+
+/* -------------------------------------------------- failures and retries -- */
+
+const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; pick: (g: FailureGroup) => number | null }[] = [
+  {
+    id: "counted",
+    header: "Counted attempts",
+    hint: "Attempts our retry loop numbered. Context for the counts beside it, not a denominator",
+    pick: (g) => g.counted,
+  },
+  {
+    id: "retries",
+    header: "Retries",
+    hint: "Goes after the first: each started because the go before it failed before its answer began",
+    pick: (g) => g.retries,
+  },
+  {
+    id: "gaveUp",
+    header: "Gave up after the last go",
+    hint: "Calls whose third and last go failed before the provider accepted it. A call refused outright on an earlier go is in the causes table",
+    pick: (g) => g.gaveUp,
+  },
+  {
+    id: "diedPartWay",
+    header: "Died part-way",
+    hint: "Attempts that failed after the provider accepted the call, which can be before any of the answer arrived",
+    pick: (g) => g.diedPartWay,
+  },
+];
+
+/** The three figures that can be unmeasured; the counted attempts beside them never are. */
+const MEASURED_COLUMNS = COUNT_COLUMNS.slice(1);
+
+const CAUSE_COLUMNS = ["Failed", "Cause", "Status", "Upstream", "Model", DIMENSION_LABEL.task, "Attempts"] as const;
+
+const SCROLL_BOX = "tw:relative tw:mb-4 tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
+
+/**
+ * Counts per value of one dimension. A plain table in its own scrolling box,
+ * as the pivot is, with the label pinned. A null figure is drawn as words,
+ * never as a zero: src/cost-cube.ts § `FailureCounts`.
+ *
+ * `fold` names the rows in the plural, and with it a row none of whose three
+ * figures was measured is left out and counted in one line underneath. The
+ * task table passes it, because most tasks have nothing to say for weeks after
+ * the counting began (41 rows of 42, on the day it was built). The day table
+ * does not: a calendar with rows missing reads as days with no calls.
+ */
+function FailureCountsTable({
+  name,
+  label,
+  groups: all,
+  fold,
+}: {
+  name: string;
+  label: string;
+  groups: FailureGroup[];
+  fold?: string;
+}) {
+  const measured = (group: FailureGroup) => MEASURED_COLUMNS.some((col) => col.pick(group) !== null);
+  const groups = fold ? all.filter(measured) : all;
+  const folded = all.length - groups.length;
+  return (
+    <>
+    <div className={SCROLL_BOX}>
+      <table data-failures-table={name} className="tw:w-full tw:border-collapse tw:text-sm">
+        <caption className="tw:sr-only">Retries, calls that gave up and attempts that died part-way, by {label}</caption>
+        <thead>
+          <tr className="tw:border-b tw:border-border">
+            <th scope="col" className={`${HEAD} ${PINNED} tw:text-left`}>
+              {label}
+            </th>
+            {COUNT_COLUMNS.map((col) => (
+              <th key={col.id} scope="col" title={col.hint} className={`${HEAD} tw:text-right`}>
+                {col.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((group) => (
+            <tr key={group.key} className="tw:border-b tw:border-border/60">
+              <th scope="row" title={group.label} className={`tw:px-3 tw:py-2 tw:text-left tw:font-normal ${PINNED}`}>
+                <span className={`tw:block tw:truncate ${LABEL_WIDTH}`}>{group.label}</span>
+              </th>
+              {COUNT_COLUMNS.map((col) => {
+                const value = col.pick(group);
+                return value === null ? (
+                  <td key={col.id} data-not-measured="" className={`${CELL} tw:text-muted-foreground`}>
+                    {NOT_MEASURED}
+                  </td>
+                ) : (
+                  <td key={col.id} className={`${CELL} tw:text-foreground`}>
+                    {value.toLocaleString("en-US")}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {fold && folded > 0 && (
+      <p data-failures-unmeasured={name} className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>
+        {folded.toLocaleString("en-US")} other {fold}: {NOT_MEASURED}.
+      </p>
+    )}
+    </>
+  );
+}
+
+/**
+ * **Failures and retries**: how often a call was asked again, gave up, or died
+ * after its answer began, and why. docs/project/admin-costs.md § Failures and
+ * retries; plan 261006b.
+ *
+ * Folds of the same visible rows as everything above it, so the period, the
+ * evals switch and every filter apply. Counts with the counted attempts beside
+ * them; no percentage is drawn anywhere in it.
+ */
+function Failures({ rows }: { rows: CostCubeRow[] }) {
+  const total = useMemo(() => failureCountsOf(rows), [rows]);
+  const byDay = useMemo(
+    /* A calendar reads oldest first. */
+    () => failureCountsBy(rows, "day").sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
+    [rows],
+  );
+  const byTask = useMemo(() => failureCountsBy(rows, "task"), [rows]);
+  const causes = useMemo(() => failureCauses(rows), [rows]);
+  const anything = total.counted > 0 || causes.length > 0;
+
+  return (
+    <section data-failures="" aria-labelledby="failures-heading" className="tw:mt-8">
+      <h2 id="failures-heading" className="tw:m-0 tw:mb-2 tw:text-sm tw:font-medium tw:text-foreground">
+        Failures and retries
+      </h2>
+      <p data-failures-summary="" className="tw:m-0 tw:mb-2 tw:text-sm tw:text-foreground">
+        {failureSummary(total)}
+      </p>
+      {anything && (
+        <>
+          <p className={`tw:m-0 tw:mb-3 ${SMALL_LABEL}`}>{FAILURE_DEFINITIONS}</p>
+          <FailureCountsTable name="day" label={DIMENSION_LABEL.day} groups={byDay} />
+          <FailureCountsTable name="task" label={DIMENSION_LABEL.task} groups={byTask} fold="modes or tasks" />
+          {causes.length === 0 ? (
+            <p className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>No failed attempt in this view recorded a cause.</p>
+          ) : (
+            <div className={SCROLL_BOX}>
+              <table data-failures-table="causes" className="tw:w-full tw:border-collapse tw:text-sm">
+                <caption className="tw:sr-only">Why attempts failed</caption>
+                <thead>
+                  <tr className="tw:border-b tw:border-border">
+                    {CAUSE_COLUMNS.map((header, i) => (
+                      <th
+                        key={header}
+                        scope="col"
+                        className={`${HEAD} ${i === CAUSE_COLUMNS.length - 1 ? "tw:text-right" : "tw:text-left"}`}
+                      >
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {causes.map((cause) => (
+                    <tr key={cause.key} className="tw:border-b tw:border-border/60">
+                      {[cause.phase, cause.failureClass, cause.status, cause.upstream, cause.model, cause.task].map(
+                        (value, i) => (
+                          <td
+                            // biome-ignore lint/suspicious/noArrayIndexKey: six fixed columns of one row.
+                            key={i}
+                            className="tw:px-3 tw:py-2 tw:text-left tw:whitespace-nowrap tw:text-foreground"
+                          >
+                            {value}
+                          </td>
+                        ),
+                      )}
+                      <td className={`${CELL} tw:text-foreground`}>{cause.attempts.toLocaleString("en-US")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+      <ul className="tw:m-0 tw:list-none tw:space-y-1 tw:p-0 tw:text-xs tw:text-muted-foreground">
+        {FAILURE_NOTES.map((note) => (
+          <li key={note}>{note}</li>
+        ))}
+      </ul>
+    </section>
   );
 }

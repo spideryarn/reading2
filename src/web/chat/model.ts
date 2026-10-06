@@ -438,14 +438,14 @@ export interface DeleteOperation extends Registered, Held {
   kind: "delete";
   threadId: string;
   /**
-   * **Put the conversation back if the server refuses.** Remember's Start over
+   * **Put the conversation back if the server refuses.** Learn's Start over
    * asks for this, and chat's delete does not.
    *
    * Chat's delete leaves a refused conversation off screen with the error
    * above it (see `delete.failed` in reduce.ts). Start over cannot: the band
-   * begins a fresh Remember conversation only once the delete has been
+   * begins a fresh Learn conversation only once the delete has been
    * answered, and a refused delete means the old one is still the article's
-   * Remember conversation on the server — so a fresh one beside it would have
+   * Learn conversation on the server — so a fresh one beside it would have
    * its first turn folded into a thread this tab is hiding. Plan 261001m, F1.
    */
   restoreOnFailure?: boolean;
@@ -879,11 +879,11 @@ export type ChatCommand =
       engine?: LiveEngine;
       /**
        * The kind of the conversation as this tab has it, which is the only
-       * place a conversation Remember began and nobody has written to yet
+       * place a conversation Learn began and nobody has written to yet
        * exists. The server uses it only when this exchange creates the thread.
        * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
        */
-      kind?: Extract<ThreadKind, "chat" | "remember">;
+      kind?: Extract<ThreadKind, "chat" | "learn">;
     }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }
@@ -1087,7 +1087,7 @@ export function withServerIds(
 /**
  * **The server named a conversation this tab already holds, so the two are one.**
  *
- * An article has one Remember conversation (plan 261001m), and a typed turn
+ * An article has one Learn conversation (plan 261001m), and a typed turn
  * into a second — a stale tab, a bookmark, two tabs racing — is appended by the
  * server to the one it has, whose id the `begin` frame then carries. Renamed in
  * place, the provisional thread would sit in the list under the same id as the
@@ -1164,7 +1164,7 @@ export function attemptOf(op: Operation | undefined): string | null {
  * no operation of any kind — a turn being answered, a recovery, a spoken
  * exchange, a rename, a delete — is still out for it.
  *
- * Remember's Start over is offered only then. A DELETE of such a conversation
+ * Learn's Start over is offered only then. A DELETE of such a conversation
  * is never held and races no write from this tab, so a delete aimed at an
  * empty, unnamed or half-answered conversation — each of which needed its own
  * reducer machinery to unwind — cannot be asked for. Plan 261001m, after GPT

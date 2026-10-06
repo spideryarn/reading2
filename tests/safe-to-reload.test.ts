@@ -59,7 +59,7 @@ describe("safeToReload", () => {
     expect(safeToReload()).toBe(true);
   });
 
-  describe("an unsent Chat or Remember draft, on any article", () => {
+  describe("an unsent Chat or Learn draft, on any article", () => {
     it("a conversation's unsent words", () => {
       chatDraftsFor("an-article").setThread("thread-1", "half a question");
       expect(reloadVeto()).toBe("chat-draft");
@@ -71,8 +71,8 @@ describe("safeToReload", () => {
       expect(safeToReload()).toBe(false);
     });
 
-    it("Remember's unsent words", () => {
-      chatDraftsFor("another-article").setRemember("remember","what I took from it");
+    it("Learn's unsent words", () => {
+      chatDraftsFor("another-article").setLearn("learn","what I took from it");
       expect(safeToReload()).toBe(false);
     });
 

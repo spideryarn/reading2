@@ -661,7 +661,7 @@ describe("the Postgres chat store", () => {
     await expect(pgChatStore.load("../etc/passwd")).rejects.toMatchObject({ status: 400 });
   });
 
-  /* ----------------------------------------------------- Remember mode ----
+  /* ----------------------------------------------------- Learn mode ----
      The two fields the mode added, against the two ways Postgres could lose them
      that the filesystem store cannot. Both are silent failures: no error, no
      visible symptom, and a transcript that still reads as one conversation.
@@ -669,37 +669,38 @@ describe("the Postgres chat store", () => {
 
   it("keeps a thread's kind across a second turn that does not mention it", async () => {
     /* A client continuing a conversation sends no kind — the thread already has
-       one. This checks the **column**, not the loaded object, because
-       `threadsFor` normalises anything unexpected to `"chat"` and would hide a
-       write that had blanked it.
+       one. This checks the **column**, not the loaded object, so the claim is
+       about what was written. (`threadsFor` used to turn anything unexpected
+       into `"chat"` and would have hidden a blanked write; since 2026-10-06 it
+       throws instead, tests/unknown-stored-thread-kind.test.ts.)
 
        Be exact about what this does NOT catch, because the first version of
        this comment claimed otherwise and was wrong: naming `kind` in
        `upsertThread`'s `set` clause does not make it red. `withTurn` derives
-       the value from the existing thread, so the upsert writes `"remember"`
-       over `"remember"`. The omission from `set` is defence in depth against a future
+       the value from the existing thread, so the upsert writes `"learn"`
+       over `"learn"`. The omission from `set` is defence in depth against a future
        caller that supplies a kind from somewhere else; the test below is the
        one that catches a kind actually changing. */
-    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "remember" });
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "learn" });
     await pgChatStore.begin(SLUG, { threadId: THREAD, question: "and also" });
     const rows = await getDb()
       .select()
       .from(chatThreads)
       .where(and(eq(chatThreads.articleId, ARTICLE_ID), eq(chatThreads.id, THREAD)));
-    expect(rows[0]?.kind).toBe("remember");
+    expect(rows[0]?.kind).toBe("learn");
   });
 
   it("refuses a second turn that contradicts the thread's kind", async () => {
     /* **The one that matters.** Remove the guard in `withTurn` and this goes
-       red — and a Remember thread's second question is then answered with
+       red — and a Learn thread's second question is then answered with
        chat's prompt,
        its list tag changes, and the transcript still reads as one
        conversation. Nothing else in the suite notices. */
-    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "remember" });
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "learn" });
     await expect(
       pgChatStore.begin(SLUG, { threadId: THREAD, question: "sneaky", kind: "chat" }),
     ).rejects.toBeInstanceOf(ChatConflict);
-    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("remember");
+    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("learn");
   });
 
   it("defaults a thread with no kind to chat", async () => {
@@ -709,11 +710,11 @@ describe("the Postgres chat store", () => {
 
   /* No stance is written since Recall became one voice on 2026-10-02. The
      column stays, for the rows that already have one. */
-  it("writes no stance on a Remember turn, and clears a legacy one on retry", async () => {
+  it("writes no stance on a Learn turn, and clears a legacy one on retry", async () => {
     const { reply, attempt } = await pgChatStore.begin(SLUG, {
       threadId: THREAD,
       question: "what I took",
-      kind: "remember",
+      kind: "learn",
     });
     expect(reply.status).toBe("pending");
     await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "done", text: "a" }, { attempt });

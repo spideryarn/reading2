@@ -20,8 +20,8 @@
  *     **different** `src/web/modes/<other>/`.
  *
  * **Rule 2 is what stops the next occurrence of the thing stage 2 avoided by
- * hand.** `RememberBand` renders `ConversationBand`, so `modes/chat/` beside
- * `modes/remember/` would have been one feature importing another; the two were
+ * hand.** `LearnBand` renders `ConversationBand`, so `modes/chat/` beside
+ * `modes/learn/` would have been one feature importing another; the two were
  * put in a single `modes/conversation/ConversationModes.tsx` instead, because
  * somebody read the code and noticed. That is exactly the check a guard should
  * be doing — GPT Sol's findings F2 and F11 on the plan. A shared piece belongs
@@ -258,9 +258,9 @@ describe("which way the reading view's imports point", () => {
   });
 
   it("never reaches sideways into another feature", () => {
-    /* Rule 2, and the reason it exists is one directory over: `RememberBand`
+    /* Rule 2, and the reason it exists is one directory over: `LearnBand`
        renders `ConversationBand`, and the two live in one file rather than in
-       `modes/remember/` and `modes/chat/` because somebody read the code and
+       `modes/learn/` and `modes/chat/` because somebody read the code and
        noticed. This is the version that does not need somebody to notice. */
     const offenders: string[] = [];
     for (const e of edges) {

@@ -619,7 +619,7 @@ async function main(): Promise<void> {
 const invokedDirectly = isMain(import.meta.url);
 
 if (invokedDirectly) {
-  /* See the note at the foot of evals/remember-recall.ts. */
+  /* See the note at the foot of evals/learn-recall.ts. */
   withLedger("eval", main).catch((err) => {
     console.error(err);
     process.exit(1);

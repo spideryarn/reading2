@@ -1,0 +1,20 @@
+
+https://arxiv.org/abs/2608.13566?utm_campaign=ai-tinkerers__paperclub&utm_conten
+  key arxiv.org/abs/2608.13566   slug arxiv-2608-13566   source arxiv
+  candidates: https://arxiv.org/pdf/2608.13566
+  used https://arxiv.org/pdf/2608.13566 (tried 1): pdf, 1040 KB, 22 pages, final https://arxiv.org/pdf/2608.13566
+
+arxiv.org/html/2609.28681v1
+  key arxiv.org/abs/2609.28681v1   slug arxiv-2609-28681v1   source arxiv
+  candidates: https://arxiv.org/pdf/2609.28681v1
+  used https://arxiv.org/pdf/2609.28681v1 (tried 1): pdf, 3134 KB, 51 pages, final https://arxiv.org/pdf/2609.28681v1
+
+https://arxiv.org/pdf/hep-th/9901001.pdf
+  key arxiv.org/abs/hep-th/9901001   slug arxiv-hep-th-9901001   source arxiv
+  candidates: https://arxiv.org/pdf/hep-th/9901001
+  used https://arxiv.org/pdf/hep-th/9901001 (tried 1): pdf, 135 KB, 13 pages, final https://arxiv.org/pdf/hep-th/9901001
+
+https://example.com/
+  key example.com   slug example   source (none)
+  candidates: https://example.com/
+  used https://example.com/ (tried 1): html, 1 KB, final https://example.com/

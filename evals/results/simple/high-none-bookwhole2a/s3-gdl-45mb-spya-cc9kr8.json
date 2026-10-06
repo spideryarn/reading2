@@ -1,0 +1,402 @@
+{
+  "arm": "high-none-bookwhole2a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-gdl-45mb-spya-cc9kr8",
+  "version": "simple-prompt/11",
+  "sourceSha256": "fbeeb7e3278bd353e4c671bd9d4b4515fa180a28508f86b670e47fc2e0419dec",
+  "at": "2026-10-05T23:57:56.180Z",
+  "bodyWords": 47957,
+  "band": "book",
+  "bodyBlocks": 970,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "94e5545c2b197d48",
+  "systemsSha256": "414b36c6ed072955d8f299f52c266e496a2eb0ae248ae028413607740f634169",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 293370,
+  "costUsd": 0.6981607,
+  "tokens": {
+    "input": 13275,
+    "output": 34479,
+    "reasoning": 30286
+  },
+  "briefReadyMs": 19804,
+  "fullerReadyMs": 293362,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 871,
+  "briefWords": 215,
+  "fuller": [
+    {
+      "text": "This piece is a long survey that tries to find one mathematical framework underneath most of modern deep learning, an idea the authors call Geometric Deep Learning. It borrows its approach from a 19th-century idea in mathematics called the Erlangen Programme. That programme said different geometries can be understood as the study of what stays unchanged, or invariant, under a chosen set of transformations called symmetries. The authors apply this same idea to neural networks, asking what symmetry each network design actually respects.",
+      "ids": [
+        "spya-m8ms9j",
+        "spya-rhgqxa"
+      ],
+      "sentences": [
+        {
+          "text": "This piece is a long survey that tries to find one mathematical framework underneath most of modern deep learning, an idea the authors call Geometric Deep Learning.",
+          "id": "spya-m8ms9j",
+          "key": "Geometric Deep Learning"
+        },
+        {
+          "text": "It borrows its approach from a 19th-century idea in mathematics called the Erlangen Programme.",
+          "id": "spya-rhgqxa"
+        },
+        {
+          "text": "That programme said different geometries can be understood as the study of what stays unchanged, or invariant, under a chosen set of transformations called symmetries.",
+          "id": "spya-rhgqxa"
+        },
+        {
+          "text": "The authors apply this same idea to neural networks, asking what symmetry each network design actually respects.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The authors say deep learning today looks the way geometry did before that 19th-century idea arrived: a long list of separate network designs with few principles connecting them. This makes it hard to see how different methods relate, and the same ideas keep getting reinvented and renamed across different applications. For someone new to the field, absorbing all this redundant terminology is, in their words, a true nightmare.",
+      "ids": [
+        "spya-m8ms9j"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say deep learning today looks the way geometry did before that 19th-century idea arrived: a long list of separate network designs with few principles connecting them.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "This makes it hard to see how different methods relate, and the same ideas keep getting reinvented and renamed across different applications.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "For someone new to the field, absorbing all this redundant terminology is, in their words, a true nightmare.",
+          "id": "spya-m8ms9j",
+          "key": "a true nightmare"
+        }
+      ]
+    },
+    {
+      "text": "To show why a shared structure is needed, the piece first explains why learning from raw, high-dimensional data is so hard, a problem known as the curse of dimensionality. If a target function is only assumed smooth, so nearby inputs give nearby outputs, examples needed to learn it grow exponentially with the number of input dimensions. In realistic cases this would require more training examples than there are atoms in the universe.",
+      "ids": [
+        "spya-kufkap",
+        "spya-jx8gmv",
+        "spya-p3tfez"
+      ],
+      "sentences": [
+        {
+          "text": "To show why a shared structure is needed, the piece first explains why learning from raw, high-dimensional data is so hard, a problem known as the curse of dimensionality.",
+          "id": "spya-kufkap",
+          "key": "the curse of dimensionality"
+        },
+        {
+          "text": "If a target function is only assumed smooth, so nearby inputs give nearby outputs, examples needed to learn it grow exponentially with the number of input dimensions.",
+          "id": "spya-jx8gmv"
+        },
+        {
+          "text": "In realistic cases this would require more training examples than there are atoms in the universe.",
+          "id": "spya-p3tfez"
+        }
+      ]
+    },
+    {
+      "text": "The piece's answer is that real data is not random: it comes from physical domains, such as images, sound, molecules, or networks, that have built-in structure and symmetry. Exploiting two features of that structure, symmetry and scale separation (keeping what matters when a signal is viewed at a coarser, zoomed-out scale), can make learning possible again. The piece argues this is exactly how Convolutional Neural Networks already work: shared filters exploit shift symmetry, and pooling exploits scale separation.",
+      "ids": [
+        "spya-kummbt",
+        "spya-ynypgp"
+      ],
+      "sentences": [
+        {
+          "text": "The piece's answer is that real data is not random: it comes from physical domains, such as images, sound, molecules, or networks, that have built-in structure and symmetry.",
+          "id": "spya-kummbt"
+        },
+        {
+          "text": "Exploiting two features of that structure, symmetry and scale separation (keeping what matters when a signal is viewed at a coarser, zoomed-out scale), can make learning possible again.",
+          "id": "spya-kummbt",
+          "key": "symmetry and scale separation"
+        },
+        {
+          "text": "The piece argues this is exactly how Convolutional Neural Networks already work: shared filters exploit shift symmetry, and pooling exploits scale separation.",
+          "id": "spya-ynypgp"
+        }
+      ]
+    },
+    {
+      "text": "Two central ideas run through the piece: invariance and equivariance. A symmetry is a transformation, like shifting an image or rotating a molecule, that leaves some property of the object unchanged. A function is invariant if its output never changes when the input is transformed this way. For example, a cat-detector should give the same answer no matter where the cat sits in the picture. A function is equivariant if its output changes in step with the input instead, such as an image-segmentation mask that shifts exactly as the input image shifts.",
+      "ids": [
+        "spya-a2jta0",
+        "spya-scvsfc",
+        "spya-jjkfs5"
+      ],
+      "sentences": [
+        {
+          "text": "Two central ideas run through the piece: invariance and equivariance.",
+          "id": null,
+          "key": "invariance and equivariance"
+        },
+        {
+          "text": "A symmetry is a transformation, like shifting an image or rotating a molecule, that leaves some property of the object unchanged.",
+          "id": "spya-a2jta0"
+        },
+        {
+          "text": "A function is invariant if its output never changes when the input is transformed this way.",
+          "id": "spya-scvsfc"
+        },
+        {
+          "text": "For example, a cat-detector should give the same answer no matter where the cat sits in the picture.",
+          "id": "spya-scvsfc"
+        },
+        {
+          "text": "A function is equivariant if its output changes in step with the input instead, such as an image-segmentation mask that shifts exactly as the input image shifts.",
+          "id": "spya-jjkfs5"
+        }
+      ]
+    },
+    {
+      "text": "The piece adds one more layer to this idea, since exact symmetry rarely holds in the real world: deformation stability. Instead of demanding a function stay exactly the same under a small, imperfect distortion of the input, the piece asks for something weaker. The output may change, but only by an amount matching how far that distortion is from a true symmetry. A function meeting this condition is called geometrically stable.",
+      "ids": [
+        "spya-er99ke",
+        "spya-drx0my"
+      ],
+      "sentences": [
+        {
+          "text": "The piece adds one more layer to this idea, since exact symmetry rarely holds in the real world: deformation stability.",
+          "id": "spya-er99ke",
+          "key": "deformation stability"
+        },
+        {
+          "text": "Instead of demanding a function stay exactly the same under a small, imperfect distortion of the input, the piece asks for something weaker.",
+          "id": "spya-drx0my"
+        },
+        {
+          "text": "The output may change, but only by an amount matching how far that distortion is from a true symmetry.",
+          "id": "spya-drx0my"
+        },
+        {
+          "text": "A function meeting this condition is called geometrically stable.",
+          "id": "spya-drx0my"
+        }
+      ]
+    },
+    {
+      "text": "From these ideas the authors build what they call the Geometric Deep Learning Blueprint, a recipe for assembling a network from a small set of basic pieces. These pieces include a local equivariant layer, which processes nearby information while respecting the chosen symmetry. They also include a nonlinearity, and a coarsening step that shrinks the domain, much like pooling does in an image. Finally, an invariant layer gives one overall output that stays unaffected by symmetry transformations.",
+      "ids": [
+        "spya-mvq7cr",
+        "spya-jfh89r"
+      ],
+      "sentences": [
+        {
+          "text": "From these ideas the authors build what they call the Geometric Deep Learning Blueprint, a recipe for assembling a network from a small set of basic pieces.",
+          "id": "spya-mvq7cr",
+          "key": "Geometric Deep Learning Blueprint"
+        },
+        {
+          "text": "These pieces include a local equivariant layer, which processes nearby information while respecting the chosen symmetry.",
+          "id": "spya-jfh89r"
+        },
+        {
+          "text": "They also include a nonlinearity, and a coarsening step that shrinks the domain, much like pooling does in an image.",
+          "id": "spya-jfh89r"
+        },
+        {
+          "text": "Finally, an invariant layer gives one overall output that stays unaffected by symmetry transformations.",
+          "id": "spya-jfh89r"
+        }
+      ]
+    },
+    {
+      "text": "The piece sorts the kinds of data deep learning handles into five domains it nicknames the 5 Gs. Grids are regular arrays like image pixels, where shifting the grid is the symmetry; groups and homogeneous spaces include things like the sphere, acted on by rotations. Graphs are networks of nodes and edges, like social networks or molecules, where the symmetry is relabeling, or permuting, the nodes. Geodesics and manifolds are curved surfaces, like 3D shapes, symmetric under bending without stretching; gauges and bundles are the local reference frames needed to compare directions across curved shapes.",
+      "ids": [
+        "spya-y6p4d9",
+        "spya-zswtdv"
+      ],
+      "sentences": [
+        {
+          "text": "The piece sorts the kinds of data deep learning handles into five domains it nicknames the 5 Gs.",
+          "id": "spya-y6p4d9",
+          "key": "the 5 Gs"
+        },
+        {
+          "text": "Grids are regular arrays like image pixels, where shifting the grid is the symmetry; groups and homogeneous spaces include things like the sphere, acted on by rotations.",
+          "id": "spya-zswtdv"
+        },
+        {
+          "text": "Graphs are networks of nodes and edges, like social networks or molecules, where the symmetry is relabeling, or permuting, the nodes.",
+          "id": "spya-y6p4d9"
+        },
+        {
+          "text": "Geodesics and manifolds are curved surfaces, like 3D shapes, symmetric under bending without stretching; gauges and bundles are the local reference frames needed to compare directions across curved shapes.",
+          "id": "spya-zswtdv"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Using this one blueprint, the piece shows that many famous architectures are special cases of the same construction, applied to different domains with different symmetry groups. Convolutional Neural Networks use shifting, or translation, symmetry on grids, while Graph Neural Networks use permutation symmetry on graphs. Transformers and Deep Sets also use permutation symmetry, but on unordered sets, while spherical CNNs use rotation symmetry on the sphere. Even Recurrent Neural Networks and their gated versions, like Long Short-Term Memory networks, follow a related idea: staying invariant when time is stretched or compressed, called time warping.",
+      "ids": [
+        "spya-vqbdy5",
+        "spya-te4bjg",
+        "spya-zwntwk"
+      ],
+      "sentences": [
+        {
+          "text": "Using this one blueprint, the piece shows that many famous architectures are special cases of the same construction, applied to different domains with different symmetry groups.",
+          "id": "spya-vqbdy5"
+        },
+        {
+          "text": "Convolutional Neural Networks use shifting, or translation, symmetry on grids, while Graph Neural Networks use permutation symmetry on graphs.",
+          "id": "spya-te4bjg"
+        },
+        {
+          "text": "Transformers and Deep Sets also use permutation symmetry, but on unordered sets, while spherical CNNs use rotation symmetry on the sphere.",
+          "id": "spya-te4bjg"
+        },
+        {
+          "text": "Even Recurrent Neural Networks and their gated versions, like Long Short-Term Memory networks, follow a related idea: staying invariant when time is stretched or compressed, called time warping.",
+          "id": "spya-zwntwk",
+          "key": "time warping"
+        }
+      ]
+    },
+    {
+      "text": "The piece then points to real applications where these symmetry-respecting networks already matter, including drug discovery, protein structure prediction, recommender systems, traffic forecasting, particle physics, and medical imaging. It argues that symmetry shows up so often in real-world data that Geometric Deep Learning methods have become central to many of today's most prominent uses of machine learning.",
+      "ids": [
+        "spya-v5d0tv",
+        "spya-tuc7ab"
+      ],
+      "sentences": [
+        {
+          "text": "The piece then points to real applications where these symmetry-respecting networks already matter, including drug discovery, protein structure prediction, recommender systems, traffic forecasting, particle physics, and medical imaging.",
+          "id": "spya-v5d0tv"
+        },
+        {
+          "text": "It argues that symmetry shows up so often in real-world data that Geometric Deep Learning methods have become central to many of today's most prominent uses of machine learning.",
+          "id": "spya-tuc7ab"
+        }
+      ]
+    },
+    {
+      "text": "The piece's main conclusion is that this geometric unification serves two purposes at once. First, it gives researchers one shared mathematical language for understanding existing architectures like CNNs, RNNs, GNNs, and Transformers. Second, it gives a constructive way to design new architectures, by first choosing which domain and symmetry group fit a problem, then building from the blueprint's pieces. The authors say they are not trying to cover every method, but hope they left enough principles for readers to classify or build future architectures.",
+      "ids": [
+        "spya-ze4mju",
+        "spya-r5kkwh"
+      ],
+      "sentences": [
+        {
+          "text": "The piece's main conclusion is that this geometric unification serves two purposes at once.",
+          "id": "spya-ze4mju"
+        },
+        {
+          "text": "First, it gives researchers one shared mathematical language for understanding existing architectures like CNNs, RNNs, GNNs, and Transformers.",
+          "id": "spya-ze4mju"
+        },
+        {
+          "text": "Second, it gives a constructive way to design new architectures, by first choosing which domain and symmetry group fit a problem, then building from the blueprint's pieces.",
+          "id": "spya-ze4mju"
+        },
+        {
+          "text": "The authors say they are not trying to cover every method, but hope they left enough principles for readers to classify or build future architectures.",
+          "id": "spya-r5kkwh"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This long piece asks whether the many different kinds of deep learning computer programs can be understood as versions of one single idea. It borrows a trick from old mathematics: instead of studying many separate geometries, look at which patterns stay unchanged under certain shifts or rotations, called symmetries.",
+      "ids": [
+        "spya-tjpt5z",
+        "spya-m8ms9j"
+      ],
+      "sentences": [
+        {
+          "text": "This long piece asks whether the many different kinds of deep learning computer programs can be understood as versions of one single idea.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "It borrows a trick from old mathematics: instead of studying many separate geometries, look at which patterns stay unchanged under certain shifts or rotations, called symmetries.",
+          "id": "spya-tjpt5z",
+          "key": "symmetries"
+        }
+      ]
+    },
+    {
+      "text": "The authors argue this matters because today's neural networks (programs loosely modeled on brain cells that learn from examples) come in a confusing zoo of types with no shared story. They show that networks built for images, networks built for graphs of connected points, and others all secretly follow the same recipe: use the shape and symmetry of the data to build in useful assumptions. They organize this around five kinds of data shapes they call the '5 Gs': grids, groups, graphs, geodesics, and gauges. From these they write out a general blueprint for building such networks.",
+      "ids": [
+        "spya-ynypgp",
+        "spya-y6p4d9",
+        "spya-s2jbgk"
+      ],
+      "sentences": [
+        {
+          "text": "The authors argue this matters because today's neural networks (programs loosely modeled on brain cells that learn from examples) come in a confusing zoo of types with no shared story.",
+          "id": null
+        },
+        {
+          "text": "They show that networks built for images, networks built for graphs of connected points, and others all secretly follow the same recipe: use the shape and symmetry of the data to build in useful assumptions.",
+          "id": "spya-ynypgp"
+        },
+        {
+          "text": "They organize this around five kinds of data shapes they call the '5 Gs': grids, groups, graphs, geodesics, and gauges.",
+          "id": "spya-y6p4d9",
+          "key": "5 Gs"
+        },
+        {
+          "text": "From these they write out a general blueprint for building such networks.",
+          "id": "spya-s2jbgk"
+        }
+      ]
+    },
+    {
+      "text": "Using this blueprint, they show that famous architectures like CNNs, graph neural networks, and transformers are really the same idea applied to different shapes of data. They also point to real uses, from drug discovery to maps and speech, where this approach already works. The takeaway is that this unified view, which they call Geometric Deep Learning, can both explain existing methods and guide the design of new ones.",
+      "ids": [
+        "spya-ebez75",
+        "spya-hat5pb",
+        "spya-pn6ntt"
+      ],
+      "sentences": [
+        {
+          "text": "Using this blueprint, they show that famous architectures like CNNs, graph neural networks, and transformers are really the same idea applied to different shapes of data.",
+          "id": "spya-ebez75"
+        },
+        {
+          "text": "They also point to real uses, from drug discovery to maps and speech, where this approach already works.",
+          "id": "spya-hat5pb"
+        },
+        {
+          "text": "The takeaway is that this unified view, which they call Geometric Deep Learning, can both explain existing methods and guide the design of new ones.",
+          "id": "spya-pn6ntt",
+          "key": "Geometric Deep Learning"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 1,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

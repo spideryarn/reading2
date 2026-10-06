@@ -51,7 +51,7 @@ const VETOES: readonly ReloadVeto[] = [
      misses a case: `navigator.onLine` is true on a captive portal, and
      `connected` is only as fresh as the last request. */
   { why: "offline", holds: () => !isConnected() || navigator.onLine === false },
-  /* Unsent Chat and Remember words, on any article — chat-draft.ts. */
+  /* Unsent Chat and Learn words, on any article — chat-draft.ts. */
   { why: "chat-draft", holds: anyChatDraftHeld },
   { why: "feedback-draft", holds: () => feedbackDraft },
   /* An upload or a batch in flight: the very fact that warns on closing the

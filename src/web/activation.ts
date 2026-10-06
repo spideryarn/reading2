@@ -4,7 +4,7 @@
  * whether to spend a model call.
  *
  * The controls include artefact-backed mode buttons in the bar and the
- * sub-mode controls for Diagram, Remember, Referee and Summary (including
+ * sub-mode controls for Diagram, Learn, Referee and Summary (including
  * their command-bar rows). Several gestures may arm the same target: Summary's
  * bar button, its Brief and Fuller segments and their command rows all arm
  * `simple`.
@@ -142,7 +142,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView, SummaryView } from "./params.js";
+import type { LearnView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -311,20 +311,20 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   /* **These two arm nothing *as modes*, and that is the honest answer rather
      than a gap.** Each opens on a sub-mode that waits on somebody's own words —
      Referee on Criteria, which has nothing to run until the referee has written
-     a criterion; Remember on Recall, which has nothing to run until the reader
+     a criterion; Learn on Recall, which has nothing to run until the reader
      has said what they took from the piece. There is no empty artefact for the
      press to fill, and their opening surfaces do not generate on arrival
      either. Their chips arm
      for themselves, one level down: Referee's through
-     `armActivationForRefereeView` below, Remember's inline in
-     `RememberSubModeToggle` (QuizPanel.tsx), which is the same call
+     `armActivationForRefereeView` below, Learn's inline in
+     `LearnSubModeToggle` (QuizPanel.tsx), which is the same call
      `DiagramPanel`'s picture chips make. */
   referee: {
     kind: "none",
     reason:
       "opens a panel without starting a model call; only the Claims chip can arm a run",
   },
-  remember: {
+  learn: {
     kind: "none",
     reason: "opens on Recall, which waits on the reader's own words (so do Tutorial and Explore); the Quiz chip arms itself",
   },
@@ -645,8 +645,8 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  * sub-mode rows (src/web/sub-modes.ts; Greg, SPIDERYARN-READING2-77). Each arm
  * is the chip's rule, read from where that rule already lives:
  *
- *  - Remember: Quiz arms `quiz`, Recall nothing (QuizPanel.tsx §
- *    `RememberSubModeToggle`);
+ *  - Learn: Quiz arms `quiz`, Recall nothing (QuizPanel.tsx §
+ *    `LearnSubModeToggle`);
  *  - Diagram: `activationForDiagram` of the picture **the row names** — never of
  *    whatever `?diagram=` said before the press, which is the orphaned-token bug
  *    that function's docblock walks through;
@@ -662,7 +662,7 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  */
 export function subModeTarget(sub: SubMode): AutoRunTarget | null {
   switch (sub.mode) {
-    case "remember":
+    case "learn":
       return sub.view === "quiz" ? "quiz" : null;
     case "diagram":
       return activationForDiagram(sub.view);
@@ -719,8 +719,8 @@ export function subModeGenerates(sub: SubMode): boolean {
  * bar armed `illustrated` retires nothing, and the token waits for a later mount
  * to spend it. So each arm below reads the table the press itself read — the
  * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
- * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
- * `RememberSubModeToggle`). A Diagram chip arms `activationForDiagram` of the
+ * the literal `"quiz"` the Learn toggle arms (QuizPanel.tsx §
+ * `LearnSubModeToggle`). A Diagram chip arms `activationForDiagram` of the
  * picture it lands on and a Summary segment `activationForSummary` of its view,
  * which are the delegated rows' answers too.
  *
@@ -730,10 +730,10 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
+  sub: { diagram: DiagramKind; referee: RefereeView; learn: LearnView; summary: SummaryView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
-  if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+  if (mode === "learn") return sub.learn === "quiz" ? "quiz" : null;
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

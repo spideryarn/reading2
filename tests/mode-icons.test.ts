@@ -28,7 +28,7 @@ describe("the icon each mode wears", () => {
       plain: AlignLeft, structure: Columns2, summary: Layers, diagram: Network,
       skim: Route, quotes: Quote, glossary: BookA, faq: BadgeQuestionMark,
       ideas: Lightbulb, timeline: Clock, citations: BookText, referee: ClipboardCheck,
-      debate: Globe, search: Search, chat: MessagesSquare, remember: Brain,
+      debate: Globe, search: Search, chat: MessagesSquare, learn: Brain,
       marginalia: PanelRight,
     });
   });
@@ -43,7 +43,7 @@ describe("the icon each mode wears", () => {
     expect(dock).toContain('from "./mode-icons.js"');
     const rows = dock.slice(dock.indexOf("const MODES_UI = ["), dock.indexOf("] satisfies readonly ModeUi[]"));
     /* The control: the slice is the table, not an empty string. */
-    expect(rows).toContain('mode: "remember"');
+    expect(rows).toContain('mode: "learn"');
     expect(rows).not.toMatch(/^\s+icon:/m);
   });
 

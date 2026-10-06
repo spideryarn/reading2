@@ -428,6 +428,10 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   the content hash a step caches on ([§ Conventions](#conventions)).
 - **`src/html.ts` § `escapeHtml`, `plainTitle`** — untrusted text becoming markup. `src/pdf-read.ts`
   still has a private `escapeHtml` that misses `'`.
+- **`src/paper-sources.ts` § `resolvePaperSource`, `arxivIdOf`, `ARXIV_ID_PATTERN`** — whether an
+  address names a paper a source knows (arXiv today), its one key and slug, and the addresses to
+  fetch it from. The one copy of the arXiv id pattern for addresses; a new source is one object in
+  `SOURCES` ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)).
 - **`src/doi-url.ts` § `doiUrl`, `doiOfUrl`, `doiPath`** — a DOI becoming a doi.org link or a
   registry API path, and a link read back to its DOI. Never paste a DOI into an address by hand
   ([postmortem 261004m](../postmortems/261004m-an-encoder-is-not-reversible-until-every-consumer-agrees-on-the-boundary.md)).

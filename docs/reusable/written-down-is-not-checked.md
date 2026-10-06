@@ -108,6 +108,14 @@ same instant.
   *"X moved to Y"* rots the moment the plan slips.
 - **Never a bare count.** *"14 by `grep -rn takeRunLock tests/`, 2026-09-02"* — command, scope,
   date.
+- **Never a list from a search piped through `head`.** On 2026-09-08 `grep -rn … | head -20`
+  showed three callers of seven, and the three went into a source comment as the set — in the
+  comment written to correct a false claim. Count first (`grep -c`, `| wc -l`), or re-run it
+  unbounded before the list becomes a sentence.
+- **Say what you searched, in the sentence that reports the result.** A grep answers one
+  direction. *"Nothing in `tools/overseer/` imports X"* is a claim a reader can size; *"the seam is
+  one-way"* also needs the reverse grep, and on 2026-09-09 nobody had run it before a design
+  decision was built on it.
 - **When you change a value, rewrite the argument above it, not just the value.** A comment left
   arguing for the rule that used to be there is worse than no comment: it is a confident,
   well-written explanation of something untrue. If the old argument was sound and is being

@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the plan:
 [261003l](../plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md) · the mode:
-[remember-mode.md § Explore](../project/remember-mode.md#explore-the-fourth-sub-mode)
+[remember-mode.md § Explore](../project/learn-mode.md#explore-the-fourth-sub-mode)
 
 **Question.** Before Explore was built, Greg said what it is for:
 
@@ -28,7 +28,7 @@ began by re-marking the sources of its previous reply.
 
 ## What was compared, and why it is a product comparison
 
-[`evals/remember-explore.ts`](../../evals/remember-explore.ts), built on the Tutorial eval's
+[`evals/remember-explore.ts`](../../evals/learn-explore.ts), built on the Tutorial eval's
 machinery ([261003c](261003c-tutorial-prompt-leans-to-retention.md)). Method:
 [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change).
 

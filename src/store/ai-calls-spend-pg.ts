@@ -66,7 +66,9 @@
  *   writes its report to a file only its owner can read.
  * - **What it returns across owners**: money, an owner id, an opaque article
  *   id, and the names of jobs, steps and models — and a slug only for the
- *   administrator's own articles. No title, no URL, no other owner's slug, no
+ *   administrator's own articles. For a failed attempt, where it failed, a
+ *   label from a closed list and an HTTP status (src/call-failure.ts: never
+ *   text from an error). No title, no URL, no other owner's slug, no
  *   sentence of anybody's reading.
  *
  * Until 2026-10-05 that list was "money and an owner id and nothing else".
@@ -93,6 +95,7 @@ import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { CostCubeGroup } from "../cost-cube.js";
 import { type Db, getDb } from "../db/client.js";
 import { aiCalls } from "../db/schema.js";
+import { TRANSPORT_ATTEMPTS } from "../transport-retry.js";
 
 /**
  * One `(owner, scope, job, step)` bucket. The four keys are what the ledger
@@ -221,6 +224,28 @@ const UNPRICED_CALLS = sql<number>`count(*) filter (
              then ${aiCalls.byokUpstreamNanos} is null
              else ${aiCalls.creditsUsedNanos} is null
         end
+)`.mapWith(Number);
+
+/**
+ * **Attempts, retries and give-ups**, as measures rather than a grouping by
+ * `attempt` — GPT Sol's F4 on plan 261006b: the ordinal would multiply the
+ * cube's groups for nothing a table needs.
+ *
+ * `counted` is the attempts a retry loop of ours numbered; a retry is any go
+ * after the first; a give-up is the last go allowed failing before its answer
+ * began. The limit is written into the statement as a literal, from the one
+ * constant the two wires share, so the cube still binds nothing but its window
+ * and the asker's id. `tests/admin-costs-store.test.ts` holds all three against
+ * the rows.
+ */
+const COUNTED_ATTEMPTS = sql<number>`count(*) filter (where ${aiCalls.attempt} is not null)`.mapWith(
+  Number,
+);
+const RETRIES = sql<number>`count(*) filter (where ${aiCalls.attempt} > 1)`.mapWith(Number);
+const GAVE_UP = sql<number>`count(*) filter (
+  where ${aiCalls.outcome} = 'error'
+    and ${aiCalls.failurePhase} = 'before_answer'
+    and ${aiCalls.attempt} = ${sql.raw(String(TRANSPORT_ATTEMPTS))}
 )`.mapWith(Number);
 
 /**
@@ -380,6 +405,9 @@ export async function spendCube(
       costSource: aiCalls.costSource,
       isByok: aiCalls.isByok,
       outcome: aiCalls.outcome,
+      failurePhase: aiCalls.failurePhase,
+      failureClass: aiCalls.failureClass,
+      failureStatus: aiCalls.failureStatus,
       calls: CALLS,
       creditsNanos: CREDITS,
       byokNanos: BYOK,
@@ -387,6 +415,9 @@ export async function spendCube(
       unpricedCalls: UNPRICED_CALLS,
       computedCalls: COMPUTED_CALLS,
       settledCalls: SETTLED_CALLS,
+      counted: COUNTED_ATTEMPTS,
+      retries: RETRIES,
+      gaveUp: GAVE_UP,
     })
     .from(aiCalls)
     .where(window(since, until))
@@ -406,6 +437,10 @@ export async function spendCube(
       aiCalls.costSource,
       aiCalls.isByok,
       aiCalls.outcome,
+      /* Null on nearly every row, so these three barely add groups. */
+      aiCalls.failurePhase,
+      aiCalls.failureClass,
+      aiCalls.failureStatus,
     )
     /* One past the cap, so "exactly the cap" and "more than it" can be told apart. */
     .limit(maxGroups + 1);
@@ -484,6 +519,15 @@ export interface SpendDetailRow {
   costSource: string;
   isByok: boolean | null;
   outcome: string;
+  /**
+   * Which go this row was, 1-based; null when no retry loop of ours numbered
+   * it. The cube turns it into three counts and the analysis checks them
+   * against this (src/cost-analysis.ts § `assertReadsAgree`).
+   */
+  attempt: number | null;
+  failurePhase: string | null;
+  failureClass: string | null;
+  failureStatus: number | null;
   eventKind: string | null;
   /* The three pockets as the row holds them. **Null is "reported nothing"**,
      which is not zero — `UNPRICED_CALLS` above is the rule that reads them. */
@@ -550,6 +594,10 @@ export async function spendDetail(
       costSource: aiCalls.costSource,
       isByok: aiCalls.isByok,
       outcome: aiCalls.outcome,
+      attempt: aiCalls.attempt,
+      failurePhase: aiCalls.failurePhase,
+      failureClass: aiCalls.failureClass,
+      failureStatus: aiCalls.failureStatus,
       eventKind: aiCalls.eventKind,
       creditsUsedNanos: aiCalls.creditsUsedNanos,
       byokUpstreamNanos: aiCalls.byokUpstreamNanos,

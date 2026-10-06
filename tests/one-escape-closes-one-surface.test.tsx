@@ -250,6 +250,7 @@ const chat = (): ReactNode => (
     onOpenFull={() => {}}
     onCreated={() => {}}
     onDropped={() => {}}
+    onRenamed={() => {}}
   />
 );
 

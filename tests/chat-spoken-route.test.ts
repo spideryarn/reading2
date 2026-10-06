@@ -451,19 +451,19 @@ describe("the expected tail, which is also the idempotency", () => {
 });
 
 /**
- * **The kind a spoken exchange creates.** SPIDERYARN-READING2-70: Remember
+ * **The kind a spoken exchange creates.** SPIDERYARN-READING2-70: Learn
  * opens straight into an empty conversation that exists only in the tab, so
  * pressing Live there makes the first spoken exchange the write that creates
- * it — and it used to create a chat, which Remember then hid.
+ * it — and it used to create a chat, which Learn then hid.
  * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md
  */
 describe("the kind of conversation it creates", () => {
-  it("creates a Remember conversation when the tab began one, on disk", async () => {
-    const out = await post("spya-vaaaca", exchange({ kind: "remember" }));
+  it("creates a Learn conversation when the tab began one, on disk", async () => {
+    const out = await post("spya-vaaaca", exchange({ kind: "learn" }));
     expect(out.status).toBe(200);
-    expect(threadOf(out).kind).toBe("remember");
+    expect(threadOf(out).kind).toBe("learn");
     const stored = (await threads()).find((t) => t.id === threadOf(out).id);
-    expect(stored?.kind).toBe("remember");
+    expect(stored?.kind).toBe("learn");
     /* And the spoken rows carry no stance, as spoken turns never have. */
     expect(stored?.messages[1]?.stance).toBeUndefined();
   });
@@ -481,14 +481,14 @@ describe("the kind of conversation it creates", () => {
   });
 
   it("refuses to turn an existing conversation into the other kind", async () => {
-    const first = threadOf(await post("spya-vaaacd", exchange({ kind: "remember" })));
+    const first = threadOf(await post("spya-vaaacd", exchange({ kind: "learn" })));
     const out = await post(
       "spya-vaaacd",
       exchange({ kind: "chat", expectedTailId: first.messages.at(-1)?.id }),
     );
     expect(out.status).toBe(409);
     const stored = (await threads()).find((t) => t.id === first.id);
-    expect(stored?.kind).toBe("remember");
+    expect(stored?.kind).toBe("learn");
     expect(stored?.messages).toHaveLength(2);
   });
 

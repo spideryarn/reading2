@@ -55,7 +55,7 @@ export const MODES = [
      docs/plans/260831an-referee-mode-for-peer-reviewers.md.
 
      **`referee` and not `reviewer`, because `review` was already in this list**
-     further down (since renamed `remember`), and it is a different thing:
+     further down (renamed `remember`, and `learn` since 2026-10-06), and it is a different thing:
      there the reader says what
      they took from a piece they have read for themselves. A `reviewer` mode
      beside a `review` mode is one word meaning two things, which is the exact
@@ -95,13 +95,15 @@ export const MODES = [
      named what the product was *for* — vision.md's "internalise and
      interrogate" — where *Review* named only the mechanism.
 
-     Renamed for the reader to **Learn** on 2026-10-05, while this identifier
-     stayed `remember`. It is the umbrella over Recall, Tutorial, Explore and
+     Renamed for the reader to **Learn** on 2026-10-05, and the identifier
+     followed on 2026-10-06 (`remember` until then; `?mode=remember` still
+     opens it, through `RETIRED_MODES` below). It is the umbrella over Recall, Tutorial, Explore and
      Quiz. The catalogue description now distinguishes that whole from a
-     course or flashcards. The two rename plans hold the reasons and costs:
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md and
-     docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
-  "remember",
+     course or flashcards. The rename plans hold the reasons and costs:
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md,
+     docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md and
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+  "learn",
   /* **`outline` was the eighth, 2026-08-28 to 2026-09-10, and it is not a mode
      any more** — the whole document as one nested list that never scrolled (it may
      since 2026-10-03, plan 261003k). It
@@ -336,6 +338,13 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
      report's mode read.
      docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
   tweets: "summary",
+  /* `remember` was this mode's id until 2026-10-06, a day after the reader's
+     word for it became Learn. The one alias that rename kept: `?remember=<view>`
+     and `?chatfrom=remember` were let go. A conversation mode, so
+     src/web/last-view.ts § `NEEDS_AN_EXPLICIT_PRESS` asks about the mode this
+     word means rather than the word.
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+  remember: "learn",
 };
 
 /**

@@ -85,7 +85,7 @@ import { RefereeBand } from "../modes/referee/RefereeMode.js";
 import {
   type ChatHandoff,
   ConversationBand,
-  RememberBand,
+  LearnBand,
 } from "../modes/conversation/ConversationModes.js";
 import {
   askAboutSummaryParagraph,
@@ -144,7 +144,7 @@ import {
   eventParam,
   spineParam,
   threadParam,
-  rememberParam,
+  learnParam,
   diagramParam,
   refereeParam,
   summaryParam,
@@ -170,6 +170,7 @@ import {
   chatCard,
   chatDock,
   fitView,
+  margTitleReserve,
   NARROW_WINDOW_MAX,
 } from "../layout.js";
 import { isFolded, subscribeFold } from "../fold.js";
@@ -983,7 +984,7 @@ export function Reader({
    * **A quiz question pressed in the prose**, for Quiz to open at — `QuizArrival`
    * in QuizPanel.tsx, and SPIDERYARN-READING2-6V. The chat handoff's shape: set
    * in the same event as the navigation, taken by the band, cleared here — and
-   * cleared if the reader leaves Remember before the band took it, so it cannot
+   * cleared if the reader leaves Learn before the band took it, so it cannot
    * wait for a later visit.
    */
   const [quizArrival, setQuizArrival] = useState<QuizArrival | null>(null);
@@ -994,10 +995,10 @@ export function Reader({
     [],
   );
   useEffect(() => {
-    if (mode !== "remember") setQuizArrival(null);
+    if (mode !== "learn") setQuizArrival(null);
   }, [mode]);
-  /* **Mode, sub-mode and thread in one pushed entry** — Remember's rule 1
-     (ConversationModes.tsx § RememberBand): `thread` cleared on the way to Quiz,
+  /* **Mode, sub-mode and thread in one pushed entry** — Learn's rule 1
+     (ConversationModes.tsx § LearnBand): `thread` cleared on the way to Quiz,
      so there is no frame in which the URL says both, and one Back undoes the
      whole trip. Not a press of the Quiz chip, so it arms nothing and can buy
      nothing: a line in the prose exists only because a quiz already does.
@@ -1009,7 +1010,7 @@ export function Reader({
      `quizAfter`'s memo, and a new one would re-render `TableView`. */
   const [quizNav, setQuizNav] = useQueryStates({
     mode: modeParam,
-    remember: rememberParam,
+    learn: learnParam,
     thread: threadParam,
   });
   /* **A mode and one of its sub-modes, in one pushed entry** — the command
@@ -1020,7 +1021,7 @@ export function Reader({
      metadata page builds its href from. */
   const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
-    remember: rememberParam,
+    learn: learnParam,
     thread: threadParam,
     diagram: diagramParam,
     referee: refereeParam,
@@ -1029,7 +1030,7 @@ export function Reader({
     debate: debateParam,
   });
   const inQuiz = useRef(false);
-  const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
+  const nowInQuiz = quizNav.mode === "learn" && quizNav.learn === "quiz" && quizNav.thread === null;
   useEffect(() => {
     inQuiz.current = nowInQuiz;
   }, [nowInQuiz]);
@@ -1037,7 +1038,7 @@ export function Reader({
     (batchId: string, questionId: BlockId) => {
       setQuizArrival({ batchId, questionId });
       if (!inQuiz.current)
-        void setQuizNav({ mode: "remember", remember: "quiz", thread: null }, { history: "push" });
+        void setQuizNav({ mode: "learn", learn: "quiz", thread: null }, { history: "push" });
       /* A band that had stepped aside on a narrow window comes back: the reader
          has asked to answer. */
       setBandAway(false);
@@ -1093,24 +1094,24 @@ export function Reader({
        resolve to `null` — but that is an argument from two other pieces of
        state staying empty, and this is an argument from the branch not
        existing. The floating chat dialog fetches a conversation on mount. */
-    !owner || mode === "chat" || mode === "remember"
+    !owner || mode === "chat" || mode === "learn"
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
            `?thread=` survives leaving the mode, so a pasted
-           `?mode=toc&thread=<a Remember thread>` used to mount this dialog over
-           a Remember conversation — chat's UI and composer rather than Remember's, and the
+           `?mode=toc&thread=<a Learn thread>` used to mount this dialog over
+           a Learn conversation — chat's UI and composer rather than Learn's, and the
            next question answered with chat's prompt. Nothing on screen would
            have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
-           exists for; a Remember thread with no matching summary simply opens
+           exists for; a Learn thread with no matching summary simply opens
            nothing,
            which is the same thing a stale id already did. GPT Sol's review of
            docs/plans/260827ah-review-mode.md, finding 7. */
-        /* **A positive test, not a negative one.** `?.kind !== "remember"`
+        /* **A positive test, not a negative one.** `?.kind !== "learn"`
            (spelled `review` at the time) was
            the first version and had its default backwards: an *unknown* thread
            — summaries not fetched yet, or a stale id — came out as a chat, so a
-           Remember URL opened the floating chat dialog for a moment on every
+           Learn URL opened the floating chat dialog for a moment on every
            load, and a missing thread sat on "Starting…" forever. Asking for
            `=== "chat"` means the overlay opens only for a thread we can see is
            one. GPT Sol's review of the built code, finding 3. */
@@ -1639,9 +1640,9 @@ export function Reader({
      ← / → are the browser's. */
   const skimKeys =
     mode === "skim" && skimControl ? skimControl.step : null;
-  /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
+  /* …and the quiz's questions while Learn's Quiz half is showing — `quizKeys`
      is only ever set while `QuizPanel` is mounted. */
-  const quizStepKeys = mode === "remember" ? quizKeys : null;
+  const quizStepKeys = mode === "learn" ? quizKeys : null;
   /* …and the quotes while Quotes is the mode — Greg, 2026-09-11 (spya-mtyquy):
      *"use left/right to navigate between quotes"*. `stepQuote` is the band's
      ‹ › rule too, so the keys can do no more than the buttons; `null` from it
@@ -2123,14 +2124,14 @@ export function Reader({
    * the opener as a parameter, so the *here / away / nowhere* check is the
    * comment row's exactly. `openChatThread` writes `?thread=` and clears
    * `?note=` in the same tick, so they land with any jump on at most one entry,
-   * and exactly one when the passage was away. Remember is
+   * and exactly one when the passage was away. Learn is
    * the deliberate extra case: even for a passage already here (or gone), its
-   * switch into Chat is itself one pushed entry, so Back can return to Remember.
+   * switch into Chat is itself one pushed entry, so Back can return to Learn.
    * The thread, panel close and any jump are still batched into that one entry.
    *
    * **Where it opens depends on the mode**, because `overlay` above is
    * suppressed in two of them: in Chat mode the band shows `?thread=` already,
-   * and in Remember it would be a chat inside the Remember band (or wiped by
+   * and in Learn it would be a chat inside the Learn band (or wiped by
    * Quiz's cleanup), so the press follows it into Chat mode — the rule the
    * band's own `onThread` keeps (ConversationModes.tsx). Every other mode gets
    * the floating dialog. GPT Sol's plan review, finding 1.
@@ -2149,7 +2150,7 @@ export function Reader({
          on a narrow window, and the floating panel is suppressed there: the
          thread would open where nobody can see it (GPT Sol, plan review
          261004g F1). In any other mode the floating panel takes it. */
-      if (mode === "remember" || mode === "chat") showBand("chat");
+      if (mode === "learn" || mode === "chat") showBand("chat");
       jumpToComment(askedList, id, openChatThread, jumpTo);
     },
     [askedList, openChatThread, jumpTo, mode, showBand],
@@ -2476,7 +2477,7 @@ export function Reader({
    * Marginalia or a mode band — an answer arriving then must not replace what
    * they chose. The mode-specific parameters are included too: moving from
    * Recall to Quiz is a new foreground choice even though `mode` stays
-   * `remember`. GPT Sol, P1 on the plan and code review of 261002j.
+   * `learn`. GPT Sol, P1 on the plan and code review of 261002j.
    *
    * **Hover cards and modals are deliberately not in it.** Sol's code review
    * also checked the DOM for any new `role="dialog"`; that was taken out,
@@ -2501,7 +2502,7 @@ export function Reader({
       mode,
       margin,
       bandAway,
-      subNav.remember,
+      subNav.learn,
       subNav.diagram,
       subNav.referee,
       subNav.summary,
@@ -2516,7 +2517,7 @@ export function Reader({
     mode,
     margin,
     bandAway,
-    subNav.remember,
+    subNav.learn,
     subNav.diagram,
     subNav.referee,
     subNav.summary,
@@ -2993,8 +2994,8 @@ export function Reader({
         /* **The key is inert today, and it is kept for the day it is not.**
            It was written when one `ConversationBand` was mounted by two modes
            — `{(mode === "chat" || mode === "review") && <ConversationBand
-           key={mode} …/>}`, commit 2dd63119 — where it is what stopped Remember
-           inheriting chat's open conversation and focus nonce. Remember
+           key={mode} …/>}`, commit 2dd63119 — where it is what stopped Learn
+           inheriting chat's open conversation and focus nonce. Learn
            has had a wrapper of its own since, so this arm renders for one mode
            and `mode` is the constant `"chat"`; the arms return different
            top-level types, so React discards the outgoing subtree with or
@@ -3009,7 +3010,7 @@ export function Reader({
            switch, the reader carries the other conversation across. See
            ConversationBand. */
         return owner ? (
-          /* Chat's answers may carry command chips; Remember's and
+          /* Chat's answers may carry command chips; Learn's and
              Candidates' prompts never ask for one, so only this arm and the
              chat dialog below are given the executor. CommandChip.tsx. */
           <ChatCommands executor={chatCommands.band}>
@@ -3026,13 +3027,13 @@ export function Reader({
             />
           </ChatCommands>
         ) : null;
-      /* **Remember is two bands behind one mode**, and the choice between them
-         is `?remember=`. The wrapper exists so that the parameter and its
+      /* **Learn is two bands behind one mode**, and the choice between them
+         is `?learn=`. The wrapper exists so that the parameter and its
          collision with `?thread=` are decided in one place rather than in each
-         half — see `RememberBand`. */
-      case "remember":
+         half — see `LearnBand`. */
+      case "learn":
         return owner ? (
-          <RememberBand
+          <LearnBand
             slug={slug}
             quizRead={owner.quiz}
             quizArrival={quizArrival}
@@ -3591,6 +3592,7 @@ export function Reader({
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
           "--marg-w": `${fit.margW}px`,
           "--marg-reserve": `${fit.margReserve}px`,
+          "--marg-title-reserve": `${margTitleReserve(fit)}px`,
           "--marg-left": `${fit.margLeft}px`,
         } as CSSProperties
       }
@@ -3744,7 +3746,7 @@ export function Reader({
            would be right only if `Reader` re-rendered on every URL change, and
            it does not. nuqs subscriptions are key-isolated, so ten reading
            parameters owned by child components — `summary`, `diagram`, `dhue`,
-           `referee`, `remember` and five more — change the address without
+           `referee`, `learn` and five more — change the address without
            waking this component at all. Until `TableView` was memoised, `?at=`
            re-rendered it once a second and hid that; it does not any more.
            router.ts § `watchHistoryWrites`. Found by GPT Sol, 2026-09-04.
@@ -3973,6 +3975,7 @@ export function Reader({
             reopen={chatReopen}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
+            onRenamed={owner.chatAnchors.rename}
             onSettled={owner.chatAnchors.refresh}
           />
         </ChatCommands>
@@ -4338,12 +4341,12 @@ export function Reader({
              Dock is their signal. */
           if (sub === undefined) {
             if (next !== mode) {
-              /* **`mode` alone, with one exception**: returning to Remember
-                 while `remember=quiz` is still in the address is a navigation
+              /* **`mode` alone, with one exception**: returning to Learn
+                 while `learn=quiz` is still in the address is a navigation
                  to Quiz, so it clears `thread` in the same pushed entry rather
                  than mounting the Quiz over Chat's conversation for
-                 `RememberBand` to repair (sub-modes.ts § `returnToSubMode`). */
-              const back = returnToSubMode(next, { remember: subNav.remember });
+                 `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
+              const back = returnToSubMode(next, { learn: subNav.learn });
               if (back === null) void setMode(next);
               else void setSubNav(back, { history: "push" });
             }

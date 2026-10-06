@@ -125,7 +125,7 @@ import {
  * **Which paying job a turn bills under**, and it is decided by the thread's
  * kind rather than by this file being called `converse`.
  *
- * Chat and Remember are one job: same prompt shape, same tools, same order of
+ * Chat and Learn are one job: same prompt shape, same tools, same order of
  * magnitude per turn. Candidates is its own, `referee-candidates`, because it is
  * the only conversation in the app that runs several web searches on nearly
  * every turn — so its cost per turn does not look like chat's, and folding the
@@ -370,9 +370,9 @@ not need a search behind it.`;
 /**
  * What a model may put in an `href`, in both prompts.
  *
- * Shared rather than written twice, because a Remember thread can search the web
+ * Shared rather than written twice, because a Learn thread can search the web
  * too and its answers go through the same renderer — so a rule that lived only
- * in `SYSTEM` would have let a Remember answer emit a model-chosen address with
+ * in `SYSTEM` would have let a Learn answer emit a model-chosen address with
  * nothing said about where it had to come from. Found by a GPT Sol review,
  * 2026-08-27.
  *
@@ -422,7 +422,7 @@ conversation, and the right response is to say so to the reader and carry on.`;
  * (src/web/chat-commands.ts), each argument checked by its own command, and a
  * press. What the sentence about the article buys is fewer stray buttons.
  *
- * **Chat's prompt only.** Remember, Tutorial and Candidates are handed no
+ * **Chat's prompt only.** Learn, Tutorial and Candidates are handed no
  * executor, so a token there would be raw brackets; and the spoken prompt is a
  * different constant (`LIVE_SYSTEM`, src/live.ts) that must never learn a
  * token it would read aloud. tests/chat-command-chips-prompt.test.ts holds
@@ -668,7 +668,7 @@ ${QUOTE_TO_SHOW}
 ${QUOTATION_IDS}`;
 
 /**
- * The system prompt for **Remember** mode, where the reader has said what they
+ * The system prompt for **Learn** mode, where the reader has said what they
  * took from the article and wants to know where it holds up.
  *
  * ## Why it is a second prompt rather than a paragraph appended to the first
@@ -726,9 +726,9 @@ ${QUOTATION_IDS}`;
  * comes last" both mean the reply before the hint.
  * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
  *
- * The cases that must not regress are in `evals/remember-recall.ts`.
+ * The cases that must not regress are in `evals/learn-recall.ts`.
  */
-const REMEMBER_SYSTEM =`You are a reading companion. The reader has just read an article — or part
+const LEARN_SYSTEM =`You are a reading companion. The reader has just read an article — or part
 of it — and is telling you, in their own words, what they took from it.
 
 Your job is to help them remember a little more of it, turn by turn — because
@@ -1001,7 +1001,7 @@ ${plainWords("explain")}
 ${PROFILE_RULES}`;
 
 /**
- * The system prompt for **Tutorial**, Remember's third sub-mode (Greg,
+ * The system prompt for **Tutorial**, Learn's third sub-mode (Greg,
  * `spya-j0scgz`, 2026-10-01): short alternating turns in which the model
  * teaches a little of the piece and the reader says it back, explains it,
  * applies it or questions it.
@@ -1017,9 +1017,9 @@ ${PROFILE_RULES}`;
  * recall for somebody who has not read it. It is **guided reading**: every
  * piece taught is a cited passage the reader is sent into, which is what keeps
  * it on the right side of vision.md's anti-goal even for a reader who has not
- * read the piece yet. docs/project/remembering-vision.md.
+ * read the piece yet. docs/project/learning-vision.md.
  *
- * Above the cache breakpoint like `REMEMBER_SYSTEM`, so its own cached prefix;
+ * Above the cache breakpoint like `LEARN_SYSTEM`, so its own cached prefix;
  * nothing in it varies per turn. The spoken-input and citing rules are
  * Recall's, interpolated rather than copied.
  *
@@ -1238,7 +1238,7 @@ ${plainWords("explain")}
 ${PROFILE_RULES}`;
 
 /**
- * The system prompt for **Explore**, Remember's fourth sub-mode. Greg,
+ * The system prompt for **Explore**, Learn's fourth sub-mode. Greg,
  * `spya-mtsf0y`, 2026-10-03:
  *
  * > why don't we create a new exploration submode alongside tutorial submode
@@ -1261,7 +1261,7 @@ ${PROFILE_RULES}`;
  * So the subject is the reader's thinking, not the article: this is where
  * Tutorial sends what it rations (THEIR OWN VIEW IS THE EXCEPTION, above).
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
- * docs/project/remember-mode.md § Explore.
+ * docs/project/learn-mode.md § Explore.
  *
  * **What it is given.** The reader's notes digest rides in the final user
  * message of every Explore turn (`notesSection` below, built by `exploreNotes`
@@ -1552,8 +1552,8 @@ in a search.`;
  */
 const systemFor = (kind: ThreadKind): string => {
   switch (kind) {
-    case "remember":
-      return REMEMBER_SYSTEM;
+    case "learn":
+      return LEARN_SYSTEM;
     case "tutorial":
       return TUTORIAL_SYSTEM;
     case "explore":
@@ -1592,7 +1592,7 @@ const systemFor = (kind: ThreadKind): string => {
  */
 const readItFor = (kind: ThreadKind): string => {
   switch (kind) {
-    case "remember":
+    case "learn":
       return "I've read it. Tell me what you took from it.";
     case "tutorial":
       /* An offer, not a request to say so: Greg, `spya-hw8mhz`, 2026-10-03.
@@ -1740,7 +1740,7 @@ export interface ConverseRequest {
    */
   useTools?: boolean;
   /**
-   * Chat or Remember — which chooses the system prompt.
+   * Chat or Learn — which chooses the system prompt.
    *
    * **The caller passes the THREAD's kind, not the request body's.** See
    * `streamChat` in src/routes.ts: a request may propose a kind for a thread it
@@ -1748,7 +1748,7 @@ export interface ConverseRequest {
    * prompt the client asked for rather than the one the conversation was
    * started with is how a transcript ends up half in one voice and half in
    * another. Defaults to `"chat"`, which is what every caller written before
-   * Remember mode existed means.
+   * Learn mode existed means.
    */
   kind?: ThreadKind;
   /**
@@ -1780,7 +1780,7 @@ export interface ConverseRequest {
   /**
    * **An eval's seam, and nothing a route passes**: what runs a tool the model
    * asked for. Defaults to `runTool` (src/chat-tools.ts), so a production turn
-   * is what it was. evals/remember-explore.ts answers `reader_notes` from
+   * is what it was. evals/learn-explore.ts answers `reader_notes` from
    * fixtures through this, with no database, and hands every other name on to
    * `runTool`. What the model is *offered* is still `toolsFor(kind)`.
    */
@@ -1942,7 +1942,7 @@ export function buildConverseMessages(opts: {
    */
   anchor?: ChatAnchor | null;
   /**
-   * Chat or Remember, which picks the system prompt — the ONE thing here that
+   * Chat or Learn, which picks the system prompt — the ONE thing here that
    * lands above the `cache_control` breakpoint and therefore changes the cached
    * prefix. Two kinds means two prefixes per article, paid on entering the mode
    * rather than per turn. docs/plans/260827ah-review-mode.md § Where the stance goes.
@@ -2023,7 +2023,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
  * avoids the words *search*, *web*, *look it up* and *tool*, which
  * tests/help-prompt.test.ts forbids anywhere in a help turn's final message.
  *
- * Chat only: Remember has its own prompt and its own idea of what an answer is
+ * Chat only: Learn has its own prompt and its own idea of what an answer is
  * for. tests/chat-provenance-line.test.ts.
  */
 function provenanceLine(kind: ThreadKind): string {

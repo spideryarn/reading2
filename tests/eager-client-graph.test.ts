@@ -488,6 +488,11 @@ const SHARED_WITH_READER = [
   "src/mode-catalog.ts",
   "src/modes.ts",
   "src/monitoring-scrub.ts",
+  /* Arrived 2026-10-05 behind src/ingest.ts, which was already here: `urlKey`
+     and `slugFromUrl` ask it which paper an address names, so the add box and
+     the server cannot disagree about an arXiv link (plan 261005l § Caller 1).
+     A leaf with no imports of its own: two regular expressions and a list. */
+  "src/paper-sources.ts",
   "src/quote-match.ts",
   "src/read-address.ts",
   "src/referee-criteria.ts",

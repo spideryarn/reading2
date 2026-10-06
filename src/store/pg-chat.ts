@@ -80,10 +80,10 @@ import type {
   Citation,
   ChatMessage,
   ChatThread,
-  RememberStance,
+  LearnStance,
   ToolRun,
 } from "../types.js";
-import { isThreadKind } from "../types.js";
+import { storedThreadKind } from "../types.js";
 import { originColumns, originFromColumns } from "../thread-origin.js";
 import { splitHint } from "../recall-hint.js";
 import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
@@ -144,7 +144,7 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     /* Absent, never `stance: undefined` — the filesystem store simply has no
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
        byte for byte. Same rule as every field above it. */
-    ...(row.stance === null ? {} : { stance: row.stance as RememberStance }),
+    ...(row.stance === null ? {} : { stance: row.stance as LearnStance }),
     /* `true` or nothing at all, exactly like `stopped` and `interrupted` above —
        the filesystem store has no key on an ordinary question and
        tests/store-roundtrip.test.ts compares the two byte for byte. */
@@ -200,7 +200,10 @@ function startOf(anchor: ChatAnchor | undefined): number | null {
   return anchor && "start" in anchor ? anchor.start : null;
 }
 
-async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
+/* Exported for tests/unknown-stored-thread-kind.test.ts, which has to hand it a
+   transaction it will roll back. Unguarded: everything else reaches it through
+   `pgChatStore` below. */
+export async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
   const [threadRows, messageRows] = await Promise.all([
     db
       .select()
@@ -230,19 +233,21 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     /* Where it was started from. Named here or it does not exist on the way
        out; `upsertThread` is the write half. src/thread-origin.ts. */
     ...originFromColumns(t),
-    /* Normalised here, the twin of `normaliseKind` in src/chat.ts. The column
-       is `not null default 'chat'` so in practice this only widens the string
-       to the union — but the default lives in exactly two places on purpose,
-       and this is the second. `ChatThread.kind` is required so that nothing
-       downstream has to remember a fallback.
+    /* The column is `not null default 'chat'` with a CHECK listing the kinds,
+       so this only narrows the string to the union. `ChatThread.kind` is
+       required so that nothing downstream has to remember a fallback.
 
-       **The list of kinds is `isThreadKind`'s, not this line's**, and it used to
-       be a ternary naming `"remember"` here. The union grew a third member on
-       2026-09-01 and a ternary would have quietly turned every Candidates thread
-       into a chat on its next read from Postgres — the same conversation
-       answered with a different prompt, and nothing anywhere saying so.
-       src/types.ts § THREAD_KINDS. */
-    kind: isThreadKind(t.kind) ? t.kind : "chat",
+       **A kind this code does not know throws; it is not a chat** (2026-10-06).
+       Until then this line fell back to `"chat"`, which during a deploy that
+       renames a kind is the same conversation answered with a different prompt
+       and stored, and nothing anywhere saying so. One unknown row fails the
+       read of every thread of its article, which is deliberate: the route picks
+       a thread out of this list, and a list that left one out would let a
+       single-thread kind be begun a second time.
+       src/types.ts § storedThreadKind, and
+       docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+       stage 0. */
+    kind: storedThreadKind(t.kind),
     messages: byThread.get(t.id) ?? [],
   }));
 }
@@ -341,7 +346,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          disappearing from the prose rather than an error anybody sees.
 
          **So is `kind`, and it is the sharpest case of the three.** Every later
-         turn of a Remember thread comes through here. Naming `kind` in `set`
+         turn of a Learn thread comes through here. Naming `kind` in `set`
          would let a stale tab's `kind: "chat"` turn one into a chat on its
          second question — the system prompt changes, the list tag changes, a
          new cache prefix appears, and the transcript reads as one conversation
@@ -683,7 +688,12 @@ const rawPgChatStore: ChatStore = {
        not racing with itself — it is racing with `begin`, which reads the title
        under the lock and upserts what it read. Without this, a rename that
        lands in the middle of a turn is written back to the old name. */
-    await db.transaction(async (tx) => {
+    /* **The list is read back inside the transaction, not after it.** That read
+       can refuse (an unknown stored kind, `storedThreadKind`), and a refusal
+       that arrives after the commit tells the reader the rename failed while
+       the new title stays. Thrown in here, it rolls the write back.
+       tests/unknown-thread-kind-refuses-cleanly.test.ts. */
+    const threads = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .update(chatThreads)
@@ -691,9 +701,10 @@ const rawPgChatStore: ChatStore = {
            column, so the reader's act is kept and the sort is not disturbed. */
         .set({ title: titleFrom(title), renamedAt: DB_NOW })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
     logger.info({ slug, threadId }, "chat thread renamed");
-    return threadsFor(articleId);
+    return threads;
   },
 
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
@@ -702,13 +713,15 @@ const rawPgChatStore: ChatStore = {
     // Messages go with it: `chat_messages_thread_fk` is `on delete cascade`.
     // Under the lock for the same reason as `rename`: a `begin` in flight would
     // otherwise re-create the thread it just read.
-    await db.transaction(async (tx) => {
+    // The list is read back inside the transaction, for `rename`'s reason: a
+    // refused read must take the delete with it.
+    const remaining = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .delete(chatThreads)
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
-    const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
   },
@@ -747,7 +760,7 @@ const rawPgChatStore: ChatStore = {
         )
         .where(thisMessage);
       if (!row) return { ok: false, reason: "no-such-message" };
-      if (row.kind !== "remember" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
+      if (row.kind !== "learn" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
       if (splitHint(row.text).hint !== hint) return { ok: false, reason: "hint-changed" };
 
       const [stamped] = await tx

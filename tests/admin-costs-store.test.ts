@@ -19,6 +19,7 @@ import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
 import { totalRows } from "../src/store/ai-calls.js";
+import { TRANSPORT_ATTEMPTS } from "../src/transport-retry.js";
 import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -67,6 +68,12 @@ function row(n: number, over: Partial<AiCallRow>): AiCallRow {
     finishedAt: "2033-05-10T10:00:01.000Z",
     durationMs: 1000,
     outcome: "ok",
+    /* Null, as on every row no retry loop counted and every call that did not
+       fail: drizzle/20261006*_ai_calls_attempt_and_failure.sql. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: 1_000_000,
     byokUpstreamNanos: null,
     isByok: false,
@@ -143,6 +150,53 @@ const FIXTURES: AiCallRow[] = [
 
 const IN_WINDOW = FIXTURES.filter((r) => r.startedAt < UNTIL);
 
+/* **A month of their own**, so the tests above still count what they counted.
+   Each is one attempt, as the two wires write them since 261006b stage 1. */
+const ATTEMPTS_SINCE = "2033-07-01T00:00:00.000Z";
+const ATTEMPTS_UNTIL = "2033-08-01T00:00:00.000Z";
+const at = { startedAt: "2033-07-04T09:00:00.000Z", finishedAt: "2033-07-04T09:00:01.000Z" };
+const refused = {
+  ...at,
+  outcome: "error",
+  failurePhase: "before_answer",
+  failureClass: "refused",
+  failureStatus: 503,
+} as const;
+const unfinished = {
+  ...at,
+  outcome: "error",
+  failurePhase: "mid_answer",
+  failureClass: "unfinished",
+  failureStatus: 200,
+} as const;
+const ATTEMPTS: AiCallRow[] = [
+  /* A call that used all its goes and gave up. */
+  row(101, { ...refused, attempt: 1 }),
+  row(102, { ...refused, attempt: 2 }),
+  row(103, { ...refused, attempt: 3 }),
+  /* A dropped connection, then an answer. No response, so no status. */
+  row(104, {
+    ...at,
+    outcome: "error",
+    attempt: 1,
+    failurePhase: "before_answer",
+    failureClass: "network:ECONNRESET",
+    failureStatus: null,
+  }),
+  row(105, { ...at, attempt: 2 }),
+  /* Died after the answer began: never retried. */
+  row(106, { ...unfinished, attempt: 1 }),
+  /* The same kind of death under a loop of its caller's: a phase, and no attempt number. */
+  row(107, { ...unfinished, failureClass: "in_band" }),
+  /* The last go, and it answered: not a give-up. */
+  row(108, { ...at, attempt: 3 }),
+  /* The last go, and it died part-way: a death, not a give-up. */
+  row(109, { ...unfinished, attempt: 3 }),
+  /* A row nothing numbered, and a stop. */
+  row(110, { ...at }),
+  row(111, { ...at, outcome: "aborted", attempt: 1 }),
+];
+
 await pgReady({
   suite: "tests/admin-costs-store.test.ts",
   tables: ["spideryarn.ai_calls"],
@@ -180,7 +234,7 @@ describe("the cost cube", () => {
        resolve an id; the "gone" slugs never had one. */
     await bareArticles([ASKER_SLUG], ASKER as OwnerId);
     await bareArticles([OTHER_SLUG], OTHER as OwnerId);
-    for (const fixture of FIXTURES) await pgCostStore.record(fixture);
+    for (const fixture of [...FIXTURES, ...ATTEMPTS]) await pgCostStore.record(fixture);
   })();
 
   async function cube(
@@ -295,6 +349,68 @@ describe("the cost cube", () => {
     const nextDay = groups.filter((g) => g.day === "2033-05-11");
     expect(nextDay).toHaveLength(1);
     expect(nextDay[0]?.creditsNanos).toBe(9_000_000);
+  });
+
+  describe("failures and retries", () => {
+    async function attempts() {
+      await written;
+      const { spendCube } = await import("../src/store/ai-calls-spend-pg.js");
+      return spendCube(ATTEMPTS_SINCE, ATTEMPTS_UNTIL, ASKER, "cost-cube-test-privacy-key");
+    }
+    function sum<G>(groups: readonly G[], pick: (g: G) => number): number {
+      return groups.reduce((n, g) => n + pick(g), 0);
+    }
+
+    it("counts the numbered attempts, the retries and the give-ups as the rows themselves say", async () => {
+      const groups = await attempts();
+      expect(sum(groups, (g) => g.calls)).toBe(ATTEMPTS.length);
+      /* Held against the rows, each rule written out again rather than borrowed. */
+      const counted = ATTEMPTS.filter((r) => r.attempt !== null);
+      expect(sum(groups, (g) => g.counted)).toBe(counted.length);
+      expect(sum(groups, (g) => g.retries)).toBe(counted.filter((r) => (r.attempt ?? 0) > 1).length);
+      expect(sum(groups, (g) => g.gaveUp)).toBe(
+        ATTEMPTS.filter(
+          (r) => r.outcome === "error" && r.failurePhase === "before_answer" && r.attempt === TRANSPORT_ATTEMPTS,
+        ).length,
+      );
+      /* And the fixtures can tell the three apart. */
+      expect(sum(groups, (g) => g.counted)).toBe(9);
+      expect(sum(groups, (g) => g.retries)).toBe(5);
+      expect(sum(groups, (g) => g.gaveUp)).toBe(1);
+      for (const g of groups) {
+        for (const key of ["counted", "retries", "gaveUp"] as const) expect(typeof g[key], key).toBe("number");
+      }
+    });
+
+    it("keeps one cause apart from another, and a failure from an answer", async () => {
+      const groups = await attempts();
+      const causes = groups
+        .map((g) => JSON.stringify([g.outcome, g.failurePhase, g.failureClass, g.failureStatus, g.calls]))
+        .sort();
+      expect(causes).toEqual(
+        [
+          ["aborted", null, null, null, 1],
+          ["error", "before_answer", "network:ECONNRESET", null, 1],
+          ["error", "before_answer", "refused", 503, 3],
+          ["error", "mid_answer", "in_band", 200, 1],
+          ["error", "mid_answer", "unfinished", 200, 2],
+          ["ok", null, null, null, 3],
+        ]
+          .map((cause) => JSON.stringify(cause))
+          .sort(),
+      );
+      expect(groups.find((g) => g.failureClass === "refused")).toMatchObject({ counted: 3, retries: 2, gaveUp: 1 });
+      /* The caller's own loop: its death is on the cube and nothing of it is counted. */
+      expect(groups.find((g) => g.failureClass === "in_band")).toMatchObject({ counted: 0, retries: 0, gaveUp: 0 });
+    });
+
+    it("counts nothing for rows that no retry loop numbered", async () => {
+      const groups = await cube();
+      expect(groups.length).toBeGreaterThan(0);
+      for (const g of groups) {
+        expect(g).toMatchObject({ counted: 0, retries: 0, gaveUp: 0, failurePhase: null });
+      }
+    });
   });
 
   it("refuses, rather than truncates, past the cap", async () => {

@@ -43,6 +43,17 @@ elsewhere.* Reviewers report this ordering works on them, so it is worth the two
 This is [codex-cli-as-subagent.md § If you can write the question, write the fix](codex-cli-as-subagent.md#the-house-workflow-in-this-repo)
 applied to the prompt's layout rather than its content.
 
+**When the stage produced a result, the conclusion is part of the candidate.** List the results
+file or the write-up in the manifest and say *read this as a reviewer of the conclusions, not only
+of the code*. Then, under your own suspicions, write the one sentence you would least like to be
+wrong about and ask for it by name; a refusal the stage introduced on a reader's path belongs
+there. On 2026-09-07 an eval's write-up called its arms "not separable", and the reviewer, asked
+directly whether that was explaining away an inconvenient result, showed that it compared two
+statistics on different sampling scales and that three of the five arms were one recipe. A reviewer
+handed only the diff cannot find that, because the defect is not in the code. Keep the wrong
+conclusion and its correction both in the plan doc: deleting the wrong one loses the evidence of
+which way the pull went.
+
 **4. Fix the severity scale, and fix what a refusal takes.** Without a scale, "blocker", "not
 ready" and "P1" mean something different every round and nothing can be triaged without reading
 everything.

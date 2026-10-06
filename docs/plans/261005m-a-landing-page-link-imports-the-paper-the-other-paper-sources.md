@@ -1,13 +1,14 @@
 # A landing-page link imports the paper: the other paper sources
 
-Status as of 2026-10-06: **plan, revised after GPT Sol's two reviews, nothing built** — evidence:
-no source but arXiv in `src/paper-sources.ts`, which is itself not on `dev` yet (see § What this
-waits on).
+Status as of 2026-10-06: **stage A is on `dev`; the rest is deferred, each item with a queue
+entry** — evidence: `acl`, `pmlr`, `neurips`, `cvf` and `jmlr` in `SOURCES` in
+`src/paper-sources.ts`, and `HUGGING_FACE_PATH` and `ALPHAXIV_PATH` beside arXiv's own. It was held
+for two hours behind part 1, which reached `dev` at `7a0e19287`; § What this waits on is history.
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 2
-of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv: plan
-`261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md`
-(not a link, because it is not on `dev` yet), queue entry `qi-jqtexyzq`.
+of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv:
+[261005l](261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md),
+queue entry `qi-jqtexyzq`.
 
 ## Goal
 
@@ -150,10 +151,13 @@ tells the reader to check the address for a slip, and their address is fine: wha
 PDF address we derived and they never saw. So when a paper source's last candidate is absent, the
 card says, under a new code `[fetch-paper-missing]`, blocked rather than retryable:
 
-> We found the page for this paper, but not the paper itself where this site usually keeps it.
-> Download the PDF from the site and upload it here.
+> This site did not have the paper where it usually keeps it. Trying again will not help. Check the
+> link is right, or download the PDF from the site and upload it here.
 
 **This is a new reader-facing sentence, written without Greg.** It is here so he can change it.
+(The first draft began "We found the page for this paper", which is not true: the pasted page is
+never fetched. An arXiv link whose paper is absent gets this sentence too, and there the likely
+cause is a mistyped id, hence "check the link".)
 
 **And a line in the log** (Sol's G13). Today's log line is written only when the fetch succeeds. A
 failed paper-source fetch logs the source's name, how many candidates were tried and the failure's
@@ -214,7 +218,7 @@ No new dependency, no key, no outside service, no login, no changed header.
 
 Waits on part 1's stage 1 being on `dev`.
 
-- [ ] Tests first, red, in `tests/paper-sources.test.ts`:
+- [x] Tests first, red, in `tests/paper-sources.test.ts`:
       - the two mirrors resolve to a value deep-equal to arXiv's for the same id, with and without
         a version; `huggingface.co/papers` alone, `huggingface.co/papers/<not an arXiv id>`,
         `huggingface.co/<user>/<model>` and `alphaxiv.org/` do not resolve;
@@ -231,12 +235,12 @@ Waits on part 1's stage 1 being on `dev`.
       - the 90-character CVF name from the measurement resolves, with a slug that passes `isSlug`
         and a key that holds the whole name; two CVF names that share their first 60 characters
         have different keys.
-- [ ] A property test over all sources: for a spread of hostile inputs (`..`, `%2f`, `@`, `\`,
+- [x] A property test over all sources: for a spread of hostile inputs (`..`, `%2f`, `@`, `\`,
       a second `//`, upper case, a query, a fragment) a resolved paper's every candidate is
       `https:`, on that source's own host, and its path holds no character outside
       `[A-Za-z0-9._/-]`.
-- [ ] Build it. Display names in `PAPER_SOURCE_LABEL`.
-- [ ] Live check, free: `evals/paper-sources/resolve-live.ts` resolves each landing address and runs
+- [x] Build it. Display names in `PAPER_SOURCE_LABEL`.
+- [x] Live check, free: `evals/paper-sources/resolve-live.ts` resolves each landing address and runs
       the step's own loop with the real `fetchDocument`. For every source: both papers measured in
       261005e end on a PDF, and **`urlKey` of the address the fetch ended on equals the paper's
       key**. New cases added for what the first measurement did not cover (Sol's G9): a NeurIPS
@@ -244,21 +248,59 @@ Waits on part 1's stage 1 being on `dev`.
       each layout over `https`, an old-style ACL id through its DOI, alphaXiv's `/overview/`. A
       shape that does not fetch is taken out of the pattern, not left in on trust. Output under
       `docs/plans/261005m-evidence/`.
-- [ ] Mutate: loosen one id class, swap two hosts, drop the slug cut, make a mirror its own source;
+- [x] Mutate: loosen one id class, swap two hosts, drop the slug cut, make a mirror its own source;
       each must turn a test red.
-- [ ] Docs: `fetching.md` (the sources table, beside part 1's section), `ingest-queue.md`,
+- [x] Docs: `fetching.md` (the sources table, beside part 1's section), `ingest-queue.md`,
       `/help` if it says what pasting a link does.
-- [ ] `npm run typecheck`, the touched tests, `npm run lint` on touched files. GPT Sol code review
-      (write-capable, fixes inside the stage). Commit, push.
+- [x] `npm run typecheck`, the touched tests, `npm run lint` on touched files. GPT Sol code review
+      (write-capable, fixes inside the stage). Committed.
+- [x] **Push.** Held until part 1 was on `dev` (`7a0e19287`), then merged. Two conflicts, both
+      kept from both sides: the mirror patterns now use part 1's bounded id grammar
+      (`ARXIV_ID_BOUNDED`, `ARXIV_VERSION`), so a mirror link with an absurd version cannot make an
+      over-long slug; and the slug cut uses part 1's `PAPER_SLUG_MAX` rather than a second copy.
+      One test changed with the merge: arXiv has two candidates now (its HTML, then its PDF), so
+      its missing-paper log says two were tried. The mirrors were checked live again afterwards:
+      a Hugging Face or alphaXiv link now ends on arXiv's HTML, which is free
+      (`261005m-evidence/resolve-live-after-part-1-arxiv.txt`).
+
+**What landed, and what changed from the plan** (2026-10-06):
+
+- The five sources stay in `src/paper-sources.ts`; one helper, `paperAt`, builds each paper. **A
+  paper's key is what `urlKey` gave its landing page before the source existed**
+  (`aclanthology.org/N19-1423`, `proceedings.mlr.press/v37/ioffe15.html`). So an article imported
+  from a landing page before this is the same article afterwards: pasting the link again finds
+  the stub, and a refresh replaces it with the paper. No backfill, as part 1 decided for arXiv.
+- A name keeps the case its address spelled it in, in the key and the candidate, because these
+  servers are case-sensitive. ACL's old-style ids are the exception: `n19-1423` is re-cased to
+  `N19-1423`, since a DOI is case-insensitive.
+- `arxivPdfUrl` asks the registry which paper, but still rewrites only a page *about* a paper
+  (arXiv's `abs/`, alphaXiv's, Hugging Face's). A `pdf/` or `html/` address and arXiv's DOI are
+  still fetched as themselves, as its callers rely on.
+- The failure and the log line are a wrapper, `fetchFromPaperSource` in `src/pipeline.ts`;
+  `fetchFirstCandidate` is untouched. The sentence was reworded from the plan's first draft (see
+  § What a wrong rule costs).
+- Live check: 23 real links, all ending on a PDF whose address resolves to the paper's key
+  (`261005m-evidence/resolve-live.txt`). JMLR's `www.` host was added; alphaXiv's `/overview/`
+  kept.
+- Mutations, each seen red: a loosened CVF name class, PMLR's and JMLR's hosts swapped, the slug
+  cut dropped, Hugging Face as a source of its own, the absent flag never reset, `keysOf` ignoring
+  mirrors.
+- The help page says nothing about what pasting a link does, so it is unchanged.
+- **Known and left:** CVF workshop paths and names with a dot in them are not recognised and
+  import as before. `www.aclanthology.org` is not recognised. Nothing was driven in a browser: no
+  screen changed but the job card's detail (`312 KB, ACL Anthology PDF`), and a full import
+  through the queue was not run, for the reason part 1 gives (the shared local database's
+  migration ledger).
 
 ### Stage B: bookkeeping
 
-- [ ] The deferred items below each have a queue entry (ids recorded here) **before** the note says
+- [x] The deferred items below each have a queue entry (ids recorded here) **before** the note says
       shipped.
-- [ ] `docs/user-feedback/261005_1912-…-part-2.md` (`reports: spya-ayettj`, `parts: 2`),
-      `npx tsx scripts/feedback-endings.ts`, `overseer-queue.ts done qi-5m89dnxa`.
-- [ ] If part 1 has not landed: stage A goes back on the queue as its own entry, this plan as its
-      brief, and the note's ending is `awaiting`, not `shipped`.
+- [x] `docs/user-feedback/261005_1912-landing-page-links-to-other-paper-sources-import-the-paper-part-2.md`
+      (`reports: spya-ayettj`, `parts: 2`), `npx tsx scripts/feedback-endings.ts`,
+      `overseer-queue.ts done qi-5m89dnxa`.
+- [x] While part 1 had not landed, the landing step was queued as `qi-zzgskxw7`, as insurance. It
+      was not needed and is marked done.
 
 ## Deferred, each with its own queue entry
 
@@ -329,4 +371,12 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
   | G14 (P2) | `requested_url` holds the derived candidate, not the pasted address | **Accepted**: the deferred entry says the job's address needs a column of its own |
 
   Discovery on the plan is closed at two rounds.
-- Code review, GPT Sol: *(pending)*
+- **Code review, GPT Sol** (`261005m-other-paper-sources-code-review-sol.md`, on commit
+  `00edb215e`, write-capable): *ship with the fixes I made*. G11, G12 and G13 confirmed closed as
+  built. One finding, fixed by the reviewer and read by me:
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | H1 (P1) | A citation stored under its old `url:huggingface…` key could lose its id on a re-run if the model also changed its title, author or year, orphaning its Find and Investigate state. (The implementer had said the id survived, and marked that as inferred, not tested.) | **Fixed by Sol**: `idsByKey` records the new `arxiv:` key as an alias of the old row; a test seen red first. Ambiguous aliases are still refused |
+
+  One round: the verdict was ship, and the one fix is small and tested.

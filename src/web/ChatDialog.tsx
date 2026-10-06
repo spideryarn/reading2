@@ -166,6 +166,12 @@ interface Props {
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
   /**
+   * The server stored the thread `onCreated` announced under another id.
+   * Required, so no caller can leave the summary under the guess: the dialog
+   * would close on the first frame (useChatAnchors.ts § `rename`).
+   */
+  onRenamed(guess: string, real: string): void;
+  /**
    * An answer in this panel has just stopped arriving: finished, failed or
    * stopped. Whoever holds the thread summaries asks for them again, so a mark
    * that shows a conversation's latest line (a Debate claim's) follows a
@@ -285,6 +291,7 @@ export function ChatDialog({
   onNewConversation,
   onCreated,
   onDropped,
+  onRenamed,
   onSettled,
   dockRoom = null,
   card = null,
@@ -932,7 +939,26 @@ export function ChatDialog({
         ...(quote ? { quote } : {}),
         question,
       });
-      const id = send(null, text, at, {
+      const id: string = send(null, text, at, {
+        /* **Data in `onConfirmed`, navigation in `onThreadId`**, and the split
+           is the controller's (chat/controller.ts § `detach`): the first
+           survives this dialog closing and the second does not. A dialog
+           closed before the first frame must still have its summary renamed,
+           or the list asked for again when the answer stops puts the real row
+           beside the guess; it must not have `?thread=` moved under whatever
+           the reader is looking at now.
+
+           For this typed send the controller calls them in this order in one
+           tick, so the summary and the address change in one commit. The
+           dialog is drawn only while the list has a row for `?thread=`
+           (Reader.tsx § `overlay`); a commit
+           between the two would close it mid-answer. Words typed while waiting
+           are kept under the thread's id, so they move too. */
+        onConfirmed: (real) => {
+          if (real === id) return;
+          drafts.moveThread(id, real);
+          onRenamed(id, real);
+        },
         onThreadId: (real) => onThread(real),
         anchor: target.anchor,
         /* **The "?" says so on the wire.** The draft has known which button
@@ -949,11 +975,12 @@ export function ChatDialog({
       });
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
-         different one, `onThread` above corrects the URL and the summary is
-         reconciled on the next load — a mark briefly keyed on a guess is a mark
-         in the right place under the wrong name, which is invisible and
-         self-healing. Not drawing it at all until the round trip lands is the
-         visible failure: the reader asks, and the words they selected go blank. */
+         different one, the two callbacks above rename the summary and correct the
+         URL together. Until 2026-10-05 only the URL followed, on the theory
+         that a mark keyed on a guess was invisible and self-healing; it closed
+         this dialog mid-answer and then counted the conversation twice. Not
+         drawing it at all until the round trip lands is the visible failure:
+         the reader asks, and the words they selected go blank. */
       onCreated({
         id,
         title: text.slice(0, 60),
@@ -961,15 +988,15 @@ export function ChatDialog({
         updatedAt: new Date().toISOString(),
         anchor: target.anchor,
         /* Always a chat. This dialog is what a selection in the prose opens,
-           and a Remember turn has no selection to open from — the route refuses
-           an anchor sent with `kind: "remember"`. So every mark the reading view
+           and a Learn turn has no selection to open from — the route refuses
+           an anchor sent with `kind: "learn"`. So every mark the reading view
            draws belongs to a chat, which is the property the overlay in
            App.tsx relies on. */
         kind: "chat",
         turns: 1,
       });
     },
-    [target, send, at, onThread, onCreated],
+    [target, send, at, onThread, onCreated, onRenamed, drafts],
   );
 
   /**
@@ -1238,7 +1265,7 @@ export function ChatDialog({
                answer stays where it starts). */
             sized={inCard ? "content" : "fixed"}
             /* Always a chat. This dialog is what a selection in the prose opens,
-               and a Remember turn cannot be anchored to one. */
+               and a Learn turn cannot be anchored to one. */
           kind="chat"
         />
         ) : loadFailed ? (

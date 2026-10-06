@@ -416,7 +416,7 @@ describe("rule A — the four tables Readability deleted for saying they have he
     expect(off.chars).toBe(11_434);
   });
 
-  it("ar5iv: 7 → 9 tables, 42 → 60 rows, and the recovered table lands where it belongs", async () => {
+  it("ar5iv: 7 → 9 tables, 40 → 58 rows, and the recovered table lands where it belongs", async () => {
     const { on, off } = await extracted("ar5iv-attention");
     const source = await readFile(path.join(FIXTURES, "ar5iv.html"), "utf8");
 
@@ -428,12 +428,16 @@ describe("rule A — the four tables Readability deleted for saying they have he
     const offDoc = dom(pageOf(off));
     expect(offDoc.querySelectorAll("table")).toHaveLength(7);
     expect(onDoc.querySelectorAll("table")).toHaveLength(9);
-    expect(offDoc.querySelectorAll("tr")).toHaveLength(42);
-    expect(onDoc.querySelectorAll("tr")).toHaveLength(60);
+    /* 42 and 60 rows until 2026-10-05, when each of the page's two aligned
+       equations (`table.ltx_equationgroup`, two rows apiece) became one row
+       holding one display formula (src/latexml.ts). The title still says what
+       rule A does: eighteen rows come back, in two tables. */
+    expect(offDoc.querySelectorAll("tr")).toHaveLength(40);
+    expect(onDoc.querySelectorAll("tr")).toHaveLength(58);
     /* The two that came back are Table 1 (6 rows) and Table 2 (12 rows), and
        the profile says so in place rather than as a difference of totals. */
-    expect(rowsPerTable(pageOf(off))).toEqual([1, 2, 1, 2, 1, 22, 13]);
-    expect(rowsPerTable(pageOf(on))).toEqual([1, 2, 1, 2, 6, 1, 12, 22, 13]);
+    expect(rowsPerTable(pageOf(off))).toEqual([1, 1, 1, 1, 1, 22, 13]);
+    expect(rowsPerTable(pageOf(on))).toEqual([1, 1, 1, 1, 6, 1, 12, 22, 13]);
 
     /**
      * **Landing is correct for free**, and this is the rung that says so.
@@ -480,9 +484,11 @@ describe("rule A — the four tables Readability deleted for saying they have he
     expect(gained.filter((b) => /^Table [12]:/.test(b.text)).every((b) => b.html.includes("<table"))).toBe(true);
     /* 41,528 / 40,430 until 2026-09-24, when ar5iv's formulas became delimited
        TeX rather than MathML text (src/maths-import.ts). The tables, rows and
-       blocks above did not move. */
-    expect(on.chars).toBe(40_983);
-    expect(off.chars).toBe(39_983);
+       blocks above did not move. 40,983 / 39,983 until 2026-10-05, when its two
+       aligned equations became one display formula each (src/latexml.ts): six
+       `\(\displaystyle…\)` cells are now two `\[\begin{aligned}…\]`. */
+    expect(on.chars).toBe(40_941);
+    expect(off.chars).toBe(39_941);
   });
 
   it("never lets either token reach the reader", async () => {

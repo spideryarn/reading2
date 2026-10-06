@@ -954,7 +954,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
   search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
-  remember: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
+  learn: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1650,16 +1650,16 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A quiz link opens Remember's owners-only band, and asks nothing** —
+   * **A quiz link opens Learn's owners-only band, and asks nothing** —
    * Greg excluded Quiz from public articles on 2026-09-29 (plan 260929c §
-   * Decided): it is Remember's second half, `POLICY` decides per mode, and
+   * Decided): it is Learn's second half, `POLICY` decides per mode, and
    * Recall must stay private. A hostile deep link naming the quiz view gets the
    * boundary sentence, and the trace is the one public GET — no read of the
    * quiz, no mark.
    */
   it("gives a quiz deep link the owners-only band, asking nothing", async () => {
     await remount();
-    await open("?mode=remember&remember=quiz");
+    await open("?mode=learn&learn=quiz");
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "the owners-only boundary").toBe(true);
     expect(readable(band as Element)).toContain("Learn is for whoever added this article");

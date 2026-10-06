@@ -76,6 +76,12 @@ function row(id: string, over: Partial<AiCallRow>): AiCallRow {
     finishedAt: "2031-03-15T10:00:01.200Z",
     durationMs: 1200,
     outcome: "ok",
+    /* Null, as on every row no retry loop counted and every call that did not
+       fail: drizzle/20261006*_ai_calls_attempt_and_failure.sql. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: 21_523_500,
     byokUpstreamNanos: null,
     isByok: false,

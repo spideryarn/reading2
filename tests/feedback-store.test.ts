@@ -753,7 +753,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(bobs.reports.map((r) => r.body)).toEqual(["Bob's"]);
   });
 
-  it("hands back exactly five fields per report, and never the email, address or picture", async () => {
+  it("hands back exactly six fields per report, and never the email, address or picture", async () => {
     const id = mintId();
     await runAsOwner(ALICE, () =>
       pgFeedbackStore.submit(
@@ -768,13 +768,41 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
     expect(reports).toHaveLength(1);
     const [only] = reports;
-    expect(Object.keys(only ?? {}).sort()).toEqual(["body", "createdAt", "id", "kind", "page"]);
+    expect(Object.keys(only ?? {}).sort()).toEqual(["at", "body", "createdAt", "id", "kind", "page"]);
     expect(only?.id).toBe(id);
     expect(Number.isNaN(Date.parse(only?.createdAt ?? ""))).toBe(false);
     /* The fixture's address is `…/read/a-piece?q=footnotes`: the page, and not
        what was searched for. src/feedback-page.ts. */
     expect(only?.page).toBe("/read/a-piece");
+    expect(only?.at).toBeNull();
     expect(JSON.stringify(only)).not.toContain("footnotes");
+  });
+
+  /* docs/plans/261006b-earlier-link-carries-the-paragraph.md. */
+  it("hands back the paragraph a report was filed at, and nothing else from the query", async () => {
+    const at = mintId();
+    const bad = mintId();
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(
+        report({
+          id: at,
+          body: "at a paragraph",
+          url: "https://www.spideryarn.com/read/a-piece?mode=search&q=footnotes&at=spya-tgnssb",
+        }),
+      ),
+    );
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(
+        report({ id: bad, body: "a mangled one", url: "https://www.spideryarn.com/read/a-piece?at=footnotes" }),
+      ),
+    );
+    const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
+    const of = (id: string) => reports.find((r) => r.id === id);
+    expect(of(at)?.page).toBe("/read/a-piece");
+    expect(of(at)?.at).toBe("spya-tgnssb");
+    expect(of(bad)?.page).toBe("/read/a-piece");
+    expect(of(bad)?.at).toBeNull();
+    expect(JSON.stringify(reports)).not.toContain("footnotes");
   });
 
   /* docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md. */

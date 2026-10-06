@@ -32,6 +32,16 @@
   padding-right: calc(var(--marg-reserve, 0px) + var(--safe-right));
 }
 
+/* The masthead is a page-wide bar and centres the title in its own box
+   (narrow-window.css § plain, centred), so it has to keep the same room clear
+   whenever the column or the card's shift moves the prose left of centre.
+   `margTitleReserve` in layout.ts is 0 beside a band and with no column.
+   The band case subtracts the reserve in its own rule (§ the title over the
+   column). */
+.reader.text-alone .masthead {
+  padding-right: calc(var(--masthead-pad-r) + var(--marg-title-reserve, 0px));
+}
+
 /* ---------------------------------------------------------- § a note --
    Inside its block's `td.text` (which is `position: relative` — prose.css),
    at the cell's top, starting just past its right edge. Out of flow, so the

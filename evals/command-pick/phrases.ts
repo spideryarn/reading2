@@ -92,7 +92,7 @@ const BRIEF = "submode:summary:brief";
 const SIMPLE = "submode:summary:simple";
 const FULLER = "submode:summary:fuller";
 const THREAD = "submode:summary:thread";
-const QUIZ = "submode:remember:quiz";
+const QUIZ = "submode:learn:quiz";
 const HIGH = "action:section-high-powered";
 const SHARE = "action:section-access-sharing";
 const PROCESSING = "action:section-ai-processing";
@@ -146,7 +146,7 @@ const OLD: readonly Hand[] = [
     id: "p11",
     style: "paraphrase",
     text: "test whether I understood it",
-    accept: [QUIZ, "mode:remember", "submode:remember:recall", "submode:remember:tutorial"],
+    accept: [QUIZ, "mode:learn", "submode:learn:recall", "submode:learn:tutorial"],
     note: "Recall and Tutorial added: the hand copy left them out, and each tests understanding.",
   },
   { id: "p12", style: "paraphrase", text: "what do other people think of this paper", accept: ["mode:debate"] },
@@ -324,8 +324,8 @@ const NEW: readonly Hand[] = [
   { id: "n44", style: "paraphrase", text: "who would be a good reviewer for this", accept: ["submode:referee:candidates"] },
   { id: "n45", style: "paraphrase", text: "check my review comments for tone", accept: ["submode:referee:mirror", "mode:referee"] },
   { id: "n46", style: "paraphrase", text: "what questions would a sceptic ask about this", accept: ["mode:faq"] },
-  { id: "n47", style: "paraphrase", text: "walk me through it a bit at a time and ask me things", accept: ["submode:remember:tutorial", "mode:remember"] },
-  { id: "n48", style: "paraphrase", text: "I want to write down what I remember and see if I got it right", accept: ["submode:remember:recall", "mode:remember"] },
+  { id: "n47", style: "paraphrase", text: "walk me through it a bit at a time and ask me things", accept: ["submode:learn:tutorial", "mode:learn"] },
+  { id: "n48", style: "paraphrase", text: "I want to write down what I remember and see if I got it right", accept: ["submode:learn:recall", "mode:learn"] },
   { id: "n49", style: "paraphrase", text: "upgrade my plan", accept: ["page:/profile"] },
   { id: "n50", style: "paraphrase", text: "back up this article to my computer", accept: ["action:export"] },
   { id: "n51", style: "paraphrase", text: "see all the sections with their summaries", accept: ["submode:structure:expanded", "mode:structure"] },
@@ -429,7 +429,7 @@ const MORE: readonly Hand[] = [
     id: "m18",
     style: "paraphrase",
     text: "I need to revise this for an exam",
-    accept: ["mode:remember", QUIZ, "submode:remember:recall", "submode:remember:tutorial"],
+    accept: ["mode:learn", QUIZ, "submode:learn:recall", "submode:learn:tutorial"],
   },
   { id: "m19", style: "paraphrase", text: "where's the further reading", accept: ["mode:citations"] },
   {
@@ -498,6 +498,16 @@ const BLIND_RELABEL: Readonly<Record<string, { accept: readonly string[]; why: s
   b04: {
     accept: ["mode:tweets", THREAD],
     why: "As p15, 2026-10-04: the thread's new id added; `mode:tweets` is no longer a row.",
+  },
+  /* The raw file says `submode:remember:quiz`, also `mode:remember`: the ids
+     of 2026-10-02. The mode's id became `learn` on 2026-10-06 and those rows
+     are not offered any more, so a correct pick would score as wrong. Same
+     two answers, today's spelling; the raw file is untouched.
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md, PR-6
+     (which calls it b16: it is line 16 of the file, and the fifteenth case). */
+  b15: {
+    accept: [QUIZ, "mode:learn"],
+    why: "2026-10-06: the same two rows under the mode's new id, `learn` (the writer's file says `remember`).",
   },
 };
 

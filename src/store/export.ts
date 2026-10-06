@@ -70,7 +70,7 @@ export { ArticleNotFound };
 import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
-import { isThreadKind } from "../types.js";
+import { storedThreadKind } from "../types.js";
 import { originFromColumns } from "../thread-origin.js";
 
 const logger = log("store");
@@ -644,7 +644,7 @@ export async function exportArticle(
            file written before this field existed is read — so the next write of
            that file has it too.
 
-           Emitting it only for Remember threads was the first attempt and was
+           Emitting it only for Learn threads was the first attempt and was
            wrong:
            tests/store-roundtrip.test.ts compares this file against the one the
            filesystem store wrote, byte for byte, and that one carries
@@ -654,9 +654,16 @@ export async function exportArticle(
            passed through. */
         /* The stored kind whenever it is one we know — Candidates and Tutorial
            were exported as chats until 2026-10-02, because this was a
-           Remember-or-chat ternary. GPT Sol's plan review of 261002i. Explore
-           (2026-10-03) rides through `isThreadKind` with nothing to do here. */
-        kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
+           Learn-or-chat ternary. GPT Sol's plan review of 261002i. Explore
+           (2026-10-03) rode through `isThreadKind` with nothing to do here.
+
+           **A kind this code does not know fails the export** (2026-10-06); it
+           was written as `"chat"` until then, which is a rollback file that
+           restores a Recall conversation as a chat. src/types.ts
+           § storedThreadKind, and
+           docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+           stage 0. */
+        kind: storedThreadKind(thread.kind),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
@@ -678,7 +685,7 @@ export async function exportArticle(
             /* **The field this file's own comment warned about**, four lines
                up: `tools` went missing from an export exactly this way once
                already, because the row is built from named fields and a new one
-               is easy not to add. A Remember thread exported without its stances
+               is easy not to add. A Learn thread exported without its stances
                and imported back is a conversation whose every answer has lost
                the instruction that produced it, and nothing reports an error.
                GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */

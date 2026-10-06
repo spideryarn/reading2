@@ -1,4 +1,4 @@
-/* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
+/* quiz.css — the Quiz sub-mode of Learn (QuizPanel.tsx), and the
    Recall | Tutorial | Explore | Quiz switch that sits in the band's head beside
    the title.
 
@@ -6,7 +6,7 @@
    vocabulary for the same things, so **it must stay after glossary.css**. */
 
 /* ------------------------------------------------------------------ quiz --
-   The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
+   The Quiz sub-mode of Learn — docs/plans/260831al-review-quiz-sub-mode.md.
 
    **The structural classes are the glossary band's** (`band-head`, `gloss-run`,
    `gloss-stale`, `gloss-count`) rather than a second vocabulary saying the same
@@ -29,7 +29,7 @@
    has room; only on a phone too narrow for all four does the set go to two
    rows, each chip whole. `flex: none` was right for two chips and would push
    a fourth off the edge. docs/project/narrow-windows.md. */
-.remember-submode {
+.learn-submode {
   display: flex;
   flex-wrap: wrap;
   gap: 1px;
@@ -40,7 +40,7 @@
   border-radius: 4px;
   overflow: hidden;
 }
-.remember-submode-btn {
+.learn-submode-btn {
   /* Grows to fill a wrapped row, and never breaks inside its own word. */
   flex: 1 0 auto;
   white-space: nowrap;
@@ -59,11 +59,11 @@
    wrapped. At 0.25rem the chips total 188px and chips plus bin 218px, which leaves
    16px. A touch screen has 226px of row content, not 234px, and keeps 8px there.
    Measured 2026-10-05, plan 261005h item B. */
-.remember-submode:has(> .remember-submode-btn:nth-child(4)) > .remember-submode-btn {
+.learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
   padding-inline: 0.25rem;
 }
-.remember-submode-btn:hover { color: var(--ink); }
-.remember-submode-btn.on {
+.learn-submode-btn:hover { color: var(--ink); }
+.learn-submode-btn.on {
   background: var(--rule);
   color: var(--ink);
 }

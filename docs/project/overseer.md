@@ -138,6 +138,10 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   it, and say in the queue entry that it rests on this rule. What still goes to him as a tagged
   question is a real product trade-off, added complexity, a destructive write to production, and the
   wording of a rule doc.
+- **A question waiting on him blocks only itself.** Greg, 2026-10-06: *"I'm probably only going to
+  check in every day or so, so if something is blocking you, just work around it sensibly in the
+  meantime."* So ask, and meanwhile carry on with everything that does not depend on the answer, or
+  take the sensible default and say so; never let one open question hold the fleet or a deploy.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
@@ -620,6 +624,15 @@ the work delegated, a GPT Sol review at the end of each stage — and its own wo
 server and one box. Beyond three the suites go red for reasons that are nobody's bug, and you will
 spend the evening investigating the box.
 
+**Every new session counts against what the box can carry, whoever asked for it.** Work started for
+an answer Greg has just given is not exempt. On 2026-10-05 about fifteen sessions were started in
+two hours, one per answer. With about twenty running, up to eight `tsc` runs at once (1–3 GB each),
+dev servers and browser agents, load reached about 170 and swap 31 of 32 GB; Greg's ssh crawled and
+peers' gates were killed. The 30 GB box fits about six to eight active sessions. So when Greg
+answers several questions at once, record the decisions straight away, put the work at the front of
+the queue, and release it as sessions finish. Check load, memory and swap before **any**
+`gjd-remote new-claude`, not only before a release from the queue.
+
 **Use waves to keep two agents off the same ground.** `--wait 5h --no-attach` creates the session now
 and starts it later, so the whole queue goes out in one pass. Two jobs touching the same mode, the
 same prompt or the same file belong in different waves.
@@ -670,6 +683,14 @@ Each of these has cost somebody real time on this box.
 - **`idle` describes the pane, not the work.** A session that ended its turn by handing Greg a
   decision in prose shows as idle; ten of fifteen did, and a mechanical check for question marks
   found one of twenty-three, because decisions end in full stops.
+- **`idle` is not abandoned either.** Measured 2026-09-06 across sixteen sessions: most `idle` ones
+  had armed a `CronCreate` one-shot hours ahead and stopped on purpose. Before calling a session
+  stuck or finished, `tmux capture-pane` and look for a `CronCreate` near the tail, and check for a
+  running `sleep` or `until` child: a session that scheduled its own wake-up is not to be killed.
+  The percentage in its status line is the context bar, not progress — "7%" was once reported as
+  "stage 1 not yet coded" on a branch eight commits deep — so take `git log origin/dev..<branch>`
+  and the plan doc's status line over any reading of the pane. Killing a finished session loses
+  nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
   and the id is in your own register.
@@ -702,6 +723,12 @@ Each of these has cost somebody real time on this box.
   allowed `kill -TERM` of the daemon and refused every relaunch, and the daemon was down eleven
   minutes on 2026-09-08 until Greg typed it. Run the exact relaunch shape against something harmless
   first; if that is refused, leave the old one running and hand Greg both halves as one command pair.
+  Worktree isolation is a second gate of the same shape: on 2026-09-09 a session in a worktree was
+  allowed to stop the readiness loop and refused every way of starting it, because the launch runs
+  git in another worktree. So probe the real path, not only the command's shape. Do not ask a peer
+  to run the half you were refused. The way out of an isolation refusal is `ExitWorktree` with
+  `action: "keep"`, which returns the session to the primary, where restarting a service is an
+  ordinary operation; say so to the Overseer before doing it.
 
 ## The log, and the surface Greg reads
 

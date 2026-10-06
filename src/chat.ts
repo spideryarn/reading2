@@ -59,14 +59,21 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
 
 /**
- * A stored thread written before Remember mode existed has no `kind`. Give it one.
+ * A stored thread written before Learn mode existed has no `kind`. Give it one.
  *
  * **`ChatThread.kind` is required**, deliberately — an optional field would mean
  * a `?? "chat"` at every read site, and one of those would eventually be missed,
- * which is a Remember turn answered with chat's prompt and nothing on screen
+ * which is a Learn turn answered with chat's prompt and nothing on screen
  * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
- * price of "required" is exactly this function, and its twin in
- * src/store/pg-chat.ts. Two places hold the default instead of twenty.
+ * price of "required" is exactly this function. One place holds the default
+ * instead of twenty.
+ *
+ * It had a twin in src/store/pg-chat.ts until 2026-10-06. That one now refuses
+ * a kind it does not know (`storedThreadKind`, src/types.ts) because its input
+ * is a column that cannot be absent. This one stays lenient because its only
+ * input is a fixture's `chat.json` (see the header), where an absent kind is a
+ * real, old state. It never sees a row from Postgres.
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md stage 0.
  *
  * It reads the field off a value the type says always has it, which is the one
  * honest way to write this: the type describes what the rest of the program may
@@ -120,10 +127,10 @@ function taken(threads: ChatThread[]): Set<string> {
 }
 
 /**
- * **The thread a new turn lands in: the one it names, or — for Remember — the
- * article's one Remember thread.**
+ * **The thread a new turn lands in: the one it names, or — for Learn — the
+ * article's one Learn thread.**
  *
- * An article has at most one Remember thread (`chat_threads_one_remember`,
+ * An article has at most one Learn thread (`chat_threads_one_learn`,
  * src/db/schema.ts). The client mints thread ids, so a stale tab, a second tab
  * or a bookmark can still ask to begin a second one; without this the unique
  * index would answer that with a 500. Instead the turn is pointed at the thread
@@ -133,7 +140,7 @@ function taken(threads: ChatThread[]): Set<string> {
  * guard refuse, because a spoken exchange must never be appended under turns
  * the live session did not see.
  *
- * **Only when no thread has this id.** A Remember turn naming a chat thread
+ * **Only when no thread has this id.** A Learn turn naming a chat thread
  * still meets the kind check and its 409; this is a fallback for a fresh id,
  * not a redirect. docs/plans/261001m-remember-is-its-own-single-thread.md
  * § Design 3.
@@ -144,7 +151,7 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Remember: Tutorial and Explore are one
+  /* Every single-thread kind, not only Learn: Tutorial and Explore are one
      per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
@@ -187,18 +194,18 @@ export interface Turn {
    */
   origin?: ThreadOrigin;
   /**
-   * Chat or Remember — **only meaningful when this turn creates the thread**,
+   * Chat or Learn — **only meaningful when this turn creates the thread**,
    * which is the only branch `withTurn` applies it on, exactly like `anchor`
    * above.
    *
    * A kind that contradicts an existing thread is refused here rather than
-   * ignored: silently answering a Remember turn with chat's prompt because a stale tab
+   * ignored: silently answering a Learn turn with chat's prompt because a stale tab
    * said so is a transcript half in one voice and half in another, with nothing
    * anywhere disagreeing. The route refuses it first, with a 409 and a sentence
    * a person can act on; this is the backstop, and it is inside the Postgres
    * transaction because `inTurnOrder` is only per-process.
    *
-   * Absent means `"chat"`, which is what every caller written before Remember
+   * Absent means `"chat"`, which is what every caller written before Learn
    * mode meant.
    */
   kind?: ThreadKind;
@@ -257,7 +264,7 @@ export function withTurn(
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
-  /* A fresh id for a Remember turn on an article that already has a Remember
+  /* A fresh id for a Learn turn on an article that already has a Learn
      thread is appended to that thread — `targetOf` says why. The returned
      `thread.id` is then the existing one, which is what the route's `begin`
      frame reports and the client follows. */
@@ -298,7 +305,7 @@ export function withTurn(
     text: "",
     createdAt: at,
     status: "pending",
-    /* No stance. Remember's four stances became one voice on 2026-10-02, so
+    /* No stance. Learn's four stances became one voice on 2026-10-02, so
        nothing new writes `ChatMessage.stance`; older rows keep theirs.
        docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
   };
@@ -412,10 +419,10 @@ export interface SpokenTurn {
    * reason: a thread is one kind for life. Absent means chat.
    *
    * It has to come from the browser because the thread it names may exist
-   * nowhere else yet: Remember opens straight into an empty conversation that is
+   * nowhere else yet: Learn opens straight into an empty conversation that is
    * only in the tab, so pressing Live there makes the first spoken exchange the
    * write that creates it. Before this field that write always made a chat, and
-   * Remember's arrival rule, which counts threads of its own kind, then hid it
+   * Learn's arrival rule, which counts threads of its own kind, then hid it
    * behind a fresh empty conversation — SPIDERYARN-READING2-70,
    * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md.
    */
@@ -427,10 +434,10 @@ export interface SpokenTurn {
  * candidates conversation has no Live control, and a spoken turn creating one
  * would be a mode nobody has designed.
  */
-export type SpokenKind = Extract<ThreadKind, "chat" | "remember">;
+export type SpokenKind = Extract<ThreadKind, "chat" | "learn">;
 
 export function isSpokenKind(value: unknown): value is SpokenKind {
-  return value === "chat" || value === "remember";
+  return value === "chat" || value === "learn";
 }
 
 /**
@@ -465,8 +472,8 @@ export function withSpokenTurn(
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const { threadId, expectedTailId, kind } = spoken;
-  /* A fresh id for a Remember exchange on an article that already has a
-     Remember thread targets that thread (`targetOf`), so the tail guard below
+  /* A fresh id for a Learn exchange on an article that already has a
+     Learn thread targets that thread (`targetOf`), so the tail guard below
      refuses it with `ChatConflict` — the session believed the conversation was
      empty, and it is not. **Not** silently appended, as a typed turn is: the
      tail is the only thing that keeps a spoken exchange from landing under
@@ -530,12 +537,12 @@ export function withSpokenTurn(
        transcription is valid, though, so this can become the lasting title and
        must describe the kind the exchange is creating. Mirrors the local-only
        placeholders in src/web/useChat.ts. */
-    title: kind === "remember" ? "Remembering" : "New chat",
+    title: kind === "learn" ? "Remembering" : "New chat",
     createdAt: at,
     updatedAt: at,
-    /* The kind the tab began it as — Remember, when Live was pressed in the
-       empty conversation Remember opens with. The rows themselves carry no
-       stance, as spoken turns into an existing Remember thread never have. */
+    /* The kind the tab began it as — Learn, when Live was pressed in the
+       empty conversation Learn opens with. The rows themselves carry no
+       stance, as spoken turns into an existing Learn thread never have. */
     kind: kind ?? "chat",
     messages: [],
   };
@@ -666,7 +673,7 @@ export function withRetry(
     status: "pending",
     /* Nothing carried over: everything the old attempt had is deliberately
        dropped, as the note above says. The stance was the one exception until
-       Remember's four stances became one voice on 2026-10-02. */
+       Learn's four stances became one voice on 2026-10-02. */
   };
   const thread: ChatThread = {
     ...existing,

@@ -1411,7 +1411,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
       "`embedAll` is stubbed, so no provider is called and no ledger row is written.",
   },
-  "tests/remember-route.test.ts": {
+  "tests/learn-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -2065,7 +2065,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["fixture-loader"],
     evidence: "static-only",
     reason:
-      "Arrived after the witness ran, with Explore, Remember's fourth sub-mode (plan 261003l stage " +
+      "Arrived after the witness ran, with Explore, Learn's fourth sub-mode (plan 261003l stage " +
       "2, 2026-10-03). It seeds one article with `scratchArticleInPg`, writes a comment and " +
       "finished conversations through the stores, posts chat turns with `fetch` stubbed to keep " +
       "the request body and fail, and reads what would have been sent — entirely Postgres. Its " +
@@ -2253,6 +2253,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     reason:
       "Arrived after the witness ran (plan 261001i § 3). A pure Postgres suite — " +
       "`articleMetadata`'s glossary verdict against a list stamped the way the job stamps one. " +
+      "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
+  },
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran (plan 261006a, stage 0's code review). A Postgres suite from " +
+      "birth: what a refused rename, delete, retry or edit leaves in `chat_threads` and on screen. " +
       "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
   },
 
@@ -2688,6 +2697,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      doing the same job — this file is what it looks like when the second one
      feeds the first. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": "private-postgres",
+  /* The deploy window of plan 261005l: job rows seeded with the keys the build
+     before the paper-source resolver wrote, then `enqueue`. The queue only. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` below. Found by the
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
@@ -2777,9 +2789,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 260930i: the sign-up ledger. `pgReady`, its own two seeded accounts, and
      its oracle is the ledger's rows. */
   "tests/reader-arrivals.test.ts": "private-postgres",
-  /* 261001m: the Remember fold migration, run statement by statement inside a
+  /* 261001m: the Learn fold migration, run statement by statement inside a
      transaction it always rolls back. `pgReady`, its own two articles. */
-  "tests/remember-one-thread-migration.test.ts": "private-postgres",
+  "tests/learn-one-thread-migration.test.ts": "private-postgres",
+  /* 261006a: the thread kind `remember` → `learn`, replayed the same way
+     against the schema of the day before. `pgReady`, its own three articles. */
+  "tests/learn-kind-migration.test.ts": "private-postgres",
   /* 261002b: a job row written under a retired step name reads back under the new one. */
   "tests/retired-step-names.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
@@ -3228,7 +3243,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      are `spideryarn.ai_calls` now, and the child reaches the private database
      because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
   "tests/request-spend.test.ts": "private-postgres",
-  "tests/remember-route.test.ts": "private-postgres",
+  "tests/learn-route.test.ts": "private-postgres",
   /* The guarantee the Metadata page's "Generate it again" control sells: a
      re-run that fails leaves the reader on the artefact they already had
      (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
@@ -3384,6 +3399,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      concurrent runs seeing each other's single thread in a `load()` this file
      asserts the length of. */
   "tests/the-query-string-does-not-decide-the-route.test.ts": "private-postgres",
+  /* Drops the `chat_threads_kind` CHECK, but only inside a transaction it
+     always rolls back, so nothing a peer file can see changes. */
+  "tests/unknown-stored-thread-kind.test.ts": "private-postgres",
+  /* Its sibling, for what the refusal leaves behind. Drives `pgChatStore` and
+     `handleApi` against a scratch article of its own and changes no schema: the
+     unknown kind is put in the reader's hand, never in a row. */
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from `spideryarn.
      uploads` rather than from the bucket: this file mints records and never
      issues a real grant — the issuer is a stand-in and no bytes are PUT — so
@@ -3529,6 +3551,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      It seeds `…dd` itself through `seedAuthUser`. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
+  },
+  /* Plan 261005l. `seedAuthUser` in `beforeAll`: its jobs spend real ingest
+     reservations, which hang off the `auth.users` foreign key. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": {
+    "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },
   "tests/admin-costs-store.test.ts": {
     "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },

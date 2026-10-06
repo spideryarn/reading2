@@ -634,7 +634,7 @@ const ROWS: readonly Row[] = [
   {
     hook: "useQuiz.ts",
     kind: "quiz",
-    search: "?mode=remember&remember=quiz",
+    search: "?mode=learn&learn=quiz",
     where: ".mode-band.quiz",
     /* Nothing has been read in this harness, so *Only what I've read* holds the
        one question back and says how many there are — a sentence the panel can

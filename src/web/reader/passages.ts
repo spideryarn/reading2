@@ -27,7 +27,7 @@
  *   `buildHitMarks(found, openKey, …)` can only ever be handed one slot's pair.
  * - **Nine modes inherited Search's results.** Both chains ended `: found` /
  *   `: openHit`, so Plain, Hierarchy, Chat, Glossary, Summary, Diagram,
- *   Remember, Outline and Debate were all reading Search's slot. That drew one
+ *   Learn, Outline and Debate were all reading Search's slot. That drew one
  *   painted frame of Search's marks on the way into Plain until 2026-09-06,
  *   when `usePassageLifecycle` made every producer's unmount clear a *layout*
  *   cleanup — so **the frame was already gone before this file existed**. What
@@ -135,7 +135,7 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
     case "skim":
       return slots.skim;
     /* The ones with nothing to mark. `plain` has no band at all; `chat`,
-       `glossary`, `summary`, `diagram`, `remember`, `structure` and `debate`
+       `glossary`, `summary`, `diagram`, `learn`, `structure` and `debate`
        have one that publishes no passages — verified rather than
        assumed for chat and remember when they moved
        (docs/plans/260906c… § Stage 2), and `glossary`'s selection is a
@@ -145,7 +145,7 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
     case "glossary":
     case "summary":
     case "diagram":
-    case "remember":
+    case "learn":
     /* Structure marks nothing in the prose, in either face: it is navigation
        over the tree, so every row of it is already a door into a passage rather
        than a claim about one. A mode that lit its own rows' blocks in the prose

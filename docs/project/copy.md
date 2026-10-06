@@ -126,7 +126,9 @@ dictation — the microphone, the recorder, or the transcription round trip; see
 [dictation.md](dictation.md). `db-` is this app's own database, and there are two
 of them: `[db-busy]` for a connection that
 dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
-and will answer "no" again. A reader quoting four characters, and whoever they
+and will answer "no" again. (A third, `[db-updating]`, is the minutes of a deploy
+in which the database holds a kind of conversation the running code has no name
+for yet: `CHAT_BEING_UPDATED`.) A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
 `jb-` is a job. `gl-` is the glossary's *Dig deeper* (was *Check the web*) refusing —
@@ -143,6 +145,9 @@ asked for by address that did not arrive: one code for each way the fetch can fa
 `src/messages.ts`, total over the fetcher's own codes, and no sentence in it names the address, the
 host or the status
 ([ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under)).
+`[fetch-paper-missing]` is the one `fetch-` code outside that map: a paper source's PDF was not
+where the source usually keeps it
+([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
 `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the

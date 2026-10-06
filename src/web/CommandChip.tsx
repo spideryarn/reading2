@@ -32,7 +32,7 @@ import { voiceClass } from "./voice.js";
  * answer (ChatPanel.tsx § `Answer`) without passing through the five
  * components between them — BlockLinkCard.tsx's reason for a context.
  *
- * `null` is the default and it means *no chips*: Remember, Candidates and a
+ * `null` is the default and it means *no chips*: Learn, Candidates and a
  * test that mounts a panel alone draw a token as text. Reader.tsx provides it
  * around chat and the chat dialog only, which are owner-only.
  */

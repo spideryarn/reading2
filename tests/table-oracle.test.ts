@@ -134,8 +134,10 @@ function oracleFor(page: keyof typeof PAGES, id: string, mutate: (clone: Element
  */
 /* s1865 until 2026-09-24: the ids count elements in document order, and each of
    ar5iv's 142 formulas above it is now one text node of TeX rather than a
-   `<math>` subtree (src/maths-import.ts), so the same table is numbered earlier. */
-const AR5IV_TABLE_2 = "s554";
+   `<math>` subtree (src/maths-import.ts), so the same table is numbered earlier.
+   s554 until 2026-10-05, for the same reason again: the two aligned equations
+   above it are one row each now, not two rows of cells (src/latexml.ts). */
+const AR5IV_TABLE_2 = "s542";
 /** The GDP fixture's regional table: fourteen rows, three columns, links in most cells. */
 const GDP_REGIONAL = "s3561";
 

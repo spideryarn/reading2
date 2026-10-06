@@ -9,7 +9,7 @@
  * the final user message, below the `cache_control` breakpoint.
  * docs/plans/260930g-briefer-chat-and-explain-answers.md.
  *
- * Chat only: Remember has its own prompt and its own LENGTH section.
+ * Chat only: Learn has its own prompt and its own LENGTH section.
  */
 import { describe, expect, it } from "vitest";
 import { buildConverseMessages } from "../src/converse.js";
@@ -67,8 +67,8 @@ describe("the length reminder", () => {
     expect(finalUser(buildConverseMessages({ ...base, help: true }))).toContain(LINE);
   });
 
-  it("is absent from a Remember turn", () => {
-    expect(finalUser(buildConverseMessages({ ...base, kind: "remember" }))).not.toContain(LINE);
+  it("is absent from a Learn turn", () => {
+    expect(finalUser(buildConverseMessages({ ...base, kind: "learn" }))).not.toContain(LINE);
   });
 
   it("is absent from a Candidates turn", () => {

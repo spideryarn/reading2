@@ -515,7 +515,8 @@ of which **3** are in the GitHub-correct form. So the repo has consistently writ
 this gate, and correcting `slug()` would redden hundreds of links across files many agents have open
 at once. Left alone on cost, not on merit. **Write anchors the way the gate wants** — one hyphen —
 and know they are wrong on github.com; the rendered docs are read locally and in editors far more
-often. Fixing it properly is a whole-tree sweep and wants to be its own job.
+often. Or link to the file with no fragment and name the section in prose, which is right in both
+places. Fixing it properly is a whole-tree sweep and wants to be its own job.
 
 Comments need their own rule, because they don't use markdown link syntax. A bare
 `granularity-zoom.md#the-tree` is resolved against the **docs** directories, not against the source
@@ -794,6 +795,13 @@ a second full pass, and the expensive half was not the re-run — it was that th
 were indistinguishable until it finished.
 [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
 
+**So re-run each red file alone before calling any of them a regression.** A file that passes alone
+was the box; one that fails alone is a real failure, and yours if it passes on the commit before
+your change. The exception is `TEST DATABASE CONTENDED`, which is never retried
+([above](#test-database-contended)). On 2026-09-03 three full runs produced 22, 2 and 2
+failures and all but three assertions passed in isolation — and those three were real, hiding in a
+batch of twenty.
+
 **And one timeout can fail the rest of its file.** A vitest timeout inside React's `act()` leaves
 the root mid-render, and every later test in that file renders an empty host. On 2026-09-02 three
 sweeps measuring 3.6–3.8s against the 5-second default met a load spike: one timed out, and twenty
@@ -873,10 +881,18 @@ whether its tmux session still exists, are the only evidence about the job.
 **A `timeout` in front of the command is one more way to be told it passed.** On 2026-09-06 a
 `timeout 400 npm run check … | tail` was killed at its deadline — the output held `Terminated` and
 `EXIT=124` — and the harness announced *"completed (exit code 0)"*, which is the pipeline's status.
-A deadline that feels generous is still far shorter than `check`.
+A deadline that feels generous is still far shorter than `check`. So never put a shell
+`timeout` in front of a long command: launch it in tmux with no outer deadline. A wrapper's own
+limit, such as `run-codex.ts --timeout-minutes`, is a different thing and stays.
 
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
+
+**A long gate reports on a commit, not on the tree you are standing in.** Record the sha the run
+started from, and before acting on a failure, and above all before telling its owner, check that
+sha is still your `HEAD`; `git merge-base --is-ancestor <fix> HEAD` says whether a fix is already
+in. On 2026-09-08 three sessions reported the same `fixture-ids` red to its owner after the fix
+had merged, one of them from a tree that already held it.
 
 **Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.** This
 section used to give the raw incantation with `-s gate` hard-coded in it, and both halves drifted:
@@ -898,6 +914,11 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
   `tests/fleet-quarantine.test.ts`, which posts to the same route and was in nobody's diff, lost
   three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
   drive a route.
+- **After merging `dev`, choose the re-run from what the merge brought in, not from what your change
+  is about.** Note `HEAD` before the merge and run `git diff --name-only <that sha> HEAD` after it
+  (once merged, `HEAD...origin/dev` is empty); then typecheck and the suites those files touch. A full gate after every merge reports on a tree that has already gone: on 2026-09-08
+  `dev` gained 74 commits in 55 minutes, two full re-gates went red, and neither red belonged to the
+  change being gated. Keep the full gate for the tree you push.
 
 ### A raw NUL in a file makes every grep of it come back empty
 
@@ -921,6 +942,13 @@ NUL byte in commit log message not allowed"* and writes nothing.
 Retyping the escape to repair it puts the byte back. An `Edit` could not find its `old_string`,
 because the file held bytes; a Python repair script written with Write arrived with a NUL in its
 own docstring.
+
+So: never insert an invisible character to get round syntax — rewrite the sentence so it does not
+need the delimiter. Repair a file with a script that contains no escape sequence at all, building
+each backslash with `chr(92)`, finding the line by a plain-text anchor that must match exactly
+once, and counting the bad bytes before and after. And when a Bash call is refused for *"control
+characters that would be hidden in the approval dialog"*, do not retry it: that is this byte, so
+move the content into a file.
 
 ### A script outside the repo cannot import the repo's packages
 
@@ -1039,7 +1067,7 @@ await vi.waitFor(() => {
 ```
 
 A fixed delay works today and bakes the current throttle into the file, so it goes quietly
-green-then-flaky if that number ever moves. `tests/remember-url-rules.test.tsx`'s `until()` helper
+green-then-flaky if that number ever moves. `tests/learn-url-rules.test.tsx`'s `until()` helper
 and `sendNew` in `tests/conversation-band-send-new.test.tsx` are the two worked examples.
 
 ## Nothing under `tests/` may call a paid provider
