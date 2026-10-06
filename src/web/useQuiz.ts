@@ -56,6 +56,7 @@
  * See docs/plans/260831al-review-quiz-sub-mode.md and src/quiz.ts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -423,7 +424,7 @@ export function useQuizRead(slug: string): QuizRead {
   );
 
   /**
-   * The read itself — the parse, the 404 branch and the error copy, which are
+   * The read itself — the parse, the "none yet" branch and the error copy, which are
    * this mode's own. `current()` after every `await`, before any state is
    * set: false means this reply is about an article, or an artefact, the hook
    * has since moved on from. See src/web/useOrderedRead.ts.
@@ -431,9 +432,18 @@ export function useQuizRead(slug: string): QuizRead {
   const load = useCallback(async (current: () => boolean) => {
     const started = begin();
     try {
-      const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}`);
+      /* The header asks for "no questions yet" as `200 null` rather than a
+         404, which a browser prints in red on every ordinary page load
+         (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404 is still read the
+         same way, for a server that has not heard of the header — the minutes
+         of a deploy. */
+      const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<QuizResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         /* The ordinary case, and here the commonest by some distance: `quiz` is
            off `DEFAULT_INGEST_STEPS`, so most articles have never had questions
            written. This is what the panel's button is for. */
@@ -448,9 +458,13 @@ export function useQuizRead(slug: string): QuizRead {
         setStatus("none");
         return;
       }
-      const loaded = await readJson<QuizResponse>(res);
-      if (!current()) return;
       /* Derive before publishing: a malformed revalidation keeps the old batch. */
+      if (!loaded?.quiz || !Array.isArray(loaded.quiz.questions) || typeof loaded.quiz.batchId !== "string") {
+        /* A plain `Error`, so the reader gets `PAGE_FAULT` like every other
+           malformed artefact (tests/read-error-matrix.test.tsx): a reply of
+           the wrong shape is this app's bug, not something to "try again". */
+        throw new Error("the quiz reply has no questions");
+      }
       const profiled = loaded.quiz.profileHash != null;
       setQuiz(loaded.quiz);
       setStale(loaded.stale);

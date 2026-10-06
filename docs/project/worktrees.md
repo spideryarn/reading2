@@ -35,7 +35,7 @@ What is built:
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
-| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, builds what the test suite reads ([`worktree-builds.ts`](../../scripts/worktree-builds.ts)), and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
 | [`scripts/worktree-setup-bootstrap.mjs`](../../scripts/worktree-setup-bootstrap.mjs) | Where `npm run worktree:setup` actually starts, and **plain Node on purpose**: the script above needs `tsx` and a package, and a new tree on `/var/tmp` has no `node_modules` of its own nor an ancestor's to borrow, so until 2026-10-05 the command that installs dependencies failed with `tsx: not found` for want of them. With no finished install it runs `npm ci` first — **only in a linked worktree, never the primary** — then hands over, and [`worktree-deps.ts`](../../scripts/worktree-deps.ts) lets setup skip its own install when the merge did not move the lockfile. Do not import a package into it. |
 | [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
@@ -77,7 +77,7 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 
 ```bash
 claude --worktree my-thing      # creates the worktree (on the box: /var/tmp/spideryarn-worktrees/my-thing), branch worktree-my-thing
-npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
+npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store, the builds the tests read
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
@@ -299,9 +299,17 @@ and `tests/pdf-bundle-trace.test.ts` both say out loud rather than skipping. The
 re-measured, so the 95 above is still the 2026-09-01 figure and the two numbers are no longer a pair.
 **And a second cause since** (seen 2026-09-29, not counted): the fleet tests that read the built
 dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — are red
-until `npm run build:fleet` runs, and say so. `worktree:setup` now names both builds rather than a
-count, and the deploy gate runs the ordinary `build` plus the extra `build:fleet` entry in
-`GATE_TOOLING_BUILDS` (`scripts/deploy-checks.ts`).
+until `npm run build:fleet` runs, and say so.
+**Since 2026-10-06 `worktree:setup` runs both builds itself**, so successful builds remove the
+missing-output failures from those five files. Every session had been reporting the same five, and
+noise that size hides a real red. It costs
+about 19 s and 16 MB (measured at load 17: `build` 16.5 s, `build:fleet` 2.7 s). The list is
+`SUITE_BUILDS` (`scripts/deploy-checks.ts`): `build` followed by `GATE_TOOLING_BUILDS`, the extra
+builds the deploy gate and `npm run check` also run. A build that fails is printed as `FAIL` and
+setup carries on, so a broken trunk still gives you a tree
+to fix it in. **The output is only as new as that build**: a bare `npm test` does not rebuild, and
+`npm run check` does. The five files still fail with no build —
+[the plan](../plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md) has the run that shows it.
 The line vitest reports for the fleet ones is `process.exit unexpectedly called with "2"`, with a
 stack into `tools/fleet/server.ts`, which reads as a wiring failure; the sentence naming the build
 is on stderr above it (2026-09-09, in a docs-only diff). A third red in a loaded full run is no

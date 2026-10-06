@@ -18,7 +18,8 @@
  * ## What it yields
  *
  * **The links to draw, or null.** Null while loading, when none were ever
- * generated (the 404 that is the ordinary case), on an error, and — the one
+ * generated (the ordinary case — a `200 null`, or a 404 from a server older
+ * than plan 261006g), on an error, and — the one
  * that is a decision rather than an absence — **when the artefact is stale**
  * (Sol F8). A carried link can still name two surviving ids and a phrase that
  * still matches while no longer being true, and the prose has no panel to say
@@ -31,7 +32,7 @@
  * ## It revalidates when a crossrefs job finishes
  *
  * The after-import box queues `crossrefs` while the article opens, so the
- * ordinary first read is a 404 and the links arrive a minute later. A job for
+ * ordinary first read is "none yet" and the links arrive a minute later. A job for
  * this article that writes `crossrefs` and reaches `done` while this page is
  * open **refreshes** the read — `refresh`, never `reload`, because a reload
  * joins a GET that may have read the database before the job wrote it
@@ -41,6 +42,7 @@
  * show, so it does not keep the idle poll going on its own.
  */
 import { useCallback, useEffect, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Crossref, CrossrefsResponse, Job } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useJobs } from "./useJobs.js";
@@ -73,13 +75,20 @@ export function useCrossrefs(slug: string): readonly Crossref[] | null {
   const load = useCallback(
     async (current: () => boolean) => {
       try {
-        const res = await apiFetch(`/api/crossrefs/${encodeURIComponent(slug)}`);
+        /* The header asks for "none were ever generated" as `200 null` rather
+           than a 404, which a browser prints in red on every ordinary page
+           load (`NONE_YET_AS_NULL_HEADER`, src/types.ts). The 404 branch stays
+           for a server that has not heard of the header — the minutes of a
+           deploy. `drawableCrossrefs` already reads `null` as nothing to draw. */
+        const res = await apiFetch(`/api/crossrefs/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
         if (res.status === 404) {
           setRead({ slug, links: null });
           return;
         }
-        const found = await readJson<CrossrefsResponse>(res);
+        const found = await readJson<CrossrefsResponse | null>(res);
         if (!current()) return;
         setRead({ slug, links: drawableCrossrefs(found, slug) });
       } catch {
