@@ -29,14 +29,15 @@ The plan, the options passed over and GPT Sol's reviews are in
 
 `spendCube` ([`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)) groups the
 ledger once by day, owner, article, scope, job, step, wire, models, upstream, account, cost source
-and outcome. Every table, pivot and chart is a fold of those rows, done by the pure functions in
+and outcome, and on a failed attempt by where it failed, its cause and its HTTP status. Every
+table, pivot and chart is a fold of those rows, done by the pure functions in
 [`src/cost-cube.ts`](../../src/cost-cube.ts), which the browser and the script share. **A figure on
 the page and the same figure in a report cannot come from two definitions.** A new breakdown is a
 new `Dimension` there, not a new query.
 
 The analysis also reads **detail rows** (`spendDetail`, one per call), because a grouped sum cannot
 find one expensive call or count the jobs behind a step. It checks the two reads agree to the
-nano-dollar and refuses to report if they do not.
+nano-dollar, and on the three attempt counts below, and refuses to report if they do not.
 
 ## The rules the figures keep
 
@@ -60,6 +61,51 @@ Each of these was a way the first design was wrong
 - **The ledger cannot say "re-run".** It records that a step was bought in several jobs for one
   article, not who asked or why ([`src/cost-categories.ts`](../../src/cost-categories.ts) says why).
   The lead is worded that way.
+- **Failures and retries are counts, never rates, and "not measured" is never drawn as zero.**
+  The reasons are in the next section.
+
+## Failures and retries
+
+The gateway retries some failures before acceptance, up to three goes, and none after acceptance.
+The PDF reader and other caller-owned loops have their own policies
+([ai-gateway.md § A transport blip is retried](ai-gateway.md#transport-retry)). This section makes
+the recorded failures visible before changing that policy
+([261006b](../plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md)).
+
+The page has it under the explorer, and `npm run cost:analyse` prints the same figures in the
+terminal, the JSON and the HTML report. Per UTC day and per mode or task:
+
+| Figure | What it counts |
+|---|---|
+| Counted attempts | rows a retry loop of ours numbered. Context for the other three, not a denominator |
+| Retries | goes after the first |
+| Gave up after the last go | calls whose third and final allowed attempt failed before acceptance; earlier refusals appear in the causes table |
+| Died part-way | attempts that failed after the seam accepted the response, which can precede any answer content; see the shared definition below |
+
+Under them, the causes: where the attempt failed, the cause, the HTTP status, the upstream, the
+model, and the mode or task. All of it follows the period, the evals switch and every filter.
+
+Two rules, both from GPT Sol's review of the plan
+([F4 and F5](../plans/261006b-count-ai-calls-plan-review-sol.md)):
+
+- **Counts, not rates.** A ledger row is one attempt, not one call, and only some attempts were
+  numbered, so no honest denominator exists. The counted attempts are shown beside the counts and
+  no percentage is drawn.
+- **Not measured is not zero.** With no numbered attempt, retries and give-ups are *not measured*.
+  Part-way deaths use separate evidence: a numbered attempt or an error with a recorded phase.
+  An unnumbered failure before acceptance therefore shows zero deaths, while older rows alone
+  cannot supply a measured figure. These are observed counts, with incomplete coverage.
+
+What it does not count is said on the page itself, from `FAILURE_NOTES` in
+[`src/cost-cube.ts`](../../src/cost-cube.ts): stalls, and the PDF reader's and the embeddings' own
+retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is missing. The folds
+are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file; `FAILURE_DEFINITIONS`
+states each seam's acceptance boundary and the distinction from answer content.
+
+**The existing "Failed or stopped calls" figure can rise after the recording fix**, because
+malformed and error-envelope bodies previously recorded as `ok` now count as failures.
+Moving an in-band error from `aborted` to `error` leaves that total unchanged, while adding it
+to the part-way count ([ai-gateway.md](ai-gateway.md#transport-retry)).
 
 ## What the administrator sees of other people's articles
 

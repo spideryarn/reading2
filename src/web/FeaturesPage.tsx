@@ -303,7 +303,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <H2 eyebrow="Internalise">Find out what you kept.</H2>
         <Gallery>
           {/* Greg, 2026-08-27, the review-mode request, rephrased to the reader. */}
-          <Portrait shot={SHOTS.remember} title="Learn." mode="remember">
+          <Portrait shot={SHOTS.learn} title="Learn." mode="learn">
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,
@@ -319,8 +319,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               dozen at a time" and "ordered by a combination of ease and value"
               were the retired batch of twelve sorted by band and value; it is
               now a path of up to MAX_QUESTIONS = 20 that nothing re-sorts.
-              Only that sentence changed. A Remember sub-mode, so `remember`. */}
-          <Portrait shot={SHOTS.quiz} title="Quiz." mode="remember">
+              Only that sentence changed. A Learn sub-mode, so `learn`. */}
+          <Portrait shot={SHOTS.quiz} title="Quiz." mode="learn">
             Questions that need a sentence or two each, up to twenty at a time, each building on the
             one before towards the piece’s key takeaways. Marked against the article, not an answer
             key.

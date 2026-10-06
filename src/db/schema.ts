@@ -3383,6 +3383,39 @@ export const aiCalls = spideryarn.table(
      */
     outcome: text("outcome").notNull(),
     /**
+     * **Which go this row was, inside one call's transport retry** — 1-based.
+     * A row with `attempt > 1` is a retry that really started, and that is the
+     * only place a retry is recorded: there is no "was retried" column, because
+     * a failed attempt's row is written before the backoff and a Stop during
+     * the backoff means nothing follows it.
+     *
+     * Null where no retry loop of the gateways' counted: every row from before
+     * 2026-10-06, every realtime row, and a call made with
+     * `retryTransport: false`, whose caller owns the loop (src/pdf-read.ts,
+     * src/embeddings.ts). **So null is "not counted", and a count of retries
+     * has to say how many rows it could see.**
+     * docs/plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md.
+     */
+    attempt: smallint("attempt"),
+    /**
+     * `before_answer` or `mid_answer`, on a row whose `outcome` is `error`;
+     * null on an `ok` row, on an `aborted` one and on every older row. The
+     * boundary is each seam's own acceptance boundary and is stated on
+     * `FailurePhase` in src/call-failure.ts.
+     */
+    failurePhase: text("failure_phase"),
+    /**
+     * Why, as a label from the closed list in src/call-failure.ts §
+     * `FailureClass` — `refused`, `network:ECONNRESET`, `in_band`, …. **Mapped,
+     * never sanitised**: no string off an error is ever stored here, which is
+     * what lets this column sit in a table whose rule is that it carries no
+     * prose. No CHECK, unlike the phase: the list is expected to grow, and a
+     * constraint would make each new label a migration that has to land first.
+     */
+    failureClass: text("failure_class"),
+    /** The HTTP status of the response, when there was one — `200` on a call that died after a `200`. */
+    failureStatus: integer("failure_status"),
+    /**
      * **Which bill this call lands on** — `openrouter`, `anthropic` or `openai`.
      *
      * Not derivable from `credential_fingerprint`, which identifies a key
@@ -3712,6 +3745,14 @@ export const aiCalls = spideryarn.table(
      * refund through this column — so this constrains nothing that happens
      * today, which is exactly when a constraint is cheap to add.
      */
+    /**
+     * The two phases, and nothing else. Passes on null, which is every row that
+     * did not fail and every row from before the column.
+     */
+    check(
+      "ai_calls_failure_phase_known",
+      sql`${t.failurePhase} is null or ${t.failurePhase} in ('before_answer','mid_answer')`,
+    ),
     check(
       "ai_calls_costs_not_negative",
       sql`(${t.creditsUsedNanos} is null or ${t.creditsUsedNanos} >= 0)
@@ -3783,8 +3824,8 @@ export const chatThreads = spideryarn.table(
      *
      * **Written on insert only**, and `upsertThread`'s conflict clause does not
      * name it, for a sharper version of the reason it does not name the anchor
-     * columns: every later turn of a Remember thread comes through that upsert,
-     * so a stale tab sending `kind: "chat"` would turn a Remember thread into a
+     * columns: every later turn of a Learn thread comes through that upsert,
+     * so a stale tab sending `kind: "chat"` would turn a Learn thread into a
      * chat on its second question. The prompt would change, the list tag would
      * change, and the transcript would still read as one conversation.
      *
@@ -3806,6 +3847,13 @@ export const chatThreads = spideryarn.table(
      * drizzle/20261005203554_chat_thread_origin_lens.sql. So a changed CHECK
      * is generated and then read, never hand-written beside the generated
      * one. What it still cannot write is the UPDATE between the two.
+     *
+     * **And `'remember'` until 2026-10-06**, a day after the reader's word for
+     * the mode became Learn. The same move, hand-completed the same way, and
+     * the one-per-article index went with it (dropped and created, because a
+     * partial index's predicate cannot be altered):
+     * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql,
+     * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
      *
      * **The third value, `'candidates'`, arrived on 2026-09-01** with Referee
      * mode's fourth sub-mode — drizzle/0050_candidates_thread_kind.sql. That one
@@ -3876,7 +3924,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial','explore')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore')`),
     /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
        modes is wider than the union on purpose: the later callers are named
        in the plan, and widening a CHECK is a migration each time. Necessary
@@ -3921,7 +3969,7 @@ export const chatThreads = spideryarn.table(
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
     /**
-     * **One Remember thread per article.** Remember is its own single
+     * **One Learn thread per article.** Learn is its own single
      * conversation, not a list. On `article_id` alone: an article has one owner
      * and the server resolves threads per article, so an owner column here
      * would claim a per-reader rule nothing else enforces.
@@ -3932,10 +3980,13 @@ export const chatThreads = spideryarn.table(
      * existing duplicates first, by hand — `drizzle-kit generate` cannot see a
      * data movement, the 0048 trap. drizzle/20261001143901_remember_one_thread.sql,
      * docs/plans/261001m-remember-is-its-own-single-thread.md.
+     *
+     * `chat_threads_one_remember`, over `kind = 'remember'`, until 2026-10-06:
+     * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql.
      */
-    uniqueIndex("chat_threads_one_remember")
+    uniqueIndex("chat_threads_one_learn")
       .on(t.articleId)
-      .where(sql`${t.kind} = 'remember'`),
+      .where(sql`${t.kind} = 'learn'`),
     /**
      * **One Tutorial thread per article**, for the same reason and with the
      * same fallback (`targetOf`). No fold was needed when it was added: no
@@ -3945,7 +3996,7 @@ export const chatThreads = spideryarn.table(
       .on(t.articleId)
       .where(sql`${t.kind} = 'tutorial'`),
     /**
-     * **One Explore thread per article**, Remember's fourth sub-mode: the same
+     * **One Explore thread per article**, Learn's fourth sub-mode: the same
      * reason, the same fallback, and again no fold, because no Explore thread
      * existed before the index. docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md.
      */
@@ -4046,7 +4097,7 @@ export const chatMessages = spideryarn.table(
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
     /**
-     * Which stance produced this answer — **legacy, read-only**. Remember
+     * Which stance produced this answer — **legacy, read-only**. Learn
      * answers written before 2026-10-02 may carry one; new turns and retries
      * write null now that Recall has one adaptive voice. The column remains so
      * exports preserve real historic rows without a destructive migration.

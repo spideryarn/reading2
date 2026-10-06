@@ -152,7 +152,7 @@ describe("the send button", () => {
       '.chat-send[type="submit"]:not([aria-disabled="true"])',
       '.chat-send[type="submit"]:not([aria-disabled="true"]):hover',
       ".chat-send:focus-visible",
-      ".remember .chat-send",
+      ".learn .chat-send",
       ".chat-send.stop",
       /* Quiz borrows the box for Answer and for Next, neither of them a
          `submit` in a form, so its fill is keyed on a class of its own
@@ -169,9 +169,9 @@ describe("the send button", () => {
     expect(go).toMatch(/color:\s*var\(--primary-foreground\)/);
   });
 
-  it("keeps Remember's send control on the far right after the stance picker is gone", () => {
-    const remember = rule(".remember .chat-send");
-    expect(remember).toMatch(/order:\s*4/);
-    expect(remember).toMatch(/margin-left:\s*auto/);
+  it("keeps Learn's send control on the far right after the stance picker is gone", () => {
+    const learn = rule(".learn .chat-send");
+    expect(learn).toMatch(/order:\s*4/);
+    expect(learn).toMatch(/margin-left:\s*auto/);
   });
 });

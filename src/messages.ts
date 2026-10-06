@@ -4236,7 +4236,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  *
  * **What was lost with it, stated rather than glossed:** *"nothing they do
  * costs a model call"*, which the inventory only implies by listing Chat,
- * Search, Remember and Referee as owner-only. It is said outright to the person
+ * Search, Learn and Referee as owner-only. It is said outright to the person
  * who meets it — `visitorSentence` (web/visitor.ts) — and no longer to the
  * owner. Worth a line back if an owner ever asks whether a link can spend their
  * money.
@@ -4904,7 +4904,7 @@ export const SHARED_THREAD = {
 /**
  * **What never goes out, whatever the switch says.**
  *
- * The modes among these — Chat, Remember and Referee — are not listed
+ * The modes among these — Chat, Learn and Referee — are not listed
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
@@ -5004,7 +5004,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      one is not said on the row — it is said once, for the whole column, in
      `SHARED_NOTE` below. */
   search: "The questions you have put to this piece, in your words, and the passages they found.",
-  remember: "What you said you took from the piece, and the quizzes on it.",
+  learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
   /* **"went looking for", not "found"**, and the tense is the whole row. This
      is the only mode whose content is not in the article, so an owner reading

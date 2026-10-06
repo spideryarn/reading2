@@ -361,7 +361,7 @@
   ]
  },
  {
-  "id": "mode:remember",
+  "id": "mode:learn",
   "label": "Learn",
   "description": "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
   "aliases": [
@@ -723,7 +723,7 @@
   ]
  },
  {
-  "id": "submode:remember:recall",
+  "id": "submode:learn:recall",
   "label": "Recall",
   "description": "Say what you took from the piece, and find out where it holds up",
   "aliases": [
@@ -745,7 +745,7 @@
   ]
  },
  {
-  "id": "submode:remember:tutorial",
+  "id": "submode:learn:tutorial",
   "label": "Tutorial",
   "description": "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
   "aliases": [
@@ -767,7 +767,7 @@
   ]
  },
  {
-  "id": "submode:remember:explore",
+  "id": "submode:learn:explore",
   "label": "Explore",
   "description": "Think it through for yourself: your own ideas, where the piece may be weak, and what others say. Starts from what you have marked and discussed",
   "aliases": [
@@ -788,7 +788,7 @@
   ]
  },
  {
-  "id": "submode:remember:quiz",
+  "id": "submode:learn:quiz",
   "label": "Quiz",
   "description": "The piece asks you questions, and your answers are marked against it",
   "aliases": [

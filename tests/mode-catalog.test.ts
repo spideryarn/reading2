@@ -157,12 +157,12 @@ describe("the descriptions", () => {
   });
 });
 
-describe("Remember's live catalog copy", () => {
+describe("Learn's live catalog copy", () => {
   /* The one adaptive voice is said on Recall's own chip since 2026-10-04
-     (tests/remember-header-cards.test.tsx pins it there); the catalog keeps
+     (tests/learn-header-cards.test.tsx pins it there); the catalog keeps
      only what is true of the whole mode, and still must not name the picker. */
   it("does not describe the retired stance picker", () => {
-    expect(MODE_CATALOG.remember.how).toContain("waits on you");
-    expect(MODE_CATALOG.remember.how).not.toMatch(/four stances|Balanced|Respond|Socratic|Signposts/i);
+    expect(MODE_CATALOG.learn.how).toContain("waits on you");
+    expect(MODE_CATALOG.learn.how).not.toMatch(/four stances|Balanced|Respond|Socratic|Signposts/i);
   });
 });

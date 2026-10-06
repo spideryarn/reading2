@@ -300,9 +300,9 @@ describe("what the button says", () => {
     expect(name()).toBe(accessible);
   });
 
-  it("keeps Remember's larger visible label while naming the continuation", () => {
+  it("keeps Learn's larger visible label while naming the continuation", () => {
     const { api } = fakeLive("idle");
-    paint(api, THREAD.id, [{ ...THREAD, kind: "remember" }]);
+    paint(api, THREAD.id, [{ ...THREAD, kind: "learn" }]);
     expect(label()).toBe("Live conversation");
     expect(name()).toBe("Continue this conversation live");
   });

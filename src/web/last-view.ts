@@ -65,7 +65,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { type ArticleView, onAddressChange, parseRoute } from "./router.js";
-import { isMarginaliaModeWord } from "../modes.js";
+import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
 import { notesFit } from "./marginalia/press.js";
 import { rootFontPx, usableWidth } from "./reader/measure.js";
@@ -94,7 +94,7 @@ export const REMEMBERED = [
   "referee", // which referee sub-mode
   "crits", // which criteria are selected
   "refscale", // which diverging ramp
-  "remember", // recall, tutorial, explore or quiz
+  "learn", // recall, tutorial, explore or quiz — `remember` until 2026-10-06, now in NEVER_REMEMBERED
   "sort", // glossary order
   "gate", // glossary threshold
   "rank", // quotes order
@@ -175,6 +175,14 @@ export const NEVER_REMEMBERED = [
   /* Debate's retired identification threshold still marks an explicit old
      link. As with `deep`, do not restore another view over it. */
   "name",
+  /* **Learn's sub-mode key until 2026-10-06**, when it became `learn` above
+     (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md).
+     Nothing reads it now: an old `/read/x?remember=quiz` opens Learn at Recall,
+     and a browser still holding the pair has it dropped on the way out. Listed
+     for `deep`'s reason: left out of both lists, that old link reads as a bare
+     address, and the stored view (or the first-open default) is put over a
+     link somebody had just opened. GPT Sol's plan review of 261006a, PR-2. */
+  "remember",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */
@@ -198,7 +206,7 @@ export const ARTICLE_PARAMS: readonly string[] = [...REMEMBERED, ...NEVER_REMEMB
  *   what it will do."* It costs a model call the first time. Bare `?mode=`
  *   would be safe, because `?diagram=` defaults to `sketch` — but we remember
  *   `?diagram=` too, so restoring the mode would restore the picture with it.
- * - **`remember`** — `RememberBand` mounts the same `ConversationBand` chat
+ * - **`learn`** — `LearnBand` mounts the same `ConversationBand` chat
  *   does, and its arrival effect calls `startNew()`, which opens a conversation,
  *   focuses the composer and writes a `?thread=`.
  * - **`chat`** — the same conversation-on-arrival, and this one costs nothing:
@@ -206,16 +214,28 @@ export const ARTICLE_PARAMS: readonly string[] = [...REMEMBERED, ...NEVER_REMEMB
  *   dropped on judgment rather than on cost, because a conversation panel that
  *   opens by itself reads as the app *starting* something.
  *
- * **`?diagram=`, `?dx=`, `?dhue=` and `?remember=` stay in `REMEMBERED`.** They
+ * **`?diagram=`, `?dx=`, `?dhue=` and `?learn=` stay in `REMEMBERED`.** They
  * are subordinate to a mode nobody is now in, so they draw nothing and fetch
- * nothing — and pressing Diagram or Remember later returns the reader to the
+ * nothing — and pressing Diagram or Learn later returns the reader to the
  * picture or the half they had chosen, which is most of what they wanted.
  *
  * `tweets` was the fourth, from 2026-09-29 to 2026-10-03. The thread is one of
  * Summary's views now, so its rule is a condition on a pair of parameters
  * rather than a mode word: § `opensTheThread` below.
+ *
+ * **Asked of the mode a word means, not of the word** (`needsAnExplicitPress`).
+ * `learn` was `remember` until 2026-10-06 and `?mode=remember` still opens it
+ * (src/modes.ts § `RETIRED_MODES`), so a set of raw words would let the old
+ * spelling through: stored, and replayed into a conversation nobody asked
+ * for. Going through `modeFromParam` closes that for every retired word at
+ * once. docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
  */
-const NEEDS_AN_EXPLICIT_PRESS = new Set(["chat", "diagram", "remember"]);
+const NEEDS_AN_EXPLICIT_PRESS: ReadonlySet<BandMode> = new Set(["chat", "diagram", "learn"]);
+
+function needsAnExplicitPress(modeWord: string): boolean {
+  const mode = modeFromParam(modeWord);
+  return mode !== null && NEEDS_AN_EXPLICIT_PRESS.has(mode);
+}
 
 /**
  * **Would restoring these pairs open Summary's thread?** Then the mode is
@@ -343,7 +363,7 @@ export function rememberableSearch(search: string): string {
   const kept = [...new Set(translated)].filter((p) => {
     const key = pairKey(p);
     if (!REMEMBERED.includes(key as (typeof REMEMBERED)[number])) return false;
-    return !(key === "mode" && (thread || NEEDS_AN_EXPLICIT_PRESS.has(pairValue(p))));
+    return !(key === "mode" && (thread || needsAnExplicitPress(pairValue(p))));
   });
   return kept.length > 0 ? `?${kept.join("&")}` : "";
 }

@@ -19,7 +19,7 @@ The reasoning: it serves the goal the slider was for — start easy, stay at the
 absence of one. The reader never learns what `band` or `value` mean and never has to tune anything
 to get a quiz pitched at them.
 
-Context: [quiz.md](../project/quiz.md) · [remember-mode.md](../project/remember-mode.md) ·
+Context: [quiz.md](../project/quiz.md) · [remember-mode.md](../project/learn-mode.md) ·
 the report [260905_1800](../user-feedback/260905_1800-quiz-questions-too-hard.md) ·
 the deferral [260905g § Three questions for Greg](260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md#three-questions-for-greg-and-one-decision).
 
@@ -220,7 +220,7 @@ an answer while any question is unseen, and there is no undefined case. The patt
   wrap-around.
 - **A run of wrong answers does not end the quiz.** Ending someone's quiz because they are getting
   things wrong is a verdict about the reader delivered by the machine, which is the thing
-  [remember-mode.md](../project/remember-mode.md) and the marking rules refuse; and "we stopped
+  [remember-mode.md](../project/learn-mode.md) and the marking rules refuse; and "we stopped
   because you were struggling" would be the loudest possible leak of the difficulty we are hiding.
   The review agreed, and added a correction this plan accepts: adding it later is **not** "one counter
   and one sentence" — it would expose hidden grading, and needs a fresh product decision rather than a

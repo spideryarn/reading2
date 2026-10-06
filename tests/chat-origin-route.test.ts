@@ -245,7 +245,7 @@ describe("an origin on the way in", () => {
     }
   });
 
-  it.each(["remember", "candidates", "tutorial", "explore"])(
+  it.each(["learn", "candidates", "tutorial", "explore"])(
     "refuses an origin on a %s conversation",
     async (kind) => {
       const out = await ask({ threadId: THREAD, question: "what?", kind, origin: claim() });

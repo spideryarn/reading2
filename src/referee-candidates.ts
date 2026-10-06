@@ -15,7 +15,7 @@
  * > — Greg, 2026-09-01
  *
  * So it is **Chat**, not a bespoke panel: `candidates` is a third `ThreadKind`
- * beside `chat` and `remember` (src/types.ts), which buys streaming, the tools,
+ * beside `chat` and `learn` (src/types.ts), which buys streaming, the tools,
  * OpenRouter's server-side web search, citation collection, thread persistence,
  * retry and the whole store for nothing. What lives here is the part chat cannot
  * supply — **the shortlist, and the four rules it is under**.

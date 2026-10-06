@@ -1,0 +1,79 @@
+p07 [submode:summary:brief|mode:summary] "give me a quick summary"
+   0903: submode:summary:brief 0.70 | 0904: submode:summary:brief 0.63 | now1: submode:summary:brief 0.66 | now2: submode:summary:brief 0.63
+p08 [submode:summary:brief|submode:summary:simple|mode:summary] "explain it like I'm five"
+   0903: submode:summary:simple 0.91 | 0904: submode:summary:brief 0.63 | now1: submode:summary:brief 0.62 | now2: submode:summary:brief 0.68  CHANGED
+p10 [submode:learn:quiz] "quiz me on this"
+   0903: submode:learn:quiz 0.93 | 0904: submode:learn:quiz 0.90 | now1: submode:learn:quiz 0.96 | now2: submode:learn:quiz 0.96
+p11 [submode:learn:quiz|mode:learn|submode:learn:recall|submode:learn:tutorial] "test whether I understood it"
+   0903: submode:learn:quiz 0.75 | 0904: submode:learn:quiz 0.52 | now1: submode:learn:recall 0.48 | now2: submode:learn:recall 0.51  CHANGED
+p12 [mode:debate] "what do other people think of this paper"
+   0903: mode:debate 0.99 | 0904: submode:debate:reception 0.70 | now1: submode:debate:reception 0.79 | now2: submode:debate:reception 0.72  CHANGED
+p15 [mode:tweets|submode:summary:thread] "turn this into a twitter thread"
+   0903: mode:tweets 1.00 | 0904: submode:summary:thread 0.97 | now1: submode:summary:thread 0.97 | now2: submode:summary:thread 0.98  CHANGED
+p35 [mode:summary] "um can you like open the summary thing"
+   0903: mode:summary 0.59 | 0904: mode:summary 0.93 | now1: mode:summary 0.93 | now2: mode:summary 0.94
+p37 [mode:chat] "hey so I've got a question about section three"
+   0903: mode:chat 0.94 | 0904: mode:chat 0.94 | now1: mode:chat 0.94 | now2: mode:chat 0.93
+p38 [arg:find|arg:jump-first] "where in this do they talk about uh working memory"
+   0903: arg:find 0.60 | 0904: arg:find 0.46 | now1: arg:find 0.56 | now2: arg:find 0.59
+h02 [submode:summary:brief] "the summary is too long"
+   0903: submode:summary:brief 0.77 | 0904: submode:summary:brief 0.96 | now1: submode:summary:brief 0.96 | now2: submode:summary:brief 0.95
+h03 [submode:summary:fuller] "this summary is too dumbed down"
+   0903: submode:summary:fuller 0.97 | 0904: submode:summary:fuller 0.86 | now1: submode:summary:fuller 0.85 | now2: submode:summary:fuller 0.82
+h05 [mode:debate] "who has responded to this online"
+   0903: mode:debate 0.91 | 0904: submode:debate:reception 0.52 | now1: submode:debate:reception 0.49 | now2: submode:debate:reception 0.48  CHANGED
+h25 [mode:chat|mode:summary|mode:structure] "summarise section two for me"
+   0903: mode:summary 0.56 | 0904: mode:summary 0.76 | now1: mode:summary 0.72 | now2: mode:summary 0.77
+n21 [arg:tag-add] "label it machine learning"
+   0903: arg:tag-add 1.00 | 0904: arg:tag-add 1.00 | now1: arg:tag-add 1.00 | now2: arg:tag-add 1.00
+n30 [submode:summary:brief|mode:summary] "um so can you like show me the the summary but the short one"
+   0903: submode:summary:brief 0.88 | 0904: submode:summary:brief 0.96 | now1: submode:summary:brief 0.97 | now2: submode:summary:brief 0.96
+n35 [action:rerun-quiz] "er could you do the the quiz again no sorry make a new quiz"
+   0903: action:rerun-quiz 0.69 | 0904: action:rerun-quiz 0.76 | now1: action:rerun-quiz 0.71 | now2: action:rerun-quiz 0.77
+n37 [arg:tag-add] "yeah so tag this as as um reinforcement learning"
+   0903: arg:tag-add 1.00 | 0904: arg:tag-add 1.00 | now1: arg:tag-add 1.00 | now2: arg:tag-add 1.00
+n47 [submode:learn:tutorial|mode:learn] "walk me through it a bit at a time and ask me things"
+   0903: submode:learn:tutorial 0.99 | 0904: submode:learn:tutorial 1.00 | now1: submode:learn:tutorial 1.00 | now2: submode:learn:tutorial 1.00
+n48 [submode:learn:recall|mode:learn] "I want to write down what I remember and see if I got it right"
+   0903: submode:learn:recall 0.98 | 0904: submode:learn:recall 0.98 | now1: submode:learn:recall 0.99 | now2: submode:learn:recall 0.99
+n51 [submode:structure:expanded|mode:structure] "see all the sections with their summaries"
+   0903: submode:structure:expanded 1.00 | 0904: submode:structure:expanded 0.99 | now1: submode:structure:expanded 1.00 | now2: submode:structure:expanded 1.00
+n52 [action:rerun-debate] "run the debate again"
+   0903: action:rerun-debate 1.00 | 0904: action:rerun-debate 1.00 | now1: action:rerun-debate 1.00 | now2: action:rerun-debate 1.00
+n58 [mode:chat|none] "why does the author think entropy matters"
+   0903: mode:chat 0.98 | 0904: mode:chat 0.95 | now1: mode:chat 0.95 | now2: mode:chat 0.95
+n59 [mode:chat|none] "what is the main argument of section 4"
+   0903: mode:chat 0.77 | 0904: mode:chat 0.62 | now1: mode:chat 0.61 | now2: mode:chat 0.67
+n60 [mode:chat|none] "do you agree with the conclusion"
+   0903: mode:chat 0.69 | 0904: mode:chat 0.76 | now1: mode:chat 0.71 | now2: mode:chat 0.72
+n74 [none] "throw away the quiz and don't make another"
+   0903: none 0.64 | 0904: none 0.39 | now1: none 0.64 | now2: none 0.65
+b03 [submode:summary:brief|mode:summary] "give me the very short, dead simple version"
+   0903: submode:summary:brief 0.94 | 0904: submode:summary:brief 0.98 | now1: submode:summary:brief 0.98 | now2: submode:summary:brief 0.98
+b04 [mode:tweets|submode:summary:thread] "turn this into a twitter thread"
+   0903: mode:tweets 1.00 | 0904: submode:summary:thread 0.97 | now1: submode:summary:thread 0.98 | now2: submode:summary:thread 0.97  CHANGED
+b07 [mode:faq|mode:chat] "what would a skeptical reader ask about this paper"
+   0903: mode:faq 0.90 | 0904: mode:faq 0.88 | now1: mode:faq 0.84 | now2: mode:faq 0.84
+b13 [mode:debate] "is anyone online arguing about this paper"
+   0903: mode:debate 0.96 | 0904: mode:debate 0.56 | now1: mode:debate 0.60 | now2: mode:debate 0.53
+b14 [mode:chat] "I want to ask it a question about the argument"
+   0903: mode:chat 1.00 | 0904: mode:chat 1.00 | now1: mode:chat 1.00 | now2: mode:chat 1.00
+b15 [submode:learn:quiz|mode:learn] "help me actually remember this stuff, quiz me on it"
+   0903: submode:learn:quiz 0.92 | 0904: submode:learn:quiz 0.91 | now1: submode:learn:quiz 0.95 | now2: submode:learn:quiz 0.93
+m12 [submode:summary:brief|mode:summary] "what's the tldr"
+   0903: ? | 0904: mode:summary 0.83 | now1: mode:summary 0.87 | now2: mode:summary 0.83  CHANGED
+m13 [submode:summary:brief|mode:summary] "just give me the gist of it"
+   0903: ? | 0904: mode:summary 0.83 | now1: mode:summary 0.81 | now2: mode:summary 0.84  CHANGED
+m16 [mode:ideas|mode:summary|submode:summary:brief] "what are the main ideas here"
+   0903: ? | 0904: mode:ideas 0.97 | now1: mode:ideas 0.97 | now2: mode:ideas 0.98  CHANGED
+m18 [mode:learn|submode:learn:quiz|submode:learn:recall|submode:learn:tutorial] "I need to revise this for an exam"
+   0903: ? | 0904: mode:learn 0.87 | now1: mode:learn 0.92 | now2: mode:learn 0.93  CHANGED
+m21 [mode:debate|submode:debate:reception] "what criticism has this had"
+   0903: ? | 0904: submode:debate:reception 0.47 | now1: submode:debate:reception 0.44 | now2: submode:debate:reception 0.46  CHANGED
+m27 [submode:summary:fuller] "add more detail to the summary"
+   0903: ? | 0904: submode:summary:fuller 0.99 | now1: submode:summary:fuller 0.99 | now2: submode:summary:fuller 0.99  CHANGED
+m33 [mode:chat|none] "tell me more about the second experiment"
+   0903: ? | 0904: mode:chat 0.69 | now1: mode:chat 0.78 | now2: mode:chat 0.81  CHANGED
+right (0903, 0904, now1, now2) of 38 31, 36, 36, 36
+learn-accepting: p10,p11,n47,n48,b15,m18
+learn-accepting right 5, 6, 6, 6 of 6

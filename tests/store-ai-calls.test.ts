@@ -54,6 +54,12 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     finishedAt: "2026-08-15T10:00:01.200Z",
     durationMs: 1200,
     outcome: "ok",
+    /* Null, as on every row no retry loop counted and every call that did not
+       fail: drizzle/20261006*_ai_calls_attempt_and_failure.sql. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: 21_523_500,
     /* **Null, because this row is not BYOK.** It carried the credits figure a
        second time until 2026-09-02, which is exactly the shape that made
@@ -321,6 +327,67 @@ describe("the Postgres ledger", () => {
     expect(typeof found?.creditsUsedNanos).toBe("number");
     expect(found?.articleSlug).toBe("no-such-article-here");
     expect(found?.cacheWrite5mTokens).toBe(8583);
+    /* A row that says nothing about attempts or failure comes back saying
+       nothing, as `null` and not as `0` or `""`. */
+    expect([found?.attempt, found?.failurePhase, found?.failureClass, found?.failureStatus]).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("keeps which go a row was, and where and why it failed", async () => {
+    /* drizzle/20261006*_ai_calls_attempt_and_failure.sql. All four columns are
+       mapped by hand in both directions (`aiCallInsertValues`, `toRow`), so a
+       column dropped from either one is a value that silently reads as null. */
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const written = row({
+      id: "00000000-0000-4000-8000-00000000a1f1",
+      runId: RUN,
+      ownerId: currentOwnerId(),
+      articleSlug: null,
+      outcome: "error",
+      attempt: 2,
+      failurePhase: "mid_answer",
+      failureClass: "network:ECONNRESET",
+      failureStatus: 200,
+    });
+    await pgCostStore.record(written);
+    const found = (await pgCostStore.read()).rows.find((r) => r.id === written.id);
+    expect([found?.attempt, found?.failurePhase, found?.failureClass, found?.failureStatus]).toEqual([
+      2,
+      "mid_answer",
+      "network:ECONNRESET",
+      200,
+    ]);
+  });
+
+  it("refuses a failure phase that is not one of the two", async () => {
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const bad = row({
+      id: "00000000-0000-4000-8000-00000000a1f2",
+      runId: RUN,
+      ownerId: currentOwnerId(),
+      articleSlug: null,
+      outcome: "error",
+      /* What a careless second writer would put: the type forbids it here, and
+         the database is what forbids it everywhere else. */
+      failurePhase: "after_answer" as never,
+    });
+    const refused = await pgCostStore.record(bad).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refused, "the constraint let an unknown phase through").not.toBeNull();
+    const names: string[] = [];
+    for (let e = refused; e instanceof Error; e = e.cause) {
+      const named = (e as { constraint?: unknown }).constraint;
+      if (typeof named === "string") names.push(named);
+    }
+    expect(names).toContain("ai_calls_failure_phase_known");
   });
 
   it("refuses a non-BYOK row that carries a BYOK upstream figure", async () => {

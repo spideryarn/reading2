@@ -2,7 +2,7 @@
  * **The Quiz band** — the questions the article would ask, and what the reader
  * made of them.
  *
- * The other half of Remember. Free recall asks the reader what they took from
+ * The other half of Learn. Free recall asks the reader what they took from
  * the article; this asks the questions the article itself would ask, from a
  * batch written once and cached as an artefact (src/quiz.ts).
  *
@@ -113,7 +113,7 @@ import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import { SharePie } from "./SharePie.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
-import type { RememberView } from "./params.js";
+import type { LearnView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -129,7 +129,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
-import { REMEMBER_SUB_MODES, visibleRememberViews } from "./sub-modes.js";
+import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
 
@@ -174,15 +174,15 @@ function questionCount(n: number): string {
  * src/quiz.ts calls a hint rather than a finding, and not evidence trimmed
  * from a question that was kept.
  *
- * **It opens with Quiz's own sentence, not Remember's catalog words**: the
+ * **It opens with Quiz's own sentence, not Learn's catalog words**: the
  * catalog now describes the whole mode, so it would lead a Quiz card with the
  * three conversation parts before reaching Quiz. This band therefore does not
  * pass `mode` to `ModeSurface`; the card leads with Quiz's sub-mode words from
- * `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every state,
+ * `LEARN_SUB_MODES` instead — always, so the (i) is there in every state,
  * as `mode` would have made it.
  */
 function QuizAbout({ quiz }: { quiz: Quiz | null }) {
-  const what = <p>{REMEMBER_SUB_MODES.quiz.description}.</p>;
+  const what = <p>{LEARN_SUB_MODES.quiz.description}.</p>;
   if (!quiz) return what;
   const n = quiz.questions.length;
   const { malformed, duplicate, unanchored } = quiz.dropped;
@@ -209,15 +209,15 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Tutorial | Explore | Quiz**, at the top of the Remember band.
+ * **Recall | Tutorial | Explore | Quiz**, at the top of the Learn band.
  *
  * A control rather than two links, because the two are one choice — and it is
- * rendered by `RememberBand` and handed to whichever panel is showing, so that
- * both halves of Remember carry the same control in the same place rather than
+ * rendered by `LearnBand` and handed to whichever panel is showing, so that
+ * both halves of Learn carry the same control in the same place rather than
  * each growing its own.
  *
  * The navigation rules it triggers (clear `thread` in one step; Quiz wins a
- * pasted collision) are `RememberBand`'s, in src/web/App.tsx. This component only
+ * pasted collision) are `LearnBand`'s, in src/web/App.tsx. This component only
  * says which half is open and asks for the other.
  *
  * **Words, not icons, and that was weighed** (SPIDERYARN-READING2-71, plan
@@ -232,22 +232,22 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  * told you. Greg, 2026-10-04 (spya-wbhrm7): *"Provide rich tooltips for the
  * remember mode submode buttons"*, and the same day (spya-usyhwy) *"each
  * submode button should have its own tooltip"*. The first paragraph is the
- * command bar's line (`REMEMBER_SUB_MODES`).
+ * command bar's line (`LEARN_SUB_MODES`).
  *
- * Recall's sentences were `MODE_CATALOG.remember.how` until that day, when the
+ * Recall's sentences were `MODE_CATALOG.learn.how` until that day, when the
  * catalog's paragraph was cut to what is true of the whole mode. Each claim,
  * against the source:
  *  - Recall, Tutorial: no turn runs before the reader's first message; the
  *    prompts are in src/converse.ts, and Tutorial is built for a reader who
- *    has not read the piece (docs/project/remember-mode.md § Tutorial).
+ *    has not read the piece (docs/project/learn-mode.md § Tutorial).
  *  - Explore: highlights and notes go in the digest with every turn; earlier
  *    conversations go as a list it may open, not as their text
  *    (src/reader-notes.ts; GPT Sol's plan review, finding 1).
  *  - Quiz: the press arms `quiz` (below), and the marker is given the whole
  *    article with the question's evidence passages (src/quiz-mark.ts; finding 4).
- * Exported for tests/remember-header-cards.test.tsx.
+ * Exported for tests/learn-header-cards.test.tsx.
  */
-export const REMEMBER_VIEW_HOW: Readonly<Record<RememberView, string>> = {
+export const LEARN_VIEW_HOW: Readonly<Record<LearnView, string>> = {
   recall:
     "The AI does not reply until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. It is asked to point its replies back to the passages they use.",
   tutorial:
@@ -257,7 +257,7 @@ export const REMEMBER_VIEW_HOW: Readonly<Record<RememberView, string>> = {
   quiz: "Pressing it writes the questions if there are none yet. A model compares each answer with the article, using the question's reference passages.",
 };
 
-export function RememberSubModeToggle({
+export function LearnSubModeToggle({
   slug,
   value,
   experimental,
@@ -271,33 +271,33 @@ export function RememberSubModeToggle({
    * file, so a test that clicks the real chip is a test of the real rule.
    */
   slug: string;
-  value: RememberView;
+  value: LearnView;
   /**
    * **Whether the reader's experimental-features switch is on**, which decides
    * whether the Explore chip is drawn and nothing else (sub-modes.ts §
-   * `visibleRememberViews`). Required, for `DiagramPanel`'s reason: a new mount
+   * `visibleLearnViews`). Required, for `DiagramPanel`'s reason: a new mount
    * site cannot forget it and quietly show a chip the switch is hiding. The
    * chip for the part the reader is in is always drawn, so the row has one
    * pressed. docs/project/experimental-features.md.
    */
   experimental: boolean;
-  onChange(next: RememberView): void;
+  onChange(next: LearnView): void;
 }) {
   return (
     /* No `role="group"`: each button already says what it is and whether it is
        pressed, and the two honest alternatives are worse — a `fieldset` needs a
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
-    <div className="remember-submode">
+    <div className="learn-submode">
       {/* A card on every chip, the way the other five sub-mode rows have one
           (StructureMode.tsx § `StructureViewToggle`): `TooltipGroup` so that
           reading along the row is one gesture, `keepSide` so a card is not
           thrown onto the chips beside it. The card is for a pointer and for
           keyboard focus; a finger's tap presses the chip, which is why the
-          conversation band's (i) lists the visible parts as well (RememberAbout.tsx §
-          `RememberSubModesAbout`). */}
+          conversation band's (i) lists the visible parts as well (LearnAbout.tsx §
+          `LearnSubModesAbout`). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {visibleRememberViews(experimental, value).map((view) => (
+        {visibleLearnViews(experimental, value).map((view) => (
           <Tooltip
             key={view}
             placement="bottom"
@@ -305,15 +305,15 @@ export function RememberSubModeToggle({
             className="tip-soon"
             content={
               <ControlTip
-                head={REMEMBER_SUB_MODES[view].label}
-                what={`${REMEMBER_SUB_MODES[view].description}.`}
-                how={REMEMBER_VIEW_HOW[view]}
+                head={LEARN_SUB_MODES[view].label}
+                what={`${LEARN_SUB_MODES[view].description}.`}
+                how={LEARN_VIEW_HOW[view]}
               />
             }
           >
             <button
               type="button"
-              className={`remember-submode-btn${value === view ? " on" : ""}`}
+              className={`learn-submode-btn${value === view ? " on" : ""}`}
               /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
                  buttons, not a tablist, and claiming to be a tablist without the
                  arrow-key handling a tablist promises is worse than not claiming
@@ -324,7 +324,7 @@ export function RememberSubModeToggle({
                    written writes them — Greg's rule about opening a mode, one level
                    down (src/web/activation.ts). Here, in a real `onClick`, and
                    deliberately *not* inside the `setBoth` the caller runs:
-                   `?remember=` is query state, so Back and Forward move it too, and
+                   `?learn=` is query state, so Back and Forward move it too, and
                    retracing your steps through this toggle must not buy a model
                    call. Recall arms nothing — it is a conversation the reader
                    starts, and there is no empty artefact for a press to fill.
@@ -343,7 +343,7 @@ export function RememberSubModeToggle({
                 if (value !== view) onChange(view);
               }}
             >
-              {REMEMBER_SUB_MODES[view].label}
+              {LEARN_SUB_MODES[view].label}
             </button>
           </Tooltip>
         ))}
@@ -380,7 +380,7 @@ export function QuizPanel({
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Tutorial | Explore | Quiz control, built by `RememberBand`. */
+  /** The Recall | Tutorial | Explore | Quiz control, built by `LearnBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -1102,10 +1102,10 @@ export function QuizPanel({
     <ModeSurface
       label="Quiz"
       feature="gloss quiz"
-      /* Quiz is Remember's other half, so its (i) opens with Remember's
+      /* Quiz is Learn's other half, so its (i) opens with Learn's
           catalog words (mode-catalog.ts has no `quiz`, on purpose). */
       about={<QuizAbout quiz={quiz && owner.status === "ready" ? quiz : null} />}
-      /* **A fragment, because `subMode` is an optional prop.** `RememberBand`
+      /* **A fragment, because `subMode` is an optional prop.** `LearnBand`
           passes one on every render, so an empty row is not a state a reader
           can reach — but `head={subMode}` would hand the surface `undefined`
           for any caller that did not, and the row would vanish rather than sit
@@ -1457,7 +1457,7 @@ export function QuizPanel({
  * **"Where to look again"** — places, never a verdict.
  *
  * Names sections and nothing else: no count, no score, no "you got", which is
- * the line docs/project/remember-mode.md § The prompt is the feature draws for
+ * the line docs/project/learn-mode.md § The prompt is the feature draws for
  * the marks, and this block inherits it. The section's name jumps the prose to
  * its first block, which is the (re-)read Greg asked for; the icon beside it
  * goes back to its first missed question, drawn only when there is one the

@@ -54,7 +54,7 @@ const MODE_TITLES = {
   "The ideas it introduces, and the ones it needs you to hold.": "ideas",
   "Structure.": "structure",
   "Skim.": "skim",
-  "Find out what you kept.": "remember",
+  "Find out what you kept.": "learn",
   "Summary.": "summary",
   "Timeline.": "timeline",
   "For peer reviewers.": "referee",

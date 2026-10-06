@@ -51,7 +51,7 @@
  * so a path this table got wrong makes a step's artefacts unreadable, shortens
  * `copied`, and reddens them by name: `chat-library-exclusion`, `chat-route`,
  * `comment-referee-mark`, `helpers-load-article`, `referee-routes-postgres`,
- * `remember-route`, `routes`, `store-block-roles-pg`, `store-parity`. See
+ * `learn-route`, `routes`, `store-block-roles-pg`, `store-parity`. See
  * `LoadedArticle.copied` in `./load-article.ts` for why that return value exists.
  *
  * **But an assertion can only reach a row the corpus populates**, and that is a

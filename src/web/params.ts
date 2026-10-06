@@ -350,7 +350,7 @@ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, `debate`, `remember` or `passage`. Since 2026-10-05
+ * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
  * D5), and this is its filter.
@@ -362,11 +362,13 @@ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
  * screen to say why. `replace`, like `?debatethread=`: it narrows a list
  * rather than moving to a new view.
  *
- * `remember` is one word for Recall, Tutorial and Explore together. Which
+ * `learn` is one word for Recall, Tutorial and Explore together. Which
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
- * words are here so this eager file does not import that one.
+ * words are here so this eager file does not import that one. It was
+ * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
+ * is an unknown word, which reads as All.
  */
-export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "remember", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({
@@ -1201,7 +1203,7 @@ const isSummaryView = (v: string | null): v is SummaryView =>
  * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md,
  * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md).
- * *Which thing, within this mode*, so the shape of `?remember=` and
+ * *Which thing, within this mode*, so the shape of `?learn=` and
  * `?referee=`: in the URL, because it changes the whole band, and pushed,
  * because switching is a deliberate act Back should undo.
  *
@@ -1256,7 +1258,7 @@ export type StructureView = (typeof STRUCTURE_VIEWS)[number];
  * Which of Structure's views is open — `fisheye` (the default, omitted) or
  * `expanded`. Greg, 2026-10-01 (spya-gxyhcc): "Add a toggle to Structure mode
  * to switch between the Fisheye submode (which should be the default …) and
- * Expanded mode". The shape of `?remember=` and `?summary=`: in the URL because
+ * Expanded mode". The shape of `?learn=` and `?summary=`: in the URL because
  * it changes the whole band, pushed because switching is a deliberate act Back
  * should undo, and an unknown value opens the default. Nothing to generate, so
  * writing it never spends.
@@ -1301,8 +1303,11 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ----------------------------------------------- Remember's four sub-modes --
-   docs/plans/260831al-review-quiz-sub-mode.md. */
+/* ----------------------------------------------- Learn's four sub-modes --
+   docs/plans/260831al-review-quiz-sub-mode.md. The key was `?remember=` until
+   2026-10-06 and is not aliased: an old link opens Learn at Recall
+   (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md;
+   last-view.ts § `NEVER_REMEMBERED` keeps such a link a link). */
 
 /** Free recall, or the questions the piece asks you back. */
 /* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
@@ -1311,11 +1316,11 @@ export const refereeParam = createParser<RefereeView>({
    docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
    Quiz. The three conversations sit together and the one that is not a
    conversation comes last. */
-export const REMEMBER_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
-export type RememberView = (typeof REMEMBER_VIEWS)[number];
+export const LEARN_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
+export type LearnView = (typeof LEARN_VIEWS)[number];
 
 /**
- * Which part of Remember is open — `recall` (the default, omitted), `tutorial`,
+ * Which part of Learn is open — `recall` (the default, omitted), `tutorial`,
  * `explore` or `quiz`. Tutorial and Explore are conversations like Recall, each
  * with its own one thread, so `?thread=` follows them exactly as it follows
  * Recall; only Quiz clears it.
@@ -1328,14 +1333,14 @@ export type RememberView = (typeof REMEMBER_VIEWS)[number];
  * switching is a deliberate act on the view and Back should undo it.
  *
  * **Its collision with `?thread=` is defined rather than left to fall out**,
- * because `?mode=remember&remember=quiz&thread=<id>` would otherwise leave a
- * Remember conversation selected and invisible. The three rules are implemented
- * in `RememberBand` (src/web/App.tsx), not here, because they are navigations
+ * because `?mode=learn&learn=quiz&thread=<id>` would otherwise leave a
+ * Learn conversation selected and invisible. The three rules are implemented
+ * in `LearnBand` (src/web/App.tsx), not here, because they are navigations
  * rather than parsing:
  *
- * - switching to Quiz sets `remember=quiz` **and clears `thread`, in one
+ * - switching to Quiz sets `learn=quiz` **and clears `thread`, in one
  *   navigation** — two would put a half-state on the Back stack;
- * - opening a Remember conversation sets `remember=recall` and `thread=<id>`,
+ * - opening a Learn conversation sets `learn=recall` and `thread=<id>`,
  *   also in one;
  * - a pasted URL carrying both: **Quiz wins**, and `thread` is dropped with a
  *   *replace*, so the reader's Back button does not land them on the broken
@@ -1351,22 +1356,22 @@ export type RememberView = (typeof REMEMBER_VIEWS)[number];
  * An unknown value degrades to the default rather than throwing, the same rule
  * as every other parser in this file.
  */
-export const rememberParam = createParser<RememberView>({
-  parse: (v) => (REMEMBER_VIEWS.includes(v as RememberView) ? (v as RememberView) : null),
+export const learnParam = createParser<LearnView>({
+  parse: (v) => (LEARN_VIEWS.includes(v as LearnView) ? (v as LearnView) : null),
   serialize: (v) => v,
 })
   .withDefault("recall")
   .withOptions({ history: "push" });
 
 /**
- * **Which part of Remember a query string names**, through `rememberParam`, so
+ * **Which part of Learn a query string names**, through `learnParam`, so
  * an unknown word is Recall here as it is on the reading view — `diagramInSearch`'s
- * reason. For the metadata page's Remember link, which has no nuqs state to ask
+ * reason. For the metadata page's Learn link, which has no nuqs state to ask
  * (Dock.tsx § `modeLinkHref`).
  */
-export function rememberInSearch(search: string): RememberView {
-  const named = new URLSearchParams(search).get("remember");
-  return (named === null ? null : rememberParam.parse(named)) ?? rememberParam.defaultValue;
+export function learnInSearch(search: string): LearnView {
+  const named = new URLSearchParams(search).get("learn");
+  return (named === null ? null : learnParam.parse(named)) ?? learnParam.defaultValue;
 }
 
 /* --------------------------------------------------------------- debate -- */

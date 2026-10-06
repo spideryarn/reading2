@@ -714,5 +714,19 @@ export function providerFailedMidAnswer(): Error {
  * think to check.
  */
 export function providerSpokeNonsense(): Error {
-  return new Error(PROVIDER_UNREADABLE.message);
+  const err = new Error(PROVIDER_UNREADABLE.message);
+  nonsense.add(err);
+  return err;
+}
+
+/** Every error `providerSpokeNonsense` made, so the gateway can label one without reading its message. */
+const nonsense = new WeakSet<object>();
+
+/**
+ * **Was this error made by `providerSpokeNonsense`?** — asked by
+ * [`ai-call.ts`](ai-call.ts) when it records why a stream died, so that
+ * `unreadable` is decided by identity and never by comparing an error's words.
+ */
+export function spokeNonsense(err: unknown): boolean {
+  return typeof err === "object" && err !== null && nonsense.has(err);
 }

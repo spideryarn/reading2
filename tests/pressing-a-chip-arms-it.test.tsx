@@ -10,7 +10,7 @@
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
- *  - Remember's Recall | Tutorial | Explore | Quiz toggle;
+ *  - Learn's Recall | Tutorial | Explore | Quiz toggle;
  *  - Summary's Brief | Fuller | Thread control, whose two lengths arm and whose
  *    **Thread** must not: the thread writes itself on arrival
  *    (tests/summary-thread-press.test.tsx), and a press that armed as well
@@ -77,7 +77,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { RefereeViews } = await import("../src/web/modes/referee/RefereeMode.js");
-const { RememberSubModeToggle } = await import("../src/web/QuizPanel.js");
+const { LearnSubModeToggle } = await import("../src/web/QuizPanel.js");
 const { pendingActivation, resetActivations } = await import("../src/web/activation.js");
 
 const SLUG = "a-paper";
@@ -190,26 +190,26 @@ describe("Referee's sub-mode chips", () => {
   });
 });
 
-/* ---------------------------------------------------- Remember's toggle -- */
+/* ---------------------------------------------------- Learn's toggle -- */
 
-function mountRememberToggle(value: "recall" | "tutorial" | "explore" | "quiz"): void {
+function mountLearnToggle(value: "recall" | "tutorial" | "explore" | "quiz"): void {
   act(() => {
     root.render(
-      createElement(RememberSubModeToggle, { slug: SLUG, value, experimental: true, onChange: () => {} }),
+      createElement(LearnSubModeToggle, { slug: SLUG, value, experimental: true, onChange: () => {} }),
     );
   });
 }
 
 function toggleButton(label: string): string {
-  const buttons = [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")];
+  const buttons = [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")];
   const at = buttons.findIndex((b) => b.textContent?.trim() === label);
   if (at < 0) throw new Error(`no ${label} button`);
-  return `.remember-submode-btn:nth-of-type(${at + 1})`;
+  return `.learn-submode-btn:nth-of-type(${at + 1})`;
 }
 
-describe("Remember's Recall | Tutorial | Explore | Quiz toggle", () => {
+describe("Learn's Recall | Tutorial | Explore | Quiz toggle", () => {
   it("arms the quiz when Quiz is pressed", () => {
-    mountRememberToggle("recall");
+    mountLearnToggle("recall");
     expect(armed("quiz")).toBe(false);
     click(toggleButton("Quiz"));
     expect(armed("quiz")).toBe(true);
@@ -221,28 +221,28 @@ describe("Remember's Recall | Tutorial | Explore | Quiz toggle", () => {
        nowhere. It must still mint a press: this is the reader asking again after
        a failed read, and it is the only control they have.
        GPT Sol found this missing in the plan, 2026-09-06. */
-    mountRememberToggle("quiz");
+    mountLearnToggle("quiz");
     click(toggleButton("Quiz"));
     expect(armed("quiz")).toBe(true);
   });
 
   it("arms nothing for Recall, Tutorial or Explore, or for merely being in Quiz", () => {
-    mountRememberToggle("quiz");
+    mountLearnToggle("quiz");
     expect(armed("quiz")).toBe(false);
-    mountRememberToggle("recall");
+    mountLearnToggle("recall");
     click(toggleButton("Recall"));
     expect(armed("quiz")).toBe(false);
-    mountRememberToggle("tutorial");
+    mountLearnToggle("tutorial");
     click(toggleButton("Tutorial"));
     expect(armed("quiz")).toBe(false);
-    mountRememberToggle("explore");
+    mountLearnToggle("explore");
     click(toggleButton("Explore"));
     expect(armed("quiz")).toBe(false);
   });
 
   it("draws the four chips in order", () => {
-    mountRememberToggle("explore");
-    const chips = [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")];
+    mountLearnToggle("explore");
+    const chips = [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")];
     expect(chips.map((b) => b.textContent?.trim())).toEqual(["Recall", "Tutorial", "Explore", "Quiz"]);
     expect(chips.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true", "false"]);
   });

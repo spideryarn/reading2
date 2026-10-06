@@ -13,7 +13,7 @@ Then, while this plan was being written, Greg found a second one:
 > — Greg, 2026-09-03
 
 Both are in Quiz mode ([quiz.md](../project/quiz.md), the half of
-[remember-mode.md](../project/remember-mode.md) where the article asks). They are unrelated
+[remember-mode.md](../project/learn-mode.md) where the article asks). They are unrelated
 mechanically, so they are separate stages.
 
 ## What happened, from the logs

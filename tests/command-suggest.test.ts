@@ -44,7 +44,7 @@ import { MAX_LENS_CHARS } from "../src/types.js";
 
 const SKIM: PickKey = { id: "mode:skim", label: "Skim" };
 const DEBATE: PickKey = { id: "mode:debate", label: "Debate" };
-const QUIZ: PickKey = { id: "submode:remember:quiz", label: "Quiz" };
+const QUIZ: PickKey = { id: "submode:learn:quiz", label: "Quiz" };
 const ARCHIVE: PickKey = { id: "action:archive", label: "Archive this article" };
 const CHANGELOG: PickKey = { id: "page:/changelog", label: "What’s new" };
 
@@ -81,7 +81,7 @@ describe("the request body", () => {
 describe("suggestableOptions", () => {
   it("keeps modes and sub-modes, with this server's words, and drops every other kind of row", () => {
     const kept = suggestableOptions([SKIM, ARCHIVE, QUIZ, CHANGELOG, { id: "mode:skim", label: "Spam or not" }]);
-    expect(kept.map((o) => o.id)).toEqual(["mode:skim", "submode:remember:quiz"]);
+    expect(kept.map((o) => o.id)).toEqual(["mode:skim", "submode:learn:quiz"]);
     expect(kept[0]?.description).not.toBe("");
   });
 });
@@ -160,7 +160,7 @@ describe("readSuggestions — the model's answer", () => {
         modes: [
           { key: "mode:skim", why: "" },
           { key: "mode:debate", why: "" },
-          { key: "submode:remember:quiz", why: "" },
+          { key: "submode:learn:quiz", why: "" },
         ],
         lens: null,
       }),

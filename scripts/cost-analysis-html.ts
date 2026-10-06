@@ -28,7 +28,13 @@ import path from "node:path";
 
 import { formatCostNanos } from "../src/admin.js";
 import { type Cell, type CostAnalysis, type EvidenceTable, type Lead, P95_MIN_CALLS, type Slice } from "../src/cost-analysis.js";
-import { OPENROUTER_CREDIT_FEE } from "../src/cost-cube.js";
+import {
+  FAILURE_DEFINITIONS,
+  type FailureGroup,
+  NOT_MEASURED,
+  OPENROUTER_CREDIT_FEE,
+  failureSummary,
+} from "../src/cost-cube.js";
 
 /* --------------------------------------------------------------- escaping -- */
 
@@ -481,6 +487,55 @@ function overTime(a: CostAnalysis, chart: Safe | null): Safe {
   </table></div></details>`;
 }
 
+function failureCell(value: number | null): Safe {
+  return value === null
+    ? html`<td class="n dim">${NOT_MEASURED}</td>`
+    : html`<td class="n">${whole(value)}</td>`;
+}
+
+function failureCounts(section: string, label: string, groups: readonly FailureGroup[]): Safe {
+  return html`<div class="scroll"><table data-section="${section}">
+    <thead><tr><th>${label}</th><th class="n">Counted attempts</th><th class="n">Retries</th><th class="n">Gave up after the last go</th><th class="n">Died part-way</th></tr></thead>
+    <tbody>${groups.map(
+      (g) =>
+        html`<tr><td>${g.label}</td><td class="n">${whole(g.counted)}</td>${failureCell(g.retries)}${failureCell(g.gaveUp)}${failureCell(g.diedPartWay)}</tr>`,
+    )}</tbody>
+  </table></div>`;
+}
+
+/**
+ * The folds `/admin/costs` draws its own section from (src/cost-cube.ts §
+ * failures and retries): counts, with the counted attempts beside them and no
+ * percentage. A null is written as words, never as a zero.
+ */
+function failures(a: CostAnalysis): Safe {
+  const f = a.failures;
+  const anything = f.total.counted > 0 || f.causes.length > 0;
+  return html`<section data-failures>
+  <h2>Failures and retries</h2>
+  <p data-failures-summary>${failureSummary(f.total)}</p>
+  ${
+    anything
+      ? html`<p class="dim">${FAILURE_DEFINITIONS}</p>
+  ${failureCounts("failures-days", "UTC day", f.byDay)}
+  ${failureCounts("failures-tasks", "Mode or task", f.byTask)}
+  ${
+    f.causes.length === 0
+      ? html`<p class="dim">No failed attempt here recorded a cause.</p>`
+      : html`<div class="scroll"><table data-section="failures-causes">
+    <thead><tr><th>Failed</th><th>Cause</th><th>Status</th><th>Upstream</th><th>Model</th><th>Mode or task</th><th class="n">Attempts</th></tr></thead>
+    <tbody>${f.causes.map(
+      (c) =>
+        html`<tr><td>${c.phase}</td><td>${c.failureClass}</td><td>${c.status}</td><td>${c.upstream}</td><td>${c.model}</td><td>${c.task}</td><td class="n">${whole(c.attempts)}</td></tr>`,
+    )}</tbody>
+  </table></div>`
+  }`
+      : ""
+  }
+  <ul class="dim">${f.notes.map((note) => html`<li>${note}</li>`)}</ul>
+  </section>`;
+}
+
 function cacheUse(a: CostAnalysis): Safe {
   if (a.cacheUse.length === 0) return html``;
   return html`<details><summary>Cache use by mode or task, one wire at a time</summary>
@@ -538,6 +593,7 @@ ${articles(analysis)}
 ${tasks(analysis)}
 ${models(analysis)}
 ${overTime(analysis, opts.chart)}
+${failures(analysis)}
 ${leads(analysis)}
 ${howToRead(analysis)}
 </main>

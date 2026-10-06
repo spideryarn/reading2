@@ -26,7 +26,7 @@ import { plainWords } from "./plain-words.js";
 /**
  * What Candidates is told, above the `cache_control` breakpoint — so this kind
  * has one cached article prefix of its own, paid on entering the sub-mode and
- * not per turn. Same arrangement as `REMEMBER_SYSTEM`; see
+ * not per turn. Same arrangement as `LEARN_SYSTEM`; see
  * `buildConverseMessages` in src/converse.ts for why two prefixes is the cheaper
  * mistake than one prompt holding two contradictory sets of instructions.
  *

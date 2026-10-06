@@ -287,7 +287,7 @@ describe("a text field iOS must not zoom into", () => {
    * this file was green, because the rule really was written.
    *
    * Then its replacement only claimed to beat *one* class — and
-   * `.remember .chat-input` in mode-band.css is (0,2,0), so Remember mode was
+   * `.learn .chat-input` in mode-band.css is (0,2,0), so Learn mode was
    * still 15.68px and every test here still passed. GPT Sol's F1, 2026-09-08.
    * Naming the competitors is what closes it: a floor is worth exactly what it
    * out-weighs, so the test has to know who it is racing.
@@ -360,8 +360,8 @@ describe("a text field iOS must not zoom into", () => {
        test, and a search that stopped finding it would go green over nothing. */
     expect(
       worstTextarea.sel,
-      "`.remember .chat-input` should still be the heaviest textarea rule the search finds",
-    ).toBe(".remember .chat-input");
+      "`.learn .chat-input` should still be the heaviest textarea rule the search finds",
+    ).toBe(".learn .chat-input");
   });
 
   /* **A file picker is not a field, and the floor must not reach it.** It did:

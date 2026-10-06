@@ -12,7 +12,7 @@
  * — the adapter filters `location.search` to the keys each hook watches and
  * returns the cached snapshot when those are unchanged — so a parameter owned
  * by a *child* wakes only that child. `deep`, `diagram`, `dx`, `dhue`,
- * `referee`, `remember`, `rank`, `bar`, `run` and `conf` are all like that.
+ * `referee`, `learn`, `rank`, `bar`, `run` and `conf` are all like that.
  *
  * It never bit, because `?at=` re-rendered the reading view seventy-odd times a
  * scroll and refreshed every href on the way past. Wrapping `TableView` in

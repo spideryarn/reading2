@@ -1,7 +1,7 @@
 # Recall and Tutorial: what the research says about prompting recall and one-to-one teaching
 
-Up: [research.md](../project/research.md) · the mode: [remember-mode.md](../project/remember-mode.md) ·
-where it is going: [remembering-vision.md](../project/remembering-vision.md) · the plan:
+Up: [research.md](../project/research.md) · the mode: [remember-mode.md](../project/learn-mode.md) ·
+where it is going: [remembering-vision.md](../project/learning-vision.md) · the plan:
 [261002i](../plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md)
 
 **Written 2026-10-02**, for Greg's reports `spya-c8x66d` (one adaptive Recall, with nudging hints)

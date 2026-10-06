@@ -192,7 +192,7 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 `review` is already a mode — the reader says what they took from a piece they have read for
 themselves and the model shows them where it comes apart
-([remember-mode.md](remember-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
+([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
 name was chosen). A `reviewer` mode beside a `review` mode would be one word meaning two things,
 which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
@@ -533,7 +533,7 @@ cut —
 > — Greg, 2026-09-01
 
 **It is Chat with a third personality, not a panel of its own.** `candidates` is a third
-`ThreadKind` beside `chat` and `remember` ([`src/types.ts`](../../src/types.ts)), so it inherits
+`ThreadKind` beside `chat` and `learn` ([`src/types.ts`](../../src/types.ts)), so it inherits
 streaming, the tools, OpenRouter's server-side web search, citation collection, thread persistence
 and retry for nothing. What had to change was small and known: the `chat_threads_kind` CHECK
 (`drizzle/0050_candidates_thread_kind.sql` — the *widening* direction, which needs no data movement
@@ -1163,7 +1163,7 @@ for you.
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.
 - [search.md](search.md) — the machinery Criteria is built on.
-- [remember-mode.md](remember-mode.md) — the other reader-authored mode, and the reason this one is
+- [learn-mode.md](learn-mode.md) — the other reader-authored mode, and the reason this one is
   not named after it.
 - [colour-scales.md](colour-scales.md) — the diverging scales Criteria's valence uses.
 - [block-ids.md](block-ids.md) — the anchoring contract every row in every sub-mode is required to

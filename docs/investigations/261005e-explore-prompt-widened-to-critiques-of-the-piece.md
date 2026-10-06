@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the plan:
 [261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md) · the mode:
-[remember-mode.md § Explore](../project/remember-mode.md#explore-the-fourth-sub-mode)
+[remember-mode.md § Explore](../project/learn-mode.md#explore-the-fourth-sub-mode)
 
 **Question.** Greg, 2026-10-05 (`spya-mvmpks`): Explore is *"also about exploring potential
 problems and criticisms and concerns … deepening your thinking around the piece"*. The prompt
@@ -30,7 +30,7 @@ claimed a web search it had not run. Both are below.
 
 ## What was run
 
-[`evals/remember-explore.ts`](../../evals/remember-explore.ts), the Explore arm only, on its two
+[`evals/remember-explore.ts`](../../evals/learn-explore.ts), the Explore arm only, on its two
 fixture articles, with a fourth scripted reader per article added before any run: **`critic`**, who
 has two doubts of their own in their notes and a reason for reading, opens with the new starter
 word for word (*"Where might this piece be wrong, or missing something?"*), pushes back in turn 2,
@@ -54,7 +54,7 @@ final arm's first four runs `…261005l-rev2-judge-scores.md`; the columns below
 are those four runs.
 
 **The blind read** was of `before` against `after` only:
-[`evals/remember-explore-critic-pairs.ts`](../../evals/remember-explore-critic-pairs.ts) put the
+[`evals/remember-explore-critic-pairs.ts`](../../evals/learn-explore-critic-pairs.ts) put the
 critic's conversations side by side in six pairs, four of them before against after and two of
 them before against before as the control, sides decided by `blindCoin`, key in its own file. Each
 prompt landed on side A as often as on side B (counted before reading). A fresh subagent read only

@@ -32,7 +32,7 @@ const HINT = `He names two games where the hand-built approach lost [${HINT_BLOC
 const HINT_WORDS = "He names two games where the hand-built approach lost";
 const HINTED = `${BODY}\n\nHint: ${HINT}`;
 
-function thread(answer: Partial<ChatMessage> = {}, kind: ThreadKind = "remember"): ChatThread {
+function thread(answer: Partial<ChatMessage> = {}, kind: ThreadKind = "learn"): ChatThread {
   return {
     id: "spya-k3m9qt",
     title: "What I took from it",

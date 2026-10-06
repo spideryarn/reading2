@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the plan:
 [261004h](../plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md) · the mode:
-[remember-mode.md](../project/remember-mode.md)
+[remember-mode.md](../project/learn-mode.md)
 
 **Question.** Greg asked (`spya-fryxrf`, 2026-10-04) for Recall's questions to link the passage that
 answers them, and for a Hint button after a question. `REMEMBER_SYSTEM` now asks for both. Does the
@@ -21,9 +21,9 @@ against 3 of 13 before the change, while run 2 returned to about the before run'
 
 `npm run eval:remember -- data/noema-mythology-of-conscious-ai`: production's `converse` with
 `kind: "remember"`, Sonnet 5, the same thirteen scripted readers as every earlier run
-([`evals/remember-recall.ts`](../../evals/remember-recall.ts)). One sample of each reader per run,
+([`evals/remember-recall.ts`](../../evals/learn-recall.ts)). One sample of each reader per run,
 so a difference of one or two replies is inside what a re-run would move. The counts come from
-[`evals/remember-recall-checks.ts`](../../evals/remember-recall-checks.ts), which splits each reply
+[`evals/remember-recall-checks.ts`](../../evals/learn-recall-checks.ts), which splits each reply
 with the panel's own `splitHint`; the judgement on each hint is mine, from reading all thirteen
 against their questions. No blind judge.
 

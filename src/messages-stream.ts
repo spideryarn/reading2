@@ -63,11 +63,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
   providerCost,
-  type SpendRecord,
   beginSpend,
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
+import { type CallFailure, networkClass, providerEventClass, thrownClass } from "./call-failure.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
 import { MODEL_REFUSED, NOT_CONFIGURED } from "./messages.js";
@@ -631,7 +631,7 @@ export function streamMessage(
    * protects, and it is why a retry is a second one of these rather than a loop
    * inside the first.
    */
-  const open = () => {
+  const open = (n: number) => {
     const startedAt = Date.now();
     /* Registered before the stream opens, so a call that never comes back leaves a
        trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
@@ -642,7 +642,11 @@ export function streamMessage(
        call actually went out with is the one the reconciliation has to ask about,
        and a second read of `process.env` is a second chance to disagree. */
     meter.credentialFingerprint = keyFingerprint(client.apiKey ?? "");
-    const attempt = { stream, meter, callId, startedAt, begun: false };
+    /* `n` is which go this is, and is what the attempt's row carries: a row
+       with `attempt > 1` is a retry that really started. `begun` is this
+       wire's acceptance boundary, `message_start`: a failure before it is
+       `before_answer`, one after it `mid_answer`. */
+    const attempt = { stream, meter, callId, startedAt, begun: false, n };
     stream.on("streamEvent", (event) => {
       if (attempt.begun || event.type !== "message_start") return;
       attempt.begun = true;
@@ -675,7 +679,7 @@ export function streamMessage(
   /* Opened here, not on the first `finalMessage()`: the request has always gone
      out when `streamMessage` is called, and a caller may attach listeners and
      await later. */
-  let current = open();
+  let current = open(1);
   let attempts = 1;
   /* A Stop that landed in the wait between two attempts. No stream was open to
      be aborted, so no stream can say so. */
@@ -695,10 +699,11 @@ export function streamMessage(
         const { stream, meter, startedAt, callId } = current;
         try {
           const message = await stream.finalMessage();
-          record(task, model, meter, message.usage, startedAt, "ok", callId, message.model);
+          record(task, model, meter, message.usage, startedAt, { outcome: "ok" }, callId, message.model, attempt);
           return message;
         } catch (err) {
-          const aborted = recordFailure(err);
+          const failure = recordFailure(err);
+          const aborted = failure === null;
           /* **The transport retry `messagesClient` § `maxRetries` promised and
              nothing built until 2026-10-03** (plan 261003m, report spya-x4zut6:
              one dropped connection, 595 ms in, failed an import). The attempt
@@ -716,7 +721,11 @@ export function streamMessage(
             stoppedWhileWaiting = true;
             throw new Anthropic.APIUserAbortError();
           }
-          current = open();
+          /* Logged as the retry starts, not when the failure was seen: a Stop
+             in the wait above means there is no retry, and this line has to
+             agree with the ledger, where a retry is a row with `attempt > 1`. */
+          log("model").warn(failureFields(task, model, attempt + 1, failure), "ai transport retry");
+          current = open(attempt + 1);
           attempts += 1;
         }
       }
@@ -724,9 +733,12 @@ export function streamMessage(
     return settled;
   };
 
-  /** Write the failed attempt's row, and say whether it was an abort. */
-  const recordFailure = (err: unknown): boolean => {
-    const { stream, meter, startedAt, callId } = current;
+  /**
+   * Write the failed attempt's row, and hand back how it failed: `null` for an
+   * abort, which says nothing more (see `SpendRecord.failure`).
+   */
+  const recordFailure = (err: unknown): CallFailure | null => {
+    const { stream, meter, startedAt, callId, begun, n } = current;
     /* **An aborted or failed call has usually still cost money.** Recording
        it with a non-`ok` outcome is the honest answer: a row saying "this
        happened, and here is what we know about what it cost" is something a
@@ -753,17 +765,17 @@ export function streamMessage(
        or an `AbortError` where none was given. "The signal happens to be
        aborted now" is not one of the two. */
     const aborted = stream.aborted || isAbort(err, options.signal);
-    record(
-      task,
-      model,
-      meter,
-      null,
-      startedAt,
-      aborted ? "aborted" : "error",
-      callId,
-      null,
-    );
-    return aborted;
+    /* The status off the stream's own response, when one arrived: an error
+       that came in-band, or a body that broke, carries none itself. */
+    const failure = aborted ? null : failureOf(err, begun, stream.response?.status ?? null);
+    /* **One line for a call that died after its answer began** — the failure
+       the retry above does not cover, and the one plan 261006b exists to
+       count. */
+    if (failure?.phase === "mid_answer") {
+      log("model").warn(failureFields(task, model, n, failure), "ai call died part-way");
+    }
+    record(task, model, meter, null, startedAt, failure ? { outcome: "error", failure } : { outcome: "aborted" }, callId, null, n);
+    return failure;
   };
 
   return {
@@ -816,6 +828,41 @@ function worthAnotherAttempt(err: unknown): boolean {
 }
 
 /**
+ * **Where and why an attempt failed**, as the labels its row carries —
+ * [`call-failure.ts`](call-failure.ts), which also says why nothing here keeps
+ * a word the error said. The same shapes `worthAnotherAttempt` sorts, asked a
+ * different question:
+ *
+ * - **A server sent a status**: `refused`, and the status.
+ * - **The connection** (`APIConnectionError` and its timeout subclass):
+ *   `network`, with the code when the SDK's wrapped `TypeError` has a known
+ *   one on its own cause, which is two causes down from here.
+ * - **An `error` event inside a `200`**: `provider:<type>` for one of
+ *   Anthropic's types, so an overloaded second and a bad key are not one
+ *   count; `in_band` for a type nobody listed or none at all.
+ * - **Anything else**: a body that broke, which the SDK wraps in a plain
+ *   `AnthropicError` with the `TypeError` as its cause. `network` when that is
+ *   what it was, `other` when it was not.
+ *
+ * `begun` is the phase and nothing else decides it. An abort never gets here.
+ */
+function failureOf(err: unknown, begun: boolean, responseStatus: number | null): CallFailure {
+  const phase = begun ? "mid_answer" : "before_answer";
+  if (!(err instanceof Anthropic.APIError)) return { phase, class: thrownClass(err), status: responseStatus };
+  if (typeof err.status === "number") return { phase, class: "refused", status: err.status };
+  if (err instanceof Anthropic.APIConnectionError) return { phase, class: networkClass(err), status: responseStatus };
+  return { phase, class: providerEventClass(err.type), status: responseStatus };
+}
+
+/** What both of this wire's log lines about a failure carry, and nothing else. The same six as ai-call.ts. */
+function failureFields(task: Task, model: string, attempt: number, failure: CallFailure): Record<string, unknown> {
+  return { job: task, wire: "messages", model, attempt, class: failure.class, status: failure.status };
+}
+
+/** How one attempt ended. An `error` has to say how; see `CallEnd` in ai-call.ts. */
+type AttemptEnd = { outcome: "ok" } | { outcome: "aborted" } | { outcome: "error"; failure: CallFailure };
+
+/**
  * **Was this error the abort itself?** — the same question
  * [`ai-call.ts`](ai-call.ts) asks, and for the same reason: a provider dying at
  * the moment a reader presses Stop is not a cancel, and recording it as one puts
@@ -833,9 +880,11 @@ function record(
   meter: CallMeter,
   usage: Anthropic.Usage | null,
   startedAt: number,
-  outcome: SpendRecord["outcome"],
+  end: AttemptEnd,
   callId: number | null,
   answeredBy: string | null,
+  /** Which go this was. This wire's loop always counts, so never `null`. */
+  attempt: number,
 ): void {
   const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
   recordSpend(
@@ -870,7 +919,9 @@ function record(
       serviceTier: meter.serviceTier,
       inferenceGeo: meter.inferenceGeo,
       ms: Date.now() - startedAt,
-      outcome,
+      outcome: end.outcome,
+      attempt,
+      failure: end.outcome === "error" ? end.failure : null,
     },
     callId,
   );

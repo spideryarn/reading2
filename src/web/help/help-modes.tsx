@@ -36,7 +36,7 @@ export const MODE_WHEN: Record<Mode, ReactNode> = {
   summary: "you need to decide whether this is worth reading at all, or want it as a thread to share",
   diagram: "you think better from a picture of the argument",
   ideas: "you want to know what the piece takes for granted, and what it adds",
-  remember: "you have finished and want to test what you took from it",
+  learn: "you have finished and want to test what you took from it",
   quotes: "you want the lines worth keeping, in the piece’s own words",
   timeline: "the piece tells a story in time and you have lost track of the order",
   debate: "you want to know what other people have said about it",
@@ -522,7 +522,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     ),
   },
 
-  remember: {
+  learn: {
     keywords:
       "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn remember check understanding explain back study revise critique criticism problems objections weaknesses",
     whenToUse: (

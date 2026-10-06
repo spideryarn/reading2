@@ -221,7 +221,7 @@ logo.
 
 ## 7. Said Back
 
-**From:** [remember-mode.md](../project/remember-mode.md).
+**From:** [remember-mode.md](../project/learn-mode.md).
 
 **What the reader sees.** The whole word fades down to a faint ghost, as if being recalled rather
 than read. The letters come back one at a time in a scattered order — not left to right — and three

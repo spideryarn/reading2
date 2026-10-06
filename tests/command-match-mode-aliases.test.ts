@@ -63,7 +63,7 @@ function rows(archived: boolean): readonly Command[] {
   const modes = visibleModes(true, undefined).map((m) => m.mode);
   return [
     ...modes.map(modeCommand),
-    ...subModeRows(modes, true, { diagram: "sketch", remember: "recall" }),
+    ...subModeRows(modes, true, { diagram: "sketch", learn: "recall" }),
     ...besideTheModes({
       article: {
         slug: "a-piece",
@@ -115,7 +115,7 @@ describe("the list these are ranked against", () => {
     const [list] = LISTS;
     const ids = (list ?? []).map(commandId);
     for (const mode of MODES) expect(ids).toContain(`mode:${mode}`);
-    expect(ids).toContain("submode:remember:quiz");
+    expect(ids).toContain("submode:learn:quiz");
     expect(ids).toContain("action:feedback");
     expect(ids).toContain("action:comments");
     expect(ids).toContain("action:rerun-glossary");
@@ -137,10 +137,10 @@ describe("Greg's four words (spya-uzkmn3)", () => {
  * **A nickname that is also one of its own mode's chips**, where the chip's
  * row comes first on its label and opens the mode with that chip pressed —
  * the same place the mode opens on, or the picture the word names.
- * mode-catalog.ts § `remember` and § `diagram` say why each word is there.
+ * mode-catalog.ts § `learn` and § `diagram` say why each word is there.
  */
 const ALSO_A_CHIP: Readonly<Record<string, string>> = {
-  recall: "submode:remember:recall",
+  recall: "submode:learn:recall",
   sketch: "submode:diagram:sketch",
   /* Debate's default chip since 2026-10-03, and an older nickname than that. */
   reception: "submode:debate:reception",

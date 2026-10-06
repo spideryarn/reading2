@@ -1553,6 +1553,13 @@ function ledgerBase(
        a lower bound: subtracting the two timestamps gives a spurious zero, so
        read this field instead of doing that. */
     durationMs: startedAt === null ? null : finishedAt - startedAt,
+    /* A live session's call is made by the browser, on a wire this process
+       never touches: no retry loop of ours counted it and no gateway saw how it
+       failed. `provider_status` is where a realtime row says what happened. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: null,
     byokUpstreamNanos: null,
     isByok: null,

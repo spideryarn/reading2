@@ -9,7 +9,7 @@
  * further left, before Quotes. Move Chat right, just before Recall. Move FAQ
  * and Search a little bit further left. Add subtle vertical separator lines
  * between groups of related modes."* Reviewer is Referee, Recall is
- * Remember and Trajectory is Skim (since 2026-10-01). How each sentence was read, and the one move he did not ask for
+ * Learn and Trajectory is Skim (since 2026-10-01). How each sentence was read, and the one move he did not ask for
  * (Diagram, into the shape run), is
  * docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md § 1.
  *
@@ -39,7 +39,7 @@ const RUNS = [
   ["structure", "summary", "diagram"],
   ["skim", "quotes", "glossary", "faq", "ideas", "timeline"],
   ["citations", "referee", "debate"],
-  ["search", "chat", "remember"],
+  ["search", "chat", "learn"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column
      (docs/plans/261001i-annotations-column-beside-a-band-mode.md). */
@@ -73,7 +73,7 @@ describe("the mode bar's order", () => {
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
     /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
-       Remember (since 2026-10-05, spya-cnqcjf): the critical run is hidden
+       Learn (since 2026-10-05, spya-cnqcjf): the critical run is hidden
        whole, so no line is left for it. Marginalia's toggle is last, in a
        frame of its own, since it left the switch the same day (spya-vv54j2). */
     const drawn = visibleModes(false, undefined);
@@ -87,7 +87,7 @@ describe("the mode bar's order", () => {
       "ideas",
       "search",
       "chat",
-      "remember",
+      "learn",
       "marginalia",
     ]);
     /* The bar asks about the bands only: the toggle's frame is its own edge

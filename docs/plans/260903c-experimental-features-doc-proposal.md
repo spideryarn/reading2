@@ -135,7 +135,7 @@ this stage has now answered, and the answer is worth more than the permission.
 > | [Timeline](../project/timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
 > | [Referee](../project/referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 > | [Diagram](../project/diagram.md) | Three pictures with different promises, and the expensive one is a ~$0.20 sketch that takes two to three minutes. |
-> | [Remember](../project/remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
+> | [Remember](../project/learn-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 >
 > **The eight that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat.
 > Hierarchy and Outline are stand-ins for the merged **Structure** mode
