@@ -170,15 +170,15 @@ export function headingFor(row: FleetRow): { kind: "own" | "generated" | "name";
  * `useHover`, and in a browser it wants `:focus-visible`, which a tap does not
  * give a button.
  *
- * **`when` is false on a full-width card**, which already shows all of it, **and
+ * **`when` is false on a full-width card**, which already shows its option labels, **and
  * on the selected one**, whose detail is the whole right-hand pane. The second
  * is also what closes the preview when its session is clicked: the button loses
  * its `Tooltip`, so the card does not stay over the detail it was a preview of.
  *
  * **The cost, stated: `when` changing REMOUNTS the button**, because `Tooltip`
- * cannot be switched off in place. Nothing is lost by it today — a selection
+ * cannot be switched off in place. A selection
  * moves focus to the detail (§ `detailRef`), and closing one finds the row
- * again by `data-session` after the commit (§ `openFromList`) — but a ref held
+ * again at one pane by `data-session` after the commit (§ `openFromList`). A ref held
  * to that node across a selection would point at a detached element.
  *
  * `placement="right"`: the column is at the left edge, and above or below

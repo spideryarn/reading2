@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
 import type { FeedApi, FeedView } from "../tools/fleet/web/src/feed-client";
-import { PREVIEW_OPTION_CAP, PREVIEW_TEXT_CAP } from "../tools/fleet/web/src/SessionPreview";
+import { PREVIEW_OPTION_CAP, PREVIEW_TEXT_CAP, SessionPreview } from "../tools/fleet/web/src/SessionPreview";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import { parseFleetState, type FleetRow, type FleetState } from "../tools/fleet/web/src/types";
 
@@ -132,7 +132,7 @@ const ASKING = "Which of these should the migration keep?";
 const LABELS = ["Keep the column", "Drop the column", "Ask Greg first"];
 
 /** The Sessions tab holding `alpha` and whatever `beta` is given. */
-async function mountApp(beta: Record<string, unknown> = {}): Promise<void> {
+async function mountApp(beta: Record<string, unknown> = {}): Promise<(rows: FleetRow[]) => void> {
   window.location.hash = "#sessions";
   await tick();
   let sink: TransportSink | null = null;
@@ -147,6 +147,10 @@ async function mountApp(beta: Record<string, unknown> = {}): Promise<void> {
     if (sink === null) throw new Error("no active transport");
     sink.onState(stateWith([sessionRow("$a", "alpha"), sessionRow("$b", "beta", beta)]));
   });
+  return (rows) => {
+    if (sink === null) throw new Error("no active transport");
+    sink.onState(stateWith(rows));
+  };
 }
 
 /** Throws rather than returning `undefined`, so a missing card cannot pass as a hover that opened nothing. */
@@ -355,5 +359,106 @@ describe("the preview on a compact session card", () => {
     await wait();
     expect(preview()).toBeNull();
     expect(rowButton("$b").getAttribute("aria-current")).toBe("true");
+  });
+});
+
+describe("preview composition contracts", () => {
+  it("does not present the captured option list as the whole terminal menu", async () => {
+    const row = stateWith([sessionRow("$b", "beta", { question: question(ASKING, LABELS) })]).rows[0]!;
+    await act(async () => root.render(<SessionPreview row={row} heading="beta" />));
+    expect(host.textContent).toContain("A long menu scrolls, so there may be more below.");
+  });
+
+  it("makes no request on hover or keyboard focus", async () => {
+    pinWidth(1280);
+    await mountApp({ status: { kind: "needs-you" }, question: question(ASKING, LABELS) });
+    await click(rowButton("$a"));
+    await wait();
+    const reads = vi.spyOn(globalThis, "fetch");
+    await hover(rowButton("$b"));
+    openPreview();
+    await act(async () => rowButton("$b").focus());
+    await wait();
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  it("keeps an open preview and its accessible description on the latest pushed row", async () => {
+    pinWidth(1280);
+    const push = await mountApp({ title: "Beta before", status: { kind: "needs-you" }, question: question("OLD PROMPT", ["OLD OPTION"]) });
+    await click(rowButton("$a"));
+    await act(async () => rowButton("$b").focus());
+    await wait();
+    expect(openPreview().textContent).toContain("OLD OPTION");
+    const focused = rowButton("$b");
+    await act(async () => push([
+      sessionRow("$a", "alpha"),
+      sessionRow("$b", "beta", { title: "Beta after", status: { kind: "needs-you" }, question: question("NEW PROMPT", ["NEW OPTION"]) }),
+    ]));
+    expect(rowButton("$b")).toBe(focused);
+    expect(document.activeElement).toBe(focused);
+    const card = openPreview();
+    expect(card.textContent).toContain("Beta after");
+    expect(card.textContent).toContain("NEW PROMPT");
+    expect(card.textContent).toContain("NEW OPTION");
+    expect(card.textContent).not.toMatch(/Beta before|OLD PROMPT|OLD OPTION/);
+    const described = focused.getAttribute("aria-describedby");
+    expect(document.getElementById(described ?? "")?.getAttribute("role")).toBe("tooltip");
+    expect(document.getElementById(described ?? "")?.contains(card)).toBe(true);
+
+    await act(async () => focused.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await wait();
+    expect(preview()).toBeNull();
+    expect(focused.getAttribute("aria-describedby")).toBeNull();
+    expect(document.activeElement).toBe(focused);
+  });
+});
+
+describe("preview bounds at the complete surface", () => {
+  it.each(["heading", "reason", "where", "directory", "option"])(
+    "bounds wire-supported long %s text and announces the cut",
+    async (field) => {
+      const long = `START ${"word ".repeat(400)}UNREACHABLE-TAIL`;
+      const row = stateWith([sessionRow("$b", "beta", {
+        title: field === "heading" ? long : "beta title",
+        status: field === "reason" ? { kind: "unknown", why: long } : { kind: "needs-you" },
+        repo: field === "where" ? long : "repo",
+        meta: { version: 1, dir: field === "directory" ? long : "/tmp/repo" },
+        question: question(ASKING, [field === "option" ? long : "Keep it"]),
+      })]).rows[0]!;
+      await act(async () => root.render(<SessionPreview row={row} heading={row.title!} />));
+      expect(host.textContent).toContain("START word");
+      expect(host.textContent).not.toContain("UNREACHABLE-TAIL");
+      expect(host.querySelector("[data-cut]")?.textContent).toContain("open the session to read the rest");
+    },
+  );
+
+  it("bounds the complete height and announces overflow outside the clipped body", async () => {
+    let contentHeight = 400;
+    let resized: ResizeObserverCallback | null = null;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { resized = callback; }
+      observe() {}
+      disconnect() {}
+    });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(200);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(() => contentHeight);
+    const row = stateWith([sessionRow("$b", "beta")]).rows[0]!;
+    await act(async () => root.render(<SessionPreview row={row} heading="beta" />));
+    const body = host.querySelector<HTMLElement>(".session-preview-body");
+    expect(body, "a text cap alone does not bound the complete surface").not.toBeNull();
+    expect(body?.style.maxHeight).toBe("min(32rem, calc(100vh - 5rem))");
+    expect(body?.style.overflow).toBe("hidden");
+    const note = host.querySelector("[data-preview-overflow]");
+    expect(note?.textContent).toContain("Cut short to fit this window");
+    expect(body?.contains(note)).toBe(false);
+
+    if (resized === null) throw new Error("the measured body has no resize observer");
+    const notify = resized as ResizeObserverCallback;
+    contentHeight = 100;
+    await act(async () => notify([], {} as ResizeObserver));
+    expect(host.querySelector("[data-preview-overflow]")).toBeNull();
+    contentHeight = 400;
+    await act(async () => notify([], {} as ResizeObserver));
+    expect(host.querySelector("[data-preview-overflow]")).not.toBeNull();
   });
 });

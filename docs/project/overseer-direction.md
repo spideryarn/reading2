@@ -822,12 +822,12 @@ mechanism, and a paraphrase would lose it.
 
 Since 2026-10-06 the left-hand column's cards carry a **hover preview**. Beside an open detail the
 cards are compact — a question keeps its prompt and drops its options — so pointing at one, or
-tabbing to it, shows what was dropped: the heading, the status and its detail, the whole
+tabbing to it, shows what was dropped: the heading, the status and its detail, the
 description, where it runs, and the question's prompt with its option labels. It is there to help
 decide whether to switch session, not to act on one: nothing in it can be pressed, a long text or
 menu is cut and says so, and what a dialog would approve is left for the detail. Mouse and keyboard
-only — a tap already selects — and never on the selected card or on a full-width list, which shows
-all of it anyway. It reads only the row the page was already pushed; nothing is fetched. The code is
+only — a tap already selects — and never on the selected card or on a full-width list, which already
+shows the option labels. It reads only the row the page was already pushed; nothing is fetched. The code is
 `tools/fleet/web/src/SessionPreview.tsx`, and the plan is
 [261006l](../plans/261006l-borrow-the-reading-app-s-machinery-for-the-fleet-dashboard.md) § Stage 2.
 
