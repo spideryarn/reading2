@@ -363,14 +363,13 @@ playwright-core against system Chrome, signed in with `scripts/browser-sign-in.t
 - Then `/features` looked at, at 1440 and 390, one viewport at a time; `naturalWidth`, `complete`
   and computed `opacity` read from the DOM for the two images, not judged from a picture.
 
-**One choice, named: the experimental switch is off for both pictures.** With it off the chips are
-Recall, Tutorial, Quiz; with it on, Explore is a fourth. Off is what somebody who signs up from
-`/features` will see, and a picture that shows a chip they cannot find is the kind of small untruth
-[261002b](261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md) retook the
-landscape shots to remove. The tile's caption already says Explore is *one of the Experimental
-Features*. What it gives up: the picture does not show Explore at all. The other option, on, shows
-the whole of Learn and matches the caption naming all of it, at the cost above. If Explore leaves
-the switch the picture is reshot with it.
+**One choice, named: the experimental switch is on for both pictures**, so the chips are Recall,
+Tutorial, Explore, Quiz. I first planned it off, because off is what somebody who signs up from
+`/features` sees before they find the switch. The plan review (S3-2) argued for on and I agree:
+the tile's caption names Explore and says it is *one of the Experimental Features*, and `/features`
+already pictures other experimental things (Diagram, Referee). The page shows what the product
+has, not only what is on by default. What it gives up: a new reader sees three chips until they
+turn the switch on, and the picture shows four; the caption is what tells them why.
 
 **The simpler option passed over:** crop or paint over the two headings. Passed over because the
 chips and the picker are also out of date, and a doctored screenshot is not a screenshot.
@@ -394,9 +393,9 @@ A Sonnet subagent, with [browser-control.md](../project/browser-control.md) then
 | Chat's list | a Recall thread's row reads *From Learn › Recall* |
 | Explore, switch on | the empty state's two lines say the wider remit; four starters, the fourth *Where might this piece be wrong, or missing something?* |
 | One real Explore turn | from the fourth starter: sent word for word, a reply streams, it states one possible problem and cites a passage |
-| The address | `?mode=learn` (since 261006a); an old `?mode=remember&remember=quiz` link still opens Quiz |
+| The address | `?mode=learn` (since 261006a), and `?mode=learn&learn=quiz` opens Quiz; an old `?mode=remember&remember=quiz` link opens Learn at **Recall**, because `?remember=` is not aliased (`src/web/params.ts` § Learn's four sub-modes) |
 
-Screenshots of what it saw go in `docs/plans/261005l-shots/` as `s3-*.png`, and the record in this
+Screenshots of what it saw go in `docs/plans/261005l-learn-shots/` as `s3-*.png`, and the record in this
 section. **What it finds:** a wrong word or a broken control that is plainly this report's is fixed
 here, red first; anything wider is written up and named for the Overseer's queue in my final
 message, since this session cannot write the queue.
@@ -404,7 +403,103 @@ message, since this session cannot write the queue.
 ### Done is
 
 Both pictures replaced and `shots.ts` agreeing with them; `tests/landing-assets.test.ts`,
-`tests/features-page-modes.test.ts`, `npm test` on what was touched and `npm run typecheck` green;
-the table above filled in; GPT Sol's review of the diff; pushed to `dev`; the note
-`docs/user-feedback/261005_0748-…` saying all three parts have ended, and
-`scripts/feedback-endings.ts` run.
+`tests/features-page-modes.test.tsx` and `npm run typecheck` green, and the full suite once through
+`scripts/tmux-job.ts` (stage 1's done-check, never re-run after its merge); the table above filled
+in; GPT Sol's review of the diff; pushed to `dev`; the feedback notes saying all three parts have
+ended, and `scripts/feedback-endings.ts` run and showing `spya-mvmpks` as `shipped`.
+
+### What the reshoot produced
+
+Two Sonnet subagents on this worktree's dev server, 2026-10-06, playwright-core against system
+Chrome as the seeded local admin, the experimental switch already on.
+
+| | `learn.png` | `quiz.png` |
+|---|---|---|
+| Was | 720×1428, headed *Remembering*, chips Recall and Quiz | 720×1469, headed *Remember*, chips Recall and Quiz |
+| Now | 720×1232, 35,974 bytes | 720×962, 20,894 bytes |
+| Article | `cargocult-spya-rz663q`, `?mode=learn` | `writes`, `?mode=learn&learn=quiz`; an existing quiz, so no model call |
+| Shows | chips Recall, Tutorial, Explore, Quiz; the invitation; the composer | the same chips; *Question 1 of 3*, *What prediction does Paul Graham make about writing ability in a couple of decades?*, unanswered |
+
+- **The band has no heading any more**, so neither picture says *Learn*; the chips are what names
+  it, and the tile's title is beside it. Read from the DOM: no element in either frame holds
+  *Remember* or *Remembering*.
+- **The window is 916×700, not 1440×900.** At 1440 Learn's band is 544 CSS px wide
+  (`src/web/layout.ts` § `bandWidth` gives the band the room the reading measure does not use), so
+  a 720px file drawn 347px wide on `/features` would put the app's text at about two thirds of its
+  size. The first take was that, and was thrown away. At 916 the band is 360, the capture at 2× is
+  720 with no resampling, and the text draws at 96%. No CSS was injected; this is a real desktop
+  window, above the width where the band becomes a phone's cover sheet.
+- **`quiz.png` was quantised at `--quality 80-98`**, not the 65-92 the doc gives. At 65-92 it is
+  18KB, under the 20KB floor in `tests/landing-assets.test.ts`; the picture is mostly flat
+  background. Opening the reference answer would have added bytes and a bare block-id chip, which
+  reads as debug text. `shots.ts`'s comment says so.
+- **Red, then green.** `tests/landing-assets.test.ts` with the new bytes and the old numbers: 2
+  failed of 29. With `h: 1232` and `h: 962`: 29 of 29. Both `alt:` lines still say what is shown.
+- **`/features`, signed out**, from the DOM at both widths: each image `complete`, `opacity` 1,
+  rendered ratio equal to natural (learn 347.3×594.3 at 1440 and 325×556.1 at 390; quiz 347.3×464.1
+  and 325×434.2). [1440](261005l-learn-shots/s3-features-1440.png),
+  [390](261005l-learn-shots/s3-features-390.png).
+
+### What the browser pass found
+
+On `/read/vb-spya-vu3xen` (*Life is Short*), 1440×900, and 390×844 where marked. Every string is
+read from the DOM. **All twelve lines hold, and nothing needed fixing.**
+
+| Where | Seen | |
+|---|---|---|
+| The bar's button (and at 390) | the sixteenth `role="radio"` reads *Learn*; none reads *Remember* | ✓ [1440](261005l-learn-shots/s3-modebar-1440.png) [390](261005l-learn-shots/s3-modebar-390.png) |
+| The tab title | *Life is Short · Learn · Spideryarn* | ✓ |
+| Command bar, *learn* | *Learn*, *Learn › Recall*, *Learn › Tutorial*, *Learn › Explore*, *Learn › Quiz* | ✓ [shot](261005l-learn-shots/s3-cmd-learn.png) |
+| Command bar, *remember* | the same five rows | ✓ |
+| Command bar, *remember quiz* | *Learn › Quiz* alone; Enter opens `?mode=learn&learn=quiz` | ✓ [shot](261005l-learn-shots/s3-cmd-remember-quiz.png) |
+| The band's (i) card (and at 390) | *Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards.* Explore's line: *Think it through for yourself: your own ideas, where the piece may be weak, and what others say. Starts from what you have marked and discussed* | ✓ [shot](261005l-learn-shots/s3-about-card-390.png) |
+| `/help` | a *Learn* section; every *rememb…* on the page is the verb; its search finds Learn for *remember* | ✓ [shot](261005l-learn-shots/s3-help-1440.png) |
+| `/features` | *Learn.* and *Quiz.* under *Find out what you kept.* | ✓ |
+| Chat's list | the Recall thread's source mark has the name and the popover *From Learn › Recall*; the row's tooltip starts *Open in Learn › Recall*. The mark is an icon, so the words are not on the row until it is pressed | ✓ [shot](261005l-learn-shots/s3-chat-threads-1440.png) |
+| Explore's empty state (and at 390) | *What do you think about this piece? Explore starts from what you've highlighted, noted and talked about here, and helps you take your own ideas further.* / *It can try the piece on cases of your own, look at where it may be weak, and look up what others have said about it.* Four starters, the fourth *Where might this piece be wrong, or missing something?* | ✓ [shot](261005l-learn-shots/s3-explore-empty-390.png) |
+| One real Explore turn | the starter is sent word for word. The reply names one problem (the advice to cut out "bullshit" assumes a freedom most people in precarious work do not have), gives Graham's own qualification first with its passage, cites three blocks, has no list and ends on one question | ✓ [shot](261005l-learn-shots/s3-explore-reply-1440.png) |
+| The address | the bar gives `?mode=learn`; `?mode=learn&learn=quiz` opens Quiz; `?mode=remember&remember=quiz` and `?mode=remember` open Learn at Recall with no error, the address left as typed | ✓ |
+
+**Does the reply stream?** The first run could not say, so a third turn was measured: the new
+reply's length sampled every 100ms, and the response's chunks counted through CDP. `POST
+/api/chat/<slug>` answers `text/event-stream`; 47 chunks over 12.5s; the reply grew from 444 to 906
+characters in 24 steps over 2.3s. So it streams. **But the first character arrived 10.4s after
+send**, behind a steady *thinking…*, and the first step was 444 characters at once. That is the
+model's own thinking and tool calls before it writes, and it is Explore's as built on 2026-10-03,
+not this report's. Named for the Overseer in the hand-back; not changed here.
+
+**Seen along the way, none of it this report's:**
+
+- `GET /api/crossrefs/<slug>` and `/api/citations/<slug>` answer 404 for an article that has none
+  yet, and `/api/quiz/<slug>` for one with no quiz, each leaving *Failed to load resource* in the
+  console. "None yet" said as a 404.
+- The local fixture article `writes` holds a stored conversation reading *Fixture Remember turn…*.
+  Those words are in no file in the tree, so they are rows some test wrote to the shared local
+  database before the rename; no reader sees them.
+- The Quiz (i) card said *12 questions* over a band showing *Question 1 of 5*, which is the *Only
+  what I've read* filter doing its job, but the two numbers sit close together.
+
+### The plan review of stage 3, 2026-10-06 — build with changes
+
+[261005l-learn-stage-3-plan-review-sol.md](261005l-learn-stage-3-plan-review-sol.md), of commit
+`45f3add14`. Six findings, each checked against the tree, all accepted.
+
+| | What | What changed |
+|---|---|---|
+| S3-1 P1 | the table said an old `?mode=remember&remember=quiz` link opens Quiz; it opens Recall | the row is corrected, and `?mode=learn&learn=quiz` is checked as well |
+| S3-2 P2 | the switch should be on for the pictures | on, four chips (§ The reshoot) |
+| S3-3 P1 | one note with `parts: 3` reads as `awaiting` for good: `combineEndings` (`scripts/feedback-endings.ts`) wants one note per part | see below |
+| S3-4 P2 | "Done is" left out the full suite stage 1 still owes | added |
+| S3-5 P3 | the test file is `.tsx` | corrected |
+| S3-6 P3 | a shorter `quiz.png` is fine; it must stay over 400px tall and 20KB | noted for the capture |
+
+**S3-3 is a conflict with this entry's brief, and I took the mechanism's side.** The brief said to
+update the one existing note, write no second note, and keep `parts: 3`. Checked:
+`src/feedback-endings.generated.ts` holds `"spya-mvmpks": "awaiting"` today, and
+`combineEndings([{ ending: "shipped", parts: 3 }])` is `awaiting` by its own test
+(`tests/feedback-endings.test.ts` § *waits while a split report has fewer notes than parts*). So the
+brief as written leaves the report unfinished for ever, which is the opposite of what it is for.
+The two ways out are three notes, or one note without `parts`. The convention in
+[feedback-reports.md § The note](../project/feedback-reports.md) is one note per entry with
+`parts: N` on each, and the identifiers part (`qi-dabpymjd`) never wrote its own. So: the existing
+note is corrected, and two short notes join it, one per other part, each a signpost to its plan.
