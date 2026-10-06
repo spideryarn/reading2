@@ -212,3 +212,25 @@ Sonnet subagent after stages 1 and 2 against a private port, never `:8787`.
   assignable to type 'never'`. The inventory table above describes the state before this stage.
   Noticed, not changed: `overseer-queue.md` still lists the `.dock-modes` share count as open work
   (closed 2026-09-09 in `3ac70cc21`) — reported to the Overseer, who owns that file's queue.
+- 2026-10-06 — **Stage 1 landed.** `historyKindFor` in `mode.ts`; `useHashState` writes with
+  `pushState` / `replaceState` in a try/catch, from a ref of the latest state, and adopts
+  `hashchange` and `popstate`. `SessionsPanel` restores the one-pane list's scroll and returns focus
+  to the row. Tests in `tests/fleet-history.test.tsx`, seen red first; no existing test changed.
+  Differences from the plan, and things found:
+  - **The ref retires the closed-over-snapshot bug for every writer**, not only inside `go`:
+    `setParam` twice, or `chooseMode` then `setParam`, in one handler now compose (two tests). The
+    writers' identities are stable as a result. `go` and `setParams` stay the one-write, one-entry
+    way to say it.
+  - **The F10 test only has teeth with both clicks before any `await`.** An awaited `act` drains
+    jsdom's queued events, and the first version passed against a push deliberately reverted to
+    `window.location.hash =`. With two synchronous `act`s that mutation goes red.
+  - **After a refused write the kind is still derived from the ref**, as planned, so a refused
+    *push* is not retried as a push: the next write replaces, and Back from that session leaves the
+    Sessions tab. Deriving the kind from the address instead would trade that for the opposite
+    error after a refused close. Left as planned.
+  - Scroll is captured only for a row opened in `SessionsPanel`'s own list. A card opened from the
+    "needs you" panel above it at one pane saves nothing, so closing restores nothing.
+  - jsdom has no `window.scrollTo`, so the existing 390px open-and-close test in
+    `tests/fleet-web.test.tsx` now prints one `Not implemented: Window's scrollTo()` line. It passes.
+  - Not checked in a real browser: that the restore lands after Safari's own scroll restoration on
+    Back, and the `SecurityError` limit itself.

@@ -46,7 +46,7 @@
  * the three bands dealt into as many columns as the window affords. That is not
  * a third layout, it is the second one with the detail absent.
  */
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
@@ -223,6 +223,9 @@ function SessionCard({
             heading.kind === "name" && "tw:text-ink-faint",
           )}
           aria-current={selected ? "true" : undefined}
+          /* How the list finds this row again to hand focus back when the
+             one-pane detail closes — § `openFromList`. */
+          data-session={row.id}
           onClick={() => onSelect(row.id)}
         >
           {heading.text}
@@ -679,6 +682,49 @@ export function SessionsPanel({
     [selectedId],
   );
 
+  /**
+   * **AT ONE PANE THE LIST COMES BACK WHERE IT WAS LEFT.**
+   *
+   * There the detail replaces the list, so the page's scroll offset stops
+   * meaning "how far down the list" the moment a row is opened, and closing
+   * would otherwise land at whatever offset the detail was read to. The offset
+   * is taken when a row is opened *from the list* and put back when the
+   * selection clears — by "← All sessions" or by the browser's Back, which is
+   * the same transition seen from here. It runs after any restoration the
+   * browser attempts itself, toward the same position.
+   *
+   * **Here and not in the hash hook**, because only this component knows the
+   * measured layout and when the list is on the page again. A layout effect, so
+   * the list is in the document and nothing has painted at the wrong offset.
+   *
+   * **Nothing saved, nothing restored**: a detail arrived at by a link, or from
+   * another tab, has no list position to go back to. And it does not meet
+   * `detailRef` above — that fires when a selection arrives, this when it goes.
+   *
+   * Focus goes back to the row as well, without scrolling: the button that
+   * closed the detail has just been unmounted, which leaves focus on nothing.
+   */
+  const listScroll = useRef<{ y: number; id: string } | null>(null);
+  const openFromList = useCallback(
+    (id: string) => {
+      if (panes === 1 && selectedId === null) listScroll.current = { y: window.scrollY, id };
+      onSelect(id);
+    },
+    [panes, selectedId, onSelect],
+  );
+  useLayoutEffect(() => {
+    const saved = listScroll.current;
+    if (selectedId !== null || saved === null) return;
+    listScroll.current = null;
+    /* Two panes by now: the list never left the screen, so it has no position
+       to be returned to and a jump would be the surprise. */
+    if (panes !== 1) return;
+    window.scrollTo(0, saved.y);
+    for (const opener of document.querySelectorAll<HTMLElement>("button.session-open")) {
+      if (opener.dataset["session"] === saved.id) opener.focus({ preventScroll: true });
+    }
+  }, [selectedId, panes]);
+
   const detail =
     selectedId === null ? null : wrongWorld ? (
       /* **NOT "we could not find it" — "we will not look".** `MissingSession`
@@ -773,7 +819,7 @@ export function SessionsPanel({
       row={row}
       now={now}
       selected={row.id === selectedId}
-      onSelect={onSelect}
+      onSelect={openFromList}
       compact={compact}
     />
   );
@@ -785,7 +831,7 @@ export function SessionsPanel({
       rows={one.rows}
       now={now}
       selectedId={selectedId}
-      onSelect={onSelect}
+      onSelect={openFromList}
       compact={compact}
     />
   );

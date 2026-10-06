@@ -389,20 +389,22 @@ export function App({
                  that resets every time is one nobody sets. */
               filters={filtersFromParams(params)}
               onFilters={(next) => {
-                /* **ONE WRITE, NOT FOUR.** `setParam` closes over the params it
-                   was built with, so four sequential calls all start from the
-                   same snapshot and only the last survives — which silently
-                   dropped every filter but `hideToolCalls`. mode.ts §
+                /* **ONE WRITE, NOT FOUR.** Until 2026-10-06 `setParam` closed
+                   over the params it was built with, so four sequential calls
+                   all started from one snapshot and only the last survived —
+                   which silently dropped every filter but `hideToolCalls`.
+                   Writes compose now, but one write is still one history
+                   entry rewritten once rather than four times. mode.ts §
                    `setParams`. */
                 setParams(paramsFromFilters(next));
               }}
               /* **THE MODE AND THE SELECTION IN ONE WRITE, for the reason one
                  line up.** `chooseMode("sessions")` followed by
-                 `setParam("sel", id)` is the same closed-over-snapshot bug: the
-                 second starts from params the first never reached, so one of
-                 the two halves is silently thrown away and the reader lands
-                 either on an unselected list or on the feed they were already
-                 looking at. `go` is the single write — mode.ts § `go`.
+                 `setParam("sel", id)` was the same closed-over-snapshot bug,
+                 and since 2026-10-06 would be two history steps instead: a
+                 push to an unselected list and then a second push opening the
+                 session, so Back would stop on a list the reader never saw.
+                 `go` is the single write — mode.ts § `go`.
 
                  The feed's own filters ride along untouched, which is what
                  makes the browser's Back button land on the filtered feed

@@ -30,6 +30,12 @@ Four things a reader can see, spread over five places a writer must edit:
 - the name in the URL hash — `#health`, `#overseer`. **The hash and not `useState`**, because this
   page is left open on a phone for hours and reloaded whenever iOS reclaims the tab; `mode.ts`'s
   header has the argument, and an unknown name falls back to Sessions rather than rendering nothing.
+  **Back undoes the last deliberate act**: a write is a new history entry for a mode change and for
+  opening a session from the list, and rewrites the current entry for everything else — another
+  session, closing the detail, an order, a limit, a filter. A new parameter needs no decision,
+  because `historyKindFor` in `mode.ts` decides from the before and after states and no panel
+  chooses. It is the reading app's rule ([url-state.md](url-state.md): a deliberate act pushes, a
+  selection or a continuous value replaces), restated here as this page's own.
 
 One more thing it gets for free: **the browser tab's title**, `(2) Box health · Fleet`, which takes
 the mode's `MODE_LABELS` word — so choose that word knowing it is also what a tab strip shows. The
