@@ -22,7 +22,8 @@ import { assignSlots } from "../src/web/hit-colours.js";
 import type { Found } from "../src/web/search-hits.js";
 import { PAUSE_MS } from "../src/web/quick-session.js";
 import { SETTLE_MS } from "../src/web/modes/search/auto-thorough.js";
-import { storedPairs, THOROUGH_PAIR_PREFIX } from "../src/web/modes/search/stored-pairs.js";
+import { storedPairsFor, THOROUGH_PAIR_PREFIX } from "../src/web/modes/search/stored-pairs.js";
+import { SignedInReader } from "../src/web/lib/made-for.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 
@@ -70,6 +71,10 @@ const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { searchDraftFor } = await import("../src/web/search-draft.js");
 
 const SLUG = "a-paper";
+/** Whose searches every case is, unless it says otherwise; and somebody else in the same browser. */
+const READER = "11111111-1111-4111-8111-111111111111";
+const OTHER_READER = "22222222-2222-4222-8222-222222222222";
+const storedPairs = storedPairsFor(READER);
 const BLOCK = "spya-k3m9qt" as BlockId;
 const BLOCKS: Block[] = [
   {
@@ -237,20 +242,26 @@ function server(options: ServerOptions = {}) {
   };
 }
 
-function mount({ strict = false, slug = SLUG } = {}): void {
+function mount({ strict = false, slug = SLUG, reader = READER } = {}): void {
+  /* Under the provider `App` puts round every signed-in page: the band reads
+     whose searches these are from it (SearchMode.tsx § `readerId`). */
   const band = createElement(
-    NuqsAdapter,
-    null,
-    createElement(SearchBand, {
-      slug,
-      blocks: BLOCKS,
-      onJump: () => {},
-      onFound: (next: Found[]) => {
-        found = next;
-      },
-      openHit: null,
-      onOpenHit: () => {},
-    }),
+    SignedInReader.Provider,
+    { value: reader },
+    createElement(
+      NuqsAdapter,
+      null,
+      createElement(SearchBand, {
+        slug,
+        blocks: BLOCKS,
+        onJump: () => {},
+        onFound: (next: Found[]) => {
+          found = next;
+        },
+        openHit: null,
+        onOpenHit: () => {},
+      }),
+    ),
   );
   act(() => {
     root.render(strict ? createElement(StrictMode, null, band) : band);
@@ -888,7 +899,7 @@ describe("a quick row and its thorough row left behind are tidied on load", () =
     hits: [MEANING_HIT],
     ...over,
   });
-  const RECORD = { slug: SLUG, quickId: QUICK_ID, meaningId: MEANING_ID, words: WORDS };
+  const RECORD = { readerId: READER, slug: SLUG, quickId: QUICK_ID, meaningId: MEANING_ID, words: WORDS };
   const remembered = () => storedPairs.of(SLUG);
   /** Open Search mode with these rows saved and these ids ticked in the URL. */
   async function open(saved: SearchRun[], runs: string, options: { strict?: boolean } = {}) {
@@ -1171,6 +1182,105 @@ describe("a quick row and its thorough row left behind are tidied on load", () =
     expect([...stored.keys()]).toEqual([THOROUGH_PAIR_PREFIX + other.meaningId]);
   });
 
+  /**
+   * **Two readers, one browser profile** (plan 261006h). A record holds the
+   * words one of them searched for, so each says whose it is, and nothing
+   * running as B reads or removes A's. Here the cases above are A's, and B is
+   * `OTHER_READER`.
+   */
+  describe("a pair is its reader's", () => {
+    const theirs = storedPairsFor(OTHER_READER);
+    const KEY = THOROUGH_PAIR_PREFIX + MEANING_ID;
+    const written = () => JSON.parse(stored.get(KEY) ?? "null") as unknown;
+
+    it("is not returned to another reader after the first one's add, and still is to them", () => {
+      storedPairs.add(RECORD);
+      expect(theirs.of(SLUG)).toEqual([]);
+      expect(storedPairsFor(null).of(SLUG)).toEqual([]);
+      expect(remembered()).toEqual([RECORD]);
+      expect(written(), "the record says whose it is").toEqual(RECORD);
+    });
+
+    it("a record from before 2026-10-06, with no reader, is deleted when read and handed to nobody", () => {
+      const { readerId: _, ...legacy } = RECORD;
+      stored.set(KEY, JSON.stringify(legacy));
+      stored.set(`${THOROUGH_PAIR_PREFIX}spya-mn7w2e`, JSON.stringify({ ...legacy, meaningId: "spya-mn7w2e" }));
+      expect(remembered()).toEqual([]);
+      expect([...stored.keys()], "both, though removing one moves the other's index").toEqual([]);
+    });
+
+    it("reading as one reader leaves another's record where it is", () => {
+      storedPairs.add(RECORD);
+      theirs.of(SLUG);
+      expect(written()).toEqual(RECORD);
+    });
+
+    it.each(["forget", "invalidate the thorough row", "invalidate the quick row"])(
+      "%s, as another reader, leaves the first one's record",
+      (operation) => {
+        /* A row id is minted at random in the browser, so two readers' rows
+           sharing one is possible, only not likely: stored-pairs.ts
+           § `storedPairsFor`. */
+        storedPairs.add(RECORD);
+        if (operation === "forget") theirs.forget(MEANING_ID);
+        else theirs.invalidate(operation.includes("quick") ? QUICK_ID : MEANING_ID);
+        expect(written()).toEqual(RECORD);
+        // The control: the same verb, as its owner, removes it.
+        if (operation === "forget") storedPairs.forget(MEANING_ID);
+        else storedPairs.invalidate(operation.includes("quick") ? QUICK_ID : MEANING_ID);
+        expect(written()).toBeNull();
+      },
+    );
+
+    it("add does not write over another reader's record", () => {
+      storedPairs.add(RECORD);
+      theirs.add({ ...RECORD, words: "somebody else's words" });
+      expect(written()).toEqual(RECORD);
+    });
+
+    it("the tidy, run as another reader, deletes no row and leaves the record", async () => {
+      storedPairs.add(RECORD);
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${QUICK_ID}`);
+      const s = server({ saved: [quickRow(), thoroughRow()] });
+      mount({ reader: OTHER_READER });
+      await flush();
+      expect(savedRows(), "both rows are still listed").toHaveLength(2);
+      expect(s.deletes()).toEqual([]);
+      expect(s.patches()).toEqual([]);
+      expect(written()).toEqual(RECORD);
+      // The control: the same rows and the same record, opened as its owner, are tidied.
+      await leave();
+      const mine = await open([quickRow(), thoroughRow()], QUICK_ID);
+      expect(mine.deletes()).toEqual([QUICK_ID]);
+      expect(written()).toBeNull();
+    });
+
+    it("select all, as another reader, leaves the first one's pending pair to be tidied", async () => {
+      storedPairs.add(RECORD);
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${QUICK_ID}`);
+      server({ saved: [quickRow(), thoroughRow({ status: "pending", hits: [] })] });
+      mount({ reader: OTHER_READER });
+      await flush();
+      click(must(".srch-all input"));
+      await flush();
+      expect(ticked(), "control: select all ticked both").toHaveLength(2);
+      expect(written()).toEqual(RECORD);
+    });
+
+    it("a pair the band launches is written as the reader it was mounted for", async () => {
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick`);
+      const s = server();
+      mount({ reader: OTHER_READER });
+      await flush();
+      type(WORDS);
+      enter();
+      await flush();
+      expect(s.posts("meaning"), "control: the thorough search is out").toHaveLength(1);
+      expect(theirs.of(SLUG)).toMatchObject([{ readerId: OTHER_READER, words: WORDS }]);
+      expect(remembered()).toEqual([]);
+    });
+  });
+
   describe("what the tab that asked writes down", () => {
     /** Type, press Enter, and have the thorough search out. */
     async function launch() {
@@ -1187,7 +1297,7 @@ describe("a quick row and its thorough row left behind are tidied on load", () =
     it("the pair, when the thorough search starts, and nothing once it is swapped in", async () => {
       const { quick, meaning } = await launch();
       expect(await remembered()).toEqual([
-        { slug: SLUG, quickId: quick.id, meaningId: meaning.id, words: WORDS },
+        { readerId: READER, slug: SLUG, quickId: quick.id, meaningId: meaning.id, words: WORDS },
       ]);
       act(() => meaning.finish());
       await flush();

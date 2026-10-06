@@ -132,4 +132,31 @@ A's place, then A again and finds A's place kept.
 
 ## What landed
 
-(filled in at the end of each stage)
+**Stage 2** landed as `0026fa06e`, as described above.
+
+**Stage 1** landed as planned, with these differences, each found by the builder:
+
+- **A change of reader with the article still on screen.** B is treated as arriving at a bare
+  address: the article's own parameters are stripped from the URL, then B's stored view or B's
+  first-open default applies. Leaving the URL alone would have shown B where A was and then saved
+  it under B's key. A's still-subscribed `save` listener also had to be fenced, or it wrote the
+  stripped address over A's place; that has its own red test.
+- **Row ids are not unique across readers by construction** (this plan said they were): they are
+  minted at random in the browser. So `forget`, `invalidate` and `add` leave a record naming
+  another reader alone, and the store is `storedPairsFor(readerId)` so no verb can omit the reader.
+- **Search gets its reader from `useMadeFor()`**, which is right there and wrong in `useLastView`:
+  the search band is under the access gate, which unmounts on a change of reader; `ArticlePage`
+  is not.
+- **Only a signed-in reader adopts the legacy key.** A signed-out visit to your own public article
+  would otherwise consume it and lose your place.
+- **`signOut(page, base)` in `scripts/browser-sign-in.ts`**, because `/login` redirects a
+  signed-in visitor, so `signIn` alone cannot change reader in one profile.
+- The second reader is `dev-reader-b@spideryarn.local`, `00000000-0000-4000-8000-000000000004`.
+  No seed data was added: the local database already holds public articles both can open.
+
+**One behaviour changed that nobody asked for, and it is Greg's to confirm.** A signed-out visit
+used to use up an article's first open, so signing in afterwards did not open it at the Summary
+default. Signed-out visits are now recorded under `signed-out`, so the reader's first signed-in
+open gets the default, and does not inherit the place they reached signed out. It falls out of
+keying by reader; keeping the old behaviour needs a special case (adopt the `signed-out` entry on
+first sign-in), which reintroduces a small version of the leak this plan closes.

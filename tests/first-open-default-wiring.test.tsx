@@ -22,14 +22,17 @@ vi.mock("../src/web/useExperimental.js", () => ({
   useExperimental: () => ({ ...setting }),
 }));
 
-const { useLastView } = await import("../src/web/last-view.js");
+const { lastViewKey, legacyLastViewKey, useLastView } = await import("../src/web/last-view.js");
 const { navigate, parseRoute } = await import("../src/web/router.js");
 
-const KEY = "spya.lastView.x";
+/** Two readers who share one browser profile. */
+const A = "11111111-1111-4111-8111-111111111111";
+const B = "22222222-2222-4222-8222-222222222222";
+const KEY = lastViewKey("x", A);
 
-function Page({ slug }: { slug: string }) {
+function Page({ slug, readerId = A }: { slug: string; readerId?: string | null }) {
   const route = parseRoute(location.pathname);
-  useLastView(slug, route.kind === "read" ? route.view : "article");
+  useLastView(slug, route.kind === "read" ? route.view : "article", readerId);
   return null;
 }
 
@@ -48,6 +51,7 @@ beforeEach(() => {
     value: {
       getItem: (key: string) => held.get(key) ?? null,
       setItem: (key: string, value: string) => void held.set(key, value),
+      removeItem: (key: string) => void held.delete(key),
     },
   });
   history.replaceState(null, "", "/read/x");
@@ -186,13 +190,41 @@ describe("opening one it has seen", () => {
     expect(location.search).toBe("?mode=quotes");
   });
 
-  it("counts a signed-out visit: the default is not held over for a later sign-in", () => {
+  it("a signed-out visit is nobody's: it does not use up the first open of the reader who then signs in", () => {
+    /* Until 2026-10-06 it did, because the key had no reader in it. A place
+       is its reader's now, and so is a first open (plan 261006h). */
     Object.assign(setting, { loaded: true, signedIn: false });
-    open();
+    act(() => root.render(<Page slug="x" readerId={null} />));
+    expect(location.search).toBe("");
+    expect(window.localStorage.getItem(lastViewKey("x", null)), "control: the visit was recorded").toBe("");
     act(() => root.unmount());
     root = createRoot(host);
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
+    expect(location.search).toBe("?mode=summary&margin=1");
+  });
+
+  it("and a second signed-out visit is not a first open again", () => {
+    Object.assign(setting, { loaded: true, signedIn: false });
+    act(() => root.render(<Page slug="x" readerId={null} />));
+    act(() => root.unmount());
+    root = createRoot(host);
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
+    act(() => root.render(<Page slug="x" readerId={null} />));
     expect(location.search).toBe("");
+  });
+
+  it("a key from before 2026-10-06 is the first signed-in reader's: restored, and then gone", () => {
+    window.localStorage.setItem(legacyLastViewKey("x"), "?mode=quotes");
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
+    open();
+    expect(location.search).toBe("?mode=quotes");
+    expect(window.localStorage.getItem(legacyLastViewKey("x"))).toBeNull();
+    expect(window.localStorage.getItem(KEY)).toBe("?mode=quotes");
+    act(() => root.unmount());
+    root = createRoot(host);
+    history.replaceState(null, "", "/read/x");
+    act(() => root.render(<Page slug="x" readerId={B} />));
+    expect(location.search, "the next reader gets the default, not the first one's view").toBe("?mode=summary&margin=1");
   });
 });

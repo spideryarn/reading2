@@ -27,14 +27,21 @@ import {
   firstOpenHref,
   firstOpenSearch,
   hasArticleState,
+  lastViewKey,
+  legacyLastViewKey,
   NEVER_REMEMBERED,
   readLastView,
   REMEMBERED,
   rememberableSearch,
   restoredHref,
+  withoutArticleState,
   writeLastView,
 } from "../src/web/last-view.js";
 import { SHARE_KEY_PARAM } from "../src/share-key.js";
+
+/** Two readers who share one browser profile. */
+const A = "11111111-1111-4111-8111-111111111111";
+const B = "22222222-2222-4222-8222-222222222222";
 
 /**
  * **A private link's key is a credential, and this store is not where one is
@@ -63,7 +70,7 @@ describe("a private link's key and the remembered view", () => {
         getItem: (k: string) => held.get(k) ?? null,
         setItem: (k: string, v: string) => void held.set(k, v),
       }) as unknown as Storage;
-    expect(writeLastView("a-piece", rememberableSearch(`?key=${KEY}&mode=glossary`), storage)).toBe(true);
+    expect(writeLastView("a-piece", A, rememberableSearch(`?key=${KEY}&mode=glossary`), storage)).toBe(true);
     expect(held.size, "the control: something was written").toBe(1);
     expect(JSON.stringify([...held])).not.toContain(KEY);
     expect(JSON.stringify([...held])).toContain("mode=glossary");
@@ -362,7 +369,7 @@ describe("restoredHref", () => {
  * not ones a real `localStorage` can be asked to produce.
  */
 describe("the first-open default", () => {
-  const KEY = "spya.lastView.x";
+  const KEY = lastViewKey("x", A);
 
   /** A `localStorage` over a map, with either verb made to throw. */
   function storage(initial: Record<string, string> = {}, broken: { read?: boolean; write?: boolean } = {}) {
@@ -376,6 +383,10 @@ describe("the first-open default", () => {
         setItem(key: string, value: string) {
           if (broken.write) throw new Error("blocked");
           held.set(key, value);
+        },
+        removeItem(key: string) {
+          if (broken.write) throw new Error("blocked");
+          held.delete(key);
         },
       }) as unknown as Storage;
     return { held, source };
@@ -402,82 +413,172 @@ describe("the first-open default", () => {
 
   describe("readLastView: a failed read is not a missing key", () => {
     it("tells the three answers apart", () => {
-      expect(readLastView("x", storage().source)).toEqual({ kind: "none" });
-      expect(readLastView("x", storage({ [KEY]: "" }).source)).toEqual({ kind: "stored", search: "" });
-      expect(readLastView("x", storage({ [KEY]: "?at=spya-a" }).source)).toEqual({
+      expect(readLastView("x", A, storage().source)).toEqual({ kind: "none" });
+      expect(readLastView("x", A, storage({ [KEY]: "" }).source)).toEqual({ kind: "stored", search: "" });
+      expect(readLastView("x", A, storage({ [KEY]: "?at=spya-a" }).source)).toEqual({
         kind: "stored",
         search: "?at=spya-a",
       });
-      expect(readLastView("x", storage({}, { read: true }).source)).toEqual({ kind: "failed" });
+      expect(readLastView("x", A, storage({}, { read: true }).source)).toEqual({ kind: "failed" });
+    });
+  });
+
+  /**
+   * **Two readers, one browser profile** (plan 261006h). The key had the slug
+   * alone in it until 2026-10-06, so the second reader to open a public
+   * article was put where the first had been reading.
+   */
+  describe("a view is its reader's", () => {
+    const LEGACY = legacyLastViewKey("x");
+
+    it("is not returned to another reader, and still is to the one who wrote it", () => {
+      const s = storage();
+      expect(writeLastView("x", A, "?mode=quotes&at=spya-far", s.source)).toBe(true);
+      expect(readLastView("x", B, s.source)).toEqual({ kind: "none" });
+      expect(readLastView("x", null, s.source)).toEqual({ kind: "none" });
+      expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=quotes&at=spya-far" });
+    });
+
+    it("keeps one entry each, and one for nobody, under keys an old one cannot be taken for", () => {
+      const s = storage();
+      writeLastView("x", A, "?at=spya-a", s.source);
+      writeLastView("x", B, "?at=spya-b", s.source);
+      writeLastView("x", null, "?at=spya-none", s.source);
+      expect(Object.fromEntries(s.held)).toEqual({
+        [`spya.lastViewFor.${A}.x`]: "?at=spya-a",
+        [`spya.lastViewFor.${B}.x`]: "?at=spya-b",
+        "spya.lastViewFor.signed-out.x": "?at=spya-none",
+      });
+      expect(LEGACY).toBe("spya.lastView.x");
+      expect([...s.held.keys()].some((key) => key.startsWith("spya.lastView."))).toBe(false);
+    });
+
+    it("one reader's first open is not used up by another's", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", B, "", readLastView("x", B, s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    describe("a key from before 2026-10-06", () => {
+      it("is adopted by the first reader, and gone afterwards", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+        expect(Object.fromEntries(s.held)).toEqual({ [lastViewKey("x", A)]: "?mode=glossary" });
+      });
+
+      it("gives a second reader nothing", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        readLastView("x", A, s.source);
+        expect(readLastView("x", B, s.source)).toEqual({ kind: "none" });
+        expect(s.held.has(lastViewKey("x", B))).toBe(false);
+      });
+
+      it("keeps an opened article from looking like a first open, even one left in Plain", () => {
+        /* Why the old keys are adopted rather than dropped: no key is how a
+           first open is recognised, so dropping them would reopen every
+           article at the first-open default on the day of the deploy. */
+        const s = storage({ [LEGACY]: "" });
+        const stored = readLastView("x", A, s.source);
+        expect(stored).toEqual({ kind: "stored", search: "" });
+        expect(claimFirstOpen("x", A, "", stored, s.source)).toBe(false);
+      });
+
+      it("does not replace a view the reader already has", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary", [lastViewKey("x", A)]: "?mode=quotes" });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=quotes" });
+        expect(s.held.get(LEGACY), "left for a reader who has none").toBe("?mode=glossary");
+      });
+
+      it("is not adopted by nobody: a signed-out visit leaves it for the reader", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        expect(readLastView("x", null, s.source)).toEqual({ kind: "none" });
+        expect(s.held.get(LEGACY)).toBe("?mode=glossary");
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+      });
+
+      it("is still answered from, and left, where the storage will not be written", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" }, { write: true });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+        expect(Object.fromEntries(s.held)).toEqual({ [LEGACY]: "?mode=glossary" });
+      });
+    });
+
+    it("withoutArticleState takes every article parameter off and keeps what is not ours", () => {
+      expect(withoutArticleState("?utm_source=nl&mode=quotes&note=spya-a&key=k&%61t=spya-far")).toBe(
+        "?utm_source=nl&key=k",
+      );
+      expect(withoutArticleState("?mode=quotes&thread=t")).toBe("");
+      expect(withoutArticleState("")).toBe("");
     });
   });
 
   describe("writeLastView: Plain is stored, not forgotten", () => {
     it("keeps the key, empty, when there is nothing to remember", () => {
       const s = storage({ [KEY]: "?mode=summary" });
-      expect(writeLastView("x", "", s.source)).toBe(true);
+      expect(writeLastView("x", A, "", s.source)).toBe(true);
       expect(s.held.get(KEY)).toBe("");
     });
 
     it("says so when the write did not happen", () => {
-      expect(writeLastView("x", "?at=spya-a", storage({}, { write: true }).source)).toBe(false);
+      expect(writeLastView("x", A, "?at=spya-a", storage({}, { write: true }).source)).toBe(false);
     });
   });
 
   describe("claimFirstOpen: is this the first open, and is it on record", () => {
     it("claims a bare address with nothing stored, and leaves the marker behind", () => {
       const s = storage();
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
       expect(s.held.get(KEY)).toBe("");
       /* The marker is what makes it once: the same question again is a no. */
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
     });
 
     it("keeps a foreign parameter from counting as state", () => {
       const s = storage();
-      expect(claimFirstOpen("x", "?utm_source=nl", readLastView("x", s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", A, "?utm_source=nl", readLastView("x", A, s.source), s.source)).toBe(true);
     });
 
     it("lets a link that says anything win, and writes no marker for it", () => {
       const s = storage();
-      expect(claimFirstOpen("x", "?at=spya-sent", readLastView("x", s.source), s.source)).toBe(false);
-      expect(claimFirstOpen("x", "?note=spya-a", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "?at=spya-sent", readLastView("x", A, s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "?note=spya-a", readLastView("x", A, s.source), s.source)).toBe(false);
       expect(s.held.has(KEY)).toBe(false);
     });
 
     it("does not take a stored empty view for a first open", () => {
       const s = storage({ [KEY]: "" });
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
     });
 
     it("stays Plain for a reader who went back to Plain and reopens", () => {
       const s = storage();
       /* First open, the default lands, the reader presses Plain at the top. */
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(true);
-      writeLastView("x", rememberableSearch("?mode=summary&margin=1"), s.source);
-      writeLastView("x", rememberableSearch(""), s.source);
-      const again = readLastView("x", s.source);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
+      writeLastView("x", A, rememberableSearch("?mode=summary&margin=1"), s.source);
+      writeLastView("x", A, rememberableSearch(""), s.source);
+      const again = readLastView("x", A, s.source);
       expect(again).toEqual({ kind: "stored", search: "" });
-      expect(claimFirstOpen("x", "", again, s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "", again, s.source)).toBe(false);
       expect(restoredHref("/read/x", "", again.kind === "stored" ? again.search : null)).toBe(null);
     });
 
     it("claims nothing when the storage cannot be read", () => {
       const s = storage({}, { read: true });
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
     });
 
     it("claims nothing when the marker cannot be written", () => {
       /* Otherwise every open would be a first one, and the default would
          override a later choice of Plain on every visit. GPT Sol, F1. */
       const s = storage({}, { write: true });
-      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
     });
 
     it("claims nothing where there is no storage at all", () => {
       /* The default source reads `window.localStorage`, and node has no window. */
-      expect(readLastView("x")).toEqual({ kind: "failed" });
-      expect(writeLastView("x", "")).toBe(false);
+      expect(readLastView("x", A)).toEqual({ kind: "failed" });
+      expect(writeLastView("x", A, "")).toBe(false);
     });
   });
 

@@ -26,7 +26,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { SearchRun } from "../../../types.js";
-import { storedPairs } from "./stored-pairs.js";
+import { type StoredPairs, storedPairsFor } from "./stored-pairs.js";
 
 /**
  * How long a quick answer must stay `done` with the same words before its
@@ -244,6 +244,8 @@ interface Look {
   local: Local;
   wired: AutoThoroughWiring;
   byId: ReadonlyMap<string, SearchRun>;
+  /** The reader's remembered pairs, and nobody else's (stored-pairs.ts). */
+  stored: StoredPairs;
   now: number;
   /** Ask for another look later: a settle timer's callback. */
   again(): void;
@@ -339,20 +341,20 @@ function settlePairs(
       case "wait":
         if (pair !== before) {
           discards.add(pair.meaningId);
-          storedPairs.forget(pair.meaningId);
+          look.stored.forget(pair.meaningId);
         }
         break;
       case "swap":
         // Before the calls, so a second pass cannot swap it again.
         local.acted.add(pair.meaningId);
-        storedPairs.forget(pair.meaningId);
+        look.stored.forget(pair.meaningId);
         if (quick) local.place.set(pair.meaningId, quick.createdAt);
         wired.swap(pair);
         settled = true;
         break;
       case "drop":
         local.acted.add(pair.meaningId);
-        storedPairs.forget(pair.meaningId);
+        look.stored.forget(pair.meaningId);
         wired.drop(pair.meaningId);
         settled = true;
         break;
@@ -380,11 +382,19 @@ function settlePairs(
  */
 export function useAutoThorough<Run extends SearchRun>({
   slug,
+  readerId,
   runs,
   loaded,
   wiring,
 }: {
   slug: string;
+  /**
+   * Whose searches these are: the remembered pairs are kept per reader, and a
+   * tidy run as one reader neither sees nor removes another's
+   * (stored-pairs.ts). `SearchBand` is mounted afresh for each reader, so this
+   * does not change under the hook.
+   */
+  readerId: string | null;
   /** Every row `useSearch` holds, hidden ones included. */
   runs: Run[];
   /** The opening read of the saved list has answered, with a list and not a failure. */
@@ -395,6 +405,7 @@ export function useAutoThorough<Run extends SearchRun>({
   /* A settle timer fired, or Enter was pressed: look again. */
   const [looks, lookAgain] = useReducer((n: number) => n + 1, 0);
   const [local] = useState(newLocal);
+  const stored = useMemo(() => storedPairsFor(readerId), [readerId]);
 
   // Another article, or leaving Search mode: stop the timers and forget the pairs.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — a new article forgets everything.
@@ -432,7 +443,7 @@ export function useAutoThorough<Run extends SearchRun>({
     if (navigator.onLine === false) return;
     const byId = new Map(runs.map((r) => [r.id, r]));
     const taken = new Set<string>();
-    for (const pair of storedPairs.of(slug)) {
+    for (const pair of stored.of(slug)) {
       const quick = byId.get(pair.quickId);
       const decision = taken.has(pair.quickId)
         ? "forget"
@@ -442,14 +453,14 @@ export function useAutoThorough<Run extends SearchRun>({
             meaningTicked: wiring.current.ticked(pair.meaningId),
           });
       if (decision === "keep") continue;
-      storedPairs.forget(pair.meaningId);
+      stored.forget(pair.meaningId);
       if (decision === "swap" && quick) {
         taken.add(pair.quickId);
         local.place.set(pair.meaningId, quick.createdAt);
         wiring.current.swap({ ...pair, discard: false });
       }
     }
-  }, [loaded, local, wiring]);
+  }, [loaded, local, wiring, stored]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `looks` is a trigger, not an input — a timer or Enter asks for another look.
   useEffect(() => {
@@ -457,13 +468,14 @@ export function useAutoThorough<Run extends SearchRun>({
       local,
       wired: wiring.current,
       byId: new Map(runs.map((r) => [r.id, r])),
+      stored,
       now: Date.now(),
       again: lookAgain,
     };
     const launched = launchWatched(look);
     // Written down, so a reload before it lands can still tidy the pair.
     for (const pair of launched) {
-      storedPairs.add({ slug, quickId: pair.quickId, meaningId: pair.meaningId, words: pair.words });
+      stored.add({ slug, quickId: pair.quickId, meaningId: pair.meaningId, words: pair.words });
     }
     const { discards, settled } = settlePairs(look, pairs);
     /* Applied as a functional update, by id, rather than by replacing the
@@ -478,7 +490,7 @@ export function useAutoThorough<Run extends SearchRun>({
         ...launched,
       ]);
     }
-  }, [slug, runs, pairs, looks, local, wiring]);
+  }, [slug, runs, pairs, looks, local, wiring, stored]);
 
   const hiddenIds = useMemo(() => new Set(pairs.map((p) => p.meaningId)), [pairs]);
   const visible = useMemo(
@@ -508,7 +520,7 @@ export function useAutoThorough<Run extends SearchRun>({
   );
   const renamed = useCallback(
     (from: string, to: string) => {
-      storedPairs.invalidate(from);
+      stored.invalidate(from);
       if (local.watch.delete(from)) local.watch.add(to);
       const words = local.submitted.get(from);
       if (words !== undefined) {
@@ -525,7 +537,7 @@ export function useAutoThorough<Run extends SearchRun>({
           : prev,
       );
     },
-    [local],
+    [local, stored],
   );
 
   return { visible, hidden, upgrading, watch, submitted, renamed };

@@ -13,10 +13,21 @@
  * about representing reading state. It answers one question: **what remembers
  * the query string, and when is it replayed?**
  *
- * The whole feature: copy the query string into `localStorage` under the slug
- * as the reader moves, and put it back when they open that article at a bare
- * address. No server, no schema, no sync, and per-device by construction, which
- * is what Greg said was fine.
+ * The whole feature: copy the query string into `localStorage` under the reader
+ * and the slug as the reader moves, and put it back when that reader opens that
+ * article at a bare address. No server, no schema, no sync, and per-device by
+ * construction, which is what Greg said was fine.
+ *
+ * ## Per device, and per reader
+ *
+ * Since 2026-10-06 the key names who was reading (§ `lastViewKey`). Two readers
+ * can share one browser profile, and both can open the same slug when the
+ * article is public; with the slug alone in the key, the second was put where
+ * the first had been reading, in the first's mode. A place is the reader's, so
+ * the key says whose it is, and signing out clears nothing: the reader may come
+ * back. docs/project/auth.md § Browser storage that is a reader's is keyed by
+ * that reader;
+ * docs/plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md.
  *
  * ## Why this is `localStorage` when url-state.md keeps view state in the URL
  *
@@ -51,12 +62,12 @@
  * Since 2026-10-05, for a signed-in reader: a bare address with **no key at
  * all** for the slug opens in Summary where a band fits beside the prose, with
  * Marginalia's notes too where those fit. It is the same decision with one more case, and the same rule: the
- * link always wins. So that "no key" means *never opened in this browser*, an
+ * link always wins. So that "no key" means *never opened by this reader in this browser*, an
  * empty view is now stored as `""` rather than removed, and a storage that
  * cannot be read or written means no default rather than one on every visit.
- * A visit signed out, or on a window too narrow for a band, writes the key
- * like any other and so uses the first open up. § The first-open default,
- * below. A bare metadata visit does not claim that first article open.
+ * A visit on a window too narrow for a band writes the key like any other and
+ * so uses the first open up; a visit signed out writes nobody's key, and uses
+ * up nobody's but its own. § The first-open default, below. A bare metadata visit does not claim that first article open.
  *
  * The reasoning, the deferred pieces and the questions nobody was there to
  * answer are in
@@ -68,6 +79,7 @@ import { type ArticleView, onAddressChange, parseRoute } from "./router.js";
 import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
 import { notesFit } from "./marginalia/press.js";
+import { storageReader } from "./lib/storage-reader.js";
 import { rootFontPx, usableWidth } from "./reader/measure.js";
 import { useExperimental } from "./useExperimental.js";
 
@@ -264,8 +276,31 @@ function opensTheThread(all: readonly string[]): boolean {
   return pairValue(mode) === "summary" && summary !== undefined && pairValue(summary) === "thread";
 }
 
-/** Where one article's last view is kept. One key per slug; see `writeLastView`. */
-const KEY_PREFIX = "spya.lastView.";
+/**
+ * **Where one reader's last view of one article is kept**:
+ * `spya.lastViewFor.<reader>.<slug>`, one key per reader and slug (see
+ * `writeLastView`). The reader is their id, or `signed-out` for nobody
+ * (`storageReader`), and neither has a dot in it, so the slug is whatever
+ * follows the second one.
+ *
+ * **A new prefix rather than a longer old one**, so a key written before
+ * 2026-10-06 can never be read as a new one.
+ */
+const KEY_PREFIX = "spya.lastViewFor.";
+
+export function lastViewKey(slug: string, readerId: string | null): string {
+  return `${KEY_PREFIX}${storageReader(readerId)}.${slug}`;
+}
+
+/**
+ * **The key every browser wrote until 2026-10-06**: `spya.lastView.<slug>`,
+ * with no reader in it. Read once more, by `readLastView`, and then removed.
+ */
+const LEGACY_KEY_PREFIX = "spya.lastView.";
+
+export function legacyLastViewKey(slug: string): string {
+  return LEGACY_KEY_PREFIX + slug;
+}
 
 /**
  * **Does this pair name that parameter, however it is spelled?**
@@ -415,7 +450,7 @@ export function restoredHref(
  * the caller's `try`. A parameter of the two functions below so a test can hand
  * in one that throws on a read or on a write (tests/last-view.test.ts).
  */
-type StorageSource = () => Pick<Storage, "getItem" | "setItem">;
+type StorageSource = () => Pick<Storage, "getItem" | "setItem" | "removeItem">;
 const browserStorage: StorageSource = () => window.localStorage;
 
 /**
@@ -437,17 +472,51 @@ export type StoredView =
   | { kind: "failed" };
 
 /**
- * What this browser last saw of that article.
+ * What this reader last saw of that article, in this browser.
  *
  * Wrapped, and not only against an empty value: `localStorage` **throws** in
  * Safari's private mode and wherever site data is blocked. A convenience is
  * never worth taking a page down for, so a failure here means the reader gets
  * the top of the article, which is what they got before this file existed.
+ *
+ * **A legacy key is adopted once, by the first signed-in reader with no entry
+ * of their own, and then removed.** Dropping the old keys instead would be less
+ * code and would cost every reader their place in every article on the day of
+ * the deploy, and more than that: no key is how `claimFirstOpen` knows a first
+ * open, so each article they had ever opened would reopen at the first-open
+ * default. Adoption keeps both for the ordinary browser one reader uses. Where
+ * two share one, the first to open a slug afterwards inherits whatever was
+ * last written there, once: the old behaviour one last time.
+ *
+ * - **Nobody adopts while signed out.** A reader whose session has lapsed
+ *   opens their own article signed out before signing back in, and that visit
+ *   would use the key up for an identity that has nothing to restore it to.
+ * - **Two tabs can both adopt it**, if both read it before either removes it.
+ *   Accepted, not serialised: it is the same one-time inheritance, and a lock
+ *   in `localStorage` is more machinery than the case is worth (GPT Sol, plan
+ *   261006h, F4).
+ * - **A storage that reads and will not write still answers.** The legacy
+ *   value is returned and left where it is.
  */
-export function readLastView(slug: string, storage: StorageSource = browserStorage): StoredView {
+export function readLastView(
+  slug: string,
+  readerId: string | null,
+  storage: StorageSource = browserStorage,
+): StoredView {
   try {
-    const search = storage().getItem(KEY_PREFIX + slug);
-    return search === null ? { kind: "none" } : { kind: "stored", search };
+    const store = storage();
+    const search = store.getItem(lastViewKey(slug, readerId));
+    if (search !== null) return { kind: "stored", search };
+    if (readerId === null) return { kind: "none" };
+    const legacy = store.getItem(legacyLastViewKey(slug));
+    if (legacy === null) return { kind: "none" };
+    try {
+      store.setItem(lastViewKey(slug, readerId), legacy);
+      store.removeItem(legacyLastViewKey(slug));
+    } catch {
+      /* Not moved. It is still this reader's to restore from, this once. */
+    }
+    return { kind: "stored", search: legacy };
   } catch {
     return { kind: "failed" };
   }
@@ -465,15 +534,20 @@ export function readLastView(slug: string, storage: StorageSource = browserStora
  * here*, or going back to Plain would earn the default again on the next open.
  * `restoredHref` treats `""` as nothing to restore, so restores are unchanged.
  *
- * One key per slug, and no index and no pruning — deliberately. An entry is a
+ * One key per reader and slug, and no index and no pruning — deliberately. An entry is a
  * few dozen bytes against a quota of about five megabytes, so it would take
  * tens of thousands of articles to matter, and `QuotaExceededError` is caught
  * here like every other failure. Read-modify-writing a bounded index on a path
  * that runs while the reader is scrolling would cost more than it saves.
  */
-export function writeLastView(slug: string, search: string, storage: StorageSource = browserStorage): boolean {
+export function writeLastView(
+  slug: string,
+  readerId: string | null,
+  search: string,
+  storage: StorageSource = browserStorage,
+): boolean {
   try {
-    storage().setItem(KEY_PREFIX + slug, search);
+    storage().setItem(lastViewKey(slug, readerId), search);
     return true;
   } catch {
     /* See `readLastView`. The view simply will not survive being closed. */
@@ -494,12 +568,14 @@ export function writeLastView(slug: string, search: string, storage: StorageSour
  * functions, one per question, and the effect in `useLastView` that asks them.
  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
  *
- * **"First open" means first open in this browser**, because the key is the
- * only memory there is. So an article read on another device gets the default
- * once here; and since the save in `useLastView` writes the key on every open,
- * a signed-out visit, or one on a window too narrow for a band, counts as
- * having opened it — the default is not held over for a wider window or a
- * later sign-in.
+ * **"First open" means this reader's first open in this browser**, because the
+ * key is the only memory there is, and it is theirs (§ `lastViewKey`). So an
+ * article read on another device gets the default once here; and since the
+ * save in `useLastView` writes the key on every open, a visit on a window too
+ * narrow for a band counts as having opened it — the default is not held over
+ * for a wider window. **A signed-out visit no longer counts against the reader
+ * who then signs in** (2026-10-06): it is recorded for nobody, and the reader's
+ * own first open is still to come.
  */
 
 /**
@@ -541,13 +617,26 @@ export function firstOpenSearch(windowWidth: number, rootFontPx: number): string
  */
 export function claimFirstOpen(
   slug: string,
+  readerId: string | null,
   search: string,
   stored: StoredView,
   storage: StorageSource = browserStorage,
 ): boolean {
   if (stored.kind !== "none") return false;
   if (hasArticleState(search)) return false;
-  return writeLastView(slug, "", storage);
+  return writeLastView(slug, readerId, "", storage);
+}
+
+/**
+ * **The query string with every article parameter taken off it**: what is
+ * left is whatever was not ours (`?key=`, a `?utm_source=`), as text, in order.
+ *
+ * For one caller: `useLastView`, when the reader changes under an article that
+ * is still on screen. § A change of reader, there.
+ */
+export function withoutArticleState(search: string): string {
+  const kept = pairs(search).filter((p) => !ARTICLE_PARAMS.includes(pairKey(p)));
+  return kept.length > 0 ? `?${kept.join("&")}` : "";
 }
 
 /**
@@ -600,27 +689,64 @@ export function firstOpenHref(
  * subscribes through `onAddressChange` rather than calling `useAddress()`:
  * `?at=` is rewritten about once a second while anybody scrolls, and a re-render
  * of `ArticlePage` on each of those would re-render the whole article.
+ *
+ * ## A change of reader, with the article still on screen
+ *
+ * `readerId` is `ArticlePage`'s own prop, **not `useMadeFor()`**. That answer
+ * is frozen at mount, which is its point, and `ArticlePage` is not remounted
+ * when one signed-in reader becomes another (another tab signed in as somebody
+ * else): only what is under its access gate is. With the frozen answer, B's
+ * movements would be written under A's key (GPT Sol, plan 261006h, F1).
+ * Between signed out and signed in the page *is* remounted, because `App`
+ * draws those two from different places, so the case here is always one
+ * reader to another.
+ *
+ * At that moment the address is A's view: A's section, A's mode, perhaps the
+ * `?note=` or `?thread=` A had open. B did not open that link. So **the change
+ * is an arrival for B at a bare address**: the article's parameters are taken
+ * off (`withoutArticleState`), and then the ordinary decision runs as B, which
+ * puts B's own stored view back or claims B's first open. The alternative,
+ * leaving the address alone, shows B where A was and then saves it under B's
+ * key as if B had chosen it. Everything below the gate is being fetched again
+ * for B at the same moment, so nothing B was looking at is lost.
+ *
+ * And A's listener is still subscribed while that rewrite is made, because a
+ * layout effect runs before the previous render's passive cleanup. It checks
+ * `arrivedFor` for exactly that, or the bare address would be saved over A's
+ * place on A's way out.
  */
-export function useLastView(slug: string, view: ArticleView): void {
-  /* One decision per slug/view arrival, including StrictMode replay. A view
-     change can claim a first article open after metadata, but only a slug
-     change restores a saved view, as before. */
-  const restoredFor = useRef<{ slug: string; view: ArticleView } | null>(null);
-  /* The slug whose first open has been claimed and whose default is still to
-     be applied — see the second effect. */
-  const firstOpenFor = useRef<string | null>(null);
+export function useLastView(slug: string, view: ArticleView, readerId: string | null): void {
+  /* One decision per slug/view/reader arrival, including StrictMode replay. A
+     view change can claim a first article open after metadata, but only a new
+     slug or a new reader restores a saved view. */
+  const arrivedFor = useRef<{ slug: string; view: ArticleView; readerId: string | null } | null>(null);
+  /* The slug and reader whose first open has been claimed and whose default
+     is still to be applied — see the second effect. */
+  const firstOpenFor = useRef<{ slug: string; readerId: string | null } | null>(null);
   useLayoutEffect(() => {
-    if (restoredFor.current?.slug === slug && restoredFor.current.view === view) return;
-    const restore = restoredFor.current?.slug !== slug;
-    restoredFor.current = { slug, view };
-    const stored = readLastView(slug);
+    const before = arrivedFor.current;
+    if (before?.slug === slug && before.view === view && before.readerId === readerId) return;
+    const newReader = before !== null && before.readerId !== readerId;
+    const restore = before?.slug !== slug || newReader;
+    arrivedFor.current = { slug, view, readerId };
+    /* § A change of reader, above. Only while the address still names this
+       article: one that has moved on is somewhere somebody chose to go. */
+    const route = parseRoute(location.pathname);
+    const leftBehind = newReader && before.slug === slug && route.kind === "read" && route.slug === slug;
+    const search = leftBehind ? withoutArticleState(location.search) : location.search;
+    const stored = readLastView(slug, readerId);
     /* The same one read answers both questions: something to put back, or a
        first open. They cannot both be yes — one needs a key and the other
        needs there to be none. */
-    firstOpenFor.current = view === "article" && claimFirstOpen(slug, location.search, stored) ? slug : null;
-    /* A view change keeps the old restoration rule: only a new slug restores.
-       But metadata must not claim the reading view's first arrival. */
-    const href = restore ? restoredHref(location.pathname, location.search, stored.kind === "stored" ? stored.search : null) : null;
+    firstOpenFor.current =
+      view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
+    /* A view change keeps the old restoration rule: only a new slug (or a new
+       reader) restores. But metadata must not claim the reading view's first
+       arrival. */
+    const restored = restore
+      ? restoredHref(location.pathname, search, stored.kind === "stored" ? stored.search : null)
+      : null;
+    const href = restored ?? (search === location.search ? null : location.pathname + search);
     if (href === null) return;
     /* `replaceState`, not `pushState`: the bare address is a spelling the reader
        arrived in rather than a page they visited, so Back belongs to whatever
@@ -628,7 +754,7 @@ export function useLastView(slug: string, view: ArticleView): void {
        and router.ts have this patched, so every `useQueryState` below sees the
        new query string without being told. */
     history.replaceState(history.state, "", href);
-  }, [slug, view]);
+  }, [slug, view, readerId]);
 
   /* **The first-open default, applied once the settings store has answered**,
      because that store is where `signedIn` comes from. (Until 2026-10-05 its
@@ -640,11 +766,13 @@ export function useLastView(slug: string, view: ArticleView): void {
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
-     reapplies this. No reader id is passed in, because `signedIn` is the
-     store's. Declared after the claim so it sees this render's claim. */
+     reapplies this. `signedIn` is the store's; the reader id is here only so
+     that a default claimed for one reader is never applied for the next.
+     Declared after the claim so it sees this render's claim. */
   const { loaded, signedIn } = useExperimental();
   useLayoutEffect(() => {
-    if (view !== "article" || !loaded || firstOpenFor.current !== slug) return;
+    const claimed = firstOpenFor.current;
+    if (view !== "article" || !loaded || claimed?.slug !== slug || claimed.readerId !== readerId) return;
     firstOpenFor.current = null;
     const href = firstOpenHref(
       slug,
@@ -654,7 +782,7 @@ export function useLastView(slug: string, view: ArticleView): void {
       firstOpenSearch(usableWidth(), rootFontPx()),
     );
     if (href !== null) history.replaceState(history.state, "", href);
-  }, [slug, view, loaded, signedIn]);
+  }, [slug, view, readerId, loaded, signedIn]);
 
   useEffect(() => {
     const save = () => {
@@ -668,15 +796,18 @@ export function useLastView(slug: string, view: ArticleView): void {
          must not write the article's marker before its arrival effect runs. */
       const route = parseRoute(location.pathname);
       if (route.kind !== "read" || route.slug !== slug || route.view !== view) return;
+      /* **And the reader this listener was made for is still the one who
+         arrived.** The pathname cannot say that. § A change of reader. */
+      if (arrivedFor.current?.readerId !== readerId) return;
       const search = rememberableSearch(location.search);
       /* A bare metadata visit is not an open of the prose. Keep its missing
          key missing; existing views and explicit article state still save. */
-      if (route.view === "metadata" && search === "" && readLastView(slug).kind !== "stored") return;
-      writeLastView(slug, search);
+      if (route.view === "metadata" && search === "" && readLastView(slug, readerId).kind !== "stored") return;
+      writeLastView(slug, readerId, search);
     };
     // The state we arrived with counts: a shared link's `?at=` is where this
     // reader was, from the moment they opened it.
     save();
     return onAddressChange(save);
-  }, [slug, view]);
+  }, [slug, view, readerId]);
 }

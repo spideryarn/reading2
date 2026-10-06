@@ -156,6 +156,32 @@ mounted reader before recording; audio conversion and retries retain that reader
 engines retain `apiWiringFor(madeFor)` from `live/wiring.ts`, so device detection, offer creation,
 provider tool callbacks and meter retirement cannot send as a later reader.
 
+### Browser storage that is a reader's is keyed by that reader
+
+Two readers can use one browser profile, and `localStorage` outlives a sign-out. So a record there
+that holds a reader's words or their place says whose it is, and is read back only for them
+([261006h](../plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md)).
+Signing out clears neither store: the reader may come back, and clearing would not cover the case
+above, where the reader changes in another tab with no sign-out in this one.
+[`lib/storage-reader.ts`](../../src/web/lib/storage-reader.ts) is the one spelling of "whose",
+with `signed-out` for nobody. Two stores follow it:
+
+- **Where you were in an article** ([`last-view.ts`](../../src/web/last-view.ts)): the key is
+  `spya.lastViewFor.<reader>.<slug>`. The reader comes from `ArticlePage`'s own prop and not from
+  `useMadeFor`, because `ArticlePage` is not remounted when one signed-in reader becomes another.
+  When that happens with an article on screen, the address is the previous reader's view, so the
+  article's parameters are taken off it and the new reader arrives as at a bare address. An old
+  `spya.lastView.<slug>` key is adopted once, by the first signed-in reader with no entry of their
+  own, and removed.
+- **The search pairs a reload tidies** ([`stored-pairs.ts`](../../src/web/modes/search/stored-pairs.ts)):
+  the record carries `readerId`, and every verb of `storedPairsFor(reader)` reads, writes and
+  removes that reader's records only. An old record with no reader is removed when read. Another
+  reader's words do stay in storage until they come back; nothing running as anybody else is
+  handed them.
+
+Keys that are the browser's rather than a reader's (the install hint, which microphone) stay as
+they are.
+
 ## The signed-out page is the landing page
 
 Since 2026-08-27, no session shows you [`LandingPage.tsx`](../../src/web/LandingPage.tsx) rather
