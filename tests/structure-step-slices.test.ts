@@ -499,13 +499,18 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     expect(out.outputTokens).toBe(4 * USAGE.output_tokens);
   });
 
-  it("when the labels step could not ask about the stitched tree (forced: wiring only)", async () => {
-    forceUnaskable = true;
-    const out = await run();
-    expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "labels-could-not-ask" });
-    expectBoundedTree(BLOCKS, out.parts.tree);
-    expect(out.wholeDocumentCalls).toBe(4);
-  });
+});
+
+/* **Reversed 2026-10-06.** This was the last "falls back" case: with
+   `unaskableBatches` forced to answer "one", the stitched tree was thrown away
+   (`slicesFailed: "labels-could-not-ask"`). The labels planner now cuts such a
+   section's call into windows, so the structure step no longer asks, and the
+   same forcing must change nothing. Stage A of plan 261005j. */
+it("the stitched tree is kept whatever `unaskableBatches` would say of it (forced: wiring only)", async () => {
+  forceUnaskable = true;
+  const out = await run();
+  expect(out.source).toMatchObject({ by: "slices" });
+  expect(out.parts.tree.provisional).toBeUndefined();
 });
 
 describe("checkpoints (review F18)", () => {

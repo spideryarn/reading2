@@ -45,7 +45,7 @@ import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { buildBoundedHeadingTree, MIN_BOUNDED_BODY } from "./heading-tree.js";
-import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile, unaskableBatches } from "./labels.js";
+import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile } from "./labels.js";
 import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, type BlockSplit, splitBlocks } from "./supplement.js";
@@ -2230,9 +2230,6 @@ export interface StructureArtefacts {
  * - `answer-too-long`: the same document, where the slices did not make a
  *   tree; `slicesFailed` says which step gave out. What was asked for on the
  *   way is in the run's counts.
- * - `labels-could-not-ask`: a model's tree was sound but held a section too
- *   long for one labels call, so the labels step would have refused it. That
- *   run's call was made and paid for; its counts say so.
  * - `before-structure`: not a fallback. A first import asked to open before
  *   its structure is built (`headingsOnly`), so no model was asked and the tree
  *   is marked `provisional: "awaiting-structure"`; a second run of this step
@@ -2240,12 +2237,16 @@ export interface StructureArtefacts {
  *
  * There is no `input-too-long`. Nothing in this codebase estimates whether the
  * whole-document call's *input* fits, and this was not the place to invent it.
+ *
+ * And since 2026-10-06 there is no `labels-could-not-ask`. A sound tree with a
+ * section too long for one labels call used to be thrown away here; the labels
+ * planner now asks about that section in windows (src/labels.ts §
+ * `planBatches`), so every sound tree is one the labels step can start on.
  */
 export type StructureSource =
   | { by: "model" }
   | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number }
   | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
-  | { by: "headings"; reason: "labels-could-not-ask" }
   | { by: "headings"; reason: "before-structure" };
 
 export interface StructureRun {
@@ -2681,7 +2682,6 @@ export async function generateStructure(opts: {
     } catch (err) {
       return giveUp("tree-unsound", err);
     }
-    if (unaskableBatches(stitched, blocks).length > 0) return giveUp("labels-could-not-ask");
     return finishStructureRun({
       blocks,
       slug,
@@ -3169,27 +3169,6 @@ export async function generateStructure(opts: {
   }
 
   const spent: StructureSpend = { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed };
-
-  /* **A sound tree is not yet one the labels step can start on.** It never cuts
-     a section, so a section too long for one labels answer was stored here and
-     refused there. Asked after the deepening, which is the one thing that
-     could have divided it, and of the labels step's own plan and budget rather
-     than a number kept here. Review F2 of
-     docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md. */
-  const unaskable = unaskableBatches(structure, blocks);
-  if (unaskable.length > 0) {
-    log("pipeline").warn(
-      {
-        slug,
-        blocks: body.length,
-        unaskableBatches: unaskable.length,
-        largestBatch: Math.max(...unaskable.map((b) => b.blocks.length)),
-        wholeDocumentResumed,
-      },
-      "the model's table of contents has a section too long for one labels call; building it from the document's headings instead",
-    );
-    return fromHeadings({ by: "headings", reason: "labels-could-not-ask" }, spent);
-  }
 
   return finishStructureRun({
     blocks,

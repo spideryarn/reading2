@@ -74,7 +74,6 @@ export type SlicesFailure =
   | "slice-failed"
   | "root-call-failed"
   | "tree-unsound"
-  | "labels-could-not-ask"
   | "out-of-time";
 
 /** A few words for the step's `detail`, which the reader's progress card shows. */
@@ -83,7 +82,6 @@ export const SLICES_FAILED_WORDS: Record<SlicesFailure, string> = {
   "slice-failed": "one part could not be read",
   "root-call-failed": "its top line could not be written",
   "tree-unsound": "the parts did not join",
-  "labels-could-not-ask": "a section was too long to label",
   "out-of-time": "there was not time to read it in parts",
 };
 

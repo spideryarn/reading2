@@ -259,10 +259,10 @@ describe("structureSourceDetail", () => {
     expect(clause).toBe(", a first outline (the full structure follows)");
   });
 
-  it("keeps the two fallbacks' clauses", () => {
+  it("keeps the fallback's clause, and says nothing for one model answer", () => {
     expect(structureSourceDetail({ by: "model" })).toBe("");
-    expect(structureSourceDetail({ by: "headings", reason: "labels-could-not-ask" })).toBe(
-      ", from its headings (a section was too long to label)",
+    expect(structureSourceDetail({ by: "headings", reason: "answer-too-long", slicesFailed: "out-of-time" })).toBe(
+      ", from its headings (too long for one answer; there was not time to read it in parts)",
     );
   });
 });

@@ -1058,8 +1058,6 @@ export function structureSourceDetail(source: StructureSource): string {
   switch (source.reason) {
     case "answer-too-long":
       return `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[source.slicesFailed]})`;
-    case "labels-could-not-ask":
-      return ", from its headings (a section was too long to label)";
     case "before-structure":
       return ", a first outline (the full structure follows)";
     default: {

@@ -768,8 +768,22 @@ The rule the split turns on:
 A label's job is to tell its paragraph apart from *its neighbours*
 ([entry length](#granularity)), so every pair a reader compares has to have been written in the same
 call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
-never splits one. Batching on a token window instead would break exactly that and nothing else,
-which is why it would be hard to notice.
+does not split one that a call can hold. Batching on a token window instead would break exactly
+that and nothing else, which is why it would be hard to notice.
+
+**The one exception is a section no single answer could label** (over 2,032 blocks under one
+title: `labelCallBudget` throws `TooLongForOnePass`). Since 2026-10-06 `planBatches` asks about it
+in consecutive near-equal windows of at most 60 blocks, a window not ending on a heading where it
+can help it (`cutIntoWindows`, the cut the [bounded headings tree](#when-one-answer-will-not-fit)
+uses for its sections). Each window is a sibling set of its own with the section's node, crumb
+and gist; the tree is not touched. The rule is on the finished plan, not on the section, because
+the floor and the tail merge below join sets: pack as always, and if any batch could not be
+asked, cut every section over 60 in that batch and pack again. So no plan holds a batch too long
+to ask, and a tree that planned fine plans exactly as it did, which its checkpoint keys depend
+on. What it gives up: that section's labels are written without the far windows in view. A
+section between 61 and 2,032 blocks is still one call (`oversizedSets` counts those, and nothing
+more); cutting them too would be the better call and would move the batches of trees that label
+fine today.
 
 **There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
 `MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
@@ -1171,9 +1185,8 @@ tree, and is an ordinary finished tree.
   returned.
 - **On a failure it cannot get past, it stops starting calls, waits for the ones in flight, and
   falls back** to the tree below. A slice that failed in both passes, a slice refused or cut short
-  that could not be read in halves, a failed root call, a joined tree that will not build, a
-  section the labels step could not ask about, or time running out, which stops both passes at
-  once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
+  that could not be read in halves, a failed root call, a joined tree that will not build, or
+  time running out, which stops both passes at once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
 seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is
@@ -1213,8 +1226,12 @@ this step.
   That value means the opposite: a `["structure"]` job is queued to replace it. Ask
   `awaitingStructure(tree)` ([`src/types.ts`](../../src/types.ts)), never the bare flag, since the
   two values want different things from every reader.
-- **A model's tree takes the same path when the labels step could not start on it**: one holding a
-  section too long for one labels call (`unaskableBatches`, [`src/labels.ts`](../../src/labels.ts)).
+- **A model's tree no longer takes this path for a section too long for one labels call.** From
+  2026-10-05 to 2026-10-06 it did (`labels-could-not-ask`), and the reader lost every gist. The
+  labels planner now asks about such a section in windows
+  ([§ Why they are two steps](#two-steps)), so the tree stands.
+  `unaskableBatches` ([`src/labels.ts`](../../src/labels.ts)) is kept as the measure: it is empty
+  for every tree, and the tests and the long-document evals ask it.
 - **`StructureRun.source` says which path ran** (one answer, slices, or headings and why), and the
   step logs it at every value and puts it in its `detail`, so a fallback that became the common
   case would show.
