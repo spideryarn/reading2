@@ -378,7 +378,7 @@ export function ReadinessPanel({
    * no reason. It is clamped because a bad number from a future build must not
    * turn this into a busy loop.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal, and `view?.refreshMs` is left out on purpose — the note above the dependency list says why.
   useEffect(() => {
     let live = true;
     const load = (): void => {
@@ -400,7 +400,6 @@ export function ReadinessPanel({
        rebuild the interval on every successful poll, which is a slow leak of
        timers and a drifting cadence. The first answer's interval is good enough
        for the life of the mount. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, refreshNonce]);
 
   const formatTime = (ms: number): string =>

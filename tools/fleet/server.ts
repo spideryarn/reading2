@@ -39,7 +39,7 @@ import { makeSchedule } from "./schedule-wiring.js";
 import { makeOccurrences } from "./occurrences-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealthAsync, type HealthReport } from "./health.js";
-import { type HealthTurn } from "./health-history.js";
+import type { HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
 import {

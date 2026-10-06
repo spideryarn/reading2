@@ -226,6 +226,7 @@ export function IdeasPanel({
           on 2026-10-02, to the corner. Without the row the corner would sit on
           the first group's heading and its count; mode-band.css floors a head
           at the corner's height. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still

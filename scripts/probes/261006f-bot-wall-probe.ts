@@ -197,7 +197,7 @@ async function probe(n: number, url: string, outDir: string): Promise<Row> {
     hints: [],
     file: null,
   };
-  let doc;
+  let doc: Awaited<ReturnType<typeof fetchDocument>>;
   try {
     doc = await fetchDocument(url, { attempts: 1, timeoutMs: 25_000 });
   } catch (e) {

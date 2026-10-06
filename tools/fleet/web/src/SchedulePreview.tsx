@@ -285,7 +285,7 @@ function DocumentLine({ document }: { document: SchedulePreviewDocument }): Reac
       break;
     default: {
       const never: never = document.current;
-      now = <>{JSON.stringify(never)}</>;
+      now = JSON.stringify(never);
     }
   }
   return (
