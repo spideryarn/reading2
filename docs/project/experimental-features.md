@@ -8,7 +8,7 @@ One setting, off by default, with **two controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes, four Diagram pictures and Remember's Explore are behind it** —
+**Some reading modes, four Diagram pictures and Learn's Explore are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -39,7 +39,7 @@ switch off, and the bar draws Timeline's button while the reader is in it, so th
 has exactly one checked thing. Since 2026-09-04 the same sentence covers `?diagram=trail`, and it is
 the same code saying it: [`experimental-visibility.ts`](../../src/web/experimental-visibility.ts) is
 the rule shared by `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx), `visibleKinds`
-in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), and Remember's
+in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), and Learn's
 [visible parts](#the-two-things-gated-below-mode-level). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
 *bars* differ, which is the whole point: the default bar for one and every mode for the other, and
@@ -69,7 +69,7 @@ The shelf's browser-only preference instead skips the server and uses `localStor
 | Contract | `readExperimental` / `writeExperimental` on `ReaderStore` — [`src/store/contracts.ts`](../../src/store/contracts.ts) |
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
-| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Remember's band and [information list](../../src/web/RememberAbout.tsx) |
+| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Learn's band and [information list](../../src/web/RememberAbout.tsx) |
 | Copy | [`experimental-copy.ts`](../../src/web/experimental-copy.ts) — the two sentences and the name, shared by both controls. **Not `src/messages.ts`**, which is the reader-facing *failure* copy and says so in its first line |
 
 **A date, not a boolean**, and [sql.md](sql.md#a-nullable-timestamp-says-more-than-a-boolean) has the
@@ -194,7 +194,7 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**The modes in the table below**, **four of Diagram's five pictures**, and **Remember's Explore**
+**The modes in the table below**, **four of Diagram's five pictures**, and **Learn's Explore**
 ([§ The two things gated below mode level](#the-two-things-gated-below-mode-level)). Diagram's picture gates,
 since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
@@ -396,9 +396,9 @@ for a reader with the switch on ([url-state.md](url-state.md)).
 It had been behind the switch since the first four went in on 2026-09-03; its row said the name
 suggests saved notes and spaced repetition, neither of which exists. That is still so. Recall,
 Tutorial and Quiz are now in every reader's bar, and Explore is gated one level down:
-[§ The two things gated below mode level](#the-two-things-gated-below-mode-level). Remember is
-owners-only as before, so a visitor's bar gains a Remember button that opens the sentence saying
-so, as Skim's does. Nothing new is generated when an article is added, because a press on Remember
+[§ The two things gated below mode level](#the-two-things-gated-below-mode-level). Learn is
+owners-only as before, so a visitor's bar gains a Learn button that opens the sentence saying
+so, as Skim's does. Nothing new is generated when an article is added, because a press on Learn
 generates nothing: the Quiz is still written on the first press of its chip.
 [261005b](../plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md).
 
@@ -422,15 +422,15 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## The two things gated below mode level
 
-Four of Diagram's pictures, and one of Remember's four parts.
+Four of Diagram's pictures, and one of Learn's four parts.
 
-**Remember's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
+**Learn's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
 Recall, Quiz and Tutorial; Explore was two days old and stays here. With the switch off the chips
 read Recall · Tutorial · Quiz, the band's (i) lists those three, and the command bar has no
-*Remember › Explore* row. `?remember=explore` still opens it, and while the reader is in it the chip
+*Learn › Explore* row. `?remember=explore` still opens it, and while the reader is in it the chip
 is drawn and pressed. That address outlives the mode
 ([url-state.md](url-state.md)), so a reader who used Explore and then turned the switch off comes
-back to it when they press Remember: hidden, not unreachable. It is the flag Diagram's pictures
+back to it when they press Learn: hidden, not unreachable. It is the flag Diagram's pictures
 use, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), read by
 `visibleRememberViews` there for the chips and the (i), and by `subModeRows`
 ([`CommandBar.tsx`](../../src/web/CommandBar.tsx)) for the bar. The policy is written out a second

@@ -66,6 +66,11 @@ long with six dated appendices: the opening and the newest appendix were read, a
 an older one. Each author appends rather than revises, so the newest section is the least likely
 to hold a fact recorded earlier.
 
+So before a sweep investigates a standing question, read the entry that owns it whole with
+`npx tsx scripts/overseer-queue.ts show <id>`, history timestamps included. If a sibling has
+already measured and nothing has changed since, say so in the debrief and append nothing: another
+"measured again, same" section is noise in a record Greg still has to read.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is

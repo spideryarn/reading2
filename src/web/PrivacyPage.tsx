@@ -478,7 +478,10 @@ export function PrivacyPage() {
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search, and Opus or a similar frontier model in its place on an article
-          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
+          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
+          and, when you ask the command bar to suggest what to do with an article, to write that short
+          list, for which it is shown your profile and your reason for reading the article, with our
+          list of commands;{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
           for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
           it has no summary yet) and your profile if you wrote one;{" "}
@@ -503,6 +506,28 @@ export function PrivacyPage() {
           is shown a written description of the scene and any figures the article came with; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
+        </p>
+        {/* **What follows from the command bar's suggestions** (plan 261005k,
+            GPT Sol's F5): saying which model is shown the profile is true and
+            is only the first transfer. The words it writes are made from the
+            profile, and a suggestion the reader presses travels on like any
+            search or chat question they typed.
+
+            **No promise that personal details are kept out, and do not add
+            one.** The model is asked to leave them out
+            (src/command-suggest-call.ts § `SUGGEST_SYSTEM`); nothing checks
+            that it did. docs/project/reader-profile.md § The command bar's
+            suggestions. tests/privacy-page.test.ts holds this paragraph. */}
+        <p>
+          <strong className="tw:text-foreground">
+            The searches and the question the command bar suggests are worded from what you wrote
+          </strong>{" "}
+          in your profile and your reason for reading. Nothing is done with a suggestion until you
+          press it. A search you press is sent and kept like one you typed, so a search is seen by
+          visitors if you share the article. The chat question waits in Chat’s box until you press Send.
+          Once sent, it is kept like a question you typed and can be searched for on the web.
+          We ask the model to leave out anything about you as a person,
+          and we cannot promise that it always does, so read a suggestion before you press it.
         </p>
       </Section>
 

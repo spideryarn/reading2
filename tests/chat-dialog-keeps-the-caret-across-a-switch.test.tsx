@@ -144,6 +144,7 @@ function draw(target: Props["target"], where: Where = "float") {
         onNewConversation={() => {}}
         onCreated={() => {}}
         onDropped={() => {}}
+        onRenamed={() => {}}
       />,
     ),
   );

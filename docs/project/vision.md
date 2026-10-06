@@ -52,7 +52,18 @@ Tools that make deep reading *cheaper*, not optional.
 - **Interrogate.** Ask questions of the text at the point of confusion, in place.
 - **Internalise.** Come away with something retained, not just something skimmed.
 
-The first feature built on this is [granularity zoom](granularity-zoom.md).
+The first feature built on this is [granularity zoom](granularity-zoom.md). It is one core feature,
+not the reason the app exists:
+
+> granularity-zoom is *a* core feature, but by no means the only reason the app
+> exists! The glossary, concept-search, remembering, diagramming, etc all feel
+> novel and interesting.
+>
+> — Greg, 2026-09-07
+
+So weigh a piece of work by what it does for the whole set of reading modes
+([reading-view-overview.md](reading-view-overview.md)), not for the tree alone. Work on extraction
+quality usually feeds all of them, which is the stronger argument for it.
 
 ## Principles
 

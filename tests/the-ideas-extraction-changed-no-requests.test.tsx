@@ -785,8 +785,17 @@ const READING_VIEW: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
 ];
 
+/**
+ * **The command bar's read of why you are reading**, since 2026-10-05 (plan
+ * 261005k): one `GET /api/reader?slug=` when the owner's reading view mounts,
+ * so the bar's *Suggest what to do here* row is already there, and first, when
+ * the bar opens. Added on purpose and counted here. It is not `useHasProfile`
+ * come back (below): that one read before every artefact; this is once a view.
+ */
+const WHY_READING = GET(`/api/reader?slug=${SLUG}`);
+
 /** The plain reading view, with no band open. */
-const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader")];
+const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader"), WHY_READING];
 
 /**
  * The same, then the Ideas artefact twice over — once per StrictMode effect
@@ -829,6 +838,7 @@ const CHAT: Shape[] = [
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET("/api/reader"),
+  WHY_READING,
 ];
 
 const OWNER = { id: "owner-1", email: "greg@example.com" };

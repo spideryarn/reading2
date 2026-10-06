@@ -1,0 +1,1 @@
+{"source":"medrxiv","label":"Hepatitis WGS","role":"landing","expect":null,"requestedUrl":"https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3","outcome":"fetch-failed","elapsedMs":70,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

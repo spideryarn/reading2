@@ -796,7 +796,7 @@ describe("scanning a directory of logs", () => {
     const many = mkdtempSync(join(tmpdir(), "readiness-many-"));
     try {
       for (let i = 0; i < 150; i += 1) mkdirSync(join(many, ".claude", "worktrees", `w${i}`), { recursive: true });
-      const found = checkoutRoots(many);
+      const found = checkoutRoots(many, null);
       expect(found.roots.length).toBeLessThanOrEqual(101);
       expect(found.truncated).toBe(true);
     } finally {
@@ -811,7 +811,7 @@ describe("scanning a directory of logs", () => {
     try {
       mkdirSync(join(many, ".claude", "worktrees"), { recursive: true });
       for (let i = 0; i < 150; i += 1) writeFileSync(join(many, ".claude", "worktrees", `f${i}`), "");
-      const found = checkoutRoots(many);
+      const found = checkoutRoots(many, null);
       /* No worktrees found — they are all files — but the listing was still
          abandoned, and that has to be said. */
       expect(found.roots).toEqual([many]);
@@ -826,7 +826,7 @@ describe("scanning a directory of logs", () => {
     try {
       mkdirSync(join(locked, ".claude", "worktrees"), { recursive: true });
       chmodSync(join(locked, ".claude", "worktrees"), 0o000);
-      const found = checkoutRoots(locked);
+      const found = checkoutRoots(locked, null);
       expect(found.why).not.toBeNull();
       expect(found.roots).toEqual([locked]);
     } finally {
@@ -839,12 +839,63 @@ describe("scanning a directory of logs", () => {
     const bare = mkdtempSync(join(tmpdir(), "readiness-roots-"));
     try {
       /* No `.claude/worktrees` at all: normal, not a fault. */
-      const none = checkoutRoots(bare);
+      const none = checkoutRoots(bare, null);
       expect(none.roots).toEqual([bare]);
       expect(none.why).toBeNull();
       expect(none.truncated).toBe(false);
     } finally {
       rmSync(bare, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * Since 2026-10-05 every new worktree on the box is under
+   * `/var/tmp/spideryarn-worktrees/`, and this listed only
+   * `<primary>/.claude/worktrees/` — so the scan covered the primary and a
+   * shrinking set of old trees, and reported nothing missing.
+   */
+  it("lists the worktrees under the external root as well as the ones in the repo", () => {
+    const primary = mkdtempSync(join(tmpdir(), "readiness-two-roots-"));
+    const external = mkdtempSync(join(tmpdir(), "readiness-external-"));
+    try {
+      mkdirSync(join(primary, ".claude", "worktrees", "old-tree"), { recursive: true });
+      mkdirSync(join(external, "new-tree"));
+      writeFileSync(join(external, "a-file"), "");
+      const found = checkoutRoots(primary, external);
+      expect(found.roots).toEqual([primary, join(primary, ".claude", "worktrees", "old-tree"), join(external, "new-tree")]);
+      expect(found.why).toBeNull();
+      expect(found.truncated).toBe(false);
+      // And with no in-repo directory at all, which is a checkout made after the move.
+      rmSync(join(primary, ".claude"), { recursive: true });
+      expect(checkoutRoots(primary, external).roots).toEqual([primary, join(external, "new-tree")]);
+    } finally {
+      rmSync(primary, { recursive: true, force: true });
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  it("caps each directory on its own, and a fault in one still lists the other", () => {
+    const primary = mkdtempSync(join(tmpdir(), "readiness-two-caps-"));
+    const external = mkdtempSync(join(tmpdir(), "readiness-external-cap-"));
+    try {
+      for (let i = 0; i < 150; i += 1) mkdirSync(join(primary, ".claude", "worktrees", `w${i}`), { recursive: true });
+      mkdirSync(join(external, "new-tree"));
+      const full = checkoutRoots(primary, external);
+      expect(full.truncated).toBe(true);
+      // A full in-repo directory used up a shared budget; the new tree must still be seen.
+      expect(full.roots).toContain(join(external, "new-tree"));
+
+      chmodSync(join(primary, ".claude", "worktrees"), 0o000);
+      const locked = checkoutRoots(primary, external);
+      expect(locked.why).not.toBeNull();
+      expect(locked.roots).toEqual([primary, join(external, "new-tree")]);
+      // An external root that is not there is the Mac, and a box before provision.sh: not a fault.
+      chmodSync(join(primary, ".claude", "worktrees"), 0o755);
+      expect(checkoutRoots(primary, join(external, "absent")).why).toBeNull();
+    } finally {
+      chmodSync(join(primary, ".claude", "worktrees"), 0o755);
+      rmSync(primary, { recursive: true, force: true });
+      rmSync(external, { recursive: true, force: true });
     }
   });
 

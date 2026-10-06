@@ -109,7 +109,7 @@
  * the ground is free; web-client.md § Never delete a semantic class name is why
  * they are on the elements even while they carry no rules.
  */
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   type ArgumentKind,
   COULD_NOT_TELL,
@@ -119,6 +119,18 @@ import {
   RUN_AT_ONCE,
   sameKey,
 } from "../command-pick.js";
+import {
+  LENS_DESCRIPTION,
+  SUGGESTING,
+  SUGGEST_DESCRIPTION,
+  SUGGEST_HEADING,
+  SUGGEST_LABEL,
+  SUGGEST_NOTHING,
+  SUGGEST_NO_REASON,
+  type SuggestRequest,
+  type Suggestions,
+  lensLabel,
+} from "../command-suggest.js";
 import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import { MODE_LABEL } from "../title-text.js";
 import { modeGenerates, subModeGenerates } from "./activation.js";
@@ -136,6 +148,8 @@ import {
   type Command,
 } from "./command-match.js";
 import { askForPick } from "./command-pick-client.js";
+import { REASON_NOT_READ } from "../messages.js";
+import { askForSuggestions, useReasonForReading } from "./command-suggest-client.js";
 import {
   type CommandExecutor,
   type ProposalRunners,
@@ -181,6 +195,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+import { voiceClass } from "./voice.js";
 import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 
 /**
@@ -772,6 +787,137 @@ function quickSearchRow(article: CommandBarArticle, words: string): Command | nu
 }
 
 /**
+ * **The row that asks for a short list from why you are reading** (plan
+ * 261005k, B) — drawn first, on an empty box, on an article the reader owns
+ * that has a reason for reading. Greg, 2026-10-03: *"if they fill in the why
+ * you're reading this, then somehow that should inform things."*
+ *
+ * **Its press is the bar's own (`suggest` in `CommandBar`), not this `run`**:
+ * an action's outcome is *close* or *stay with a sentence*, and this row's is
+ * a third thing, a list drawn in the bar. `run` is here because a `Command`
+ * must have one, and says nothing.
+ *
+ * **No `generates` mark**, as *Ask what you meant* has none: the mark is for a
+ * row that starts work on the article and keeps what it made. This asks a
+ * small model one question and keeps nothing on the server. No price either;
+ * what a call costs is an administrator's business.
+ */
+const SUGGEST_ROW: Command = {
+  kind: "action",
+  id: "suggest-from-why-reading",
+  label: SUGGEST_LABEL,
+  description: SUGGEST_DESCRIPTION,
+  aliases: [],
+  generates: false,
+  typedOnly: true,
+  opensOnly: false,
+  run: () => ({ kind: "stay", message: "" }),
+};
+
+/**
+ * **A suggested lens, as a row** — the reading view's own handoff (Reader.tsx
+ * § `debateThroughLensInChat`), so the question lands in Chat's box and
+ * nothing is sent until the reader presses Send there. `generates: false` for
+ * that reason: this press spends nothing.
+ */
+function lensRow(askThroughLens: (lens: string) => ActionOutcome, lens: string): Command {
+  return {
+    kind: "action",
+    /* Unique per lens and no whitespace: it ends up in an `id` attribute. */
+    id: `ask-lens:${encodeURIComponent(lens)}`,
+    label: lensLabel(lens),
+    description: LENS_DESCRIPTION,
+    aliases: [],
+    generates: false,
+    typedOnly: true,
+    opensOnly: false,
+    run: () => askThroughLens(lens),
+  };
+}
+
+/**
+ * **One row as the bar draws it.** A plain command for every ordinary row; a
+ * suggested row carries the model's `why` for its second line and the model's
+ * own words inside the label, so they can be set in the model's face
+ * (docs/project/fonts.md).
+ *
+ * `rowId` rather than `commandId` alone, because a suggested mode is *the
+ * bar's existing command for that mode* and so is drawn twice while the list
+ * is up: once under the heading and once in its ordinary place.
+ */
+interface ShownRow {
+  readonly command: Command;
+  readonly rowId: string;
+  /** `suggest`: the one row whose press is the bar's own request. */
+  readonly press: "activate" | "suggest";
+  readonly suggested?: { readonly why: string; readonly said?: string };
+}
+
+/**
+ * **A row's label, with a model's own words inside it set in the model's
+ * face** (docs/project/fonts.md): *Quick search “…”* is ours, what is between
+ * the quotes is not. `said` is absent on every row a model did not word.
+ */
+function RowLabel({ label, said }: { label: string; said: string | undefined }) {
+  const at = said === undefined ? -1 : label.indexOf(said);
+  if (said === undefined || at < 0) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, at)}
+      <span className={voiceClass("ai")}>{said}</span>
+      {label.slice(at + said.length)}
+    </>
+  );
+}
+
+const ordinaryRow = (command: Command): ShownRow => ({ command, rowId: commandId(command), press: "activate" });
+
+/**
+ * **A kept list, as rows of today's bar** — and the only place a suggestion
+ * becomes something that can be pressed.
+ *
+ *  - a search is the quick-search row a typed `find` makes (`quickSearchRow`);
+ *  - a mode is looked up in the list the bar holds *now*, by id and label, and
+ *    only among its `mode` and `submode` rows (GPT Sol's F1): what a press
+ *    arms and what mark it wears are that row's, and a key that is not a mode
+ *    here today is not drawn;
+ *  - the lens is drawn only where the page handed in the handoff and the Dock
+ *    draws Chat.
+ *
+ * Nothing here runs anything. Each row waits for its own press.
+ */
+function suggestionRows(
+  list: Suggestions,
+  commands: readonly Command[],
+  article: CommandBarArticle,
+  chatReachable: boolean,
+): readonly ShownRow[] {
+  const rows: ShownRow[] = [];
+  const add = (command: Command, why: string, said?: string) =>
+    rows.push({
+      command,
+      rowId: `suggested:${commandId(command)}`,
+      press: "activate",
+      suggested: said === undefined ? { why } : { why, said },
+    });
+  for (const search of list.searches) {
+    const row = quickSearchRow(article, search.words);
+    if (row !== null) add(row, search.why, search.words);
+  }
+  for (const mode of list.modes) {
+    const command = commands.find(
+      (c) => (c.kind === "mode" || c.kind === "submode") && sameKey(pickKey(c, article.slug), mode.key),
+    );
+    if (command !== undefined) add(command, mode.why);
+  }
+  const askThroughLens = article.executor?.askThroughLens;
+  if (list.lens !== null && askThroughLens !== undefined && chatReachable) {
+    add(lensRow(askThroughLens, list.lens.words), list.lens.why, list.lens.words);
+  }
+  return rows;
+}
+
+/**
  * **The address a words search for `words` is** — the find row's, and the one
  * chat's *Find “X”* chip goes to (Reader.tsx § `chatCommands`), so the two
  * cannot open different searches. `carried` is already through `carriedSearch`.
@@ -1346,7 +1492,7 @@ export function CommandBar({
 
   const [draft, setDraft] = useState("");
   /**
-   * **Which row Enter would take**, as an index into `results` below.
+   * **Which row Enter would take**, as an index into `shown` below.
    *
    * The first row is selected whenever the filter changes — reset in the input
    * handler rather than in an effect, so that "the selection follows what you
@@ -1433,7 +1579,74 @@ export function CommandBar({
     revision.current += 1;
     asking.current?.abort();
     asking.current = null;
+    suggestTurn.current += 1;
+    suggestOut.current?.abort();
+    suggestOut.current = null;
   }, []);
+
+  /**
+   * **Where a short list from why you are reading can be offered** (plan
+   * 261005k, B): somebody is signed in, the article is theirs (`shelfRow`,
+   * which only the owner's pages hand in) and this is the reading view, where
+   * a quick search can run. `undefined` anywhere else — a visitor, the
+   * Metadata page — and then nothing is read, offered or kept.
+   */
+  const suggestSlug =
+    experimental.signedIn && article?.shelfRow !== undefined && article.executor?.quickSearch !== undefined
+      ? article.slug
+      : undefined;
+  /** Whether there is a reason for reading, and the fingerprint of what a list would be written from. */
+  const { reason, saves, version: reasonVersion, heard: reasonHeard } = useReasonForReading(suggestSlug, open);
+  /**
+   * **The list, kept for the visit** — state of its own and not the pick's
+   * `suggested` (GPT Sol's F2): that one is dropped by every opening, closing
+   * and keystroke, and is hidden whenever the box matches a row, as an empty
+   * box does. This survives all three.
+   *
+   * Words and keys, never rows: what is drawn is built again from today's
+   * commands at every render (`suggestionRows`). Kept under the article and
+   * the fingerprint of what the model read; `keptList` below is where it
+   * stops being shown.
+   */
+  const [list, setList] = useState<{ slug: string; readFrom: string; suggestions: Suggestions } | null>(null);
+  /** The request is out. Its own state, not `said`, which an opening and a keystroke both clear. */
+  const [suggestWaiting, setSuggestWaiting] = useState(false);
+  const suggestOut = useRef<AbortController | null>(null);
+  /** Which request an answer belongs to; bumped to disown one that is out. */
+  const suggestTurn = useRef(0);
+  /**
+   * **A save drops the list, and disowns a request that is out** (F3). The
+   * model read both boxes, so a list written before either changed is about
+   * somebody the reader no longer says they are. `saves` counts this tab's
+   * saves of *About you* and of any reason for reading (profile-saved.ts).
+   */
+  const savesSeen = useRef(saves);
+  useLayoutEffect(() => {
+    if (savesSeen.current === saves) return;
+    savesSeen.current = saves;
+    setList(null);
+    if (suggestOut.current !== null) {
+      suggestTurn.current += 1;
+      suggestOut.current.abort();
+      suggestOut.current = null;
+      inFlight.current = false;
+      setSuggestWaiting(false);
+    }
+  }, [saves]);
+  /* **And so does no longer being the owner here.** Signing out passes
+     through this, so a list can never be carried from one reader to the next
+     in a tab that stayed open. */
+  useLayoutEffect(() => {
+    if (suggestSlug !== undefined) return;
+    setList(null);
+    if (suggestOut.current !== null) {
+      suggestTurn.current += 1;
+      suggestOut.current.abort();
+      suggestOut.current = null;
+      inFlight.current = false;
+      setSuggestWaiting(false);
+    }
+  }, [suggestSlug]);
 
   /**
    * **The way into the Feedback dialog**, or `null` where no host is mounted
@@ -1596,8 +1809,69 @@ export function CommandBar({
   const offerToAsk = canAsk && askMessage !== COULD_NOT_TELL && askMessage !== ASK_TOO_LONG;
   /* A timeout may recover; an unchanged over-limit sentence cannot. */
   const showAskButton = canAsk && askMessage !== ASK_TOO_LONG;
-  const index = Math.min(selected, Math.max(0, results.length - 1));
-  const active = results[index];
+  /**
+   * **The kept list, while it is still about this reader and this article** —
+   * the same article, still the owner's, and the fingerprint the server sent
+   * with it still the one the profile reads as now. A read that says the
+   * profile changed elsewhere (another tab, another device) hides it without
+   * a save being heard here.
+   */
+  const keptList =
+    list !== null && suggestSlug === list.slug && reason.state === "has" && reason.readFrom === list.readFrom
+      ? list.suggestions
+      : null;
+  /**
+   * **Drawn above the ordinary rows while the box is empty, hidden while the
+   * reader types, back when they clear it** (F2). A list none of whose rows
+   * can be drawn today is no list, and the row that asks is offered again.
+   */
+  const emptyBox = draft.trim() === "";
+  const chatReachable = modes.includes("chat");
+  const suggestedNow = useMemo(
+    () =>
+      emptyBox && keptList !== null && article !== undefined
+        ? suggestionRows(keptList, commands, article, chatReachable)
+        : [],
+    [emptyBox, keptList, commands, article, chatReachable],
+  );
+  const offerSuggest =
+    emptyBox &&
+    suggestSlug !== undefined &&
+    (reason.state === "has" || reason.state === "failed") &&
+    suggestedNow.length === 0;
+  const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
+  const shown = useMemo<readonly ShownRow[]>(
+    () => [
+      ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
+      ...suggestedNow,
+      ...results.map(ordinaryRow),
+    ],
+    [offerSuggest, suggestedNow, results],
+  );
+  /** Where the ordinary rows start, for the rule drawn between the list and them. */
+  const firstOrdinary = shown.length - results.length;
+  const index = Math.min(selected, Math.max(0, shown.length - 1));
+  const active = shown[index];
+  /* A profile read may insert or remove rows while the reader is choosing.
+     Keep their highlighted command, rather than applying its index to a new
+     list. A new suggestion answer, save and fresh opening still select row zero.
+     An unknown reason keeps the last save generation until its read lands. */
+  const previousReasonRows = useRef({ open, reason, list, saves, rowId: active?.rowId });
+  useLayoutEffect(() => {
+    const previous = previousReasonRows.current;
+    previousReasonRows.current = {
+      open, reason, list,
+      saves: reason.state === "unknown" ? previous.saves : saves,
+      rowId: active?.rowId,
+    };
+    if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
+    /* A new answer deliberately selects its first suggestion. */
+    if (list !== null && previous.list !== list) return;
+    /* A save restarts the choice; a removed row has no neighbour to confirm. */
+    const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
+    const next = at >= 0 ? at : 0;
+    if (next !== index) setSelected(next);
+  }, [open, reason, list, saves, shown, index, active?.rowId]);
 
   /* Lightbox.tsx § closingOurselves, and the same trap: `close()` fires the
      same `close` event a reader's Escape does, so without this the shutting we
@@ -1631,9 +1905,11 @@ export function CommandBar({
          why. */
       const message = reopeningWith.current;
       reopeningWith.current = null;
+      /* A suggestion that is out holds `inFlight` too, and has its own line
+         (`suggestWaiting`), so it is not also `Starting…`. */
       setSaid(
         message === null
-          ? inFlight.current
+          ? inFlight.current && suggestOut.current === null
             ? { kind: "pending" }
             : null
           : { kind: "message", text: message },
@@ -1934,12 +2210,79 @@ export function CommandBar({
   }, [canAsk, dictationBusy, draft, keys, signature, article]);
 
   /**
+   * **The press on *Suggest what to do here*** (plan 261005k, B): one post, and
+   * the bar stays open under a waiting line until the list is drawn.
+   *
+   * **Nothing the answer names is run** — it is kept as words and keys and
+   * drawn as rows, each waiting for a press of its own, whatever the model
+   * said and however sure it sounded.
+   *
+   * `inFlight` is the lock the pick and every asynchronous action use, so two
+   * presses post once and no row is pressed while this is out. The answer is
+   * kept even if the bar has been shut meanwhile, which is the point of
+   * keeping it; a failure that lands on a shut bar is not said, since the row
+   * is still there to press.
+   *
+   * The body is the keys of the mode and sub-mode rows the bar has now. The
+   * server keeps only those kinds whatever is sent (F1); sending only those is
+   * the same rule on this side, so the reply is re-read against a list with
+   * nothing else in it.
+   */
+  const suggest = useCallback(() => {
+    if (suggestSlug === undefined || inFlight.current || dictationBusy) return;
+    const slug = suggestSlug;
+    const request: SuggestRequest = {
+      rows: commands.filter((c) => c.kind === "mode" || c.kind === "submode").map((c) => pickKey(c, slug)),
+    };
+    const readVersion = reasonVersion();
+    const controller = new AbortController();
+    const mine = ++suggestTurn.current;
+    inFlight.current = true;
+    suggestOut.current = controller;
+    setSaid(null);
+    setSuggestWaiting(true);
+    void askForSuggestions(slug, request, controller.signal).then((reply) => {
+      /* Disowned: a save, a sign-out or an unmount has already let go. */
+      if (mine !== suggestTurn.current) return;
+      suggestOut.current = null;
+      inFlight.current = false;
+      setSuggestWaiting(false);
+      const barOpen = ref.current?.open === true;
+      if (!reply.ok) {
+        if (barOpen) setSaid({ kind: "message", text: reply.message });
+        return;
+      }
+      if (reply.answer.kind === "nothing") {
+        if (reply.answer.why === "no-reason") {
+          /* A later read may already have found a reason. Do not contradict it. */
+          if (reasonVersion() !== readVersion) return;
+          reasonHeard(null, readVersion);
+        }
+        if (barOpen) {
+          setSaid({ kind: "message", text: reply.answer.why === "no-reason" ? SUGGEST_NO_REASON : SUGGEST_NOTHING });
+        }
+        return;
+      }
+      const { kind: _kind, readFrom, ...suggestions } = reply.answer;
+      setSelected(0);
+      reasonHeard(readFrom, readVersion);
+      setList({ slug, readFrom, suggestions });
+    });
+  }, [suggestSlug, dictationBusy, commands, reasonHeard, reasonVersion]);
+
+  /** A row's press, by Enter or by a finger: the bar's own request for the one row that is one, `activate` for the rest. */
+  const pressRow = (row: ShownRow): void => {
+    if (row.press === "suggest") suggest();
+    else activate(row.command);
+  };
+
+  /**
    * **What Enter does**: take the selected row, or with none, ask. One
    * function for the key and for a double press on Stop (`onDone` above), so
    * the two cannot come to run different things.
    */
   const enter = () => {
-    if (active !== undefined) activate(active);
+    if (active !== undefined) pressRow(active);
     else ask();
   };
   enterNow.current = enter;
@@ -2006,12 +2349,12 @@ export function CommandBar({
           enterKeyHint="go"
           value={draft}
           role="combobox"
-          aria-expanded={results.length > 0}
+          aria-expanded={shown.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
           /* Which row Enter would take, announced without moving focus off the
              box the reader is typing in — the listbox pattern's own answer. */
-          aria-activedescendant={active === undefined ? undefined : `${listId}-${commandId(active)}`}
+          aria-activedescendant={active === undefined ? undefined : `${listId}-${active.rowId}`}
           autoComplete="off"
           spellCheck={false}
           /* Back to the first row, and a refusal's sentence gone — `changeDraft`
@@ -2023,7 +2366,7 @@ export function CommandBar({
               /* Clamped rather than wrapped, at both ends. Wrapping is fine in a
                  long list you scroll; in fourteen rows it means holding an arrow
                  quietly cycles, and every row here can spend money. */
-              setSelected(Math.min(index + 1, results.length - 1));
+              setSelected(Math.min(index + 1, shown.length - 1));
               return;
             }
             if (e.key === "ArrowUp") {
@@ -2066,10 +2409,22 @@ export function CommandBar({
         <p
           role="status"
           className={`cmdbar-status tw:m-0 tw:text-sm ${
-            said === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
+            said === null && reasonFailure === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
           } ${said?.kind === "message" ? "tw:text-ink" : "tw:text-muted-foreground"}`}
         >
-          {said === null ? "" : said.kind === "pending" ? "Starting…" : said.kind === "asking" ? ASKING : said.text}
+          {said === null ? reasonFailure ?? "" : said.kind === "pending" ? "Starting…" : said.kind === "asking" ? ASKING : said.text}
+        </p>
+        {/* **The wait for a short list from why you are reading**, a line of
+            its own: `said` above is cleared by every opening and keystroke,
+            and this request outlives both. Always in the tree, for the reason
+            the status line is. */}
+        <p
+          role="status"
+          className={`cmdbar-suggesting tw:m-0 tw:text-sm tw:text-muted-foreground ${
+            suggestWaiting ? "tw:border-b tw:border-rule tw:px-4 tw:py-2" : ""
+          }`}
+        >
+          {suggestWaiting ? SUGGESTING : ""}
         </p>
         {/* The microphone's own strip — the timer, the transcript on its way, a
             refusal. **After the bar's status line, not before it**: the strip
@@ -2077,7 +2432,7 @@ export function CommandBar({
             bar's is the one a reader and every test here looks for first. */}
         <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
 
-        {results.length === 0 ? (
+        {shown.length === 0 ? (
           /* Greg's answer 3: no search fallback, no list of everything, and
              nothing guessed. Beside it, for a signed-in reader who has typed
              something, only the offer to ask (`ASK_LABEL`) — which does
@@ -2148,12 +2503,31 @@ export function CommandBar({
                a lie the reader should have to reconcile. */
             aria-label="Commands"
           >
-            {results.map((command, at) => (
-              // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in
+            {shown.map((row, at) => {
+              const { command } = row;
+              return (
+              <Fragment key={row.rowId}>
+              {/* The list a model wrote from why you are reading, under one
+                  muted line saying so, and a rule where the bar's ordinary
+                  rows begin again. Neither is an option: the arrows pass
+                  over them. */}
+              {row.suggested !== undefined && shown[at - 1]?.suggested === undefined && (
+                <div role="presentation" className="cmdbar-from-why tw:px-3 tw:pb-1 tw:pt-2 tw:text-sm tw:text-muted-foreground">
+                  {SUGGEST_HEADING}
+                </div>
+              )}
+              {at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined && (
+                <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
+              )}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in */}
               <div
-                key={commandId(command)}
-                id={`${listId}-${commandId(command)}`}
+                id={`${listId}-${row.rowId}`}
                 className={`cmdbar-row tw:flex tw:items-baseline tw:gap-2 tw:rounded tw:px-3 tw:py-2 tw:text-sm ${
+                  /* A suggested row has a second line, and words nobody
+                     capped to a phone's width: it wraps where the bar's own
+                     short labels never need to (narrow-windows.md). */
+                  row.suggested !== undefined ? "cmdbar-row-suggested tw:flex-wrap" : ""
+                } ${
                   dictationBusy ? "tw:cursor-default tw:opacity-50" : "tw:cursor-pointer"
                 } ${
                   at === index ? "on tw:bg-accent tw:text-ink" : "tw:text-ink-soft"
@@ -2184,11 +2558,11 @@ export function CommandBar({
                    rather than lag a frame behind it. */
                 onClick={() => {
                   setSelected(at);
-                  activate(command);
+                  pressRow(row);
                 }}
               >
                 {/* A sub-mode says which mode it is in, muted, before its own
-                    name — `Remember › Quiz` — so *Simple* is not a mystery and
+                    name — `Learn › Quiz` — so *Simple* is not a mystery and
                     the pictures read as Diagram's. Outside `cmdbar-name`, which
                     stays the row's own label. */}
                 {command.kind === "submode" && (
@@ -2196,10 +2570,23 @@ export function CommandBar({
                     {MODE_LABEL[command.sub.mode]} ›
                   </span>
                 )}
-                <span className="cmdbar-name tw:font-medium tw:text-ink">
-                  {commandText(command).label}
+                <span
+                  className={`cmdbar-name tw:font-medium tw:text-ink ${
+                    row.suggested !== undefined ? "tw:min-w-0 tw:max-w-full tw:break-words" : ""
+                  }`}
+                >
+                  <RowLabel label={commandText(command).label} said={row.suggested?.said} />
                 </span>
-                <span className="cmdbar-what tw:min-w-0 tw:flex-1 tw:truncate tw:text-muted-foreground">
+                {/* A suggested row's sentence is never cut: it takes a line of its
+                    own and wraps, at every width. Beside a long label it was cut
+                    to "Pu…" on a desktop and "Nothing is sent u…" on a phone, so
+                    the Chat row lost the half that says a press sends nothing
+                    (seen in the browser, 2026-10-06, plan 261005k). */}
+                <span
+                  className={`cmdbar-what tw:min-w-0 tw:text-muted-foreground ${
+                    row.suggested !== undefined ? "tw:basis-full" : "tw:flex-1 tw:truncate"
+                  }`}
+                >
                   {commandText(command).description}
                 </span>
                 {/* One bit, after the sentence rather than before it: the row is
@@ -2221,8 +2608,18 @@ export function CommandBar({
                     {commandMarker(command)}
                   </span>
                 )}
+                {/* **Why the model proposed it**, as the row's second line and
+                    in the model's face. Absent when it gave none worth
+                    keeping (src/command-suggest.ts § `whyOf`). */}
+                {row.suggested !== undefined && row.suggested.why !== "" && (
+                  <span className={`cmdbar-why tw:basis-full tw:text-xs tw:text-muted-foreground ${voiceClass("ai")}`}>
+                    {row.suggested.why}
+                  </span>
+                )}
               </div>
-            ))}
+              </Fragment>
+              );
+            })}
           </div>
           </>
         )}

@@ -1,14 +1,20 @@
-# Remember mode — say what you took from it, and find out
+# Learn mode — say what you took from it, and find out
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-27, and named *Remember* since 2026-09-01; Recall, Tutorial and Quiz since 2026-10-02, and Explore since 2026-10-03** — the rename and its reasoning are in
+**Built 2026-08-27, and named *Remember* from 2026-09-01 to 2026-10-05, *Learn* since; Recall, Tutorial and Quiz since 2026-10-02, and Explore since 2026-10-03** — the Review → Remember rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they remember of the article, and the model corrects briefly where their account
 and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
 the gap when they are stuck. One voice since 2026-10-02; until then four **stances** (Balanced,
 Respond, Socratic, Signposts) were picked per turn. Where the four sub-modes are going:
 [remembering-vision.md](remembering-vision.md).
+
+**It has been called Learn since 2026-10-05** (Greg, report `spya-mvmpks`;
+[261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md)); until then it
+was Remember. Only the word a reader sees changed: the code, the URL (`?mode=remember`,
+`?remember=`), the thread kind and this file's name still say `remember`, and renaming those is a
+separate queue entry.
 
 Greg, 2026-08-27, when it was still called Review:
 
@@ -35,8 +41,8 @@ The plan, the reasoning and the cross-family review:
 [260827ah-review-mode.md](../plans/260827ah-review-mode.md).
 
 ```
-   CHAT                                 REMEMBER
-   ────                                 ────────
+   CHAT                                 LEARN
+   ────                                 ─────
 
    reader ──── question ────►           reader ──── what I think ────►
                                                                        model
@@ -101,7 +107,7 @@ ladder is [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remembe
 
 **What the stances left behind.** Old rows keep their stored `stance` (the column and its CHECK
 stay; dropping them is destructive and buys nothing); nothing writes or shows one. The route still
-accepts a `stance` on an ordinary Remember send, validated against the old four and then dropped, so
+accepts a `stance` on an ordinary Recall send, validated against the old four and then dropped, so
 a tab open across the deploy does not 400 — kept indefinitely, because a tab can stay open for weeks.
 [261002i](../plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
 
@@ -226,7 +232,7 @@ reading is taken straight to it. The research is
 citing sections by interpolation.
 
 **Why a reader who has not read it is allowed.** § Why this one is not the anti-goal rests on
-Remember being unusable without reading, and Tutorial is not. Greg decided the case himself —
+Learn being unusable without reading, and Tutorial is not. Greg decided the case himself —
 *"it may be that the user says nothing. I haven't read it yet"* — so Tutorial is built as **guided
 reading**: every piece it teaches is a short quotation or close paraphrase with its block id,
 sent back into the article, never a summary standing in for it.
@@ -234,7 +240,7 @@ sent back into the article, never a summary standing in for it.
 **The machinery is Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
 (`chat_threads_one_tutorial`, beside Remember's index; `SINGLE_THREAD_KINDS` in
 [`src/types.ts`](../../src/types.ts) is the one list `targetOf` and `ConversationBand` read). Same
-band, same panel, same tall dictation box, Start over, Remember's long length cap, chat's job and
+band, same panel, same tall dictation box, Start over, Learn's long length cap, chat's job and
 model. **No Live yet**: Greg named voice as the ideal home and also said Live *"doesn't work very
 well at the moment"*, so the band passes no Live controls and `SpokenKind` stays `chat | remember`.
 The empty state asks the opening question, so the reader speaks first and the model never writes an
@@ -272,7 +278,10 @@ thought. So "moving up" now means a harder question **about the article** (what 
 two parts fit, what the author would say to a case), and a task that asks for the reader's own view
 is rationed: never in the first two tasks, never two running, about one turn in four. When the
 reader sets off on a line of their own, the tutor answers briefly, points to Chat, and comes back to
-the piece. The opening prediction for a reader who has not read it is not one of the rationed tasks.
+the piece. **It points to Chat and not to Explore on purpose** (plan 261005l, PR-8): Explore is the
+natural home for that line of thought, but it is behind the experimental switch, so most readers
+have no such chip. When Explore leaves the switch, that sentence of the prompt should name it. The
+opening prediction for a reader who has not read it is not one of the rationed tasks.
 
 Measured before and after on two articles with a blind judge: own-view tasks fell from 19 of 60
 turns to 6 of 60, none in a first two turns —
@@ -290,7 +299,7 @@ sub-mode, below, which starts from the reader's comments, highlights and convers
 
 ### Who sees which chip, since 2026-10-05
 
-Remember is in every reader's bar, with Recall, Tutorial
+Learn is in every reader's bar, with Recall, Tutorial
 and Quiz. Explore's chip is drawn only with the experimental-features switch on, or while the reader
 is in Explore. The reason and the mechanism are in
 [experimental-features.md](experimental-features.md#the-two-things-gated-below-mode-level).
@@ -323,6 +332,37 @@ The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=explore`). 
 about what the author says; Explore is about what the reader thinks. It is where Tutorial's rationed
 own-view turns go (§ It is about the author first).
 
+**Widened on 2026-10-05 to what may be wrong with the piece.** Greg, report `spya-mvmpks`:
+
+> Let's slightly expand the remit of explore submode in remember mode to help us think about
+> potential critiques of the piece. … explore mode also is about—it's not just about sort of
+> exploring ideas; it's also about exploring potential problems and criticisms and concerns and
+> everything else like that. So it's really just about kind of deepening your thinking around the
+> piece, whereas tutorial submode is more about understanding and internalizing what the piece says
+> and making sure you've got a firm grasp of the author's intent.
+>
+> — Greg, 2026-10-05
+
+So a fifth move, a possible problem with the piece, and a section of the prompt, TESTING THE PIECE,
+whose rules are there to keep the move fair
+([261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md)):
+
+- **The reader's own doubt first**, named as theirs, and sharpened.
+- **Fair before it objects.** Before raising a problem, it searches the article for the author's
+  strongest answer. The piece's claim or qualification gets its own sentence and block id; the
+  objection follows as the model's marked, uncited view, and is dropped if nothing is left of it.
+- **An absence is said of a passage or an argument, never of the whole piece.** The text the model
+  is given may lack footnotes and captions (Tutorial's prompt has the same rule).
+- **It says whose view it is**: the model's own, marked as such, or somebody's found by searching
+  and linked.
+- **Possible, not settled**: stated plainly, with what would settle it; no verdict on the piece as
+  a whole.
+- **One at a time**; at most three when the reader asks for several, in prose, never bullets.
+- **Asked, it answers** with a problem, not a question back. Unasked, it is one move among five.
+
+It is not Debate. Debate is a stored survey of what the web says about the piece; this is one turn
+of a conversation, about the argument or the reader's own doubt. Tutorial is unchanged.
+
 With the Experimental switch on there are four chips, and the group tightens their side padding
 (`quiz.css`, `.remember-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the
 288px band on an iPad. With three chips the padding is unchanged.
@@ -333,6 +373,7 @@ With the Experimental switch on there are four chips, and the group tightens the
    a question that opens their idea up     what follows, what it rests on, where it stops
    a case to try it on                     their own, when "Why you're reading this" gives one
    a connection they have not made         two of their marks, a note and a passage, another saved piece
+   a possible problem with the piece       one, grounded in a cited claim, fair, and offered as a view (since 2026-10-05)
    the wider world                         who disagrees, what came after: searched for, and linked
 ```
 
@@ -392,9 +433,10 @@ Recall, Tutorial or Candidates).
 ### How it opens, and what it does not have
 
 The reader speaks first, as in Tutorial. The empty state says in two lines what Explore is for and
-offers three starters as buttons, each sent as the reader's first message word for word: *Start
+offers four starters as buttons, each sent as the reader's first message word for word: *Start
 from what I've marked and discussed*, *Help me apply this to my own work*, *Where does this sit in
-the wider world?* Recall's invitation refuses buttons because a Recall starter would be the reader's
+the wider world?*, and since 2026-10-05 *Where might this piece be wrong, or missing something?*
+Recall's invitation refuses buttons because a Recall starter would be the reader's
 account written by us; these are requests, and put no view in the reader's mouth.
 
 **The machinery is Tutorial's**: a fifth `ThreadKind`, `explore`, one per article
@@ -532,7 +574,7 @@ Tests: [`recall-hint.test.ts`](../../tests/recall-hint.test.ts) (the split),
 the options passed over and what is deferred (Tutorial hints; telling the model about the press):
 [261004h](../plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md).
 
-## A Remember conversation IS a chat thread
+## Recall's `remember` conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of
 the reuse comes from. Same table, same store, same streaming route, same citation contract, same
@@ -558,10 +600,10 @@ make it one thread:
 - **The database says so**: a partial unique index, `chat_threads_one_remember`, on `article_id`
   where `kind = 'remember'`. An article has one owner, so this is one per article per reader.
 - **A second one cannot be started by accident.** The client mints thread ids, so a stale tab can
-  ask to begin a new Remember thread. `withTurn` appends that typed turn to the existing one instead,
+  ask to begin a new Recall thread. `withTurn` appends that typed turn to the existing one instead,
   and the `begin` frame names it; `withSpokenTurn` treats it as the existing one too, so the live
   tail guard refuses it rather than appending under turns it never saw.
-- **Older articles' Remember threads were folded into one** by the migration that added the index:
+- **Older articles' `remember` threads were folded into one** by the migration that added the index:
   messages moved whole, conversation by conversation, into the earliest thread.
 
 [261001m](../plans/261001m-remember-is-its-own-single-thread.md) has the reasoning and the review.
@@ -571,7 +613,7 @@ Two fields were added, and both are the kind that goes wrong quietly.
 ### `kind` belongs to the thread
 
 `ChatThread.kind` is **required**, not optional — an optional field means a `?? "chat"` at every read
-site and one of them would eventually be missed, which is a Remember turn answered with chat's prompt
+site and one of them would eventually be missed, which is a Recall turn answered with chat's prompt
 and nothing on screen disagreeing. Stored threads that predate the field are normalised to `"chat"` once
 on load, in each store (`normaliseKind` in [`src/chat.ts`](../../src/chat.ts), and `threadsFor` in
 [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts)). Making it required is what turned this from a
@@ -587,14 +629,14 @@ question of discipline into four compiler errors.
 - **Retry and edit send no kind at all** — their thread already has one, and the route 400s one that
   arrives. That refusal happens *before* `settleThread`, because a request rejected after it has
   already aborted the answer another tab's reader was watching.
-- **A Remember thread cannot be anchored.** No gesture starts one from a selection, so an anchor
+- **A `remember` thread cannot be anchored.** No gesture starts one from a selection, so an anchor
   with `kind: "remember"` is a 400. That is worth more than tidiness: it means every mark in the prose
   belongs to a chat, which is what lets the floating `ChatDialog` go on being chat's.
 - **A stance on a chat is refused**, because the check constraint can only say "assistant rows
   only" and the invariant is "Remember threads only". An invariant the database cannot express is one
   the route has to.
 - **The length cap resolves the thread's kind too.** Reading only the request's was a bug: an edit
-  sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character Remember
+  sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character Recall
   message could be created and then never rewritten.
 
 ### The stance belonged to the turn, and is legacy now
@@ -646,15 +688,17 @@ identical and **cannot** prove the provider read them; the eval run above report
 ## On screen
 
 The mode band, the eighth value in `MODES`, last in the dock — the order runs outward from the
-article's own words to the conversation about it, and Remember is one step further out again as the
+article's own words to the conversation about it, and Learn is one step further out again as the
 only mode whose content comes from the reader.
 
-**Remember has no list; it opens its one conversation.** Until 2026-10-01 the list was shared — both
+**Learn's conversational parts have no list; each opens its one conversation.** Until 2026-10-01
+the list was shared — both
 modes showed every thread, a Remember row carried a `remember` tag, and opening one from chat moved
-`?mode=` with `?thread=`. Since `spya-peszam` (above) Remember shows its single thread directly,
-with no list, no `+`, no rename and the header reading *Remember*. **Chat's side of that rule
+`?mode=` with `?thread=`. Since `spya-peszam` (above) Recall shows its single thread directly,
+with no list, no `+`, no rename and the header reading *Learn*; Tutorial and Explore use the same
+one-thread shape. **Chat's side of that rule
 changed on 2026-10-05** (report `spya-hyfqkq`): Recall's, Tutorial's and Explore's conversations
-are listed in Chat again, each as a row with Remember's icon that leads back here. Chat cannot open,
+are listed in Chat again, each as a row with Learn's icon that leads back here. Chat cannot open,
 rename or delete one —
 [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article). The thread is **derived during render** — the stored one if there is one, else
 one begun locally — and `?thread=` is only synced to it afterwards, so neither a stale `?thread=`
@@ -690,7 +734,7 @@ differs is an empty state and a box six rows tall instead of one. Likewise one
 second chat state machine.
 
 **Live works in a Recall conversation too, and is saved as one** — including when it is the
-first thing said in the empty conversation Remember opens with. Tutorial and Explore have none
+first thing said in the empty conversation Recall opens with. Tutorial and Explore have none
 (§ How it opens, and what it does not have). Spoken rows carry no stance.
 [live-conversation.md](live-conversation.md) has the rule and the bug that prompted it.
 
@@ -701,7 +745,7 @@ beside it and first place in the row. Greg:
 > the input box should be much larger for Review mode, and probably emphasise the microphone UI,
 > because talking will be much less annoying than typing.
 
-Because talking is the expected input, a Remember turn has **its own length limit**
+Because talking is the expected input, a Recall, Tutorial or Explore turn has **its own length limit**
 (`MAX_REMEMBER_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
 typed question and an accident applied to a spoken paragraph, and a reader who talked for four
 minutes would have hit it after paying for the transcription. Same mistake `MAX_QUOTE_CHARS` had to
@@ -716,9 +760,9 @@ be rescued from.
   corrections the mode exists for. The prompt honours an *explicit* request instead.
 - **No model-written title.** A thread is named from the reader's first 60 characters, which for
   speech will regularly be *"Um, so I suppose what I took from this was…"*. Since 2026-10-01 that
-  title is shown nowhere — Remember's header just says *Remember* — so there is nothing to rename.
-- **No list of Remember conversations**, and no second one (§ A Remember conversation IS a chat
-  thread). Remember's own controls are still to come; Greg's report names more Socratic ones.
+  title is shown nowhere — Learn's header just says *Learn* — so there is nothing to rename.
+- **No list of Recall conversations**, and no second one (§ Recall's `remember` conversation IS a chat
+  thread). Learn's own controls are still to come; Greg's report names more Socratic ones.
 
 ## See also
 

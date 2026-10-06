@@ -1,0 +1,1 @@
+{"source":"science","label":"Silencing mito (OA via PMC)","role":"fulltext","expect":"pdf","requestedUrl":"https://www.science.org/doi/pdf/10.1126/science.adr3498","outcome":"fetch-failed","elapsedMs":56,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

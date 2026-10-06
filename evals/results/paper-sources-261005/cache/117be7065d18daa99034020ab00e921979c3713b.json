@@ -1,0 +1,1 @@
+{"source":"pmlr","label":"CLIP","role":"fulltext","expect":"pdf","requestedUrl":"http://proceedings.mlr.press/v139/radford21a/radford21a.pdf","outcome":"ok","finalUrl":"http://proceedings.mlr.press/v139/radford21a/radford21a.pdf","chainHosts":["proceedings.mlr.press"],"status":200,"kind":"pdf","bytes":3526772,"elapsedMs":347,"pdfPages":16}

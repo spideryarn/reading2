@@ -1,0 +1,1 @@
+{"source":"nber","label":"w30000","role":"fulltext","expect":"pdf","requestedUrl":"https://www.nber.org/system/files/working_papers/w30000/w30000.pdf","outcome":"ok","finalUrl":"https://www.nber.org/system/files/working_papers/w30000/w30000.pdf","chainHosts":["www.nber.org"],"status":200,"kind":"pdf","bytes":1077387,"elapsedMs":2309,"pdfPages":41}

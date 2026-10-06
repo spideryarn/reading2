@@ -1,0 +1,50 @@
+[
+  {
+    "pair": 1,
+    "set": "noema",
+    "a": "261005l-before-noema-1",
+    "b": "261005l-after-noema-1",
+    "aHash": "fb12eb27600b",
+    "bHash": "138658a5316f"
+  },
+  {
+    "pair": 2,
+    "set": "agents",
+    "a": "261005l-before-agents-1",
+    "b": "261005l-before-agents-2",
+    "aHash": "fb12eb27600b",
+    "bHash": "fb12eb27600b"
+  },
+  {
+    "pair": 3,
+    "set": "agents",
+    "a": "261005l-after-agents-1",
+    "b": "261005l-before-agents-1",
+    "aHash": "138658a5316f",
+    "bHash": "fb12eb27600b"
+  },
+  {
+    "pair": 4,
+    "set": "noema",
+    "a": "261005l-before-noema-2",
+    "b": "261005l-before-noema-1",
+    "aHash": "fb12eb27600b",
+    "bHash": "fb12eb27600b"
+  },
+  {
+    "pair": 5,
+    "set": "noema",
+    "a": "261005l-before-noema-2",
+    "b": "261005l-after-noema-2",
+    "aHash": "fb12eb27600b",
+    "bHash": "138658a5316f"
+  },
+  {
+    "pair": 6,
+    "set": "agents",
+    "a": "261005l-after-agents-2",
+    "b": "261005l-before-agents-2",
+    "aHash": "138658a5316f",
+    "bHash": "fb12eb27600b"
+  }
+]

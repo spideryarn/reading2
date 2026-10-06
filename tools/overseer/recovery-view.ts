@@ -26,6 +26,7 @@ import { join } from "node:path";
 
 import { isClaudeSessionId, slugifyDir, type NotFoundReason } from "../fleet/transcript.js";
 import { statusKey } from "./diff.js";
+import { externalWorktreeRoot, worktreePlace } from "../../scripts/worktree-roots.js";
 import type { ObservedRow } from "./observation.js";
 import {
   isRetained,
@@ -83,7 +84,8 @@ export type DirEvidence =
 
 /**
  * `entry.worktree` is display text and never something to stat (Sol's F8). It is
- * `recorded` only when `meta.dir` itself is under `.claude/worktrees/<name>`,
+ * `recorded` only when `meta.dir` itself is in the worktree of that name — under
+ * `.claude/worktrees/<name>` or the external root, scripts/worktree-roots.ts —
  * and then `dir` already covers its existence.
  */
 export type WorktreeEvidence =
@@ -332,12 +334,11 @@ async function dirEvidence(dir: string | null, deps: EvidenceDeps): Promise<DirE
 
 function worktreeEvidence(entry: RegisterEntry, dir: string | null): WorktreeEvidence {
   if (entry.worktree === null) return { kind: "none" };
-  const marker = `/.claude/worktrees/${entry.worktree}`;
-  if (dir !== null && (dir.endsWith(marker) || dir.includes(`${marker}/`))) return { kind: "recorded", name: entry.worktree, dir };
+  if (dir !== null && worktreePlace(dir)?.name === entry.worktree) return { kind: "recorded", name: entry.worktree, dir };
   return {
     kind: "not-recorded",
     name: entry.worktree,
-    why: "the worktree name is display text, and the recorded directory is not under .claude/worktrees/<name>, so no path is reconstructed",
+    why: `the worktree name is display text, and the recorded directory is not under .claude/worktrees/<name> or ${externalWorktreeRoot()}/<name>, so no path is reconstructed`,
   };
 }
 

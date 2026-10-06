@@ -185,7 +185,7 @@ describe("Remember's panel is one conversation", () => {
 
   it("says Remember in the header, and offers Start over but no close, new or rename", () => {
     paint(rememberThread());
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector('button[title="All conversations"]')).toBeNull();
     expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
     expect(host.querySelector('button[title^="Rename"]')).toBeNull();
@@ -201,7 +201,7 @@ describe("Remember's panel is one conversation", () => {
     act(() =>
       root.render(createElement(ChatPanel, props({ threads: [open], threadId: open.id, canStartOver: false }))),
     );
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector("button.chat-icon.danger")).toBeNull();
   });
 
@@ -296,16 +296,20 @@ describe("Explore's panel", () => {
     expect(hints.join(" ")).toMatch(/what you've highlighted, noted and talked about/);
     const buttons = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")];
     expect(buttons.map((b) => b.textContent)).toEqual([...EXPLORE_STARTERS]);
-    expect(EXPLORE_STARTERS).toHaveLength(3);
+    /* Four since 2026-10-05: the fourth asks what may be wrong with the piece
+       (Greg, spya-mvmpks; plan 261005l). */
+    expect(EXPLORE_STARTERS).toHaveLength(4);
+    expect(EXPLORE_STARTERS).toContain("Where might this piece be wrong, or missing something?");
+    expect(hints.join(" ")).toMatch(/where it may be weak/);
   });
 
-  it("sends a starter as the reader's first message, word for word", () => {
+  it("sends the critique starter as the reader's first message, word for word", () => {
     paint(empty(), "explore");
     const button = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")].find((b) =>
-      b.textContent?.includes("marked and discussed"),
+      b.textContent?.includes("wrong, or missing something"),
     );
     act(() => button?.click());
-    expect(sent).toEqual([{ question: "Start from what I've marked and discussed" }]);
+    expect(sent).toEqual([{ question: "Where might this piece be wrong, or missing something?" }]);
   });
 
   it("draws no starters once the conversation has begun", () => {
@@ -318,7 +322,7 @@ describe("Explore's panel", () => {
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
     expect(box?.rows).toBe(6);
     expect(box?.placeholder).toMatch(/What do you make of it/);
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector('[aria-label="Explore what you think about this article"]')).not.toBeNull();
   });
 

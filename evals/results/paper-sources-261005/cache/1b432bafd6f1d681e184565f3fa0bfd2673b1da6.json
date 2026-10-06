@@ -1,0 +1,1 @@
+{"source":"europepmc","label":"Nat Commun flat bands","role":"fulltext","expect":"html","requestedUrl":"https://europepmc.org/article/PMC/PMC12317057","outcome":"fetch-failed","elapsedMs":55,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

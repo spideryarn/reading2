@@ -474,6 +474,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/command-pick"],
   },
   {
+    /* The bar's short list from why you are reading, 261005k. */
+    match: { kind: "regex", source: "^\\/api\\/command-suggest\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/command-suggest/w1"],
+  },
+  {
     match: { kind: "literal", path: "/api/feedback" },
     methods: ["GET", "POST"],
     witnesses: ["/api/feedback"],
@@ -930,10 +936,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-/* 93 since the private link's one matcher, 2026-10-05 (plan 261005e). */
-const EXPECTED_MATCHER_COUNT = 93;
-/* 115 since its three verbs, each a guard. */
-const EXPECTED_GUARD_COUNT = 115;
+/* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
+   the command bar's suggestions (plan 261005k). */
+const EXPECTED_MATCHER_COUNT = 94;
+/* 115 since its three verbs, each a guard; 116 with the suggestions' one. */
+const EXPECTED_GUARD_COUNT = 116;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2110,6 +2117,8 @@ describe("the authenticated API's route contract", () => {
         "POST literal /api/transcribe",
         // the command bar's sentence, 261003k
         "POST literal /api/command-pick",
+        // the bar's short list from why you are reading, 261005k
+        "POST regex /^\\/api\\/command-suggest\\/([\\w.%-]+)$/",
         "POST literal /api/feedback",
         // the reader's own earlier reports, 260916c — beside the POST it lists
         "GET literal /api/feedback",

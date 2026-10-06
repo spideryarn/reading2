@@ -55,6 +55,13 @@ which is why the second-pass rule further down says to treat those fixes as some
 a **plan review**, where the only thing to fix is prose, and for any pass where you want the mutation
 rather than the patch.
 
+**Read the reviewer's doc edits as well as its code, and grep them for `Greg`.** On 2026-10-04 a
+write-capable review edited a plan doc and put a sentence from the review prompt, the caller's own
+account of a trade-off it had taken, in a dated blockquote headed as Greg's decision. Greg had said
+nothing. This repo treats his quoted words as rules, so a made-up one in a committed doc would be
+read as his authority by every later agent, and nothing else checks it. In the prompt, say whose
+decision each trade-off was (*"my decision, not the user's"*).
+
 Give it three quarters of an hour, in the background. Under `review` the tree is read-only, but the
 reviewer *can* run one test file or a tsx script — see [the review profile](#the-review-profile) —
 so say so in the prompt, and say how: `npx vitest run tests/<one>.test.ts` and
@@ -94,6 +101,17 @@ the severity scale and why your own suspicions go last.
 **Check each finding yourself before acting on it.** Some of them are wrong. Fold what survives into
 the plan, and add its questions to the ones for Greg.
 
+**Checking means tracing, not reading a description.** Open the function that does the thing and
+every hop on the way to it. A comment says what a field *means*, never what it *equals*; a file
+header says what one component cannot see, not what the system does. On 2026-09-09 a plan's central
+mechanism rested on two values being the same thing, inferred from an assignment and a nearby
+comment with the middle hop never opened, and it was false. On 2026-09-10 a security finding was
+"verified" from a header describing a blind spot, when the check that covered it was one file over,
+and it went to Greg as an alarm. For a claim about behaviour, run the small complete set of inputs
+rather than one: a finding that a function "compares only the first two" ids was true, and the
+obvious single test of it would have passed and seemed to refute it, because only the position of
+the odd one decides. **A finding you could not trace is relayed as *unverified*, in that word.**
+
 **If you can write the question, write the fix before you send it.** On 2026-09-02 four rounds all
 returned rejections, and *three of the four headline findings were suspicions already written into
 the prompt* — "can this loop pass while checking nothing?", "`existsSync` is weak", a list of `GIT_*`
@@ -121,6 +139,19 @@ unreviewed code written by someone else, and spend most of the run on what has c
 that returned nothing looks exactly like a review that found nothing. This is
 [silent-success.md](silent-success.md) with a subprocess in it; the several ways it happens are under
 [Gotchas](#gotchas). `retrying with CODEX_API_KEY` on stdout is the fallback working, not a failure.
+
+**And check that it was a second opinion.** A Codex run asked both to implement and to review can
+end up reviewing its own work: when the wrapper cannot start a nested Codex process inside the
+sandbox (the read-only filesystem, or the `listen EPERM` on tsx's IPC socket under
+[Gotchas](#gotchas)), the same model takes the review brief itself. It does not fail. Measured
+2026-09-09: it wrote a proper artefact with IDs, severities and two rounds, found two real P1s and
+reported "accepted after fixes"; an independent pass over the same commit, launched from the
+caller's own shell, then refused it on five established P1s. Exit 0, a fresh answer file and
+plausible findings are all satisfied by a self-review. The only sign was one sentence in the
+artefact saying the nested process could not start. So read a review artefact for how it was
+produced, launch the review yourself from a fresh `run-codex.ts` invocation, and do not count a
+self-review as the cross-family round. Brief that second run to treat the first artefact as a
+*claim*, not as coverage, and name two of its specific statements for it to test.
 
 **Assume intermittent, not down.** The commonest way a run returns nothing is an `HTTP 404` from the
 responses endpoint, and it comes and goes: on 2026-09-03 it failed twice five minutes apart and then
@@ -775,6 +806,22 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   so it isn't output reuse on this side; the likely causes are upstream. Treat such an answer as
   suspect, re-run with a textually distinct prompt, and never let a single Codex pass carry a
   load-bearing claim ("X is already implemented", "this is safe") without a second check.
+- **One cause of a stale answer is on this side: relaunching onto an `--output` path a killed run
+  used.** Measured 2026-09-07: a review was killed with `kill <pid>` and `pkill -P <pid>` and
+  relaunched with a rewritten prompt at the same path. The first run survived both signals (it sits
+  below the `npx` and `tsx` processes, in a process group of its own), finished, and wrote the
+  *superseded* review to that path about eight minutes later. Exit code and "the file exists" both
+  passed, the answer was acted on, and a design decision was reversed on it. So give every run its
+  own `--output` path, or delete the file first and treat its reappearance as the signal; kill a
+  run by process group (`kill -- -<pgid>`); and judge an answer by whether it discusses the prompt
+  you sent. Asking the reviewer to echo a nonce from the prompt makes that mechanical.
+- **The opposite ending: under memory pressure the run dies and writes nothing.** No answer file
+  and no process whose `--prompt-file` is yours means it died, and relaunching onto the same path
+  is then safe because nothing was written. Check with `pgrep -af "run-codex|codex"` and match the
+  prompt file: several worktrees run reviews at once and a bare process count is somebody else's.
+  Relaunch once; a second death is the box, not the run.
+- **The Bash tool's own two-minute default kills a review mid-run.** Give the call an explicit
+  timeout well above `--timeout-minutes`, or run it detached with `scripts/tmux-job.ts`.
 - **Cost.** A runaway high-effort run burns quota fast. The wrapper caps any single run at
   `--timeout-minutes`.
 - **Running out of credit is the commonest failure, and it wears several disguises.** The two auth

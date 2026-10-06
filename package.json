@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "vitest run",
-    "worktree:setup": "tsx scripts/worktree-setup.ts",
+    "worktree:setup": "node scripts/worktree-setup-bootstrap.mjs",
     "worktree:sweep": "tsx scripts/worktree-sweep.ts",
     "worktree:check": "tsx scripts/worktree-check.ts",
     "worktree:remove": "tsx scripts/worktree-remove.ts",

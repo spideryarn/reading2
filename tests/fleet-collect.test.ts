@@ -115,6 +115,13 @@ describe("worktreeOf", () => {
     expect(worktreeOf("/home/greg/code/spideryarn2/.claude/worktrees/logo-animations")).toBe("logo-animations");
   });
 
+  it("names one under the external root, where every new tree on the box has been since 2026-10-05", () => {
+    // It looked for a segment called `worktrees`, so these rows showed the bare repo.
+    expect(worktreeOf("/var/tmp/spideryarn-worktrees/bar-reads-profile", {})).toBe("bar-reads-profile");
+    expect(worktreeOf("/var/tmp/spideryarn-worktrees/bar-reads-profile/tools/fleet", {})).toBe("bar-reads-profile");
+    expect(worktreeOf("/var/tmp/spideryarn-worktrees", {})).toBeNull();
+  });
+
   it("is null in a plain checkout rather than guessing", () => {
     expect(worktreeOf("/home/greg/code/spideryarn2")).toBeNull();
   });

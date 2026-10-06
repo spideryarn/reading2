@@ -41,20 +41,20 @@ describe("threadSource", () => {
     expect(threadSource(t("remember"))).toEqual({
       from: "remember",
       mode: "remember",
-      label: `From Remember › ${REMEMBER_SUB_MODES.recall.label}`,
+      label: `From Learn › ${REMEMBER_SUB_MODES.recall.label}`,
       remember: "recall",
     });
     expect(threadSource(t("tutorial"))).toMatchObject({
       from: "remember",
-      label: `From Remember › ${REMEMBER_SUB_MODES.tutorial.label}`,
+      label: `From Learn › ${REMEMBER_SUB_MODES.tutorial.label}`,
       remember: "tutorial",
     });
     expect(threadSource(t("explore"))).toMatchObject({
       from: "remember",
-      label: `From Remember › ${REMEMBER_SUB_MODES.explore.label}`,
+      label: `From Learn › ${REMEMBER_SUB_MODES.explore.label}`,
       remember: "explore",
     });
-    expect(threadSource(t("remember"))?.label).toBe("From Remember › Recall");
+    expect(threadSource(t("remember"))?.label).toBe("From Learn › Recall");
   });
 
   it("says an anchored chat is about a passage, and quotes the passage when the anchor has its words", () => {
@@ -116,7 +116,7 @@ describe("the filter", () => {
   it("has a label for every word the URL can carry", () => {
     expect(Object.keys(CHAT_FROM_LABEL).sort()).toEqual([...CHAT_FROM_WORDS].sort());
     expect(CHAT_FROM_LABEL.chats).toBe("Chats");
-    expect(CHAT_FROM_LABEL.remember).toBe("Remember");
+    expect(CHAT_FROM_LABEL.remember).toBe("Learn");
     expect(CHAT_FROM_LABEL.debate).toBe("Debate");
   });
 

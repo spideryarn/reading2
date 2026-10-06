@@ -137,6 +137,24 @@ function json(body: unknown, status = 200): Response {
  * in one microtask chain with no macrotask between frames.
  */
 let burst: number | null = null;
+
+/**
+ * **What the server has**, so the list it is asked for says so. Since
+ * 2026-10-05 the reading view asks for the summaries again when an answer
+ * stops arriving (useChatAnchors.ts § `refresh`), and a stub that went on
+ * answering "no conversations" after taking a POST was a server that had lost
+ * the thread: the dialog closed under every case here.
+ * docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md
+ */
+const stored: Record<string, unknown>[] = [];
+/** When set, the chat POST is refused with this message and nothing is stored. */
+let refuse: string | null = null;
+/**
+ * When set, the server stores a new conversation under this id whatever the
+ * tab guessed, which is what the route does when a message uses the guess
+ * (including one minted for this turn; src/chat.ts, `withTurn`).
+ */
+let storeAs: string | null = null;
 const BURST_WORD = "word ";
 
 function chatStream(threadId: string): Response {
@@ -179,12 +197,25 @@ function reply(url: string, method: string, init?: RequestInit): Response {
   if (method === "POST" && url.startsWith("/api/chat/")) {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     posts.push({ url, body });
-    const id = typeof body.threadId === "string" ? body.threadId : "spya-srvthr";
+    const id = storeAs ?? (typeof body.threadId === "string" ? body.threadId : "spya-srvthr");
+    if (refuse !== null) return json({ error: refuse }, 503);
+    stored.push({
+      id,
+      title: "About the paragraph",
+      createdAt: "2026-10-05T12:00:00.000Z",
+      updatedAt: "2026-10-05T12:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      ...(body.anchor ? { anchor: body.anchor } : {}),
+    });
     return chatStream(id);
   }
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
-  if (url.startsWith("/api/chat/")) return json({ threads: [] });
+  /* The summaries are what the reading view asks for again. The full list is
+     asked for once per mount of the dialog, before anything here is stored. */
+  if (url.startsWith("/api/chat/") && url.includes("summary=1")) return json({ threads: stored });
+  if (url.startsWith("/api/chat/")) return json({ threads: stored.map((t) => ({ ...t, messages: [] })) });
   if (url.startsWith("/api/glossary/")) return json(GLOSSARY);
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -205,6 +236,9 @@ beforeEach(() => {
   session.user = { id: "owner-1", email: "greg@example.com" };
   stream = null;
   burst = null;
+  refuse = null;
+  storeAs = null;
+  stored.length = 0;
   posts.length = 0;
   errors = [];
   thrown = [];
@@ -377,6 +411,106 @@ describe("a '?' answer streaming into the floating dialog", () => {
     expect(loops()).toEqual([]);
   });
 
+  /* **The server never had this one.** A refused first question stops
+     arriving too, so the list is asked for again, and the answer has no row
+     for a conversation the server did not make. The dialog is drawn from that
+     row (Reader.tsx § `overlay`), so dropping it took the dialog away along
+     with the only words saying why.
+     docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md */
+  it("keeps the dialog, and its reason, when the first question is refused", async () => {
+    refuse = "The model is not answering just now.";
+    await open("");
+    await press("spya-bbbbbb");
+    expect(posts, "the press must have sent").toHaveLength(1);
+    await settle();
+    expect(host.querySelector(".chat-dialog"), "the dialog must still be open").toBeTruthy();
+    expect(host.querySelector(".chat-dialog")?.textContent).toContain("The model is not answering just now.");
+    expect(loops()).toEqual([]);
+  });
+
+  /* **The server stored it under another id.** The tab guesses a new
+     conversation's id and the server overrules a guess that is taken. The
+     summary the dialog put in the list is under the guess; if it stays there,
+     `?thread=` moves to an id the list has no row for, and the list asked for
+     again when the answer stops brings the real row to sit beside the guess.
+     docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md */
+  it("counts one conversation, and keeps its dialog, when the server stores it under another id", async () => {
+    storeAs = "spya-srvown";
+    await open("");
+    await press("spya-bbbbbb");
+    expect(posts, "the press must have sent").toHaveLength(1);
+    expect(posts[0]?.body.threadId, "the tab must have guessed a different id").not.toBe(storeAs);
+    const s = stream;
+    expect(s, "the chat POST must have opened a stream").toBeTruthy();
+    if (!s) return;
+    const dialog = host.querySelector(".chat-dialog");
+    expect(dialog, "the dialog must be open before the server answers").toBeTruthy();
+    const count = () => host.querySelector('tr[data-block="spya-bbbbbb"] .block-chat-n')?.textContent;
+    expect(count(), "the control: the paragraph counts the guess").toBe("1");
+
+    await begin(s, "spya-msgrep");
+    expect(new URLSearchParams(location.search).get("thread"), "the address follows the server").toBe(storeAs);
+    expect.soft(host.querySelector(".chat-dialog"), "the same dialog, not closed or remounted").toBe(dialog);
+    expect.soft(count()).toBe("1");
+
+    await deltas(s, WORDS);
+    await finish(s);
+    expect.soft(host.querySelector(".chat-dialog"), "the same dialog after the answer").toBe(dialog);
+    expect.soft(host.textContent).toContain("doing the arguing");
+    expect(count(), "one conversation is one in the paragraph's count").toBe("1");
+    expect(loops()).toEqual([]);
+  });
+
+  /* The address is navigation and stops following once the dialog has gone
+     (chat/controller.ts § `detach`); the summary is data and must not. GPT
+     Sol's plan review, finding 1. */
+  it("counts one conversation when the dialog was closed before the server named it", async () => {
+    storeAs = "spya-srvown";
+    await open("");
+    await press("spya-bbbbbb");
+    const s = stream;
+    expect(s, "the chat POST must have opened a stream").toBeTruthy();
+    if (!s) return;
+    const close = host.querySelector<HTMLButtonElement>('.chat-dialog button[aria-label="Close"]');
+    expect(close, "the dialog must have a Close").toBeTruthy();
+    await act(async () => close?.click());
+    await settle(2);
+    expect(host.querySelector(".chat-dialog"), "the control: the dialog is closed").toBeNull();
+
+    await begin(s, "spya-msgrep");
+    await deltas(s, WORDS);
+    await finish(s);
+    expect(host.querySelector(".chat-dialog"), "a closed dialog stays closed").toBeNull();
+    expect(
+      host.querySelector('tr[data-block="spya-bbbbbb"] .block-chat-n')?.textContent,
+      "one conversation is one in the paragraph's count",
+    ).toBe("1");
+  });
+
+  /* Words typed while the first answer is on its way are kept under the
+     conversation's id (chat-draft.ts), so they have to move with it. GPT Sol's
+     plan review, finding 3. */
+  it("keeps what the reader typed while waiting, when the server stores it under another id", async () => {
+    storeAs = "spya-srvown";
+    await open("");
+    await press("spya-bbbbbb");
+    const s = stream;
+    expect(s, "the chat POST must have opened a stream").toBeTruthy();
+    if (!s) return;
+    const box = () => host.querySelector<HTMLTextAreaElement>(".chat-dialog textarea");
+    const el = box();
+    expect(el, "the dialog must have a composer while it waits").toBeTruthy();
+    if (!el) return;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, "and a follow-up");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(box()?.value, "the control: the composer took the words").toBe("and a follow-up");
+
+    await begin(s, "spya-msgrep");
+    expect(box()?.value).toBe("and a follow-up");
+  });
+
   it("does not loop when '?' is pressed again on the same paragraph after it answered", async () => {
     await pressAndStream(GREG);
     /* The reopen path: `helpThreadFor` finds the conversation this block
@@ -448,4 +582,3 @@ describe("a '?' answer streaming into the floating dialog", () => {
     expect(loops()).toEqual([]);
   });
 });
-

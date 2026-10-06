@@ -19,8 +19,9 @@
  * path-set comparison that called an overwritten fixture identical, and the
  * three real-worktree cases below.
  */
-import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -30,6 +31,7 @@ import { CORPUS_ROOT } from "../scripts/corpus-materialise.js";
 import {
   blockers,
   type CheckFacts,
+  checkTarget,
   classifyIgnored,
   comparedWithPrimary,
   corpusStrays,
@@ -38,6 +40,7 @@ import {
   listenersUnder,
   logStrays,
   report,
+  runCheck,
   standingAgainstTrunk,
 } from "../scripts/worktree-check.js";
 
@@ -75,19 +78,27 @@ describe("listenersUnder", () => {
   const line = (addr: string, pid: number) =>
     `LISTEN 0      511      ${addr}       0.0.0.0:*    users:(("node-MainThread",pid=${pid},fd=33))`;
 
-  it("matches a real pid whose cwd is under the root, and skips one whose is not", () => {
+  it("matches a real pid whose cwd is under the root, and skips one whose is not", async () => {
     // Uses this very process as the positive case: vitest runs with its cwd in
     // the tree, so the readlink and the prefix comparison are the real ones
-    // rather than a fake standing in for them. pid 1 runs from `/`, which no
-    // worktree is ever under.
+    // rather than a fake standing in for them. Give the negative case a known
+    // cwd: pid 1 can run from this same tree in a container.
     const root = process.cwd();
-    const out = [line("127.0.0.1:8787", process.pid), line("0.0.0.0:22", 1)].join("\n");
-    const scan = listenersUnder(root, out);
-    expect(scan.kind).toBe("checked");
-    if (scan.kind !== "checked") return;
-    expect(scan.found.map((l) => l.pid)).toEqual([process.pid]);
-    expect(scan.found[0]?.addr).toBe("127.0.0.1:8787");
-    expect(scan.found[0]?.command).not.toBe("(command unreadable)");
+    const outside = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { cwd: tmpdir(), stdio: "ignore" });
+    await once(outside, "spawn");
+    try {
+      const out = [line("127.0.0.1:8787", process.pid), line("0.0.0.0:22", outside.pid!)].join("\n");
+      const scan = listenersUnder(root, out);
+      expect(scan.kind).toBe("checked");
+      if (scan.kind !== "checked") return;
+      expect(scan.found.map((l) => l.pid)).toEqual([process.pid]);
+      expect(scan.found[0]?.addr).toBe("127.0.0.1:8787");
+      expect(scan.found[0]?.command).not.toBe("(command unreadable)");
+    } finally {
+      const exited = once(outside, "exit");
+      outside.kill();
+      await exited;
+    }
   });
 
   it("does not treat a sibling worktree as being under this one", () => {
@@ -627,6 +638,157 @@ describe("gather, in a real linked worktree", () => {
     expect(facts.trunk).toEqual({ kind: "landed" });
     expect(blockers(facts)).toEqual([]);
     expect(report(facts).safe).toBe(true);
+  });
+
+  /* `--root`: the primary's copy of the script asked about another tree, which
+     is what the fleet dashboard's removal does for a tree that was never set up
+     and so cannot run its own copy (docs/plans/261005n). Each refusal below is a
+     way of printing SAFE about something other than the tree that was named. */
+  describe("checkTarget", () => {
+    it("answers for the script's own checkout when given nothing", () => {
+      expect(checkTarget([], primary)).toEqual({ kind: "root", root: primary });
+    });
+
+    it("answers for the tree --root names", () => {
+      expect(checkTarget(["--root", worktree], primary)).toEqual({ kind: "root", root: realpathSync(worktree) });
+      expect(checkTarget(["--root", `${worktree}/`], primary)).toEqual({ kind: "root", root: realpathSync(worktree) });
+    });
+
+    it("refuses a directory inside the tree, whose data/ it would look for in the wrong place", () => {
+      expect(checkTarget(["--root", path.join(worktree, "data")], primary).kind).toBe("refused");
+      /* `data/` is ignored, so what git calls it is its own business; a tracked
+         directory is the unambiguous case. */
+      expect(checkTarget(["--root", path.join(worktree, "tests")], primary)).toMatchObject({
+        kind: "refused",
+        why: expect.stringContaining("not its top"),
+      });
+    });
+
+    it("refuses a tree of some other repository", () => {
+      const other = path.join(root, "other");
+      git(["init", "--quiet", "-b", "dev", other], root);
+      expect(checkTarget(["--root", other], primary)).toMatchObject({
+        kind: "refused",
+        why: expect.stringContaining("different repository"),
+      });
+    });
+
+    it("hands back the real directory when given a symlink to it", () => {
+      /* `listenersUnder` compares the root with `/proc/<pid>/cwd`, which the
+         kernel reports resolved. An alias handed on unchanged would find no
+         server in a tree that has one. */
+      const alias = path.join(root, "alias");
+      symlinkSync(worktree, alias);
+      expect(checkTarget(["--root", alias], primary)).toEqual({ kind: "root", root: realpathSync(worktree) });
+    });
+
+    it("refuses a copy of a worktree, whose .git pointer is still the original's", () => {
+      /* What `cp -r` leaves: git names the copy as the top of a work tree of
+         this repository, and reads HEAD and the index from the tree it was
+         copied from. Every other condition here passes. */
+      const copy = path.join(root, "copy");
+      mkdirSync(copy);
+      writeFileSync(path.join(copy, ".git"), readFileSync(path.join(worktree, ".git")));
+      expect(git(["rev-parse", "--show-toplevel"], copy)).toBe(realpathSync(copy));
+      expect(checkTarget(["--root", copy], primary)).toMatchObject({
+        kind: "refused",
+        why: expect.stringContaining("backlink"),
+      });
+    });
+
+    it("refuses what it cannot look at, and what it does not understand", () => {
+      expect(checkTarget(["--root", "wt"], primary).kind).toBe("refused");
+      expect(checkTarget(["--root", path.join(root, "nowhere")], primary).kind).toBe("refused");
+      expect(checkTarget(["--root", path.join(worktree, ".env.local")], primary).kind).toBe("refused");
+      expect(checkTarget(["--root", root], primary).kind).toBe("refused");
+      expect(checkTarget(["--root"], primary).kind).toBe("refused");
+      expect(checkTarget(["--root", worktree, "extra"], primary).kind).toBe("refused");
+      expect(checkTarget([worktree], primary).kind).toBe("refused");
+      expect(checkTarget(["--rot", worktree], primary).kind).toBe("refused");
+    });
+  });
+
+  describe("runCheck", () => {
+    it("refuses a borrowed pointer even with no arguments, rather than clearing an unlanded empty commit", () => {
+      const sibling = path.join(root, "sibling");
+      git(["worktree", "add", "--quiet", "-b", "worktree-sibling", sibling, "HEAD"], primary);
+      git(["commit", "--quiet", "--allow-empty", "-m", "only on the target branch"], worktree);
+      const pointer = readFileSync(path.join(worktree, ".git"));
+      try {
+        expect(runCheck([], worktree).code).toBe(1);
+        writeFileSync(path.join(worktree, ".git"), readFileSync(path.join(sibling, ".git")));
+        expect(git(["branch", "--show-current"], worktree)).toBe("worktree-sibling");
+        const out = runCheck([], worktree);
+        expect(out.code).toBe(2);
+        expect(out.lines.join("\n")).toContain("backlink");
+        expect(out.lines.join("\n")).not.toContain("SAFE TO REMOVE");
+      } finally {
+        writeFileSync(path.join(worktree, ".git"), pointer);
+        git(["worktree", "remove", "--force", sibling], primary);
+      }
+    });
+
+    it("refuses a copied administration directory masquerading as a primary .git directory", () => {
+      const copy = path.join(root, "copy");
+      cpSync(worktree, copy, { recursive: true });
+      rmSync(path.join(copy, ".git"));
+      cpSync(git(["rev-parse", "--absolute-git-dir"], worktree), path.join(copy, ".git"), { recursive: true });
+      // A relative commondir only worked at its original administration path.
+      writeFileSync(path.join(copy, ".git", "commondir"), `${path.join(primary, ".git")}\n`);
+      expect(git(["rev-parse", "--show-toplevel"], copy)).toBe(realpathSync(copy));
+      expect(git(["rev-parse", "--git-common-dir"], copy)).toBe(path.join(primary, ".git"));
+      const out = runCheck(["--root", copy], primary);
+      expect(out.code).toBe(2);
+      expect(out.lines.join("\n")).not.toContain("SAFE TO REMOVE");
+    });
+
+    it("judges the tree --root names, not the checkout the script is in", () => {
+      writeFileSync(path.join(worktree, "only-copy.md"), "a note nobody committed\n");
+      const out = runCheck(["--root", worktree], primary);
+      expect(out.code).toBe(1);
+      const text = out.lines.join("\n");
+      expect(text).toContain(realpathSync(worktree));
+      expect(text).toContain("only-copy.md");
+      expect(text).toContain("DO NOT REMOVE");
+    });
+
+    it("clears a finished tree it was pointed at", () => {
+      const out = runCheck(["--root", worktree], primary);
+      expect(out.lines.join("\n")).toContain("SAFE TO REMOVE");
+      expect(out.code).toBe(0);
+    });
+
+    it("exits 2, and says nothing is safe, when it could not look", () => {
+      const out = runCheck(["--root", path.join(worktree, "tests")], primary);
+      expect(out.code).toBe(2);
+      expect(out.lines.join("\n")).not.toContain("SAFE");
+    });
+  });
+
+  /**
+   * A git hook runs with `GIT_DIR` set, and git obeys it over the directory it
+   * is run in. Before this, `gather(tree)` under such an environment took its
+   * branch, its index and its landed-or-not from whichever checkout the
+   * variable named, and its files from `tree` (GPT Sol, plan review of 261005n).
+   */
+  it("answers for the tree it was given, whatever GIT_DIR the caller inherited", () => {
+    const sibling = path.join(root, "sibling");
+    git(["worktree", "add", "--quiet", "-b", "worktree-sibling", sibling, "HEAD"], primary);
+    const poisoned = { GIT_DIR: git(["rev-parse", "--absolute-git-dir"], sibling), GIT_WORK_TREE: worktree };
+    const before = { GIT_DIR: process.env.GIT_DIR, GIT_WORK_TREE: process.env.GIT_WORK_TREE };
+    try {
+      Object.assign(process.env, poisoned);
+      /* The control: the poison works on a plain git call. */
+      expect(execFileSync("git", ["branch", "--show-current"], { cwd: worktree, encoding: "utf8" }).trim()).toBe("worktree-sibling");
+      expect(gather(worktree).branch).toBe("worktree-thing");
+      expect(checkTarget(["--root", worktree], primary)).toEqual({ kind: "root", root: realpathSync(worktree) });
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      git(["worktree", "remove", "--force", sibling], primary);
+    }
   });
 
   it("proves the copied-in .env.local rather than assuming it", () => {

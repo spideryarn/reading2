@@ -243,7 +243,11 @@ export const MODE_LABEL: Record<Mode, string> = {
   referee: "Referee",
   diagram: "Diagram",
   chat: "Chat",
-  remember: "Remember",
+  /* Called Remember until 2026-10-05, when Greg renamed it (spya-mvmpks). Only
+     the word a reader sees changed: the mode id, `?mode=remember`, the thread
+     kind and every identifier still say `remember`.
+     docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
+  remember: "Learn",
   debate: "Debate",
   structure: "Structure",
   citations: "Citations",

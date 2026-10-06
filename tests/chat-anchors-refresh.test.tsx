@@ -16,7 +16,7 @@
  *
  * Harness: tests/chat-arrival-race.test.ts's.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../src/types.js";
@@ -137,6 +137,109 @@ describe("asking for the summaries again", () => {
     expect(ids()).toEqual([B]);
   });
 
+  /* "No longer has" needs the server to have had it. A conversation added
+     here before the refetch went out, whose first question was refused or
+     whose insert the list was read ahead of, is in no answer, and the floating
+     dialog is drawn from its row.
+     docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md */
+  it("keeps a conversation added here that the server has never listed, until it does", async () => {
+    await mount();
+    await answer(0, [summary(A)]);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(1, [summary(A)]);
+    expect(ids(), "added before the flight, and never the server's to drop").toEqual([A, C]);
+
+    /* Once an answer names it, it is the server's like any other. */
+    await act(async () => api().refresh());
+    await answer(2, [summary(A), summary(C)]);
+    await act(async () => api().refresh());
+    await answer(3, [summary(A)]);
+    expect(ids()).toEqual([A]);
+  });
+
+  it("does not bring back a never-listed conversation the reader dropped", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().drop(C));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("takes the server's first confirmed copy when the optimistic add preceded the fetch", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C, { title: "optimistic", lastLine: "" })));
+    await act(async () => api().refresh());
+    await answer(1, [summary(C, { title: "confirmed", lastLine: "the answer", turns: 2 })]);
+    expect(api().summaries).toEqual([summary(C, { title: "confirmed", lastLine: "the answer", turns: 2 })]);
+  });
+
+  it("does not make an already confirmed id unseen again when add replaces it", async () => {
+    await mount();
+    await answer(0, [summary(C)]);
+    await act(async () => api().add(summary(C, { title: "local replacement" })));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("does not confirm an unseen id from a superseded response", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await act(async () => api().refresh());
+    await answer(2, []);
+    await answer(1, [summary(C)]);
+    await act(async () => api().refresh());
+    await answer(3, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("keeps an unseen id through a failed refresh and the next empty response", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await act(async () => asked[1]?.reject(new Error("offline")));
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("resets both unseen and confirmed ids for another article", async () => {
+    await mount();
+    await answer(0, [summary(C)]);
+    await act(async () => api().add(summary(A)));
+    await mount("another-piece");
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("keeps the same reconciliation under StrictMode's repeated effects and updaters", async () => {
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness, { slug: "a-piece" }))));
+    expect(asked).toHaveLength(2);
+    await answer(1, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(0, [summary(C)]);
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+    await act(async () => api().refresh());
+    await answer(3, [summary(C, { title: "confirmed" })]);
+    expect(api().summaries[0]?.title).toBe("confirmed");
+    await act(async () => api().refresh());
+    await answer(4, []);
+    expect(ids()).toEqual([]);
+  });
+
   it("keeps what the reader did while it was in the air: an add, a touch and a drop", async () => {
     await mount();
     await answer(0, [summary(A, { lastLine: "old" }), summary(B)]);
@@ -238,5 +341,176 @@ describe("asking for the summaries again", () => {
     const count = asked.length;
     await act(async () => afterOldAnswer());
     expect(asked).toHaveLength(count);
+  });
+});
+
+/* **The server stored a new conversation under another id than the tab
+   guessed.** The row `add` put here is under the guess, which no answer will
+   ever name as this conversation, so without `rename` it stays beside the real
+   row and the paragraph counts one conversation twice. `G` is the guess and
+   `R` the id the server chose.
+   docs/plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md */
+describe("a conversation the server stored under another id", () => {
+  const G = "spya-ggg222";
+  const R = "spya-rrr222";
+
+  it("accepts the current article's name after StrictMode repeats its effect", async () => {
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness, { slug: "a-piece" }))));
+    expect(asked).toHaveLength(2);
+    await answer(1, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    expect(ids()).toEqual([R]);
+  });
+
+  it("is one row, under the server's id, where the guess was", async () => {
+    await mount();
+    await answer(0, [summary(A)]);
+    await act(async () => api().add(summary(G, { title: "the question" })));
+    await act(async () => api().add(summary(B)));
+    await act(async () => api().rename(G, R));
+    expect(ids()).toEqual([A, R, B]);
+    expect(api().summaries[1]?.title).toBe("the question");
+  });
+
+  it("stays one row when the list is asked for again", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    await act(async () => api().refresh());
+    await answer(1, [summary(R, { title: "the server's" })]);
+    expect(api().summaries).toEqual([summary(R, { title: "the server's" })]);
+  });
+
+  it("is kept under the server's id through an answer that was read before it was stored", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids(), "never listed yet, so not the server's to drop").toEqual([R]);
+  });
+
+  it("is one row when the name arrives while a request is in the air", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await act(async () => api().rename(G, R));
+    await answer(1, [summary(R)]);
+    expect(ids()).toEqual([R]);
+
+    /* And it is the server's from then on: a later answer without it drops it. */
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("is one row when a refetch named the real one before the dialog heard", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await answer(1, [summary(R, { title: "the server's" })]);
+    expect(ids(), "the control: this is the double count").toEqual([R, G]);
+    await act(async () => api().rename(G, R));
+    expect(api().summaries).toEqual([summary(R, { title: "the server's" })]);
+  });
+
+  for (const inFlight of [false, true]) {
+    it(`keeps a later deletion of the stored id when its name arrives${inFlight ? " during a refetch" : " between refetches"}`, async () => {
+      await mount();
+      await answer(0, []);
+      await act(async () => api().add(summary(G)));
+      await act(async () => api().refresh());
+      await answer(1, [summary(R)]);
+      expect(ids(), "the server's row arrived before the original stream's name").toEqual([R, G]);
+      if (inFlight) await act(async () => api().refresh());
+      await act(async () => api().drop(R));
+      expect(ids(), "the reader removed the stored conversation").toEqual([G]);
+      await act(async () => api().rename(G, R));
+      expect(ids(), "the older creation acknowledgement must not undo the deletion").toEqual([]);
+      if (inFlight) {
+        await answer(2, [summary(R)]);
+        expect(ids(), "a stale snapshot must not undo the deletion either").toEqual([]);
+      }
+      await act(async () => api().refresh());
+      await answer(inFlight ? 3 : 2, []);
+      expect(ids()).toEqual([]);
+    });
+  }
+
+  it("can use an id deleted before this conversation was started", async () => {
+    await mount();
+    await answer(0, [summary(R)]);
+    await act(async () => api().drop(R));
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    expect(ids(), "an older deletion is not a deletion of this new conversation").toEqual([R]);
+  });
+
+  it("keeps the later deletion even when the guess was listed for an older conversation", async () => {
+    await mount();
+    await answer(0, [summary(G)]);
+    await act(async () => api().refresh());
+    await answer(1, []);
+    await act(async () => api().refresh());
+    await act(async () => api().add(summary(G)));
+    await answer(2, [summary(R)]);
+    expect(ids(), "both rows are present before the deletion").toEqual([R, G]);
+    await act(async () => api().drop(R));
+    await act(async () => api().rename(G, R));
+    expect(ids(), "historical confirmation of the guess is not confirmation of this new send").toEqual([]);
+  });
+
+  it("keeps a row explicitly added after the stored id was deleted", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().drop(R));
+    await act(async () => api().add(summary(R, { title: "a newer creation" })));
+    await act(async () => api().rename(G, R));
+    expect(api().summaries).toEqual([summary(R, { title: "a newer creation" })]);
+  });
+
+  /* The row was added before this request went out, so the guess is not in
+     the flight's `written`, and an id an older answer once listed is not
+     `unseen` either. The rename itself has to count as a write. GPT Sol's
+     plan review, finding 6. */
+  it("survives a request in the air even under an id an older answer once listed", async () => {
+    await mount();
+    await answer(0, [summary(R)]);
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids(), "the control: the server dropped the old one").toEqual([]);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await act(async () => api().rename(G, R));
+    await answer(2, []);
+    expect(ids()).toEqual([R]);
+  });
+
+  /* The acknowledgement that calls this outlives the dialog that sent the
+     turn, so it can arrive after the reader has moved to another article. */
+  it("ignores a name that arrives for an article the reader has left", async () => {
+    await mount("a-piece");
+    await answer(0, []);
+    const late = api().rename;
+    await mount("another-piece");
+    await answer(1, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => late(G, R));
+    expect(ids()).toEqual([G]);
+  });
+
+  it("does nothing when the server kept the guess", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    const before = api().summaries;
+    await act(async () => api().rename(G, G));
+    expect(api().summaries).toBe(before);
   });
 });

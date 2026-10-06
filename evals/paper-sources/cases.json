@@ -1,0 +1,955 @@
+[
+ {
+  "source": "biorxiv",
+  "label": "African rope squirrels",
+  "landingUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2",
+  "fullTextUrls": [
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "biorxiv",
+  "label": "ASC glial reactivity",
+  "landingUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2",
+  "fullTextUrls": [
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "medrxiv",
+  "label": "Potassium channel",
+  "landingUrl": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7",
+  "fullTextUrls": [
+   {
+    "url": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7.full",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "medrxiv",
+  "label": "Hepatitis WGS",
+  "landingUrl": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3",
+  "fullTextUrls": [
+   {
+    "url": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3.full",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (Nat Commun)",
+  "landingUrl": "https://pubmed.ncbi.nlm.nih.gov/40750793/",
+  "fullTextUrls": [
+   {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (eLife)",
+  "landingUrl": "https://pubmed.ncbi.nlm.nih.gov/40888484/",
+  "fullTextUrls": [
+   {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12401548/",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "pubmed",
+  "label": "not in PMC (Lancet)",
+  "landingUrl": "https://pubmed.ncbi.nlm.nih.gov/40885583/",
+  "fullTextUrls": []
+ },
+ {
+  "source": "pubmed",
+  "label": "not in PMC (Nature news)",
+  "landingUrl": "https://pubmed.ncbi.nlm.nih.gov/40866691/",
+  "fullTextUrls": []
+ },
+ {
+  "source": "pmc",
+  "label": "Nat Commun flat bands",
+  "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+  "fullTextUrls": [
+   {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/pdf/",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "pmc",
+  "label": "PLOS GH multiparity",
+  "landingUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/",
+  "fullTextUrls": [
+   {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/pdf/",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "europepmc",
+  "label": "Nat Commun flat bands",
+  "landingUrl": "https://europepmc.org/article/MED/40750793",
+  "fullTextUrls": [
+   {
+    "url": "https://europepmc.org/article/PMC/PMC12317057",
+    "expect": "html"
+   },
+   {
+    "url": "https://europepmc.org/backend/ptpmcrender.fcgi?accid=PMC12317057&blobtype=pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "europepmc",
+  "label": "eLife burial",
+  "landingUrl": "https://europepmc.org/article/PMC/PMC12401548",
+  "fullTextUrls": [
+   {
+    "url": "https://europepmc.org/backend/ptpmcrender.fcgi?accid=PMC12401548&blobtype=pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "AlphaFold 2021",
+  "landingUrl": "https://doi.org/10.1038/s41586-021-03819-2",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nature.com/articles/s41586-021-03819-2",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.nature.com/articles/s41586-021-03819-2.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "GNoME materials",
+  "landingUrl": "https://doi.org/10.1038/s41586-023-06735-9",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nature.com/articles/s41586-023-06735-9.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-springer",
+  "label": "U-Net chapter",
+  "landingUrl": "https://doi.org/10.1007/978-3-319-24574-4_28",
+  "fullTextUrls": [
+   {
+    "url": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-springer",
+  "label": "ImageNet IJCV",
+  "landingUrl": "https://doi.org/10.1007/s11263-015-0816-y",
+  "fullTextUrls": [
+   {
+    "url": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Explanation in AI (Miller)",
+  "landingUrl": "https://doi.org/10.1016/j.artint.2018.07.007",
+  "fullTextUrls": [
+   {
+    "url": "https://www.sciencedirect.com/science/article/pii/S0004370218305988",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Deep learning in NN (Schmidhuber)",
+  "landingUrl": "https://doi.org/10.1016/j.neunet.2014.09.003",
+  "fullTextUrls": [
+   {
+    "url": "https://www.sciencedirect.com/science/article/pii/S0893608014002135",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Methods Ecol Evol 2017",
+  "landingUrl": "https://doi.org/10.1111/2041-210X.12941",
+  "fullTextUrls": [
+   {
+    "url": "https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12941",
+    "expect": "html"
+   },
+   {
+    "url": "https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/2041-210X.12941",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Wiley Ecol Evol 2017",
+  "landingUrl": "https://doi.org/10.1002/ece3.3615",
+  "fullTextUrls": [
+   {
+    "url": "https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.3615",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "doi-acm",
+  "label": "Optuna KDD19",
+  "landingUrl": "https://doi.org/10.1145/3292500.3330701",
+  "fullTextUrls": [
+   {
+    "url": "https://dl.acm.org/doi/pdf/10.1145/3292500.3330701",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-acm",
+  "label": "Interlocking building blocks",
+  "landingUrl": "https://doi.org/10.1145/3716305",
+  "fullTextUrls": [
+   {
+    "url": "https://dl.acm.org/doi/pdf/10.1145/3716305",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-ieee",
+  "label": "ResNet CVPR16",
+  "landingUrl": "https://doi.org/10.1109/CVPR.2016.90",
+  "fullTextUrls": [
+   {
+    "url": "https://ieeexplore.ieee.org/document/7780459",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "doi-ieee",
+  "label": "LeNet 1998",
+  "landingUrl": "https://doi.org/10.1109/5.726791",
+  "fullTextUrls": [
+   {
+    "url": "https://ieeexplore.ieee.org/document/726791",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "doi-plos",
+  "label": "Why most findings false",
+  "landingUrl": "https://doi.org/10.1371/journal.pmed.0020124",
+  "fullTextUrls": [
+   {
+    "url": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+    "expect": "html"
+   },
+   {
+    "url": "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-plos",
+  "label": "PLOS GH multiparity",
+  "landingUrl": "https://doi.org/10.1371/journal.pgph.0005051",
+  "fullTextUrls": [
+   {
+    "url": "https://journals.plos.org/globalpublichealth/article/file?id=10.1371/journal.pgph.0005051&type=printable",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "African rope squirrels",
+  "landingUrl": "https://doi.org/10.1101/2025.08.25.672055",
+  "fullTextUrls": [
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "ASC glial reactivity",
+  "landingUrl": "https://doi.org/10.1101/2025.06.19.660521",
+  "fullTextUrls": [
+   {
+    "url": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "openreview",
+  "label": "Lottery ticket (ICLR19)",
+  "landingUrl": "https://openreview.net/forum?id=rJl-b3RcF7",
+  "fullTextUrls": [
+   {
+    "url": "https://openreview.net/pdf?id=rJl-b3RcF7",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "openreview",
+  "label": "Graph attention (ICLR18)",
+  "landingUrl": "https://openreview.net/forum?id=rJXMpikCZ",
+  "fullTextUrls": [
+   {
+    "url": "https://openreview.net/pdf?id=rJXMpikCZ",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "aclanthology",
+  "label": "BART",
+  "landingUrl": "https://aclanthology.org/2020.acl-main.703/",
+  "fullTextUrls": [
+   {
+    "url": "https://aclanthology.org/2020.acl-main.703.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "aclanthology",
+  "label": "ACL 2023 long 1",
+  "landingUrl": "https://aclanthology.org/2023.acl-long.1/",
+  "fullTextUrls": [
+   {
+    "url": "https://aclanthology.org/2023.acl-long.1.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "ssrn",
+  "label": "SSRN 3340189",
+  "landingUrl": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3340189",
+  "fullTextUrls": []
+ },
+ {
+  "source": "ssrn",
+  "label": "SSRN 4389233",
+  "landingUrl": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4389233",
+  "fullTextUrls": []
+ },
+ {
+  "source": "semanticscholar",
+  "label": "Attention is all you need",
+  "landingUrl": "https://www.semanticscholar.org/paper/Attention-is-All-you-Need-Vaswani-Shazeer/204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+  "fullTextUrls": []
+ },
+ {
+  "source": "semanticscholar",
+  "label": "BERT",
+  "landingUrl": "https://www.semanticscholar.org/paper/BERT%3A-Pre-training-of-Deep-Bidirectional-for-Devlin-Chang/df2b0e26d0599ce3e70df8a9da02e51594e0e992",
+  "fullTextUrls": []
+ },
+ {
+  "source": "pmlr",
+  "label": "CLIP",
+  "landingUrl": "https://proceedings.mlr.press/v139/radford21a.html",
+  "fullTextUrls": [
+   {
+    "url": "http://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "pmlr",
+  "label": "BatchNorm",
+  "landingUrl": "https://proceedings.mlr.press/v37/ioffe15.html",
+  "fullTextUrls": [
+   {
+    "url": "http://proceedings.mlr.press/v37/ioffe15.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "neurips",
+  "label": "Attention is all you need",
+  "landingUrl": "https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+  "fullTextUrls": [
+   {
+    "url": "https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "neurips",
+  "label": "GPT-3",
+  "landingUrl": "https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html",
+  "fullTextUrls": [
+   {
+    "url": "https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "cvf",
+  "label": "ResNet",
+  "landingUrl": "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+  "fullTextUrls": [
+   {
+    "url": "https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "cvf",
+  "label": "Swin",
+  "landingUrl": "https://openaccess.thecvf.com/content/ICCV2021/html/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.html",
+  "fullTextUrls": [
+   {
+    "url": "https://openaccess.thecvf.com/content/ICCV2021/papers/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "jmlr",
+  "label": "Dropout",
+  "landingUrl": "https://jmlr.org/papers/v15/srivastava14a.html",
+  "fullTextUrls": [
+   {
+    "url": "https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "jmlr",
+  "label": "scikit-learn",
+  "landingUrl": "https://jmlr.org/papers/v12/pedregosa11a.html",
+  "fullTextUrls": [
+   {
+    "url": "https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "nature",
+  "label": "OA: AlphaFold",
+  "landingUrl": "https://www.nature.com/articles/s41586-021-03819-2",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nature.com/articles/s41586-021-03819-2.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "nature",
+  "label": "paywalled: Go (2016)",
+  "landingUrl": "https://www.nature.com/articles/nature16961",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nature.com/articles/nature16961.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "science",
+  "label": "GraphCast",
+  "landingUrl": "https://www.science.org/doi/10.1126/science.adi2336",
+  "fullTextUrls": [
+   {
+    "url": "https://www.science.org/doi/pdf/10.1126/science.adi2336",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "science",
+  "label": "Silencing mito (OA via PMC)",
+  "landingUrl": "https://www.science.org/doi/10.1126/science.adr3498",
+  "fullTextUrls": [
+   {
+    "url": "https://www.science.org/doi/pdf/10.1126/science.adr3498",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "pnas",
+  "label": "Catastrophic forgetting",
+  "landingUrl": "https://www.pnas.org/doi/10.1073/pnas.1611835114",
+  "fullTextUrls": [
+   {
+    "url": "https://www.pnas.org/doi/full/10.1073/pnas.1611835114",
+    "expect": "html"
+   },
+   {
+    "url": "https://www.pnas.org/doi/pdf/10.1073/pnas.1611835114",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "pnas",
+  "label": "Proofreading DNA pol",
+  "landingUrl": "https://www.pnas.org/doi/10.1073/pnas.2507232122",
+  "fullTextUrls": [
+   {
+    "url": "https://www.pnas.org/doi/full/10.1073/pnas.2507232122",
+    "expect": "html"
+   }
+  ]
+ },
+ {
+  "source": "plos",
+  "label": "Why most findings false",
+  "landingUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "fullTextUrls": []
+ },
+ {
+  "source": "plos",
+  "label": "PNTD resistance",
+  "landingUrl": "https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0013363",
+  "fullTextUrls": [
+   {
+    "url": "https://journals.plos.org/plosntds/article/file?id=10.1371/journal.pntd.0013363&type=printable",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "elife",
+  "label": "Deliberate burial",
+  "landingUrl": "https://elifesciences.org/articles/89106",
+  "fullTextUrls": []
+ },
+ {
+  "source": "elife",
+  "label": "Opsins",
+  "landingUrl": "https://elifesciences.org/articles/105451",
+  "fullTextUrls": []
+ },
+ {
+  "source": "frontiers",
+  "label": "Depression college students",
+  "landingUrl": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/full",
+  "fullTextUrls": [
+   {
+    "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "frontiers",
+  "label": "Algae-bacteria",
+  "landingUrl": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/full",
+  "fullTextUrls": [
+   {
+    "url": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "mdpi",
+  "label": "Origami lens",
+  "landingUrl": "https://www.mdpi.com/2079-9292/14/19/3892",
+  "fullTextUrls": [
+   {
+    "url": "https://www.mdpi.com/2079-9292/14/19/3892/pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "mdpi",
+  "label": "AUV navigation",
+  "landingUrl": "https://www.mdpi.com/2077-1312/13/2/303",
+  "fullTextUrls": [
+   {
+    "url": "https://www.mdpi.com/2077-1312/13/2/303/pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "sciencedirect",
+  "label": "Explanation in AI",
+  "landingUrl": "https://www.sciencedirect.com/science/article/pii/S0004370218305988",
+  "fullTextUrls": []
+ },
+ {
+  "source": "sciencedirect",
+  "label": "Deep learning overview",
+  "landingUrl": "https://www.sciencedirect.com/science/article/pii/S0893608014002135",
+  "fullTextUrls": []
+ },
+ {
+  "source": "springerlink",
+  "label": "ImageNet IJCV",
+  "landingUrl": "https://link.springer.com/article/10.1007/s11263-015-0816-y",
+  "fullTextUrls": [
+   {
+    "url": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "springerlink",
+  "label": "U-Net chapter",
+  "landingUrl": "https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28",
+  "fullTextUrls": [
+   {
+    "url": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "wiley",
+  "label": "Methods Ecol Evol",
+  "landingUrl": "https://besjournals.onlinelibrary.wiley.com/doi/10.1111/2041-210X.12941",
+  "fullTextUrls": [
+   {
+    "url": "https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/2041-210X.12941",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "wiley",
+  "label": "Ecol Evol",
+  "landingUrl": "https://onlinelibrary.wiley.com/doi/10.1002/ece3.3615",
+  "fullTextUrls": [
+   {
+    "url": "https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.3615",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "acmdl",
+  "label": "Optuna",
+  "landingUrl": "https://dl.acm.org/doi/10.1145/3292500.3330701",
+  "fullTextUrls": [
+   {
+    "url": "https://dl.acm.org/doi/pdf/10.1145/3292500.3330701",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "acmdl",
+  "label": "PRO-MTL",
+  "landingUrl": "https://dl.acm.org/doi/10.1145/3718092",
+  "fullTextUrls": [
+   {
+    "url": "https://dl.acm.org/doi/pdf/10.1145/3718092",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "ieeexplore",
+  "label": "ResNet",
+  "landingUrl": "https://ieeexplore.ieee.org/document/7780459",
+  "fullTextUrls": [
+   {
+    "url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7780459",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "ieeexplore",
+  "label": "LeNet",
+  "landingUrl": "https://ieeexplore.ieee.org/document/726791",
+  "fullTextUrls": [
+   {
+    "url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=726791",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "researchgate",
+  "label": "ResearchGate Attention",
+  "landingUrl": "https://www.researchgate.net/publication/317558625_Attention_Is_All_You_Need",
+  "fullTextUrls": []
+ },
+ {
+  "source": "researchgate",
+  "label": "ResearchGate BERT",
+  "landingUrl": "https://www.researchgate.net/publication/328230984_BERT_Pre-training_of_Deep_Bidirectional_Transformers_for_Language_Understanding",
+  "fullTextUrls": []
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "Attention",
+  "landingUrl": "https://huggingface.co/papers/1706.03762",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/1706.03762",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "DeepSeek-R1",
+  "landingUrl": "https://huggingface.co/papers/2501.12948",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/2501.12948",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "alphaxiv",
+  "label": "Attention",
+  "landingUrl": "https://www.alphaxiv.org/abs/1706.03762",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/1706.03762",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "alphaxiv",
+  "label": "DeepSeek-R1",
+  "landingUrl": "https://www.alphaxiv.org/abs/2501.12948",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/2501.12948",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "ar5iv",
+  "label": "Attention",
+  "landingUrl": "https://ar5iv.labs.arxiv.org/html/1706.03762",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/1706.03762",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "ar5iv",
+  "label": "ResNet",
+  "landingUrl": "https://ar5iv.org/abs/1512.03385",
+  "fullTextUrls": [
+   {
+    "url": "https://arxiv.org/pdf/1512.03385",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "PsyArXiv np2vd",
+  "landingUrl": "https://osf.io/preprints/psyarxiv/np2vd",
+  "fullTextUrls": [
+   {
+    "url": "https://osf.io/download/np2vd/",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "OSF vxh6m",
+  "landingUrl": "https://osf.io/preprints/osf/vxh6m",
+  "fullTextUrls": [
+   {
+    "url": "https://osf.io/download/vxh6m/",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "chemrxiv",
+  "label": "Ion mobility",
+  "landingUrl": "https://chemrxiv.org/engage/chemrxiv/article-details/chemrxiv-2025-l6zz7",
+  "fullTextUrls": [
+   {
+    "url": "https://doi.org/10.26434/chemrxiv-2025-l6zz7/v4",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "chemrxiv",
+  "label": "Droplet motion",
+  "landingUrl": "https://doi.org/10.26434/chemrxiv.15009878/v1",
+  "fullTextUrls": []
+ },
+ {
+  "source": "nber",
+  "label": "w30000",
+  "landingUrl": "https://www.nber.org/papers/w30000",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "nber",
+  "label": "w31000",
+  "landingUrl": "https://www.nber.org/papers/w31000",
+  "fullTextUrls": [
+   {
+    "url": "https://www.nber.org/system/files/working_papers/w31000/w31000.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "zenodo",
+  "label": "Zenodo 3233821",
+  "landingUrl": "https://zenodo.org/records/3233821",
+  "fullTextUrls": []
+ },
+ {
+  "source": "zenodo",
+  "label": "Zenodo 7152285",
+  "landingUrl": "https://zenodo.org/records/7152285",
+  "fullTextUrls": []
+ },
+ {
+  "source": "hal",
+  "label": "Cerrado woody plants",
+  "landingUrl": "https://hal.science/hal-05779468",
+  "fullTextUrls": [
+   {
+    "url": "https://hal.science/hal-05779468/document",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "hal",
+  "label": "Constraint acquisition LLM",
+  "landingUrl": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484",
+  "fullTextUrls": [
+   {
+    "url": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484/document",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2023/1",
+  "landingUrl": "https://eprint.iacr.org/2023/001",
+  "fullTextUrls": [
+   {
+    "url": "https://eprint.iacr.org/2023/001.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2024/100",
+  "landingUrl": "https://eprint.iacr.org/2024/100",
+  "fullTextUrls": [
+   {
+    "url": "https://eprint.iacr.org/2024/100.pdf",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "oxford-academic",
+  "label": "BWA bioinformatics",
+  "landingUrl": "https://academic.oup.com/bioinformatics/article/25/14/1754/225615",
+  "fullTextUrls": []
+ },
+ {
+  "source": "oxford-academic",
+  "label": "Pfam NAR",
+  "landingUrl": "https://academic.oup.com/nar/article/49/D1/D412/5943866",
+  "fullTextUrls": []
+ },
+ {
+  "source": "taylor-francis",
+  "label": "ASA p-values",
+  "landingUrl": "https://www.tandfonline.com/doi/full/10.1080/00031305.2016.1154108",
+  "fullTextUrls": [
+   {
+    "url": "https://www.tandfonline.com/doi/pdf/10.1080/00031305.2016.1154108",
+    "expect": "pdf"
+   }
+  ]
+ },
+ {
+  "source": "taylor-francis",
+  "label": "JASA",
+  "landingUrl": "https://www.tandfonline.com/doi/abs/10.1080/01621459.2017.1285773",
+  "fullTextUrls": []
+ }
+]

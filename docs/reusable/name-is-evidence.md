@@ -60,6 +60,12 @@ provenance is not only a name that points at an object, but any name that stands
 Reusing a predicate because its name sounds like your question is the same move as matching a process
 by the string in its command line.
 
+**A hash is a predicate too.** A fingerprint built for *caching* is allowed to be weaker than one
+built for *safety*. On 2026-09-09 a dialog fingerprint that keyed a classifier's cache left out the
+option consequences and keys that the safety comparison reads, so borrowing it as an identity would
+have allowed false matches, and a "drift fails safe" argument resting on it was wrong in the
+dangerous direction. Ask what a hash was built to protect before borrowing it.
+
 ## And the compile-time pair, which is the strongest form
 
 - **A brand is a claim that survives the operations which destroy what it claimed.** An intersection

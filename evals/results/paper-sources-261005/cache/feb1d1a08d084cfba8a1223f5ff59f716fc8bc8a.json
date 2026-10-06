@@ -1,0 +1,1 @@
+{"source":"jmlr","label":"scikit-learn","role":"fulltext","expect":"pdf","requestedUrl":"https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf","outcome":"ok","finalUrl":"https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf","chainHosts":["jmlr.org"],"status":200,"kind":"pdf","bytes":42310,"elapsedMs":308,"pdfPages":6}

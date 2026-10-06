@@ -176,7 +176,8 @@ readers never are.
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
   261001k and 261001n above.
 
-The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
+The last two band-mode identifiers — `chat` and `remember` (shown as Chat and Learn), with Quiz as
+one of Learn's parts — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
 That is every band mode; `plain` and Marginalia open none — Marginalia draws its column on the
 right instead, beside a band or without one.
@@ -193,10 +194,10 @@ right instead, beside a band or without one.
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
   not to ship the first one, and the one mode that cannot be used to avoid reading.
-- **[quiz.md](quiz.md)** — the other half of Remember, where the questions come the other way: a
+- **[quiz.md](quiz.md)** — the other half of Learn, where the questions come the other way: a
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
-- **[remembering-vision.md](remembering-vision.md)** — where Remember is going: Recall, Tutorial and
+- **[remembering-vision.md](remembering-vision.md)** — where Learn is going: Recall, Tutorial and
   Quiz as three directions of one exchange, Explore as the one about the reader's own thinking, what
   they share (brief, block links, hints that make success likely), and the ideas not built yet. Read
   it before adding a fifth.
@@ -288,13 +289,13 @@ nothing is sent. The models, the measurement and what is not built:
 [chat-llm-help-commands-vision.md § Where we are](chat-llm-help-commands-vision.md#where-we-are).
 
 **Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
-Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Remember › Quiz*,
+Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Learn › Quiz*,
 *Diagram › Illustrated*, *Referee › Claims*, *Summary › Thread* and the rest sit after the mode rows
 and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
 arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
 `generates` marker rule. Only a mode the Dock draws offers its sub-modes, and Diagram offers the
 pictures its chip row would. A sub-mode here means a control that **replaces the whole band** —
-Remember, Diagram, Referee and Summary's plain-words levels; the names live once, in
+Learn, Diagram, Referee and Summary's plain-words levels; the names live once, in
 [`src/web/sub-modes.ts`](../../src/web/sub-modes.ts), and the chips read them from there. Orderings
 and matchers inside a mode (Quotes' rank, Search's Words | Meaning) are not offered, by decision
 rather than oversight —
@@ -428,6 +429,21 @@ in a checked-in file. A row the model picks waits for Enter, as every row that c
 does. If the device refuses to keep the choice the colours still change and the bar stays open to
 say it will last only until the page is closed. Words in
 [`src/web/appearance-commands.ts`](../../src/web/appearance-commands.ts).
+
+**It proposes a short list from why you are reading, since 2026-10-05**
+([261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)).
+On the owner's reading view, for an article that has a *why you're reading this*, an empty bar opens
+on *Suggest what to do here*. Pressing it makes one small model call; the bar stays open and then
+draws, under *From why you're reading*, up to three quick searches, up to two modes and one
+question for chat about what the web says, each with a line saying why. **Every one is a row the
+bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
+lens handoff), and nothing runs without its own press, whatever the model returned. The list is
+kept for the visit in state of its own, hidden while the reader types, and dropped when *About you*
+or the reason is saved. The model is shown the reader's profile and our words for the modes, never
+the article. That makes this the one place the profile becomes words that can leave the
+conversation: [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
+Shapes in [`src/command-suggest.ts`](../../src/command-suggest.ts), the prompt and the call in
+[`src/command-suggest-call.ts`](../../src/command-suggest-call.ts).
 
 **The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
 microphone every other box has, and nothing can be pressed while it is listening —

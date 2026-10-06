@@ -343,7 +343,10 @@ No schema. Answers `spya-hyfqkq`.
 - **Glossary and Citations: an origin chat from an entry.** `{ mode: "glossary", itemId }` and
   `{ mode: "citations", itemId }`, durable, so the mark survives regeneration. What happens to
   their Dig deeper is `[Q-dig-deeper]`.
-- **A claim in your own words**, from a box in Debate › Claims.
+- **A claim in your own words**, from a box in Debate › Claims. Built on 2026-10-05 as the box at
+  the top of Debate, *Look at the debate from an angle*, which takes any angle and not only a
+  claim: [261005k](261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md),
+  part A, and [debate.md § Look at the debate from an angle](../project/debate.md#look-at-the-debate-from-an-angle).
 - **Start the chat beside the mode**, `[Q-start-beside]`.
 - **A written summary of the thread in the caller**, `[Q-thread-summary]`.
 - **Comments in Chat's list.** A comment's question is already a chat thread and is listed (as
@@ -384,6 +387,8 @@ instead of delete.
 them. B if you want to carry them on without leaving Chat. Neither keeps your other conversations
 in view beside the one you are reading; Chat does not do that for any conversation today.
 
+**Decided: keep opening Remember, as built.** Greg, 2026-10-06: "it's fine to open Remember".
+
 ### [Q-dig-deeper] What should happen to Dig deeper in Glossary and Citations?
 
 **Background.** Both have a *Dig deeper* button today. Each runs one forced web search and stores a
@@ -412,6 +417,8 @@ them. You said this kind of digging should be a chat.
 **What would decide it.** Whether the structured result (especially the citation check) is worth
 keeping as its own thing. A lets you find that out before anything is removed.
 
+**Decided: add an "Ask in chat" button beside Dig deeper, first.** Greg, 2026-10-06: "let's start with adding the "Ask in chat" button". Queued.
+
 ### [Q-thread-summary] Should the mode show a written summary of the chat, or its latest line?
 
 **Background.** You wondered whether a chat started from a mode could *"produce a little summary"*
@@ -433,6 +440,8 @@ sometimes a preamble and not a conclusion.
 **What would decide it.** Use A for a week on real claims. If the line usually tells you what the
 chat concluded, stop there.
 
+**Decided: keep as built for now.** Greg, 2026-10-06: "I don't quite follow. let's keep as built for now".
+
 ### [Q-start-beside] Should "check this claim" open the chat beside Debate from the first press?
 
 **Background.** Built now: the first press takes you to Chat with the question ready to send, and
@@ -449,6 +458,8 @@ wide window you get the second column only when Marginalia is already on.
   today. About two days.
 
 **What would decide it.** Whether the trip to Chat and back gets in your way.
+
+**Decided: keep as built for now.** Greg, 2026-10-06 (with Q-thread-summary): "I don't quite follow. let's keep as built for now".
 
 ## Log
 

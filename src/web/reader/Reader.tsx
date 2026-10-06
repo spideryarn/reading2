@@ -31,6 +31,7 @@ import {
   type Article,
   type BlockId,
   type CitedWork,
+  type ClaimOrigin,
   type GlossaryEntry,
   type ThreadOrigin,
 } from "../../types.js";
@@ -86,7 +87,12 @@ import {
   ConversationBand,
   RememberBand,
 } from "../modes/conversation/ConversationModes.js";
-import { askAboutSummaryParagraph, askAboutTerm, askToCheckClaim } from "../chat-handoff.js";
+import {
+  askAboutSummaryParagraph,
+  askAboutTerm,
+  askDebateThroughLens,
+  askToCheckClaim,
+} from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -938,7 +944,23 @@ export function Reader({
      thread will store, so the claim can find its chat again
      (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
   const checkClaimInChat = useCallback(
-    (origin: ThreadOrigin) => handToChat(askToCheckClaim(origin.quote), origin),
+    (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), origin),
+    [handToChat],
+  );
+  /* **A fourth, the same day: Debate's *Look at the debate from an angle*.**
+     The reader's words travel twice too, in the question and as the lens the
+     thread stores, which is what Debate's *Your angles* lists it by. A lens is
+     Debate's second origin shape and has no block or quote, so this takes the
+     words and builds the origin here: a claim's handler cannot be handed one
+     (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
+     Trimmed here as the route trims it, so what is stored equals what is sent
+     and a resent first question is the same origin. */
+  const debateThroughLensInChat = useCallback(
+    (lens: string) => {
+      const words = lens.trim();
+      if (words === "") return;
+      handToChat(askDebateThroughLens(words), { mode: "debate", lens: words });
+    },
     [handToChat],
   );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
@@ -2327,8 +2349,13 @@ export function Reader({
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
-    () => ({ summaries: chatSummaries, onCheck: checkClaimInChat, onOpen: openClaimChat }),
-    [chatSummaries, checkClaimInChat, openClaimChat],
+    () => ({
+      summaries: chatSummaries,
+      onCheck: checkClaimInChat,
+      onLens: debateThroughLensInChat,
+      onOpen: openClaimChat,
+    }),
+    [chatSummaries, checkClaimInChat, debateThroughLensInChat, openClaimChat],
   );
 
   /**
@@ -2568,6 +2595,9 @@ export function Reader({
             }
           : undefined,
         openQuickSearch: isOwner ? openQuickSearch : undefined,
+        /* The bar's suggested lens row: Debate's own handoff, so the question
+           waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
+        askThroughLens: isOwner ? debateThroughLensInChat : undefined,
       }),
     [
       slug,
@@ -2583,6 +2613,7 @@ export function Reader({
       moreTerms,
       moreQuotes,
       openQuickSearch,
+      debateThroughLensInChat,
     ],
   );
   /**
@@ -3942,6 +3973,7 @@ export function Reader({
             reopen={chatReopen}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
+            onRenamed={owner.chatAnchors.rename}
             onSettled={owner.chatAnchors.refresh}
           />
         </ChatCommands>

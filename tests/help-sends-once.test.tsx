@@ -123,6 +123,7 @@ const dialog = (props: Record<string, unknown>) =>
     onOpenFull: () => {},
     onCreated: () => {},
     onDropped: () => {},
+    onRenamed: () => {},
     ...props,
     // biome-ignore lint/suspicious/noExplicitAny: the props are built per case
   } as any);

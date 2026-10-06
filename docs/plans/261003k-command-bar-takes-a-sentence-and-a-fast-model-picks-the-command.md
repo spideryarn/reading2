@@ -238,6 +238,10 @@ subagent. The feedback note; queue entries for the deferred halves.
   are reading, proposes a set of actions — a few searches, a mode to try, a Debate steered by a
   lens. It needs the composition this plan leaves out (several proposals confirmed together) and
   an interface model that may see the reader's profile. Left for Greg to discuss, as he asked.
+  **Since built, in part** (2026-10-05):
+  [261005k](261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md). The bar
+  proposes a list whose rows are pressed one at a time, and Debate's lens is a chat. Confirming
+  several together is still not built; that plan says why and what the smaller version would be.
 - **Questions about the app answered from the Help** (vision doc § Knowing how Spideryarn works).
 - **Two commands from one sentence.**
 - **A capable model when the fast one is unsure** — replaced by showing the candidates (decision 4).

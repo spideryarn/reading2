@@ -1,0 +1,1 @@
+{"source":"ar5iv","label":"ResNet","role":"fulltext","expect":"pdf","requestedUrl":"https://arxiv.org/pdf/1512.03385","outcome":"ok","finalUrl":"https://arxiv.org/pdf/1512.03385","chainHosts":["arxiv.org"],"status":200,"kind":"pdf","bytes":819383,"elapsedMs":61,"pdfPages":12}
