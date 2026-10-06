@@ -86,11 +86,14 @@
  * quote under each arm, and each stop also records its `quoteId` and the
  * paragraph before its own (`before`), which the blind judge is shown. Three
  * flags came with it: `--old-only` (a second control run without paying for a
- * second NEW run), `--context` (the NEW arm with the passage around each
- * quote, `skimInput({ context: true })`), and `--file=<slug>=<json>` (an
- * article read from a file written by
- * scripts/eval/skim-inputs-from-production.ts, where it is not in the local
- * database). Each results file names the SHA-256 of the module each arm ran.
+ * second NEW run), `--file=<slug>=<json>` (an article read from a file written
+ * by scripts/eval/skim-inputs-from-production.ts, where it is not in the local
+ * database) and `--tag=` (a suffix on the results file's name). Each results
+ * file names the SHA-256 of the module each arm ran. A fourth flag,
+ * `--context`, ran the NEW arm with the passage around each quote; that arm
+ * was measured and removed from src/skim.ts, and the flag went with it (commit
+ * c943494a9 has both). The first round's results files still carry
+ * `context: true` on that arm's runs.
  * scripts/eval/skim-cue-pairs.ts turns several results files into the
  * screens, the route comparison and the blind pairs.
  */
@@ -118,8 +121,6 @@ const ALLOW_OUTDATED_IDEAS = args.includes("--allow-outdated-ideas");
 /* `--old-only`: the OLD arm alone — a second control run. */
 const OLD_ONLY = args.includes("--old-only");
 if (NEW_ONLY && OLD_ONLY) throw new Error("--new-only and --old-only together leave no arm to run");
-/* `--context`: the NEW arm is given the passage around each quote (plan 261006e, arm C). */
-const CONTEXT = args.includes("--context");
 /* `--file=<slug>=<json>`: that slug is read from a file, not the database. */
 const FILES = new Map(
   args
@@ -322,8 +323,6 @@ interface RunResult {
     /** The nearest body paragraph before the stop's own, whole, wherever it sits — for a judge checking a cue's scene against the text. */
     before: string | null;
   }[];
-  /** Whether the NEW arm was given the passage around each quote (`--context`); always false for OLD. */
-  context: boolean;
   /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
   abstractQuotes: number;
   /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
@@ -335,7 +334,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const { result, report } = await collectSpend(
     async () => {
       if (arm === "new") {
-        const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas, context: CONTEXT });
+        const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
         return NEW.generateSkim({ power: "standard", slug, input, profile: null });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
@@ -375,7 +374,6 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     slug,
     arm,
     run,
-    context: arm === "new" && CONTEXT,
     dropped: skim.dropped,
     walks: ([1, 2, 3] as const).map((depth) => {
       const own = stopBlocks.filter((s) => s.depth === depth).length;
@@ -503,7 +501,7 @@ async function main(): Promise<void> {
         );
         console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, context: CONTEXT, profile: null, snapshot, results, failures }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, profile: null, snapshot, results, failures }, null, 2));
     }
   });
 

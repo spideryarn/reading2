@@ -61,6 +61,7 @@ v1, for the article's owner only, and behind the experimental switch until later
 v2, the scrapbook, is built on top of that:
 
 - **A cue instead of a role.** The same call now gives each stop one **cue**: at most 140
+  (200 since `skim/10`, 2026-10-06, below)
   characters, an instruction or a question naming what to *look for* in the passage, never what it
   found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
   never mentions another stop, because a reader can arrive at a stop from anywhere. The current row
@@ -334,6 +335,36 @@ row, and the passages it opened, were removed, and Skim no longer reads the FAQ 
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
 
+**A cue sets the scene when its quote needs one (`skim/10`, 2026-10-06)** — Greg, report
+spya-jghnva, plan [261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md):
+
+> In Skim mode, when generating a question, use it as a way to contextualise the quote. [...] The
+> question we generate with Skim mode is an opportunity to situate the quote, eg it could tell us
+> what's being asked of the evidence and/or what are the two interpretations?
+>
+> — Greg, 2026-10-06
+
+His example was *"Which interpretation does their evidence favour?"* before a quote that says *"the
+latter interpretation"*: the reader is told to look for something without being told what the
+choice is. So when a quote leans on words it does not explain ("the latter", "this approach",
+"these results"), its cue first names the question or the options, as a question and never as a
+statement of what the passage says, and then points: *"Which of the two possibilities does the
+evidence favor: real transfer or benchmark-specific gains?"* Most quotes stand on their own, and
+their cue is still one instruction or question and nothing else. A cue is one or two whole
+sentences, at most 200 characters (it was 140), adds no detail that is not in the quotes, the Ideas
+or the outline, never states the finding, and never refers to another stop.
+
+Two wordings were measured blind on five articles
+([261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md)). The first set a scene on
+every cue. Readers were judged better prepared by it in 72 pairs of 88, but it gave the finding away
+twice as often as the old cue and misstated the context in one cue in ten. The one kept was
+preferred to the old cue in 50 pairs of 88 against 19, with neither fault above the old prompt's own
+level. **What it cannot do** is name a referent that only the surrounding paragraph holds, because
+the prompt is still given no prose. Handing it each quote's paragraph was measured too, did not
+clearly do better on the quotes it was meant for, cost about a third more per route, and was removed
+(its code is at commit `c943494a9`). An older route is outdated, not stale, so it keeps its cues
+until it is planned again from Metadata.
+
 **On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
 report spya-kudr63, plan
 [261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 1.
@@ -596,7 +627,7 @@ Only if that fails would a second set be worth it.
 
 **Background.** Each stop gets one short generated line, shown on the current stop and, in small
 italics, under the **Next stop ›** door, so the door says where it leads. v1 wrote a *role* (what
-the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters, saying
+the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters (200 since 2026-10-06), saying
 what to look for in the passage ("Look for how rich-club membership changes the comparison"). Like
 the role, it never says what the passage found.
 

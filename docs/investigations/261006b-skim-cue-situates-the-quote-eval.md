@@ -4,7 +4,21 @@ Written and run 2026-10-06 for
 [plan 261006e § Stage 2](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md).
 Up: [investigations.md](../project/investigations.md). The mode is [skim.md](../project/skim.md).
 
-**In one paragraph.** `skim/10` asks each cue to set the scene its quote assumes and then point at
+**Both rounds in one paragraph.** Round one made every cue set a scene (arm B), and tried the same
+with each quote's paragraph in the prompt (arm C). Both prepared a reader far better than the old
+cue and both paid for it: more findings given away (B) and more misstated context (B and C).
+Round two (arm **B2**, the wording that ships) sets a scene only where the quote leans on something
+unsaid, as a question or a naming of the options, and otherwise only points. Against the old cue a
+blind judge preferred B2 in 50 pairs of 88 (old: 19, 19 ties), where two runs of the old prompt
+split 31 to 35; it gives the finding away no more often (18 against 19) and misstates about as
+rarely (3 against 1, control 3 against 2). On the 28 dangling quotes it is ahead 15 to 8, which is
+better than the control's 11 to 10 but not by much. B2 gives up most of B's extra preparation (B
+beat it head to head, 64 to 19) to get rid of B's faults. Arm C was removed from the code. The
+route did not move in any arm. Spend: $0.86 in round one and $0.22 in round two.
+[Round two](#round-two-b2-a-scene-only-where-the-quote-needs-one) is below; everything before it is
+round one, left as written.
+
+**Round one in one paragraph.** `skim/10` asks each cue to set the scene its quote assumes and then point at
 what to look for. A blind judge found the new cue prepares a reader better in 72 pairs of 88
 (old: 11), and in 24 of the 28 quotes whose own words lean on something unsaid (old: 1). Two runs
 of the old prompt against each other split 31 to 35, so that is far outside noise. Giving the
@@ -267,13 +281,170 @@ If it has to be one of the three today: **B**, by the plan's own rule (C did not
 dangling cases), knowing it gives the finding away in roughly one cue in three where the old
 prompt did in one in five. The option on `skimInput` for C stays in the code, off, and costs nothing.
 
+## Round two: B2, a scene only where the quote needs one
+
+Run the same morning, on the round-one recommendation. One paid run; A1, A2 and B are the stored
+round-one runs, not re-run.
+
+**What changed in the prompt** (§ 3 only; cap 200, `skim/10`, `plainWords("ask")` and the "this
+section wins" paragraph kept):
+
+1. *Most quotes stand on their own, and their cue only points.* Said first, called the common
+   case, with examples, and with "do not put a sentence in front that says the quote's point first
+   in your own words".
+2. *Some quotes lean on words they do not explain, and their cue sets the scene first*, as a
+   question or a bare naming of the options. "It is never a statement of what the passage says,
+   shows or argues."
+3. *Only what the records say*: no added place, date, method, size or motive, and no sharpening
+   ("never" for "rarely").
+4. *Write whole sentences*: one or two, no fragment, no ".?".
+
+The examples in the prompt are invented or from another field, not taken from the five articles.
+B2 is `src/skim.ts` at SHA-256 `3987d5b6e7ca598d`, with arm C already removed, so the file
+measured is the file that ships.
+
+```
+npx tsx scripts/eval/skim-coverage-eval.ts --runs=1 --new-only --new-version=skim/10 --tag=b2 $S
+npx tsx scripts/eval/skim-cue-pairs.ts --a1=…-a1-b.json --b=…-a1-b.json --a2=…-a2.json --c=…-c.json \
+  --b2=…-b2.json --out=evals/results/skim-cue-2026-10-06
+```
+
+Two more fresh Opus judges, the same three questions, the same dangling rule and coin. Key
+balance: 42/46 and 42/46. Re-running the pairs script left the round-one pairs and keys
+byte-identical (checked by checksum).
+
+### The blind read
+
+| Comparison | pairs | (a) better prepared | (b) gives the finding away | (c) invents or misstates |
+|---|---|---|---|---|
+| A1 v A2 (control, round one) | 88 | A1 31 · A2 35 · tie 22 | A1 20 · A2 27 | A1 3 · A2 2 |
+| A1 v B (round one) | 88 | A1 11 · B 72 · tie 5 | A1 17 · B 33 | A1 1 · B 10 |
+| **A1 v B2** | 88 | A1 19 · **B2 50** · tie 19 | A1 19 · B2 18 | A1 1 · B2 3 |
+| **B v B2** | 88 | **B 64** · B2 19 · tie 5 | B 30 · **B2 15** | B 10 · **B2 4** |
+
+The 28 dangling quotes:
+
+| Comparison | (a) better prepared | (b) gives away | (c) misstates |
+|---|---|---|---|
+| A1 v A2 (control) | A1 11 · A2 10 · tie 7 | 8 · 10 | 0 · 0 |
+| A1 v B | A1 1 · B 24 · tie 3 | 7 · 12 | 0 · 1 |
+| **A1 v B2** | A1 8 · **B2 15** · tie 5 | A1 7 · B2 3 | A1 0 · B2 1 |
+| **B v B2** | **B 22** · B2 4 · tie 2 | B 12 · B2 5 | B 2 · B2 2 |
+
+- **Better prepared, overall: yes.** 50 to 19 against a control of 31 to 35.
+- **Better prepared, dangling: ahead, not clearly.** 15 to 8 with 5 ties, against the control's 11
+  to 10 with 7. Half of the 28 "dangling" quotes explain their own "this" (the rule is a regex),
+  and on those B2 writes what the old prompt wrote, often word for word.
+- **Giving away: fixed.** 18 against A1's 19 from the same judge, and half of B's (15 against 30).
+- **Misstating: back inside the control.** 3 against 1, where the two control runs were 3 and 2;
+  4 against B's 10.
+- **The price is plain in B v B2**: a judge asked only "which prepares better" picks B's fuller
+  scene 64 to 19. B2 is the old cue's restraint with a scene where one is needed, not B with the
+  faults sanded off.
+
+### Screens and route
+
+| Arm | null cues | length: median · mean · max | over 140 | over 200 | start "Look for" | ask a question | lean on elsewhere | cost, 5 routes | input / route | output / route |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | 0 | 79 · 78 · 99 | 0 | 0 | 25% | 20% | 0 | $0.160 | 8,869 | 1,433 |
+| B | 0 | 131 · 131 · 184 | 22 | 0 | 2% | 25% | 2 | $0.218 | 9,505 | 2,464 |
+| **B2** | 0 | 94 · 95 · 155 | 1 | 0 | 7% | 23% | 0 | $0.224 | 9,898 | 2,493 |
+
+B2's cues are a fifth longer than the old ones, not two thirds. One of 88 is over 140, so the
+cap of 200 is now headroom, not a need; it stays, because a nulled cue is worse than a long one.
+B2 costs about what B did ($0.045 a route against the old $0.035): the prompt is longer and the
+model thinks more.
+
+| Route, shared quotes | A1 v A2 (control) | A1 v B2 | A2 v B2 | B v B2 |
+|---|---|---|---|---|
+| stops on both | 100% | 100% | 100% | 100% |
+| same depth | 82% | 83% | 81% | 78% |
+| same `again` | 83% | 84% | 83% | 82% |
+| same relative order | 88% | 83% | 94% | 95% |
+
+Beside the control throughout. **B2 did not move the route.**
+
+### Examples
+
+1. **Greg's quote** (*"Our evidence supports the latter interpretation…"*)
+   - Old: Notice whether gains from SWE-bench training carried over to other tasks in the same codebase.
+   - B: Two readings are possible for why post-training raises scores: real general gains, or narrow specialization. Which one the evidence favours.
+   - B2: Which of the two possibilities does the evidence favor: real transfer or benchmark-specific gains?
+2. **The scene as a question** (*"…if post-training on SWE-bench trajectories reliably improves general coding capabilities, this approach provides a path… But if it just produces models skilled at SWE-bench-like tasks…"*)
+   - B2: Two possibilities are weighed here: does training build general skill, or just skill at one benchmark? Notice what is at stake either way.
+3. **Where B gave it away and B2 does not** (*"These results support our claim: … may mislead practitioners into perceiving a 'capability jump'…"*)
+   - B: Easy, within-task testing can make a narrow fine-tune look like a big leap. See what they say this risks misleading practitioners into believing.
+   - B2: Consider what fine-tuning with only within-task evaluation might make practitioners wrongly believe.
+4. **Where B invented and B2 does not** (*"Uman and colleagues call what was produced not ball lightning…"*)
+   - B: A modern experimental team produced striking effects in the lab. See what they themselves say those effects do, and do not, demonstrate.
+   - B2: Look for how experimenters judged whether their produced effect truly matched the phenomenon.
+
+The worst of B2:
+
+5. **A referent still left hanging, and a detail added** (*"It is very dangerous to have such a policy in teaching…"*)
+   - B2: Consider what gets taught to students when only the result, not the method, is graded.
+   - Nothing says what "such a policy" was, which only the paragraph could; and "graded" is not in the text.
+6. **The opposite of the quote** (*"…you must not fool yourself—and you are the easiest person to fool."*)
+   - B2: Who, according to this, is the hardest person for a scientist to deceive?
+   - The old prompt's A1 made the same slip ("hardest to deceive").
+7. **A pointer that leans on the quote's own unexplained words** (*"7B (52.9% → 5.8% OK): the largest flow is OK → NOT_RUN (113 examples)."*)
+   - B2: Notice which direction of change was most common for this model size.
+   - This is Greg's complaint in miniature, on a quote the prompt cannot situate from what it is given.
+
+### What reading them shows
+
+- B2 reads like the old prompt on most stops. 11 of its 88 cues are two sentences, a scene and a pointer; the rest are a pointer alone.
+- Where a quote names its own two options, B2 now says them (example 1). Where the referent is
+  only in the paragraph (examples 5 and 7), nothing in B2 can supply it. That was arm C's job, and
+  C did not do it reliably enough to keep.
+- No fragments and no ".?" in 88 cues.
+
+### Arm C was removed
+
+The option that handed the prompt each quote's own paragraph (`QUOTE_CONTEXT_DEFAULT`,
+`SKIM_SYSTEM_WITH_CONTEXT`, the context fields on `SkimInput` and `QuoteRecord`, the `PASSAGE
+AROUND` record, its branch of the hash, its tests, and the harness's `--context` flag) is gone from
+the tree. It did not beat the wording alone where it was meant to (14 to 10 on the dangling
+quotes), it misstated as often, it cost a third more per route, and an off switch nobody uses is
+machinery to keep working. **Its code is commit `c943494a9`**, where B and C are exactly as
+measured in round one. The default input hash never moved (`tests/skim.test.ts` pins the literal),
+and one test now holds the opposite property: a paragraph that changes outside its quote's words
+changes neither the prompt nor the hash.
+
+### Still not shown, after both rounds
+
+- **No person has read these.** Writer and judge are the same model family.
+- **One run of B2.** Its run-to-run spread is unknown; the control's is the only one measured.
+- **B2 on the truly dangling quotes.** 15 to 8 is on a regex's idea of dangling. A hand-marked set
+  of quotes whose referent is outside the quote would say whether B2 helps exactly there; examples
+  5 and 7 suggest it often cannot, because the prompt is not given the paragraph.
+- **Whether the paragraph would help under B2's rules.** C was measured with round one's wording
+  only. "A scene as a question, nothing added" plus the paragraph was never run.
+- **(b) and (c) still rest on one judge per comparison**, each a different subagent.
+- Five articles, four academic; no reader profile; nothing about how a cue reads in the band.
+
+### Cost, round two
+
+OpenRouter `limit_remaining`: **$13.693** before, **$13.577** straight after the run, and
+**$13.353** a few minutes later once judging was done. The run's own total is **$0.224** for 5
+calls. The key's figure lags and other sessions spend on it, so the three readings do not add up
+to the run; the script's own total is the one to trust.
+
+### Recommendation, round two
+
+**Ship B2.** It clearly beats the old cue overall, it is inside the control on giving the finding
+away and on misstating, and it fixes Greg's own example. The one part of the bar it does not
+clearly clear is the dangling subset (15 to 8, 5 ties). The next thing worth trying, if readers
+still meet cues like example 7, is the paragraph again under B2's rules; not now.
+
 ## Files
 
 - `evals/results/skim-coverage-2026-10-06T06-35-03-a1-b.json` (A1 and B),
-  `…T06-36-39-a2.json` (A2), `…T06-36-40-c.json` (C);
+  `…T06-36-39-a2.json` (A2), `…T06-36-40-c.json` (C), `…T06-53-56-b2.json` (B2);
 - `evals/results/skim-cue-2026-10-06-screens.md`, `-dangling.json`, and for each of `s1` (A1 v A2),
-  `s2` (A1 v B), `s3` (A2 v C), `s4` (B v C): `-pairs-sN.md`, `-key-sN.json`, `-judgment-sN.json`.
+  `s2` (A1 v B), `s3` (A2 v C), `s4` (B v C), `s5` (A1 v B2), `s6` (B v B2): `-pairs-sN.md`,
+  `-key-sN.json`, `-judgment-sN.json`.
 - Scripts: [`skim-coverage-eval.ts`](../../scripts/eval/skim-coverage-eval.ts) (gained
-  `--old-only`, `--context`, `--file=`, `--tag=`),
+  `--old-only`, `--file=`, `--tag=`; `--context` came and went with arm C),
   [`skim-cue-pairs.ts`](../../scripts/eval/skim-cue-pairs.ts),
   [`skim-inputs-from-production.ts`](../../scripts/eval/skim-inputs-from-production.ts).

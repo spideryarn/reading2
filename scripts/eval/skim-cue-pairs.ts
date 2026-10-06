@@ -11,11 +11,14 @@
  * call, nothing read from or written to the database.** The four arms:
  *
  * - **A1, A2** — the OLD arm (`skim/9`) of two runs: the control pair;
- * - **B** — the NEW arm without the passage around each quote;
- * - **C** — the NEW arm with it (`--context`).
+ * - **B** — the NEW arm, first wording, without the passage around each quote;
+ * - **C** — the same wording with it (a harness flag `--context`, since
+ *   removed with the arm; commit c943494a9 has both);
+ * - **B2** (`--b2=`, optional) — the NEW arm's second wording, the one kept.
+ *   With it come s5 (A1 v B2) and s6 (B v B2).
  *
  * `--a1` and `--b` are usually one file. An arm's file is refused if it is not
- * the arm it is named as (C must say `context: true`, B must not).
+ * the arm it is named as (C must say `context: true`, B and B2 must not).
  *
  * It writes, beside `--out`:
  *
@@ -56,7 +59,8 @@ interface Run {
   arm: "old" | "new";
   run: number;
   version: string;
-  context: boolean;
+  /** Only on results from before arm C was removed. */
+  context?: boolean;
   offered: number;
   costNanos: number;
   inputTokens: number;
@@ -65,7 +69,7 @@ interface Run {
   dropped: Record<string, number>;
   stops: Stop[];
 }
-type ArmName = "A1" | "A2" | "B" | "C";
+type ArmName = "A1" | "A2" | "B" | "C" | "B2";
 
 const arg = (name: string): string | undefined => {
   const found = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -85,7 +89,7 @@ function load(name: ArmName, file: string): Run[] {
   if (runs.length === 0) throw new Error(`${name}: ${file} has no ${arm} arm`);
   for (const r of runs) {
     if (name === "C" && !r.context) throw new Error(`C: ${file} was not run with --context`);
-    if (name === "B" && r.context) throw new Error(`B: ${file} was run with --context`);
+    if ((name === "B" || name === "B2") && r.context) throw new Error(`${name}: ${file} was run with --context`);
     if (arm === "old" && r.version !== "skim/9") throw new Error(`${name}: ${r.slug} is ${r.version}, not skim/9`);
     if (arm === "new" && r.version !== "skim/10") throw new Error(`${name}: ${r.slug} is ${r.version}, not skim/10`);
   }
@@ -97,9 +101,12 @@ const ARMS: Record<ArmName, Run[]> = {
   A2: load("A2", need("a2")),
   B: load("B", need("b")),
   C: load("C", need("c")),
+  B2: arg("b2") ? load("B2", arg("b2")!) : [],
 };
 if (arg("a1") === arg("a2")) throw new Error("A1 and A2 must be two runs, so two files");
-const NAMES = ["A1", "A2", "B", "C"] as const;
+if (arg("b2") !== undefined && arg("b2") === arg("b")) throw new Error("B and B2 are two wordings, so two files");
+const HAS_B2 = ARMS.B2.length > 0;
+const NAMES: readonly ArmName[] = HAS_B2 ? ["A1", "A2", "B", "C", "B2"] : ["A1", "A2", "B", "C"];
 const slugs = [...new Set(ARMS.A1.map((r) => r.slug))];
 const runOf = (arm: ArmName, slug: string): Run | null => ARMS[arm].find((r) => r.slug === slug) ?? null;
 
@@ -176,8 +183,11 @@ out.push(
   "For each article and each pair of arms: `stops` = quotes on both routes / quotes on either; `depth` = of the shared quotes, how many sit at the same depth; `again` = how many are carried into the same passes; `order` = of the pairs of shared quotes, how many come in the same order in both routes. **A1 v A2 is the control**: two runs of one prompt.",
   "",
 );
-const PAIRS: [ArmName, ArmName][] = [["A1", "A2"], ["A1", "B"], ["A2", "B"], ["A1", "C"], ["A2", "C"], ["B", "C"]];
-out.push(`| Article | sizes A1 · A2 · B · C (Gist/More/Most) | ${PAIRS.map(([x, y]) => `${x} v ${y}`).join(" | ")} |`);
+const PAIRS: [ArmName, ArmName][] = [
+  ["A1", "A2"], ["A1", "B"], ["A2", "B"], ["A1", "C"], ["A2", "C"], ["B", "C"],
+  ...(HAS_B2 ? ([["A1", "B2"], ["A2", "B2"], ["B", "B2"]] as [ArmName, ArmName][]) : []),
+];
+out.push(`| Article | sizes ${NAMES.join(" · ")} (Gist/More/Most) | ${PAIRS.map(([x, y]) => `${x} v ${y}`).join(" | ")} |`);
 out.push(`|---|---|${PAIRS.map(() => "---").join("|")}|`);
 const totals = new Map<string, { both: number; either: number; depth: number; again: number; ordSame: number; ordAll: number }>();
 for (const slug of slugs) {
@@ -234,6 +244,12 @@ const SETS: { name: string; first: ArmName; second: ArmName; seed: number }[] = 
   { name: "s2", first: "A1", second: "B", seed: Number(arg("seed2") ?? 26100602) },
   { name: "s3", first: "A2", second: "C", seed: Number(arg("seed3") ?? 26100603) },
   { name: "s4", first: "B", second: "C", seed: Number(arg("seed4") ?? 26100604) },
+  ...(HAS_B2
+    ? [
+        { name: "s5", first: "A1" as const, second: "B2" as const, seed: Number(arg("seed5") ?? 26100605) },
+        { name: "s6", first: "B" as const, second: "B2" as const, seed: Number(arg("seed6") ?? 26100606) },
+      ]
+    : []),
 ];
 const clipHead = (t: string, max: number): string => (t.length > max ? `${t.slice(0, max)}…` : t);
 const clipTail = (t: string, max: number): string => (t.length > max ? `…${t.slice(t.length - max)}` : t);

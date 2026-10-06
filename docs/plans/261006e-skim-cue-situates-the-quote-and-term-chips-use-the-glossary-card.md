@@ -148,3 +148,19 @@ article). **Ship C only if it beats B on the dangling-reference cases; otherwise
 
 - 2026-10-06: plan written; Sol's plan review folded in as above. OpenRouter had $14.70 left of the
   month's $400, so the paid run is held under about $1.
+- 2026-10-06: **stage 1 landed** (`0432a7404`, Sol's review and two fixes `35629c447`): no "also at
+  stop", and a term chip opens the glossary's own card. Sol found a touch tap that never pinned (P1)
+  and a slow Hide stealing focus (P2), fixed both red-first, verdict ready.
+- 2026-10-06: **stage 2, two rounds** ([261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md)).
+  Round one (`c943494a9`): B, a scene on every cue, was preferred 72 to 11 but gave the finding away
+  twice as often (33 against 17) and misstated context ten times against one. C, the paragraph arm,
+  did not clearly beat B on the dangling quotes (14 to 10) and cost 36% more. **So the ship rule
+  failed for both, and neither shipped.** Round two: B2 sets a scene only when the quote needs one,
+  as a question, from the records alone. Preferred to the old cue 50 to 19; giveaways 18 against 19
+  and misstatements 3 against 1, both inside what two runs of the old prompt differ by. On the
+  dangling subset it is ahead 15 to 8, which is not clearly outside the control (11 to 10). **B2
+  ships as `skim/10`; arm C's code was removed.** OpenRouter spend: about $1.09 over both rounds.
+- **Not shown:** one run of each new arm, one judge per comparison and of the writer's family, no
+  person has read the pairs, and the regex that marks "dangling" quotes is wide. A judge asked only
+  which cue prepares better prefers B's fuller scene to B2's 64 to 19: that is a product trade-off
+  (fuller scene, more giveaways) and is put to Greg in the debrief.
