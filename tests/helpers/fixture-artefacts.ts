@@ -24,7 +24,7 @@
  *
  * Until 2026-09-05 `load-article.ts` built a `createFsArtifactStore` over the
  * fixture root and handed it to `copyArtefacts` as the source. Measured by
- * [`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts)
+ * the store-migration witness script (deleted 2026-10-06)
  * on 2026-09-04, **56 test files executed `createFsArtifactStore` and only 14
  * of them named it**: the other ~42 inherited it from that single line, through
  * `scratchArticleInPg`. It was the largest single thing keeping

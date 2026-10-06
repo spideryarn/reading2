@@ -764,7 +764,7 @@ function useBuyIntent(billing: UseBilling): void {
  *   the sentence being long.
  *
  * The other three keep the headline alone: `free` and a renewing `paid` are
- * explained by the cards six inches above, and `exempt` and `off` are
+ * explained by the cards six inches above, and `exempt` is
  * self-contained. Two explanations of one rule read as a page that is not sure.
  *
  * **And the headline is printed as it stands, with no sentence built around

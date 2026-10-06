@@ -125,7 +125,7 @@ const SELF = "tests/one-store-only.test.ts";
 const DIRS = ["src", "scripts", "evals", "tests", "api"];
 
 /** Single files that carry executable code and live at the root. */
-const FILES = ["vite.config.ts", "vitest.config.ts", "vitest.witness.config.ts", "package.json"];
+const FILES = ["vite.config.ts", "vitest.config.ts", "package.json"];
 
 /**
  * **Two root files that are not code, read raw, added 2026-09-06.**
@@ -213,8 +213,9 @@ async function scanned(): Promise<[string, string][]> {
       const text = await readFile(full, "utf8");
       out.push([rel, strip ? stripComments(text) : text]);
     } catch {
-      /* A file that is not there — `vitest.witness.config.ts` goes with the
-         filesystem store in stage G — is not a violation. */
+      /* A file that is not there is not a violation. (Written for the
+         store-migration witness's own vitest config, which went on
+         2026-10-06.) */
     }
   };
 
