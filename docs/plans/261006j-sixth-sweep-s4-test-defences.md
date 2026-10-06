@@ -169,6 +169,21 @@ Both findings accepted.
 - **Also:** a bare `npm test` in a fresh clone with no build fails three build-output files. That
   is intended, and `docs/project/testing.md` and `docs/project/setup-dev.md` now say so.
 
+## Review, round two
+
+[GPT Sol's narrow re-check](261006j-sixth-sweep-s4-code-review-2-sol.md)
+([prompt](261006j-sixth-sweep-s4-code-review-2-prompt.md)) of the C1 fix, verdict **ship**. C1 is
+closed: the two comment-prefixed imports and `import ("../sanitize.js")` pass the sanitiser test
+with the old reader and fail it with the new one. No new findings.
+
+It compared the old and new edge sets over 1,144 files in `src/` and `tools/`. Ten files lost an
+edge and every one was a false positive of the regex reader: text in a comment, or a type-only or
+type-position import. No real run-time edge was dropped and no scanned file was refused. A file
+that cannot be parsed fails the caller loudly, with its name.
+
+One limit is unchanged, in the old reader and the new alike: `require(...)` and
+`import x = require(...)` are not reported.
+
 ## Gates
 
 - `npm run typecheck`: 0 errors, after every stage.
