@@ -939,13 +939,13 @@ describe("openRouterStream — a death after the 200 is mid_answer, and says whi
     };
   }
 
-  const open = (opts: { signal?: AbortSignal; malformedFrames?: "throw" } = {}) =>
+  const open = (opts: { signal?: AbortSignal; malformedFrames?: "throw"; onActivity?: () => void } = {}) =>
     openRouterStream(
       "chat",
       { model: "m", messages: [] },
       {
         signal: opts.signal ?? new AbortController().signal,
-        onActivity: () => {},
+        onActivity: opts.onActivity ?? (() => {}),
         end: { terminated: false },
         ...(opts.malformedFrames ? { malformedFrames: opts.malformedFrames } : {}),
       },
@@ -988,6 +988,38 @@ describe("openRouterStream — a death after the 200 is mid_answer, and says whi
         /* drained */
       }
     });
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+  });
+
+  it("keeps an observed in-band error when the body subsequently breaks", async () => {
+    const t = script(dies(ERROR_CHUNK), streamed(WORD, DONE));
+    const run = await drive(async () => {
+      for await (const _ of open()) {
+        /* Read on after the provider's error. */
+      }
+    });
+    expect(errorOf(run.outcome)).toBeInstanceOf(TypeError);
+    expect(t.sent()).toBe(1);
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+  });
+
+  it("keeps an observed in-band error when a later read is aborted", async () => {
+    const stop = new AbortController();
+    const reason = new Error("the reader pressed Stop");
+    const t = script(streamed(ERROR_CHUNK, WORD, DONE));
+    let reads = 0;
+    const run = await drive(async () => {
+      for await (const _ of open({
+        signal: stop.signal,
+        onActivity: () => {
+          if (++reads === 2) stop.abort(reason);
+        },
+      })) {
+        /* Read on until the abort lands on the next body read. */
+      }
+    });
+    expect(errorOf(run.outcome)).toBe(reason);
+    expect(t.sent()).toBe(1);
     expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
   });
 

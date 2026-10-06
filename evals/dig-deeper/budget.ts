@@ -229,8 +229,15 @@ export async function paidStep<T>(
         usd += cost;
         continue;
       }
-      if (c.outcome === "ok") unknown = `${c.job} ${c.model} finished and reported no cost`;
-      else if (c.outcome === "error" && c.answeredBy === null && !c.inputTokens && !c.outputTokens) {
+      /* **A `2xx` that then failed to be an answer is on this side of the line,
+         not the refusal's.** Until 2026-10-06 such a call was an `ok` row; it is
+         now `error` / `mid_answer` (src/call-failure.ts), and it has no model
+         and no tokens either, so without its phase it reads as a refusal and
+         settles at $0. The provider accepted the work and may have billed it. */
+      const accepted = c.failure?.phase === "mid_answer";
+      const wasAnAnswer = accepted && (c.failure?.class === "unreadable" || c.failure?.class === "in_band");
+      if (c.outcome === "ok" || wasAnAnswer) unknown = `${c.job} ${c.model} finished and reported no cost`;
+      else if (c.outcome === "error" && !accepted && c.answeredBy === null && !c.inputTokens && !c.outputTokens) {
         notes.push(`${c.model} refused before answering; settled at $0`);
       } else {
         bounded = true;

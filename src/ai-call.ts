@@ -2367,18 +2367,16 @@ export async function* openRouterStream(
     end = meter.failed(err, options.signal);
     throw err;
   } finally {
-    if (end.outcome === "ok") {
-      /* **First, because it is evidence and the two below are inferences.** An
-         error chunk is the provider saying it failed; a signal that happens to
-         be aborted by now, or a consumer that left, says only that the call
-         did not run on. The same order of belief as `abortedBy`: a provider
-         dying as a reader presses Stop is not a cancel. */
-      if (sawErrorChunk) end = meter.died("in_band");
+    /* The provider's error remains evidence even if a later body read throws
+       or aborts. Keep the thrown error for the caller, but record the observed
+       in-band failure rather than replacing it with its subsequent cleanup. */
+    if (sawErrorChunk) end = meter.died("in_band");
+    else if (end.outcome === "ok") {
       /* **An abort can end the loop cleanly**, because `sseChunks` cancels the
          reader on abort and a cancelled read resolves `{done: true}` rather than
          throwing. Both streaming callers carry a guard for exactly that race in
          their own logging; this is its equivalent for the bill. */
-      else if (options.signal.aborted) end = { outcome: "aborted" };
+      if (options.signal.aborted) end = { outcome: "aborted" };
       /* The consumer closed us early — see `ranToEnd` above. */
       else if (!ranToEnd) end = { outcome: "aborted" };
       /* **The stream stopped without saying it had finished.** `[DONE]` is the
