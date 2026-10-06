@@ -39,8 +39,8 @@ It lists every production row that no note's `reports:` header and no queue item
 **That list is what needs doing**, whether or not Sentry has the report.
 Report ids are unique only per owner; if two owners share one, it lists both as ambiguous even when
 that id is covered, because the coverage record cannot say which row it meant.
-**An empty list has two checks, not one.** That the read worked is the first: exit 2, and the
-summary line's count of reports in the window. The window is the second: a report older than
+**An empty list has two checks, not one.** That the read worked is the first: exit 0 and the
+summary line's count of reports in the window, since exit 2 is no verdict at all. The window is the second: a report older than
 `--since` that nothing covers is not listed either, so before reporting "nothing waiting", run it
 once more with a wider one (`--since 90d`, or an ISO date).
 **A report an admin marked Ignore on `/admin/feedback` is left out**, and the first line says how

@@ -61,7 +61,9 @@ line at all, so `pkill -f FLEET_PORT=8791` matches nothing and leaves the server
 So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), then check the port is
 actually free before starting another. **Before killing a pid you found by port, read
 `/proc/<pid>/cwd` and confirm it is your own tree**: on 2026-09-08 a session's own server was
-already gone and the listener on its port was a peer's dev server, bound in the gap. And prove
+already gone and the listener on its port was a peer's dev server, bound in the gap. To check
+that your own server is gone, walk `/proc` for processes whose cwd is your tree; do not ask who
+holds the port. And prove
 *which code* is being served before you trust a
 single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.
 

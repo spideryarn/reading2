@@ -56,8 +56,8 @@ explanation when somebody reports a long wait "cancelled after about ten minutes
 "No cap found" in the table is true of a quiet machine. On a box shared by many agents the harness
 stops background Bash tasks when the *system* is short of memory, whoever is using it: on 2026-09-03
 five background runs in a row were reported `status: killed` with nothing written, and on
-2026-09-05 a waiter that was only a sleeping shell was stopped at 63 minutes, launched at a load of
-17.7 with 9 GB free. So checking `uptime` and `free -g` first is necessary and not sufficient.
+2026-09-05 a waiter that was only a sleeping shell was stopped at 63 minutes: the load was 17.7
+when it launched, and 9 GB of 30 were available when it was killed. So checking `uptime` and `free -g` first is necessary and not sufficient.
 
 - **`killed` is no information about the thing you were running.** Read the job's own log.
 - **Run the job itself somewhere the harness does not own** — a tmux session — and treat the waiter

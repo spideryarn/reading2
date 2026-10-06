@@ -1498,8 +1498,9 @@ check that replaces it) is in `overseer-direction.md` § Remote Control fails qu
 days' counts.
 
 One lesson was dropped by the Overseer and not by this job: `session-cap-covers-greg-directed-work`
-L2, the `flock /var/tmp/spideryarn-heavy.lock` line that AP6 landed without. The lock file exists on
-the box and no doc names it.
+L2, the `flock /var/tmp/spideryarn-heavy.lock` line. Dropped as stale: the Overseer's commit
+`252111f70` landed "AP6 without the retired heavy-lock line". The empty lock file is still on the
+box and no doc names it.
 
 ### What happened to each remaining memory file
 

@@ -359,7 +359,7 @@ landed, not against the file.
 ```bash
 # from a worktree, when a piece of work is done
 git fetch origin dev
-git merge origin/dev           # NOT rebase — see below. Commit first: never merge on a dirty tree
+git merge origin/dev           # NOT rebase — see below. Commit your own edits first
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
 
@@ -386,8 +386,9 @@ In the shared primary, look first: if `git rev-list --left-right --count HEAD...
 nothing local-only, `git merge --ff-only origin/dev` moves the branch without a merge commit and
 without touching what other agents have uncommitted there.
 
-**Commit before every merge.** A merge refused over modified tracked files has once left them at
-`HEAD` — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
+**In your own worktree, commit before every merge.** A merge refused over modified tracked files
+has once left them at `HEAD`. The shared primary is the exception just described: commit your own
+files there, never a peer's unfinished ones, and take the fast-forward — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
 
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.

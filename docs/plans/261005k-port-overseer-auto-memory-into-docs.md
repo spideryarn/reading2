@@ -140,3 +140,12 @@ existing `tests/doc-links.test.ts`. The check on meaning is Sol's sample, not a 
   2026-10-01 sweep. Rule 8 above ("the memory files are not deleted") was the first half's; the
   Overseer handed the deletion to this job, and 43 files went after the hashes were checked,
   leaving ten.
+- 2026-10-06 — GPT Sol's read-only review of the second half (nonce echoed; it read all 53 files in
+  full): nine findings, no invented attribution, no secret. All nine taken. F1: the heavy-lock
+  line's drop now has its reason (the Overseer's commit calls the lock retired). F2: the "is my
+  own server gone" check added to `browser-testing.md`. F3: exit 0, not 2, in `feedback-reports.md`.
+  F4: the load and memory readings in `long-waits.md` put back at their own times. F5: BP6's diff
+  command was empty after a merge, in the memory too; corrected. F6: `git diff HEAD` in
+  `linting.md`. F7–F9: "commit before every merge", "re-run each red file" and "no deadline"
+  scoped so they do not contradict the primary's fast-forward, the no-retry rule for a contended
+  database, and `--timeout-minutes`.

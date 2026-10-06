@@ -796,7 +796,9 @@ were indistinguishable until it finished.
 [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
 
 **So re-run each red file alone before calling any of them a regression.** A file that passes alone
-was the box; one that fails alone is yours. On 2026-09-03 three full runs produced 22, 2 and 2
+was the box; one that fails alone is a real failure, and yours if it passes on the commit before
+your change. The exception is `TEST DATABASE CONTENDED`, which is never retried
+([above](#test-database-contended)). On 2026-09-03 three full runs produced 22, 2 and 2
 failures and all but three assertions passed in isolation — and those three were real, hiding in a
 batch of twenty.
 
@@ -879,8 +881,9 @@ whether its tmux session still exists, are the only evidence about the job.
 **A `timeout` in front of the command is one more way to be told it passed.** On 2026-09-06 a
 `timeout 400 npm run check … | tail` was killed at its deadline — the output held `Terminated` and
 `EXIT=124` — and the harness announced *"completed (exit code 0)"*, which is the pipeline's status.
-A deadline that feels generous is still far shorter than `check`. So never put a `timeout` on a
-long command: launch it in tmux with no deadline at all.
+A deadline that feels generous is still far shorter than `check`. So never put a shell
+`timeout` in front of a long command: launch it in tmux with no outer deadline. A wrapper's own
+limit, such as `run-codex.ts --timeout-minutes`, is a different thing and stays.
 
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
@@ -912,8 +915,8 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
   three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
   drive a route.
 - **After merging `dev`, choose the re-run from what the merge brought in, not from what your change
-  is about.** `git diff --name-only HEAD...origin/dev` first; then typecheck and the suites those
-  files touch. A full gate after every merge reports on a tree that has already gone: on 2026-09-08
+  is about.** Note `HEAD` before the merge and run `git diff --name-only <that sha> HEAD` after it
+  (once merged, `HEAD...origin/dev` is empty); then typecheck and the suites those files touch. A full gate after every merge reports on a tree that has already gone: on 2026-09-08
   `dev` gained 74 commits in 55 minutes, two full re-gates went red, and neither red belonged to the
   change being gated. Keep the full gate for the tree you push.
 
