@@ -29,6 +29,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isSpideryarnId } from "../ids.js";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type {
   AddedTerm,
   AskedTermAnswer,
@@ -355,9 +356,17 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     async (current: () => boolean): Promise<void> => {
       const started = begin();
       try {
-        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+           is still read the same way, for a server that has not heard of the
+           header — the minutes of a deploy. */
+        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<GlossaryResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case, not a fault: most articles have no glossary, and
              this is what the panel's button is for. */
           setGlossary(null);
@@ -371,9 +380,13 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setStatus("none");
           return;
         }
-        const loaded = await readJson<GlossaryResponse>(res);
-        if (!current()) return;
-        /* Derive before publishing: a malformed revalidation keeps the old list. */
+        /* Only an explicit `null` means none yet, and a reply without its
+           artefact is published nowhere: a plain `Error`, so the reader gets
+           `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+           stays. */
+        if (typeof loaded?.glossary !== "object" || loaded.glossary === null) {
+          throw new Error("the glossary reply has no glossary");
+        }
         const profiled = loaded.glossary.profileHash != null;
         setGlossary(loaded.glossary);
         setStale(loaded.stale);

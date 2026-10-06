@@ -487,8 +487,15 @@ function reply(url: string, method: string): Response {
      route sends (`{ glossary: null }`, and `{}` from the fall-through), which
      each hook threw a `TypeError` on. Nothing noticed until 2026-10-04, when the
      read catches began reporting an unauthored exception as the page's own
-     fault (plan 261004c § 1a) — three reports beside the one this file counts. */
-  if (/^\/api\/(glossary|quotes|quiz)\//.test(url)) return new Response(null, { status: 404 });
+     fault (plan 261004c § 1a) — three reports beside the one this file counts.
+
+     **And the reads that check their reply has its artefact**, for the same
+     reason: citations since plan 261006g, and Simple, FAQ, Timeline and
+     Debate since 261006h, each of which the fall-through's `{}` is now a
+     reported fault for rather than an `undefined` quietly published. */
+  if (/^\/api\/(glossary|quotes|quiz|citations|simple|faq|timeline|debate)\//.test(url)) {
+    return new Response(null, { status: 404 });
+  }
   if (url.startsWith("/api/ideas/")) return json(IDEAS_BODY);
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});

@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   isSimpleParagraphs,
+  NONE_YET_AS_NULL_HEADER,
   type Job,
   type SimpleParagraph,
   type SimpleSummary,
@@ -158,9 +159,17 @@ export function useSimple(slug: string): UseSimple {
     async (current: () => boolean) => {
       const started = begin();
       try {
-        const res = await apiFetch(`/api/simple/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+           is still read the same way, for a server that has not heard of the
+           header — the minutes of a deploy. */
+        const res = await apiFetch(`/api/simple/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<SimpleSummaryResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case: nobody has asked for one yet. */
           setSimple(null);
           setStale(false);
@@ -171,14 +180,18 @@ export function useSimple(slug: string): UseSimple {
           setStatus("none");
           return;
         }
-        const loaded = await readJson<SimpleSummaryResponse>(res);
-        if (!current()) return;
+        /* Only an explicit `null` means none yet, and a reply without its
+           artefact is published nowhere: a plain `Error`, so the reader gets
+           `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+           stays. */
+        if (typeof loaded?.simpleSummary !== "object" || loaded.simpleSummary === null) {
+          throw new Error("the plain-words reply has no summary");
+        }
         setSimple(loaded.simpleSummary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);
-        /* `?.`: a null artefact is drawn as it always was, not thrown on here. */
-        landed(started, res, loaded.simpleSummary?.generatedAt ?? null);
+        landed(started, res, loaded.simpleSummary.generatedAt);
         setError(null);
         setStatus("ready");
       } catch (err) {

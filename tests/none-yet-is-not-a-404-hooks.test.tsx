@@ -11,6 +11,15 @@
  * 3. **A 404 still is**, for the minutes of a deploy when the new client meets
  *    the old server.
  *
+ * **And the other seven since** — Simple, Ideas, FAQ, Timeline, Debate,
+ * Glossary, Quotes: the same three, and two more that the first three's review
+ * found (docs/postmortems/261006k-a-null-sentinel-is-widened-by-a-truthiness-check.md):
+ *
+ * 4. **Only `null` is "none yet".** `false`, `0` and `""` are a broken reply.
+ * 5. **A reply without its artefact does not replace one already on screen.**
+ *
+ * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md.
+ *
  * The route's half is tests/none-yet-is-not-a-404-route.test.ts. Harness after
  * tests/always-mounted-reads-refresh.test.tsx.
  */
@@ -43,6 +52,13 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { useQuizRead } = await import("../src/web/useQuiz.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useCrossrefs } = await import("../src/web/useCrossrefs.js");
+const { useSimple } = await import("../src/web/useSimple.js");
+const { useIdeasRead } = await import("../src/web/useIdeas.js");
+const { useFaqRead } = await import("../src/web/useFaq.js");
+const { useTimelineRead } = await import("../src/web/useTimeline.js");
+const { useDebateRead } = await import("../src/web/useDebate.js");
+const { useGlossaryRead } = await import("../src/web/useGlossary.js");
+const { useQuotesRead } = await import("../src/web/useQuotes.js");
 
 const nullBody = () =>
   new Response("null", { status: 200, headers: { "content-type": "application/json" } });
@@ -170,4 +186,69 @@ it.each([false, 0, "", {}, { crossrefs: null }])("crossrefs draws nothing for a 
   answer = () => json(body);
   await mount(useCrossrefs);
   expect(seen).toBeNull();
+});
+
+/* ------------------------------------------------------ the other seven --
+   One row each: the URL's name, the hook, the field the hook publishes the
+   artefact under, and a reply the route could really send. */
+const AT = "2026-10-06T00:00:00.000Z";
+const FLAGS = { stale: false, outdated: false, profileChanged: false };
+const SEVEN = [
+  ["simple", useSimple, "simple", { simpleSummary: { slug: SLUG, generatedAt: AT, profileHash: null, levels: {} }, ...FLAGS }, "simpleSummary"],
+  ["ideas", useIdeasRead, "ideas", { ideas: { slug: SLUG, generatedAt: AT, profileHash: null, ideas: [] }, ...FLAGS }, "ideas"],
+  ["faq", useFaqRead, "faq", { faq: { slug: SLUG, generatedAt: AT, questions: [] }, ...FLAGS }, "faq"],
+  ["timeline", useTimelineRead, "timeline", { timeline: { slug: SLUG, generatedAt: AT, events: [] }, ...FLAGS }, "timeline"],
+  ["debate", useDebateRead, "debate", { debate: { slug: SLUG, generatedAt: AT, direct: { rows: [] }, claims: { rows: [] } }, ...FLAGS }, "debate"],
+  ["glossary", useGlossaryRead, "glossary", { glossary: { slug: SLUG, generatedAt: AT, profileHash: null, entries: [] }, ...FLAGS }, "glossary"],
+  ["quotes", useQuotesRead, "quotes", { quotes: { slug: SLUG, generatedAt: AT, profileHash: null, quotes: [] }, ...FLAGS }, "quotes"],
+] as const;
+
+interface SevenRead {
+  status: string;
+  error: unknown;
+  retryRead(): Promise<void>;
+}
+
+describe.each(SEVEN)("%s", (name, use, held, body, sent) => {
+  const url = `/api/${name}/${SLUG}`;
+  const artefact = (body as Record<string, unknown>)[sent];
+  const read = () => seen as SevenRead & Record<string, unknown>;
+
+  for (const [what, reply] of ANSWERS) {
+    it(`${what} is none yet: the panel's button, not an error`, async () => {
+      answer = reply;
+      await mount(use);
+      expect(asked.filter((ask) => ask.url === url)).toEqual([{ url, header: "1" }]);
+      expect({ status: read().status, artefact: read()[held], error: read().error }).toEqual({
+        status: "none",
+        artefact: null,
+        error: null,
+      });
+    });
+  }
+
+  it("accepts a real response", async () => {
+    answer = () => json(body);
+    await mount(use);
+    expect(read()).toMatchObject({ status: "ready", error: null, [held]: artefact });
+  });
+
+  for (const malformed of [false, 0, "", {}, { [sent]: null }]) {
+    it(`reports ${JSON.stringify(malformed)} as a failed opening read, not as none yet`, async () => {
+      answer = () => json(malformed);
+      await mount(use);
+      expect(read()).toMatchObject({ status: "error", [held]: null });
+      expect(read().error).toBeTruthy();
+    });
+
+    it(`keeps a real response when the next read returns ${JSON.stringify(malformed)}`, async () => {
+      answer = () => json(body);
+      await mount(use);
+      answer = () => json(malformed);
+      await act(async () => read().retryRead());
+      await settle();
+      expect(read()).toMatchObject({ status: "ready", [held]: artefact });
+      expect(read().error).toBeTruthy();
+    });
+  }
 });

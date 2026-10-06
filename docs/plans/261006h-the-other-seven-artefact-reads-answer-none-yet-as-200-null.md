@@ -9,8 +9,9 @@ It finishes what
 question. That plan moved three reads (quiz, crossrefs, citations) from "404 means not made yet" to
 "`200 null` when the request carries `x-spideryarn-none-yet-as-null`". Seven others still use the
 404, so the codebase has two conventions for one fact, and the next person to add a read will copy
-whichever they happen to open. On an article with nothing made, an ordinary page load also still
-prints seven red 404s.
+whichever they happen to open. On an article with nothing made, a page load also still prints a red
+404 for each of the seven it asks for (Glossary and Quotes on every owner view, four more with
+Marginalia on, Simple in its Summary view).
 
 ## What changes
 
@@ -22,8 +23,12 @@ three edits the first three got, and nothing new is invented.
   becomes `new ArtefactNotMadeYet(message)` with the message it has today. The class carries
   `status: 404`, so every other caller of these loaders (chat tools, term lookup, Skim, Search, the
   public reader, jobs) sees exactly what it saw. `notFound(slug)` for a missing article is not
-  touched. If a loader has more than one "not there" throw (`loadDebate` may), only the one that
-  means "never made" moves; the builder reads each and says which.
+  touched. **The fact that moves is "no usable artefact", exactly as each loader tests it today**
+  (Sol F1): `loadFaq` also counts a document without a `questions` array, `loadSimpleSummary` a
+  legacy `simple/1` or otherwise unusable one, and `loadDebate` one that fails `isDebateDocument`,
+  each in the same throw as plain absence. Those predicates stay as they are and the whole throw
+  becomes the typed error, so every band shows what it shows now. A valid but empty FAQ, timeline
+  or debate is an artefact, not "none".
 - **Route** (`src/routes.ts`, the seven `GET /api/<name>/:slug` handlers). Each wraps its read in
   `orNullWhenNotMadeYet({ req, res }, …)` and returns when that answers. Where the read is already
   inside `withProfileChanged`, the helper goes around the outside, as quiz has it. This also puts
@@ -42,7 +47,9 @@ three edits the first three got, and nothing new is invented.
   to a tab opened before the deploy, which never asked for one.
 - **Words.** The comments and docs that say "three reads" (`NONE_YET_AS_NULL_HEADER` in
   `src/types.ts`, `orNullWhenNotMadeYet`, `ArtefactNotMadeYet`, `api.ts`,
-  `docs/project/web-client.md`) are brought up to date, and say there is now one convention.
+  `docs/project/web-client.md`) are brought up to date: these ten reads share the opt-in
+  convention. Tweets, relations, Skim, Sketch and Arc still answer a plain 404 (Sol F3) and are
+  named there as the ones not moved.
 
 ## What does not change
 
@@ -78,10 +85,19 @@ is in one place and not another does the same job with no new machinery, and is 
 - One test that the set of routes wrapped in `orNullWhenNotMadeYet` and the set the offline pattern
   matches are the same ten.
 - `npm test` on the touched files, `npm run typecheck`, lint on touched files; then the full suite.
-- Browser, by a Sonnet subagent, at 1440 / 820 / 390: an owner's article with nothing made loads
-  with no 4xx for any of the ten reads; each of the seven bands still shows its "nothing yet" state
-  and button; an article that has them made still shows them.
+- Tests also cover (Sol F1): a legacy Simple, a malformed FAQ and a malformed debate answer
+  `200 null` with the header; a valid empty FAQ, timeline and debate answer their document.
+- Browser, by a Sonnet subagent, at 1440 / 820 / 390: an owner's article with nothing made, each
+  view opened by URL (so nothing is started by a click), Marginalia on, Summary open for Simple.
+  **The observed request set must include all ten URLs** before "no 4xx" counts (Sol F2); each band
+  shows its "nothing yet" state and button; an article that has them made still shows them.
 
 ## Reviews
 
 GPT Sol on this plan before building (read-only), and on the code after (write-capable).
+
+**Plan review, 2026-10-06** — [the answer](261006h-none-yet-rest-plan-review-sol.md), of commit
+`f66c0cb2c`. Verdict: build it; no P0 or P1. All three findings accepted and folded in above: F1
+(three loaders fold "unusable" into the same throw as "absent" — move the throw whole), F2 (a clean
+network log proves nothing unless all ten requests were seen), F3 ("one convention" overstated:
+five other artefact reads keep the 404).
