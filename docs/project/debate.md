@@ -167,12 +167,13 @@ part A. Greg had wondered whether Debate could be steered:
 What the reader gets:
 
 - **A box at the top of the panel**, *Look at the debate from an angle*, with an **Ask in chat**
-  button. Enter or the button goes to Chat and opens a fresh conversation. Its box holds the angle,
-  quoted, and a fixed question after it: *What do others say about the article from this angle?
-  Search the web, and say so plainly if you find little.* Nothing is sent, searched or paid for
-  until Send, and the reader can edit it first. Back returns to Debate.
+  button. Enter or the button goes to Chat, opens a fresh conversation, and **sends** its first
+  question: the angle, quoted, and a fixed question after it: *What do others say about the
+  article from this angle? Search the web, and say so plainly if you find little.* The press is
+  the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)); until
+  then the question waited in the box. Back returns to Debate.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
-  all. A chat appears once its first question is sent; an unsent draft has no saved thread to list.
+  all. A chat appears once its first question is sent.
   A line opens its conversation beside Debate, as a claim's mark does.
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
@@ -186,7 +187,7 @@ claim was tried and worked, at about 20 cents and a minute and a half a run
 But the stored debate is one result per article, shown to visitors when the article is shared and
 replaced by each run. An angled run would either overwrite the plain one, and show a visitor the owner's
 angle, or need storage per angle, a merge, a spending rule and the angle in the freshness stamp. A
-chat costs nothing until Send, can be answered back, and can be pointed in several directions by
+chat is one answer's cost, can be answered back, and can be pointed in several directions by
 starting another. It is also where Greg said this kind of digging belongs (the quote under
 [§ Check a claim in chat](#check-a-claim-in-chat)). **What it gives up:** the answer is prose in a
 conversation, not rows in Reception or Claims with checked quotations, and a visitor never sees it.

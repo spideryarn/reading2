@@ -31,7 +31,7 @@ vi.mock("../src/web/ChatPanel.js", () => ({
   },
 }));
 
-const calls: { url: string; method: string }[] = [];
+const calls: { url: string; method: string; body?: unknown }[] = [];
 /** What the list GET answers with. */
 let stored: ChatThread[] = [];
 /** Whether the list GET waits to be released, so "before the list arrives" is a state. */
@@ -45,15 +45,25 @@ vi.mock("../src/web/lib/api.js", async () => {
   return {
     ...real,
     apiFetch: (url: string, init?: RequestInit) => {
-      calls.push({ url: String(url), method: init?.method ?? "GET" });
+      calls.push({
+        url: String(url),
+        method: init?.method ?? "GET",
+        ...(typeof init?.body === "string" ? { body: JSON.parse(init.body) as unknown } : {}),
+      });
       const answer = () =>
         new Response(JSON.stringify({ threads: stored }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
-      if (!holdList) return Promise.resolve(answer());
+      /* Only the list waits. A POST made meanwhile is answered at once, so
+         releasing lets go of the list and of nothing else. */
+      if (!holdList || (init?.method ?? "GET") !== "GET") return Promise.resolve(answer());
       return new Promise<Response>((go) => {
-        release = () => go(answer());
+        const earlier = release;
+        release = () => {
+          earlier?.();
+          go(answer());
+        };
       });
     },
   };
@@ -141,9 +151,82 @@ function prop<T>(name: string): T {
   return value as T;
 }
 
+const posts = () => calls.filter((c) => c.method === "POST");
+
+/**
+ * **A hand-off that sends: the press on *Ask in chat* was the Send.** Greg,
+ * 2026-10-06 (spya-x896vu): *"When I click "ask in Chat" anywhere,
+ * automatically submit the input (rather than just prefilling the input box
+ * and waiting for me to hit send)"*.
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+ */
+describe("ConversationBand's handoff that sends", () => {
+  it("sends the question once under StrictMode, to the one conversation it began", async () => {
+    await mount({ slug: SLUG, question: QUESTION, send: true });
+
+    expect(threads()).toHaveLength(1);
+    const fresh = threads()[0] as ChatThread;
+    expect(panel?.threadId).toBe(fresh.id);
+    expect(posts(), "one press, one model call").toHaveLength(1);
+    expect(posts()[0]?.body).toMatchObject({ question: QUESTION, threadId: fresh.id });
+    /* Sent, so not also waiting in the box to be sent again. */
+    expect(chatDraftsFor(SLUG).thread(fresh.id) ?? "").toBe("");
+    expect(chatDraftsFor(SLUG).isFresh(fresh.id), "something has been submitted to it").toBe(false);
+    /* The answer is arriving and there is nothing to edit: no caret, so no
+       soft keyboard over the answer and ↑/↓ still step the article. */
+    expect(panel?.focusNonce).toBe(0);
+    expect(taken).toBeGreaterThan(0);
+  });
+
+  it("sends the origin with it", async () => {
+    const origin = { mode: "glossary", itemId: "spya-aaaaaa", quote: "axiom" } as const;
+    await mount({ slug: SLUG, question: QUESTION, send: true, origin });
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]?.body).toMatchObject({ question: QUESTION, origin });
+  });
+
+  it("does not send again when the band re-renders with the same handoff", async () => {
+    const handoff = { slug: SLUG, question: QUESTION, send: true };
+    await mount(handoff);
+    await act(async () => root.render(band(handoff)));
+    await settle();
+    expect(threads()).toHaveLength(1);
+    expect(posts()).toHaveLength(1);
+  });
+
+  /**
+   * **Before the list has arrived**, which is when a press from another mode
+   * always lands: the band is mounted by the press. `begin` puts the
+   * conversation in the list on the spot, so the send has somewhere to go,
+   * and the arrival rule must not begin a second one when the list lands.
+   * GPT Sol's review of the plan, PR-6.
+   */
+  it("sends once while the list is still loading, and begins no second conversation when it lands", async () => {
+    holdList = true;
+    history.replaceState(null, "", "/a-piece?mode=chat");
+    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: true })));
+    await settle();
+    expect(posts()).toHaveLength(1);
+    const sentTo = (posts()[0]?.body as { threadId: string }).threadId;
+    expect(panel?.threadId).toBe(sentTo);
+
+    await act(async () => release?.());
+    await settle();
+    expect(panel?.loaded).toBe(true);
+    expect(posts(), "the list landing sends nothing more").toHaveLength(1);
+    expect(panel?.threadId).toBe(sentTo);
+    expect(threads().filter((t) => t.messages.length === 0 && t.id !== sentTo), "no second, empty conversation").toHaveLength(0);
+  });
+
+  it("sends nothing for a question asked in another article", async () => {
+    await mount({ slug: "another-piece", question: QUESTION, send: true });
+    expect(posts()).toHaveLength(0);
+  });
+});
+
 describe("ConversationBand's handoff", () => {
   it("mints one conversation under StrictMode, seeds it, and opens it", async () => {
-    await mount({ slug: SLUG, question: QUESTION });
+    await mount({ slug: SLUG, question: QUESTION, send: false });
 
     /* One, not two — and not a second, empty one from the arrival rule either,
        which fires on exactly this state (no conversations, list loaded). */
@@ -171,7 +254,7 @@ describe("ConversationBand's handoff", () => {
         messages: [],
       },
     ];
-    await mount({ slug: SLUG, question: QUESTION });
+    await mount({ slug: SLUG, question: QUESTION, send: false });
     expect(threads().map((t) => t.id)).toContain("spya-k3m9qt");
     expect(threads()).toHaveLength(2);
     expect(panel?.threadId).not.toBe("spya-k3m9qt");
@@ -180,7 +263,7 @@ describe("ConversationBand's handoff", () => {
   });
 
   it("does not take the same handoff twice when the band re-renders with it", async () => {
-    const handoff = { slug: SLUG, question: QUESTION };
+    const handoff = { slug: SLUG, question: QUESTION, send: false };
     await mount(handoff);
     await act(async () => root.render(band(handoff)));
     await settle();
@@ -198,7 +281,7 @@ describe("ConversationBand's handoff", () => {
   it("does not reopen an empty conversation after the reader closes the handed-over one", async () => {
     holdList = true;
     history.replaceState(null, "", "/a-piece?mode=chat");
-    await act(async () => root.render(band({ slug: SLUG, question: QUESTION })));
+    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: false })));
     await settle();
     expect(threads()).toHaveLength(1);
     const fresh = (threads()[0] as ChatThread).id;
@@ -220,7 +303,7 @@ describe("ConversationBand's handoff", () => {
   });
 
   it("drops a question asked in another article, and starts only the ordinary empty one", async () => {
-    await mount({ slug: "another-piece", question: QUESTION });
+    await mount({ slug: "another-piece", question: QUESTION, send: false });
     expect(taken, "refused, but still handed back").toBeGreaterThan(0);
     for (const t of threads()) expect(chatDraftsFor(SLUG).thread(t.id)).toBeUndefined();
     for (const t of threads()) expect(chatDraftsFor("another-piece").thread(t.id)).toBeUndefined();

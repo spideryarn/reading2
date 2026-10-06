@@ -238,7 +238,7 @@ export function readingExecutor({
   openQuickSearch?: (() => void) | undefined;
   /**
    * Hand a lens to Chat, unsent, for the bar's suggested lens row —
-   * Reader.tsx § `debateThroughLensInChat` (plan 261005k).
+   * Reader.tsx § `suggestedLensInChat` (plan 261005k).
    */
   askThroughLens?: ((lens: string) => void) | undefined;
 }): CommandExecutor {

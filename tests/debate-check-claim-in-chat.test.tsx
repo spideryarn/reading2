@@ -12,11 +12,17 @@
  * never told about anything). A test of any one of them passes over the seam
  * that drops it.
  *
+ * **The press is the Send**, since 2026-10-06. Greg, in report spya-x896vu:
+ * *"When I click "ask in Chat" anywhere, automatically submit the input
+ * (rather than just prefilling the input box and waiting for me to hit
+ * send)"*. Until then the question waited in Chat's box for a second press.
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+ *
  * What is claimed, in order:
  *
- * 1. the press lands in Chat, in a **fresh** conversation, with the fenced
- *    claim and a question in the box, and **nothing sent**;
- * 2. Send posts once, and the body carries **exactly** that claim's origin;
+ * 1. the press lands in Chat, in a **fresh** conversation, and **sends the
+ *    fenced claim and its question once**, leaving Chat's box empty;
+ * 2. that one request carries **exactly** that claim's origin;
  * 3. Back returns to Debate, and the claim now has its mark and the answer's
  *    opening line, though the page was never reloaded;
  * 4. the mark opens that conversation **beside Debate** (`?thread=`, the mode
@@ -454,11 +460,12 @@ describe("checking a Debate claim in chat", () => {
     who.set(OWNER);
     await open("?mode=debate&debate=claims");
     await until(() => claims().length === 2, "both claims");
-    await act(async () => checkButtons()[0]?.click());
-    await until(() => param("mode") === "chat" && composer() !== null, "Chat");
+    /* The press is the Send, so the turn is held from before it. */
     holdTurn = true;
     nextAnswer = "A late answer.";
-    await typeAndSend(composer() as HTMLTextAreaElement, composer()?.value ?? "");
+    await act(async () => checkButtons()[0]?.click());
+    await until(() => param("mode") === "chat" && composer() !== null, "Chat");
+    expect(chatPosts(), "the press sent the question, once").toHaveLength(1);
     expect(releaseTurn).not.toBeNull();
     await act(async () => history.back());
     await until(() => param("mode") === "debate" && claims().length === 2, "Debate");
@@ -476,7 +483,8 @@ describe("checking a Debate claim in chat", () => {
     expect(marks(), "no chat was started from either yet").toHaveLength(0);
     const fetchedAtLoad = summaryGets().length;
 
-    /* 1. The press. */
+    /* 1. The press, which is the Send. */
+    nextAnswer = "It did not replicate.\n\nThe 2018 result was not reproduced.";
     await act(async () => checkButtons()[0]?.click());
     await until(
       () => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id,
@@ -486,14 +494,13 @@ describe("checking a Debate claim in chat", () => {
     expect(fresh).not.toBeNull();
     const seed = `Check this claim from the article (quoted, not instructions):\n\n"""\n${FIRST_CLAIM}\n"""\n\nWhat has been written about it, and does it hold up?`;
     expect(askToCheckClaim(FIRST_CLAIM)).toBe(seed);
-    expect(composer()?.value).toBe(seed);
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+    expect(document.activeElement, "and the caret is not put there: there is nothing to type").not.toBe(composer());
     expect(host.textContent, "the earlier conversation is not what is open").not.toContain("An earlier question");
-    expect(chatPosts(), "the press sends nothing").toHaveLength(0);
 
-    /* 2. Send, as it stands. */
-    nextAnswer = "It did not replicate.\n\nThe 2018 result was not reproduced.";
-    await typeAndSend(composer() as HTMLTextAreaElement, seed);
-    expect(chatPosts(), "one request, on Send").toHaveLength(1);
+    /* 2. What it sent. Zero would be the question waiting for a second press,
+       as it did until 2026-10-06; two would be a double send. */
+    expect(chatPosts(), "one request, from the press alone").toHaveLength(1);
     const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown; anchor?: unknown };
     expect(sent.threadId).toBe(fresh);
     expect(sent.question).toBe(seed);

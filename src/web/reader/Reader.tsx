@@ -918,26 +918,37 @@ export function Reader({
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
   /**
-   * **A question on its way into chat mode from another mode.** Two senders:
-   * the glossary's *Ask in chat*, for a term the article does not contain, and
-   * (since 2026-10-04) the button on a Summary paragraph, which carries the
-   * paragraph across, quoted
-   * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md).
+   * **A question on its way into chat mode from another mode.** The first two
+   * senders: the glossary's *Ask in chat*, for a term the article does not
+   * contain, and (since 2026-10-04) the button on a Summary paragraph, which
+   * carries the paragraph across, quoted
+   * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). The rest
+   * are below.
+   *
+   * **Since 2026-10-06 the press sends the question** (`ChatHandoff.send`),
+   * for every sender whose question is complete: Greg, *"When I click "ask in
+   * Chat" anywhere, automatically submit the input (rather than just
+   * prefilling the input box and waiting for me to hit send)"*. The Summary
+   * paragraph's is the one that still waits in the box, because it carries a
+   * paragraph and no question yet
+   * (docs/plans/261006j-ask-in-chat-sends-the-question.md).
    *
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
    * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
    * draft about a passage, and it is left exactly as it was — suppressed in chat
    * mode, back when the reader leaves. This one lives for one commit: the chat
-   * band takes it, opens a new conversation with it in the box, and clears it.
+   * band takes it, opens a new conversation with it, and clears it.
    * `ChatHandoff` in ConversationModes.tsx says what else it guards against.
    */
   const [chatHandoff, setChatHandoff] = useState<ChatHandoff | null>(null);
-  /* The one body both senders share: the text is ready-made, and the handoff
-     and the mode are set in one event so they arrive in one commit. */
+  /* The one body every sender shares: the text is ready-made, and the handoff
+     and the mode are set in one event so they arrive in one commit. `then`
+     is whether this press is the Send, and each sender says: one press is one
+     handoff object, which the band takes once, so it is one model call. */
   const handToChat = useCallback(
-    (question: string, origin?: ThreadOrigin) => {
-      setChatHandoff({ slug, question, ...(origin ? { origin } : {}) });
+    (question: string, then: "send" | "wait", origin?: ThreadOrigin) => {
+      setChatHandoff({ slug, question, send: then === "send", ...(origin ? { origin } : {}) });
       showBand("chat");
     },
     [slug, showBand],
@@ -948,7 +959,7 @@ export function Reader({
      thread will store, so the claim can find its chat again
      (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
   const checkClaimInChat = useCallback(
-    (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), origin),
+    (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
     [handToChat],
   );
   /* **A fourth, the same day: Debate's *Look at the debate from an angle*.**
@@ -958,16 +969,25 @@ export function Reader({
      words and builds the origin here: a claim's handler cannot be handed one
      (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
      Trimmed here as the route trims it, so what is stored equals what is sent
-     and a resent first question is the same origin. */
-  const debateThroughLensInChat = useCallback(
-    (lens: string) => {
+     and a resent first question is the same origin.
+
+     **Two callers, and only one of them sends.** Debate's box is the reader's
+     own typed words and a button named *Ask in chat*: the press sends. The
+     command bar's suggested row is worded by a model from the reader's
+     private profile, and the privacy page says its question is sent only when
+     the reader presses Send in Chat, so that one still waits in the box
+     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5). */
+  const lensInChat = useCallback(
+    (lens: string, then: "send" | "wait") => {
       const words = lens.trim();
       if (words === "") return;
-      handToChat(askDebateThroughLens(words), { mode: "debate", lens: words });
+      handToChat(askDebateThroughLens(words), then, { mode: "debate", lens: words });
     },
     [handToChat],
   );
-  const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
+  const debateThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
+  const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
      and on a Citations row**, beside Dig deeper, which is unchanged. Each
      travels twice, as a claim does: its name fenced in the question, and as
@@ -978,16 +998,18 @@ export function Reader({
      (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md). */
   const askGlossaryEntryInChat = useCallback(
     (entry: Pick<GlossaryEntry, "id" | "name">) =>
-      handToChat(askAboutGlossaryEntry(entry.name), itemOrigin("glossary", entry.id, entry.name)),
+      handToChat(askAboutGlossaryEntry(entry.name), "send", itemOrigin("glossary", entry.id, entry.name)),
     [handToChat],
   );
   const askCitedWorkInChat = useCallback(
     (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
-      handToChat(askAboutCitedWork(work), itemOrigin("citations", work.id, work.title)),
+      handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
     [handToChat],
   );
+  /* The one sender that waits: the paragraph, quoted, and an empty line for
+     the reader's question. There is nothing to ask until they type it. */
   const askAboutSummary = useCallback(
-    (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText)),
+    (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText), "wait"),
     [handToChat],
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
@@ -2631,7 +2653,7 @@ export function Reader({
         openQuickSearch: isOwner ? openQuickSearch : undefined,
         /* The bar's suggested lens row: Debate's own handoff, so the question
            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
-        askThroughLens: isOwner ? debateThroughLensInChat : undefined,
+        askThroughLens: isOwner ? suggestedLensInChat : undefined,
       }),
     [
       slug,
@@ -2647,7 +2669,7 @@ export function Reader({
       moreTerms,
       moreQuotes,
       openQuickSearch,
-      debateThroughLensInChat,
+      suggestedLensInChat,
     ],
   );
   /**
@@ -3940,8 +3962,17 @@ export function Reader({
                exactly the reader who typed the most into it. */
             void owner.comments.create(comment).then((stored) => {
               if (!ask || !stored) return;
-              /* The conversation opens on the same words, pre-filled with what
-                 they wrote. `sourceComment` travels with it so the *server*
+              /* The conversation opens on the same words, and what they wrote
+                 is sent as its first question (`sendNow`); with nothing
+                 written it asks to have the passage explained, which is
+                 `askAboutBlock`'s reading of an empty question. Until
+                 2026-10-06 the words were pre-filled and waited for Send
+                 (plan 261003i, D5, "the smaller version"); Greg's words that
+                 day about every *Ask in chat* describe this button too, and
+                 Opus arbitrated it in
+                 (docs/plans/261006j-ask-in-chat-sends-the-question.md, D6).
+                 Still inside this `then`, so the comment is stored before
+                 anything is spent. `sourceComment` travels with it so the *server*
                  can write the link once it knows the real thread id — the
                  client's is a guess it only learns was wrong if it was. */
               void setThread(null);
@@ -3955,6 +3986,7 @@ export function Reader({
                 opening: anchor.quote,
                 sourceCommentId: stored.id,
                 ...(body ? { question: body } : {}),
+                sendNow: true,
               });
             });
           }}
@@ -4141,10 +4173,16 @@ export function Reader({
                It carries the comment's own anchor, so the new chat is tied to
                the same words the explanation was about: the passage keeps a mark
                and the model is told what "this" refers to on every turn, not
-               just the first. The question itself is not sent yet — it is
-               pre-filled, and the reader presses send — because a follow-up
-               typed into one box and fired from another is a model call they did
-               not quite ask for, which is the whole thing this change is about.
+               just the first.
+
+               **The question is sent as the panel opens** (`sendNow`), since
+               2026-10-06. It used to be pre-filled for the reader to send, on
+               the argument that a follow-up typed into one box and fired from
+               another was a model call they did not quite ask for. Greg, of
+               every *Ask in chat*: *"automatically submit the input (rather
+               than just prefilling the input box and waiting for me to hit
+               send)"*. They typed it and pressed a button named Ask
+               (docs/plans/261006j-ask-in-chat-sends-the-question.md, D4).
 
                The dialog closes on the way through: one panel in the slot. */
             /* A whole-block bookmark hands chat the whole-block anchor, which
@@ -4162,6 +4200,7 @@ export function Reader({
                     },
               opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
               question,
+              sendNow: true,
             });
               void setNote(null);
               void setThread(null);

@@ -1342,8 +1342,8 @@ function WorkRow({
             onInvestigate={investigate.onInvestigate}
           />
         )}
-        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). It costs
-            nothing until Send, so it needs no tap-to-reveal. It stays once a
+        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). The press
+            sends the question (plan 261006j). It stays once a
             chat exists: a second one can be started. */}
         {chats && (
           <AskInChatButton

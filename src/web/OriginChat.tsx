@@ -52,9 +52,8 @@ export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
 
-/** What the button's card says under its name: where the press goes, and that it is free until Send. */
-export const ASK_IN_CHAT_SAYS =
-  "Opens a new chat with a question about it in the box. Nothing is sent until you press Send.";
+/** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
+export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";
 
 /** The mark's tooltip: what a press does, what the number is, and what the words are. */
 export function originChatTip(label: string, turns: number, answered: boolean): string {
@@ -123,8 +122,10 @@ export function OriginChatMark({
  * and drawn as it is: the quiet `.gloss-btn`, an icon and a label. Chat's
  * icon from the bar, because the press takes the reader into Chat.
  *
- * Never disabled: a chat needs no passage and no finished lookup, and the
- * press spends nothing (the question waits in the box for Send).
+ * Never disabled: a chat needs no passage and no finished lookup. **The
+ * press sends the question** (since 2026-10-06, Greg's ask in
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md), so it is one model
+ * call, and the tooltip says so.
  */
 export function AskInChatButton({
   label,

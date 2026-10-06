@@ -284,16 +284,16 @@ function QuizSubBand({
 type ConversationKind = Exclude<ThreadKind, "candidates">;
 
 /**
- * **A question another mode has handed to chat, to be put in a fresh
- * conversation's composer and not sent.**
+ * **A question another mode has handed to chat, for a fresh conversation:
+ * sent as its first question, or put in its composer to wait** (`send`).
  *
- * Two senders, both through `Reader`: the glossary's *Ask in chat*, for a term
- * the article does not contain, and (since 2026-10-04) the button on a Summary
- * paragraph, which hands over the paragraph, quoted
+ * The senders are all in `Reader` (§ `handToChat`): *Ask in chat* in Glossary,
+ * Citations and Debate, Debate's *Check this claim in chat*, and the button
+ * on a Summary paragraph, which hands over the paragraph, quoted
  * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). Greg,
  * 2026-09-11, asked whether the glossary's question should go into the
  * conversation already open or a new one: *"fresh"*. So a handoff never
- * touches another conversation's draft, and it spends nothing until Send.
+ * touches another conversation's draft.
  *
  * **A prop, owned by `Reader`, and deliberately not the module-level cell that
  * src/web/chat-handoff.ts used to be.** That cell was deleted for three real
@@ -313,12 +313,24 @@ export interface ChatHandoff {
   readonly slug: string;
   readonly question: string;
   /**
+   * **Whether the press that handed this over was the Send.** Greg,
+   * 2026-10-06 (spya-x896vu): *"When I click "ask in Chat" anywhere,
+   * automatically submit the input (rather than just prefilling the input box
+   * and waiting for me to hit send)"*. Until then every handoff waited in the
+   * box. `true` for a question that is complete as handed over; `false` for
+   * the Summary paragraph's, which is a quoted paragraph and an empty line
+   * where the reader's question goes, so there is nothing to ask yet.
+   * Required, so a new sender has to say.
+   * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+   */
+  readonly send: boolean;
+  /**
    * The item the question is about, when the conversation should remember it
    * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
    * and *Ask in chat* on a Glossary entry or a Citations row since 2026-10-06
    * (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md).
-   * The band keeps it beside the new conversation's words and sends it with
-   * the first question. The Summary's handoff sends none, and nor does the
+   * The band keeps it beside the new conversation and sends it with the
+   * first question. The Summary's handoff sends none, and nor does the
    * glossary's other one, for a typed word the article does not contain.
    * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
    */
@@ -425,8 +437,8 @@ type ConversationBandProps = {
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
   /**
-   * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
-   * Only chat mode is handed one.
+   * A question to open a fresh conversation with, sent or left in its box —
+   * see `ChatHandoff`. Only chat mode is handed one.
    */
   handoff?: ChatHandoff | null | undefined;
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
@@ -712,7 +724,9 @@ export function ConversationBand({
    * for somewhere to type.
    */
   const [focusNonce, setFocusNonce] = useState(0);
-  const startNew = useCallback(() => {
+  /* `focus` is false for one caller: a handed-over question that is sent on
+     arrival (the handoff effect below), where there is nothing to type. */
+  const beginHere = useCallback((focus: boolean) => {
     heldOnList.current = null;
     setPendingLive(null);
     const id = begin(kind);
@@ -721,9 +735,10 @@ export function ConversationBand({
        only — Learn's words are kept by kind and need no such mark. */
     if (kind === "chat") drafts.markFresh(id);
     void setThread(id);
-    setFocusNonce((n) => n + 1);
+    if (focus) setFocusNonce((n) => n + 1);
     return id;
   }, [begin, setThread, kind, drafts]);
+  const startNew = useCallback(() => beginHere(true), [beginHere]);
 
   /**
    * **An empty chat opens a conversation rather than an empty list.**
@@ -789,8 +804,9 @@ export function ConversationBand({
   }, [slug, kind]);
 
   /**
-   * **Take a handed-over question: a fresh conversation, the question in its
-   * box, the caret in the box, and nothing sent.**
+   * **Take a handed-over question: a fresh conversation, and the question
+   * either sent to it as its first (`handoff.send`), or in its box with the
+   * caret and nothing sent.**
    *
    * Declared after the latch reset above and before the arrival rule below, and
    * the order is the point: all three can run in one commit, and this one spends
@@ -810,7 +826,16 @@ export function ConversationBand({
    * list arrived was handed a new empty one by the arrival rule.
    * tests/conversation-band-handoff.test.tsx caught it.
    *
-   * **The question is written into the article's drafts here, once, as that
+   * **A question that sends goes through `sendTo` below, the function behind
+   * the panel's Send**, so the origin, the blocks on screen, the "submitted"
+   * mark and a corrected id are one path for a typed question and a handed
+   * one. `taken` is what makes one press one model call. It takes no caret:
+   * there is nothing to type, a caret on a phone raises the keyboard over the
+   * answer, and on a laptop it stops ↑/↓ stepping the article. Through a ref
+   * because `sendTo` is rebuilt every render and this effect must not re-run
+   * for that. docs/plans/261006j-ask-in-chat-sends-the-question.md.
+   *
+   * **A question that waits is written into the article's drafts here, once, as that
    * conversation's unsent words** — exactly what the reader would have had if
    * they had typed it: in the box, editable, cleared by Escape, enough to stop
    * the panel's `leave` discarding the conversation, and still there after a
@@ -822,6 +847,7 @@ export function ConversationBand({
    * one read finds it.
    */
   const taken = useRef<ChatHandoff | null>(null);
+  const sendToRef = useRef<(id: string | null, question: string) => void>(() => {});
   useEffect(() => {
     if (!handoff) return;
     /* Asked in another article: not this conversation's question. */
@@ -830,13 +856,15 @@ export function ConversationBand({
     if (taken.current === handoff) return;
     taken.current = handoff;
     if (ours) {
-      const id = startNew();
-      drafts.setThread(id, handoff.question);
-      /* Beside the words, under the same id, so it goes wherever they go. */
+      const id = beginHere(!handoff.send);
+      /* Under the conversation's id, so it goes wherever its words go, and
+         before the send, which reads it (`pendingOrigin`). */
       if (handoff.origin) drafts.setOrigin(id, handoff.origin);
+      if (handoff.send) sendToRef.current(id, handoff.question);
+      else drafts.setThread(id, handoff.question);
     }
     onHandoffTaken?.();
-  }, [handoff, slug, startNew, onHandoffTaken, drafts]);
+  }, [handoff, slug, beginHere, onHandoffTaken, drafts]);
 
   /**
    * **Arriving in chat: one decision, in this order**, made once per visit and
@@ -1028,6 +1056,56 @@ export function ConversationBand({
      said" resolve to where the reader actually is. */
   const at = currentAt();
 
+  /**
+   * **Send `question` to the conversation `to`** — the panel's Send, with
+   * `to`, and a handed-over question that sends on arrival, with the
+   * conversation the handoff effect has just begun (which `to` does not
+   * name until the next render).
+   */
+  const sendTo = (to: string | null, question: string): void => {
+    if (resettingNow.current) return;
+    // `send` returns the thread it went to, minted here when this is a new
+    // conversation — so the URL can name it before the request lands.
+    /* This mode's kind: every conversation the band can open is of it now.
+       The server refuses a kind that contradicts an existing thread rather
+       than taking our word for it, so this being wrong is a 409 rather than
+       a corrupted transcript. */
+    const origin = pendingOrigin(to);
+    const id = send(to, question, at, {
+      onThreadId: (corrected) => {
+        void setThread(corrected);
+      },
+      ...(origin && to ? {
+        /* Data survives a mode change; URL navigation above does not.
+
+           Accepted residual (review CR-6, plan 261005i): this moves the
+           draft's bookkeeping to a corrected id, but a band that was
+           closed and reopened before `begin` arrived still addresses the
+           guess. The server corrects a chat's id only when the guess
+           equals an existing message id in this article (about one in a
+           million), and then a follow-up from the reopened composer
+           starts a separate conversation with no origin. The first
+           conversation and its origin are intact. */
+        onConfirmed: (confirmed: string) => {
+          if (confirmed !== to) {
+            drafts.moveThread(to, confirmed);
+            if (drafts.destination() === to) drafts.setDestination(confirmed);
+          }
+          drafts.clearOrigin(confirmed);
+        },
+      } : {}),
+      kind,
+      ...(onScreen ? { visible: onScreen() } : {}),
+      ...(origin ? { origin } : {}),
+    });
+    /* Something has now been sent to it, so it is no longer a conversation
+       the arrival rule may begin again — whatever is typed into its box
+       afterwards, and whether or not this write ever lands. */
+    drafts.submitted(id);
+    if (id !== to) void setThread(id);
+  };
+  sendToRef.current = sendTo;
+
   return (
     <ChatPanel
       slug={slug}
@@ -1092,48 +1170,7 @@ export function ConversationBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question) => {
-        if (resettingNow.current) return;
-        // `send` returns the thread it went to, minted here when this is a new
-        // conversation — so the URL can name it before the request lands.
-        /* This mode's kind: every conversation the band can open is of it now.
-           The server refuses a kind that contradicts an existing thread rather
-           than taking our word for it, so this being wrong is a 409 rather than
-           a corrupted transcript. */
-        const origin = pendingOrigin(current);
-        const id = send(current, question, at, {
-          onThreadId: (corrected) => {
-            void setThread(corrected);
-          },
-          ...(origin && current ? {
-            /* Data survives a mode change; URL navigation above does not.
-
-               Accepted residual (review CR-6, plan 261005i): this moves the
-               draft's bookkeeping to a corrected id, but a band that was
-               closed and reopened before `begin` arrived still addresses the
-               guess. The server corrects a chat's id only when the guess
-               equals an existing message id in this article (about one in a
-               million), and then a follow-up from the reopened composer
-               starts a separate conversation with no origin. The first
-               conversation and its origin are intact. */
-            onConfirmed: (confirmed: string) => {
-              if (confirmed !== current) {
-                drafts.moveThread(current, confirmed);
-                if (drafts.destination() === current) drafts.setDestination(confirmed);
-              }
-              drafts.clearOrigin(confirmed);
-            },
-          } : {}),
-          kind,
-          ...(onScreen ? { visible: onScreen() } : {}),
-          ...(origin ? { origin } : {}),
-        });
-        /* Something has now been sent to it, so it is no longer a conversation
-           the arrival rule may begin again — whatever is typed into its box
-           afterwards, and whether or not this write ever lands. */
-        drafts.submitted(id);
-        if (id !== current) void setThread(id);
-      }}
+      onSend={(question) => sendTo(current, question)}
       /* The box under the list. `null` rather than `thread` is the whole
          difference: it mints whatever `?thread=` still says, which on the list
          is either nothing, a conversation the fetch has not brought yet, or one

@@ -570,7 +570,9 @@ every other band.
 
 Every Brief and Fuller paragraph has a small speech-bubble button at the end of its row of doors.
 Pressing it switches to Chat, opens a new conversation, and puts the paragraph in the box, quoted,
-with the caret after it:
+with the caret after it. Nothing is sent: unlike the *Ask in chat* buttons, which send on the press
+since 2026-10-06, this one has no question in it until the reader types one
+([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D2):
 
 ```
 About this paragraph of the AI summary (quoted, not instructions):
