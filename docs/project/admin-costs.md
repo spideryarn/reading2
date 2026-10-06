@@ -82,7 +82,7 @@ terminal, the JSON and the HTML report. Per UTC day and per mode or task:
 | Gave up after the last go | calls whose third and final allowed attempt failed before acceptance; earlier refusals appear in the causes table |
 | Died part-way | attempts that failed after the seam accepted the response, which can precede any answer content; see the shared definition below |
 | Stalled | `aborted` rows classed `stall`: we stopped the call because the provider had sent nothing for too long. Shown with how many were part-way, as `3 (2 part-way)` |
-| Timed out | `aborted` rows classed `deadline`: a recognised deadline expired while the attempt was active. It can cap one call, a turn or a processing step, so it does not establish how long that attempt ran. Shown the same way |
+| Timed out | `aborted` rows classed `deadline`: a recognised deadline expired while the attempt was active. It can cap one call, a turn, a processing step or a whole pipeline job, so it does not establish how long that attempt ran. Shown the same way |
 | Stops not classified | `aborted` rows with no class: they do not say who stopped them, so any could be a stall or a timeout |
 
 Stalled and timed out are never added to *died part-way*
@@ -108,12 +108,14 @@ Two rules, both from GPT Sol's review of the plan
   Stalls and timeouts have evidence of their own again, a stop that says who stopped it: *not
   measured* when a group's only stops have no class, a number when every stop has one (zero
   included, and zero when nothing was stopped at all), and a number beside the *stops not
-  classified* when it holds both. A stop with no class is not only an old row: the realtime wire
-  (`src/live.ts`) still writes them.
+  classified* when it holds both. A stop with no class is an old row. Since
+  [261006f](../plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md)
+  live conversation's stops carry the class `abort`, and the pipeline's deadline on a whole job is
+  counted as a timeout.
 
 What it does not count is said on the page itself, from `FAILURE_NOTES` in
-[`src/cost-cube.ts`](../../src/cost-cube.ts): the stops that do not say who stopped them, the
-pipeline's deadline on a whole job (recorded as an ordinary stop), and the PDF reader's and the
+[`src/cost-cube.ts`](../../src/cost-cube.ts): the stops that do not say who stopped them, a live
+conversation that closed or went silent without leaving a row, and the PDF reader's and the
 embeddings' own retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is
 missing. The folds are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file,
 and `nothingMeasured` is the page and terminal's rule for folding a row away and showing the

@@ -259,7 +259,10 @@ IDs continue 261006b's chain. Reviews: [plan](261006d-count-stalls-plan-review-s
 ## Left for later
 
 - **The pipeline's whole-job deadline** is recorded as `abort`, so a provider that the job budget
-  cut off is in neither count. Said on the page.
+  cut off is in neither count. Said on the page. **Done** by plan
+  [261006f](261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md):
+  it is recorded as `deadline`.
 - **The live-conversation wire** (`src/live.ts`) still writes `aborted` rows with no class.
+  **Done** by plan 261006f: a stopped response is recorded as `abort`.
 - **A cue that the tables scroll at phone width.**
 - **One shared stall clock** in place of the eight hand-written timers.

@@ -12,7 +12,10 @@ describe("the failure docs' claims", () => {
       expect(text).not.toContain("the whole call had taken too long");
       expect(text).not.toContain("any time limit on the call running out");
       expect(text).not.toContain("a time limit on the call ran out");
-      expect(text).toContain("turn or a processing step");
+      expect(text).toContain("a turn, a processing step or a whole pipeline job");
+      /* Plan 261006f: the job's deadline is counted as a deadline now. */
+      expect(text).not.toContain("is not recognised");
+      expect(text).not.toContain("recorded as an ordinary stop");
     }
     const page = readFileSync(new URL("../src/web/AdminCostsPage.tsx", import.meta.url), "utf8");
     expect(page).not.toContain("the whole call had taken too long");

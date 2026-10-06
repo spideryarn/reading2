@@ -879,7 +879,10 @@ describe("failures and retries", () => {
     expect(text).toContain("one attempt, not one call");
     expect(text).not.toContain("Stalls are not measured.");
     expect(text).toContain("Stalls and timeouts are counted only on stopped attempts that say who stopped them.");
-    expect(text).toContain("neither does live conversation");
+    expect(text).not.toContain("neither does live conversation");
+    expect(text).toContain("Live conversation's recorded stops are ordinary stops");
+    expect(text).toContain("usually leaves no row");
+    expect(text).toContain("a processing step or a whole pipeline job");
     expect(text).toContain("An attempt stalled when we stopped it because the provider had sent nothing for too long");
     expect(text).toContain("The PDF reader and the embeddings retry in loops of their own");
     /* No rate anywhere in it. */

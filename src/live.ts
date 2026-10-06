@@ -1464,11 +1464,22 @@ export function acceptRealtimeUsage(opts: RealtimeAcceptance): AiCallRow | null 
     };
   }
 
+  const outcome = REALTIME_OUTCOME[usage.status];
   return {
     ...common,
     requestedModel: session.model,
-    outcome: REALTIME_OUTCOME[usage.status],
+    outcome,
     providerStatus: usage.status,
+    /* **A stopped response is an ordinary stop, and says so.** No timer of ours
+       sends `response.cancel`: our time limits close the whole conversation,
+       and a response unfinished then usually reports nothing. So a terminal
+       event that did arrive saying `cancelled` or `incomplete` was not made by
+       our clock: it is the reader talking over the model, or the reply hitting
+       its length cap or a content filter. `abort` rather than null, so the row
+       does not read as a stop that might have been a stall. The phase and the
+       status stay null: the browser does not report how far the response had
+       got. Plan docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md. */
+    failureClass: outcome === "aborted" ? ("abort" as const) : null,
     ...money,
     /* The totals stay on the columns every other wire uses; the splits say what
        they were made of. `reported_`, because a realtime input count is the
@@ -1555,7 +1566,9 @@ function ledgerBase(
     durationMs: startedAt === null ? null : finishedAt - startedAt,
     /* A live session's call is made by the browser, on a wire this process
        never touches: no retry loop of ours counted it and no gateway saw how it
-       failed. `provider_status` is where a realtime row says what happened. */
+       failed. `provider_status` is where a realtime row says what happened.
+       These nulls are the default; the one exception is a stopped Realtime
+       response, which `acceptRealtimeUsage` classes as `abort`. */
     attempt: null,
     failurePhase: null,
     failureClass: null,
