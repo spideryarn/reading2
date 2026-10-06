@@ -175,3 +175,17 @@ Built as planned, items 1–6 and F1–F3, with these differences and findings.
     and upload that file. [jb-bot-check]"*
   - uploaded: unchanged from the draft above.
 - **Not done here**: the code review by GPT Sol, and the full `npm test`.
+
+## GPT Sol's code review, 2026-10-06 — land it
+
+On commit `677404435`:
+[261006c-a-bot-check-page-code-review-sol.md](261006c-a-bot-check-page-code-review-sol.md). No P0 or
+P1, and it changed no file. It reversed each precedence and removed the suspension exemption
+itself, and the tests went red each time. Two P3s in the postmortem, both fixed: **F4**, the title
+is in `results.json`, not `summary.md`; **F5**, *"any site behind the same check did the same"*
+said more than one captured site shows. One limit it named and we keep: a page with an earlier
+non-script element of the same id is not recognised, which fails towards publishing, as before.
+
+**In a browser** (Playwright, 1440, 820 and 390 wide, the live hal.science address): the job fails
+at *Extracting the article* with the fetched sentence and `[jb-bot-check]`, no Retry, no article on
+the shelf, and the sentence wraps without overflow at each width.

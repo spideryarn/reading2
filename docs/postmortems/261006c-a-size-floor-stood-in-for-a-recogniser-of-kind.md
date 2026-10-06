@@ -6,7 +6,7 @@ hal.science answers our fetch with a bot check, and until 2026-10-06 stage 2 imp
 an article titled *"Making sure you're not a bot!"*, with no error. A published article spends the
 reader's slot. **Whether any reader actually imported one was not established**: it was found by an
 eval, [261005m](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md)'s
-measurement of paper sources, not by a report. Any site behind the same check (Anubis) did the same.
+measurement of paper sources, not by a report. Another site that answers with the same page (the check is Anubis) would have imported the same way; only HAL's was captured.
 The fix is [261006c](../plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md).
 
 ## What happened
@@ -75,8 +75,8 @@ deferral into the plan: *"So C1 does not ship until a long-wall fixture does."*
    that fixture now, and `tests/extract-challenge-page.test.ts` holds its counterfactual: the same
    bytes less one element are published. Done.
 3. **An eval that reads titles.** What actually caught it: a person reading
-   `evals/results/paper-sources-261005/summary.md` and seeing an article called *"Making sure you're
-   not a bot!"*. Cheap wherever an eval already imports real addresses; it is luck, not a guard.
+   `evals/results/paper-sources-261005/results.json`, where the `hal` rows are titled *"Making sure
+   you're not a bot!"* (the summary table beside it shows the 178 words but not the title). Cheap wherever an eval already imports real addresses; it is luck, not a guard.
 4. Raising the floor — rejected. At 1,034 characters it refuses genuine short pages, and the next
    check will be longer. It is the same substitution again.
 5. Matching the title or the page's wording — rejected in 260904e with a real page behind the
