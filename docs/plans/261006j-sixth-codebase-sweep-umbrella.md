@@ -417,6 +417,16 @@ Waves, after the review: **1** S1 + S2 · **2** S3 + S4 · **3** S5 + S6 · **4*
 - This umbrella, round 1: [GPT Sol](261006j-sixth-codebase-sweep-umbrella-review-sol.md),
   read-only, **ready with these fixes**; all ten applied above. No second round: the fixes narrow
   the work and each cluster's code gets its own review.
+- Each cluster's code: reviewed by GPT Sol, write-capable inside the cluster; the prompts and
+  answers are beside each cluster's plan (`261006j-sixth-sweep-s<N>-code-review-*.md`). S2 and S4
+  took two rounds. One finding was overruled (S5's C1, above); every other was fixed or is listed
+  in § After the clusters.
+- **The whole, together:** `npm run typecheck` clean (3,335 files) and a full `npm test` on the
+  merge of `origin/dev` at `630b6c269`, which holds all eight clusters: **1,753 test files passed,
+  1 skipped; 39,238 tests passed, 46 skipped** (4,362 s on a loaded box). `npm run check` was not
+  run by this session; the readiness loop runs it against `dev`.
+- Not done: a browser. Nothing here was meant to change a pixel, and S6's evidence is a diff of the
+  built stylesheet, not a look at it.
 
 ## What landed
 
