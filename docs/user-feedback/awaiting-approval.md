@@ -13,6 +13,16 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-DY (spya-uc0asn) · AI (search, for example) for a signed-in
+  reader on somebody else's public article: not built, because it does add complexity and every
+  version that runs AI in place edits a listed security defence. We would pay, not the owner, and
+  nothing limits it today. Five options, A to E, and two questions. Recommended: two small things
+  now that edit no defence (an "Add a private copy to your shelf" button for a signed-in visitor,
+  and the free words search for every visitor), then a quick search in place with a daily limit ·
+  qi-qw7tggag ·
+  [261006k § Questions for Greg](../plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article.md#questions-for-greg) ·
+  [note](261006_1425-ai-for-a-signed-in-reader-on-a-public-article.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-DQ (spya-jghnva; the report itself shipped as `skim/10`, this is
   its deferred half) · should Skim's cue set a scene more often? What shipped sets one only when the
   quote leans on words it does not explain. A wording that sets one on every cue was preferred 64 to
