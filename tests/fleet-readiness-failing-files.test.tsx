@@ -94,6 +94,8 @@ describe("reading the names off the wire", () => {
       { files: ["<b>bold</b> and a space"], total: 1 },
       { files: ["/etc/passwd"], total: 1 },
       { files: "tests/a.test.ts", total: 1 },
+      { files: ["tests/a.test.ts"], total: 3 },
+      { files: ["tests/bad\u0000.test.ts"], total: 1 },
       [],
       "tests/a.test.ts",
     ]) {
@@ -109,6 +111,10 @@ describe("reading the names off the wire", () => {
       expect(first?.state).toBe(state);
       expect(first?.failedTestFiles, state).toBeNull();
     }
+  });
+
+  it("rejects a binary file name accepted by neither the scanner nor the record parser", () => {
+    expect(view([sent(1, { record: names(["tests/bad\u0000.test.ts"]) })]).readings[0]?.failedTestFiles).toBeNull();
   });
 });
 
@@ -230,6 +236,36 @@ describe("the Failing test files card", () => {
     expect(rows[0]).toContain("at least 1 of 1 failed run");
     expect(card()?.textContent).toContain("and 8 more files");
     expect(card()?.textContent).toContain("1 run failed in more files than a record lists (11 more)");
+  });
+
+  it("does not call omitted rows less recent when their timestamps are equal", async () => {
+    await draw([sent(1, { record: names(Array.from({ length: 20 }, (_, i) => `tests/f${i}.test.ts`)) })]);
+    expect(card()?.textContent).toContain("and 8 more files");
+    expect(card()?.textContent).not.toContain("each failing less recently");
+  });
+
+  it("does not call an older named run the latest failed run", async () => {
+    await draw([sent(5, { record: names(["tests/a.test.ts"]) }), sent(1)]);
+    expect(card()?.querySelector("li")?.textContent).not.toContain("in the latest");
+  });
+
+  it("qualifies occurrence times when a capped run may have omitted the file", async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => `tests/f${i}.test.ts`);
+    await draw([
+      sent(9, { record: names(twenty, 31) }),
+      sent(5, { record: names(["tests/z.test.ts"]) }),
+      sent(3, { record: names(["tests/z.test.ts"]) }),
+      sent(1, { record: names(["tests/z.test.ts"]) }),
+    ]);
+    const row = [...(card()?.querySelectorAll("li") ?? [])].find((li) => li.textContent?.includes("tests/z.test.ts"));
+    expect(row?.textContent).toContain("first listed");
+    expect(row?.textContent).toContain("last listed");
+  });
+
+  it("does not assert why a test failure's names were unavailable", async () => {
+    await draw([sent(1, { record: { counts: { kind: "vitest", files: { failed: 1, passed: 0, skipped: 0, total: 1 } } } })]);
+    expect(card()?.textContent).toContain("did not record which files");
+    expect(card()?.textContent).not.toContain("recorded before names were kept, or failed somewhere other than a test");
   });
 
   it("is not drawn at all on a day with no failed wrapper run", async () => {

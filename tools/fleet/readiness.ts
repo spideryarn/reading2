@@ -678,7 +678,7 @@ function asCounts(v: unknown): Counts {
  * disagrees with its list, and the answer is *not known* rather than a
  * repaired list nobody wrote.
  */
-function asFailedTestFiles(v: unknown): FailedTestFiles | null {
+export function asFailedTestFiles(v: unknown): FailedTestFiles | null {
   if (!isRecord(v)) return null;
   const raw = v["files"];
   const total = v["total"];

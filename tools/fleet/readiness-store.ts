@@ -120,9 +120,9 @@ export const WINDOW_LOOKBACK_MS = 3 * 60 * 60 * 1000;
  * Measured on 2026-10-06 over the 108 records on this box: 857 to 2,609
  * bytes, the largest a `check` with fourteen rows in its table. (This said
  * "~600 bytes", which was true of none of them.) The names of the failing test
- * files add at most twenty paths of two hundred characters, about 4.3 KB, so
- * the largest record the wrapper can write is about 7 KB — and a test writes
- * that one and reads it back. The cap exists so that a directory somebody
+ * files add at most twenty paths of two hundred ASCII characters, about
+ * 8.2 KB including JSON escaping — quotes and backslashes cost two bytes.
+ * A test writes capped, escaped paths and reads them back. The cap exists so that a directory somebody
  * points `FLEET_READINESS_DIR` at by mistake cannot make a request read a
  * gigabyte.
  */

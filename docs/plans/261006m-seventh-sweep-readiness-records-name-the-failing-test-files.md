@@ -138,10 +138,49 @@ somebody made it read it.
 
 ## Not done
 
-- The backfill's records, typecheck's failing files, and a comparison with vitest's own count: see
+- The backfill's records and typecheck's failing files: see
   Passed over.
-- A ` FAIL ` line that is part of a test's *error message* inside the summary — a diff of expected
-  output, say — would be read as a failure if it starts at column 0 with exactly that shape. None
-  of 37 real logs has one. The cost would be a wrong name on the card, never a wrong verdict.
 - The panel was not looked at in a browser. The card is covered by a jsdom render test, which
   cannot see spacing or wrapping on a phone.
+
+## Code review fixes
+
+Review of `73d6be783` reproduced the quoted-error limitation with a real Vitest run: one failed
+test's error quoted a child runner's ` FAIL ` line, and the scanner named two files. The capture is
+`tests/fixtures/readiness/tmux-jobs/vitest-error-quotes-fail-line.log`. The scanner now gives up on
+that ambiguity, preserves badge delimiters rather than guessing at space-containing paths, requires
+completed reporter groups, and reconciles distinct project/path executions with the streamed file
+tally. This supersedes the rejected footer comparison above: the footer is available to the
+streaming scanner even when absent from the wrapper's retained text.
+
+The card now labels its denominator and occurrence times as recorded observations, considers
+unnamed failures when identifying the latest run, and makes no unsupported claim about why names
+are missing or whether hidden rows are older. The browser rejects malformed lists using the same
+limits as the record parser. Reproductions and regressions are in
+`tests/readiness-failed-files-review.test.ts` and `tests/fleet-readiness-failing-files.test.tsx`;
+the root-cause class is recorded in
+[261006p](../postmortems/261006p-diagnostic-text-promoted-to-exact-readiness-history.md).
+
+## Review status
+
+- **Plan review: none.** This plan had no separate plan-stage GPT Sol review. That was the
+  orchestrating agent's call for a small additive item; the code review below read the plan
+  alongside the commit and covered it.
+- **Code review: GPT Sol, 2026-10-06, of `73d6be783`. Verdict: "ship with these fixes applied";
+  no P0.** Six findings, C1–C6, all fixed by the reviewer inside the stage and committed as a
+  second commit: a path with a space read as a different file (C1), a ` FAIL ` line quoted in an
+  error message named as a second file (C2), a partial summary given an exact total (C3), four
+  overclaims on the card (C4), the browser's parser looser than the record's (C5), and the
+  record-size comment wrong about JSON escaping (C6). The prompt and the answer are beside this
+  file: [prompt](261006m-seventh-sweep-readiness-records-name-the-failing-test-files-code-review-prompt.md),
+  [answer](261006m-seventh-sweep-readiness-records-name-the-failing-test-files-code-review-sol.md).
+- **The fixes were then checked by a Claude agent before landing.** The fixes for C1, C2, C3, the
+  "latest run" case of C4, and C5 were each put back by hand and their regression tests seen to go
+  red. The stricter scanner still names files: on the three real fixtures here (3, 1 and 6 files)
+  and on 27 real logs on the box with a failing footer, it returned names in every one and its
+  total equalled vitest's own count. The eleven failures the reviewer saw in its sandbox were
+  blocked child processes; outside it they pass.
+- **One thing the stricter scanner gives up.** A ` FAIL ` line quoted inside an error body now
+  makes the whole list *not known* rather than being skipped. The file tally would catch most
+  misreadings anyway, so skipping it would probably be safe and would name more runs; nothing
+  has needed it yet.

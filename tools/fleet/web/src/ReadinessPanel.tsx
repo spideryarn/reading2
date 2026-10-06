@@ -374,10 +374,10 @@ function FailingFiles({
                 <span className="tw:min-w-0 tw:break-all tw:font-mono tw:text-ink">{row.file}</span>
                 <span className="tw:text-[11px] tw:text-ink-faint">
                   {atLeast}
-                  {row.runs} of {plural(summary.namedRuns, "failed run", "failed runs")} ·{" "}
+                  {row.runs} of {plural(summary.namedRuns, "failed run", "failed runs")} with recorded names ·{" "}
                   {row.firstAtMs === row.lastAtMs
-                    ? formatTime(row.lastAtMs)
-                    : `first ${formatTime(row.firstAtMs)}, last ${formatTime(row.lastAtMs)}`}
+                    ? `listed ${formatTime(row.lastAtMs)}`
+                    : `first listed ${formatTime(row.firstAtMs)}, last listed ${formatTime(row.lastAtMs)}`}
                   {row.inLatest ? " · in the latest" : ""}
                 </span>
               </li>
@@ -386,7 +386,7 @@ function FailingFiles({
         )}
         {summary.rows.length > shown.length ? (
           <p className="tw:pt-2 tw:text-[11px] tw:text-ink-faint">
-            and {plural(summary.rows.length - shown.length, "more file", "more files")}, each failing less recently.
+            and {plural(summary.rows.length - shown.length, "more file", "more files")} listed.
           </p>
         ) : null}
         {summary.cappedRuns > 0 ? (
@@ -400,7 +400,7 @@ function FailingFiles({
             {summary.namedRuns > 0
               ? plural(summary.unnamedRuns, "other failed run", "other failed runs")
               : plural(summary.unnamedRuns, "failed run", "failed runs")}{" "}
-            did not record which files — recorded before names were kept, or failed somewhere other than a test.
+            did not record which files — their names are unavailable.
           </p>
         ) : null}
       </Card>

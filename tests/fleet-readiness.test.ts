@@ -1508,7 +1508,8 @@ describe("which test files failed", () => {
     const stdout = capture.stream();
     stderr.push("⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n\n");
     stdout.push(" FAIL  unit  tests/on-the-wrong-stream.test.ts > x\n");
-    stderr.push(" FAIL  unit  tests/real.test.ts > x\n");
+    stderr.push(" FAIL  |unit| tests/real.test.ts > x\nError: x\n⎯⎯⎯[1/1]⎯\n");
+    stdout.push(" Test Files  1 failed (1)\n");
     expect(capture.result()).toEqual({ files: ["tests/real.test.ts"], total: 1 });
   });
 
@@ -1516,7 +1517,7 @@ describe("which test files failed", () => {
      were cut from fails in more than twenty files, or prints a FAIL line in a
      shape vitest does not use. */
   const summaryOf = (paths: string[]): string =>
-    `⎯⎯⎯⎯⎯⎯⎯ Failed Tests ${paths.length} ⎯⎯⎯⎯⎯⎯⎯\n\n${paths.map((p) => ` FAIL  unit  ${p} > a test\n`).join("")}`;
+    `⎯⎯⎯⎯⎯⎯⎯ Failed Tests ${paths.length} ⎯⎯⎯⎯⎯⎯⎯\n\n${paths.map((p, i) => ` FAIL  |unit| ${p} > a test\nError: x\n⎯⎯⎯[${i + 1}/${paths.length}]⎯\n`).join("")} Test Files  ${paths.length} failed (${paths.length})\n`;
 
   it("lists the first twenty in sorted order and still says how many there were", () => {
     const paths = Array.from({ length: 25 }, (_, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`);
@@ -1532,9 +1533,9 @@ describe("which test files failed", () => {
 
   it("gives up on the whole list when one FAIL line cannot be read with certainty", () => {
     /* A partial list with a confident total is the one answer worse than none. */
-    const good = " FAIL  unit  tests/a.test.ts > a test\n";
+    const good = " FAIL  |unit| tests/a.test.ts > a test\n";
     const heading = "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯\n\n";
-    expect(parseFailedTestFiles(`${heading}${good}`)?.total).toBe(1);
+    expect(parseFailedTestFiles(`${heading}${good}`)).toBeNull();
     expect(parseFailedTestFiles(`${heading}${good} FAIL  a project with spaces  tests/b.test.ts > x\n`)).toBeNull();
     expect(parseFailedTestFiles(`${heading}${good} FAIL  unit  /abs/olute.test.ts > x\n`)).toBeNull();
     expect(parseFailedTestFiles(`${heading}${good} FAIL  unit  tests/${"x".repeat(200)}.test.ts > x\n`)).toBeNull();
@@ -1553,9 +1554,9 @@ describe("which test files failed", () => {
   it("reads a FAIL line however long the test's name is, and holds no more than a line's start", () => {
     const capture = makeFailedTestFilesCapture();
     const stream = capture.stream();
-    stream.push(summaryOf(["tests/a.test.ts"]));
+    stream.push("⎯⎯⎯ Failed Tests 2 ⎯⎯⎯\n FAIL  |unit| tests/a.test.ts > a test\nError: x\n");
     for (let i = 0; i < 200; i += 1) stream.push("x".repeat(10_000));
-    stream.push(`\n FAIL  unit  tests/b.test.ts > ${"long name ".repeat(2000)}\n`);
+    stream.push(`\n⎯⎯⎯[1/2]⎯\n FAIL  |unit| tests/b.test.ts > ${"long name ".repeat(2000)}\nError: x\n⎯⎯⎯[2/2]⎯\n Test Files  2 failed (2)\n`);
     expect(capture.result()).toEqual({ files: ["tests/a.test.ts", "tests/b.test.ts"], total: 2 });
   });
 
@@ -1626,13 +1627,13 @@ describe("which test files failed", () => {
       expect(shape([reading(failing()), typecheck])).toEqual(bare);
     });
 
-    it("the largest record the wrapper can write still fits what the store will read", () => {
+    it("capped paths requiring JSON escaping still fit what the store will read", () => {
       const dir = mkdtempSync(join(tmpdir(), "readiness-names-"));
       try {
         const opened = openReadinessStore(dir);
         if (opened.kind !== "open") throw new Error(opened.why);
         const worst = failedTestFilesFrom(
-          Array.from({ length: 300 }, (_, i) => `tests/${String(i).padStart(3, "0")}${"x".repeat(FAILED_TEST_FILE_PATH_MAX - 9)}`),
+          Array.from({ length: 300 }, (_, i) => `tests/${String(i).padStart(3, "0")}${"\\".repeat(FAILED_TEST_FILE_PATH_MAX - 9)}`),
         );
         expect(worst?.files).toHaveLength(FAILED_TEST_FILES_CAP);
         expect(worst?.files[0]).toHaveLength(FAILED_TEST_FILE_PATH_MAX);
@@ -1640,8 +1641,8 @@ describe("which test files failed", () => {
         const record = failing({ failedTestFiles: worst });
         opened.store.put(record);
         const bytes = readFileSync(join(opened.dir, readdirSync(opened.dir)[0] ?? "")).length;
-        expect(bytes).toBeGreaterThan(4000);
-        expect(bytes).toBeLessThan(MAX_RECORD_BYTES / 8);
+        expect(bytes).toBeGreaterThan(8000);
+        expect(bytes).toBeLessThan(MAX_RECORD_BYTES / 4);
         const back = opened.store.read({ sinceMs: 0, nowMs: Date.parse("2026-09-09T11:00:00.000Z"), isAlive: () => false });
         expect(back.unreadable).toEqual([]);
         expect(back.readings[0]?.record).toEqual(record);

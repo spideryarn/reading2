@@ -368,10 +368,10 @@ const FAILURE_HEADING = /^⎯+ Failed (?:Suites|Tests) \d+ ⎯+$/;
 /**
  * What one line of the failure summary says, once its colour is stripped:
  *
- *      FAIL  unit  tests/x.test.ts > a describe > a test
+ *      FAIL   unit  tests/x.test.ts > a describe > a test
  *      FAIL  |unit| tests/x.test.ts > a test            (no colour)
  *      FAIL  tests/x.test.ts > a test                   (one project)
- *      FAIL  unit  tests/x.test.ts [ tests/x.test.ts ]  (the file would not load)
+ *      FAIL   unit  tests/x.test.ts [ tests/x.test.ts ]  (the file would not load)
  *
  * All four shapes are in real logs or were produced by a probe on this box —
  * tests/fixtures/readiness/tmux-jobs/, the three fixtures the plan names.
@@ -381,20 +381,20 @@ const FAILURE_HEADING = /^⎯+ Failed (?:Suites|Tests) \d+ ⎯+$/;
  * and the caller gives up on the whole list, because the alternative is a list
  * one short of the truth with nothing to say so.
  */
-export type FailedLine = { kind: "none" } | { kind: "file"; path: string } | { kind: "unreadable" };
+export type FailedLine = { kind: "none" } | { kind: "file"; path: string; project?: string } | { kind: "unreadable" };
 
 export function failedTestFileOnLine(cleanLine: string): FailedLine {
   if (!/^ FAIL\s/.test(cleanLine)) return { kind: "none" };
-  /* Everything before the first ` > ` or ` [ ` is the badge and the path. A
-     path has no spaces in it, so neither separator can be inside one. */
+  /* Preserve the reporter's badge delimiters. Splitting on whitespace makes
+     `tests/my file.test.ts` look like project `tests/my`, file `file.test.ts`.
+     Unsupported paths/badges make the whole capture unknown. */
   const cut = /\s(?:>|\[)\s/.exec(cleanLine);
-  const before = cut === null ? cleanLine : cleanLine.slice(0, cut.index);
-  const tokens = before.trim().split(/\s+/).slice(1);
-  /* One token is a path; two are a project badge and a path. More than that is
-     a project whose name has a space in it, or a format this has never seen. */
-  const path = tokens.length === 1 ? tokens[0] : tokens.length === 2 ? tokens[1] : undefined;
+  if (cut === null) return { kind: "unreadable" };
+  const before = cleanLine.slice(0, cut.index);
+  const match = /^ FAIL {2}(?:\|([^\s|]+)\| | ([^\s]+) {2})?([^\s]+)$/.exec(before);
+  const path = match?.[3];
   if (path === undefined || !isFailedTestFilePath(path)) return { kind: "unreadable" };
-  return { kind: "file", path };
+  return { kind: "file", path, project: match?.[1] ?? match?.[2] ?? "" };
 }
 
 /**
@@ -426,11 +426,11 @@ const FAILED_FILES_SEEN_MAX = 10_000;
  * not get a stdout chunk spliced into it, and **its own latch**: nothing is
  * read on a stream until vitest's own heading has gone past on it. Vitest
  * writes the heading and every `FAIL` line to stderr and its footer to stdout
- * (probed, 2026-10-06), so the megabytes before the summary — where any test
- * may print anything, including a line that starts ` FAIL ` — are never looked
- * at. The latch does not close again: nothing after the summary has matched in
- * 35 real logs, and closing it on the footer would mean ordering two pipes
- * against each other.
+ * (probed, 2026-10-06). A group is adjacent FAIL lines, then diagnostic text,
+ * then a ruled [N/M] divider. A FAIL-looking diagnostic makes names unknown.
+ * The streamed file tally must agree with distinct project/path executions;
+ * unlike distinct paths, those count a file run under two projects twice.
+ * Footer arrival never closes another pipe: the pipes have no shared ordering.
  *
  * ## What it cannot do
  *
@@ -447,31 +447,73 @@ export function makeFailedTestFilesCapture(readLine: (cleanLine: string) => Fail
   result(): FailedTestFiles | null;
 } {
   const seen = new Set<string>();
+  const executions = new Set<string>();
+  const streams: { flush(): void; unfinished(): boolean }[] = [];
+  let failedTally: number | null = null;
   /* Once true, the result is null whatever else is seen. */
   let gaveUp = false;
 
-  const take = (line: string, state: { open: boolean }): void => {
-    /* The cheap test first: this runs on every line of a 14 MB log. */
-    if (!line.includes("FAIL") && !line.includes("Failed")) return;
+  type StreamState = { phase: "before" | "names" | "body" | "between" | "done"; group: boolean };
+  const take = (line: string, state: StreamState): void => {
+    if (state.phase === "before" && !line.includes("Failed") && !line.includes("Test Files")) return;
     const clean = stripAnsi(line).replace(/\r$/, "");
-    if (!state.open) {
-      if (FAILURE_HEADING.test(clean.trim())) state.open = true;
+    if (/^\s*Test Files\s/.test(clean)) {
+      const tally = parseTally(clean);
+      if (tally === null || (failedTally !== null && failedTally !== tally.failed)) gaveUp = true;
+      else failedTally = tally.failed;
+      state.phase = "done";
+      return;
+    }
+    if (state.phase === "done") {
+      // Multiple summaries on one pipe are ambiguous, rather than a chance
+      // for an earlier quoted/nested summary to hide the real one.
+      if (FAILURE_HEADING.test(clean.trim())) gaveUp = true;
+      return;
+    }
+    if (state.phase !== "body" && FAILURE_HEADING.test(clean.trim())) {
+      if (state.group) gaveUp = true;
+      state.phase = "names";
+      return;
+    }
+    if (state.phase === "before") return;
+    if (/^⎯+\[\d+\/\d+\]⎯+$/.test(clean.trim())) {
+      if (state.group) {
+        state.group = false;
+        state.phase = "between";
+      }
+      return;
+    }
+    if (clean.trim() === "") return;
+    if (state.phase === "body") {
+      if (/^ FAIL\s/.test(clean)) gaveUp = true;
       return;
     }
     const read = readLine(clean);
     if (read.kind === "unreadable") gaveUp = true;
     else if (read.kind === "file") {
+      state.phase = "names";
+      state.group = true;
       seen.add(read.path);
-      if (seen.size > FAILED_FILES_SEEN_MAX) gaveUp = true;
+      executions.add(JSON.stringify([read.project ?? "", read.path]));
+      if (executions.size > FAILED_FILES_SEEN_MAX) gaveUp = true;
+    } else {
+      state.phase = state.group ? "body" : "done";
     }
   };
 
   return {
     stream() {
-      const state = { open: false };
+      const state: StreamState = { phase: "before", group: false };
       let held = "";
       /* True while the tail of an over-long line is being thrown away. */
       let overflowing = false;
+      streams.push({
+        flush() {
+          if (held.length > 0) take(held, state);
+          held = "";
+        },
+        unfinished: () => state.group,
+      });
       return {
         push(chunk) {
           if (gaveUp) return;
@@ -497,8 +539,14 @@ export function makeFailedTestFilesCapture(readLine: (cleanLine: string) => Fail
       };
     },
     result() {
-      if (gaveUp) return null;
-      return failedTestFilesFrom(seen);
+      try {
+        for (const stream of streams) stream.flush();
+        if (gaveUp || failedTally === null || executions.size !== failedTally || streams.some((s) => s.unfinished())) return null;
+        return failedTestFilesFrom(seen);
+      } catch {
+        gaveUp = true;
+        return null;
+      }
     },
   };
 }

@@ -53,7 +53,7 @@ nothing does not touch it — so a green verdict is never a claim about what is 
 ## Which test files failed
 
 A failed run's record names the test files that failed, and the tab has a **Failing test files**
-card: each file, how many of the day's failed runs it failed in, and when it first and last did. That
+card: each file, how many failed runs with recorded names listed it, and when it was first and last listed. That
 is the difference between a test that has been red since this morning and one that failed once.
 The wrapper also prints the names as its last line, and the loop puts them on its `outcome:` line.
 The design is [261006m](../plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md).
@@ -72,7 +72,9 @@ Three things it will not say:
 The names come from vitest's own failure summary — the ` FAIL  <project>  tests/x.test.ts > …`
 lines under its `Failed Suites` / `Failed Tests` headings — read as the output streams past, because
 in a full `npm run check` that summary is in the middle of a 14 MB log and in neither end the
-wrapper keeps. A run reconstructed from a tmux log never has names: it holds two ends of the log
+wrapper keeps. The scanner requires a completed summary and agreement with the streamed file tally,
+counting a path run under two projects as two executions. Ambiguous summaries, including a
+`FAIL` line quoted inside diagnostic text, leave the names unknown. A run reconstructed from a tmux log never has names: it holds two ends of the log
 and could not tell how many failures it had missed.
 
 ## What the graphs show

@@ -12,6 +12,8 @@
  * field this build does not understand must not silently become a green tick.
  */
 
+import { asFailedTestFiles, type FailedTestFiles } from "../../readiness";
+
 export type ReadinessStateView = "pass" | "fail" | "void" | "running";
 
 export type TreeView =
@@ -55,7 +57,7 @@ export type ReadingView = {
   failedTestFiles: FailedTestFilesView | null;
 };
 
-export type FailedTestFilesView = { files: [string, ...string[]]; total: number };
+export type FailedTestFilesView = FailedTestFiles;
 
 export type EvidenceView = {
   check: string;
@@ -136,32 +138,6 @@ function parseTree(v: unknown): TreeView {
   return { kind: "unknown", why: str(v["why"]) ?? "no reason was given" };
 }
 
-/**
- * The failing files, or null for anything short of a well-formed list.
- *
- * The browser-side copy of the server's `asFailedTestFiles`, and looser in one
- * place only: it does not know the server's cap, so it takes any length up to
- * a bound of its own. Everything else is the same all-or-nothing — one entry
- * that is not a plain path and the answer is *not known*, because these strings
- * are drawn on the page and a list that had been quietly trimmed would show a
- * count nobody could reconcile with it.
- */
-function parseFailedTestFiles(v: unknown): FailedTestFilesView | null {
-  if (!isRecord(v)) return null;
-  const raw = v["files"];
-  const total = num(v["total"]);
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 100) return null;
-  if (total === null || !Number.isInteger(total) || total < raw.length) return null;
-  const files: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string" || item.length > 300 || !/^[^\s/][^\s]*$/.test(item)) return null;
-    if (files.includes(item)) return null;
-    files.push(item);
-  }
-  const [first, ...rest] = files;
-  return first === undefined ? null : { files: [first, ...rest], total };
-}
-
 function parseReading(raw: unknown): ReadingView | null {
   if (!isRecord(raw)) return null;
   const record = raw["record"];
@@ -191,7 +167,7 @@ function parseReading(raw: unknown): ReadingView | null {
     counts: record["counts"],
     /* Only beside a failure. A pass or a run still going, drawn with failing
        files next to it, would be the page saying two things about one run. */
-    failedTestFiles: state === "fail" ? parseFailedTestFiles(record["failedTestFiles"]) : null,
+    failedTestFiles: state === "fail" ? asFailedTestFiles(record["failedTestFiles"]) : null,
   };
 }
 
@@ -206,7 +182,7 @@ export type FailingFileRow = {
   runs: number;
   firstAtMs: number;
   lastAtMs: number;
-  /** Did it fail in the most recent named failed run? */
+  /** Was it listed in the most recent failed wrapper run? */
   inLatest: boolean;
 };
 
@@ -247,7 +223,7 @@ export type FailingFilesSummary = {
 export function failingFilesOverDay(readings: readonly ReadingView[]): FailingFilesSummary {
   const failed = readings.filter((r) => r.state === "fail" && r.source === "wrapper");
   const named = failed.filter((r) => r.failedTestFiles !== null);
-  const latestAtMs = Math.max(...named.map((r) => r.atMs));
+  const latestAtMs = failed.reduce((latest, r) => Math.max(latest, r.atMs), -Infinity);
   const byFile = new Map<string, FailingFileRow>();
   for (const reading of named) {
     for (const file of reading.failedTestFiles?.files ?? []) {
