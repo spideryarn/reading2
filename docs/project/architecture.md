@@ -410,7 +410,8 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 - **`src/routes.ts` § `sse`** — writing server-sent events from a route, with the heartbeat.
 - **[`src/answer-opening.ts`](../../src/answer-opening.ts) § `answerOpening`, `withoutBlockIds`** —
   an answer's words where they are drawn as plain text and not as a chat answer: how it begins,
-  as one line with no markdown and no `[spya-…]`, and prose with the block references taken out.
+  as one readable line with markdown formatting and prose citations removed, and prose with the
+  block references taken out. Literal code, link labels and image alt text retain their words.
   Pure, so the browser imports it too.
 - **[`src/live-keys.ts`](../../src/live-keys.ts) § `liveKeys`** — count the requests holding a
   key so abandonment sweeps spare a row while any of its handlers is still running.

@@ -30,6 +30,11 @@ import { webLinks } from "./urls.js";
  * `leaves an id inside a URL alone`.
  */
 export function withoutBlockIds(text: string): string {
+  return tidy(stripBlockIds(text));
+}
+
+/** Citation removal without trimming a text leaf's boundary spaces. */
+function stripBlockIds(text: string): string {
   /* **Links are held out of the way first, and this was a bug before it was a
      comment.** The first version stripped ids from the raw string, so
      `https://example.com/notes/spya-k3m9qt` came back as
@@ -44,15 +49,17 @@ export function withoutBlockIds(text: string): string {
   const spans = webLinks(text).map((l) => [l.index, l.end] as const);
   const insideLink = (at: number): boolean => spans.some(([from, to]) => at >= from && at < to);
 
-  const stripped = text.replace(
+  return text.replace(
     /* A bracketed citation, or a bare id. One pass, so a bracket cannot be
        eaten by the first rule and its contents by the second. */
     /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}/g,
     (match, offset: number) => (insideLink(offset) ? match : ""),
   );
+}
 
+function tidy(text: string): string {
   return (
-    stripped
+    text
       /* Tidy the holes. A stripped citation otherwise leaves a double space and
          a space before the full stop — and a text-to-speech pass does hear the
          difference. */
@@ -63,44 +70,54 @@ export function withoutBlockIds(text: string): string {
 }
 
 /**
- * How deep the walk below reads structure before it gives the rest as its own
- * characters. The same cap, for the same reason, as `MAX_DEPTH` in
- * src/web/Cited.tsx: the parser survives thousands of nested `>` and a
- * recursive walk over its tree does not.
- */
-const MAX_DEPTH = 12;
-
-/**
- * A markdown tree's words, one block to a line.
+ * A markdown tree's words, one block to a line. An explicit stack survives
+ * deeply nested markdown without falling back to source markers.
  *
  * A link gives its label and an image its alt text; a rule and a link
  * definition give nothing. Code and raw HTML give their own characters,
  * because that is what the chat draws for them (src/web/Cited.tsx §
- * `sourceOf`). Blocks, list items and hard breaks are parted by a newline so
- * the caller's "first line" is the first block's first line.
+ * `drawBlock`, `drawPhrase`). Blocks, list items and hard breaks are parted
+ * by a newline so the caller's "first line" is the first block's first line.
+ * Strip citations
+ * only from ordinary text leaves, before joining: a link label, code or image
+ * alt is literal text, and joining leaves can manufacture an id-shaped string.
  */
-function words(node: Nodes, source: string, depth: number): string {
-  if (depth > MAX_DEPTH) {
-    const from = node.position?.start.offset;
-    const to = node.position?.end.offset;
-    return from !== undefined && to !== undefined ? source.slice(from, to) : "";
-  }
-  const each = (children: readonly Nodes[], between: string): string =>
-    children.map((child) => words(child, source, depth + 1)).join(between);
-  switch (node.type) {
-    case "break":
-      return "\n";
-    case "image":
-    case "imageReference":
-      return node.alt ?? "";
-    case "root":
-    case "blockquote":
-    case "list":
-    case "listItem":
-      return each(node.children, "\n");
-    default:
-      if ("children" in node) return each(node.children, "");
-      return "value" in node ? node.value : "";
+function* words(root: Nodes): Generator<string> {
+  const stack: ({ node: Nodes; literal: boolean } | string)[] = [{ node: root, literal: false }];
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (typeof frame === "string") {
+      yield frame;
+      continue;
+    }
+    const { node } = frame;
+    const literal = frame.literal || node.type === "link" || node.type === "linkReference";
+    switch (node.type) {
+      case "text":
+        yield literal ? node.value : stripBlockIds(node.value);
+        break;
+      case "break":
+        yield "\n";
+        break;
+      case "image":
+      case "imageReference":
+        yield node.alt ?? "";
+        break;
+      case "code":
+      case "inlineCode":
+      case "html":
+        yield node.value;
+        break;
+      default: {
+        if (!("children" in node)) break;
+        const blocks = ["root", "blockquote", "list", "listItem"].includes(node.type);
+        for (let i = node.children.length - 1; i >= 0; i--) {
+          if (blocks && i < node.children.length - 1) stack.push("\n");
+          stack.push({ node: node.children[i]!, literal });
+        }
+        break;
+      }
+    }
   }
 }
 
@@ -108,9 +125,10 @@ function words(node: Nodes, source: string, depth: number): string {
 const HAS_WORDS = /[\p{L}\p{N}]/u;
 
 /**
- * **How an answer begins, in plain words**: its first line with the markdown
- * and our block references taken out. The one line a chat's mark, the gutter
- * chip's hover and the collapsed chat card show.
+ * **How an answer begins, in plain words**: its first line with markdown
+ * formatting and prose citations taken out. The one line a chat's mark and
+ * the collapsed chat card show. Literal code, link labels and image alt text
+ * keep their characters, including anything id-shaped.
  *
  * Parsed with the parser the reader's own view of the answer uses
  * (src/web/Cited.tsx), so the line agrees with the chat about what is
@@ -122,9 +140,45 @@ const HAS_WORDS = /[\p{L}\p{N}]/u;
  * no line has any: the caller's test is `if (line)`.
  */
 export function answerOpening(text: string): string | undefined {
-  for (const raw of words(fromMarkdown(text), text, 0).split("\n")) {
-    const line = withoutBlockIds(raw);
-    if (HAS_WORDS.test(line)) return line;
+  const head = openingOf(headOf(text));
+  /* A head with no words in it (rules, lone citations) is rare enough to pay
+     for the whole answer. */
+  return head !== undefined || headOf(text) === text ? head : openingOf(text);
+}
+
+/**
+ * How much of an answer is parsed to find its opening. The parser's cost is
+ * the whole string's length, and the summaries route pays it once per thread
+ * on every fetch: 18 ms for a 4 KB answer on the box, measured in
+ * docs/plans/261006f-code-review-sol.md § F8.
+ */
+const HEAD_CHARS = 1000;
+
+/**
+ * The answer up to the first blank line past `HEAD_CHARS`, so the cut never
+ * falls inside a paragraph. **The price**: a reference link in the opening
+ * whose definition is past the cut keeps its source characters, `[Label][ref]`.
+ */
+function headOf(text: string): string {
+  const blank = /\r?\n[ \t]*\r?\n/g;
+  blank.lastIndex = HEAD_CHARS;
+  const cut = blank.exec(text);
+  return cut ? text.slice(0, cut.index) : text;
+}
+
+function openingOf(text: string): string | undefined {
+  let raw = "";
+  for (const part of words(fromMarkdown(text))) {
+    const lines = part.split(/\r\n|\r|\n/);
+    for (let i = 0; i < lines.length; i++) {
+      raw += lines[i];
+      if (i < lines.length - 1) {
+        const line = tidy(raw);
+        if (HAS_WORDS.test(line)) return line;
+        raw = "";
+      }
+    }
   }
-  return undefined;
+  const line = tidy(raw);
+  return HAS_WORDS.test(line) ? line : undefined;
 }

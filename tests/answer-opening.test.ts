@@ -1,7 +1,7 @@
 /**
  * **How an answer begins, in plain words** — `answerOpening` in
  * src/answer-opening.ts. It is the one line a chat's mark shows under a Debate
- * claim, a Glossary entry and a Citations row, the gutter chip's hover, and the
+ * claim, a Glossary entry and a Citations row, and the
  * collapsed floating chat's second line.
  *
  * The defect these were written against (queue item `qi-ezpyknnv`): that line
@@ -92,6 +92,63 @@ describe("answerOpening", () => {
   it("leaves an id inside a URL alone", () => {
     const text = "As at https://example.com/notes/spya-k3m9qt which explains it.";
     expect(answerOpening(text)).toContain("https://example.com/notes/spya-k3m9qt");
+  });
+
+  it("keeps a link's label, even when it contains an id-shaped string", () => {
+    expect(answerOpening("[See spya-k3m9qt](https://example.com/source)")).toBe("See spya-k3m9qt");
+    expect(answerOpening("[spya-k3m9qt][ref]\n\n[ref]: https://example.com/source")).toBe("spya-k3m9qt");
+    expect(answerOpening("[`https://example.com/a*spya-k3m9qt`](https://example.com/source)")).toBe(
+      "https://example.com/a*spya-k3m9qt",
+    );
+  });
+
+  it("does not invent a citation by joining markdown leaves", () => {
+    expect(answerOpening("[spya-](https://example.com/source)k3m9qt is literal.")).toBe(
+      "spya-k3m9qt is literal.",
+    );
+    expect(answerOpening("spya-**k3m9qt** is literal.")).toBe("spya-k3m9qt is literal.");
+  });
+
+  it("keeps literal ids in code, image alt text and raw HTML", () => {
+    expect(answerOpening("Use `spya-k3m9qt` as a key.")).toBe("Use spya-k3m9qt as a key.");
+    expect(answerOpening("```\nspya-k3m9qt\n```")).toBe("spya-k3m9qt");
+    expect(answerOpening("![spya-k3m9qt diagram](https://example.com/image.png)")).toBe("spya-k3m9qt diagram");
+    expect(answerOpening('<div id="spya-k3m9qt">')).toBe('<div id="spya-k3m9qt">');
+  });
+
+  it("gives deeply nested markdown plain words without a recursive fallback", () => {
+    expect(answerOpening(`${"> ".repeat(13)}**Deep** answer [spya-k3m9qt].`)).toBe("Deep answer.");
+    expect(answerOpening(`${">".repeat(4000)} **Deep** answer [spya-k3m9qt].`)).toBe("Deep answer.");
+  });
+
+  it("decodes escapes and entities and handles CRLF and reference definitions", () => {
+    expect(answerOpening("\\*literal\\* and &amp; entities.")).toBe("*literal* and & entities.");
+    expect(answerOpening("[spya-k3m9qt]\r\n**Yes**\r\nNext.")).toBe("Yes");
+    expect(answerOpening("[Label][ref]\n\n[ref]: https://example.com/source")).toBe("Label");
+    expect(answerOpening("- [spya-k3m9qt]\n  - **Nested** answer.\n- Other.")).toBe("Nested answer.");
+  });
+
+  describe("a long answer is read only as far as its opening", () => {
+    /* The parser's cost is the whole answer's length, and the summaries route
+       pays it once per thread (GPT Sol, code review F8: 18 ms for 4 KB on the
+       box). So only the head is parsed, cut at a blank line. */
+    const filler = "Another **paragraph** with [a link](https://example.com).\n\n".repeat(60);
+
+    it("gives the same opening", () => {
+      expect(answerOpening(`**Opening** answer [spya-k3m9qt].\n\n${filler}`)).toBe("Opening answer.");
+    });
+
+    it("does not see a link definition past the cut, and shows the label's source instead", () => {
+      /* The price, pinned so it is a decision and not a surprise. A short
+         answer still resolves its definition (the test above this block). */
+      expect(answerOpening(`Opening [Label][ref].\n\n${filler}[ref]: https://example.com/source`)).toBe(
+        "Opening [Label][ref].",
+      );
+    });
+
+    it("reads on when the head has no words", () => {
+      expect(answerOpening(`${"---\n\n".repeat(500)}**Yes.**`)).toBe("Yes.");
+    });
   });
 
   it("keeps an asterisk or a bracket that is not markdown", () => {

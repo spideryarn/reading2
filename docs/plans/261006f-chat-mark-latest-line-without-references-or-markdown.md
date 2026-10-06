@@ -4,7 +4,8 @@ Up: [plans.md](../project/plans.md) · queue item `qi-ezpyknnv` · the known gap
 [261005i](261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md) and in
 [261006d](261006d-glossary-and-citations-ask-in-chat-with-origin.md) § Log
 
-**Status as of 2026-10-06: built; GPT Sol's code review and the browser check are next.**
+**Status as of 2026-10-06: built, reviewed by GPT Sol (plan and code), checked in a browser at three
+widths, and on `dev`; not deployed.**
 
 ## The defect
 
@@ -110,3 +111,35 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
   in a stubbed server (`tests/debate-check-claim-in-chat.test.tsx`,
   `tests/glossary-and-citations-ask-in-chat.test.tsx`); left alone, since neither asserts on
   markdown.
+- 2026-10-06 — **GPT Sol's code review: approve with changes**
+  ([261006f-code-review-sol.md](261006f-code-review-sol.md)). It fixed F6, F7 and F9 itself, red
+  first; I read the diff and kept it. Its postmortem for the two classes is
+  [261006j](../postmortems/261006j-flattening-destroys-the-context-a-later-filter-needs.md).
+  - F6 (P1): block references were stripped *after* the tree was flattened to a string, so a link's
+    label, code and image alt lost id-shaped words, and joining two leaves could make an id that
+    was in neither. Now stripped per ordinary text leaf, before joining.
+  - F7 (P1): past the depth cap the walk gave back source markdown. The walk is now iterative and
+    has no cap, so § Log F4 above is superseded.
+  - F8 (P2, reported only): the parser reads the whole answer, 18 ms for 4 KB on the box, once per
+    thread on every summaries fetch. **Fixed by me after the review, so Sol has not seen it**:
+    `answerOpening` parses only the head, the answer up to the first blank line past 1,000
+    characters, and reads the whole answer only when the head has no words. The probe is flat
+    at about 3 ms from 4 KB to 512 KB afterwards
+    ([261006f-preview-cost-probe.mjs](261006f-preview-cost-probe.mjs)). **The price, pinned by a
+    test**: a reference link in the opening whose definition is past the cut shows as
+    `[Label][ref]`. Passed over: caching or storing the line, which needs a column and an
+    invalidation rule for one line of text.
+  - F9 (P3): the doc lines and comments said "first line" and "no markdown" more strongly than is
+    true.
+- 2026-10-06 — **browser check** (a Sonnet subagent, Playwright, threads seeded in the local
+  database and deleted afterwards, no paid call), at 1440, 820 and 390, on the review's fixes
+  being written, before the head cut:
+  - The mark under a Glossary entry, a Citations row and a Debate claim read
+    *Qualia are the felt qualities of experience. They are what Dennett denies.* from an answer
+    with bold, italics, a `[spya-…]` and a link; a `## Short answer` answer read *Short answer*.
+    One line, clipped, no overflow, at all three widths.
+  - Pressing a mark opens the chat with the answer drawn in full, as before.
+  - The collapsed card's line read the same, at 1440 only. **Not checked at 820 and 390**: the
+    Collapse control exists only for a chat opened beside a Marginalia note, which a mark never
+    opens, and the 820 attempt found no control.
+  - Screenshots: `261006f-shot-*.png`.

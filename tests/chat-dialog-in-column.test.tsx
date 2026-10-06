@@ -353,6 +353,20 @@ describe("collapsed and expanded", () => {
     expect(shown(".chat-card-line")[0]?.textContent).toBe("1 question");
   });
 
+  it.each([
+    ["[spya-k3m9qt](https://example.com/source)", "spya-k3m9qt"],
+    ["**Unclosed bold", "**Unclosed bold"],
+    ["```ts\nconst n = 2;", "const n = 2;"],
+  ])("keeps the readable opening of an interrupted answer: %s", (text, opening) => {
+    threads = [{
+      ...ANSWERED,
+      messages: [ANSWERED.messages[0]!, { ...ANSWERED.messages[1]!, text, status: "error" }],
+    }];
+    draw(THREAD, inCard());
+    act(() => button("Collapse")?.click());
+    expect(shown(".chat-card-line")[0]?.textContent).toBe(opening);
+  });
+
   it("expands again on a press, to the same transcript it had", () => {
     draw(THREAD, inCard());
     const transcript = panel().querySelector(".chat-scroll");
