@@ -116,6 +116,21 @@ export interface PgReady {
   pool?: Pool;
 }
 
+/**
+ * What `keepPool: true` hands back: the pool, **certainly**.
+ *
+ * Until 2026-10-06 every caller got `pool?: Pool`, so the twenty-odd suites that
+ * asked to keep the pool each guarded a value that could not be missing —
+ * `pool!.`, `pool?.end()`, `if (!pool) throw`, and four `describe.skipIf(!pool)`
+ * that could never skip and read exactly like the silent skip removed on
+ * 2026-09-05. The overload below makes those guards unnecessary rather than
+ * merely unused.
+ */
+export interface PgReadyWithPool {
+  /** The caller owns it and must `end()` it. */
+  pool: Pool;
+}
+
 /** 10s. See the header — this number is the whole reason the file exists. */
 const CONNECT_TIMEOUT_MS = 10_000;
 
@@ -170,6 +185,10 @@ export function refusePostgres(suite: string, why: string, kind: MissingKind): n
  * opt themselves out of a run that printed green; there is one store now, and a
  * database this suite cannot use is a failure rather than a configuration.
  */
+export async function pgReady(
+  options: PgReadyOptions & { keepPool: true },
+): Promise<PgReadyWithPool>;
+export async function pgReady(options: PgReadyOptions): Promise<PgReady>;
 export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
   const url = process.env.DATABASE_URL;
   if (!url) refusePostgres(options.suite, "DATABASE_URL is not set", "no-url");

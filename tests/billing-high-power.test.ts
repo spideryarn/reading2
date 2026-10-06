@@ -146,7 +146,6 @@ const TABLE_TIER_ID = "test-billing-high-power-tier";
 const TABLE_TIER_PRICE = "price_test_billing_high_power_only";
 
 async function sellATier(): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_tiers
        (id, product_name, description, ingests_per_period, lookup_key, stripe_price_id,
@@ -161,7 +160,6 @@ async function sellATier(): Promise<void> {
 
 /** A subscribed row, the way the webhook would write one. */
 async function givenSubscription(priceId: string, start: Date, end: Date): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
@@ -184,7 +182,6 @@ async function givenArticle(
   visibility: "private" | "public",
   owner: OwnerId = OWNER,
 ): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ id: string }>(
     `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
      values ($1, $2, $3, case when $3 = 'public' then now() end)
@@ -196,7 +193,6 @@ async function givenArticle(
 
 /** A settled ingest row pointing at `articleId` — what a successful job leaves. */
 async function givenIngest(articleId: string | null, succeededAt?: Date): Promise<void> {
-  if (!pool) throw new Error("no pool");
   await pool.query(
     `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at, article_id)
      values ($1, coalesce($3::timestamptz, now()), coalesce($3::timestamptz, now()), $2)`,
@@ -206,7 +202,6 @@ async function givenIngest(articleId: string | null, succeededAt?: Date): Promis
 
 /** An upgrade row written straight in, for the boundary cases. */
 async function givenUpgradeAt(articleId: string, at: Date): Promise<void> {
-  if (!pool) throw new Error("no pool");
   await pool.query(
     `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at, article_id)
      values ($1, 'high_power', $3, $3, $2)`,
@@ -226,7 +221,6 @@ async function switchOff(name: string): Promise<void> {
 
 /** The upgrade rows for one article, and the column. */
 async function stateOf(articleId: string): Promise<{ upgrades: number; since: Date | null }> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ upgrades: number; since: Date | null }>(
     `select (select count(*)::int from spideryarn.ingest_events
               where kind = 'high_power' and article_id = $1) as upgrades,
@@ -240,7 +234,6 @@ async function stateOf(articleId: string): Promise<{ upgrades: number; since: Da
 async function upgradeRows(): Promise<
   { article_id: string | null; article_visibility_at_delete: string | null }[]
 > {
-  if (!pool) return [];
   const { rows } = await pool.query(
     `select article_id, article_visibility_at_delete from spideryarn.ingest_events
       where owner_id = $1 and kind = 'high_power'`,
@@ -250,7 +243,6 @@ async function upgradeRows(): Promise<
 }
 
 async function billingRowExists(owner: OwnerId): Promise<boolean> {
-  if (!pool) return false;
   const { rows } = await pool.query("select 1 from spideryarn.billing_accounts where owner_id = $1", [
     owner,
   ]);
@@ -258,7 +250,6 @@ async function billingRowExists(owner: OwnerId): Promise<boolean> {
 }
 
 async function clear(): Promise<void> {
-  if (!pool) return;
   for (const owner of [OWNER, OTHER]) {
     await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [owner]);
     await pool.query("delete from spideryarn.article_visibility_changes where actor_owner_id = $1", [
@@ -272,7 +263,6 @@ async function clear(): Promise<void> {
 }
 
 beforeEach(async () => {
-  if (!pool) return;
   await seedAuthUser(pool, {
     id: OWNER,
     email: `billing-high-power-owner-${OWNER}@spideryarn.local`,
@@ -289,7 +279,6 @@ beforeEach(async () => {
 afterEach(clear);
 
 afterAll(async () => {
-  if (!pool) return;
   await pool.query("delete from auth.users where id = any($1::uuid[])", [[OWNER, OTHER]]).catch(() => {});
   await pool.end();
 });
@@ -457,7 +446,6 @@ describe("charged once per article, for ever", () => {
   });
 
   it("is backed by the database: a second upgrade row for one article is refused", async () => {
-    if (!pool) return;
     const id = await givenArticle("index", "private");
     await givenUpgradeAt(id, new Date());
     await expect(givenUpgradeAt(id, new Date())).rejects.toMatchObject({ code: "23505" });
@@ -484,7 +472,6 @@ describe("the upgrade follows the article's price, like its ingest", () => {
   });
 
   it("freezes the upgrade's price when the article is deleted, as the trigger does the ingest's", async () => {
-    if (!pool) return;
     const priv = await givenArticle("deleted-private", "private");
     await givenIngest(priv);
     await switchOnHighPower(OWNER, slug("deleted-private"), NO_TIERS);
@@ -530,7 +517,6 @@ describe("a paid period counts the upgrade by when it happened", () => {
   });
 
   it("uses one post-lock instant for entitlement and the charge at a period boundary", async () => {
-    if (!pool) return;
     const id = await givenArticle("boundary", "private");
     const start = new Date(Date.now() + 1_500);
     const end = new Date(start.getTime() + 30 * 24 * 3600 * 1000);
@@ -627,7 +613,6 @@ describe("the database refuses an upgrade row of the wrong shape", () => {
     succeededAt: string | null;
     releasedAt: string | null;
   }): Promise<void> {
-    if (!pool) throw new Error("no pool");
     await pool.query(
       `insert into spideryarn.ingest_events
          (owner_id, kind, article_id, reserved_at, succeeded_at, released_at)
@@ -694,7 +679,6 @@ describe("chargeAndSwitchOnHighPower", () => {
   });
 
   it("resyncs a stale entitlement once, and switches on when the resync fixed it", async () => {
-    if (!pool) return;
     const id = await givenArticle("resynced", "private");
     await givenIngest(id);
     await makeStale();
@@ -735,7 +719,6 @@ describe("chargeAndSwitchOnHighPower", () => {
    * tests/high-power-routes.test.ts.
    */
   it("refuses to charge the administrator at all", async () => {
-    if (!pool) return;
     const before = await pool.query(
       "select count(*)::int as n from spideryarn.ingest_events where owner_id = $1",
       [ADMIN_USER_ID_LOCAL],

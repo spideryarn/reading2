@@ -128,7 +128,6 @@ const ADMIN = ADMIN_USER_ID_LOCAL as OwnerId;
 let vercel: string | undefined;
 
 beforeAll(async () => {
-  if (!pool) return;
   /**
    * **`VERCEL`, so `enqueue` does not start driving what it queues.** `pump`
    * returns immediately when it is set (src/jobs.ts). Every case here creates
@@ -162,7 +161,6 @@ const onTheShelf = (slug: string) => bareArticles([slug], OWNER);
 afterAll(async () => {
   if (vercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = vercel;
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
@@ -181,7 +179,6 @@ const staged: string[] = [];
 /** Jobs before ingest events: `jobs_ingest_event_fk` points that way. */
 async function sweep(): Promise<void> {
   for (const key of staged.splice(0)) await blobStore().remove(key);
-  if (!pool) return;
   await pool.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
   /* After the jobs, because a job row's `draft_revision_id` is a foreign key into
@@ -209,7 +206,6 @@ async function sweep(): Promise<void> {
  * and `reserveIngest` reads it through that cache.
  */
 async function sellATier(): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_tiers
        (id, product_name, description, ingests_per_period, lookup_key, stripe_price_id,
@@ -263,7 +259,6 @@ const add = (name: string) => post("/api/jobs", { url: `${HOST}/${name}` });
 
 /** What the ledger holds for an owner: taken, and of those, still unsettled. */
 async function ledgerFor(owner: string): Promise<{ taken: number; inFlight: number }> {
-  if (!pool) return { taken: 0, inFlight: 0 };
   const { rows } = await pool.query<{ taken: string; in_flight: string }>(
     `select count(*) as taken,
             count(*) filter (where succeeded_at is null and released_at is null) as in_flight
@@ -278,7 +273,6 @@ const ledger = () => ledgerFor(OWNER);
 
 /** The provenance column, which is the only place "this job spent a slot" is written. */
 async function slotOf(jobId: string): Promise<string | null> {
-  if (!pool) return null;
   const { rows } = await pool.query<{ ingest_event_id: string | null }>(
     "select ingest_event_id from spideryarn.jobs where id = $1",
     [jobId],
@@ -289,7 +283,6 @@ async function slotOf(jobId: string): Promise<string | null> {
 
 /** Make a job retryable: `retryJob` takes only one that failed. */
 async function fail(jobId: string): Promise<void> {
-  if (!pool) return;
   await pool.query("update spideryarn.jobs set status = 'error' where id = $1", [jobId]);
 }
 
@@ -309,7 +302,6 @@ async function subscribed(fields: {
   /** What a Portal cancellation writes, leaving `cancel_at_period_end` false. */
   cancelAt?: Date | null;
 }): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
@@ -338,7 +330,6 @@ async function subscribed(fields: {
 
 /** Successful ingests already spent, without running anything. */
 async function alreadySpent(n: number, owner: string = OWNER): Promise<string[]> {
-  if (!pool) return [];
   /* The ids come back so that a case spending on behalf of somebody who is not
      this file's own owner can delete **exactly what it inserted** — see the
      admin case, which writes against a shared local identity and must not sweep
@@ -354,7 +345,7 @@ async function alreadySpent(n: number, owner: string = OWNER): Promise<string[]>
 
 /** Take back exactly the rows a case inserted, by id. */
 async function forgetSpend(ids: string[]): Promise<void> {
-  if (!pool || ids.length === 0) return;
+  if (ids.length === 0) return;
   await pool.query("delete from spideryarn.ingest_events where id = any($1::uuid[])", [ids]);
 }
 
@@ -684,7 +675,6 @@ describe("a stored period that has run out", () => {
 
   /** What a real sync would have written: a period that contains now. */
   async function fixThePeriod(): Promise<void> {
-    if (!pool) return;
     await pool.query(
       `update spideryarn.billing_accounts
           set current_period_start = now() - interval '5 days',

@@ -124,7 +124,6 @@ const SAVED = {
 };
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   for (const id of [OWNER, STRANGER]) {
     await seedAuthUser(pool, { id, email: `checkout-${id}@example.invalid` });
@@ -150,14 +149,12 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.billing_tiers where id = any($1::text[])", [
     [RETIRED_TIER, UNPRICED_TIER, CACHED_TIER],
@@ -173,7 +170,6 @@ async function accountRow(owner: string): Promise<{
   subscription: string | null;
   status: string | null;
 } | null> {
-  if (!pool) return null;
   const { rows } = await pool.query<{
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
@@ -198,7 +194,6 @@ async function givenAccount(
   owner: string,
   fields: { customer?: string | null; subscription?: string | null; status?: string | null } = {},
 ): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, status)
@@ -220,7 +215,6 @@ async function givenAccount(
  * value has to come from the same table rather than from a constant here.
  */
 async function readerPriceId(): Promise<string> {
-  if (!pool) return "";
   const { rows } = await pool.query<{ stripe_price_id: string | null }>(
     "select stripe_price_id from spideryarn.billing_tiers where id = 'reader' and active",
   );
@@ -549,7 +543,6 @@ describe("what the request is not allowed to decide", () => {
    * see it (the same reasoning as `sellATier` in tests/billing-admission.test.ts).
    */
   it("refuses a tier that has been retired", async () => {
-    if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
          (id, product_name, description, ingests_per_period, lookup_key, stripe_price_id,
@@ -575,7 +568,6 @@ describe("what the request is not allowed to decide", () => {
    * make. GPT Sol, 2026-09-03.
    */
   it("answers 503, not 400, for an active tier nobody has set up in Stripe", async () => {
-    if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
          (id, product_name, description, ingests_per_period, lookup_key, stripe_price_id,
@@ -606,7 +598,6 @@ describe("what the request is not allowed to decide", () => {
    * above clears the cache and therefore cannot see this.
    */
   it("does not sell a tier retired seconds ago, cache or no cache", async () => {
-    if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
          (id, product_name, description, ingests_per_period, lookup_key, stripe_price_id,

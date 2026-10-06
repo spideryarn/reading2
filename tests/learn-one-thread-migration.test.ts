@@ -45,7 +45,7 @@ const { pool } = await pgReady({
 });
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 const MIGRATION = readFileSync(
@@ -250,7 +250,7 @@ async function snapshot(c: PoolClient): Promise<string> {
  * later index, `chat_threads_one_learn`, stays: no row here is a `learn` one.
  */
 async function inRolledBack(body: (c: PoolClient) => Promise<void>): Promise<void> {
-  const c = await pool!.connect();
+  const c = await pool.connect();
   try {
     await c.query("begin");
     await c.query('drop index if exists "spideryarn"."chat_threads_one_remember"');

@@ -25,6 +25,7 @@
  * preflight in `tests/setup/private-db-global.ts` has already failed the command
  * by then.
  */
+import type { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
@@ -161,8 +162,41 @@ describe("pgReady, against the real database", () => {
       keepPool: true,
     });
     expect(pool).toBeDefined();
-    const rows = await pool!.query<{ n: number }>("select 1 as n");
+    const rows = await pool.query<{ n: number }>("select 1 as n");
     expect(rows.rows[0]?.n).toBe(1);
-    await pool!.end();
+    await pool.end();
   });
 });
+
+/**
+ * The return type, checked by the compiler and by nothing at run time.
+ *
+ * `keepPool: true` promises a pool; anything else — left out, `false`, or a
+ * `boolean` nobody can read at compile time — promises only that there might be
+ * one. The three cases are here because the overload is two signatures and the
+ * easy mistake is the second: widening the certain one to `keepPool: boolean`
+ * would compile every caller and quietly hand `undefined` to the ones that
+ * passed `false`. `npm run typecheck` is what runs this; the function is never
+ * called.
+ */
+async function pgReadyReturnTypeCases(flag: boolean): Promise<void> {
+  const suite = "tests/pg-ready.test.ts";
+
+  const kept = await pgReady({ suite, keepPool: true });
+  const certain: Pool = kept.pool;
+
+  const omitted = await pgReady({ suite });
+  // @ts-expect-error — no `keepPool`, so the pool may not be there
+  const fromOmitted: Pool = omitted.pool;
+
+  const unknown = await pgReady({ suite, keepPool: flag });
+  // @ts-expect-error — a `boolean` is not `true`, so the pool may not be there
+  const fromBoolean: Pool = unknown.pool;
+
+  const refused = await pgReady({ suite, keepPool: false });
+  // @ts-expect-error — `false` ends the pool inside the helper
+  const fromFalse: Pool = refused.pool;
+
+  void [certain, fromOmitted, fromBoolean, fromFalse];
+}
+void pgReadyReturnTypeCases;
