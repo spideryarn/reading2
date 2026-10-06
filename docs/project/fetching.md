@@ -519,8 +519,10 @@ ten seconds apart
 That signed address would be the article's `final_url`, which the source link and Refresh both read
 (`urlForSlug` in [`src/pipeline.ts`](../../src/pipeline.ts), asked by `enqueue` in
 [`src/jobs.ts`](../../src/jobs.ts)). `articles.asked_url` (`slugForUrlKey`,
-[`src/store/find-article.ts`](../../src/store/find-article.ts)) makes such an article findable by
-the pasted link again and fixes neither of those. The plan names the two ways out and builds
+[`src/store/find-article.ts`](../../src/store/find-article.ts)) makes a paper findable by the pasted
+link only when its `final_url` or revision's `requested_url` resolves to a registered paper source;
+OSF is not registered. Adding an OSF source would enable that lookup but fix neither the source
+link nor Refresh. The plan names the two ways out and builds
 neither: the paper's `canonicalUrl` (`ResolvedPaper`,
 [`src/paper-sources.ts`](../../src/paper-sources.ts)) stored as the article's address, or Refresh
 sent through `asked_url`. Not established: how long a signed address keeps answering (the probe

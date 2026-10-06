@@ -585,23 +585,42 @@ red by themselves. These do not all, and `debate` is the specimen each was check
 **Where a mode's name is stored**
 
 - [`src/db/schema.ts`](../../src/db/schema.ts) § `articleRevisions` — the jsonb column named for
-  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks rename-or-drop, and an
-  agent has no terminal to answer —
+  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks create-or-rename, and
+  without a TTY it cannot take the answer —
   [database.md § That rename question needs a terminal](database.md#that-rename-question-needs-a-terminal-and-without-one-you-get-silence);
   the migration itself is [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines).
 - Same file § `revision_step_runs_step` — the hand-kept CHECK listing every step name, and the rows
   under it. *Loud:* [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts).
-  `jobs.steps[].name` holds the step name too, in jsonb. *Silent.*
-- Same file § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
+  `jobs.steps[].name` and `jobs.reset.regenerate[]` hold the step name too, in jsonb. *Silent.*
+  `jobs.work_key` hashes the ordered step names (`workKeyFor` in
+  [`src/store/jobs.ts`](../../src/store/jobs.ts)); the Skim migration deliberately kept it, accepting
+  a possible duplicate run across the deploy window.
+- [`src/debate.ts`](../../src/debate.ts) § `PROMPT_VERSION` — stored in `debate.version` and
+  `revision_step_runs.prompt_version`. A rename alone keeps this tag, as the Skim precedent did;
+  changing it would mark unchanged output outdated. *A string, not checked by the compiler.*
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
   `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
   [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
 - [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler) and
-  § `RENAMED` — `ai_calls` is append-only and is **not** rewritten, so the old job name gets a row
-  in `RENAMED`. *Silent if forgotten.*
+  § `RENAMED` — `ai_calls.purpose` and `ai_calls.step_name` are append-only and are **not** rewritten,
+  so the old job/step name gets a row in `RENAMED`. *Silent if forgotten.*
+- Same schema § `feedback` — the saved URL and diagnostics (`article.mode`, `job.step`)
+  keep old names as evidence. Incoming stale-tab names are normalised in
+  [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
 - [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
   (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
 - [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
-  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`. *Silent:* an old link loses the parameter.
+  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  [`DebateMode.tsx`](../../src/web/modes/debate/DebateMode.tsx). *Silent:* an old link loses the parameter.
+- [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
+  keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
+  the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
+  *The compiler does not check these strings; `tests/last-view.test.ts` checks the key inventory.*
+- [`src/routes.ts`](../../src/routes.ts) and [`src/web/useDebate.ts`](../../src/web/useDebate.ts) —
+  `/api/debate/:slug`, also in `CACHEABLE` and `NONE_YET_AS_NULL` in
+  [`src/web/lib/api.ts`](../../src/web/lib/api.ts). The IndexedDB offline copy stores that URL
+  (`keyFor` in [`offline-store.ts`](../../src/web/lib/offline-store.ts)). *The path is a string:*
+  renaming it loses the old offline read until fetched again, a cost the Skim precedent accepted.
 - [`src/public-types.ts`](../../src/public-types.ts) § `PublicArtefactSet` — the visitor's key.
   *Compiler.*
 - [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) § `REVISION_WRITTEN_ELSEWHERE`
@@ -617,16 +636,18 @@ red by themselves. These do not all, and `debate` is the specimen each was check
 - **Trajectory → Skim**
   ([261001r](../plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md)) is the
   template for a mode with a pipeline step: one in-place migration for the column, the step CHECK
-  and `jobs.steps` (`drizzle/20261001224759_skim.sql`), and what deliberately **kept** the old
-  word — the prompt version tag, the input-hash namespace, `ai_calls`.
+  and `jobs.steps` / `jobs.reset.regenerate` (`drizzle/20261001224759_skim.sql`), and what deliberately
+  **kept** the old word — the prompt version tag, the input-hash namespace, `ai_calls`, feedback
+  evidence and the immutable `jobs.work_key`.
 - **Remember → Learn**
   ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)) is the
-  template for a name stored as a value under a CHECK (`chat_threads.kind`), for which old URL words
+  template for a name stored as a value under a CHECK (`chat_threads.kind`, plus the partial unique
+  index rebuilt with the new kind in its predicate), for which old URL words
   get an alias and which are let go, and for the list of what keeps the old word on purpose.
 
 **Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
 quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:
-they keep their words and their file names.
+they keep their words and their file names; retarget their links to renamed live files.
 
 ## Before you call it finished
 

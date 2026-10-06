@@ -448,4 +448,13 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
 ## Log
 
 - 2026-10-07 — S1 measured, S2 landed.
-- 2026-10-07 — S3 round one and round two, S4, and S6 landed; S5 (GPT Sol) running.
+- 2026-10-07 — S3 round one and round two, S4, and S6 landed; S5 round one, ship.
+- 2026-10-07 — the two held-back gaps closed (`mode.md` § Renaming a mode, `fetching.md` on OSF).
+- 2026-10-07 — S5 round two,
+  [ship](261007a-docs-sweep-signposts-truth-and-coverage-review-2-sol.md): all 31 of round one's
+  fixes hold. Seven findings in the two new sections, six P1, each fixed: the stored-name list in
+  `mode.md` had missed `jobs.reset.regenerate[]`, the stored prompt tag, the browser's saved view and
+  offline keys, and the feedback rows that keep the old name as evidence; and `fetching.md` said
+  `asked_url` already makes an OSF article findable, when that look-up needs a registered source.
+  Two re-checked here (S2 against the Skim migration, S7 against `find-article.ts`). Discovery is
+  closed at two rounds.
