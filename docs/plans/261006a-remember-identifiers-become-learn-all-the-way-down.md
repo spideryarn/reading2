@@ -316,3 +316,20 @@ The docs half was done beside it by another agent.
   `evals/cost/baseline/**`, `catalogue-261002c.ts`, `blind.raw.json`, the changelog files,
   `evals/live/hallucination-on-noise.mts`, the Overseer's captured terminal tail, and the ledger
   slug `test-remember-route-fixture` named in `src/store/ai-calls.ts`.
+
+## Stage 1's code review, and the picker measured (2026-10-06)
+
+- **GPT Sol's code review** of `8c36c5caa`: [approve](261006a-code-review-sol.md). No P0, P1 or
+  P2. Four comments the rename had got wrong (two English verbs turned into `learn`, two test
+  headers whose history had been rewritten), fixed by the reviewer. CR-5, a sentence in
+  `learn-mode.md` that stage 0 had made false, fixed by hand. A second pass by grep over every
+  added line for the same two mistakes found no more.
+- **Full suite** on `27e84ba15`: 1701 files passed, 5 failed, and those five are the ones that
+  need `npm run build` output; after building, all five pass (112 tests). The migration test that
+  went red in the first full run (the lane database held other suites' `learn` rows) was green in
+  this one.
+- **PR-8, the picker**:
+  [261006a-command-picker-after-remember-ids-became-learn.md](../investigations/261006a-command-picker-after-remember-ids-became-learn.md).
+  38 phrases run twice, $0.02. 36 right before and after; all six Learn phrases right; one pick
+  moved, between two accepted Learn rows at about 0.5 confidence. Not an A/B on the ids alone,
+  and the suggester was not run. Taken as enough.
