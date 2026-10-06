@@ -199,6 +199,22 @@ plan's wording or were decided on the way:
   this one included, so a keyboard-only user in a browser that does not focus scrollers by itself
   cannot scroll these tables. That predates this work and wants one shared change.
 
+## At the end — 2026-10-06
+
+Both stages are on `dev` (`a8a5d3724`). **Finished**, with the open items named above.
+
+- **The full suite, after merging `dev`:** 1,734 files passed, 6 failed, 38,537 tests passed, 5
+  failed. Five of the six ask for `npm run build` or `npm run build:fleet`, which this worktree
+  never ran. The sixth was this work's: `tests/read-error-matrix.test.tsx` pins that a malformed
+  quiz revalidation is reported as `PAGE_FAULT`, and Sol's F1 fix had thrown a `ReaderFacingError`
+  with its own sentence. Both hooks now throw a plain `Error`, so the reader gets `PAGE_FAULT` like
+  every other malformed artefact. **That last fix came after the review and no second family has
+  read it**; the suite was not run again in full after it, only the ten files of both stages (363
+  tests, green) and the typecheck.
+- **Left open:** the seven other reads that still answer 404 on an article with nothing made
+  (Stage 1); keyboard focus on sideways-scrolling boxes (Stage 2, Sol F2); the stronger dark-theme
+  shade was seen once more in a browser and judged noticeable but subtle.
+
 ## Reviews
 
 GPT Sol on this plan before building (read-only), and on each stage's code after (write-capable).
