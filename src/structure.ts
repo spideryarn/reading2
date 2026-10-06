@@ -45,7 +45,7 @@ import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { buildBoundedHeadingTree, MIN_BOUNDED_BODY } from "./heading-tree.js";
-import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile, unaskableBatches } from "./labels.js";
+import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile } from "./labels.js";
 import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, type BlockSplit, splitBlocks } from "./supplement.js";
@@ -82,6 +82,7 @@ import { log } from "./log.js";
 /* Values flow one way: that file takes this one's helpers as `SliceDeps`. */
 import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailure } from "./structure-slices.js";
 import { plainWords } from "./plain-words.js";
+import { type LeaseWindow, NeedsAnotherWindow } from "./another-window.js";
 import { paperwork } from "./paperwork.js";
 
 /**
@@ -2226,13 +2227,11 @@ export interface StructureArtefacts {
  *   body was asked about in `slices` slices. `reasked` answers did not pass and
  *   were asked for again; `refilled` sections came back undivided and were
  *   divided by a call of their own; `secondPass` slices failed when first
- *   asked and were asked for once more.
+ *   asked and were asked for once more; `rootAskedTwice`, and so was the call
+ *   for the root's sentence and question.
  * - `answer-too-long`: the same document, where the slices did not make a
  *   tree; `slicesFailed` says which step gave out. What was asked for on the
  *   way is in the run's counts.
- * - `labels-could-not-ask`: a model's tree was sound but held a section too
- *   long for one labels call, so the labels step would have refused it. That
- *   run's call was made and paid for; its counts say so.
  * - `before-structure`: not a fallback. A first import asked to open before
  *   its structure is built (`headingsOnly`), so no model was asked and the tree
  *   is marked `provisional: "awaiting-structure"`; a second run of this step
@@ -2240,12 +2239,16 @@ export interface StructureArtefacts {
  *
  * There is no `input-too-long`. Nothing in this codebase estimates whether the
  * whole-document call's *input* fits, and this was not the place to invent it.
+ *
+ * And since 2026-10-06 there is no `labels-could-not-ask`. A sound tree with a
+ * section too long for one labels call used to be thrown away here; the labels
+ * planner now asks about that section in windows (src/labels.ts §
+ * `planBatches`), so every sound tree is one the labels step can start on.
  */
 export type StructureSource =
   | { by: "model" }
-  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number }
+  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number; rootAskedTwice: boolean }
   | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
-  | { by: "headings"; reason: "labels-could-not-ask" }
   | { by: "headings"; reason: "before-structure" };
 
 export interface StructureRun {
@@ -2558,6 +2561,14 @@ export async function generateStructure(opts: {
    * reads it, to stop itself before the queue would.
    */
   stepBudgetMs?: number;
+  /**
+   * Which lease window of the job this is, and whether the queue would grant
+   * one more (src/another-window.ts). Only the slices path reads it: out of
+   * time with a window left, it throws `NeedsAnotherWindow` and returns no
+   * tree. Absent from direct calls without a queue, it never throws that.
+   * The stage CLI uses the queue and receives a window (scripts/stage.ts).
+   */
+  window?: LeaseWindow;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
   /**
@@ -2662,11 +2673,42 @@ export async function generateStructure(opts: {
     };
     const giveUp = (slicesFailed: SlicesFailure, err?: unknown): StructureRun => {
       log("pipeline").warn(
-        { slug, blocks: body.length, slicesFailed, slices: sliced.slices, calls: sliced.spend.calls, err },
+        {
+          slug,
+          blocks: body.length,
+          slicesFailed,
+          slices: sliced.slices,
+          secondPass: sliced.secondPass,
+          rootAskedTwice: sliced.rootAskedTwice,
+          calls: sliced.spend.calls,
+          err,
+        },
         "the slices did not make a table of contents; building it from the document's headings",
       );
       return fromHeadings({ by: "headings", reason: "answer-too-long", slicesFailed }, spent, bounded);
     };
+    /* **Out of time with a window left: hand the job back, and return no tree.**
+       The answers bought are in checkpoints and are read before any deadline
+       is consulted, so the next window asks only for what is missing. The
+       headings tree here would be a finished step, and the reader would lose
+       every gist to a clock. Only `out-of-time`: the other failures have had
+       their second ask, or would fail the same way again. `runSlices` returns
+       once every call it started has settled, and throws a reader's Stop
+       itself, so neither reaches this line. src/another-window.ts. */
+    if (!sliced.ok && sliced.failure === "out-of-time" && opts.window?.anotherAvailable === true) {
+      log("pipeline").info(
+        {
+          slug,
+          blocks: body.length,
+          slices: sliced.slices,
+          calls: sliced.spend.calls,
+          resumed: sliced.spend.resumed,
+          window: opts.window.number,
+        },
+        "the slices ran out of time; asking the queue for another window",
+      );
+      throw new NeedsAnotherWindow();
+    }
     if (!sliced.ok) return giveUp(sliced.failure);
     /* One build over the whole body, as for any answer, then the same checks. */
     const built = emptyBuildReport();
@@ -2681,7 +2723,6 @@ export async function generateStructure(opts: {
     } catch (err) {
       return giveUp("tree-unsound", err);
     }
-    if (unaskableBatches(stitched, blocks).length > 0) return giveUp("labels-could-not-ask");
     return finishStructureRun({
       blocks,
       slug,
@@ -2696,6 +2737,7 @@ export async function generateStructure(opts: {
         refilled: sliced.refilled,
         reasked: sliced.reasked,
         secondPass: sliced.secondPass,
+        rootAskedTwice: sliced.rootAskedTwice,
       },
       ...spent,
     });
@@ -3169,27 +3211,6 @@ export async function generateStructure(opts: {
   }
 
   const spent: StructureSpend = { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed };
-
-  /* **A sound tree is not yet one the labels step can start on.** It never cuts
-     a section, so a section too long for one labels answer was stored here and
-     refused there. Asked after the deepening, which is the one thing that
-     could have divided it, and of the labels step's own plan and budget rather
-     than a number kept here. Review F2 of
-     docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md. */
-  const unaskable = unaskableBatches(structure, blocks);
-  if (unaskable.length > 0) {
-    log("pipeline").warn(
-      {
-        slug,
-        blocks: body.length,
-        unaskableBatches: unaskable.length,
-        largestBatch: Math.max(...unaskable.map((b) => b.blocks.length)),
-        wholeDocumentResumed,
-      },
-      "the model's table of contents has a section too long for one labels call; building it from the document's headings instead",
-    );
-    return fromHeadings({ by: "headings", reason: "labels-could-not-ask" }, spent);
-  }
 
   return finishStructureRun({
     blocks,

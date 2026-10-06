@@ -47,7 +47,7 @@ import {
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
-import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
+import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   cameFromAnUpload,
   decodeHtml,
@@ -193,6 +193,7 @@ import {
   articleHadNoText,
   codeOfMessage,
   documentHadTooLittleText,
+  documentIsABotCheck,
   documentHasNoArticle,
   FETCH_PAPER_MISSING,
   fetchFailed,
@@ -223,6 +224,7 @@ import {
   type StepStamp,
 } from "./store/artifacts.js";
 import { checkCoverage, generateStructure, type StructureSource } from "./structure.js";
+import type { LeaseWindow } from "./another-window.js";
 import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
@@ -701,6 +703,14 @@ export interface StepContext {
    */
   stepBudgetMs?: number;
   /**
+   * Which lease window of its job this step is running in, and whether the
+   * queue would grant one more (src/another-window.ts § `LeaseWindow`). Absent
+   * from direct calls without a queue, which reads as no further window. The
+   * structure step's slices are the only reader: out of time with a window
+   * left, they hand the job back and do not settle for the headings tree.
+   */
+  window?: LeaseWindow;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * Resolved once by whoever queued the job and carried here, never read from
@@ -1050,16 +1060,20 @@ export function needsRealStructure(step: StepName): boolean {
 export function structureSourceDetail(source: StructureSource): string {
   if (source.by === "model") return "";
   if (source.by === "slices") {
-    /* A run that only finished on its second pass says so: one that became
-       common would otherwise read as an ordinary success (plan 261005j, 1a). */
-    const twice = source.secondPass > 0 ? ` (${source.secondPass} asked for twice)` : "";
+    /* A run that only finished on a second ask says so: one that became
+       common would otherwise read as an ordinary success (plan 261005j, 1a).
+       The parts by their number, and the root call as "the top line", the
+       words `SLICES_FAILED_WORDS` already uses for it. */
+    const what = [
+      ...(source.secondPass > 0 ? [String(source.secondPass)] : []),
+      ...(source.rootAskedTwice ? ["the top line"] : []),
+    ];
+    const twice = what.length > 0 ? ` (${what.join(" and ")} asked for twice)` : "";
     return `, read in ${source.slices} parts${twice}`;
   }
   switch (source.reason) {
     case "answer-too-long":
       return `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[source.slicesFailed]})`;
-    case "labels-could-not-ask":
-      return ", from its headings (a section was too long to label)";
     case "before-structure":
       return ", a first outline (the full structure follows)";
     default: {
@@ -2704,6 +2718,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              stage 2 owns and this seam does not — so what travels to Sentry is
              the reader's coded sentence, and the log keeps the library's name.
              ⟨Sol, 2026-09-03⟩ */
+          /* **The third typed refusal, and the first one asked about**, though
+             the three are disjoint classes and the order here decides nothing:
+             the precedence is `runExtract`'s. `blocked` for the reason the two
+             below give — Retry would read the same stored copy — and the
+             diagnostic names the provider, which the reader's sentence
+             deliberately does not. src/challenge-page.ts. */
+          if (err instanceof ChallengePage) {
+            throw stageFailure(
+              documentIsABotCheck(origin),
+              `The document stage 1 stored is a bot check (${err.provider}), not the page behind it.`,
+            );
+          }
           if (err instanceof ReadabilityRefused) {
             throw stageFailure(
               documentHasNoArticle(origin),
@@ -3118,6 +3144,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            it changes nothing at all. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
         ...(ctx.stepBudgetMs !== undefined ? { stepBudgetMs: ctx.stepBudgetMs } : {}),
+        /* Lets the slices ask for another window when they run out of time.
+           `generateStructure` then throws `NeedsAnotherWindow` and nothing
+           below this line runs: src/another-window.ts. */
+        ...(ctx.window !== undefined ? { window: ctx.window } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -3133,9 +3163,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              every value so the rate of the fallback can be read off the log:
              src/structure.ts § `StructureSource`. */
           source: run.source.by,
+          /* Which lease window of the job this ran in: 2 or 3 is a structure
+             that needed a hand-back to finish. `null` with no queue. A window
+             that ended in a hand-back does not reach this line; it is logged
+             in src/structure.ts and by the walk in src/jobs.ts. */
+          window: ctx.window?.number ?? null,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
           /* The slices path: how many, how many re-asked, refilled and asked
-             for in a second pass, or why it gave way to the headings.
+             for in a second pass, whether the root was asked for twice, or
+             why it gave way to the headings.
              src/structure-slices.ts. */
           slices: run.source.by === "slices" ? run.source : null,
           slicesFailed:

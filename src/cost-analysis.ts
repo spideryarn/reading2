@@ -280,7 +280,7 @@ export interface CostAnalysis {
     total: FailureCounts;
     /** Every UTC day with a call, oldest first. */
     byDay: FailureGroup[];
-    /** The most retries, give-ups and part-way deaths first. */
+    /** The most retries, give-ups, part-way deaths, stalls and timeouts first. */
     byTask: FailureGroup[];
     /** The commonest first. */
     causes: FailureCause[];

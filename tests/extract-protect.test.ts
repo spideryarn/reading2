@@ -51,6 +51,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { ALL_FIXTURES } from "../evals/extraction/corpus.mjs";
 import { splitIntoBlocks } from "../src/blocks.js";
 import {
+  ChallengePage,
   TooLittleTextToRead,
   readArticle,
   readArticleWithProvenance,
@@ -105,7 +106,14 @@ interface Arm {
 /** Both arms of one fixture, or the typed refusal both arms raised. */
 type Row =
   | { readonly kind: "extracted"; readonly on: Arm; readonly off: Arm }
-  | { readonly kind: "refused"; readonly onRefusal: TooLittleTextToRead; readonly offRefusal: TooLittleTextToRead };
+  | { readonly kind: "refused"; readonly onRefusal: Refusal; readonly offRefusal: Refusal };
+
+/**
+ * The two typed refusals a corpus page can raise, kept apart: the floor's (too
+ * little text) and, since 2026-10-06, the bot check's (src/challenge-page.ts).
+ */
+type Refusal = TooLittleTextToRead | ChallengePage;
+const isRefusal = (v: unknown): v is Refusal => v instanceof TooLittleTextToRead || v instanceof ChallengePage;
 
 /**
  * The five fixtures whose output is kept whole. Everything else is compared by
@@ -114,8 +122,11 @@ type Row =
  */
 const DETAILED = new Set(["ar5iv-attention", "wiki-gdp-table", "plos-biology", "wiki-ar-ai", "wikipedia-transformer"]);
 
-/** The two pages that are a bot wall rather than an article, in both arms. */
+/** The two pages that are a bot wall rather than an article, in both arms — refused by the floor. */
 const WALLS = ["medium-about", "pmc-article"];
+
+/** The one that is long enough to clear the floor, and is refused by its own markup instead. */
+const CHALLENGES = ["hal-anubis"];
 
 /**
  * **A digest, so "byte-identical" is a comparison of bytes rather than of
@@ -135,7 +146,7 @@ function digestOf(s: string): string {
   return (h >>> 0).toString(16);
 }
 
-async function armOf(html: string, url: string, slug: string, keepHtml: boolean): Promise<Arm | TooLittleTextToRead> {
+async function armOf(html: string, url: string, slug: string, keepHtml: boolean): Promise<Arm | Refusal> {
   try {
     const r = await runExtract({ html, url, slug });
     return {
@@ -146,16 +157,17 @@ async function armOf(html: string, url: string, slug: string, keepHtml: boolean)
       html: keepHtml ? r.extractedHtml : null,
     };
   } catch (e) {
-    /* **The typed refusal, and only that one.** Catching every exception into a
+    /* **The typed refusals, and only those.** Catching every exception into a
        sentinel is what the first draft's spike did, and it turns a crash on one
-       arm into a row that reads like a deliberate refusal. */
-    if (e instanceof TooLittleTextToRead) return e;
+       arm into a row that reads like a deliberate refusal. Which of the two it
+       was stays on the row, and the cases below assert it per page. */
+    if (isRefusal(e)) return e;
     throw e;
   }
 }
 
 /**
- * **Both arms of all 35 fixtures, run once and in sequence.**
+ * **Both arms of all 36 fixtures, run once and in sequence.**
  *
  * Sequence is required rather than tidy: `withProtectionDisabled` is module
  * state, so two extractions in flight at once in different arms would see each
@@ -168,8 +180,8 @@ async function runCorpus(): Promise<Map<string, Row>> {
     const keep = DETAILED.has(f.name);
     const on = await armOf(html, f.url, f.name, keep);
     const off = await withProtectionDisabled(() => armOf(html, f.url, f.name, keep));
-    const onRefused = on instanceof TooLittleTextToRead;
-    const offRefused = off instanceof TooLittleTextToRead;
+    const onRefused = isRefusal(on);
+    const offRefused = isRefusal(off);
     /* **Both or neither.** A fixture that refused in one arm alone would be
        this pass changing whether a page is publishable at all, which it must
        never do — and it would leave the row below a half-truth, so it is a
@@ -179,11 +191,11 @@ async function runCorpus(): Promise<Map<string, Row>> {
     if (onRefused !== offRefused) {
       throw new Error(`${f.name}: refused in one arm only (on=${onRefused}, off=${offRefused})`);
     }
-    if (on instanceof TooLittleTextToRead && off instanceof TooLittleTextToRead) {
+    if (isRefusal(on) && isRefusal(off)) {
       out.set(f.name, { kind: "refused", onRefusal: on, offRefusal: off });
       continue;
     }
-    if (on instanceof TooLittleTextToRead || off instanceof TooLittleTextToRead) {
+    if (isRefusal(on) || isRefusal(off)) {
       throw new Error(`${f.name}: unreachable — the two arms disagree about refusing`);
     }
     out.set(f.name, { kind: "extracted", on, off });
@@ -787,7 +799,9 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
    */
   it("stamps exactly four fixtures and leaves the other thirty-one alone", async () => {
     const corpus = await CORPUS;
-    expect(corpus.size).toBe(35);
+    /* 36 since 2026-10-06: `hal-anubis` joined, and it is refused, so it moves
+       neither the four stamped nor the twenty-nine compared. */
+    expect(corpus.size).toBe(36);
     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
     expect(stamped.map(([n]) => n).sort()).toEqual([
       "ar5iv-attention",
@@ -848,11 +862,27 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
     for (const name of WALLS) {
       const row = corpus.get(name);
       expect(row?.kind, name).toBe("refused");
-      const r = row as { kind: "refused"; onRefusal: TooLittleTextToRead; offRefusal: TooLittleTextToRead };
+      const r = row as Extract<Row, { kind: "refused" }>;
       expect(r.onRefusal, name).toBeInstanceOf(TooLittleTextToRead);
       expect(r.offRefusal, name).toBeInstanceOf(TooLittleTextToRead);
     }
     expect(WALLS).toHaveLength(2);
+  });
+
+  it("refuses the bot check as a bot check, in both arms, and not as too little text", async () => {
+    /* The recogniser runs before `prepareDocument`, so the protection pass
+       being on or off cannot move it — which is what both arms agreeing says. */
+    const corpus = await CORPUS;
+    for (const name of CHALLENGES) {
+      const row = corpus.get(name);
+      expect(row?.kind, name).toBe("refused");
+      const r = row as Extract<Row, { kind: "refused" }>;
+      expect(r.onRefusal, name).toBeInstanceOf(ChallengePage);
+      expect(r.offRefusal, name).toBeInstanceOf(ChallengePage);
+    }
+    /* And those three are every refusal in the corpus. */
+    const refused = [...corpus].filter(([, r]) => r.kind === "refused").map(([n]) => n);
+    expect(refused.sort()).toEqual([...WALLS, ...CHALLENGES].sort());
   });
 
   it("leaves the mutation seam where it found it", async () => {

@@ -89,7 +89,10 @@ import {
 } from "../modes/conversation/ConversationModes.js";
 import {
   askAboutSummaryParagraph,
+  askAboutCitedWork,
+  askAboutGlossaryEntry,
   askAboutTerm,
+  itemOrigin,
   askDebateThroughLens,
   askToCheckClaim,
 } from "../chat-handoff.js";
@@ -965,6 +968,24 @@ export function Reader({
     [handToChat],
   );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
+  /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
+     and on a Citations row**, beside Dig deeper, which is unchanged. Each
+     travels twice, as a claim does: its name fenced in the question, and as
+     the `origin` the thread stores, which is the entry's durable id and a
+     snapshot of its name cut to the route's cap (`itemOrigin`). Not
+     `askInChat` above, which is for a word the article does not contain and
+     records nothing
+     (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md). */
+  const askGlossaryEntryInChat = useCallback(
+    (entry: Pick<GlossaryEntry, "id" | "name">) =>
+      handToChat(askAboutGlossaryEntry(entry.name), itemOrigin("glossary", entry.id, entry.name)),
+    [handToChat],
+  );
+  const askCitedWorkInChat = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
+      handToChat(askAboutCitedWork(work), itemOrigin("citations", work.id, work.title)),
+    [handToChat],
+  );
   const askAboutSummary = useCallback(
     (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText)),
     [handToChat],
@@ -2358,6 +2379,18 @@ export function Reader({
     }),
     [chatSummaries, checkClaimInChat, debateThroughLensInChat, openClaimChat],
   );
+  /* The same three things for Glossary's entries and Citations' rows
+     (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
+     below, which is filtered to the conversations anchored to a passage and
+     so holds none of these. The way back is the claim's own handler. */
+  const entryChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askGlossaryEntryInChat, onOpen: openClaimChat }),
+    [chatSummaries, askGlossaryEntryInChat, openClaimChat],
+  );
+  const workChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
+    [chatSummaries, askCitedWorkInChat, openClaimChat],
+  );
 
   /**
    * **One press, one model call, and the reader keeps reading.**
@@ -3072,6 +3105,7 @@ export function Reader({
               onJump={bandJump}
               onSelected={setTerm}
               onAskChat={askInChat}
+              chats={entryChats}
             />
           );
         return artefacts?.glossary ? (
@@ -3308,6 +3342,7 @@ export function Reader({
             onJump={bandJump}
             focus={citeFocus}
             onFocusTaken={citeFocusTaken}
+            chats={workChats}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason

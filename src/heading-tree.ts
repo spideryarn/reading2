@@ -62,7 +62,7 @@
 
 import { isStructural } from "./block-policy.js";
 import { PREAMBLE_TITLE, sameHeading, UNTITLED_WINDOW_TITLE } from "./heading-text.js";
-import { MAX_BATCH } from "./labels.js";
+import { cutIntoWindows, MAX_BATCH } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
@@ -471,28 +471,9 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
     return { title: UNTITLED_WINDOW_TITLE };
   };
 
-  /**
-   * [lo, hi] as consecutive windows of at most `MAX_BATCH` blocks, near-equal,
-   * and at least `atLeast` of them (the caller guarantees that many blocks). A
-   * window does not end on a heading where it can help it: the heading opens
-   * the next one.
-   */
-  const windows = (seg: Segment, atLeast: number): Segment[] => {
-    const out: Segment[] = [];
-    let lo = seg.lo;
-    for (let owed = atLeast; ; owed--) {
-      const left = seg.hi - lo + 1;
-      const count = Math.max(owed, Math.ceil(left / MAX_BATCH));
-      if (count <= 1) {
-        out.push({ lo, hi: seg.hi });
-        return out;
-      }
-      let hi = lo + Math.ceil(left / count) - 1;
-      while (hi > lo && headingLevel(body[hi]!) !== null) hi--;
-      out.push({ lo, hi });
-      lo = hi + 1;
-    }
-  };
+  /** The shared cut (src/labels.ts § `cutIntoWindows`), over this body's own idea of a heading. */
+  const windows = (seg: Segment, atLeast: number): Segment[] =>
+    cutIntoWindows(seg, { max: MAX_BATCH, atLeast, isHeading: (i) => headingLevel(body[i]!) !== null });
 
   /** `own` is the heading the part wears, if it wears one. */
   const partOf = (seg: Segment, own: number | null, cut: Segment[]): PlannedPart => ({
@@ -550,9 +531,10 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
  *
  * Both halves of that are for a consumer that cannot cope with less. The client
  * takes one section depth for the whole article (src/web/position.ts §
- * `sectionDepth`), and the labels step never cuts a sibling set
- * (src/labels.ts § `planBatches`), so a flat or mixed-depth tree breaks the
- * first and one long run under a heading breaks the second.
+ * `sectionDepth`), and the labels step writes a section's labels in one call
+ * (src/labels.ts § `planBatches`, which cuts one only when its packed batch
+ * cannot be asked), so a flat or mixed-depth tree breaks the first and one long
+ * run under a heading makes the second a call too big to trust.
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md.
  *
  * Parts are `buildHeadingTree`'s, by the same two rules. Sections are a part's

@@ -24,8 +24,12 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
     case "debate":
       /* Two shapes under one mode: an angle the reader typed, or a claim. */
       return isLensOrigin(origin) ? titleFrom(`Angle: ${origin.lens}`) : titleFrom(`Claim: ${origin.quote}`);
+    case "glossary":
+      return titleFrom(`Glossary: ${origin.quote}`);
+    case "citations":
+      return titleFrom(`Cited work: ${origin.quote}`);
     default: {
-      const never: never = origin.mode;
+      const never: never = origin;
       return never;
     }
   }

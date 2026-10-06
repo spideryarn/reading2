@@ -7,9 +7,13 @@
  * ahead of its blocks, and every slice's top-level sections are put under one
  * root whose gist and question come from one small call. A slice that fails is
  * asked for once more, and one whose answer was refused or cut short is asked
- * for in two halves; a slice that still fails, or a failed root call, and the
- * caller returns the tree built from the document's headings instead
- * (src/heading-tree.ts § `buildBoundedHeadingTree`).
+ * for in two halves; the root call is asked for once more too. A slice or a
+ * root call that still fails, and the caller returns the tree built from the
+ * document's headings instead
+ * (src/heading-tree.ts § `buildBoundedHeadingTree`). Running out of time is
+ * the one failure the caller may not end on: while the queue has another lease
+ * window to give, it hands the job back and the next window starts from the
+ * answers saved here (src/another-window.ts).
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md
  * docs/plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md § Stage 1a
  *
@@ -18,6 +22,7 @@
  * The final build over the whole body stays with the caller.
  */
 import type Anthropic from "@anthropic-ai/sdk";
+import { CallDeadlineReached } from "./call-failure.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { MAX_BATCH } from "./labels.js";
 import { log } from "./log.js";
@@ -66,7 +71,11 @@ export const ROOT_GIST_MAX_WORDS = 40;
  */
 const NAMESPACE = "structure-whole-document" as const;
 
-/** Why the slices path gave up and the headings tree was returned. */
+/**
+ * Why the slices path gave up. The caller returns the headings tree for each,
+ * except that `out-of-time` with a lease window left is a hand-back to the
+ * queue and no tree at all (src/structure.ts § `generateStructure`).
+ */
 export type SlicesFailure =
   | "could-not-plan"
   /* A slice failed in both passes, or was refused or cut short and could not
@@ -74,7 +83,6 @@ export type SlicesFailure =
   | "slice-failed"
   | "root-call-failed"
   | "tree-unsound"
-  | "labels-could-not-ask"
   | "out-of-time";
 
 /** A few words for the step's `detail`, which the reader's progress card shows. */
@@ -83,7 +91,6 @@ export const SLICES_FAILED_WORDS: Record<SlicesFailure, string> = {
   "slice-failed": "one part could not be read",
   "root-call-failed": "its top line could not be written",
   "tree-unsound": "the parts did not join",
-  "labels-could-not-ask": "a section was too long to label",
   "out-of-time": "there was not time to read it in parts",
 };
 
@@ -358,7 +365,9 @@ export function acceptRoot(raw: string, question: SliceDeps["question"]): RootAn
  * When the slices path must have finished asking: the earlier of the step's
  * own budget and the queue's deadline, less the finish reserve. The queue ends
  * a job as interrupted if its own deadline fires, even when this step then
- * returns the headings tree, so this path stops itself first.
+ * returns the headings tree, so this path stops itself first. Stopping itself
+ * is also what lets the caller ask for another window with every call settled
+ * and counted (src/another-window.ts).
  */
 export function slicesDeadline(started: number, stepBudgetMs?: number, deadlineAt?: number): number {
   return (
@@ -396,9 +405,16 @@ export interface SlicesSpend {
  * `reasked` answers did not pass and were asked for again at once. `secondPass`
  * slices failed when first asked and were asked for once more after the rest:
  * above zero on a finished tree, it is a tree the first pass alone would not
- * have made.
+ * have made. `rootAskedTwice` says the same of the root call: its first ask
+ * failed and a second was started, whatever came of it.
  */
-export type SlicesOutcome = { spend: SlicesSpend; slices: number; reasked: number; secondPass: number } & (
+export type SlicesOutcome = {
+  spend: SlicesSpend;
+  slices: number;
+  reasked: number;
+  secondPass: number;
+  rootAskedTwice: boolean;
+} & (
   | { ok: true; proposal: ModelNode; sections: number; seams: string[]; refilled: number }
   | { ok: false; failure: SlicesFailure }
 );
@@ -423,9 +439,10 @@ interface HalveMarker {
  * How much the tree depends on one question.
  *
  * - `required`: without it there is no tree. Any failure ends the run.
- * - `second-chance`: a slice or a half in the first pass. A failure another ask
- *   might mend leaves the run going, and the slice is asked for again after
- *   the rest.
+ * - `second-chance`: a slice or a half in the first pass, or the root's first
+ *   ask. A failure another ask might mend leaves the run going, and the
+ *   question is put once more as `required`. A refusal that cannot be halved,
+ *   and running out of time, end the run here as they do there.
  * - `optional`: a refill. Nothing it does ends the run, its own time cap
  *   included; the section it was to divide is kept.
  */
@@ -476,6 +493,12 @@ async function inPool<T>(width: number, jobs: (() => Promise<T>)[]): Promise<T[]
  * refused or cut short is asked for in two halves, in whichever pass that
  * happens. Refills cannot end the run at all.
  *
+ * **The root is asked for twice at most, the same way.** Its first ask (with
+ * the one re-ask of an answer that does not pass) may fail without ending the
+ * run; then it is asked once more, one call, and a failure there ends it. A
+ * refused or cut-short root answer, and a root call past its cap, are not
+ * asked for again.
+ *
  * **Time is a different matter from failure, and ends everything**: once a
  * call the tree needs has passed its cap, or would not fit before the
  * deadline, nothing is started in either pass.
@@ -506,6 +529,7 @@ export async function runSlices(opts: {
   const spend: SlicesSpend = { calls: 0, resumed: 0, usage: { input_tokens: 0, output_tokens: 0 } };
   let reasked = 0;
   let secondPass = 0;
+  let rootAskedTwice = false;
   /** A call the tree needs passed its cap, or would not have fitted. Nothing is started after it. */
   let outOfTime = false;
   /** A question the tree needs has failed for good. Nothing is started after it. */
@@ -586,14 +610,17 @@ export async function runSlices(opts: {
       const expiresAt = Date.now() + q.capMs;
       const own = new AbortController();
       active.set(own, expiresAt);
-      const onStop = (): void => own.abort();
-      if (signal?.aborted) own.abort();
+      /* Each abort carries its reason, because the reason is all the gateway
+         has to say who stopped the call: the caller's own is passed on as it
+         came, and the cap below is our deadline (`abortClass`). */
+      const onStop = (): void => own.abort(signal?.reason);
+      if (signal?.aborted) own.abort(signal.reason);
       else signal?.addEventListener("abort", onStop, { once: true });
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
         not(q, "out-of-time");
-        own.abort();
+        own.abort(new CallDeadlineReached());
       }, q.capMs);
       let message: Anthropic.Message;
       let call: ReturnType<typeof streamMessage> | undefined;
@@ -601,6 +628,10 @@ export async function runSlices(opts: {
         call = streamMessage("structure", q.params, { power, signal: own.signal });
         message = await call.finalMessage();
       } catch (err) {
+        /* A transport rejection can win the event-loop race with its cap's
+           timer. Check the clock too, before finally removes the active cap
+           and clears that timer; otherwise a second chance can outlive it. */
+        timedOut ||= Date.now() >= expiresAt;
         callError ??= err;
         plog.warn({ slug, key, err: anthropicCallFailed(err), timedOut }, "a slice call did not come back");
         return not(q, timedOut ? "out-of-time" : "failed");
@@ -720,7 +751,7 @@ export async function runSlices(opts: {
   /** Every way out. A reader's Stop wins over whatever else happened. */
   const done = (out: Stitched | null, slices: number): SlicesOutcome => {
     if (signal?.aborted) throw anthropicCallFailed(callError ?? signal.reason);
-    const base = { spend, slices, reasked, secondPass };
+    const base = { spend, slices, reasked, secondPass, rootAskedTwice };
     return out !== null ? { ...base, ...out } : { ...base, ok: false, failure: failure ?? "slice-failed" };
   };
 
@@ -787,17 +818,34 @@ export async function runSlices(opts: {
 
   const title = opts.bounded.nodes[opts.bounded.rootId]!.title;
   const rootParams = rootRequest(title, sections);
-  const root = await ask({
-    params: rootParams,
-    canonical: { promptVersion: ROOT_PROMPT_VERSION, request: messagesWireBody("structure", rootParams, power) },
-    capMs: ROOT_CALL_CAP_MS,
-    thenMs: 0,
-    attempts: 2,
-    need: "required",
-    failure: "root-call-failed",
-    text: (message) => finishedText(message, "table of contents root", ROOT_MAX_TOKENS, ROOT_ANSWER_TOKENS),
-    accept: (answer) => acceptRoot(answer, deps.question),
-  });
+  const askRoot = (last: boolean): Promise<Asked<RootAnswer>> =>
+    ask({
+      params: rootParams,
+      canonical: { promptVersion: ROOT_PROMPT_VERSION, request: messagesWireBody("structure", rootParams, power) },
+      capMs: ROOT_CALL_CAP_MS,
+      thenMs: 0,
+      attempts: last ? 1 : 2,
+      /* Neither flag is cleared for the second ask, because the first never
+         set one: as `second-chance`, a failure another ask might mend latches
+         nothing (`not`), while a refusal or a passed cap latches as it would
+         for a required call and `ask` then starts nothing. */
+      need: last ? "required" : "second-chance",
+      ...(last ? { onAsked: () => { rootAskedTwice = true; } } : {}),
+      failure: "root-call-failed",
+      text: (message) => finishedText(message, "table of contents root", ROOT_MAX_TOKENS, ROOT_ANSWER_TOKENS),
+      accept: (answer) => acceptRoot(answer, deps.question),
+    });
+  let root = await askRoot(false);
+  /* Only `failed`: the call did not come back, or its answer and the re-ask of
+     it did not pass. `ask` accepts a checkpoint before checking its admission
+     latches, so the guard also stops a good late answer saved by the first ask
+     from rescuing this run after its cap. The slices and refills are in hand
+     and are not asked again. With no time left the second ask is not started and the run is out
+     of time; after a reader's Stop it is not started and `done` throws. */
+  if (!root.ok && root.why === "failed") {
+    root = await askRoot(true);
+    plog.info({ slug, rootAskedTwice, ok: root.ok }, "asked for the root a second time");
+  }
   if (!root.ok) return done(null, plan.length);
   return done(
     {

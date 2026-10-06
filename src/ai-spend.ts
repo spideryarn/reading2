@@ -218,9 +218,15 @@ export interface SpendRecord {
   attempt?: number | null;
   /**
    * Where and why a failed call failed, as labels from a closed list —
-   * [`call-failure.ts`](call-failure.ts). `null` on a call that answered, and
-   * on an `aborted` one: an abort is the caller's doing and the gateway cannot
-   * tell a reader's Stop from a stall clock.
+   * [`call-failure.ts`](call-failure.ts). `null` on a call that answered.
+   *
+   * **An `aborted` record from either gateway carries it too**, since
+   * 2026-10-06: the class is who stopped the call (`stall`, `deadline` or
+   * `abort`), the phase and status how far it had got. `outcome` is still
+   * `aborted`. So a phase or a class alone does not mean the call failed;
+   * read it with `outcome`. An `aborted` record with none is from something
+   * that could not tell: the realtime wire (src/live.ts), or a row from
+   * before.
    */
   failure?: CallFailure | null;
 }
@@ -545,9 +551,12 @@ export interface AiCallRow {
   attempt: number | null;
   /**
    * `SpendRecord.failure`, flattened into the three columns it is stored in.
-   * All three are `null` on an `ok` row, on an `aborted` one and on every row
-   * from before the columns existed, so **a null here is "not said", never
-   * "did not fail"**: `outcome` is what says whether a call failed.
+   * All three are `null` on an `ok` row and on every row from before the
+   * columns existed, so **a null here is "not said", never "did not fail"**:
+   * `outcome` is what says whether a call failed. An `aborted` row has them
+   * when a gateway wrote it on or after 2026-10-06 (class `stall`, `deadline`
+   * or `abort`) and not otherwise, so a phase here is not by itself a failure
+   * either.
    */
   failurePhase: FailurePhase | null;
   failureClass: FailureClass | null;

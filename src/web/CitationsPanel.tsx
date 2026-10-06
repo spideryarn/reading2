@@ -66,6 +66,14 @@ import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { citePassageKey } from "./rows.js";
 import {
+  ASK_WORK_IN_CHAT,
+  AskInChatButton,
+  type CitedWorkChats,
+  OPEN_WORK_CHAT,
+  OriginChatMark,
+} from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
+import {
   InvestigateButton,
   type InvestigateFailureHere,
   InvestigationBlock,
@@ -818,8 +826,20 @@ const NO_WORKS: ShownWork[] = [];
  * SPIDERYARN-READING2-56, plan 260929c stage 3.
  */
 export type CitationsAccess =
-  | { kind: "owner"; owner: UseCitations }
-  | { kind: "visitor"; citations: PublicCitations; owner?: never };
+  | {
+      kind: "owner";
+      owner: UseCitations;
+      /**
+       * **A chat about one work**: what a row's *Ask in chat* and its mark
+       * need (OriginChat.tsx § `ItemChats`; plan 261006d). On the owner's arm
+       * because a visitor has no chat: with `chats?: never` below, a
+       * visitor's panel cannot be handed one. Optional, so a panel drawn
+       * without it (most tests) has no button; that `Reader` passes it is
+       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       */
+      chats?: CitedWorkChats;
+    }
+  | { kind: "visitor"; citations: PublicCitations; owner?: never; chats?: never };
 
 interface Props {
   access: CitationsAccess;
@@ -1062,6 +1082,9 @@ export function CitationsPanel({
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     showInSpideryarn={owner !== null}
                     onJump={onJump}
+                    /* The owner's alone: a visitor's row draws neither the
+                       button nor the mark. */
+                    chats={access.kind === "owner" ? (access.chats ?? null) : null}
                     /* The owner's alone, and never on the hover card. */
                     investigate={
                       owner === null
@@ -1230,6 +1253,7 @@ function WorkRow({
   showInSpideryarn,
   onJump,
   investigate,
+  chats,
 }: {
   work: ShownWork;
   unscored: boolean;
@@ -1237,8 +1261,16 @@ function WorkRow({
   showInSpideryarn: boolean;
   onJump(id: BlockId, passage?: string): void;
   investigate: RowInvestigate | null;
+  /** `null` for a visitor: no *Ask in chat*, and no mark. */
+  chats: CitedWorkChats | null;
 }) {
   const cited = citingPlaceOf(work);
+  /* The chat started from this row, if there is one: matched by the work's
+     id alone, so it survives a re-run that rewords the title. The name in the
+     origin built here is not compared (`sameOrigin`). */
+  const chat = chats
+    ? threadForOrigin(chats.summaries, { mode: "citations", itemId: work.id, quote: work.title })
+    : undefined;
   /* **No source at all when the public boundary refused the address** — a
      visitor's row whose link carried a credential or a private host. The row
      stays, drawn as a citation with no link, and says nothing about why: the
@@ -1310,6 +1342,17 @@ function WorkRow({
             onInvestigate={investigate.onInvestigate}
           />
         )}
+        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). It costs
+            nothing until Send, so it needs no tap-to-reveal. It stays once a
+            chat exists: a second one can be started. */}
+        {chats && (
+          <AskInChatButton
+            label={ASK_WORK_IN_CHAT}
+            className="gloss-btn cite-ask-chat"
+            iconSize={11}
+            onAsk={() => chats.onAsk(work)}
+          />
+        )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}
           {cited === null ? (
@@ -1330,6 +1373,9 @@ function WorkRow({
           )}
         </span>
       </p>
+      {/* The way back to the chat started from this row, on a line of its
+          own under the controls. */}
+      {chats && chat && <OriginChatMark chat={chat} label={OPEN_WORK_CHAT} onOpen={chats.onOpen} />}
       {/* The press's first step found no page: said quietly, and the
           reading below goes on unconfirmed (plan 260930d P-5). */}
       {note && (

@@ -32,7 +32,7 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, ChatThread } from "../src/types.js";
+import type { Article, ChatThread, Glossary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { ASKED_TERM_ABSENT, ASKED_TERM_PART_WORD } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
@@ -154,6 +154,24 @@ const TREE: PublicArticle["tree"] = {
   },
 };
 
+const GLOSSARY: Glossary = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  entries: [{
+    id: "spya-ttm222",
+    name: "paragraph",
+    kind: "concept",
+    aliases: [],
+    senseHere: "A passage of the piece.",
+    blocks: ["spya-bbbbbb"],
+  }],
+  passes: 1,
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
   blocks: BLOCKS,
@@ -163,6 +181,7 @@ const ARTICLE: PublicArticle = {
   assets: undefined,
   navLabelStatus: "ready",
   sharedBy: "public",
+  glossary: GLOSSARY,
 };
 
 const OWNED: Article = {
@@ -216,7 +235,7 @@ function reply(url: string, method: string): Response {
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [STORED] });
-  if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  if (url.startsWith("/api/glossary/")) return json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
 }
@@ -331,7 +350,11 @@ function composer(): HTMLTextAreaElement | null {
 }
 
 async function askInChat(): Promise<void> {
-  const button = buttonNamed("Ask in chat");
+  const matching = [...host.querySelectorAll<HTMLButtonElement>(".gloss-ask-failed button")].filter(
+    (b) => (b.textContent ?? "").trim() === "Ask in chat",
+  );
+  expect(matching, "the selector must identify only the refusal's handoff").toHaveLength(1);
+  const button = matching[0];
   expect(button, "the refusal offers Ask in chat").toBeDefined();
   await act(async () => (button as HTMLButtonElement).click());
   await until(() => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id);
@@ -352,7 +375,9 @@ describe("Ask in chat, from the glossary's refusal", () => {
     /* `?thread=` names a conversation the reader already has, so "fresh" is
        falsifiable: a handoff that wrote into the open conversation would put
        the question under STORED. */
-    await open(`?mode=glossary&thread=${STORED.id}`);
+    await open(`?mode=glossary&term=spya-ttm222&thread=${STORED.id}`);
+
+    expect(host.querySelector(".gloss-ask-chat"), "the entry's separate Ask in chat is present too").not.toBeNull();
 
     await lookUp("  Bayesian prior  ");
     /* The positive control for the request count below: the harness can see a
@@ -384,10 +409,11 @@ describe("Ask in chat, from the glossary's refusal", () => {
 
     expect(chatPosts(), "exactly one request, on Send").toHaveLength(1);
     expect(chatApiPosts(), "and no other chat or Live request accompanied it").toHaveLength(1);
-    const body = chatPosts()[0]?.body as { threadId: string; question: string };
+    const body = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown };
     expect(body.question).toBe(question);
     expect(body.threadId).toBe(fresh);
     expect(body.threadId).not.toBe(STORED.id);
+    expect(body.origin, "the absent term has no entry to store as an origin").toBeUndefined();
   });
 
   it("carries what the reader edited, not the handed-over text", async () => {

@@ -368,7 +368,7 @@ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
  * is an unknown word, which reads as All.
  */
-export const CHAT_FROM_WORDS = ["chats", "debate", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({

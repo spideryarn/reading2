@@ -754,6 +754,23 @@ search's `DIG_MAX_RESULTS`. On the gateway a press can record up to five jobs: `
 picked, `citation-influence` when a page of the search is about the work, and
 `citation-investigate` for the streamed answer.
 
+## Ask in chat: a conversation about one work
+
+Since 2026-10-06 every owner row has **Ask in chat** beside Dig deeper, which is unchanged. It
+opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
+the article gives them) and a question after it; nothing is sent until Send. Once a chat exists,
+a line under the row's controls shows how many questions were asked and how the latest answer
+begins, and pressing it opens that conversation beside Citations. Chat's list marks the
+conversation with Citations' icon. A visitor has neither the button nor the line.
+
+It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
+work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
+the id alone, so a reworded title keeps the line. Everything else, and Greg's words, are in
+[glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
+machinery under both is
+[debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat). The hover card in the prose
+has no *Ask in chat*.
+
 ## Already an article here
 
 Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5R):

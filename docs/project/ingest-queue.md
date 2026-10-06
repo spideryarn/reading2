@@ -1909,6 +1909,21 @@ hand-back before this one was preceded by a *completed* step, so progress was st
 guaranteed, where a step that can never fit in one window would otherwise pause, re-claim and spend
 another window for ever.
 
+**A step can ask for the same pause itself, since 2026-10-06.** The structure step's slices stop
+themselves ahead of the deadline, so the queue's abort never reaches them; out of time, they used
+to finish the step on the headings tree and lose every gist. With a window left they now throw
+`NeedsAnotherWindow` ([`src/another-window.ts`](../../src/another-window.ts)). `runStep` reports
+that as its own outcome, `handed-back`, and `walkClaim` takes it through the same
+`pauseForDeadline` call and the same four answers as its own deadline: one path, two triggers.
+The step is told which window it is in and whether another is left (`StepContext.window`, from
+`requeues` when the step starts), and with none left it finishes on the headings tree as before.
+If the store then refuses the pause, the endings are the ones above, and the step does not fall
+back to the headings tree a second time.
+[structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)
+has the step's side;
+[261005j § Plan: the rest of stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)
+has the reasoning, stage C.
+
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
 the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate

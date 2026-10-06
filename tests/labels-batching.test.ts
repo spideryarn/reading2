@@ -4,8 +4,9 @@
  *
  * The design's whole claim is that labels can be written in separate calls
  * without becoming incoherent, and that claim rests on one rule: every leaf
- * under one lowest-level parent goes in the same call, because a label's job is
- * to tell its paragraph apart from its *neighbours*. A batching bug that split a
+ * under one lowest-level parent goes in the same call while its packed batch
+ * is askable, because a label's job is to tell its paragraph apart from its
+ * *neighbours*. A batching bug that split a
  * sibling set would not fail anything — it would produce a complete, valid tree
  * whose labels were subtly worse in a way only a reader would notice. That is
  * docs/reusable/silent-success.md, and it is what most of this file is about.
@@ -33,7 +34,13 @@ import {
   coversExactly,
   detectShift,
   generateLabels,
+  isHeading,
+  LABEL_RETRY_HEADROOM,
+  labelCallBudget,
+  MAX_BATCH,
   mergeLabels,
+  MIN_BATCH,
+  oversizedSets,
   parseLabels,
   planBatches,
   prefixIsCacheable,
@@ -41,8 +48,12 @@ import {
   renderBatch,
   renderOutline,
   structureHash,
+  unaskableBatches,
   usableEntry,
 } from "../src/labels.js";
+import { isStructural } from "../src/block-policy.js";
+import { isSupplementNode } from "../src/supplement.js";
+import { TooLongForOnePass } from "../src/token-budget.js";
 import { anthropicCallFailed } from "../src/anthropic-call.js";
 import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
 import type { Batch } from "../src/labels.js";
@@ -168,7 +179,7 @@ describe("planBatches", () => {
     expect(seen.sort()).toEqual(blocks.map((b) => b.id).sort());
   });
 
-  it("never splits a sibling set across two calls — the rule the design rests on", () => {
+  it("keeps sibling sets whole when the packed batches are askable", () => {
     // Sections of 7 against a 40-block target: the packing must round to whole
     // sections rather than cutting one at 40.
     const { tree, blocks } = fixture(20, 7);
@@ -180,6 +191,11 @@ describe("planBatches", () => {
       }
     }
     // And every section appears in exactly one batch.
+    /* **Narrowed on 2026-10-06, by name: this holds when the packed batches
+       can be asked, which is every batch here.** A section in a batch that
+       would be refused is planned as windows that share its node id, so "one
+       set per parent" is no longer true of every plan. What stays true of all
+       of them is asked below, in "a section too long for one labels call". */
     const sets = batches.flatMap((b) => b.sets.map((s) => s.nodeId));
     expect(new Set(sets).size).toBe(sets.length);
   });
@@ -361,6 +377,272 @@ describe("planBatches", () => {
 
     expect(() => planBatches(tree, blocks)).toThrow(/out of every batch/);
     expect(() => planBatches(tree, blocks)).toThrow(/mix of leaves and internal nodes/);
+  });
+});
+
+/**
+ * Sections of the given sizes under one root, as `fixture` shapes them.
+ * `headings` are document indices whose block is an `<h3>`.
+ */
+function sized(sizes: number[], headings: number[] = []): { tree: Tree; blocks: Block[] } {
+  const total = sizes.reduce((a, b) => a + b, 0);
+  const isH = new Set(headings);
+  const blocks = Array.from({ length: total }, (_, i): Block =>
+    isH.has(i) ? { ...block(i), tag: "h3", kind: "heading", level: 3, text: `Heading ${i}` } : block(i),
+  );
+  const nodes: Record<NodeId, TreeNode> = {};
+  const rootId: NodeId = "n0000";
+  const sectionIds: NodeId[] = [];
+  let from = 0;
+  sizes.forEach((size, s) => {
+    const sectionId: NodeId = `s${String(s).padStart(4, "0")}`;
+    const leafIds: NodeId[] = [];
+    for (let i = from; i < from + size; i++) {
+      const leafId: NodeId = `l${String(i).padStart(6, "0")}`;
+      nodes[leafId] = { id: leafId, depth: 2, parent: sectionId, children: [], range: [blocks[i]!.id, blocks[i]!.id], title: "" };
+      leafIds.push(leafId);
+    }
+    nodes[sectionId] = {
+      id: sectionId, depth: 1, parent: rootId, children: leafIds,
+      range: [blocks[from]!.id, blocks[from + size - 1]!.id],
+      title: `Section ${s}`, gist: `Section ${s} argues something.`,
+    };
+    sectionIds.push(sectionId);
+    from += size;
+  });
+  nodes[rootId] = {
+    id: rootId, depth: 0, parent: null, children: sectionIds,
+    range: [blocks[0]!.id, blocks[total - 1]!.id], title: "Whole piece", gist: "The article argues something.",
+  };
+  return { tree: { version: "test", generator: "test", slug: "test", rootId, nodes }, blocks };
+}
+
+/* Askable means askable twice: the re-draw of a truncated batch needs more room. */
+const askable = (count: number): boolean => {
+  try {
+    labelCallBudget(count, LABEL_RETRY_HEADROOM);
+    return true;
+  } catch (err) {
+    if (err instanceof TooLongForOnePass) return false;
+    throw err;
+  }
+};
+
+/** The most blocks one labels call may be asked for and re-drawn, from the labels step's own arithmetic. */
+const MOST = ((): number => {
+  let n = 1;
+  while (askable(n + 1)) n++;
+  return n;
+})();
+
+/**
+ * The default-cap packing of `planBatches` before 2026-10-06: the control for
+ * "a tree that planned fine plans exactly as it did". This copy omits the
+ * configurable cap and the final coverage assertion; the fixtures are valid
+ * trees. A checkpoint is keyed on a batch's sets and blocks, so a plan that
+ * moved for an ordinary tree would buy every stored batch again.
+ */
+function planBatchesBefore(tree: Tree, blocks: Block[]): Batch[] {
+  const max = MAX_BATCH;
+  const min = MIN_BATCH;
+  const order = new Map(blocks.map((b, i) => [b.id, i]));
+  const sets: Batch["sets"] = [];
+  const walk = (id: NodeId, crumb: string[]): void => {
+    const node = tree.nodes[id];
+    if (!node || isSupplementNode(node) || node.children.length === 0) return;
+    const here = node.title ? [...crumb, node.title] : crumb;
+    const children = node.children.map((c) => tree.nodes[c]).filter((c): c is TreeNode => !!c && !isSupplementNode(c));
+    if (children.every((c) => c.children.length === 0)) {
+      const own = children.map((c) => blocks[order.get(c.range[0]) ?? -1]).filter((b): b is Block => !!b && isStructural(b));
+      if (own.length > 0) sets.push({ nodeId: id, crumb: here, ...(node.gist ? { gist: node.gist } : {}), blocks: own });
+      return;
+    }
+    for (const child of children) walk(child.id, here);
+  };
+  walk(tree.rootId, []);
+  sets.sort((a, b) => (order.get(a.blocks[0]!.id) ?? 0) - (order.get(b.blocks[0]!.id) ?? 0));
+  const batches: Batch[] = [];
+  let current: Batch["sets"] = [];
+  let count = 0;
+  const close = (): void => {
+    if (current.length === 0) return;
+    const flat = current.flatMap((s) => s.blocks);
+    const setStarts: number[] = [];
+    let at = 0;
+    for (const s of current) {
+      setStarts.push(at);
+      at += s.blocks.length;
+    }
+    batches.push({ sets: current, blocks: flat, setStarts, span: [order.get(flat[0]!.id) ?? 0, order.get(flat.at(-1)!.id) ?? 0] });
+    current = [];
+    count = 0;
+  };
+  for (const set of sets) {
+    if (count >= min && count + set.blocks.length > max) close();
+    current.push(set);
+    count += set.blocks.length;
+  }
+  close();
+  const last = batches.at(-1);
+  if (last && batches.length > 1 && last.blocks.length < min) {
+    batches.pop();
+    const before = batches.pop()!;
+    current = [...before.sets, ...last.sets];
+    close();
+  }
+  return batches;
+}
+
+/** What is true of every plan, windows or none. */
+function expectSoundPlan(tree: Tree, blocks: Block[]): Batch[] {
+  const batches = planBatches(tree, blocks);
+  expect(batches.filter((b) => !askable(b.blocks.length)).map((b) => b.blocks.length), "unaskable batches").toEqual([]);
+  expect(unaskableBatches(tree, blocks)).toEqual([]);
+  /* Every block once, in document order, and each batch is exactly its sets. */
+  expect(batches.flatMap((b) => b.blocks.map((x) => x.id))).toEqual(blocks.map((b) => b.id));
+  for (const b of batches) expect(b.sets.flatMap((s) => s.blocks)).toEqual(b.blocks);
+  return batches;
+}
+
+/**
+ * **A section too long for one labels call is cut into windows by the planner,
+ * and no plan holds a batch that could not be asked.** Until 2026-10-06 the
+ * planner never cut a section, and the structure step threw a model's whole
+ * tree away when one was this long. Plan 261005j, stage A, and review F1: the
+ * promise is about the *final plan*, because the floor and the tail merge join
+ * sets, so a section one call could hold became unaskable beside a short one.
+ */
+describe("planBatches: a section too long for one labels call", () => {
+  it("the limit is where this file thinks it is", () => {
+    expect(MOST).toBeGreaterThan(1000);
+    expect(askable(MOST)).toBe(true);
+    expect(askable(MOST + 1)).toBe(false);
+    /* The first call alone would take more: the limit is the re-draw's. */
+    expect(() => labelCallBudget(MOST + 1)).not.toThrow();
+    expect(() => labelCallBudget(MOST + 1, LABEL_RETRY_HEADROOM)).toThrow(TooLongForOnePass);
+  });
+
+  for (const sizes of [[1, MOST], [MOST, 1], [MOST, MIN_BATCH - 1]]) {
+    it(`plans only askable batches for neighbouring sections of ${sizes.join(" and ")} (review F1)`, () => {
+      const { tree, blocks } = sized(sizes);
+      /* The control: this arrangement was one unaskable batch. */
+      expect(planBatchesBefore(tree, blocks).filter((b) => !askable(b.blocks.length))).toHaveLength(1);
+      const batches = expectSoundPlan(tree, blocks);
+      for (const set of batches.flatMap((b) => b.sets)) expect(set.blocks.length).toBeLessThanOrEqual(MAX_BATCH);
+    });
+  }
+
+  it("cuts a lone section of 2,100 into windows of at most MAX_BATCH, each still that section", () => {
+    /* Headings exactly where an even cut would end a window, and one mid-window. */
+    const { tree, blocks } = sized([2100], [59, 119, 1000]);
+    const batches = expectSoundPlan(tree, blocks);
+    const sets = batches.flatMap((b) => b.sets);
+    expect(sets.length).toBeGreaterThanOrEqual(Math.ceil(2100 / MAX_BATCH));
+    for (const set of sets) {
+      expect(set.blocks.length).toBeLessThanOrEqual(MAX_BATCH);
+      expect(set.nodeId).toBe("s0000");
+      expect(set.crumb).toEqual(["Whole piece", "Section 0"]);
+      expect(set.gist).toBe("Section 0 argues something.");
+      /* A heading opens the next window; it does not end this one. */
+      expect(isHeading(set.blocks.at(-1)!), `a window ends on ${set.blocks.at(-1)!.text}`).toBe(false);
+    }
+    /* Near-equal: no window is a sliver. */
+    expect(Math.min(...sets.map((s) => s.blocks.length))).toBeGreaterThan(MAX_BATCH / 2);
+    /* And none is then reported as a section too big for its call. */
+    expect(oversizedSets(batches)).toEqual([]);
+  });
+
+  it("survives a run of headings: a window ends on one only when it is nothing else", () => {
+    const run = Array.from({ length: 150 }, (_, i) => 400 + i);
+    const { tree, blocks } = sized([2100], run);
+    const batches = expectSoundPlan(tree, blocks);
+    const sets = batches.flatMap((b) => b.sets);
+    for (const set of sets) {
+      expect(set.blocks.length).toBeLessThanOrEqual(MAX_BATCH);
+      if (isHeading(set.blocks.at(-1)!)) expect(set.blocks).toHaveLength(1);
+    }
+    /* The fixture did make the hard case: some window is one heading. */
+    expect(sets.some((s) => s.blocks.length === 1)).toBe(true);
+    /* And the floor still packs those: no batch is under it. */
+    for (const b of batches) expect(b.blocks.length).toBeGreaterThanOrEqual(MIN_BATCH);
+  });
+
+  it("merges a short tail into the last window's batch, not into one call too long to ask", () => {
+    const { tree, blocks } = sized([2100, 5]);
+    const batches = expectSoundPlan(tree, blocks);
+    const last = batches.at(-1)!;
+    expect(last.sets.map((s) => s.nodeId)).toEqual(["s0000", "s0001"]);
+    expect(last.blocks.length).toBeLessThanOrEqual(MAX_BATCH + MIN_BATCH - 1);
+    for (const b of batches) expect(b.blocks.length).toBeGreaterThanOrEqual(MIN_BATCH);
+  });
+
+  it("names a section once in the prompt when two of its windows share a call", () => {
+    const run = Array.from({ length: 150 }, (_, i) => 400 + i);
+    const { tree, blocks } = sized([2100], run);
+    const shared = planBatches(tree, blocks).find((b) => b.sets.length > 1);
+    expect(shared, "the fixture put two windows in one call").toBeDefined();
+    const { own } = batchParts(shared!, blocks, renderOutline(tree));
+    expect(own.split("Whole piece › Section 0").length - 1).toBe(1);
+  });
+
+  it("leaves a section one call can hold as one call, exactly as before", () => {
+    const { tree, blocks } = sized([MOST]);
+    const batches = planBatches(tree, blocks);
+    expect(batches).toEqual(planBatchesBefore(tree, blocks));
+    expect(batches.map((b) => b.sets.length)).toEqual([1]);
+    expect(batches[0]!.blocks).toHaveLength(MOST);
+  });
+
+  it("plans the committed real trees exactly as before", () => {
+    const dirs = ["example", ...["constitution", "openai-huggingface", "todo", "noema-mythology-of-conscious-ai", "writes"]
+      .map((slug) => `tests/fixtures/data-root/data/${slug}`)];
+    let batchesSeen = 0;
+    for (const dir of dirs) {
+      const tree = read<Tree>(`${dir}/tree.json`);
+      const { blocks } = read<{ blocks: Block[] }>(`${dir}/blocks.json`);
+      const before = planBatchesBefore(tree, blocks);
+      batchesSeen += before.length;
+      expect(planBatches(tree, blocks), dir).toEqual(before);
+    }
+    expect(batchesSeen).toBeGreaterThan(5);
+  });
+
+  it("holds over many arrangements: askable always, and unchanged wherever the old plan was askable", () => {
+    /* mulberry32, seeded: the same arrangements every run. */
+    let seed = 0x5eed;
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const between = (lo: number, hi: number): number => lo + Math.floor(random() * (hi - lo + 1));
+    const size = (): number => {
+      const kind = random();
+      if (kind < 0.45) return between(1, MIN_BATCH + 2);
+      if (kind < 0.7) return between(MIN_BATCH, 3 * MAX_BATCH);
+      if (kind < 0.85) return between(MOST - MIN_BATCH, MOST);
+      return between(MOST + 1, MOST + 200);
+    };
+    let same = 0;
+    let rescued = 0;
+    for (let round = 0; round < 60; round++) {
+      const sizes = Array.from({ length: between(1, 7) }, size);
+      const total = sizes.reduce((a, b) => a + b, 0);
+      const headings = Array.from({ length: between(0, 40) }, () => between(0, total - 1));
+      const { tree, blocks } = sized(sizes, headings);
+      const before = planBatchesBefore(tree, blocks);
+      const batches = expectSoundPlan(tree, blocks);
+      if (before.every((b) => askable(b.blocks.length))) {
+        expect(batches, `sizes ${sizes.join(",")}`).toEqual(before);
+        same++;
+      } else {
+        rescued++;
+      }
+    }
+    /* Both halves were exercised. */
+    expect(same).toBeGreaterThan(10);
+    expect(rescued).toBeGreaterThan(10);
   });
 });
 

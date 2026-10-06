@@ -311,7 +311,7 @@ Waits on part 1's stage 1 being on `dev`.
 | **bioRxiv and medRxiv**, with the eval that decides between bioRxiv's full-text HTML and its PDF | The HTML is free and seconds; the PDF is paid. A pasted `.full` page must stay the HTML (Sol's G3). bioRxiv's robots file was only half read (G9). medRxiv refused us (403), so it is included only if a later check gets in. Needs part 1's eval harness on `dev` | `qi-w49m6b3d` |
 | **Follow a stub landing page's `citation_pdf_url`**, for the long tail (university repositories, Zenodo, AAAI, small journals) | A second mechanism and a judgement about what a stub is. Wants its own plan | `qi-nyd8f2w6` |
 | **OpenReview** | Challenged from the box. One fetch of a forum page and its PDF from production's network decides whether a ten-line source is worth adding | `qi-smqhdmcm` |
-| **HAL's bot-check page imports as an article** (*"Making sure you're not a bot!"*, 178 words, no error) | A bug found on the way, in a different place: stage 2's refusal of a page with too little text. Any Anubis-protected site will do the same | `qi-ptvjnvdm` |
+| **HAL's bot-check page imports as an article** (*"Making sure you're not a bot!"*, 178 words, no error) | A bug found on the way, in a different place: stage 2's refusal of a page with too little text. Any Anubis-protected site will do the same. **Fixed 2026-10-06 by [261006c](261006c-a-bot-check-page-is-refused-by-its-own-markup.md)**: the page is refused by its own markup and the reader is told to save it from their own browser; the address still cannot be imported | `qi-ptvjnvdm` |
 
 ## For Greg: not built, and why
 

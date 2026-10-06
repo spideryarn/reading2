@@ -38,6 +38,16 @@ import { SHIPPED_ARM, armNamed, preparedSourceHtml } from "../evals/extraction/a
 import { parseManifest } from "../evals/extraction/manifest.mjs";
 import { score } from "../evals/extraction/scorecard.mjs";
 
+/**
+ * **The floor's count, or `undefined` for anything that is not the floor's
+ * refusal.** `refusal` has been `TooLittleTextToRead | ChallengePage | null`
+ * since 2026-10-06 (src/challenge-page.ts), and only the first carries `chars`.
+ * Narrowing on the class keeps every assertion below exactly as strict as it
+ * was: a bot-check refusal here would read `undefined` and fail the number.
+ */
+const charsOf = (refusal: unknown): number | undefined =>
+  refusal instanceof TooLittleTextToRead ? refusal.chars : undefined;
+
 const FIXTURES = path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures");
 const bytes = (file: string): string => readFileSync(path.join(FIXTURES, file), "utf-8");
 
@@ -97,7 +107,7 @@ describe("rung 1 — the source candidates, and what the floor accepts of them",
     expect(refusal).toBeInstanceOf(TooLittleTextToRead);
     /* The exact number, not "below the floor": the count is what the reader is
        shown and what a later re-measurement is checked against. */
-    expect(refusal?.chars).toBe(chars);
+    expect(charsOf(refusal)).toBe(chars);
   });
 
   it("does not fire on the shortest genuine page in the corpus", () => {
@@ -139,7 +149,7 @@ describe("the floor is a number, and these are the two characters either side of
       (r.article?.textContent ?? "").trim().replace(/\s{2,}/g, " ").length;
     expect(measured(under)).toBe(MIN_ARTICLE_CHARS - 1);
     expect(measured(at)).toBe(MIN_ARTICLE_CHARS);
-    expect(under.refusal?.chars).toBe(MIN_ARTICLE_CHARS - 1);
+    expect(charsOf(under.refusal)).toBe(MIN_ARTICLE_CHARS - 1);
     expect(at.refusal).toBeNull();
   });
 
@@ -186,7 +196,7 @@ describe("the counterfactual, both directions", () => {
     const { article, refusal } = readArticle(bytes(file), url);
     expect(article).not.toBeNull();
     expect(article?.title).toBeTruthy();
-    expect(refusal?.chars).toBe(chars);
+    expect(charsOf(refusal)).toBe(chars);
     /* The disabled arm of the counterfactual, said as arithmetic: at a floor of
        zero nothing here is refused, and it is the number alone that separates
        the two worlds. */
@@ -252,8 +262,8 @@ describe("rung 3 — the same verdict on the path the harness takes", () => {
   }) => {
     const shipping = readArticle(bytes(file), url).refusal;
     const instrumented = readArticleWithProvenance(bytes(file), url).refusal;
-    expect(shipping?.chars).toBe(chars);
-    expect(instrumented?.chars).toBe(chars);
+    expect(charsOf(shipping)).toBe(chars);
+    expect(charsOf(instrumented)).toBe(chars);
   });
 
   it("agrees on a page it does not fire on either", () => {

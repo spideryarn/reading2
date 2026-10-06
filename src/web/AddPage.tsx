@@ -541,6 +541,13 @@ interface Started {
   vanished?: true;
 }
 
+/** Whether a POST's answer has what `JobCard` reads: see `heldJob` in `AddPage`. */
+function isDrawableJob(job: unknown): job is Job {
+  if (job === null || typeof job !== "object") return false;
+  const { id, slug, status, steps } = job as Record<string, unknown>;
+  return typeof id === "string" && typeof slug === "string" && typeof status === "string" && Array.isArray(steps);
+}
+
 export function AddPage({
   source: origin,
   readerId = null,
@@ -951,13 +958,20 @@ export function AddPage({
      copy follows every newer list answer; it never reverts to POST-time
      status when a later list omits a dismissed job. */
   const listed = queue.jobs.find((j) => j.id === startedId) ?? null;
-  const heldStatus = current?.job.status;
+  /* **Only a reply that is a job is drawn as one.** `queue.add`'s answer is
+     read off the wire unchecked, and `JobCard` reads `steps`: a 2xx of another
+     shape used to cost nothing here, because only its id was kept, and must
+     not now take the page down. Without a drawable copy the page waits for
+     the list, as it did before it held one. Found by
+     tests/dock-corner-controls.test.tsx in the full suite. */
+  const heldJob = current && isDrawableJob(current.job) ? current.job : null;
+  const heldStatus = heldJob?.status;
   const heldEnded = heldStatus === "done" || heldStatus === "error" || heldStatus === "cancelled";
   /* An advance may report an ending before the list catches up. A terminal
      job never becomes active under the same id; Retry makes a new id. */
   const listedIsOlder = heldEnded && (listed?.status === "queued" || listed?.status === "running");
   const newerList = listedIsOlder ? null : listed;
-  const job = vanished ? null : newerList ?? current?.job ?? null;
+  const job = vanished ? null : newerList ?? heldJob;
   useLayoutEffect(() => {
     if (!newerList) return;
     setStarted((held) =>

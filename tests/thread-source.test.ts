@@ -71,6 +71,23 @@ describe("threadSource", () => {
     });
   });
 
+  it("names a glossary entry and a cited work, each under its own mode's icon and word", () => {
+    expect(threadSource(t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }))).toEqual({
+      from: "glossary",
+      mode: "glossary",
+      label: "Started from a glossary entry",
+      quote: "qualia",
+    });
+    expect(
+      threadSource(t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "Consciousness Explained" } })),
+    ).toEqual({
+      from: "citations",
+      mode: "citations",
+      label: "Started from a cited work",
+      quote: "Consciousness Explained",
+    });
+  });
+
   it("says nothing for a plain chat", () => {
     expect(threadSource(t("chat"))).toBeNull();
   });
@@ -105,6 +122,14 @@ describe("the filter", () => {
     expect(sourcesIn([])).toEqual([]);
   });
 
+  it("puts a glossary chat and a cited-work chat under their own words", () => {
+    const g = { id: "g", ...t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }) };
+    const c = { id: "c2", ...t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "A work" } }) };
+    expect(sourcesIn([...all, c, g])).toEqual(["chats", "debate", "glossary", "citations", "learn", "passage"]);
+    expect(narrowed([...all, c, g], "glossary").map((x) => x.id)).toEqual(["g"]);
+    expect(narrowed([...all, c, g], "citations").map((x) => x.id)).toEqual(["c2"]);
+  });
+
   it("narrows to one source, and to everything when there is no choice", () => {
     expect(narrowed(all, null).map((x) => x.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(narrowed(all, "chats").map((x) => x.id)).toEqual(["a"]);
@@ -118,6 +143,9 @@ describe("the filter", () => {
     expect(CHAT_FROM_LABEL.chats).toBe("Chats");
     expect(CHAT_FROM_LABEL.learn).toBe("Learn");
     expect(CHAT_FROM_LABEL.debate).toBe("Debate");
+    expect(CHAT_FROM_LABEL.glossary).toBe("Glossary");
+    expect(CHAT_FROM_LABEL.citations).toBe("Citations");
+    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "debate", "glossary", "citations", "learn", "passage"]);
   });
 
   it("reads `?chatfrom=` as one of those words, and anything else as All", () => {

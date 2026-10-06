@@ -18,7 +18,6 @@
  */
 import { type AiCallRow, collectSpend } from "../../src/ai-spend.js";
 import { buildBoundedHeadingTree } from "../../src/heading-tree.js";
-import { unaskableBatches } from "../../src/labels.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
 import { CASCADE_RECIPE, ExpansionRefused, type ExpansionTarget, normaliseExpansion, type ProposedChild } from "../../src/structure-cascade.js";
 import { readExpansion } from "../../src/structure-deepen.js";
@@ -299,13 +298,12 @@ export async function armA(ctx: ArmContext): Promise<ArmResult> {
   };
   if (!sliced.ok) return result(begun, calls, { status: "failed", failure: `slices:${sliced.failure}`, detail });
   const top = Date.now() - begun.at;
-  /* The stitch, as `generateStructure` does it: one build, the seams, the checks, the labels' ask. */
+  /* The stitch, as `generateStructure` does it: one build, the seams, the checks. */
   try {
-    const { tree, bodyTree, built, problems } = finishTree(doc, sliced.proposal);
+    const { bodyTree, built, problems } = finishTree(doc, sliced.proposal);
     const over = { proposal: sliced.proposal, build: countReport(built), checkTreeProblems: problems.slice(0, 20), topMs: top, detail };
     if (!seamsHeld(bodyTree, sliced.sections, sliced.seams)) return result(begun, calls, { status: "failed", failure: "slices:tree-unsound(seams)", ...over });
     if (problems.length > 0) return result(begun, calls, { status: "failed", failure: "slices:tree-unsound(checkTree)", ...over });
-    if (unaskableBatches(tree, doc.blocks).length > 0) return result(begun, calls, { status: "failed", failure: "slices:labels-could-not-ask", ...over });
     return result(begun, calls, { status: "ok", ...over, treeMs: Date.now() - begun.at });
   } catch (err) {
     return result(begun, calls, { status: "failed", failure: `slices:tree-unsound(${(err as Error).name})`, proposal: sliced.proposal, detail });

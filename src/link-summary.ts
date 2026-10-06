@@ -71,6 +71,7 @@
 
 import { createHash } from "node:crypto";
 
+import { StallReached } from "./call-failure.js";
 import { type AiRequestBody, classifyEnd, openRouterStream, ProviderRefused } from "./ai-call.js";
 import { errorFields, log, since } from "./log.js";
 import { linkInArticle, type LinkOccurrence, type LinkSighting } from "./link-previews.js";
@@ -496,7 +497,7 @@ async function* callModel(
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), SUMMARY_STALL_MS);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), SUMMARY_STALL_MS);
   };
   const composite = AbortSignal.any(
     signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
