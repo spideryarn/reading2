@@ -81,7 +81,9 @@ What the reader gets:
   ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
   started from.
 - **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
-  latest answer begins. No model writes that line; it is the answer's own first line. Pressing the
+  latest answer begins. No model writes that line; it is the answer's own first line, in plain words
+  (`answerOpening` in `src/answer-opening.ts` takes the markdown and the block references out).
+  Pressing the
   mark opens the conversation beside Debate (`?thread=`, the mode unchanged), in the floating chat
   panel, which docks in the right-hand column only when Marginalia is open and the window is wide.
 - **In Chat's list** the conversation has Debate's icon, with a card that quotes the claim.

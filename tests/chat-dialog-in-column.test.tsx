@@ -314,6 +314,29 @@ describe("collapsed and expanded", () => {
     expect(cardHost.contains(panel())).toBe(true);
   });
 
+  it("shows that line in plain words: no markdown, no block references", () => {
+    /* It was the answer's raw first line, `**…**` and `[spya-…]` included
+       (queue item qi-ezpyknnv). The cut is `answerOpening`, shared with the
+       summaries' `lastLine`. */
+    threads = [
+      {
+        ...ANSWERED,
+        messages: [
+          ANSWERED.messages[0]!,
+          {
+            ...ANSWERED.messages[1]!,
+            text: "**Because** the sum telescopes [spya-k3m9qt].\n\nAnd a second paragraph.",
+          },
+        ],
+      },
+    ];
+    draw(THREAD, inCard());
+    act(() => button("Collapse")?.click());
+    expect(shown(".chat-card-shut")[0]?.querySelector(".chat-card-line")?.textContent).toBe(
+      "Because the sum telescopes.",
+    );
+  });
+
   it("says an answer is arriving, with the spinner, while one is", () => {
     threads = [ANSWERING];
     draw(THREAD, inCard());
