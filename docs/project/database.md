@@ -180,6 +180,13 @@ fingerprints put the tree's `structureHash` and the prompt head beside it, becau
 fingerprint has to cover **everything its prompt reads** — including the lines that are not about
 the article's text at all, and including whatever the stage substitutes when an input is missing.
 
+**A stored run is stamped with the hash of the exact blocks it sent, not of the blocks the store
+reads when the row is made.** For Search and Criteria the handler loads the article first, passes
+`hashBlocks` of it into `begin` as a required `sourceHash`, and hands that same article to the model;
+read inside `begin`, a re-extraction landing in between left a fresh answer stamped stale. The cost
+is that a failed `loadArticle` is now an HTTP error with no stored row, where it was a stored error
+run (`7fc1b41fb`, 2026-10-05).
+
 ## Next: Supabase Postgres
 
 **The heading is from when this was the plan; it is now the store, and the only one.** This section
