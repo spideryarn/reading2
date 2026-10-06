@@ -74,7 +74,7 @@ describe("Toast", () => {
     render({ id: 1, text: "Thank you." });
     act(() => vi.advanceTimersByTime(2000));
     /* Pointer events since 261006i: the clock is `useGoesByItself`, which
-       ignores a finger (tests/marginalia-narrow-notice.test.tsx). */
+       ignores a finger or Pencil (tests/marginalia-narrow-notice.test.tsx). */
     act(() => card()?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" })));
     act(() => vi.advanceTimersByTime(60_000));
     expect(dismissed, "it went while being read").toBe(0);

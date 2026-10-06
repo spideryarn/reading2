@@ -622,22 +622,31 @@ export function MarginaliaHead({
  *
  * **Nothing is remembered.** "Gone" is this component's own state, so the line
  * shows again each time it is mounted afresh: Marginalia switched off and on,
- * the room found and lost again, a covering band closed. That keeps its job —
- * a mode that silently drew nothing would look broken.
+ * the room found and lost again, or a covering band closed in a window still
+ * too narrow for the notes alone. That keeps its job — a mode that silently
+ * drew nothing would look broken.
  *
  * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
  * the small-screen banner while this element exists
  * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
  * it would drop that banner into the top of the article mid-read. And the
- * sentence is only made invisible, not hidden, so a screen reader still finds
- * why there are no notes, as it did before this could fade.
+ * sentence is only made invisible, not hidden, when the clock runs out, so a
+ * screen reader still finds why there are no notes, as it did before this
+ * could fade. An explicit Dismiss does hide it from the accessibility tree:
+ * that control must do what its name says.
  * docs/plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md
  */
 function NarrowLine({ beside }: { beside: boolean }) {
   const [gone, setGone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const reading = useGoesByItself(TOAST_MS, () => setGone(true));
   return (
-    <aside className={`marg-narrow${gone ? " is-gone" : ""}`} aria-label="Marginalia" {...reading}>
+    <aside
+      className={`marg-narrow${gone ? " is-gone" : ""}`}
+      aria-label="Marginalia"
+      aria-hidden={dismissed || undefined}
+      {...reading}
+    >
       <p>
         {beside
           ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
@@ -647,7 +656,14 @@ function NarrowLine({ beside }: { beside: boolean }) {
         type="button"
         className="marg-narrow-close close-x"
         aria-label="Dismiss"
-        onClick={() => setGone(true)}
+        onClick={(event) => {
+          /* Do not leave focus inside the subtree we are about to hide from
+             assistive technology. The visual close already loses focus when
+             visibility:hidden applies. */
+          event.currentTarget.blur();
+          setDismissed(true);
+          setGone(true);
+        }}
       >
         <X aria-hidden="true" />
       </button>

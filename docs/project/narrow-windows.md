@@ -224,9 +224,9 @@ the reasons.
 **That line goes by itself after about five seconds, and has a × to send it away sooner**, since
 2026-10-06 — Greg, spya-u264yb: *"there's no way to dismiss it, and it doesn't fade after a few
 seconds."* Nothing is remembered: it shows again whenever it is drawn afresh (Marginalia off and
-on, the room found and lost, a covering band closed), because a mode that silently drew nothing
-would look broken. Once gone the element is still in the document, invisible, for two reasons that
-are easy to undo by accident:
+on, the room found and lost, or a covering band closed below the width where the notes fit alone),
+because a mode that silently drew nothing would look broken. Once gone the element is still in the
+document, invisible, for two reasons that are easy to undo by accident:
 [261006i](../plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md).
 
 The full account, including what the measuring harness cannot see, is

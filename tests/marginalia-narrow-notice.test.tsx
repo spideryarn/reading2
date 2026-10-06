@@ -88,13 +88,32 @@ describe("Marginalia's narrow-window line", () => {
   });
 
   /* A tap fires the hover family and need never say it has left
-     (docs/project/touch.md); a finger must not stop the clock for good. */
-  it("does not wait for a finger that touched it", () => {
+     (docs/project/touch.md); a finger or Pencil must not stop the clock for
+     good. The Pencil is `pen`, and touch.md's gesture-wide rule says it counts
+     as a finger. */
+  it.each(["touch", "pen"])("does not wait for a %s pointer that tapped it", (pointerType) => {
     draw();
-    point("pointerover", "touch");
+    point("pointerover", pointerType);
     act(() => vi.advanceTimersByTime(TOAST_MS));
     expect(gone(), "a tap stopped the clock").toBe(true);
   });
+
+  it.each(["touch", "pen"])(
+    "does not let a %s pointer leaving cancel a mouse's pause",
+    (pointerType) => {
+      draw();
+      act(() => vi.advanceTimersByTime(2000));
+      point("pointerover", "mouse");
+      point("pointerover", pointerType);
+      point("pointerout", pointerType);
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(gone(), "a direct pointer resumed the clock while the mouse was still over it").toBe(false);
+
+      point("pointerout", "mouse");
+      act(() => vi.advanceTimersByTime(TOAST_MS - 2000));
+      expect(gone()).toBe(true);
+    },
+  );
 
   it("waits while focus is on its button, and only counts the time that is left", () => {
     draw();
@@ -112,9 +131,18 @@ describe("Marginalia's narrow-window line", () => {
 
   it("goes at once when its close button is pressed", () => {
     draw();
+    point("pointerover", "mouse");
     expect(close()?.getAttribute("aria-label")).toBe("Dismiss");
     act(() => close()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(gone()).toBe(true);
+    expect(line()?.getAttribute("aria-hidden"), "Dismiss left the line in the accessibility tree").toBe(
+      "true",
+    );
+    /* The paused clock resumes when the pointer leaves; its later callback
+       must not undo an explicit semantic dismissal. */
+    point("pointerout", "mouse");
+    act(() => vi.advanceTimersByTime(TOAST_MS));
+    expect(line()?.getAttribute("aria-hidden")).toBe("true");
   });
 
   /* The element stays: `.reader.band-covers:has(.mode-band, .marg-narrow)`
@@ -129,6 +157,10 @@ describe("Marginalia's narrow-window line", () => {
     draw();
     act(() => vi.advanceTimersByTime(TOAST_MS));
     expect(line()?.textContent).toContain("The notes need a wider window");
+    expect(line()?.hasAttribute("aria-hidden"), "the clock hid the explanation from a screen reader").toBe(
+      false,
+    );
+    expect(line()?.hasAttribute("hidden")).toBe(false);
 
     const css = readerCssNoComments();
     const box = /\.marg-narrow\.is-gone\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";

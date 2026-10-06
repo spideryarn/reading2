@@ -29,7 +29,7 @@ It stays for as long as that state lasts, over the bottom of the article, with n
 Both of the things Greg names, since each is small and they share one bit of state:
 
 1. **It goes by itself after about five seconds** (`TOAST_MS`, the number the app's one toast
-   already uses), fading out. The clock stops while the pointer is over it or focus is inside it,
+   already uses), fading out. The clock stops while the mouse is over it or focus is inside it,
    as the toast's does, so it does not go while it is being read.
 2. **It has a × button** ("Dismiss") that sends it away at once.
 
@@ -70,13 +70,13 @@ they are told why once.
 `ToastCard` ([`Toast.tsx`](../../src/web/Toast.tsx)) has the pause-aware clock inline: a timeout,
 stopped while hovered or focused, resumed with only the time left. A second copy would be the same
 twenty lines. So it moves into a hook in the same file, `useGoesByItself(ms, onGone)`, which returns
-the four handlers (`onMouseEnter`, `onMouseLeave`, `onFocus`, `onBlur`) to spread on the element.
+the four handlers (`onPointerEnter`, `onPointerLeave`, `onFocus`, `onBlur`) to spread on the element.
 `ToastCard` uses it; the new line uses it too.
 
 **One deliberate change to the toast comes with it** (GPT Sol's F4): the hover half listens to
-pointer events and ignores a finger. A tap fires the hover family and nothing need say it has left
-([touch.md](../project/touch.md)), so on a touch device a tap on either could have stopped the
-clock for good. A finger that wants it gone has the ×. `tests/toast.test.tsx` moves from
+pointer events and ignores a finger or Apple Pencil. A tap fires the hover family and nothing need
+say it has left ([touch.md](../project/touch.md)), so on either input a tap could have stopped the
+clock for good. Either can use the ×. `tests/toast.test.tsx` moves from
 `mouseover` to `pointerover` for that one case and is otherwise unchanged.
 
 ### The element stays in the document once gone
@@ -96,15 +96,18 @@ arrive **in flow at the top of the article five seconds into reading it** and mo
 So the line is not unmounted: it gets a class, `is-gone`, and the stylesheet makes it invisible
 (`opacity: 0; pointer-events: none`). The fade is a `transition` on `opacity`, written only inside
 `prefers-reduced-motion: no-preference`, so a reader who asked for less movement sees it simply go.
-One boolean, no "leaving" state, no second timer.
+There is no "leaving" state and no second timer. A second boolean distinguishes an explicit
+dismissal, which must hide the line from assistive technology, from the clock running out.
 
 **Invisible, not hidden, and that is for a screen reader** (GPT Sol's F6). The line is a plain
 `aside`, not an announced status, so somebody using a screen reader finds it by moving to it, which
 may well take longer than five seconds. `visibility: hidden` (the first draft) would have taken the
 explanation away from them before they got there, where today it stays. With `opacity: 0` the
-sentence is still in the accessibility tree, exactly as before this change. Only the × is hidden
-outright (`visibility: hidden`), since it would otherwise be an invisible tab stop. Passed over: a
-live region that announces the sentence — it would interrupt on every arrival, for a layout fact.
+sentence is still in the accessibility tree after the clock runs out, exactly as before this change.
+An explicit press on Dismiss also adds `aria-hidden`, so that control dismisses the line for a
+screen-reader user too. Only the × is hidden outright (`visibility: hidden`), since it would
+otherwise be an invisible tab stop. Passed over: a live region that announces the sentence — it
+would interrupt on every arrival, for a layout fact.
 
 A side effect, accepted: the small-screen banner stays hidden after the line has gone, for as long
 as Marginalia is on in a window too narrow for it. That is today's behaviour for the same state.
@@ -138,12 +141,13 @@ seen red on their own.
 - goes by itself at `TOAST_MS`, not a millisecond before;
 - † a re-render part-way through does not start the clock again;
 - waits while a mouse is over it, then counts only what was left;
-- † does not wait for a finger (`pointerType: "touch"`) — the mouse case beside it is what shows
-  the test can tell the two apart;
+- † does not wait for a finger (`pointerType: "touch"`) or Apple Pencil (`"pen"`) — the mouse case
+  beside it is what shows the test can tell them apart;
 - † waits while focus is on its button, then counts only what was left;
-- the × sends it away at once, and is named "Dismiss";
-- once gone the sentence is still in the document, the box's rule has `opacity: 0` and no
-  `visibility` or `display`, and the button's has `visibility: hidden`;
+- the × sends it away at once, is named "Dismiss", and removes the line from the accessibility tree;
+- after the clock runs out the sentence is still in the document and the accessibility tree, the
+  box's rule has `opacity: 0` and no `visibility` or `display`, and the button's has
+  `visibility: hidden`;
 - comes back when the room returns and is lost again;
 - stays gone across an ordinary re-render.
 
@@ -168,9 +172,51 @@ fixes**; no established P0 or P1. Each finding was checked against the code and 
 | F1 P2 | one red test failed on a `TypeError` in the test, not on the missing behaviour | **Yes**: `readerCssNoComments()` |
 | F2 P2 | the "comes back" table had the widths wrong; the two sentences never swap in place; 650px with no band shows no line | **Yes**: the table above; the `key` and its test dropped; a page test at 590px; the browser check moved to 590px |
 | F3 P2 | nothing tested a re-render mid-countdown, or focus on the new button | **Yes**: both added |
-| F4 P1, reasoned | a tap could stop the clock for good | **Yes**: pointer events, a finger ignored, in the shared hook, so the toast is fixed too |
+| F4 P1, reasoned | a tap could stop the clock for good | **Yes**: pointer events, a finger or Pencil ignored, in the shared hook, so the toast is fixed too |
 | F5 P1, reasoned | the × had no stated touch target | **Yes**: `.close-x` |
 | F6 P1, reasoned | fading with `visibility: hidden` takes the explanation from a screen-reader user who has not reached it yet | **Yes**: invisible rather than hidden, above |
+
+## GPT Sol's code review, and what it fixed
+
+[261006i-marginalia-narrow-notice-code-review-sol.md](261006i-marginalia-narrow-notice-code-review-sol.md),
+on [its prompt](261006i-marginalia-narrow-notice-code-review-prompt.md), of commit `72121e004`.
+Verdict **approve with the fixes made**. It fixed these itself, red first; I read each in its diff
+and agree with all five.
+
+| | Finding | What it did |
+|---|---|---|
+| F7 P1 | F4 ignored a finger but still treated an Apple Pencil (`pen`) as hovering, against [touch.md](../project/touch.md) | one test for both, `isDirectPointer` in `Toast.tsx` |
+| F8 P1 | leaving did not apply the same test, so on a device with both, a finger lifting could restart the clock under a resting mouse | `onPointerLeave` ignores a finger or Pencil too |
+| F9 P1 | "Dismiss" left the sentence in the accessibility tree, so the button did not do what its name says to the one reader who cannot see the fade | pressing × also sets `aria-hidden`; the clock running out still does not |
+| F10 P2 | the F6 test read `textContent` and one CSS rule and called that accessibility | it now tells the clock from the × and checks `aria-hidden` and `hidden` |
+| F11 P3 | prose: "a covering band closed" without the width; "mouse" handlers that are pointer handlers | reworded here and in the docs |
+
+It also wrote two short postmortems, since both P1s were real defects in a commit:
+[direct pointers](../postmortems/261006n-direct-pointers-classified-on-enter-and-leave.md) and
+[visual disappearance is not dismissal](../postmortems/261006n-visual-disappearance-is-not-semantic-dismissal.md).
+Neither reached `dev`.
+
+## The browser check
+
+A Sonnet subagent, Playwright against system Chrome on the box, the worktree's own dev server, on
+commit `72121e004` (before the review's fixes, none of which changes what a mouse sees). Shots:
+[800px with Glossary open](261006i-shot-800-band.png), [590px, no band](261006i-shot-590.png).
+
+- The box is 352 by 45px at both widths, the sentence on two lines, the × 32 by 32 and centred
+  beside it, 8px clear of the Dock.
+- Left alone it went, and **nothing moved**: the first paragraph's rectangle and the scroll
+  position were identical before and after.
+- The × sends it away at once; afterwards the button's `visibility` is `hidden` and a click where
+  the box was reaches the article underneath.
+- A mouse held over it for 8.5s kept it; it went about 3s after the mouse left.
+- At 590px, Marginalia off and on again drew it afresh.
+- No page errors.
+
+**One number is not settled.** The fade was seen 4.2 to 4.35s after the box was first *seen*, not
+5s. The clock is one 5000ms timeout from mount and the unit test pins it to the millisecond, so the
+likeliest reading is that the first sighting was late: the page was still loading for 5 to 7s in
+that headless run and the poll runs on the same busy thread. It was not measured a second way. If
+it is real, the reader gets about four seconds rather than five on a slow first load.
 
 ## Stages
 

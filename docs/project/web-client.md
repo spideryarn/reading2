@@ -157,7 +157,7 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation, and its `useGoesByItself` for anything else that should go after a few
-  seconds but not while it is being read.
+  seconds but not while it has mouse hover or focus.
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
   and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its

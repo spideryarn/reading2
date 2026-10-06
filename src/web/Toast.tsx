@@ -41,6 +41,11 @@ export interface ToastMessage {
   text: string;
 }
 
+/** Direct pointers tap rather than hover; touch.md gives Pencil the same rule as a finger. */
+function isDirectPointer(pointerType: string): boolean {
+  return pointerType === "touch" || pointerType === "pen";
+}
+
 export function Toast({
   toast,
   onDismiss,
@@ -57,18 +62,19 @@ export function Toast({
 
 /**
  * **The clock of a thing that goes by itself, and not while it is being read.**
- * It calls `onGone` after `ms`; it stops while a pointer is over the element
- * or focus is inside it, and resumes with only the time that was left. Spread
- * what it returns on the element.
+ * It calls `onGone` after `ms`; it stops while a mouse pointer is over the
+ * element or focus is inside it, and resumes with only the time that was left.
+ * Spread what it returns on the element.
  *
  * Shared by the toast and Marginalia's narrow-window line
  * (marginalia/MarginaliaColumn.tsx § `NarrowLine`), so there is one clock.
  *
- * **Pointer events, and a finger does not count as hovering.** A tap fires the
- * hover family too, and nothing need say it has left until the next tap
- * elsewhere, so a touch that stopped the clock could stop it for good
- * (docs/project/touch.md § a lift fires the hover events too; GPT Sol's F4 on
- * plan 261006i). A finger that wants it gone has the close button.
+ * **Pointer events, and a finger or Pencil does not count as hovering.** A tap
+ * fires the hover family too, and nothing need say it has left until the next
+ * tap elsewhere, so a touch or pen pointer that stopped the clock could stop
+ * it for good (docs/project/touch.md § a lift fires the hover events too and
+ * § an Apple Pencil counts as a finger; GPT Sol's F4 on plan 261006i). Either
+ * can use the close button instead.
  */
 export function useGoesByItself(ms: number, onGone: () => void) {
   const [hovered, setHovered] = useState(false);
@@ -94,9 +100,13 @@ export function useGoesByItself(ms: number, onGone: () => void) {
 
   return {
     onPointerEnter: (e: PointerEvent<HTMLElement>) => {
-      if (e.pointerType !== "touch") setHovered(true);
+      if (!isDirectPointer(e.pointerType)) setHovered(true);
     },
-    onPointerLeave: () => setHovered(false),
+    onPointerLeave: (e: PointerEvent<HTMLElement>) => {
+      /* A direct pointer never started the pause, so it must not end a mouse's
+         pause on a hybrid device either. */
+      if (!isDirectPointer(e.pointerType)) setHovered(false);
+    },
     onFocus: () => setFocused(true),
     onBlur: (e: FocusEvent<HTMLElement>) => {
       /* Focus moving between two things inside the element is not leaving it. */

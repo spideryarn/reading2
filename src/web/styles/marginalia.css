@@ -418,8 +418,9 @@ p.marg-shut {
 /* **Gone after a few seconds, or on its ×** (MarginaliaColumn.tsx §
    `NarrowLine`). The element stays, because narrow-window.css hides the
    small-screen banner while it exists. The box is made invisible rather than
-   hidden, so a screen reader still finds the sentence; only the button, which
-   would otherwise be an invisible tab stop, is hidden outright. */
+   hidden, so after the clock runs out a screen reader still finds the
+   sentence. An explicit Dismiss adds `aria-hidden` in NarrowLine. The button,
+   which would otherwise be an invisible tab stop, is hidden outright. */
 .marg-narrow.is-gone {
   opacity: 0;
   pointer-events: none;
