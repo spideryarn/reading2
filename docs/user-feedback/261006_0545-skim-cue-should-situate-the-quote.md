@@ -45,5 +45,15 @@ measured in [261006b](../investigations/261006b-skim-cue-situates-the-quote-eval
 
 > use your judgment. don't change things too much - the Skim questions were mostly good
 
-So neither the every-cue scene (B) nor a further round (C) is built. Queue entry qi-pjrr5g86 is
-dropped.
+and then, on one more measured round of a middle wording: *"run spike, use your judgment"*.
+
+**The spike ran and the middle wording did not pass; `skim/10` stays as it is.** It was judged
+blind against `skim/10` on 36 hand-marked dangling quotes and 50 ordinary ones, from 23 articles,
+by two judges. On the dangling quotes one judge preferred the shipped cue 19 to 11 and the other
+the new one 14 to 11, where the shipped prompt against itself split 15 to 11; and against one of
+the two control runs the new wording gave more away (21 to 17) and misstated more (5 to 2). So
+neither the every-cue scene (B) nor the middle wording is built, and nothing else about Skim
+changed. One candidate run, with judges of the writer's model family; the original strict-by-both
+subset also fails. The sample does not establish how often quotes dangle across all articles. $3.90.
+[261006b § Round three](../investigations/261006b-skim-cue-situates-the-quote-eval.md#round-three-a-middle-wording-on-hand-marked-dangling-quotes).
+Queue entry qi-pjrr5g86 is dropped.
