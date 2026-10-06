@@ -34,7 +34,7 @@ export interface ResolvedPaper {
   canonicalUrl: string;
   /** What `urlKey` (src/ingest.ts) answers for `canonicalUrl`, so every shape of the link is one article. */
   key: string;
-  /** Passes `isSlug` (src/ingest.ts): lower-case, `[a-z0-9-]` only. */
+  /** Passes `isSlug` (src/ingest.ts): lower-case, `[a-z0-9-]` only, at most `PAPER_SLUG_MAX` long. */
   slug: string;
   /** The addresses to try, in order of preference. */
   candidates: readonly PaperCandidate[];
@@ -53,16 +53,42 @@ export interface PaperSource {
  */
 export const ARXIV_ID_PATTERN = "\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7}";
 
+/**
+ * The longest slug `isSlug` (src/ingest.ts) accepts — its `MAX`. A copy, because
+ * src/ingest.ts imports this file and the import cannot go both ways;
+ * tests/paper-sources.test.ts fails if the two stop agreeing.
+ */
+export const PAPER_SLUG_MAX = 60;
+
+/**
+ * The same id, **bounded**, for the addresses this file resolves: an old-style
+ * archive name is at most 16 characters. `ARXIV_ID_PATTERN` leaves it unbounded,
+ * and that copy is left alone because src/cited-in-spideryarn.ts and
+ * src/paper-text.ts share it and neither builds a slug from what it matches.
+ *
+ * Sixteen is twice the longest archive name known to whoever wrote this
+ * (`cond-mat`, `astro-ph`, `chao-dyn`, `quant-ph` — eight each; not checked
+ * against arXiv's full list of retired archives), and the subject class after
+ * the dot is two letters (`math.GT`).
+ */
+const ARXIV_ID_BOUNDED = "\\d{4}\\.\\d{4,5}|[a-z-]{1,16}(?:\\.[a-z]{2})?\\/\\d{7}";
+/** A version: `v` and one to three digits — up to `v999`. */
+const ARXIV_VERSION = "v\\d{1,3}";
+/* With both bounded, the longest slug the grammar can produce is 37 characters
+   (`arxiv-` + 16 + `.xx` + `/` + 7 digits + `v999`), well inside PAPER_SLUG_MAX.
+   `arxivPaper` checks the length anyway, so widening either bound later cannot
+   hand out a slug the store refuses. */
+
 const ARXIV_HOSTS: ReadonlySet<string> = new Set(["arxiv.org", "www.arxiv.org", "export.arxiv.org", "browse.arxiv.org"]);
 const DOI_HOSTS: ReadonlySet<string> = new Set(["doi.org", "dx.doi.org"]);
 
 /** `/abs/<id>`, `/html/<id>`, `/format/<id>`, `/pdf/<id>` and `/pdf/<id>.pdf`; nothing before or after. */
 const ARXIV_PATH = new RegExp(
-  `^/(?:(?:abs|html|format)/(${ARXIV_ID_PATTERN})(v\\d+)?|pdf/(${ARXIV_ID_PATTERN})(v\\d+)?(?:\\.pdf)?)/?$`,
+  `^/(?:(?:abs|html|format)/(${ARXIV_ID_BOUNDED})(${ARXIV_VERSION})?|pdf/(${ARXIV_ID_BOUNDED})(${ARXIV_VERSION})?(?:\\.pdf)?)/?$`,
   "i",
 );
 /** arXiv's own DOI, the only DOI that names its paper without a fetch. */
-const ARXIV_DOI_PATH = new RegExp(`^/10\\.48550/arxiv\\.(${ARXIV_ID_PATTERN})(v\\d+)?/?$`, "i");
+const ARXIV_DOI_PATH = new RegExp(`^/10\\.48550/arxiv\\.(${ARXIV_ID_BOUNDED})(${ARXIV_VERSION})?/?$`, "i");
 
 /**
  * The addresses to try for one arXiv paper, in order of preference.
@@ -105,19 +131,37 @@ function arxivIdIn(url: URL): { versionedId: string; workId: string } | null {
   return { versionedId: `${workId}${(version ?? "").toLowerCase()}`, workId };
 }
 
+/**
+ * The arXiv paper with this id — exactly what the arXiv source answers for any
+ * of its addresses, so another source (a mirror of arXiv) can hand back the same
+ * paper without copying the object.
+ *
+ * **`null` when the slug would not pass `isSlug`'s length rule.** An id from
+ * `arxivIdOf` never gets there, because the grammar above is bounded; an id
+ * built some other way might, and a `ResolvedPaper` whose slug the store
+ * refuses is worse than no paper — `slugFromUrl` would return it and
+ * `POST /api/jobs` would answer 400. `null` sends the address down the ordinary
+ * path instead.
+ */
+export function arxivPaper(id: { versionedId: string; workId: string }): ResolvedPaper | null {
+  const slug = `arxiv-${id.versionedId.replace(/[^a-z0-9]+/g, "-")}`;
+  if (slug.length > PAPER_SLUG_MAX) return null;
+  return {
+    source: "arxiv",
+    versionedId: id.versionedId,
+    workId: id.workId,
+    canonicalUrl: `https://arxiv.org/abs/${id.versionedId}`,
+    key: `arxiv.org/abs/${id.versionedId}`,
+    slug,
+    candidates: arxivCandidates(id.versionedId),
+  };
+}
+
 const arxiv: PaperSource = {
   name: "arxiv",
   resolve(url) {
     const id = arxivIdIn(url);
-    if (id === null) return null;
-    return {
-      source: "arxiv",
-      ...id,
-      canonicalUrl: `https://arxiv.org/abs/${id.versionedId}`,
-      key: `arxiv.org/abs/${id.versionedId}`,
-      slug: `arxiv-${id.versionedId.replace(/[^a-z0-9]+/g, "-")}`,
-      candidates: arxivCandidates(id.versionedId),
-    };
+    return id === null ? null : arxivPaper(id);
   },
 };
 

@@ -6,8 +6,14 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { isSlug, urlKey } from "../src/ingest.js";
-import { ARXIV_ID_PATTERN, arxivIdOf, resolvePaperSource } from "../src/paper-sources.js";
+import { isSlug, slugFromUrl, urlKey } from "../src/ingest.js";
+import {
+  ARXIV_ID_PATTERN,
+  arxivIdOf,
+  arxivPaper,
+  PAPER_SLUG_MAX,
+  resolvePaperSource,
+} from "../src/paper-sources.js";
 
 /** The link Greg pasted, tracking parameters and all. */
 const PASTED =
@@ -173,6 +179,81 @@ describe("resolvePaperSource — arXiv", () => {
     for (const url of ["https://arxiv.org/abs/2608.13566", "https://arxiv.org/abs/2608.13566v1", PASTED]) {
       expect(resolvePaperSource(url)?.key).toBe(urlKey(url));
     }
+  });
+});
+
+/* Review finding F16: the grammar used to leave the version and the old-style
+   archive name unbounded, so an address could resolve to a slug `isSlug`
+   refuses. Both are bounded now, and the resolver refuses any slug over the
+   limit whatever the grammar says. */
+describe("resolvePaperSource — a slug the store would refuse", () => {
+  const LONG_VERSION = `https://arxiv.org/abs/2608.13566v${"1".repeat(50)}`;
+  const LONG_ARCHIVE = `https://arxiv.org/abs/${"a".repeat(50)}/9901001`;
+  const TOO_LONG = [
+    LONG_VERSION,
+    LONG_ARCHIVE,
+    `https://arxiv.org/pdf/2608.13566v${"1".repeat(50)}.pdf`,
+    `https://arxiv.org/pdf/${"a".repeat(50)}.gt/9901001v2`,
+    `https://doi.org/10.48550/arXiv.2608.13566v${"1".repeat(50)}`,
+    // One past each bound, well short of the slug limit: the grammar is closed, not only guarded.
+    "https://arxiv.org/abs/2608.13566v1234",
+    `https://arxiv.org/abs/${"a".repeat(17)}/9901001`,
+  ];
+
+  it.each(TOO_LONG)("answers null for %s", (url) => {
+    expect(resolvePaperSource(url)).toBeNull();
+    expect(arxivIdOf(url)).toBeNull();
+  });
+
+  it.each([LONG_VERSION, LONG_ARCHIVE])("leaves %s to the ordinary slug and key", (url) => {
+    const slug = slugFromUrl(url);
+    expect(slug === "" || isSlug(slug)).toBe(true);
+    // The ordinary key: host and path, lower-cased — not a paper's.
+    expect(urlKey(url)).toBe(url.replace("https://", "").toLowerCase());
+  });
+
+  /** The longest id each bound admits, and real archives beside them. */
+  const LONGEST = [
+    `https://arxiv.org/abs/${"a".repeat(16)}.GT/9901001v999`,
+    `https://arxiv.org/pdf/${"a-".repeat(8)}.GT/9901001v999.pdf`,
+    "https://arxiv.org/abs/2608.13566v999",
+    "https://doi.org/10.48550/arXiv.2608.13566v999",
+    "https://arxiv.org/abs/cond-mat/9901001v12",
+    "https://arxiv.org/abs/astro-ph/0001001",
+    "https://arxiv.org/abs/chao-dyn/9901001",
+    "https://arxiv.org/abs/physics/0001001v3",
+    "https://arxiv.org/abs/q-alg/9701001",
+    "https://arxiv.org/abs/nlin.CD/0001001",
+  ];
+
+  it.each(LONGEST)("still resolves %s, to a slug the store accepts", (url) => {
+    const got = resolvePaperSource(url);
+    if (got === null) throw new Error(`did not resolve: ${url}`);
+    expect(isSlug(got.slug)).toBe(true);
+    expect(got.slug.length).toBeLessThanOrEqual(PAPER_SLUG_MAX);
+  });
+
+  it("keeps its limit equal to isSlug's", () => {
+    expect(isSlug("a".repeat(PAPER_SLUG_MAX))).toBe(true);
+    expect(isSlug("a".repeat(PAPER_SLUG_MAX + 1))).toBe(false);
+  });
+});
+
+describe("arxivPaper", () => {
+  it.each([
+    "https://arxiv.org/abs/2608.13566",
+    "https://arxiv.org/pdf/2608.13566v1.pdf",
+    "https://arxiv.org/abs/math.GT/0309136v3",
+  ])("answers what the arXiv source answers for %s", (url) => {
+    const id = arxivIdOf(url);
+    if (id === null) throw new Error(`no id: ${url}`);
+    expect(arxivPaper(id)).not.toBeNull();
+    expect(arxivPaper(id)).toEqual(resolvePaperSource(url));
+  });
+
+  it("refuses an id whose slug the store would refuse, rather than returning it", () => {
+    const workId = "2608.13566";
+    expect(arxivPaper({ versionedId: `${workId}v${"1".repeat(50)}`, workId })).toBeNull();
   });
 });
 

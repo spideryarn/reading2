@@ -248,6 +248,37 @@ describe("a paper queued before the resolver, pasted again after it", () => {
     expect(await stateOf(pasted.reservation)).toBe("released");
   });
 
+  /**
+   * **A holder the reader has pressed Stop on is not handed back** — GPT Sol's
+   * F15, reviewing the built stage 1.
+   *
+   * A running job with Stop pressed stays `running`, with `cancelling` set,
+   * until its claimant unwinds. Handing it back would give the new request a
+   * job that is about to end `cancelled`, and its slot — on no job — back to
+   * the reader: the paste would vanish. `jobs_active_work` leaves cancelling
+   * rows out for this reason, and the look before the insert must agree.
+   */
+  it("does not hand back a job that is being cancelled, and spends the paste's slot on a new one", async () => {
+    const id = anArxivId();
+    const seeded = await queuedByTheOldBuild(`https://arxiv.org/pdf/${id}`);
+    const claimed = await pgJobStore.claim(seeded.job.id, OWNER, mintAttempt(), 60_000, 4);
+    expect(claimed.kind, "the seed could not be claimed, so it cannot be left stopping").toBe("claimed");
+    const stopping = await pgJobStore.requestCancel(seeded.job.id, OWNER);
+    /* The state the case is about, proved rather than assumed: still active, and stopping. */
+    expect(stopping?.status).toBe("running");
+    expect(stopping?.cancelling).toBe(true);
+
+    const pasted = await paste(`https://arxiv.org/abs/${id}`);
+
+    expect(pasted.job.id, "the paste was handed a job that is stopping").not.toBe(seeded.job.id);
+    expect(pasted.job.status).toBe("queued");
+    expect(pasted.job.cancelling).not.toBe(true);
+    expect(pasted.job.slug, "one paper became two articles").toBe(seeded.job.slug);
+    /* The new request's slot is on its own new job, not given back. */
+    expect(await jobsCarrying(pasted.reservation)).toEqual([pasted.job.id]);
+    expect(await stateOf(pasted.reservation)).toBe("held");
+  });
+
   it("still queues a different piece of work behind it, on the same article", async () => {
     const id = anArxivId();
     const seeded = await queuedByTheOldBuild(`https://arxiv.org/pdf/${id}`);
