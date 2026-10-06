@@ -17,7 +17,7 @@
  *
  * Plan: docs/plans/261006l-borrow-the-reading-app-s-machinery-for-the-fleet-dashboard.md § Stage 2.
  */
-import { act } from "react";
+import { act, Component, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +25,12 @@ import { App } from "../tools/fleet/web/src/App";
 import type { FeedApi, FeedView } from "../tools/fleet/web/src/feed-client";
 import { PREVIEW_OPTION_CAP, PREVIEW_TEXT_CAP, SessionPreview } from "../tools/fleet/web/src/SessionPreview";
 import { Tooltip } from "../tools/fleet/web/src/Tooltip";
+import { SessionsPanel } from "../tools/fleet/web/src/SessionsPanel";
+import { httpActionsApi } from "../tools/fleet/web/src/actions-client";
+import { httpMessagesApi } from "../tools/fleet/web/src/messages-client";
+import { httpNewSessionApi } from "../tools/fleet/web/src/new-session-client";
+import { httpRenameApi } from "../tools/fleet/web/src/rename-client";
+import { httpSteerApi } from "../tools/fleet/web/src/steer-client";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import { parseFleetState, type FleetRow, type FleetState } from "../tools/fleet/web/src/types";
 
@@ -472,6 +478,40 @@ async function goTo(hash: string): Promise<void> {
   });
 }
 
+/** Deterministic focus changes on either side of DOM mutation; no timer race. */
+class CommitFocus extends Component<{ beforeMutation: () => void; afterMutation: () => void }> {
+  override getSnapshotBeforeUpdate(): null {
+    this.props.beforeMutation();
+    return null;
+  }
+  override componentDidUpdate(): void {
+    this.props.afterMutation();
+  }
+  override render() { return null; }
+}
+
+/** Direct panel fixture: change its band ancestry without a URL or transport update. */
+function listAtCommit(split: boolean, beforeMutation: () => void = () => {}, afterMutation: () => void = () => {}) {
+  return (
+    <StrictMode>
+      <CommitFocus beforeMutation={beforeMutation} afterMutation={afterMutation} />
+      <SessionsPanel
+        rows={stateWith([
+          sessionRow("$a", "alpha"),
+          sessionRow("$b", "beta", split ? { status: { kind: "needs-you" } } : {}),
+        ]).rows}
+        now={Date.now()} collected unreadableRows={0}
+        answeringEnabled={{ kind: "not-reported" }} answeringRefusal={null}
+        onAnsweringRefused={() => {}} tmuxServerPid={132280}
+        order="status" onOrder={() => {}} selectedId={null} selectedPid={null}
+        onSelect={() => {}} steer={httpSteerApi} rename={httpRenameApi}
+        actions={{ api: httpActionsApi, feed: null, error: null, asked: false, lastGoodAt: null, pollMs: 3_600_000, refresh: () => {} }}
+        messages={httpMessagesApi} newSession={httpNewSessionApi} onRefresh={() => {}}
+      />
+    </StrictMode>
+  );
+}
+
 /**
  * **The reader's place in the list is a session, not a DOM node.**
  *
@@ -480,6 +520,16 @@ async function goTo(hash: string): Promise<void> {
  * with it. docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
  */
 describe("keyboard focus across a change of layout", () => {
+  it("restores the title focused just before mutation, under StrictMode", async () => {
+    pinWidth(1280);
+    await act(async () => root.render(listAtCommit(false)));
+    const before = rowButton("$b");
+    await act(async () => rowButton("$a").focus());
+    await act(async () => root.render(listAtCommit(true, () => before.focus())));
+    expect(rowButton("$b")).not.toBe(before);
+    expect(document.activeElement === rowButton("$b")).toBe(true);
+  });
+
   it("stays on the focused row when the two-pane detail closes", async () => {
     pinWidth(1280);
     await mountApp();
@@ -518,15 +568,18 @@ describe("keyboard focus across a change of layout", () => {
 
   it("does not take focus from a control the reader moved to", async () => {
     pinWidth(1280);
-    await mountApp();
-    await click(rowButton("$a"));
-    await act(async () => rowButton("$b").focus());
+    await act(async () => root.render(listAtCommit(true)));
+    const before = rowButton("$b");
+    await act(async () => before.focus());
     const order = host.querySelector<HTMLSelectElement>('select[aria-label="Order the session list"]');
     if (order === null) throw new Error("no ordering control on the page");
-    await act(async () => order.focus());
 
-    await goTo("#sessions");
-    expect(document.activeElement).toBe(order);
+    // The title is focused at the snapshot. A preceding layout lifecycle then
+    // moves focus onto a surviving control before restoration gets its turn.
+    await act(async () => root.render(listAtCommit(false, undefined, () => order.focus())));
+    expect(rowButton("$b")).not.toBe(before);
+    expect(host.querySelector('select[aria-label="Order the session list"]')).toBe(order);
+    expect(document.activeElement === order).toBe(true);
   });
 
   it("does not put focus on a row when it was inside the detail that closed", async () => {
@@ -676,6 +729,44 @@ describe("Tooltip § enabled", () => {
 });
 
 describe("where the preview is drawn", () => {
+  it("uses the trigger by default and restores it when a position override becomes null or omitted", async () => {
+    pinWidth(1280);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(800);
+    const card = document.createElement("div");
+    document.body.appendChild(card);
+    card.getBoundingClientRect = () => new DOMRect(200, 100, 340, 80);
+    const render = (reference?: Element | null) => act(async () => root.render(
+      <StrictMode>
+        <Tooltip content="geometry probe" placement="right-start" {...(reference === undefined ? {} : { positionReference: reference })}>
+          <button type="button">trigger</button>
+        </Tooltip>
+      </StrictMode>,
+    ));
+    const position = () => {
+      const anchor = document.querySelector<HTMLElement>(".tooltip-anchor");
+      const at = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(anchor?.style.transform ?? "");
+      if (at === null) throw new Error("the open tooltip has no position");
+      return [Number(at[1]), Number(at[2])];
+    };
+    try {
+      await render();
+      const trigger = host.querySelector("button");
+      if (trigger === null) throw new Error("no trigger rendered");
+      trigger.getBoundingClientRect = () => new DOMRect(20, 50, 100, 30);
+      await hover(trigger);
+      expect(position()).toEqual([130, 50]);
+      expect(trigger.getAttribute("aria-describedby")).not.toBeNull();
+
+      for (const reference of [card, null, card, undefined]) {
+        await render(reference);
+        expect(host.querySelector("button")).toBe(trigger);
+        expect(position()).toEqual(reference === card ? [550, 100] : [130, 50]);
+      }
+    } finally {
+      card.remove();
+    }
+  });
+
   /**
    * jsdom lays nothing out, so every box is 0×0 at the origin unless a test
    * says otherwise. This one gives the CARD a box and leaves the title button

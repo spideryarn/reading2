@@ -257,8 +257,8 @@ Sonnet subagent after stages 1 and 2 against a private port, never `:8787`.
   neither. Tests added to `tests/fleet-session-preview.test.tsx`, none changed.
   - **F19, focus lost when the two-pane detail closes** — fixed by identity
     ([postmortem](../postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md)
-    § Fixed). `SessionsPanel` notes which title has focus as it renders and gives it back after the
-    commit if focus fell to `<body>`. Not by keeping the list mounted: the spread layout re-parents
+    § Fixed). `SessionsPanel` captures the focused title before DOM mutation and gives it back after
+    the commit if focus fell to `<body>`. Not by keeping the list mounted: the spread layout re-parents
     cards regardless. The one-pane restore is unchanged and the two share only the lookup — its row
     comes from what was opened, since at one pane the focused control is the Back button.
   - **F18, the title button remounting** — `PreviewOn` passes `enabled={when}` instead of returning

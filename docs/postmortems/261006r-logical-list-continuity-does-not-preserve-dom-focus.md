@@ -36,10 +36,24 @@ but would not preserve it across replacement of the whole list.
 
 ## Fixed, 2026-10-06
 
-Countermeasures 1 and 2, in `tools/fleet/web/src/SessionsPanel.tsx`. The panel reads which session's
-title has focus as it renders; after the commit, if focus has fallen to `<body>`, it goes back to the
-button with that `data-session`, without scrolling. It never takes focus from anything else, and it
-is separate from the one-pane pixel restore, which keeps its own rules.
+Countermeasures 1 and 2, in `tools/fleet/web/src/SessionsPanel.tsx`, now use
+`TitleFocusContinuity`. Its `getSnapshotBeforeUpdate` captures the focused session before DOM
+mutation; `componentDidUpdate` restores that title only if focus is then body/null, after child
+refs and layout effects have had their turn. The one-pane pixel restore keeps its own rules.
+
+The first repair, `f9cf93d64`, introduced a **render-to-commit snapshot race**: render sampled
+alpha, focus could move to beta before commit, and restoration would choose alpha after both
+buttons were replaced. StrictMode's double render alone causes no mutation, and discarded renders
+run no restoration; the risk is committing a render whose DOM sample has become stale. The
+deterministic pre-mutation interleaving test in `tests/fleet-session-preview.test.tsx` reproduced
+the wrong title under StrictMode before the snapshot repair. It models the gap without depending
+on scheduler timing; an actual yielded concurrent render was not reproduced.
+
+Cheap countermeasures are the pre-mutation interleaving regression and the surviving-control test,
+which now moves focus after the snapshot but before restoration. Removing the postcommit guard
+makes that test fail. A fallback to the first surviving title makes the removed-row test fail.
+The rejected listener-only alternative depends on deletion blur behavior; the snapshot lifecycle
+reads the live DOM without retaining an obsolete last-focused row.
 
 Countermeasure 3 was not taken. With nothing selected and more than one band, the list is dealt into
 columns, so cards change parent whatever the surrounding markup does. Keeping the subtree would have

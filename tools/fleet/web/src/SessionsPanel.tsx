@@ -47,6 +47,7 @@
  * a third layout, it is the second one with the detail absent.
  */
 import {
+  Component,
   useCallback,
   useImperativeHandle,
   useLayoutEffect,
@@ -551,7 +552,32 @@ function focusedTitleId(): string | null {
   return active.dataset["session"] ?? null;
 }
 
-export type SessionsPanelHandle ={ openFromList: (id: string) => void };
+/**
+ * Preserve the focused title across list replacement, independently of scroll.
+ * Render can precede commit by an arbitrary interval. React's snapshot lifecycle
+ * reads focus before DOM mutation; the update lifecycle restores it after child
+ * refs and layout effects (including deliberate focus into the detail) run.
+ * A discarded render writes nothing, and a surviving focused control wins.
+ * See docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
+ */
+class TitleFocusContinuity extends Component<{ children: ReactNode }, Record<string, never>, string | null> {
+  override getSnapshotBeforeUpdate(): string | null {
+    return focusedTitleId();
+  }
+
+  override componentDidUpdate(_previousProps: unknown, _previousState: unknown, focusedTitle: string | null): void {
+    if (focusedTitle === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    titleButton(focusedTitle)?.focus({ preventScroll: true });
+  }
+
+  override render(): ReactNode {
+    return this.props.children;
+  }
+}
+
+export type SessionsPanelHandle = { openFromList: (id: string) => void };
 
 export function SessionsPanel({
   ref: selectionRef,
@@ -843,49 +869,6 @@ export function SessionsPanel({
     if (saved.listKey === listKey) window.scrollTo(0, saved.y);
   }, [selectedId, selectedPid, panes, listKey, tmuxServerPid]);
 
-  /**
-   * **A ROW THAT HAD FOCUS KEEPS IT WHEN THE LIST IS REBUILT UNDER IT.**
-   *
-   * The list is drawn in three places below — beside the detail, dealt into
-   * columns, or alone in one — and going from one to another gives every title
-   * button a new node. The reader's place is a session and survives; the
-   * browser's is a node and does not, so focus falls to `<body>` and the next
-   * Tab starts from the top of the page. Closing the two-pane detail with Back
-   * is the case that was found (GPT Sol's F19); a window crossing a column
-   * threshold is the same one.
-   * docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
-   *
-   * **By identity, and separate from the pixels above**, which belong to one
-   * width and ordering and are thrown away when either changes. Which row had
-   * focus has no such expiry.
-   *
-   * **It gives focus back; it never takes it.** Two conditions, both needed: a
-   * title had focus as this render began, and nothing has it once the commit is
-   * done. So a reader who moved to another control keeps it, and opening a
-   * session still ends in the detail — `detailRef` runs first, inside the same
-   * commit, and by then focus is not on `<body>`. It cannot meet the one-pane
-   * restore above either: that one runs when the list was NOT on the page, so no
-   * title could have been focused.
-   *
-   * **Read during render, because nothing later can know.** The alternative is
-   * a note kept by `focus` and `blur` listeners, and whether a node removed from
-   * the document is sent a `blur` is not something to build on: jsdom sends
-   * none, and a browser that did would clear the note at the one moment it is
-   * wanted, silently. What had focus just before React replaced it is only on
-   * record here.
-   *
-   * No dependency list: it has to run after every commit, since any of them may
-   * be the one that moved the list. A row that has left the list is not found,
-   * and focus stays where the browser put it.
-   */
-  const focusedTitle = focusedTitleId();
-  useLayoutEffect(() => {
-    if (focusedTitle === null) return;
-    const active = document.activeElement;
-    if (active !== null && active !== document.body) return;
-    titleButton(focusedTitle)?.focus({ preventScroll: true });
-  });
-
   const detail =
     selectedId === null ? null : wrongWorld ? (
       /* **NOT "we could not find it" — "we will not look".** `MissingSession`
@@ -1047,7 +1030,7 @@ export function SessionsPanel({
     ) : null;
 
   if (empty !== null) {
-    return (
+    const content = (
       <div className="tw:mx-auto tw:max-w-3xl">
         {unreadable}
         <NewSessionPanel api={newSession} />
@@ -1068,6 +1051,7 @@ export function SessionsPanel({
         {empty}
       </div>
     );
+    return <TitleFocusContinuity>{content}</TitleFocusContinuity>;
   }
 
   /* Never more columns than there are bands to put in them: an empty first
@@ -1078,7 +1062,7 @@ export function SessionsPanel({
      two-pane grid puts the ordering control in the middle of nothing. */
   const wideHeader = spread || (detail !== null && panes === 2);
 
-  return (
+  const content = (
     /* The measured element is this one, and it is always full width — the
        narrowing happens INSIDE it. Capping the measured box at `max-w-3xl`
        would make the answer to "how much room is there?" depend on the answer,
@@ -1138,4 +1122,5 @@ export function SessionsPanel({
       )}
     </div>
   );
+  return <TitleFocusContinuity>{content}</TitleFocusContinuity>;
 }
