@@ -251,11 +251,14 @@ export async function openPgStoreSession(opts: {
   readonly job: { readonly id: string; readonly attemptId: string };
   /** The article is born minimal if this claim creates it — see `lockOrCreateArticle`. */
   readonly processing?: "minimal";
+  /** The job's own address, for `articles.asked_url`. Absent for an upload. */
+  readonly askedUrl?: string;
 }): Promise<StoreSession> {
   const draft = await openOrBeginJobDraft({
     slug: opts.slug,
     job: opts.job,
     ...(opts.processing ? { processing: opts.processing } : {}),
+    ...(opts.askedUrl !== undefined ? { askedUrl: opts.askedUrl } : {}),
   });
   return pgStoreSession({
     ref: {
@@ -299,7 +302,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * write a perfectly valid draft into an article nobody is reading.
    */
   const lockArticleFor = async (tx: Tx, slug: string): Promise<void> => {
-    const article = await lockOrCreateArticle(tx, slug);
+    /* No asked-for address: this is a commit's lock on an article the claim
+       already opened, and told. A row created here is the wrong article, and
+       the check below refuses it. */
+    const article = await lockOrCreateArticle(tx, slug, { askedUrl: null });
     if (article.id !== ref.articleId) {
       throw new Error(
         `The article for "${slug}" is now ${article.id}, but this session's draft belongs to ` +

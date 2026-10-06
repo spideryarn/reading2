@@ -325,7 +325,7 @@ describe("a checkpoint survives the job that paid for it", () => {
    */
   async function articleForSlug(slug: string): Promise<string> {
     return await runAsOwner(OWNER, async () =>
-      db.transaction(async (tx) => (await lockOrCreateArticle(tx, slug)).id),
+      db.transaction(async (tx) => (await lockOrCreateArticle(tx, slug, { askedUrl: null })).id),
     );
   }
 

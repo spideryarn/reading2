@@ -8,7 +8,8 @@
  *
  * - `slugForUrlKey` — *do we already have this article?* This is the adoption
  *   half of `freeSlug` (src/jobs.ts), and the thing that stops one address in
- *   two spellings becoming two shelf cards and two invoices.
+ *   two spellings becoming two shelf cards and two invoices. A paper is also
+ *   found by the address it was asked for, which need not be the paper's own.
  * - `slugForShortId` — *which article is this the id of?* The stable handle
  *   Greg asked for on 2026-08-31, so that a renamed slug can still be found:
  *
@@ -48,6 +49,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles } from "../db/schema.js";
 import { urlKey } from "../ingest.js";
+import { resolvePaperSource } from "../paper-sources.js";
 import { guardDbStore } from "./db-errors.js";
 import { ownedByReader } from "./pg.js";
 
@@ -64,10 +66,18 @@ import { ownedByReader } from "./pg.js";
  * These two run on `POST /api/jobs`, which is exactly the path that broke.
  */
 const db = guardDbStore("find-article", {
-  /** Every article row this reader owns, with its published revision's URL. */
-  articleUrls(): Promise<{ slug: string; url: string | null }[]> {
+  /**
+   * Every article row this reader owns, with its published revision's URL and
+   * the address the reader asked for when the article was made.
+   */
+  articleUrls(): Promise<{ slug: string; url: string | null; requestedUrl: string | null; askedUrl: string | null }[]> {
     return getDb()
-      .select({ slug: articles.slug, url: articleRevisions.finalUrl })
+      .select({
+        slug: articles.slug,
+        url: articleRevisions.finalUrl,
+        requestedUrl: articleRevisions.requestedUrl,
+        askedUrl: articles.askedUrl,
+      })
       .from(articles)
       .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       .where(ownedByReader());
@@ -92,11 +102,49 @@ const db = guardDbStore("find-article", {
  * published revision has no URL either, so it simply never matches — the join
  * is left so that the *breadth* is the same as every other claim question, not
  * because a draft could be adopted.
+ *
+ * ## Two addresses, and the second one only for a paper
+ *
+ * An article matches by **where its bytes came from** (`final_url`), as it
+ * always has. Since 2026-10-06 a paper also matches by **the address the reader
+ * asked for** (`articles.asked_url`): a `doi.org` link or a short link that
+ * ends on a paper has the paper's address as its `final_url`, so the link
+ * itself would otherwise find nothing, and pasting it twice would import and
+ * charge for the paper twice. Plan 261006i.
+ *
+ * **Only when the article came through a paper source**: either `final_url`
+ * or the published revision's `requested_url` resolves. A candidate may
+ * redirect to an address the registry does not recognise, while its requested
+ * address still identifies the source. Do not classify by `asked_url`: a
+ * paper-looking pasted address could have led to an ordinary page.
+ * A link to an ordinary page may be
+ * one that is meant to move, like `example.com/latest`, and an article found
+ * by it would be found for ever: Refresh reads `final_url` and never goes back
+ * to the link. A paper's link does not move. GPT Sol's K3 on that plan;
+ * widening it is a product decision, not a tidy-up.
+ *
+ * **`final_url` wins**, across the whole shelf and not row by row: the article
+ * that is the paper beats one that was only asked for by the paper's address.
+ * That is two passes on purpose, since one `find` with an `or` would answer
+ * whichever row happened to come back first.
+ *
+ * An article that has never published still never matches. The asked-for
+ * address is read only beside a `final_url`, and that is null without a
+ * published revision.
  */
 export async function slugForUrlKey(key: string): Promise<string | undefined> {
   if (key === "") return undefined;
   const rows = await db.articleUrls();
-  return rows.find((row) => row.url !== null && urlKey(row.url) === key)?.slug;
+  const byFinalUrl = rows.find((row) => row.url !== null && urlKey(row.url) === key);
+  if (byFinalUrl) return byFinalUrl.slug;
+  return rows.find(
+    (row) =>
+      row.url !== null &&
+      row.askedUrl !== null &&
+      (resolvePaperSource(row.url) !== null ||
+        (row.requestedUrl !== null && resolvePaperSource(row.requestedUrl) !== null)) &&
+      urlKey(row.askedUrl) === key,
+  )?.slug;
 }
 
 /**

@@ -138,6 +138,7 @@ import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
 import { type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
+import { sameTarget } from "./urls.js";
 import { modelTitleTidier } from "./title-tidy-model.js";
 import { plainTitle } from "./html.js";
 import type { TitleTidier } from "./title-tidy.js";
@@ -2221,6 +2222,9 @@ export interface FetchCandidate {
   marker?: string;
 }
 
+/** `fetchDocument` (src/fetch.ts) as the fetch step calls it. A type so a test or a live check can stand in front of it. */
+export type DocumentFetcher = (url: string, options: { signal: AbortSignal }) => Promise<FetchedDocument>;
+
 /** Whether a fetched document is the one its candidate promised. A candidate that promised nothing always is. */
 function isWhatItPromised(candidate: FetchCandidate, doc: FetchedDocument): boolean {
   if (candidate.expect === undefined) return true;
@@ -2267,10 +2271,7 @@ function saysItIsNotThere(err: unknown): boolean {
  */
 export async function fetchFirstCandidate(
   candidates: readonly FetchCandidate[],
-  deps: {
-    signal: AbortSignal;
-    fetchDocument: (url: string, options: { signal: AbortSignal }) => Promise<FetchedDocument>;
-  },
+  deps: { signal: AbortSignal; fetchDocument: DocumentFetcher },
 ): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
   for (const [index, candidate] of candidates.entries()) {
     const mayMoveOn = () => index < candidates.length - 1 && !deps.signal.aborted;
@@ -2316,10 +2317,21 @@ export async function fetchFirstCandidate(
  *
  * A Stop or a deadline passes through untouched and unlogged. It is not the
  * source's failure, and `runStep` in src/jobs.ts writes its own sentence for it.
+ *
+ * **`held` is a document already fetched, on the way to finding out which
+ * paper this is** (`fetchByAddress`). It is answered for the candidate whose
+ * address is the one it ended on, in place of asking for those bytes twice.
+ * `sameTarget` (src/urls.ts) is the comparison: the same request, differing at
+ * most by a fragment. Not `urlKey`, which calls every shape of a paper's link
+ * one address, and would hand a PDF to the HTML candidate. It goes back
+ * through the loop like any answer, so it is held to its candidate's promise
+ * and a wrong kind moves on or fails exactly as a fetched one does. It counts
+ * as an address asked, because it was, a moment ago.
  */
 async function fetchFromPaperSource(
   paper: ResolvedPaper,
   ctx: { slug: string; signal: AbortSignal },
+  deps: { fetchDocument: DocumentFetcher; held?: FetchedDocument },
 ): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
   let asked = 0;
   let lastWasAbsent = false;
@@ -2329,8 +2341,9 @@ async function fetchFromPaperSource(
       fetchDocument: async (address, options) => {
         asked += 1;
         lastWasAbsent = false;
+        if (deps.held !== undefined && sameTarget(address, deps.held.url)) return deps.held;
         try {
-          return await fetchDocument(address, options);
+          return await deps.fetchDocument(address, options);
         } catch (err) {
           lastWasAbsent = saysItIsNotThere(err);
           throw err;
@@ -2358,6 +2371,49 @@ async function fetchFromPaperSource(
   }
 }
 
+/**
+ * **What the fetch step fetches for a job's address**, and which paper source
+ * it came through, if any.
+ *
+ * **Resolved here, from the job's own address, and not only at the route**, so
+ * a retry, a refresh and a job queued by any other path fetch the paper too.
+ * An address no source recognises is one candidate that promises nothing, which
+ * is the single `fetchDocument(url)` this always was. See `fetchFirstCandidate`.
+ *
+ * **The redirect look.** A short link or a DOI names no paper until it has
+ * been followed. So when that one fetch ended somewhere other than where it was
+ * asked, the address it ended on is put to the registry too, and a paper is
+ * then fetched as if that address had been pasted: its candidates, in order,
+ * with the document already in hand standing in for whichever of them it is
+ * (`fetchFromPaperSource` § `held`). Three limits, each deliberate:
+ *
+ * - **Only where the fetch ended**, never a hop in the middle.
+ * - **Only when it moved.** A document from the address asked is what was
+ *   asked for, and that address has already been told it names no paper.
+ * - **Nothing new is trusted.** The redirect says which paper, read off its
+ *   final address by the patterns a pasted address goes through. What is then
+ *   fetched are the registry's own fixed addresses, through the same fetcher.
+ *
+ * Anything else is kept exactly as it arrived, with the one request it took.
+ * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+ * § Stage 2: the redirect look.
+ *
+ * `fetcher` is an argument only so a test can count the requests and a live
+ * check can space them out.
+ */
+export async function fetchByAddress(
+  url: string,
+  ctx: { slug: string; signal: AbortSignal },
+  fetcher: DocumentFetcher = fetchDocument,
+): Promise<{ doc: FetchedDocument; tried: number; paper: ResolvedPaper | null }> {
+  const named = resolvePaperSource(url);
+  if (named !== null) return { ...(await fetchFromPaperSource(named, ctx, { fetchDocument: fetcher })), paper: named };
+  const first = await fetchFirstCandidate([{ url }], { signal: ctx.signal, fetchDocument: fetcher });
+  const paper = sameTarget(first.doc.url, url) ? null : resolvePaperSource(first.doc.url);
+  if (paper === null) return { ...first, paper: null };
+  return { ...(await fetchFromPaperSource(paper, ctx, { fetchDocument: fetcher, held: first.doc })), paper };
+}
+
 /** How a paper source is written on the job card. One the table does not know is shown by its registry name. */
 const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
   arxiv: "arXiv",
@@ -2366,6 +2422,7 @@ const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
   neurips: "NeurIPS",
   cvf: "CVF",
   jmlr: "JMLR",
+  nber: "NBER",
 };
 
 /**
@@ -2412,16 +2469,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
-      /* **Resolved here, from the job's own address, and not only at the
-         route**, so a retry, a refresh and a job queued by any other path fetch
-         the paper too. An address no source recognises is one candidate that
-         promises nothing, which is the single `fetchDocument(url)` this always
-         was. See `fetchFirstCandidate`. */
-      const paper = resolvePaperSource(url);
-      const { doc, tried } =
-        paper === null
-          ? await fetchFirstCandidate([{ url }], { signal: ctx.signal, fetchDocument })
-          : await fetchFromPaperSource(paper, ctx);
+      /* A paper source's candidates, the one address that was pasted, or the
+         paper a pasted link turned out to lead to: `fetchByAddress`. */
+      const { doc, tried, paper } = await fetchByAddress(url, ctx);
       const via = paper === null ? null : { source: paper.source, format: doc.kind };
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on

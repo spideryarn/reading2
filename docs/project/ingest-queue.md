@@ -784,8 +784,19 @@ The same holds for the sources added on 2026-10-06. A Hugging Face or alphaXiv p
 paper has the arXiv paper's key. An ACL Anthology, PMLR, NeurIPS, CVF or JMLR paper has the key
 its landing page always had (`aclanthology.org/2020.acl-main.703`), and the PDF's own address now
 answers with it too. Their slugs are `acl-…`, `pmlr-…`, `neurips-…`, `cvf-…` and `jmlr-…`, cut to
-60 characters while the key keeps the whole id. The table of what each recognises is
+60 characters while the key keeps the whole id. An NBER working paper, added later the same day,
+has `nber.org/papers/w30000` and `nber-w30000`. The table of what each recognises is
 [fetching.md § The sources](fetching.md#the-sources).
+
+A short link or a redirecting DOI has no paper's key: nothing can be read off it before it is
+fetched. The fetch step finds the paper afterwards
+([fetching.md § A link that leads to a paper](fetching.md#a-link-that-leads-to-a-paper)), so that
+article's own address is the paper's and its pasted one is kept beside it, in `articles.asked_url`.
+`slugForUrlKey` asks that column as well, so a second paste of the same link finds the article. It
+asks it only for an article that came through a paper source: a link to an ordinary page may be
+meant to move, and Refresh never goes back to it. The column is written once, when the article row
+is made, and never by a refresh
+([261006i](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md)).
 
 A job row stores the key it was queued with, so a job queued before that change carries the old
 one. `enqueue` therefore looks at an adopted active job with `sameWork`, which compares addresses
