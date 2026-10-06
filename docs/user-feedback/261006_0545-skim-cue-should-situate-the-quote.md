@@ -40,3 +40,10 @@ measured in [261006b](../investigations/261006b-skim-cue-situates-the-quote-eval
   wrong in one cue in ten. Whether to move towards it is the question `[Q-skim-cue-scene]` in the
   session's debrief. This session could not write the Overseer's queue (`--by` takes only `greg` or
   `overseer`), so it asked the Overseer to add the entry, with this report id as its source.
+
+**[Q-skim-cue-scene] decided: stay with what shipped (skim/10).** Greg, 2026-10-06:
+
+> use your judgment. don't change things too much - the Skim questions were mostly good
+
+So neither the every-cue scene (B) nor a further round (C) is built. Queue entry qi-pjrr5g86 is
+dropped.
