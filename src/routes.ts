@@ -81,7 +81,7 @@ import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
+import { ChatConflict, isSpokenKind, requireTail, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -3222,15 +3222,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          pressed nothing and was told they had stopped it, and no replacement
          came. Found by a GPT-5.6 review, 2026-08-26.
 
-         The check is the real rule rather than a copy of it: `withRetry` and
-         `withEdit` are pure, so they can be run against a snapshot and thrown
-         away. Whatever they would refuse, they refuse here, for free, before
-         the destructive part. The authoritative run is still the one inside
-         `chatStore.retry` / `chatStore.edit` below, which re-reads under the
-         store's own lock — this is a gate, not a substitute. */
+         The check is the real rule rather than a copy of it: `withRetry`,
+         `requireTail` and `withEdit` are pure, so they can be run against a
+         snapshot and thrown away. What the store would refuse of this
+         snapshot is refused here, for free, before the destructive part. The
+         authoritative run is still the one inside `chatStore.retry` /
+         `chatStore.edit` below, which re-reads under the store's own lock —
+         this is a gate, not a substitute, and it sees only this process.
+
+         **The edit's tail is part of that, and until 2026-10-07 it was not.**
+         `withEdit` never looks at the tail; `pgChatStore.edit` runs
+         `requireTail` before it. So a stale edit passed this gate, stopped the
+         other tab's answer (stored `done`, `stopped`, empty), and was then
+         refused: the bug in the first paragraph, by its other door. Seventh
+         sweep, SV1; tests/chat-route.test.ts. */
       const snapshot = await chatStore.load(slug);
       if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
-      else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      else {
+        if (typeof expectedTailId === "string") requireTail(snapshot, threadId, expectedTailId);
+        withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      }
 
       /* Both of these rewrite rows that a live answer in this thread may be
          halfway through writing, so the live one is stopped and *waited for*
