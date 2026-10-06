@@ -220,6 +220,7 @@ import { isUsableSimpleSummary } from "../types.js";
 import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
+import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
 import { CitationsListNotFound } from "./citations-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
@@ -3887,12 +3888,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const quiz = found.revision.quiz as Quiz | null;
     if (!quiz) {
-      throw Object.assign(
-        new Error(
-          `No quiz for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No quiz for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3994,12 +3992,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const crossrefs = found.revision.crossrefs as Crossrefs | null;
     if (!crossrefs || !Array.isArray(crossrefs.links)) {
-      throw Object.assign(
-        new Error(
-          `No cross-references for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["crossrefs"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No cross-references for "${slug}" yet. Build them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["crossrefs"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);

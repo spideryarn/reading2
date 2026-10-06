@@ -140,9 +140,16 @@ function unportableTarget(resolved: string): string | null {
 const stripFences = (md: string) => md.replace(/^```[\s\S]*?^```/gm, "");
 
 /**
- * GitHub's heading → anchor rule: lower-case, drop everything that isn't a
- * letter, number, space, hyphen or underscore (so backticks, colons, commas and
- * apostrophes all vanish), then spaces to hyphens.
+ * Heading → anchor: lower-case, drop everything that isn't a letter, number,
+ * space, hyphen or underscore (so backticks, colons, commas and apostrophes all
+ * vanish), then each **run** of spaces to one hyphen.
+ *
+ * That last step is where this is NOT GitHub's rule, which turns each space
+ * into a hyphen. The two differ on consecutive spaces, including those left
+ * when punctuation is dropped. A common case is an em dash: `Stage 3 — the dashboard` is
+ * `stage-3-the-dashboard` here and `stage-3--the-dashboard` on GitHub. An anchor
+ * written from GitHub habit therefore fails, and `suggestAnchor` below is what
+ * puts the right one in the failure message.
  */
 function slug(heading: string): string {
   return heading
@@ -185,6 +192,32 @@ interface Link {
   target: string;
   file: string;
   anchor: string;
+}
+
+/**
+ * The anchor somebody most likely meant by one that does not exist, or `null`.
+ *
+ * It answers only when exactly one real anchor is the same as the wanted one
+ * once every run of hyphens is a single hyphen — the GitHub-habit mistake `slug`
+ * describes. Two candidates is no answer: it cannot know which was meant.
+ *
+ * Deliberately not fuzzy. A nearest-by-edit-distance guess was planned and cut
+ * at review: `#overview-2` would be pointed at `#overview-1`, and a wrong
+ * suggestion taken on trust is a link that passes this test and goes to the
+ * wrong place — the silent failure this file exists to stop.
+ */
+function suggestAnchor(wanted: string, anchors: Set<string>): string | null {
+  const collapse = (s: string) => s.replace(/-+/g, "-");
+  const candidates = [...anchors].filter((a) => collapse(a) === collapse(wanted));
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
+/** One line of the "anchors that exist" failure: the broken link, and the fix when there is one. */
+function describeBrokenAnchor(l: Link, anchors: Set<string>): string {
+  const line = `${l.from} → ${l.target}`;
+  const meant = suggestAnchor(l.anchor, anchors);
+  if (!meant) return line;
+  return `${line} (did you mean #${meant}? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)`;
 }
 
 function linksIn(file: string): Link[] {
@@ -322,8 +355,85 @@ describe("documentation links", () => {
     const broken = allLinks
       .filter((l) => l.anchor && existsSync(l.file) && l.file.endsWith(".md"))
       .filter((l) => !anchorsFor(l.file).has(l.anchor))
-      .map((l) => `${l.from} → ${l.target}`);
+      .map((l) => describeBrokenAnchor(l, anchorsFor(l.file)));
     expect(broken).toEqual([]);
+  });
+
+  /**
+   * The positive control for the message above, which is only ever printed when
+   * the list is not empty — so on a green tree nothing shows whether it helps.
+   *
+   * The first case is the one this exists for: on 2026-09-10 four plans in one
+   * day linked a heading containing an em dash with GitHub's two-hyphen anchor,
+   * and each went red with a line that said the link was wrong and not what the
+   * right one was.
+   */
+  it("says which anchor a broken link probably meant", () => {
+    const anchors = new Set([
+      slug("Stage 3 — the dashboard"),
+      slug("Stage 4 — the queue"),
+      slug("Principles"),
+    ]);
+    // The slug rule itself, pinned: one hyphen where GitHub gives two.
+    expect(anchors.has("stage-3-the-dashboard")).toBe(true);
+
+    // GitHub's anchor for an em-dash heading → the one this repo computes.
+    expect(suggestAnchor("stage-3--the-dashboard", anchors)).toBe("stage-3-the-dashboard");
+    // The other way round: the real anchor has the run, the link does not.
+    expect(suggestAnchor("the-editor-is-emacs-nw", new Set(["the-editor-is-emacs--nw"]))).toBe(
+      "the-editor-is-emacs--nw",
+    );
+    // Every run is collapsed, including runs longer than two hyphens.
+    expect(suggestAnchor("a---b--c", new Set(["a-b-c"]))).toBe("a-b-c");
+    expect(suggestAnchor("a-b-c", new Set(["a---b--c"]))).toBe("a---b--c");
+    // A repeated heading's suffix survives.
+    expect(suggestAnchor("a--b-1", new Set(["a-b", "a-b-1"]))).toBe("a-b-1");
+    // Two anchors that differ only in their hyphen runs → nothing; it cannot
+    // know which was meant.
+    expect(suggestAnchor("a---b", new Set(["a-b", "a--b"]))).toBeNull();
+    // A typo, a neighbouring stage or a stale anchor → nothing, rather than a
+    // confident wrong guess.
+    expect(suggestAnchor("principels", anchors)).toBeNull();
+    expect(suggestAnchor("stage-5-the-queue", anchors)).toBeNull();
+    expect(suggestAnchor("how-billing-works", anchors)).toBeNull();
+    expect(suggestAnchor("overview-2", new Set(["overview", "overview-1"]))).toBeNull();
+    expect(suggestAnchor("a--b", new Set())).toBeNull();
+    // Explicit ids are case-sensitive; only hyphen runs may differ.
+    expect(suggestAnchor("Editor--Mode", new Set(["editor-mode"]))).toBeNull();
+    expect(suggestAnchor("a--b", new Set(["a_b"]))).toBeNull();
+
+    const link: Link = {
+      from: "docs/plans/a.md",
+      target: "roadmap.md#stage-3--the-dashboard",
+      file: "docs/plans/roadmap.md",
+      anchor: "stage-3--the-dashboard",
+    };
+    const line = describeBrokenAnchor(link, anchors);
+    expect(line).toBe(
+      "docs/plans/a.md → roadmap.md#stage-3--the-dashboard (did you mean #stage-3-the-dashboard? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)",
+    );
+    // A literal id with repeated hyphens gets the same neutral explanation.
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#Editor-Mode", anchor: "Editor-Mode" },
+        new Set(["Editor--Mode"]),
+      ),
+    ).toBe(
+      "docs/plans/a.md → roadmap.md#Editor-Mode (did you mean #Editor--Mode? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)",
+    );
+    // And with nothing to suggest, the line is what it always was.
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#how-billing-works", anchor: "how-billing-works" },
+        anchors,
+      ),
+    ).toBe("docs/plans/a.md → roadmap.md#how-billing-works");
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#a---b", anchor: "a---b" },
+        new Set(["a-b", "a--b"]),
+      ),
+    ).toBe("docs/plans/a.md → roadmap.md#a---b");
   });
 });
 

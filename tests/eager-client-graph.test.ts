@@ -568,6 +568,13 @@ const SHARED_WITH_READER = [
   "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
+  /* Arrived 2026-10-06 by the second predicted route: `DataTable.tsx`, already
+     here, gained an import of it for its `sidewaysCue` prop (plan 261006g
+     § Stage 2). Only `/admin/costs` turns the prop on, so the reader's shelf
+     downloads it and never runs it: about a hundred lines, most of them
+     comment, importing nothing but React. The way to take it back out is to
+     hand `DataTable` the box as a prop instead of a boolean. */
+  "src/web/lib/SidewaysScrollBox.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages
      (`useAdminUsers`, `useAdminFeedback`) started using `describeFetchFailure`,
      which the reader's shelf and comments already download — and `sse.ts`
