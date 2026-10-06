@@ -1,8 +1,9 @@
 # Port the Overseer's auto-memory into docs in Git, once
 
-Queue item `qi-8836whem`. Status: **done bar five proposals waiting on Greg** (2026-10-06) —
-evidence: 75 of 85 memory files deleted, ten kept, each named with what it waits on in
-[the mapping § The second half](../investigations/261005d-overseer-auto-memory-ported-to-docs-the-mapping.md#the-second-half-2026-10-06).
+Queue item `qi-8836whem`. Status: **done** (2026-10-06) —
+evidence: all 85 memory files deleted, the last ten after Greg answered the five proposals held
+back for him, in
+[the mapping § The five held back, answered](../investigations/261005d-overseer-auto-memory-ported-to-docs-the-mapping.md#the-five-held-back-answered).
 
 ## What this is for
 
