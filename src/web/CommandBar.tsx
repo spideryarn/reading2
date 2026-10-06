@@ -2577,7 +2577,16 @@ export function CommandBar({
                 >
                   <RowLabel label={commandText(command).label} said={row.suggested?.said} />
                 </span>
-                <span className="cmdbar-what tw:min-w-0 tw:flex-1 tw:truncate tw:text-muted-foreground">
+                {/* A suggested row's sentence is never cut: it takes a line of its
+                    own and wraps, at every width. Beside a long label it was cut
+                    to "Pu…" on a desktop and "Nothing is sent u…" on a phone, so
+                    the Chat row lost the half that says a press sends nothing
+                    (seen in the browser, 2026-10-06, plan 261005k). */}
+                <span
+                  className={`cmdbar-what tw:min-w-0 tw:text-muted-foreground ${
+                    row.suggested !== undefined ? "tw:basis-full" : "tw:flex-1 tw:truncate"
+                  }`}
+                >
                   {commandText(command).description}
                 </span>
                 {/* One bit, after the sentence rather than before it: the row is
