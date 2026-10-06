@@ -2084,6 +2084,32 @@ the one before it wrote. Carrying on past a failure would run the two model call
 stale file happened to be on disk, and produce a tree for the previous version of the article —
 which looks entirely fine. A [silent success](../reusable/silent-success.md).
 
+### A read or a progress write that fails does not abandon the claim
+
+Until 2026-10-07 four awaits in the walk stood outside every catcher: the freshness read
+(`stepIsDone`, in `runStep`'s `if`) and the three progress writes (`note()`: a skip, a step
+starting, a kept step). Any of them failing once left the request as a throw that recorded nothing.
+The row stayed `running` behind a live lease, so its own next advance answered `busy`, every other
+job on the article waited behind it, and it held one of the machine's slots, for up to the 760 s of
+`LEASE_MS`.
+
+Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
+
+- **A freshness read that fails is the step's failure**, caught where it is made and rethrown
+  inside `runStep`'s `try`, as a failed power read already was. The job ends `error`, retryable,
+  with its draft failed and its pointer cleared. It is never taken as "not current", which would
+  start paid work on a question nobody answered.
+- **A progress write that fails is logged and the walk goes on**, unless the failure is the fence
+  saying the claim has moved, which still stops the claimant. The write is a progress bar; the
+  step's own `beginStep` or commit, which comes next, is what decides whether the store can be
+  reached. The cost is one look at `cancelling`, so a Stop pressed on another server is noticed one
+  step later.
+
+**What is still left to the lease** is a failure of the write that *settles* the job
+(`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to
+fall back on. `tests/jobs-walk.test.ts` § *the exits of a claim* has the cases;
+[261007a](../plans/261007a-seventh-sweep-job-queue-tier-0.md) has the count.
+
 ## The failures Retry is not offered under
 
 Until 2026-08-26 the button appeared under every failure. That included the ones that are

@@ -1196,12 +1196,23 @@ async function runStep(
       );
   const gated = !structureRead.ok || structureRead.awaiting;
 
-  if (
-    powerRead.ok &&
-    !gated &&
-    !stillForced(step) &&
-    (await stepIsDone(registry[step.name], ctx, session.reads))
-  ) {
+  /* **The freshness read, caught like the two reads above it.** It was awaited
+     bare in the `if` below until 2026-10-07, outside the `try`, so a read that
+     failed once left this function as a throw nothing recorded: the walk's
+     outer `catch` rethrew it, and the row stayed `running` behind a live lease
+     with the article's line and a machine slot held for up to `LEASE_MS`. A
+     failed read is the step's failure. It is **not** an answer of "not
+     current": that would start paid work on a question nobody answered.
+     tests/jobs-walk.test.ts § the exits of a claim. */
+  const freshRead =
+    powerRead.ok && !gated && !stillForced(step)
+      ? await stepIsDone(registry[step.name], ctx, session.reads).then(
+          (done) => ({ ok: true as const, done }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      : ({ ok: true as const, done: false });
+
+  if (freshRead.ok && freshRead.done) {
     /* **A step this job already ran keeps saying so.** `runJob` never meets
        this case — it visits each step once, at `pending` — but `advanceJob`
        walks the whole list on every call, so without the guard the second
@@ -1248,6 +1259,7 @@ async function runStep(
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
     if (structureRead.awaiting) throw stageFailure(STRUCTURE_NOT_BUILT);
+    if (!freshRead.ok) throw freshRead.error;
     /* Bracketing the run, not decorating it. A step that dies between two of
        its own writes leaves artefacts that all exist and all parse and
        describe two different generations, and nothing about the files can
@@ -2759,8 +2771,32 @@ async function walkClaim(
    */
   /* **Hands the written row back**, because the walk reads `cancelling` off it
      between steps — a Stop pressed on another instance arrives there and
-     nowhere else. `runStep` ignores the return; see its `note` parameter. */
-  const note = async (): Promise<Job> => await store.noteProgress(job.id, attempt, job.steps);
+     nowhere else. `runStep` ignores the return; see its `note` parameter.
+
+     **A write that fails answers `undefined` and the walk goes on**, unless the
+     failure is the fence saying the claim has moved, which still propagates.
+     Every call is awaited outside `runStep`'s `try` (a skip, a step starting,
+     a kept step), so until 2026-10-07 any other failure left the walk through
+     its outer `catch` with the row still `running` behind a live lease. This
+     is a progress bar: the next fenced write, which is the step's own
+     `beginStep` or its commit, is what decides whether the store can be
+     reached. What a failed write costs is one look at `cancelling`, so a Stop
+     pressed on another instance is noticed one step later.
+     tests/jobs-walk.test.ts § the exits of a claim. */
+  const note = async (): Promise<Job | undefined> => {
+    try {
+      return await store.noteProgress(job.id, attempt, job.steps);
+    } catch (err) {
+      if (err instanceof StaleAttemptError) throw err;
+      /* The class only: a driver error's message can carry the statement's
+         bound parameters, which here are the steps. src/store/db-errors.ts. */
+      jlog.warn(
+        { errorType: err instanceof Error ? err.name : typeof err },
+        `progress not written, carrying on — ${job.slug}`,
+      );
+      return undefined;
+    }
+  };
 
   try {
     /**
@@ -3024,7 +3060,7 @@ async function walkClaim(
        * docs/plans/260830d-v1-imports-on-vercel.md § Risks rather than discovered.
        */
       const noted = await note();
-      if (noted.cancelling) {
+      if (noted?.cancelling) {
         jlog.debug({ step: step.name }, `stop noticed after ${step.name} — ${job.slug}`);
         /* The same word `transitionAfter` uses when a Stop lands *during* a
            step, because it is the same event and the reader must not be able to

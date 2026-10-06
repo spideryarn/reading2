@@ -136,7 +136,7 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, jobs as jobsTable } from "../src/db/schema.js";
+import { articleRevisions, articles, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import {
@@ -505,7 +505,7 @@ async function fixture(
     ]),
   ) as Partial<Record<StepName, PipelineStep>>;
   const job = await queueJob(slug, names);
-  return { ran, job, parts: partsFor(fresh, steps) };
+  return { ran, job, parts: partsFor(fresh, steps), fresh, made };
 }
 
 /* --------------------------------------------------------------- the cases -- */
@@ -1143,6 +1143,153 @@ describe("one claim walks the whole job", () => {
       expect(atStart?.status).toBe("running");
       expect(atStart?.preview, "the old attempt's preview was shown under the new attempt").toBeUndefined();
       expect(advanced?.job.status).toBe("done");
+    });
+  });
+
+  /**
+   * **The ways a claim was put down wrongly, or not put down at all** — the
+   * seventh sweep's tier 0 for the queue
+   * (docs/plans/261007a-seventh-sweep-job-queue-tier-0.md). Each case was
+   * watched red against the code as it stood, and each fix was mutated back at
+   * the end; the plan lists both.
+   */
+  describe("the exits of a claim (seventh sweep, tier 0)", () => {
+    /** The job row as stored, including the two columns `Job` does not carry. */
+    async function rowOf(id: string) {
+      const [row] = await getDb()
+        .select({
+          status: jobsTable.status,
+          draft: jobsTable.draftRevisionId,
+          requeues: jobsTable.requeues,
+          title: jobsTable.title,
+        })
+        .from(jobsTable)
+        .where(eq(jobsTable.id, id))
+        .limit(1);
+      return row;
+    }
+
+    async function revisionStatus(id: string | null | undefined): Promise<string | undefined> {
+      if (!id) return undefined;
+      const [row] = await getDb()
+        .select({ status: articleRevisions.status })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, id))
+        .limit(1);
+      return row?.status;
+    }
+
+    /* ------------------------------------------------------------- PQ1 -- */
+
+    it("ends the job, rather than abandoning the claim, when the freshness read fails", async () => {
+      const names: StepName[] = ["fetch", "extract"];
+      const { ran, job, parts } = await fixture("test-walk-freshness-throws", names);
+      let thrown = 0;
+      let draft: string | null | undefined;
+      const failing: AdvanceParts = {
+        ...parts,
+        session: async (j, attempt) => {
+          const session = await parts.session(j, attempt);
+          draft = (await rowOf(j.id))?.draft;
+          const once = async <T,>(real: () => Promise<T>): Promise<T> => {
+            if (thrown === 0) {
+              thrown += 1;
+              throw new Error("transient freshness read");
+            }
+            return await real();
+          };
+          return {
+            ...session,
+            reads: {
+              ...session.reads,
+              interrupted: (...args) => once(() => session.reads.interrupted(...args)),
+              has: (...args) => once(() => session.reads.has(...args)),
+            },
+          };
+        },
+      };
+
+      const advanced = await advanceAsOwner(job.id, failing);
+
+      expect(thrown, "the read has to have failed for this to mean anything").toBe(1);
+      expect(draft, "and the claim has to have opened a draft").toBeTruthy();
+      expect(ran.names, "no step runs on a freshness answer nobody got").toEqual([]);
+      expect(advanced?.done).toBe(true);
+      expect(advanced?.busy).toBe(false);
+      expect(advanced?.job.status).toBe("error");
+      expect(advanced?.job.failureKind, "a failed read is worth another go").not.toBe("blocked");
+      const row = await rowOf(job.id);
+      expect(row?.status, "the row is over, not running behind a live lease").toBe("error");
+      expect(row?.draft, "a terminal job holds no draft pointer").toBeNull();
+      expect(await revisionStatus(draft)).toBe("failed");
+    });
+
+    /**
+     * `noteProgress` is called at three places in a walk and none was inside a
+     * catcher. With two steps and nothing skipped the calls are: `fetch`
+     * starting, `fetch` kept, `extract` starting.
+     */
+    it.each([
+      [1, "as the first step starts"],
+      [2, "after a kept step"],
+      [3, "as the second step starts"],
+    ])("carries on when progress write %i fails, %s", async (nth) => {
+      const names: StepName[] = ["fetch", "extract"];
+      const { ran, job, parts } = await fixture(`test-walk-note-fails-${nth}`, names);
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+        calls += 1;
+        if (calls === nth) throw new Error("the database blinked");
+        return await realNote(id, attempt, steps);
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(calls, "the failing write has to have been reached").toBeGreaterThanOrEqual(nth);
+      expect(ran.names).toEqual(names);
+      expect(advanced?.done).toBe(true);
+      expect(advanced?.job.status).toBe("done");
+      expect((await rowOf(job.id))?.status).toBe("done");
+    });
+
+    it("carries on when the progress write for a skipped step fails", async () => {
+      const names: StepName[] = ["fetch", "extract"];
+      const { ran, job, parts, fresh } = await fixture("test-walk-note-fails-skip", names);
+      fresh.note("test-walk-note-fails-skip", "fetch");
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+        calls += 1;
+        if (calls === 1) {
+          expect(steps[0]?.status, "the first write is the skip's").toBe("skipped");
+          throw new Error("the database blinked");
+        }
+        return await realNote(id, attempt, steps);
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(ran.names).toEqual(["extract"]);
+      expect(advanced?.job.status).toBe("done");
+    });
+
+    it("still stands down, running nothing, when a progress write says the claim has moved", async () => {
+      const names: StepName[] = ["fetch", "extract"];
+      const { ran, job, parts } = await fixture("test-walk-note-stale", names);
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id) => {
+        throw new StaleAttemptError(id);
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(ran.names, "a claimant that lost the job spends nothing").toEqual([]);
+      expect(advanced?.busy).toBe(true);
+      expect(advanced?.done).toBe(false);
+      /* The refusal was this test's invention, so the row is still `running`
+         under a live lease and would hold one of the machine's slots against
+         every case after it. */
+      await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
     });
   });
 });
