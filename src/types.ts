@@ -30,7 +30,7 @@
  * A fourth, of types again: the difficulty rating's shapes belong to
  * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
-import type { FailureKind, PaperUnreadableReason } from "./messages.js";
+import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
 import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
@@ -3984,14 +3984,17 @@ export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial" | "expl
  * The thread kinds, as a value, and the predicate both ends validate with.
  *
  * **One list**, for the reason `REMEMBER_STANCES` below gives about itself and
- * for one more that is specific to this field: the default lives in *two*
- * normalisers, one per store (`normaliseKind` in src/chat.ts and its twin in
- * src/store/pg-chat.ts), and both coerce anything unrecognised to `"chat"`. A
- * fourth kind added to the union and missed in either of them is a thread that
- * silently becomes a chat on its next read — answered with chat's prompt, with
- * nothing on screen disagreeing, which is the failure the `kind` field was
- * introduced to prevent. Since both call `isThreadKind`, adding a member is one
- * edit rather than four.
+ * for one more that is specific to this field: every reader of a stored kind
+ * has to agree on the list. A kind added to the union and missed by one of
+ * them used to be a thread that silently became a chat on its next read —
+ * answered with chat's prompt, with nothing on screen disagreeing, which is the
+ * failure the `kind` field was introduced to prevent. Since they all go
+ * through `isThreadKind`, adding a member is one edit rather than four.
+ *
+ * Since 2026-10-06 the two Postgres readers (src/store/pg-chat.ts and
+ * src/store/export.ts) no longer coerce at all: `storedThreadKind` below
+ * refuses a kind that is not on this list. Only `normaliseKind` in src/chat.ts
+ * still supplies `"chat"`, and it reads fixture files, never the database.
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial", "explore"];
 
@@ -4026,6 +4029,46 @@ export const MAX_VISIBLE_BLOCKS = 100;
 /** Is this one of the three? Used by both stores' normalisers and by the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * The database holds a thread kind this code has no name for.
+ *
+ * **A 409, carried on the class**, which is the door src/store/db-errors.ts
+ * asks a refusal to use: the store's guard passes anything with a numeric
+ * `status`, and `serveApi` answers with it. 409 and not 500 because the browser
+ * has usually already drawn the Retry or Edit this refuses, and a 409 is the one
+ * answer it puts the screen back for (src/web/chat/effects.ts § `runTurn`); a
+ * 500 it commits, blanking an answer Postgres still holds.
+ *
+ * **So the message is the reader's**, since below 500 the message is what the
+ * response says. What was stored is on `stored`: a column a CHECK constrains to
+ * a handful of words chosen in a migration, never anybody's prose.
+ */
+export class UnknownStoredThreadKind extends Error {
+  override readonly name = "UnknownStoredThreadKind";
+  readonly status = 409;
+  constructor(readonly stored: unknown) {
+    super(CHAT_BEING_UPDATED.message);
+  }
+}
+
+/**
+ * **A kind read from `chat_threads`, or a refusal. Never a default.**
+ *
+ * The column is `not null` with a CHECK listing the kinds, so a value outside
+ * `THREAD_KINDS` can only mean the database is newer or older than this code.
+ * Until 2026-10-06 both Postgres readers answered that with `"chat"`: a Retry
+ * or Edit of a Recall answer was then answered under Chat's prompt and stored
+ * over the original, and an export labelled the conversation a chat, with
+ * nothing failing. Refusing costs a failed request for the minutes a deploy
+ * takes; coercing cost a wrong answer that stayed.
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md,
+ * stage 0, and docs/reusable/silent-success.md.
+ */
+export function storedThreadKind(value: unknown): ThreadKind {
+  if (isThreadKind(value)) return value;
+  throw new UnknownStoredThreadKind(value);
 }
 
 /**
