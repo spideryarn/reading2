@@ -46,13 +46,22 @@
  * the three bands dealt into as many columns as the window affords. That is not
  * a third layout, it is the second one with the detail absent.
  */
-import { useCallback, useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
-import { Explain, type Tip } from "./Tooltip";
+import { SessionPreview } from "./SessionPreview";
+import { Explain, Tooltip, type Tip } from "./Tooltip";
 import { useDetailTargetKey } from "./continuity";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
@@ -147,6 +156,54 @@ export function headingFor(row: FleetRow): { kind: "own" | "generated" | "name";
   return { kind: "name", text: row.name };
 }
 
+/**
+ * **The preview a compact card's title button carries** — SessionPreview.tsx
+ * for what it shows and why nothing in it can be pressed.
+ *
+ * In the left-hand column a card has dropped its question's options and clamped
+ * its description; hovering or tabbing to it shows what was dropped, so the
+ * reader can decide whether to switch session without switching.
+ *
+ * `mouseOnly`, as on the dock and for the dock's reason: a tap on this button
+ * selects the session, and a card would land over the detail the tap just
+ * opened. Keyboard focus still opens it — `useFocus` is separate from
+ * `useHover`, and in a browser it wants `:focus-visible`, which a tap does not
+ * give a button.
+ *
+ * **`when` is false on a full-width card**, which already shows all of it, **and
+ * on the selected one**, whose detail is the whole right-hand pane. The second
+ * is also what closes the preview when its session is clicked: the button loses
+ * its `Tooltip`, so the card does not stay over the detail it was a preview of.
+ *
+ * **The cost, stated: `when` changing REMOUNTS the button**, because `Tooltip`
+ * cannot be switched off in place. Nothing is lost by it today — a selection
+ * moves focus to the detail (§ `detailRef`), and closing one finds the row
+ * again by `data-session` after the commit (§ `openFromList`) — but a ref held
+ * to that node across a selection would point at a detached element.
+ *
+ * `placement="right"`: the column is at the left edge, and above or below
+ * would cover the neighbouring cards the pointer is travelling along.
+ */
+function PreviewOn({
+  row,
+  heading,
+  when,
+  children,
+}: {
+  row: FleetRow;
+  heading: string;
+  when: boolean;
+  /** The title button. `Tooltip` needs one element that takes a ref, which a `<button>` does. */
+  children: ReactElement<Record<string, unknown>>;
+}): ReactNode {
+  if (!when) return children;
+  return (
+    <Tooltip content={<SessionPreview row={row} heading={heading} />} placement="right" mouseOnly>
+      {children}
+    </Tooltip>
+  );
+}
+
 function SessionCard({
   row,
   now,
@@ -208,28 +265,30 @@ function SessionCard({
       </div>
 
       <h3 className="tw:mt-1.5 tw:leading-snug tw:font-medium tw:break-words">
-        <button
-          type="button"
-          className={cx(
-            "session-open",
-            /* ONLY A BARE NAME IS FAINT. A generated title is real
-               information about the session and a tmux name is the absence
-               of any, and the first version drew both in the same grey — so
-               a described row and an undescribed one looked equally
-               de-emphasised, which defeats the point of distinguishing the
-               three sources at all. The marker says it is generated; the
-               colour no longer has to. Found in a browser, where it is the
-               only place it is visible. */
-            heading.kind === "name" && "tw:text-ink-faint",
-          )}
-          aria-current={selected ? "true" : undefined}
-          /* How the list finds this row again to hand focus back when the
-             one-pane detail closes — § `openFromList`. */
-          data-session={row.id}
-          onClick={() => onSelect(row.id)}
-        >
-          {heading.text}
-        </button>
+        <PreviewOn row={row} heading={heading.text} when={compact && !selected}>
+          <button
+            type="button"
+            className={cx(
+              "session-open",
+              /* ONLY A BARE NAME IS FAINT. A generated title is real
+                 information about the session and a tmux name is the absence
+                 of any, and the first version drew both in the same grey — so
+                 a described row and an undescribed one looked equally
+                 de-emphasised, which defeats the point of distinguishing the
+                 three sources at all. The marker says it is generated; the
+                 colour no longer has to. Found in a browser, where it is the
+                 only place it is visible. */
+              heading.kind === "name" && "tw:text-ink-faint",
+            )}
+            aria-current={selected ? "true" : undefined}
+            /* How the list finds this row again to hand focus back when the
+               one-pane detail closes — § `openFromList`. */
+            data-session={row.id}
+            onClick={() => onSelect(row.id)}
+          >
+            {heading.text}
+          </button>
+        </PreviewOn>
         {heading.kind === "generated" ? (
           /* SAID OUT LOUD, because a generated title is a guess about a session
              and the reader has to be able to tell it from the one Claude gave

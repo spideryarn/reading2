@@ -234,3 +234,21 @@ Sonnet subagent after stages 1 and 2 against a private port, never `:8787`.
     `tests/fleet-web.test.tsx` now prints one `Not implemented: Window's scrollTo()` line. It passes.
   - Not checked in a real browser: that the restore lands after Safari's own scroll restoration on
     Back, and the `SecurityError` limit itself.
+- 2026-10-06 — **Stage 2 built; no browser check yet.** `SessionPreview.tsx` (new) is the card;
+  `SessionsPanel.tsx` § `PreviewOn` wraps the title button in the existing `Tooltip`
+  (`placement="right"`, `mouseOnly`). `Tooltip.tsx` and the stylesheet are untouched. Tests in
+  `tests/fleet-session-preview.test.tsx`: seven red first (`Error: no preview is open`), the two
+  absence tests proved by mutation instead. No existing test changed. Differences from the plan:
+  - **Not on the selected card either**, only on the other compact ones. Its detail is the whole
+    right-hand pane, and this is also what takes the preview down when its session is clicked —
+    otherwise it would sit over the detail the click just opened until the pointer left.
+  - **Cut in the data, not with `line-clamp`.** A clamp cannot know whether it clipped, so it cannot
+    say so. Description and prompt are cut at 600 characters, options at 6, each with a line saying
+    the rest is in the session. Material is never shown; one line says so when there is some.
+  - **The button remounts when a card gains or loses its preview**, because `Tooltip` cannot be
+    switched off in place. Harmless today: a selection moves focus to the detail, and the scroll
+    restore finds the row by `data-session` after the commit. An `enabled` prop on `Tooltip` would
+    remove it; not done, since the stage excludes changing `Tooltip`.
+  - Focus opens it in jsdom because Floating UI skips its `:focus-visible` test there. That a tap's
+    focus does not open it in a real browser is therefore untested here, and is for the browser check
+    — as is the placement over the detail pane at desktop and iPad widths.
