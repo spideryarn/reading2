@@ -11,6 +11,14 @@ is three commits on the branch `worktree-read-while-importing-spike` (`009d28407
 `c82f2f0d5`), in the worktree `.claude/worktrees/read-while-importing-spike`, and is described
 under [What was built](#what-was-built).
 
+**Decided: not landed.** Greg, 2026-10-06:
+
+> open-before-structure is preferable to read-while-importing
+
+[261005j](../plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md)
+opens the real reading view about 10 s after Add, which leaves this route under a second to fill
+on a web page. The branch is kept as the fallback; the worktree can go.
+
 ## What was asked
 
 > yes, this sounds promising, and definitely sounds worth a spike. it's ok to incur some costs

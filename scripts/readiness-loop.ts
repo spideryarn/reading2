@@ -41,7 +41,6 @@ import {
   closeSync,
   copyFileSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -53,6 +52,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { recordRefusal } from "../admission-journal.js";
+import { worktreePointerProblem } from "./worktree-port.js";
 import { isLocalDatabaseUrl } from "../src/db/ssl.js";
 import { parseEnvFile, pinnedNames } from "../src/env.js";
 import {
@@ -351,49 +351,11 @@ export function runnerWorktreeProblem(
   return null;
 }
 
+/* The check itself is shared with `worktree:check --root`, which needs it for
+   the same reason: scripts/worktree-port.ts § worktreePointerProblem. */
 function linkedWorktreePointerProblem(requested: string): string | null {
-  const dotGit = path.join(requested, ".git");
-  let dotGitKind: ReturnType<typeof lstatSync>;
-  try {
-    dotGitKind = lstatSync(dotGit);
-  } catch (error) {
-    return `runner path ${requested}; ${dotGit} could not be inspected: ${(error as Error).message}`;
-  }
-  /* A primary checkout has a .git directory. A linked worktree has a pointer
-     file, and its administration directory points back to that exact file.
-     Checking the backlink catches a copied pointer: --show-toplevel still
-     reports `requested` in that state, while every ref comes from the other
-     repository. */
-  if (dotGitKind.isDirectory()) return null;
-  if (!dotGitKind.isFile()) {
-    return `runner path ${requested}; ${dotGit} is neither a repository directory nor a linked-worktree pointer`;
-  }
-  let pointerText: string;
-  try {
-    pointerText = readFileSync(dotGit, "utf8").trim();
-  } catch (error) {
-    return `runner path ${requested}; ${dotGit} could not be read: ${(error as Error).message}`;
-  }
-  const match = /^gitdir:\s*(.+)$/.exec(pointerText);
-  if (match?.[1] === undefined) {
-    return `runner path ${requested}; ${dotGit} is not a linked-worktree gitdir pointer`;
-  }
-  const adminText = path.resolve(requested, match[1]);
-  try {
-    const admin = realpathSync(adminText);
-    const backlinkText = readFileSync(path.join(admin, "gitdir"), "utf8").trim();
-    if (backlinkText === "") {
-      return `runner path ${requested}; linked-worktree backlink is empty`;
-    }
-    const backlink = realpathSync(path.resolve(admin, backlinkText));
-    const pointer = realpathSync(dotGit);
-    if (backlink !== pointer) {
-      return `runner path ${requested}; linked-worktree backlink resolves to ${backlink}, not ${pointer}`;
-    }
-  } catch (error) {
-    return `runner path ${requested}; linked-worktree pointer or backlink could not be canonicalised: ${(error as Error).message}`;
-  }
-  return null;
+  const problem = worktreePointerProblem(requested);
+  return problem === null ? null : `runner path ${requested}; ${problem}`;
 }
 
 function requireCommand(

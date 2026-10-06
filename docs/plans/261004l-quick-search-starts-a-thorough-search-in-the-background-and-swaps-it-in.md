@@ -362,3 +362,16 @@ the pair is tidied without a second load: a timer and a second read for a case t
     row, the same way ([shot](261004l-shot-pair-tidy-B-after.png)). The ordinary in-tab swap
     leaves no record. Not looked at: the marks in the prose after the tidy, and an unticked quick
     row (both are in the band tests).
+- 2026-10-06: the flaky case "leave Search mode mid-search, come back after it finished: one row"
+  (the Overseer, 2026-10-05: 2 red in 4) was the test harness, not the tidy. The case before it
+  ends while nuqs is still holding a `?runs=` write, in a queue that belongs to the page and that
+  unmounting does not cancel; about 20 ms into the next case it landed on the fresh URL, so that
+  case opened with the last case's row ticked and failed at its *first* `?runs=` check, before it
+  had left Search mode or tidied anything. The app is not open to it: `src/web/main.tsx` calls
+  `enableHistorySync()`, which makes nuqs drop a held write when anything else writes `history`,
+  and this test file did not. It does now, with a guard case ("the harness") that is red without
+  it, 10 of 10. The failing sequence, 30 runs: 17 red before, 0 after; the whole file 4 of 4.
+  GPT Sol's review agreed it is not a product race and found the first guard passed falsely when
+  the unmount was awaited; the guard now unmounts without a yield. **Not done:**
+  `tests/search-as-you-type.test.tsx` and 29 other test files mount the same adapter without the
+  call. None is known to flake.

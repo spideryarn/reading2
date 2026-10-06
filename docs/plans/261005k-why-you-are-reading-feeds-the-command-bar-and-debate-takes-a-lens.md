@@ -209,6 +209,10 @@ action ([comments.md](../project/comments.md)). Simplest first: not built; it is
 option in `[Q-suggest-together]` for Greg. **The feedback item is not fully answered until he has
 decided that.**
 
+**Decided: A for now, one press each.** Greg, 2026-10-06: "Q-suggest-together go with your
+recommendation for now". The recommendation was to try one press per suggestion for a week and
+build B (tick the searches, press once) only if pressing three rows in turn feels like work.
+
 Also not built: suggestions appearing unprompted on first open (a model call nobody pressed for);
 the interface model seeing the article; a Debate run stored per lens.
 
