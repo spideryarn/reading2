@@ -680,8 +680,13 @@ export type ChatResult =
    * The `error` frame inside a 200, a request that never opened, a non-2xx that
    * is not a 409. `text` is the partial answer where the server sent one back;
    * what arrived is kept, because the reader watched it appear.
+   *
+   * **`repair` is for the one case that keeps nothing**: a retry or an edit
+   * that failed before its `begin` frame is withdrawn and repaired, as a
+   * `turn.refused` is. Always carried, because whether the turn had begun is
+   * the reducer's to know and the id is not the reducer's to mint.
    */
-  | { type: "turn.failed"; opId: OpId; error: string; text?: string }
+  | { type: "turn.failed"; opId: OpId; error: string; text?: string; repair: { id: OpId } }
   /**
    * The stream stopped without ending, or ended without saying how.
    *
