@@ -14,7 +14,7 @@
  * docs/plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,9 +67,11 @@ function aged(file: string, days: number, kind: "file" | "dir" = "file"): string
   return file;
 }
 
-function run(b: ReturnType<typeof box>, args: string[] = [], env: Record<string, string> = {}) {
-  const result = spawnSync(process.execPath, [SCRIPT, ...args], {
-    encoding: "utf8",
+function run(b: ReturnType<typeof box>, args: string[] = [], env: Record<string, string> = {}, entry = SCRIPT) {
+  const output = path.join(b.root, "tidy-output.txt");
+  const fd = openSync(output, "w");
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    stdio: ["ignore", fd, fd],
     env: {
       PATH: process.env["PATH"] ?? "",
       BOX_TIDY_HOME: b.home,
@@ -81,7 +83,9 @@ function run(b: ReturnType<typeof box>, args: string[] = [], env: Record<string,
       ...env,
     },
   });
-  return { status: result.status, out: result.stdout + result.stderr };
+  closeSync(fd);
+  if (result.error) throw result.error;
+  return { status: result.status, out: readFileSync(output, "utf8") };
 }
 
 describe("the copy that reaches the box", () => {
@@ -199,7 +203,7 @@ describe("logs in the checkout", () => {
 });
 
 describe("directories under /tmp", () => {
-  it("removes an idle mkdtemp directory after three days, and nothing that is not one", () => {
+  it("reports old mkdtemp candidates without removing them", () => {
     const b = box();
     // ctime cannot be backdated, so the script's clock is put ten days ahead
     // instead, and every age below is counted back from there (`LATER`).
@@ -215,9 +219,9 @@ describe("directories under /tmp", () => {
 
     const { out } = run(b, [], LATER);
 
-    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(stale)).toBe(true);
     for (const kept of [fresh, typed, dated, scratch, sockets, file]) expect(existsSync(kept), kept).toBe(true);
-    expect(out).toContain("tmp directories: removed 1 idle");
+    expect(out).toContain("tmp directories: report only; 1 candidate(s)");
   });
 
   it("keeps a directory whose ctime is recent, whatever its mtime says", () => {
@@ -238,7 +242,7 @@ describe("directories under /tmp", () => {
 
     expect(existsSync(busy)).toBe(true);
     expect(existsSync(open)).toBe(true);
-    expect(existsSync(idle)).toBe(false);
+    expect(existsSync(idle)).toBe(true);
     expect(out).toContain("kept 2 that a live process is using");
   });
 });
@@ -267,4 +271,185 @@ describe("the npm cache", () => {
     expect(readFileSync(marker, "utf8").trim()).toBe("cache clean --force");
     expect(out).toContain("npm run worktree:sweep");
   });
+});
+
+
+describe("review regressions: preserving work", () => {
+  it("never deletes a mkdtemp tree with closed nested work", () => {
+    const b = box();
+    const dir = aged(path.join(b.tmp, "analysis-Ab3xQz"), 30, "dir");
+    const result = aged(path.join(dir, "deep", "result.txt"), -9);
+    utimesSync(dir, 1, 1);
+    run(b, [], LATER);
+    expect(existsSync(result)).toBe(true);
+  });
+
+  it("does not traverse a symlink at the sessions root", () => {
+    const b = box();
+    const outside = aged(path.join(b.root, "retained", "rollout-result.jsonl"), 30);
+    mkdirSync(path.join(b.home, ".codex"));
+    symlinkSync(path.dirname(outside), path.join(b.home, ".codex", "sessions"));
+    run(b);
+    expect(existsSync(outside)).toBe(true);
+  });
+
+  it("does not traverse a symlink in the job-log root's ancestors", () => {
+    const b = box();
+    const outside = aged(path.join(b.root, "retained", "tmux-jobs", "result.log"), 30);
+    symlinkSync(path.join(b.root, "retained"), path.join(b.checkout, "logs"));
+    run(b);
+    expect(existsSync(outside)).toBe(true);
+  });
+
+  it("keeps an empty sessions directory that is a live cwd", () => {
+    const b = box();
+    const cwd = aged(path.join(b.home, ".codex", "sessions", "live"), 30, "dir");
+    fakeProcess(b, 4242, cwd);
+    run(b);
+    expect(existsSync(cwd)).toBe(true);
+  });
+
+  it("fails closed when cwd is missing but the process still exists", () => {
+    const b = box();
+    const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+    mkdirSync(path.join(b.proc, "4242", "fd"), { recursive: true });
+    symlinkSync(old, path.join(b.proc, "4242", "fd", "3"));
+    const { out } = run(b);
+    expect(existsSync(old)).toBe(true);
+    expect(out).toContain("NOTHING DELETED");
+  });
+});
+
+
+describe("overseer scripts moved out of scratch storage", () => {
+  function shell(b: ReturnType<typeof box>, script: string, extra: Record<string, string> = {}) {
+    const output = path.join(b.root, "shell-output.txt");
+    const fd = openSync(output, "w");
+    const result = spawnSync("/bin/bash", [`${REPO}scripts/overseer-tools/${script}`, "test", "focus", "spya-test"], {
+      env: { HOME: b.home, PATH: `${b.root}/bin:/usr/bin:/bin`, ...extra },
+      stdio: ["ignore", fd, fd],
+    });
+    closeSync(fd);
+    if (result.error) throw result.error;
+    return { status: result.status, out: readFileSync(output, "utf8") };
+  }
+
+  it("writes feedback briefs when OVERSEER_SCRATCH contains spaces", () => {
+    const b = box();
+    const scratch = path.join(b.root, "scratch with spaces");
+    mkdirSync(scratch);
+    writeFileSync(path.join(scratch, "reports.txt"), "######## spya-test\nreader report text\n");
+    const result = shell(b, "mkfb.sh", { OVERSEER_SCRATCH: scratch });
+    expect(result.status).toBe(0);
+    expect(existsSync(path.join(scratch, "brief-test.md"))).toBe(true);
+    expect(readFileSync(path.join(scratch, "brief-test.md"), "utf8")).toContain("reader report text");
+  });
+
+  it("refuses to touch a primary checkout with an ongoing merge", () => {
+    const b = box();
+    mkdirSync(path.join(b.root, "bin"));
+    mkdirSync(path.join(b.home, ".overseer"));
+    const calls = path.join(b.root, "git-calls.txt");
+    writeFileSync(path.join(b.root, "bin", "git"), `#!/bin/sh
+printf '%s\\n' "$*" >> '${calls}'
+case "$1" in
+  rev-parse) exit 0 ;;
+  fetch) exit 0 ;;
+  rev-list) echo 1 ;;
+  merge) exit 1 ;;
+esac
+`, { mode: 0o755 });
+    shell(b, "dashboard-refresh.sh");
+    expect(readFileSync(calls, "utf8")).not.toContain("merge --abort");
+    expect(readFileSync(calls, "utf8")).not.toContain("fetch");
+  });
+
+  it("creates its state directory on a fresh home", () => {
+    const b = box();
+    mkdirSync(path.join(b.root, "bin"));
+    writeFileSync(path.join(b.root, "bin", "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    shell(b, "dashboard-refresh.sh");
+    expect(existsSync(path.join(b.home, ".overseer", "dashboard-refresh.log"))).toBe(true);
+  });
+
+  it("points the operator to the standalone tidy that exists", () => {
+    for (const file of ["README.md", "queue-status.sh"]) {
+      expect(readFileSync(`${REPO}scripts/overseer-tools/${file}`, "utf8")).not.toContain("scripts/box-tidy.ts");
+    }
+    expect(readFileSync(`${REPO}scripts/overseer-tools/queue-status.sh`, "utf8")).toContain("sudo systemctl start box-tidy.service");
+  });
+});
+
+
+describe("file revalidation immediately before unlink", () => {
+  it.each(["replacement", "append"])("keeps a rollout changed by %s between its two stats", (change) => {
+    const b = box();
+    const file = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+    const entry = path.join(b.root, "race.mjs");
+    // Interpose a concurrent writer at the real script's second file stat.
+    // All writes and renames remain in this test's disposable directory.
+    writeFileSync(entry, `import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { main } from ${JSON.stringify(SCRIPT)};
+const target = ${JSON.stringify(file)};
+const original = fs.lstatSync;
+let reads = 0;
+fs.lstatSync = (file, ...args) => {
+  if (file === target && ++reads === 2) {
+    if (${JSON.stringify(change)} === "replacement") {
+      fs.renameSync(target, target + ".saved");
+      fs.writeFileSync(target, "replacement work");
+      fs.utimesSync(target, 1, 1);
+    } else {
+      fs.appendFileSync(target, "live append");
+    }
+  }
+  return original(file, ...args);
+};
+syncBuiltinESMExports();
+main([], process.env);
+`);
+    run(b, [], {}, entry);
+    expect(existsSync(file)).toBe(true);
+  });
+});
+
+
+it("is not stopped by a zombie, which holds nothing open", () => {
+  // The box had 254 of them on 2026-10-07, some 33 days old, and with any one
+  // present the scan read "cannot read process" and the tidy deleted nothing,
+  // every hour. A zombie has exited: the kernel has already released its cwd,
+  // descriptors and mappings, and only the process-table entry is left for a
+  // parent that never collected it. State `Z` in /proc/<pid>/stat says so.
+  const b = box();
+  const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+  const dir = path.join(b.proc, "1325187");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "1325187 (node) Z 4192885 0 0 0 -1 4228100\n");
+  const { out } = run(b);
+  expect(out).not.toContain("NOTHING DELETED");
+  expect(existsSync(old)).toBe(false);
+});
+
+it("is still stopped by a live process it cannot read, even one whose name says zombie", () => {
+  // The state is the field after the LAST `)`: a process can be called anything.
+  const b = box();
+  const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+  const dir = path.join(b.proc, "777");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "777 (x) Z (y) S 1 0 0 0 -1 4228100\n");
+  const { out } = run(b);
+  expect(out).toContain("NOTHING DELETED");
+  expect(existsSync(old)).toBe(true);
+});
+
+it("permits a positively identified kernel thread with no descriptors or mappings", () => {
+  const b = box();
+  const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+  const dir = path.join(b.proc, "2");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "2 (kthreadd) S 0 0 0 0 -1 2097152\n");
+  writeFileSync(path.join(dir, "maps"), "");
+  run(b);
+  expect(existsSync(old)).toBe(false);
 });

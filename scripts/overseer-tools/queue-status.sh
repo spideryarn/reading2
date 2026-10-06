@@ -18,7 +18,7 @@ free -g | awk 'NR==2{print "mem available GB: "$7} NR==3{print "swap used GB: "$
 home_free=$(df -BG --output=avail /home | tail -1 | tr -dc 0-9); root_free=$(df -BG --output=avail / | tail -1 | tr -dc 0-9)
 echo "disk free GB: /home $home_free, / $root_free"
 # The delete that used to live here (Codex transcripts older than a week) is box-tidy.timer now,
-# hourly: scripts/box-tidy.ts. `journalctl -u box-tidy -n 40` shows what it last did.
+# hourly: infra/hetzner/box-tidy.mjs. `journalctl -u box-tidy -n 40` shows what it last did.
 if [ "$home_free" -lt 5 ]; then
-  echo "DISK LOW: /home has ${home_free} GB free. Gate: hold releases under 3 GB; remove finished pushed worktrees (npm run worktree:sweep); run 'npx tsx scripts/box-tidy.ts' now rather than waiting for the hour."
+  echo "DISK LOW: /home has ${home_free} GB free. Gate: hold releases under 3 GB; remove finished pushed worktrees (npm run worktree:sweep); run 'sudo systemctl start box-tidy.service' now rather than waiting for the hour."
 fi

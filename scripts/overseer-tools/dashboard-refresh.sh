@@ -6,16 +6,22 @@
 # runs its own nine checks; this wrapper only decides WHETHER there is anything new to serve.
 set -u
 cd "$HOME/code/spideryarn2" || exit 1
+mkdir -p "$HOME/.overseer" || exit 1
 STATE=$HOME/.overseer/dashboard-refresh-last-sha
 LOG=$HOME/.overseer/dashboard-refresh.log
 INPUTS="tools vite.fleet.config.ts package.json package-lock.json scripts/overseer.ts scripts/overseer-queue.ts"
 say() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG"; }
 
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  say "SKIP: primary has an ongoing merge; leaving it for its owner"
+  exit 0
+fi
+
 git fetch -q origin dev || { say "SKIP: fetch failed"; exit 0; }
 behind=$(git rev-list --count HEAD..origin/dev)
 if [ "$behind" != 0 ]; then
   if git merge -q --no-edit origin/dev 2>>"$LOG"; then say "merged origin/dev into the primary ($behind commit(s))"
-  else say "SKIP: merge of origin/dev failed (dirty primary?) — left as is"; git merge --abort 2>/dev/null; exit 0; fi
+  else say "SKIP: merge of origin/dev failed — leaving all work and conflicts for review"; exit 0; fi
 fi
 head=$(git rev-parse HEAD)
 last=$(cat "$STATE" 2>/dev/null || true)

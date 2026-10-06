@@ -17,25 +17,24 @@
 //   2. Captured stdout of finished tmux jobs (<checkout>/logs/tmux-jobs/*.log)
 //      older than 14 days. Nothing else under logs/: the rest holds loop ledgers
 //      and hand-written judgements that exist nowhere else (scripts/worktree-check.ts).
-//   3. Directories directly under /tmp that mkdtemp made (the name ends in its
-//      six random characters) and that have not changed for 3 days. Test runs
-//      leave about fifty thousand a day. systemd already ages /tmp out at 30
-//      days; this shortens that for one recognisable kind of directory.
+//   3. /tmp candidates are reported only. A mkdtemp-shaped name and old top-level
+//      timestamps cannot prove that nested work is disposable or inactive.
 //   4. The npm download cache, only when /home is at least 80% full.
 // It never touches Docker (the local database is in Docker volumes), worktrees,
 // Claude's transcripts or scratchpads. Those are reported, and a session decides.
 //
-// THREE GUARDS ON EVERY DELETE:
-//   - Only what this user owns, and never through a symlink.
-//   - Never a path a live process has open or is standing in. If
-//     that cannot be established, the step deletes nothing and says so.
-//   - The age is checked again immediately before the unlink.
+// SELECTION GUARDS ON TRANSCRIPTS AND JOB LOGS:
+//   - Only what this user owns, with symlink entries and ancestors refused.
+//   - Paths observed in the /proc cwd/fd snapshot are kept. Unreadable
+//     process evidence stops cleanup. This does not cover mappings or races.
+//   - Age and inode identity are checked again immediately before unlink.
+// These checks are snapshots, not a lock shared with the writers.
 //
 // It prints to stdout, so the log is the journal (`journalctl -u box-tidy`),
 // which is on / and still writable when /home is full.
 
 import { execFileSync } from "node:child_process";
-import { lstatSync, readdirSync, readlinkSync, rmSync, rmdirSync, statfsSync, unlinkSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, readlinkSync, rmdirSync, statfsSync, unlinkSync } from "node:fs";
 import { userInfo } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,7 +96,7 @@ export function diskOf(mount) {
 }
 
 /**
- * Every path a live process has open or is standing in.
+ * A snapshot of cwd and descriptor paths, without mapped files or namespace aliases.
  *
  * `ok: false` when any process could not be read for a reason other than
  * having exited: the caller must then delete nothing, because an unreadable
@@ -129,17 +128,59 @@ export function pathsInUse(procDir) {
         }
       }
     } catch (err) {
-      if (err.code === "ENOENT" || err.code === "ESRCH") continue; // exited mid-read
+      if (err.code === "ENOENT" || err.code === "ESRCH") {
+        // A missing cwd/fd tree does not prove exit (zombies and unusual proc
+        // layouts can still have a pid directory). Only a vanished pid may pass.
+        try {
+          lstatSync(dir);
+        } catch (checkErr) {
+          if (checkErr.code === "ENOENT" || checkErr.code === "ESRCH") continue;
+          return { ok: false, why: `cannot confirm process ${pid} exited: ${checkErr.message}` };
+        }
+        try {
+          const stat = readFileSync(path.join(dir, "stat"), "utf8");
+          const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
+          // A zombie has exited. The kernel has already released its cwd,
+          // descriptors and mappings; the entry waits for a parent to collect
+          // it. The box had 254 on 2026-10-07, some a month old, and treating
+          // one as unreadable meant the tidy never deleted anything.
+          if (fields[0] === "Z") continue;
+          // Kernel threads normally have no cwd. Identify them positively via
+          // stat field 9 (PF_KTHREAD), and require empty fd and maps readings.
+          const flags = Number(fields[6]);
+          if (Number.isInteger(flags) && (flags & 0x00200000) !== 0 &&
+              readdirSync(path.join(dir, "fd")).length === 0 &&
+              readFileSync(path.join(dir, "maps"), "utf8").trim() === "") continue;
+        } catch {
+          // Missing or unreadable evidence is still uncertainty, not exit.
+        }
+      }
       return { ok: false, why: `cannot read process ${pid}: ${err.message}` };
     }
   }
   return { ok: true, inUse };
 }
 
+/** Refuse symlinked ancestors as well as symlinked directory entries. */
+function realDirectoryTree(dir) {
+  let current = path.resolve(dir);
+  for (;;) {
+    try {
+      if (!lstatSync(current).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return true;
+    current = parent;
+  }
+}
+
 /** Regular files under `root` (no symlink followed) for which `want(name)` is true. */
 function filesUnder(root, want, recursive) {
   const out = [];
   const walk = (dir) => {
+    if (!realDirectoryTree(dir)) return;
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -160,9 +201,10 @@ function filesUnder(root, want, recursive) {
 
 /** Old enough, a regular file, and ours. Called twice: when listing, and again just before the unlink. */
 function oldOwnFile(file, cutoffMs, uid) {
+  if (!realDirectoryTree(path.dirname(file))) return null;
   try {
     const st = lstatSync(file);
-    return st.isFile() && st.uid === uid && st.mtimeMs < cutoffMs ? st.size : null;
+    return st.isFile() && st.uid === uid && st.mtimeMs < cutoffMs ? st : null;
   } catch {
     return null;
   }
@@ -174,17 +216,18 @@ function deleteOldFiles({ label, files, days, nowMs, uid, inUse, dryRun }) {
   let bytes = 0;
   let kept = 0;
   for (const file of files) {
-    if (oldOwnFile(file, cutoff, uid) === null) continue;
+    const before = oldOwnFile(file, cutoff, uid);
+    if (before === null) continue;
     if (inUse.has(file)) {
       kept += 1;
       continue;
     }
-    const size = oldOwnFile(file, cutoff, uid); // again: it may have been appended to since the listing
-    if (size === null) continue;
+    const current = oldOwnFile(file, cutoff, uid); // it may have been appended to or replaced
+    if (current === null || current.dev !== before.dev || current.ino !== before.ino) continue;
     try {
       if (!dryRun) unlinkSync(file);
       count += 1;
-      bytes += size;
+      bytes += current.size;
     } catch (err) {
       say(`  could not delete ${file}: ${err.message}`);
     }
@@ -194,9 +237,12 @@ function deleteOldFiles({ label, files, days, nowMs, uid, inUse, dryRun }) {
 }
 
 /** Remove directories under `root` that are now empty, deepest first. Never `root` itself. */
-function pruneEmptyDirs(root, dryRun) {
-  if (dryRun) return;
+function pruneEmptyDirs(root, ctx) {
+  if (ctx.dryRun) return;
   const walk = (dir, isRoot) => {
+    if (!realDirectoryTree(dir)) return;
+    if (lstatSync(dir).uid !== ctx.uid) return;
+    if ([...ctx.inUse].some((p) => p === dir || p.startsWith(dir + path.sep))) return;
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -218,7 +264,7 @@ function stepCodex(cfg, ctx) {
   const root = path.join(cfg.home, ".codex", "sessions");
   const files = filesUnder(root, (n) => /^rollout-.*\.jsonl$/.test(n), true);
   const bytes = deleteOldFiles({ label: "codex transcripts", files, days: POLICY.codexDays, ...ctx });
-  pruneEmptyDirs(root, ctx.dryRun);
+  pruneEmptyDirs(root, ctx);
   return bytes;
 }
 
@@ -264,19 +310,16 @@ function stepTmpDirs(cfg, ctx) {
       break;
     }
     if (!stale(full)) continue;
-    try {
-      if (!ctx.dryRun) rmSync(full, { recursive: true, force: true });
-      count += 1;
-    } catch (err) {
-      say(`  could not remove ${full}: ${err.message}`);
-    }
+    // Report only: even a completely closed tree may be needed on resumption.
+    // Recursive rm also crosses mount points, and a /proc snapshot can race.
+    count += 1;
   }
   say(
-    `tmp directories: ${ctx.dryRun ? "would remove" : "removed"} ${count} idle for ${POLICY.tmpDirDays}+ days` +
+    `tmp directories: report only; ${count} candidate(s) with top-level timestamps older than ${POLICY.tmpDirDays} days` +
       (kept ? `; kept ${kept} that a live process is using` : "") +
       (stoppedEarly ? "; stopped at the time budget, the next run carries on" : ""),
   );
-  return 0; // sizes are not summed: walking them costs more than the tidy. The closing df says what it freed.
+  return 0; // Reporting does not reclaim bytes.
 }
 
 function stepNpmCache(cfg, ctx, homePercent) {

@@ -27,4 +27,4 @@ Start a loop with `npx tsx scripts/tmux-job.ts`, so it has a log and a session n
 loops survives a reboot; the list of what to restart afterwards is in
 [infra/hetzner/README.md](../../infra/hetzner/README.md).
 
-Disk tidying is not here. It is `scripts/box-tidy.ts`, run hourly by `box-tidy.timer`.
+Disk tidying is not here. It is `infra/hetzner/box-tidy.mjs`, run hourly by `box-tidy.timer`.

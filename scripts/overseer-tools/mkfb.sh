@@ -1,6 +1,7 @@
 #!/bin/bash
 # Writes the brief for a feedback-report session out of $OVERSEER_SCRATCH/reports.txt.
 # usage: mkfb.sh NAME "focus line" id1 id2 ...
+set -e
 SP=${OVERSEER_SCRATCH:?set OVERSEER_SCRATCH to the Overseer working directory; see scripts/overseer-tools/README.md}
 name=$1; focus=$2; shift 2
 out=$SP/brief-$name.md
@@ -10,7 +11,7 @@ echo
 echo "$focus"
 for id in "$@"; do
   echo
-  awk -v id="$id" '$0=="######## "id{p=1;next} /^######## /{p=0} p' $SP/reports.txt
+  awk -v id="$id" '$0=="######## "id{p=1;next} /^######## /{p=0} p' "$SP/reports.txt"
 done
 cat <<'B'
 
@@ -24,5 +25,5 @@ How to work:
 - Push to dev, write the feedback note(s), remove the worktree after worktree:check, and message the Overseer a short debrief.
 - NEVER run npm run deploy; only the Overseer deploys.
 B
-} > $out
-echo $out
+} > "$out"
+echo "$out"

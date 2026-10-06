@@ -26,7 +26,7 @@ plan below is the revised one. What changed is under [Sol's plan review](#sols-p
 
 | What | Size | What the tidy frees today |
 | --- | --- | --- |
-| `/tmp` | **150 GB, 806,000 entries** | 556,756 directories idle for 3 days or more |
+| `/tmp` | **150 GB, 806,000 entries** | nothing: 557,203 idle directories are counted, not removed |
 | `~/.codex/sessions` | 4.1 GB | 0.46 GB (138 files older than 7 days) |
 | `logs/tmux-jobs` in the primary checkout | 98 MB | 0.08 GB (142 files older than 14 days) |
 | `~/.npm/_cacache` | 360 MB | 360 MB, only when `/home` is tight |
@@ -40,8 +40,8 @@ plan below is the revised one. What changed is under [Sol's plan review](#sols-p
 about fifty thousand a day (`fake-codex-*`, `launch-fixture-*`, `run-codex-*`, `fleet-transcript-*`
 and a hundred other prefixes). systemd ages `/tmp` out after 30 days and empties it at boot, so 150
 GB is roughly the steady state of a month of leaks. Nobody had looked, because `df` on `/` said 83%.
-Fixing the tests is a separate job, proposed to the Overseer; the tidy shortens the wait from 30
-days to 3.
+Fixing the tests is a separate job, proposed to the Overseer. The tidy was first built to shorten
+the wait from 30 days to 3, and the code review turned that into a count.
 
 **The Overseer daemon died of the full disk and nothing noticed.** It stopped at 2026-10-05T00:18Z
 with `ENOSPC` and was down 46 hours. It runs in tmux from a launch script in `/tmp`.
@@ -80,11 +80,9 @@ What it deletes, and whose words permit each
 2. **Captured stdout of finished tmux jobs** older than 14 days: `logs/tmux-jobs/*.log` in the
    primary checkout, and nothing else under `logs/`. The rest holds loop ledgers and hand-written
    judgements that exist nowhere else, which `scripts/worktree-check.ts` already protects.
-3. **Directories directly under `/tmp` that `mkdtemp` made and that have been idle for 3 days.**
-   The name must end in six characters that are not all lowercase and not all digits, so a name
-   somebody typed is left alone; `claude-*` (scratchpads), `tmux-*` and other programs' trees are
-   never candidates; both mtime and ctime must be old. Nothing in `/tmp` is durable to begin with:
-   systemd empties it at boot.
+3. ~~Directories directly under `/tmp` that `mkdtemp` made and that have been idle for 3 days.~~
+   **Counted and reported, not removed**, since the code review
+   ([below](#sols-code-review-of-stage-1)).
 4. **The npm download cache**, only when `/home` is at or above 80%: `npm cache clean --force`.
 
 Three guards on every delete. Only what the user owns, never through a symlink. Never a path a live
@@ -188,8 +186,41 @@ All three P0s accepted, and all the P1s bar the part of 6 noted below.
 | 14 | `npm cache clean` frees `_cacache` (360 MB), not all of `~/.npm` (1.3 GB) | Number corrected |
 | 15 | A smaller first version | Taken: worktree sweep stays operator-run |
 
-Added after the review, so not reviewed at plan stage: the `/tmp` step. It goes to the code review
-with that said.
+Added after the review, so not reviewed at plan stage: the `/tmp` step. It went to the code review
+with that said, and did not survive it.
+
+## Sol's code review of stage 1
+
+[Prompt](261006m-box-disk-hygiene-code-review-1-prompt.md),
+[answer](261006m-box-disk-hygiene-code-review-1-sol.md). Write-capable; it fixed nine findings in
+place, each with a test seen red, and reported the rest. Its verdict was *revise before unattended
+deletion*. What was done about that:
+
+- **The `/tmp` step is report-only (its P0s 1 and 2), and that is accepted.** An old top-level
+  directory says nothing about a file rewritten deep inside it, a stopped investigation may be
+  resumed, and `rmSync` can cross a mount point. So the timer counts the candidates (557,203 on
+  2026-10-07) and removes none. **The 150 GB in `/tmp` is therefore still there**, ageing out at
+  systemd's 30 days. What to do about it is a question for Greg, in the debrief; the real fix is
+  tests that remove what they make.
+- **Its fixes, all kept:** symlinked roots and ancestors refused; the second check compares device
+  and inode, not only age; empty-directory pruning respects a live cwd; a process whose links are
+  missing is no longer assumed to have exited; an unmeasured `/home` makes the verdict `unknown`
+  rather than `ok`; the unit unsets every `BOX_TIDY_*` test override; `dashboard-refresh.sh` no
+  longer runs `git merge --abort` over somebody else's merge.
+- **Its stricter process scan stopped the tidy from ever running here, found by the dry run on the
+  box.** The box had 254 zombie processes, and each read as "cannot read process". A zombie has
+  exited and holds nothing, so state `Z` in `/proc/<pid>/stat` is now skipped, with a test. The
+  provisioning check was the one Sol asked for in finding 13 and would have caught this: it runs
+  the dry run under the unit's capabilities and fails on `NOTHING DELETED`.
+- **Reported and not fixed, and why that is acceptable for what is still deleted** (findings 3
+  and 4): the scan does not see memory-mapped files or a path seen under another name inside a
+  container, and one snapshot of `/proc` cannot rule out a file opened a moment later. What the
+  timer still deletes is a Codex transcript untouched for a week, a job's captured output
+  untouched for a fortnight, and a download cache. Greg permitted the first *"any time"*, with no
+  guard at all, and the Overseer had been doing it with a bare `find -delete`. The guards make a
+  loss unlikely; they do not make it impossible, and this says so rather than claiming otherwise.
+- **Not taken:** a separate privileged helper for reading `/proc` (finding 15). The user already
+  has passwordless sudo on this box.
 
 ## Log
 

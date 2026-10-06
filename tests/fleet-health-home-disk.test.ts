@@ -97,3 +97,25 @@ describe("assembleHealth", () => {
     expect(report.verdict.reasons).toContain("/home is 100% full");
   });
 });
+
+
+describe("review regressions: unknown home measurements", () => {
+  it("does not treat an unparseable data row as no separate home disk", () => {
+    expect(parseHomeDisk("Filesystem 1024-blocks Used Available Use% Mounted on\ntruncated garbage\n").kind).toBe("unknown");
+  });
+
+  it("does not return ok when the home measurement failed", () => {
+    expect(computeVerdict({ ...calm, homeDisk: { kind: "unknown", why: "df: /home: No such file or directory" } }).level).toBe("unknown");
+  });
+
+  it("preserves a known critical root when the home measurement failed", () => {
+    expect(computeVerdict({ ...calm, disk: { ...calm.disk, usePercent: 100 }, homeDisk: { kind: "unknown", why: "failed" } }).level).toBe("critical");
+  });
+});
+
+
+it("treats an omitted internal home measurement as unknown", () => {
+  const fail = { ok: false as const, why: "unavailable" };
+  const report = assembleHealth({ uptime: fail, nproc: fail, free: fail, swapon: fail, df: fail, vmstat: { skipped: true }, ps: fail }, 0, 1);
+  expect(report.homeDisk?.kind).toBe("unknown");
+});

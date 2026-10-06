@@ -565,7 +565,7 @@ describe("the box tidy service and timer", () => {
     expect(PROVISION).toContain('install -o root -g root -m 0644 "$box_tidy_tmp" /usr/local/lib/spideryarn/box-tidy.mjs');
   });
 
-  it("can see what other processes have open, and has no other privilege", () => {
+  it("requests the capabilities needed to observe other processes", () => {
     // Without both, the script meets a process it cannot read (`systemd --user`
     // without the first, pid 1's descriptors without the second) and deletes
     // nothing, every hour, with a green timer. Both failures were seen on the
@@ -592,5 +592,16 @@ describe("the box tidy service and timer", () => {
       .filter((line) => line.trim() !== "")
       .filter((line) => !/Unit .* not found|command not found|is not a valid user|Failed to (resolve|create)|Unknown user|is not executable/i.test(line));
     expect(complaints).toEqual([]);
+  });
+});
+
+
+describe("box-tidy test overrides", () => {
+  it("unsets every destructive test override in the real service", () => {
+    const lines = section(unitFromRepo("box-tidy.service"), "Service");
+    const unset = lines.filter((l) => l.startsWith("UnsetEnvironment=")).flatMap((l) => l.slice("UnsetEnvironment=".length).split(/\s+/));
+    for (const name of ["HOME", "TMP", "CHECKOUT", "PROC", "NPM", "HOME_MOUNT", "NOW_MS", "TIGHT_PERCENT"]) {
+      expect(unset).toContain(`BOX_TIDY_${name}`);
+    }
   });
 });

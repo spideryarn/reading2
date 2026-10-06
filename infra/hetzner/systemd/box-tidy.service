@@ -17,7 +17,7 @@
 # tests/systemd-units.test.ts compares these bytes against the heredoc in that
 # script.
 [Unit]
-Description=Box tidy -- deletes old Codex transcripts, job logs and stale temp directories
+Description=Box tidy -- deletes old Codex transcripts, job logs; reports temp directories
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/hetzner-remote-server-box.md
 
 [Service]
@@ -31,16 +31,19 @@ Environment=HOME=/home/@USER@
 # npm is /usr/bin/npm on this box (NodeSource). Spelled out because a unit gets
 # no login PATH.
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Test roots, fake /proc, and future clocks must never affect the real timer.
+UnsetEnvironment=BOX_TIDY_HOME BOX_TIDY_TMP BOX_TIDY_CHECKOUT BOX_TIDY_PROC BOX_TIDY_NPM BOX_TIDY_HOME_MOUNT BOX_TIDY_NOW_MS BOX_TIDY_TIGHT_PERCENT
 
-# The script will not delete a file a live process has open, and it finds that
-# out from /proc/<pid>/cwd and /proc/<pid>/fd. Two read-only capabilities, and
+# The script keeps paths observed in a snapshot of /proc/<pid>/cwd and
+# /proc/<pid>/fd. Two capabilities, and
 # both are needed, measured on the box on 2026-10-07: CAP_SYS_PTRACE to read
 # another process's links at all (even some of this user's own; `systemd --user`
 # is not dumpable), and CAP_DAC_READ_SEARCH to list /proc/<pid>/fd for a process
 # owned by root, which is a directory only root may list. With either missing
 # the script meets a process it cannot read and deletes nothing, by design.
-# Neither grants a write: files are still deleted as @USER@, with @USER@'s
-# permissions. (@USER@ has passwordless sudo on this box, so this widens nothing.)
+# These are powerful capabilities: SYS_PTRACE can also modify other processes,
+# and DAC_READ_SEARCH bypasses filesystem read/search permissions. The cleaner
+# uses them for observation, but that does not make the capabilities read-only.
 AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 
 # NOT the checkout's tsx, unlike the other units here, and on purpose. A full
@@ -53,6 +56,6 @@ ExecStart=/usr/bin/node /usr/local/lib/spideryarn/box-tidy.mjs
 # and disk.
 Nice=19
 IOSchedulingClass=idle
-# The script stops deleting temp directories after ten minutes of its own
+# The script stops reporting temp directories after ten minutes of its own
 # accord; this is the backstop for a step that hangs.
 TimeoutStartSec=30min

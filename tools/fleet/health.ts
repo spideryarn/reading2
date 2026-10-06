@@ -179,7 +179,7 @@ export type HealthReads = {
   free: CommandOutcome;
   swapon: CommandOutcome;
   df: CommandOutcome;
-  /** `df -k /home`. Absent from a caller that predates the reading, which reads as `none`. */
+  /** `df -k /home`. Legacy callers may omit it, which is an unknown measurement. */
   dfHome?: CommandOutcome;
   /** `skipped` is the caller opting out of `vmstat`, which is not a failure. */
   vmstat: CommandOutcome | { skipped: true };
@@ -305,8 +305,14 @@ export function parseDisk(dfOut: string): DiskReading {
  */
 export function parseHomeDisk(dfOut: string): HomeDiskReading {
   const line = dfOut.split("\n").filter((l) => l.trim().length > 0)[1];
-  if (line !== undefined && line.trim().split(/\s+/).at(-1) !== "/home") return { kind: "none" };
-  return parseDisk(dfOut);
+  // macOS's automount has a two-word filesystem name and no disk capacity.
+  if (line !== undefined && /^map auto_home\s+0\s+0\s+0\s+100%\s/.test(line.trim())) return { kind: "none" };
+  const disk = parseDisk(dfOut);
+  if (disk.kind === "unknown") return disk;
+  const mount = line?.trim().split(/\s+/).at(-1);
+  if (mount === "/") return { kind: "none" };
+  if (mount !== "/home") return { kind: "unknown", why: `unexpected /home mount: ${mount}` };
+  return disk;
 }
 
 /**
@@ -429,8 +435,9 @@ export function parseAttribution(psOut: string): AttributionReading {
  * three the doc treats as the core survey — there is nothing to base "ok" on,
  * and saying "ok" anyway would be the exact zero-reads-as-healthy collapse
  * this whole module exists to prevent. That case reports `unknown`, with a
- * reason for each reading that could not be read. Any other reading
- * (`disk`, `swapActivity`, `attribution`) that failed on its own does not
+ * reason for each reading that could not be read. An unknown `/home` reading
+ * also forces `unknown`; a measured critical signal always remains critical.
+ * Other readings (`disk`, `swapActivity`, `attribution`) failing alone do not
  * force `unknown` — it appends a "could not measure" reason so the gap is
  * visible without hiding a verdict the other data can still support.
  */
@@ -564,6 +571,9 @@ export function computeVerdict(input: {
     reasons.unshift("could not establish the core reading (load, memory and swap all failed) — this is not the same as the box being fine");
     return { level: raised.includes("critical") ? "critical" : "unknown", reasons };
   }
+  if (home?.kind === "unknown") {
+    return { level: raised.includes("critical") ? "critical" : "unknown", reasons };
+  }
   if (reasons.length === 0) {
     reasons.push("load, memory and swap all look fine");
   }
@@ -596,7 +606,7 @@ export function assembleHealth(reads: HealthReads, startedAtMs: number, nowMs: n
     ? parseDisk(reads.df.out)
     : { kind: "unknown", why: `df failed: ${reads.df.why}` };
   const homeDisk: HomeDiskReading = reads.dfHome === undefined
-    ? { kind: "none" }
+    ? { kind: "unknown", why: "df /home measurement was not supplied" }
     : reads.dfHome.ok
       ? parseHomeDisk(reads.dfHome.out)
       : { kind: "unknown", why: `df failed: ${reads.dfHome.why}` };
