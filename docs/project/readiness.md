@@ -71,6 +71,7 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-verdict.ts` | the conjunction above, as one pure function |
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
+| `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
 
 ## Three ways it nearly lied, caught in review
 

@@ -1295,7 +1295,7 @@ That is a change of policy, and the thing it replaced is worth knowing. A hundre
 take themselves out when the database was missing, in the one part of the summary nobody reads: a run
 could pass, or fail for something else entirely, with every one of them absent. `REQUIRE_POSTGRES=1`
 was the escape hatch for the runs that cared. **The flag is gone from every decision** — nothing
-reads it, `scripts/check.ts` still sets it and will stop when the store tombstone goes.
+reads it, and `scripts/check.ts` no longer sets it either.
 
 Two mechanisms, and between them there is no way for a suite to opt out:
 
