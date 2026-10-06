@@ -138,6 +138,10 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   it, and say in the queue entry that it rests on this rule. What still goes to him as a tagged
   question is a real product trade-off, added complexity, a destructive write to production, and the
   wording of a rule doc.
+- **A question waiting on him blocks only itself.** Greg, 2026-10-06: *"I'm probably only going to
+  check in every day or so, so if something is blocking you, just work around it sensibly in the
+  meantime."* So ask, and meanwhile carry on with everything that does not depend on the answer, or
+  take the sensible default and say so; never let one open question hold the fleet or a deploy.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
