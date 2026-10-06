@@ -39,8 +39,8 @@ const { navigate, parseRoute, watchHistoryWrites } = await import("../src/web/ro
    during B's arrival, which is the case the guard in `save` is for. */
 watchHistoryWrites();
 
-const A = "11111111-1111-4111-8111-111111111111";
-const B = "22222222-2222-4222-8222-222222222222";
+const A = "1a1a1a1a-1111-4111-8111-000000000002";
+const B = "2b2b2b2b-2222-4222-8222-000000000002";
 const A_KEY = lastViewKey("x", A);
 const B_KEY = lastViewKey("x", B);
 const A_VIEW = "?mode=quotes&at=spya-far";

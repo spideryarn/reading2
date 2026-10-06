@@ -19,8 +19,9 @@ type SessionState = {
   session: { access_token: string } | null;
   user: { id: string; email: string } | null;
   loading: boolean;
+  known: boolean;
 };
-let state: SessionState = { session: null, user: null, loading: false };
+let state: SessionState = { session: null, user: null, loading: false, known: true };
 const listeners = new Set<() => void>();
 function setState(next: SessionState) {
   state = next;
@@ -83,7 +84,7 @@ const { rememberReturn } = await import("../src/web/auth-return.js");
 const READER = {
   session: { access_token: "t" },
   user: { id: "11111111-1111-4000-8000-000000000001", email: "reader@example.test" },
-  loading: false,
+  loading: false, known: true,
 };
 
 let host: HTMLDivElement;
@@ -91,7 +92,7 @@ let root: Root;
 
 beforeEach(() => {
   sessionStorage.clear();
-  state = { session: null, user: null, loading: false };
+  state = { session: null, user: null, loading: false, known: true };
   vi.stubGlobal(
     "fetch",
     async () =>

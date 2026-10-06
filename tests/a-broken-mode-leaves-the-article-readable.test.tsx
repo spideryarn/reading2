@@ -163,7 +163,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -809,6 +809,12 @@ describe("a mode that throws is replaced by a band, not by an empty page", () =>
     await act(async () => who.set(OWNER_B));
     await settle();
 
+    /* B is not left in A's mode: a change of reader takes the article's
+       parameters off the address (last-view.ts § A change of reader). So B
+       opens Ideas themselves, and it is a healthy panel with nothing pressed. */
+    expect(text(), "the fallback survived a remount").not.toContain("[mode-render]");
+    expect(modeInUrl(), "B was left in A's mode").not.toBe("ideas");
+    await open("?mode=ideas");
     expect(text(), "the fallback survived a remount").not.toContain("[mode-render]");
     expect(text(), "Ideas did not come back").toContain(IDEA_NAME);
     expect(jobPosts(), "changing reader is not a press").toEqual([]);
@@ -1254,9 +1260,12 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     await act(async () => who.set(null));
     await settle();
 
-    expect(modeInUrl(), "signing out changed the mode instead of changing its access").toBe(
-      "debate",
-    );
+    /* Signing out is a change of reader, so the owner's view is taken off the
+       address (last-view.ts § A change of reader). The visitor then asks for
+       Debate themselves, and gets the owners-only band rather than the panel. */
+    expect(modeInUrl(), "the visitor was left in the owner's mode").not.toBe("debate");
+    await open("?mode=debate");
+    expect(modeInUrl()).toBe("debate");
     expect(
       host.querySelector('.mode-band[aria-label="Not available on a shared link"]'),
       "the visitor's owners-only band never replaced Debate",

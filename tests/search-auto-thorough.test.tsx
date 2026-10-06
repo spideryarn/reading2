@@ -72,8 +72,8 @@ const { searchDraftFor } = await import("../src/web/search-draft.js");
 
 const SLUG = "a-paper";
 /** Whose searches every case is, unless it says otherwise; and somebody else in the same browser. */
-const READER = "11111111-1111-4111-8111-111111111111";
-const OTHER_READER = "22222222-2222-4222-8222-222222222222";
+const READER = "1a1a1a1a-1111-4111-8111-000000000005";
+const OTHER_READER = "2b2b2b2b-2222-4222-8222-000000000005";
 const storedPairs = storedPairsFor(READER);
 const BLOCK = "spya-k3m9qt" as BlockId;
 const BLOCKS: Block[] = [

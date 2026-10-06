@@ -26,8 +26,8 @@ const { lastViewKey, legacyLastViewKey, useLastView } = await import("../src/web
 const { navigate, parseRoute } = await import("../src/web/router.js");
 
 /** Two readers who share one browser profile. */
-const A = "11111111-1111-4111-8111-111111111111";
-const B = "22222222-2222-4222-8222-222222222222";
+const A = "1a1a1a1a-1111-4111-8111-000000000001";
+const B = "2b2b2b2b-2222-4222-8222-000000000001";
 const KEY = lastViewKey("x", A);
 
 function Page({ slug, readerId = A }: { slug: string; readerId?: string | null }) {

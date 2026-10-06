@@ -175,6 +175,16 @@ answer. The late answer then looked like a change of reader and stripped a cold 
 the move had made false) is corrected. Discovery closed here; D1's fix got one narrow check
 ([261006h-code-review-3-sol.md](261006h-code-review-3-sol.md)).
 
+**What the first full suite run found.** Thirty-five test files replace `useSession` with a mock
+that had no `known`, so under `App` the hook was handed a null slug and did nothing: the suite
+would have gone green over a hook that never ran. Every mock now says `known`. With the hook
+live, two cases in `tests/a-broken-mode-leaves-the-article-readable.test.tsx` failed, correctly:
+they asserted that a reader who changes, or signs out, under an open article is left in the
+previous reader's mode. They now assert the opposite and then open the mode as the new reader.
+So a second behaviour changed, and it follows from C1: **signing out with an article open takes
+the page back to its plain address.** The new test files also shared two reader ids with
+`tests/upload-records.test.ts`, which `tests/fixture-ids.test.ts` refuses; each has its own now.
+
 **Left open, and outside this plan's claim:** a session that expires on an article sends the
 reader to the sign-in screen with a return address (`src/web/auth-return.ts`). If a different
 reader signs in there, they are returned to the first reader's address. Sol modelled it in round

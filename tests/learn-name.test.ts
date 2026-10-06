@@ -27,7 +27,7 @@ import {
 import { chatFromParam, learnInSearch, learnParam, modeParam } from "../src/web/params.js";
 import { PHRASES } from "../evals/command-pick/phrases.js";
 
-const A = "11111111-1111-4111-8111-111111111111";
+const A = "1a1a1a1a-1111-4111-8111-000000000004";
 import CATALOGUE from "../src/command-pick-catalogue.generated.json" with { type: "json" };
 
 const labels: Record<string, string> = MODE_LABEL;
