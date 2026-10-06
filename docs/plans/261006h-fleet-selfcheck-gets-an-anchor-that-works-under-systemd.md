@@ -183,6 +183,17 @@ it does not prove every valid pathname or alias was handled. Tests exercise thos
   green. No second review round: F10 (a pathname swapped between the tmux reply and the
   comparison) is left open as reasoned and out of scope, and is the `/proc` option under
   "Passed over".
+- 2026-10-06 — **landed and live.** Pushed to `dev` as `f131bba65`, the primary fast-forwarded,
+  and the dashboard restarted with `npx tsx scripts/fleet-restart.ts restart` (pid 3219330 →
+  3624129, all checks clear). The first collection after it, read from `/api/state`:
+  `"selfCheck": {"kind": "socket-matches", "socketPath": "/tmp/tmux-1000/default"}`, `error`
+  null, 14 rows, server 132280. The check that had answered `cannot-check` since 2026-09-08 now
+  runs on the production path.
+- 2026-10-06 — the full `npm test` in the worktree showed failures in six files, none from this
+  change. `fleet-decisions-route` and `fleet-reports-route` exit 2 because a fresh worktree has
+  no `tools/fleet/web/dist`; both pass after `npm run build:fleet`. The other four
+  (`a-broken-mode-leaves-the-article-readable`, `describe-fetch-failure`, `pdf-bundle-trace`,
+  `cold-start-lazy-imports`) touch nothing under `tools/fleet` and were not investigated here.
 
 ---
 
