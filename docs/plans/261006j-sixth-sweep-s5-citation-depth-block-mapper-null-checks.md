@@ -25,7 +25,9 @@ them draws anything: `citedBlockIds` and `unknownCitedIds` in `src/converse.ts` 
 that says how many ids an answer cited and how many it made up, and two evals), and `unknownIds` in
 `src/web/citations.ts`, which its own comment says renders nothing. The cost was to the numbers we
 watch: a citation the reader was shown went uncounted, and an invented id that deep went
-unreported. At the depths a model actually writes (0 to 3) the two always agreed.
+unreported. The depth defect needs more nesting than a model usually writes. The fix leaves the
+count unchanged for every shape the renderer and the old walk already agreed on; where they
+disagreed, at any block depth, the count is now the renderer's (C1 in the review below).
 
 **The fix changes the server and leaves the screen alone**, because `citableText` is defined as "the
 text a reader will actually be offered a citation in", which makes the renderer right by
@@ -114,11 +116,17 @@ Neither fact was in either doc before.
   checked with the compiler; the third reads `doc.text` without narrowing on `kind` first, so it may
   be live.
 - **The renderer's inline walk has no depth cap.** `strong` inside `emphasis` recurses without
-  limit in `Cited.tsx`, and a 3,000-deep tree is reachable from 6,000 asterisks. Whether that
-  overflows the render was not tested: the parse alone takes 6.7 seconds at that size, which is the
-  library's cliff and arrives first. A cap there would change what a reader sees, so it is reported
-  and not built.
-- **Flat mode.** `CitedText` (the Quiz reply, the summary panel) draws only top-level paragraphs
+  limit in `Cited.tsx`, and a 3,000-deep tree is reachable from 6,000 asterisks. The independent
+  review reproduced a `RangeError` in React SSR for
+  `"*".repeat(6000) + "spya-k3m9qt" + "*".repeat(6000)` (about 4.9 seconds, including parsing).
+  A cap there would change what a reader sees, so it is reported and not built (C4 in the review).
+- **The server matches the source characters and the renderer matches the decoded text** (C2 in
+  the review; there since `3f6b7d68a`, not this cluster). Escapes and character references make the
+  two counts disagree both ways. GPT Sol's minimal inputs, as server count / chips drawn:
+  `spya\-k3m9qt` 0 / 1 · `spya-&#107;3m9qt` 0 / 1 · `https://x.example/&#32;spya-k3m9qt` 0 / 1 ·
+  `https\://x.example/spya-k3m9qt` 1 / 0 · `https&#58;//x.example/spya-k3m9qt` 1 / 0 ·
+  `[cmd\:bookmark:spya-k3m9qt]` 1 / 0 · `[cmd:bookmark:spya-k3m9qt\]` 1 / 0. Reported, not built.
+- **Flat mode.** `CitedText` (the Quiz reply) draws only top-level paragraphs
   with chips and everything else as source, while `citableText` counts an id in a list or a quote.
   No caller counts citations in flat-mode text today. Not changed.
 
@@ -136,3 +144,33 @@ Neither fact was in either doc before.
 - `npx biome lint` on the touched files: nothing introduced. Two complexity notes in `pg.ts` and
   `pg-revisions.ts` were there before.
 - The full `npm test` was not run here; the orchestrator runs it once on the branch.
+
+## Review
+
+GPT Sol reviewed the five commits on 2026-10-06 and fixed two things in the tree:
+[the prompt](261006j-sixth-sweep-s5-code-review-prompt.md),
+[its answer](261006j-sixth-sweep-s5-code-review-sol.md). Its headline was "do not ship", on C1 alone.
+
+- **C1, overruled.** Sol objects that a depth-zero input with 21 nested emphasis markers now counts
+  a citation it did not before; overruled because the requirement it breaks was the orchestrator's
+  over-strict wording, and the new answer is the one the renderer draws. The input is
+  `"*".repeat(21) + "spya-k3m9qt" + "*".repeat(21)`: the old walk counted each `emphasis` against
+  its cap of twelve and gave up; the renderer never did.
+- **C2, reported.** The escapes and character references under *Left* above.
+- **C3, fixed by Sol.** While an answer is streaming, `lastText` in `src/web/Cited.tsx` walked the
+  whole tree recursively before the capped render began, so `"> ".repeat(10000) + "spya-k3m9qt"`
+  threw `RangeError`. Sol made the walk a work list and added a regression to
+  `tests/chat-markdown-render.test.tsx`. Checked here before committing: the old and new walks
+  return the same node on twelve trees (seven parsed, five built by hand with equal and missing
+  offsets, where the first seen wins), and with the fix taken out the new test fails with
+  `RangeError` and the other 79 pass.
+- **C4, reported.** The renderer's inline recursion, under *Left* above.
+- **C5, fixed by Sol.** A comment in `src/store/block-rows.ts` said an absent key and an
+  `undefined` one give a JSON reader a different file. They serialise the same; the difference is
+  the type and the own property.
+
+What supported the build: a fuzz of 12,008 generated answers (10,008 with valid ids and 2,000 with
+the literal id, depths 0 to 14, mixed lists, quotes, marks, code, links and headings) with **zero
+disagreements on literal ids**; and an independent probe of the mapper over all 128 combinations of
+the seven nullable columns, which matched the old mappings in value, omitted keys and serialised
+bytes.

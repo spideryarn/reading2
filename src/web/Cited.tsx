@@ -203,14 +203,22 @@ function Drawn({
  */
 function lastText(tree: Root, source: string): Text | null {
   let last: Text | null = null;
-  const walk = (node: Nodes) => {
+  // Streaming inspects the whole tree, including blocks past the render cap.
+  // Keep that inspection off the call stack too.
+  const todo: Nodes[] = [tree];
+  for (let node = todo.pop(); node; node = todo.pop()) {
     if (node.type === "text") {
       if (!last || (node.position?.end.offset ?? 0) > (last.position?.end.offset ?? 0)) last = node;
-      return;
+      continue;
     }
-    if ("children" in node) for (const child of node.children) walk(child);
-  };
-  walk(tree);
+    // Reverse insertion preserves the old traversal's tie-breaking order.
+    if ("children" in node) {
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        const child = node.children[i];
+        if (child) todo.push(child);
+      }
+    }
+  }
   /* **Only if it really is the end of the answer.** An answer whose last block
      is a code fence has its greatest-offset `text` node somewhere above it —
      that text has finished arriving, and suppressing a link in it left a

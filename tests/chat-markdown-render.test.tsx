@@ -446,6 +446,12 @@ describe("the client and the server agree about what a citation is", () => {
 });
 
 describe("what the second review caught", () => {
+  it("survives deeply nested quotes while the answer is streaming", () => {
+    expect(() => painting(`${"> ".repeat(10000)}spya-k3m9qt`)).not.toThrow();
+    expect(text()).toContain("spya-k3m9qt");
+    expect(all(".cite-chips .block-ref")).toHaveLength(0);
+  });
+
   it("survives Markdown nested past anything a model writes", () => {
     /* The parser handles 4,000 nested quote markers in 140ms; the RENDER WALK
        does not — `RangeError: Maximum call stack size exceeded` at around 2,400

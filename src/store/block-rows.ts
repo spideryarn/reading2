@@ -64,10 +64,9 @@ export interface BlockColumns extends PublicBlockColumns {
 }
 
 /* Conditional spreads throughout, because `exactOptionalPropertyTypes` is on:
-   `level: undefined` is a different type from no `level`, and a JSON reader
-   sees a different file. The two halves exist only so that `note` keeps the
-   place it has always had between them, which is the key order of every
-   exported blocks.json. */
+   `level: undefined` is a different type from no `level`. The two halves exist
+   only so that `note` keeps the place it has always had between them, which is
+   the key order of every exported blocks.json. */
 function upToNote(id: BlockId, row: PublicBlockColumns) {
   return {
     id,
