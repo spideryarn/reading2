@@ -37,8 +37,19 @@
  *
  * The shades are decoration: `aria-hidden`, and `pointer-events-none`, so a
  * tap or a drag on one reaches the cell under it.
+ *
+ * **And it can be reached from the keyboard, while there is something to
+ * reach.** The arrow keys scroll whatever has focus, and a plain `div` never
+ * has it: in Safari, and in Chrome before 130, somebody without a pointer
+ * could not bring the hidden columns into view at all (WCAG 2.1.1; axe's
+ * `scrollable-region-focusable`). So while the content overflows, the
+ * scrolling element is a tab stop, a `region`, and named; when it fits it is
+ * none of the three, because a stop that scrolls nothing is a wasted stop and
+ * a region for every small table is landmark noise. `useScrollBox` is that
+ * much on its own, for a box this component does not draw.
+ * docs/plans/261006h-focusable-sideways-scroll-boxes.md.
  */
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /**
  * How near the end counts as the end, in pixels. `scrollLeft` is fractional on
@@ -48,14 +59,29 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
  */
 const NEAR = 1;
 
-type More = { left: boolean; right: boolean };
-const NEITHER: More = { left: false, right: false };
+/**
+ * `left` and `right`: which edges have content hidden past them, which moves
+ * with the scroll. `any`: whether there is anything to scroll at all, which
+ * does not — at the far end `right` is false and the box still scrolls. And
+ * `any` has no tolerance: `NEAR` is about a fractional scroll *position*, and
+ * a box one whole pixel too narrow does scroll.
+ */
+type More = { left: boolean; right: boolean; any: boolean };
+const NEITHER: More = { left: false, right: false, any: false };
+
+/** What makes an element a named tab stop. All three or none: a `region` must be named. */
+type Reachable = { tabIndex: 0; role: "region"; "aria-label": string };
+
+/** Spread onto the scrolling element: its ref, and `Reachable` while it overflows. */
+export type ScrollBoxProps = { ref: RefObject<HTMLDivElement | null> } & Partial<Reachable>;
 
 /**
- * Which edges of a sideways-scrolling element have content hidden past them.
- * Give `ref` to the element that has `overflow-x: auto`.
+ * A sideways-scrolling element, measured. Spread `box` onto the element that
+ * has `overflow-x: auto`: it is the ref, and — while the content overflows —
+ * what lets the keyboard reach it. `label` is its accessible name then; for a
+ * table, the caption's words.
  */
-function useMoreSideways(): [React.RefObject<HTMLDivElement | null>, More] {
+export function useScrollBox(label: string): { box: ScrollBoxProps; more: More } {
   const ref = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState<More>(NEITHER);
 
@@ -67,9 +93,12 @@ function useMoreSideways(): [React.RefObject<HTMLDivElement | null>, More] {
     const measure = () => {
       const left = box.scrollLeft > NEAR;
       const right = box.scrollWidth - box.clientWidth - box.scrollLeft > NEAR;
+      const any = box.scrollWidth > box.clientWidth;
       /* The same object back when nothing changed, so a scroll that stays
          between the two ends renders nothing. */
-      setMore((was) => (was.left === left && was.right === right ? was : { left, right }));
+      setMore((was) =>
+        was.left === left && was.right === right && was.any === any ? was : { left, right, any },
+      );
     };
     measure();
     box.addEventListener("scroll", measure, { passive: true });
@@ -83,7 +112,7 @@ function useMoreSideways(): [React.RefObject<HTMLDivElement | null>, More] {
     };
   }, []);
 
-  return [ref, more];
+  return { box: more.any ? { ref, tabIndex: 0, role: "region", "aria-label": label } : { ref }, more };
 }
 
 /* 15% of the text colour on a light page; twice that on a dark one, where a
@@ -92,22 +121,35 @@ function useMoreSideways(): [React.RefObject<HTMLDivElement | null>, More] {
 const SHADE =
   "tw:pointer-events-none tw:absolute tw:inset-y-px tw:z-20 tw:w-6 tw:from-foreground/15 tw:dark:from-foreground/30 tw:to-transparent";
 
-/**
- * The scrolling box itself. Exported for `DataTable`, which draws the same box
- * without the cue, so the two cannot drift apart.
- */
-export const SCROLL_BOX = "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
+/** The scrolling box itself. `relative` is for the `sr-only` labels inside: lib/DataTable.tsx § `DataTable`. */
+const SCROLL_BOX = "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
 
 export function SidewaysScrollBox({
+  label,
+  cue = true,
   className,
   children,
 }: {
-  /** For the outer box: a margin. The border and the scrolling are the inner one's. */
+  /** The box's accessible name while it scrolls — for a table, its caption. */
+  label: string;
+  /**
+   * The shades. Without them this is the one scrolling `div` and no wrapper —
+   * what the shelf and `/admin/users` have always drawn — still measured, so
+   * still reachable from the keyboard.
+   */
+  cue?: boolean;
+  /** For the outer box: a margin. The border and the scrolling are the inner one's. Needs `cue`. */
   className?: string;
   /** One element that lasts as long as the box does — see the header. */
   children: ReactNode;
 }) {
-  const [box, more] = useMoreSideways();
+  const { box, more } = useScrollBox(label);
+  const scroller = (
+    <div {...box} data-scroll-box="" className={SCROLL_BOX}>
+      {children}
+    </div>
+  );
+  if (!cue) return scroller;
   return (
     <div
       data-sideways-scroll=""
@@ -115,14 +157,7 @@ export function SidewaysScrollBox({
       data-more-right={more.right ? "" : undefined}
       className={`tw:relative tw:isolate${className ? ` ${className}` : ""}`}
     >
-      {/* `relative` is for the `sr-only` labels inside: lib/DataTable.tsx § `DataTable`. */}
-      <div
-        ref={box}
-        data-scroll-box=""
-        className={SCROLL_BOX}
-      >
-        {children}
-      </div>
+      {scroller}
       {/* Inset by the border's one pixel and rounded with it, so a shade stays inside the box's outline. */}
       {more.left && (
         <div aria-hidden="true" data-scroll-fade="left" className={`${SHADE} tw:left-px tw:rounded-l-lg tw:bg-linear-to-r`} />

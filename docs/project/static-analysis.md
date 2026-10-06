@@ -32,7 +32,10 @@ expensive command is a trap that documentation sets, not one a careless reader w
 So: `npm run typecheck`, `npm run knip`, `npm run cycles` and the rest are what you reach for while
 working. `npm run check` is the pre-commit gate, and you should expect to wait — run it under
 [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
-*system* memory pressure here. `--fast` skips the build but **not** the suite.
+*system* memory pressure here. `--fast` skips the build but **not** the suite. Start it early rather
+than waiting on it in series: commit on the fast gates — `npm run typecheck`, the suites you
+touched, and `npx vitest run tests/doc-links.test.ts` after any doc edit — and read `check`'s
+verdict when it lands.
 
 Started beside an `npm test` it is two full suites. On 2026-09-05 both ran in tmux at once: each
 took over half an hour, available memory fell to 6 GB of 30, and six waiters were OOM-killed in one

@@ -24,6 +24,7 @@ import { type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../a
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { Button } from "./components/ui/button.js";
+import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
 import { ADMIN_HREF } from "./router.js";
@@ -35,6 +36,9 @@ import {
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
 import { useNow } from "./useNow.js";
+
+/** The table's name: its caption, and its scroll box's while it scrolls. */
+const CAPTION = "Every gift voucher, newest first";
 
 const INPUT =
   "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25";
@@ -621,10 +625,13 @@ export function AdminVouchersPage() {
            box, and the whole page scrolled sideways by 336px at 390. The same
            bug and fix as DataTable.tsx § the scroll box. The `min-w-*` on the
            wordy columns are what make the table scroll in here rather than
-           squeezing an address to two characters a line. Plan 261001m. */
-        <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+           squeezing an address to two characters a line. Plan 261001m.
+
+           The shared box without its shade, so it is measured and takes
+           keyboard focus while the table is wider than it (plan 261006h). */
+        <SidewaysScrollBox label={CAPTION} cue={false}>
           <table className="tw:w-full tw:border-collapse tw:text-sm">
-            <caption className="tw:sr-only">Every gift voucher, newest first</caption>
+            <caption className="tw:sr-only">{CAPTION}</caption>
             <thead>
               <tr className="tw:border-b tw:border-border">
                 <th className={HEAD}>Email</th>
@@ -645,7 +652,7 @@ export function AdminVouchersPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </SidewaysScrollBox>
       )}
     </Shell>
   );

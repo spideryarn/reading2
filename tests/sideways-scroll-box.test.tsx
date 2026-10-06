@@ -108,8 +108,16 @@ function resized(target: Element | null | undefined, what: string): void {
   expect(watching, `no ResizeObserver is watching ${what}`).toBeGreaterThan(0);
 }
 
+/** What the keyboard needs of the scroll box: a tab stop, a role, a name. */
+function reach(): { tabindex: string | null; role: string | null; name: string | null } {
+  const el = box();
+  if (!el) throw new Error("no scroll box");
+  return { tabindex: el.getAttribute("tabindex"), role: el.getAttribute("role"), name: el.getAttribute("aria-label") };
+}
+const UNREACHABLE = { tabindex: null, role: null, name: null };
+
 const wide = (
-  <SidewaysScrollBox className="tw:mb-4">
+  <SidewaysScrollBox label="Figures by day" className="tw:mb-4">
     <table data-inner="">
       <tbody>
         <tr>
@@ -218,6 +226,54 @@ describe("SidewaysScrollBox", () => {
   });
 });
 
+/* docs/plans/261006h-focusable-sideways-scroll-boxes.md. The arrow keys scroll
+   whatever has focus, and a plain div never has it. That a focused box really
+   scrolls under the arrow keys, and shows a ring, is the browser's to show. */
+describe("reaching the box from the keyboard", () => {
+  const REACHABLE = { tabindex: "0", role: "region", name: "Figures by day" };
+
+  it("is a named tab stop while the content is wider than the box", () => {
+    Object.assign(layout, { content: 900, box: 360 });
+    mount(wide);
+    expect(reach()).toEqual(REACHABLE);
+  });
+
+  it("is not a tab stop, a region or named when the content fits", () => {
+    Object.assign(layout, { content: 360, box: 360 });
+    mount(wide);
+    expect(reach()).toEqual(UNREACHABLE);
+  });
+
+  /* `NEAR` forgives a fractional scroll position. It must not forgive a whole
+     pixel of width: that box scrolls. Sol's F2 on the plan. */
+  it("counts one pixel too wide as scrolling, though no shade is drawn for it", () => {
+    Object.assign(layout, { content: 361, box: 360 });
+    mount(wide);
+    expect(reach()).toEqual(REACHABLE);
+    expect(more()).toEqual({ left: false, right: false });
+  });
+
+  it("stays reachable at the far end, where nothing more is hidden to the right", () => {
+    Object.assign(layout, { content: 900, box: 360 });
+    mount(wide);
+    scrollTo(540);
+    expect(more().right).toBe(false);
+    expect(reach()).toEqual(REACHABLE);
+  });
+
+  it("follows the content as it grows and shrinks, with no scroll", () => {
+    Object.assign(layout, { content: 360, box: 360 });
+    mount(wide);
+    expect(reach()).toEqual(UNREACHABLE);
+    layout.content = 900;
+    resized(host.querySelector("[data-inner]"), "the table inside the box");
+    expect(reach()).toEqual(REACHABLE);
+    layout.content = 360;
+    resized(host.querySelector("[data-inner]"), "the table inside the box");
+    expect(reach()).toEqual(UNREACHABLE);
+  });
+});
+
 /* The shared table: the shelf and /admin/users draw it too, and neither asked
    for a cue. */
 describe("DataTable's sidewaysCue", () => {
@@ -257,6 +313,27 @@ describe("DataTable's sidewaysCue", () => {
       "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border",
     );
     expect(table?.parentElement?.parentElement).toBe(host);
+  });
+
+  /* The shelf's table, which is the one a reader meets. */
+  it("is reachable from the keyboard without the cue, named by its caption", () => {
+    Object.assign(layout, { content: 900, box: 360 });
+    mount(<Harness />);
+    expect(host.querySelector("table")?.parentElement).toBe(box());
+    expect(reach()).toEqual({ tabindex: "0", role: "region", name: "People" });
+    expect(host.querySelector("[data-scroll-fade]")).toBeNull();
+  });
+
+  it("is not a tab stop without the cue when the table fits", () => {
+    Object.assign(layout, { content: 360, box: 360 });
+    mount(<Harness />);
+    expect(reach()).toEqual(UNREACHABLE);
+  });
+
+  it("is named by its caption with the cue too", () => {
+    Object.assign(layout, { content: 900, box: 360 });
+    mount(<Harness cue />);
+    expect(reach()).toEqual({ tabindex: "0", role: "region", name: "People" });
   });
 
   it("measures the table's own scroll box when asked", () => {

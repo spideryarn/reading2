@@ -398,6 +398,11 @@ without touching what other agents have uncommitted there.
 has once left them at `HEAD`. The shared primary is the exception just described: commit your own
 files there, never a peer's unfinished ones, and take the fast-forward — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
 
+**Do not wait for a green full suite on a busy trunk.** Each merge of `dev` can bring a different
+session's breakage: three merges in one afternoon on 2026-09-08 met three unrelated reds, each
+fixed upstream within the hour by the session that caused it. Show that your own files are
+disjoint from the failing ones, show that your own tests pass, and push.
+
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.
 That is not a display problem: the workflow hands GPT Sol "the scoped diff" as review evidence, so a
