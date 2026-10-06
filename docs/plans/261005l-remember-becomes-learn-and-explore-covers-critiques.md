@@ -1,6 +1,6 @@
 # Remember becomes Learn, and Explore also covers critiques of the piece
 
-Status: **built and on `dev`, except the two screenshots and the browser pass** (§ What landed). Queue entry `qi-hsv465b2`. Report `spya-mvmpks`
+Status: **built and on `dev`; all three stages landed.** Queue entry `qi-hsv465b2`. Report `spya-mvmpks`
 (SPIDERYARN-READING2-DG), from Greg (admin, proved by `scripts/feedback-reporter.ts` exit 0), filed
 2026-10-05 07:48 UTC on `2605-20355v1-spya-ygtwkz`:
 
@@ -479,6 +479,22 @@ not this report's. Named for the Overseer in the hand-back; not changed here.
 - The Quiz (i) card said *12 questions* over a band showing *Question 1 of 5*, which is the *Only
   what I've read* filter doing its job, but the two numbers sit close together.
 
+### The code review of stage 3, 2026-10-06
+
+[261005l-learn-stage-3-code-review-sol.md](261005l-learn-stage-3-code-review-sol.md), GPT Sol,
+write-capable, of `45f3add14^..03c95f935`. Its verdict line is *changes needed*, for the one
+finding it reported instead of fixing; that one is now fixed. It found the two pictures accurate,
+cropped and truly described by their alt text, and the numbers in `shots.ts` right.
+
+| | What | |
+|---|---|---|
+| P2 | `marketing-pages.md` said 1440×900 and quality 65-92, and these two pictures were made at 916×700, one at 80-98 | the doc gains two paragraphs under § The mechanics saying when and why |
+| P3 | this plan's status line and one paragraph still spoke of stage 3 as open | fixed by the reviewer |
+| P3 | `s3-features-learn-1440.png` showed two loading skeletons and nothing cited it | deleted by the reviewer |
+| wider | `ChatPanel.tsx`'s comment said Explore's empty state offers *three ways in* over an array of four | one word, stage 2's leftover, fixed here |
+
+It also checked the three-note reading of `combineEndings` and agreed with it.
+
 ### The plan review of stage 3, 2026-10-06 — build with changes
 
 [261005l-learn-stage-3-plan-review-sol.md](261005l-learn-stage-3-plan-review-sol.md), of commit
@@ -494,12 +510,12 @@ not this report's. Named for the Overseer in the hand-back; not changed here.
 | S3-6 P3 | a shorter `quiz.png` is fine; it must stay over 400px tall and 20KB | noted for the capture |
 
 **S3-3 is a conflict with this entry's brief, and I took the mechanism's side.** The brief said to
-update the one existing note, write no second note, and keep `parts: 3`. Checked:
-`src/feedback-endings.generated.ts` holds `"spya-mvmpks": "awaiting"` today, and
+update the one existing note, write no second note, and keep `parts: 3`. Checked before the
+close-out notes: `src/feedback-endings.generated.ts` held `"spya-mvmpks": "awaiting"`, and
 `combineEndings([{ ending: "shipped", parts: 3 }])` is `awaiting` by its own test
 (`tests/feedback-endings.test.ts` § *waits while a split report has fewer notes than parts*). So the
 brief as written leaves the report unfinished for ever, which is the opposite of what it is for.
 The two ways out are three notes, or one note without `parts`. The convention in
 [feedback-reports.md § The note](../project/feedback-reports.md) is one note per entry with
-`parts: N` on each, and the identifiers part (`qi-dabpymjd`) never wrote its own. So: the existing
+`parts: N` on each, and the identifiers part (`qi-dabpymjd`) had not written its own. So: the existing
 note is corrected, and two short notes join it, one per other part, each a signpost to its plan.
