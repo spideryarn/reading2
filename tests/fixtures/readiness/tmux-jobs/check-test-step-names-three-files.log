@@ -1,0 +1,126 @@
+readiness-run e02bcbb3543e check
+
+> spideryarn@1.0.0 check
+> tsx scripts/check.ts
+
+
+── typecheck (gate)
+✓ src/web/tsconfig.json  (553 files)
+…
+ [32m✓[39m [30m[45m private-postgres [49m[39m tests/store-export-search-kind.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 158[2mms[22m[39m
+ [32m✓[39m [30m[45m private-postgres [49m[39m tests/db-transaction-errors.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m [30m[45m private-postgres [49m[39m tests/store-roundtrip.test.ts[2m > [22ma round trip through Postgres[2m > [22mwrites[2m > [22mpreserves chat.json exactly
+[31m[1mAssertionError[22m: expected { threads: [ { …(6) }, { …(7) } ] } to deeply equal { threads: [ { …(6) }, { …(7) } ] }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[33m@@ -29,11 +29,11 @@[39m
+[2m        "anchor": {[22m
+[2m          "blockId": "spya-z7zzwv",[22m
+[2m        },[22m
+[2m        "createdAt": "2026-08-26T09:00:00.000Z",[22m
+[2m        "id": "spya-fxc300",[22m
+[32m-       "kind": "remember",[39m
+[31m+       "kind": "chat",[39m
+[2m        "messages": [[22m
+[2m          {[22m
+[2m            "createdAt": "2026-08-26T09:00:00.000Z",[22m
+[2m            "id": "spya-fxc303",[22m
+[2m            "role": "user",[22m
+
+[36m [2m❯[22m tests/store-roundtrip.test.ts:[2m583:53[22m[39m
+    [90m581|[39m
+    [90m582|[39m       [34mexpect[39m(returned)[33m.[39m[34mtoBeDefined[39m()[33m;[39m
+    [90m583|[39m       [34mexpect[39m([34msorted[39m([34mcanonical[39m(artefact[33m,[39m returned)))[33m.[39m[34mtoEqual[39m(
+    [90m   |[39m                                                     [31m^[39m
+    [90m584|[39m         sorted(canonical(artefact, cleanedAsExported(artefact, origina…
+    [90m585|[39m       )[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/dock-corner-controls.test.tsx[2m > [22mthe route walk: one branded home control, never two triggers[2m > [22msigned in at /add/https://example.com/a: the corner pair, and only that
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'find')[39m
+[36m [2m❯[22m activeStep src/job-state.ts:[2m558:13[22m[39m
+    [90m556|[39m
+    [90m557|[39m [35mconst[39m activeStep [33m=[39m (job[33m:[39m [33mJob[39m)[33m:[39m [33mJobStep[39m [33m|[39m [35mnull[39m [33m=>[39m
+    [90m558|[39m   job[33m.[39msteps[33m.[39m[34mfind[39m((s) [33m=>[39m s[33m.[39mstatus [33m===[39m [32m"running"[39m) [33m??[39m [35mnull[39m[33m;[39m
+    [90m   |[39m             [31m^[39m
+    [90m559|[39m
+    [90m560|[39m [90m/**
+[90m [2m❯[22m displayJob src/job-state.ts:[2m566:16[22m[39m
+[90m [2m❯[22m JobCard src/web/AddArticle.tsx:[2m569:17[22m[39m
+[90m [2m❯[22m Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:[2m25904:20[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:[2m7662:22[22m[39m
+[90m [2m❯[22m updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:[2m10166:19[22m[39m
+[90m [2m❯[22m beginWork node_modules/react-dom/cjs/react-dom-client.development.js:[2m11778:18[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:[2m874:13[22m[39m
+[90m [2m❯[22m performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:[2m17641:22[22m[39m
+[90m [2m❯[22m workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:[2m17469:41[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/fleet-child.test.ts[2m > [22mowned fleet probe children[2m > [22msignals only the pid when stat reports a different process group, and explains the fallback
+[31m[1mAssertionError[22m: expected "kill" to not be called at all, but actually been called 1 times[90m
+
+Received:
+
+[1m  1st kill call:
+
+[22m    Array [
+      -3794549,
+      "SIGKILL",
+    ]
+[31m[90m
+
+Number of calls: [1m1[22m
+[31m[39m
+[36m [2m❯[22m tests/fleet-child.test.ts:[2m584:27[22m[39m
+    [90m582|[39m     [35mconst[39m outcome [33m=[39m [35mawait[39m run[33m;[39m
+    [90m583|[39m
+    [90m584|[39m     [34mexpect[39m(groupKill)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m   |[39m                           [31m^[39m
+    [90m585|[39m     [34mexpect[39m(fakeChild[33m.[39mkill)[33m.[39m[34mtoHaveBeenNthCalledWith[39m([34m1[39m[33m,[39m [32m"SIGTERM"[39m)[33m;[39m
+    [90m586|[39m     [34mexpect[39m(fakeChild[33m.[39mkill)[33m.[39m[34mtoHaveBeenNthCalledWith[39m([34m2[39m[33m,[39m [32m"SIGKILL"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m1711 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (1715)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m37924 passed[39m[22m[2m | [22m[33m45 skipped[39m[90m (37972)[39m
+[2m   Start at [22m 06:07:40
+[2m   Duration [22m 4067.29s[2m (transform 158.76s, setup 135.73s, import 1858.64s, tests 3921.48s, environment 654.70s)[22m
+
+…
+[90mFound 538 clones.[39m
+[90mtime: 1.02s[39m
+
+[90m💡 Auto-refactor with AI: [1m[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring[90m[22m
+[90m🎩 New: Gangsta Agents — discipline your AI coding → gangsta.page[39m
+[90m💖 Support jscpd project → https://opencollective.com/jscpd[39m
+
+============================================================
+summary
+============================================================
+  ✓ typecheck    clean
+  ✓ build        clean
+  ✗ test         FAILED
+  ✓ cycles       clean
+  ✓ hook-deps    clean
+  ✓ promises     clean
+  ✓ chain        clean
+  ✓ conflicts    clean
+  ✓ committed    clean
+  ! lint         has findings
+      the lint baseline is not clean on purpose — docs/project/linting.md
+  ! knip         has findings
+      unused files/exports/deps are queued, not fixed — promote to a gate when this reaches zero
+  ! complexity   450 finding(s)
+      a high score means 'go and look', never 'this is wrong'
+  ! dupes        538 finding(s)
+      some duplication is honest; read before deduplicating
+
+A gate failed. That means something is newly wrong.

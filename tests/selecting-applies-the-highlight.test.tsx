@@ -602,6 +602,34 @@ describe("letting go of a mouse selection", () => {
     expect(painted(), "the highlight is still stored and painted").toContain(sentId());
   });
 
+  for (const changeView of [false, true]) {
+    it(`a held selection create ${changeView ? "stays closed after changing Debate view" : "opens over unchanged Debate"}`, async () => {
+      let release!: () => void;
+      heldList = new Promise<void>((go) => { release = go; });
+      await open("?mode=debate&debate=reception");
+      expect(param("mode")).toBe("debate");
+      await drag(4, 19);
+      expect(commentPosts()).toHaveLength(0);
+      expect(dialog()).toBeNull();
+      if (changeView) {
+        await act(async () => history.pushState(null, "", `/read/${SLUG}?mode=debate&debate=claims`));
+        await settle();
+        expect(param("debate")).toBe("claims");
+      }
+      await act(async () => release());
+      await until(() => commentPosts().length === 1);
+      await settle(12);
+      if (changeView) {
+        expect(dialog()).toBeNull();
+        expect(param("note")).toBeNull();
+      } else {
+        await until(() => dialog() !== null);
+        expect(dialog()).not.toBeNull();
+      }
+      expect(painted()).toContain(sentId());
+    });
+  }
+
   it("shows nothing as highlighted when the store refuses", async () => {
     storeStatus = 500;
     await open();

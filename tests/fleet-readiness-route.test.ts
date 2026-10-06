@@ -50,6 +50,7 @@ function record(over: Partial<FinishedRecord> = {}): FinishedRecord {
     exit: 0,
     counts: { kind: "vitest", files: null, tests: null },
     treeAtEnd: { kind: "known", sha: SHA, branch: "dev", dirty: false },
+    failedTestFiles: null,
     logPath: null,
     why: null,
     ...over,

@@ -49,7 +49,8 @@
  * ## What that costs, weighed rather than waved through
  *
  * **A directory instead of a file.** At ~100 runs a day and 7 days' retention
- * that is ~700 files of ~600 bytes. The window is selected **from the
+ * that is ~700 files of a kilobyte or two (see {@link MAX_RECORD_BYTES} for the
+ * measured sizes). The window is selected **from the
  * filenames**, before anything is opened, so a read touches only what it uses.
  *
  * **Retention is deletion, not rotation.** A writer opportunistically unlinks
@@ -116,8 +117,14 @@ export const WINDOW_LOOKBACK_MS = 3 * 60 * 60 * 1000;
 /**
  * A file bigger than this is not one of ours.
  *
- * A record is ~600 bytes. The cap exists so that a directory somebody points
- * `FLEET_READINESS_DIR` at by mistake cannot make a request read a gigabyte.
+ * Measured on 2026-10-06 over the 108 records on this box: 857 to 2,609
+ * bytes, the largest a `check` with fourteen rows in its table. (This said
+ * "~600 bytes", which was true of none of them.) The names of the failing test
+ * files add at most twenty paths of two hundred ASCII characters, about
+ * 8.2 KB including JSON escaping — quotes and backslashes cost two bytes.
+ * A test writes capped, escaped paths and reads them back. The cap exists so that a directory somebody
+ * points `FLEET_READINESS_DIR` at by mistake cannot make a request read a
+ * gigabyte.
  */
 export const MAX_RECORD_BYTES = 64 * 1024;
 

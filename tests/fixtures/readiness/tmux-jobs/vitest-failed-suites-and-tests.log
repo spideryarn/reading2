@@ -1,0 +1,156 @@
+
+> spideryarn@1.0.0 test
+> vitest run --reporter=dot
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/home/greg/code/spideryarn2[39m
+…
+
+[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m [30m[45m private-postgres [49m[39m tests/store-parity.test.ts[2m > [22mthe Postgres store, over the whole corpus
+[31m[1mError[22m: hierarchy for "source": the labels manifest was written against a different tree than the one beside it (manifest structureHash 847fa44562a719b9, tree 084bda97c3e0c494). A label tells its paragraph apart from its neighbours, so labels carried onto re-cut boundaries are wrong in the way src/labels.ts § structureHash describes — write a PendingLabelsFile instead and let the labels step buy them again. Nothing has been written.[39m
+[36m [2m❯[22m writeArtefacts src/store/artifacts-pg.ts:[2m1398:13[22m[39m
+    [90m1396|[39m     [35mconst[39m actual [33m=[39m [34mstructureHash[39m(parts[33m.[39mtree)[33m;[39m
+    [90m1397|[39m     [35mif[39m ([35mtypeof[39m declared [33m===[39m [32m"string"[39m [33m&&[39m declared [33m!==[39m actual) {
+    [90m1398|[39m       [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m             [31m^[39m
+    [90m1399|[39m         `${step} for "${slug}": the labels manifest was written agains…
+    [90m1400|[39m           `than the one beside it (manifest structureHash ${declared},…
+[90m [2m❯[22m copyArtefacts src/store/copy-artefacts.ts:[2m181:5[22m[39m
+[90m [2m❯[22m NodePgSession.transaction node_modules/src/node-postgres/session.ts:[2m259:18[22m[39m
+[90m [2m❯[22m tests/helpers/load-article.ts:[2m452:22[22m[39m
+[90m [2m❯[22m started tests/helpers/load-article.ts:[2m404:14[22m[39m
+[90m [2m❯[22m withRunLock tests/helpers/run-lock.ts:[2m604:12[22m[39m
+[90m [2m❯[22m withRunningJob tests/helpers/load-article.ts:[2m414:22[22m[39m
+[90m [2m❯[22m tests/store-parity.test.ts:[2m328:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[45m private-postgres [49m[39m tests/store-roundtrip.test.ts[2m > [22ma round trip through Postgres
+[31m[1mError[22m: hierarchy for "source": the labels manifest was written against a different tree than the one beside it (manifest structureHash 847fa44562a719b9, tree 084bda97c3e0c494). A label tells its paragraph apart from its neighbours, so labels carried onto re-cut boundaries are wrong in the way src/labels.ts § structureHash describes — write a PendingLabelsFile instead and let the labels step buy them again. Nothing has been written.[39m
+[36m [2m❯[22m writeArtefacts src/store/artifacts-pg.ts:[2m1398:13[22m[39m
+    [90m1396|[39m     [35mconst[39m actual [33m=[39m [34mstructureHash[39m(parts[33m.[39mtree)[33m;[39m
+    [90m1397|[39m     [35mif[39m ([35mtypeof[39m declared [33m===[39m [32m"string"[39m [33m&&[39m declared [33m!==[39m actual) {
+    [90m1398|[39m       [35mthrow[39m [35mnew[39m [33mError[39m(
+    [90m   |[39m             [31m^[39m
+    [90m1399|[39m         `${step} for "${slug}": the labels manifest was written agains…
+    [90m1400|[39m           `than the one beside it (manifest structureHash ${declared},…
+[90m [2m❯[22m copyArtefacts src/store/copy-artefacts.ts:[2m181:5[22m[39m
+[90m [2m❯[22m NodePgSession.transaction node_modules/src/node-postgres/session.ts:[2m259:18[22m[39m
+[90m [2m❯[22m tests/helpers/load-article.ts:[2m452:22[22m[39m
+[90m [2m❯[22m started tests/helpers/load-article.ts:[2m404:14[22m[39m
+[90m [2m❯[22m withRunLock tests/helpers/run-lock.ts:[2m604:12[22m[39m
+[90m [2m❯[22m withRunningJob tests/helpers/load-article.ts:[2m414:22[22m[39m
+[90m [2m❯[22m tests/store-roundtrip.test.ts:[2m317:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/messages.test.ts[2m [ tests/messages.test.ts ][22m
+[31m[1mTypeError[22m: pdfPagesIncomplete is not a function[39m
+[36m [2m❯[22m tests/messages.test.ts:[2m165:24[22m[39m
+    [90m163|[39m   pdfPagesCutOff[33m:[39m [[34mpdfPagesCutOff[39m([[34m12[39m[33m,[39m [34m13[39m])][33m,[39m
+    [90m164|[39m   pdfPagesFiltered[33m:[39m [[34mpdfPagesFiltered[39m([[34m12[39m[33m,[39m [34m13[39m])][33m,[39m
+    [90m165|[39m   pdfPagesIncomplete[33m:[39m [[34mpdfPagesIncomplete[39m([[34m12[39m[33m,[39m [34m13[39m])][33m,[39m
+    [90m   |[39m                        [31m^[39m
+    [90m166|[39m }[33m;[39m
+    [90m167|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/chat-web-links.test.ts[2m > [22msplitLinks — how long it takes on hostile input[2m > [22mgrows roughly linearly in the number of unclosed brackets
+[31m[1mAssertionError[22m: expected 36.136781780161094 to be less than 8[39m
+[36m [2m❯[22m tests/chat-web-links.test.ts:[2m268:19[22m[39m
+    [90m266|[39m     [35mconst[39m ratio [33m=[39m ([34mtime[39m(large) [33m+[39m [34m0.01[39m) [33m/[39m ([34mtime[39m(small) [33m+[39m [34m0.01[39m)[33m;[39m
+    [90m267|[39m     // Quadratic would be ~16×. Anything under 8 is comfortably not th…
+    [90m268|[39m     [34mexpect[39m(ratio)[33m.[39m[34mtoBeLessThan[39m([34m8[39m)[33m;[39m
+    [90m   |[39m                   [31m^[39m
+    [90m269|[39m   })[33m;[39m
+    [90m270|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/doc-links.test.ts[2m > [22mdocumentation links[2m > [22mpoint at anchors that exist
+[31m[1mAssertionError[22m: expected [ …(6) ] to deeply equal [][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "docs/research/260903b-landing-page-design-research.md → ../project/design-css-overview.md#typography",[39m
+[31m+   "docs/project/open-questions.md → design-css-overview.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure",[39m
+[31m+   "docs/project/web-client.md → design-css-overview.md#typography",[39m
+[31m+   "docs/project/original-version/design-system.md → ../design-css-overview.md#typography",[39m
+[31m+   "docs/project/original-version/typography.md → ../design-css-overview.md#typography",[39m
+[31m+   "docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md → ../project/design-css-overview.md#narrow-windows-wrap-do-not-shrink",[39m
+[31m+ ][39m
+
+[36m [2m❯[22m tests/doc-links.test.ts:[2m325:20[22m[39m
+    [90m323|[39m       [33m.[39m[34mfilter[39m((l) [33m=>[39m [33m![39m[34manchorsFor[39m(l[33m.[39mfile)[33m.[39m[34mhas[39m(l[33m.[39manchor))
+    [90m324|[39m       [33m.[39m[34mmap[39m((l) [33m=>[39m [32m`[39m[36m${[39ml[33m.[39m[35mfrom[39m[36m}[39m[32m → [39m[36m${[39ml[33m.[39mtarget[36m}[39m[32m`[39m)[33m;[39m
+    [90m325|[39m     [34mexpect[39m(broken)[33m.[39m[34mtoEqual[39m([])[33m;[39m
+    [90m   |[39m                    [31m^[39m
+    [90m326|[39m   })[33m;[39m
+    [90m327|[39m })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/doc-links.test.ts[2m > [22mdocs have exactly one owner[2m > [22mclaims every doc that exists
+[31m[1mAssertionError[22m: expected [ 'controls.md', …(2) ] to deeply equal [][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "controls.md",[39m
+[31m+   "narrow-windows.md",[39m
+[31m+   "typography.md",[39m
+[31m+ ][39m
+
+[36m [2m❯[22m tests/doc-links.test.ts:[2m406:21[22m[39m
+    [90m404|[39m       [33m.[39m[34mfilter[39m((f) [33m=>[39m [33m![39m[33mENTRY_POINTS[39m[33m.[39m[34mincludes[39m(f))
+    [90m405|[39m       [33m.[39m[34mfilter[39m((f) [33m=>[39m [33m![39mclaims[33m.[39m[34mincludes[39m(f))[33m;[39m
+    [90m406|[39m     [34mexpect[39m(orphans)[33m.[39m[34mtoEqual[39m([])[33m;[39m
+    [90m   |[39m                     [31m^[39m
+    [90m407|[39m   })[33m;[39m
+    [90m408|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[42m unit [49m[39m tests/every-ai-code-is-registered.test.ts[2m > [22mevery ai- failure code in the tree resolves to a kind[2m > [22mresolves every one of them through kindOfMessage
+[31m[1mAssertionError[22m: ai- codes reaching no kind — register them in CODE_KINDS: expected [ Array(1) ] to deeply equal [][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "ai-pdf-incomplete (src/messages.ts:1385)",[39m
+[31m+ ][39m
+
+[36m [2m❯[22m tests/every-ai-code-is-registered.test.ts:[2m112:84[22m[39m
+    [90m110|[39m        what kind the code is and add it to `CODE_KINDS` — and whoever …
+    [90m111|[39m        go red needs the site to make that decision, not a number. */[39m
+    [90m112|[39m     expect(unresolved, "ai- codes reaching no kind — register them in …
+    [90m   |[39m                                                                                    [31m^[39m
+    [90m113|[39m   })[33m;[39m
+    [90m114|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m6 failed[39m[22m[2m | [22m[1m[32m791 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (798)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m14628 passed[39m[22m[2m | [22m[33m402 skipped[39m[90m (15034)[39m
+[2m   Start at [22m 15:00:29
+[2m   Duration [22m 1872.60s[2m (transform 124.19s, setup 77.48s, import 1332.17s, tests 1891.51s, environment 431.38s)[22m
+
+…
+  [private lane] dropped spideryarn_test_260907140031_0afde46252564962a21d9c6b0131d995
+EXIT=1
