@@ -23,7 +23,7 @@ because its page happens to be short (the floor is 500 characters of article tex
 ## What was run
 
 [`scripts/probes/261006f-bot-wall-probe.ts`](../../scripts/probes/261006f-bot-wall-probe.ts), from
-the Hetzner box, in two batches the same afternoon (addresses 1 to 69, then 70 to 109). The list is
+the Hetzner box, in two batches (addresses 1 to 69, then 70 to 109). The list is
 in the script. Each address got one `fetchDocument` call with the shipped User-Agent and no retry,
 then `readArticle` on any web page that came back. The script also greps the bytes for hints of a
 challenge (a `g-recaptcha` class, a `captcha-delivery.com` URL and so on). Those hints only say
@@ -100,7 +100,7 @@ text than the newer ones (1,106 characters against 1,034), so it is further over
 
 ## What this does not show
 
-- **One machine, one afternoon, one User-Agent.** A wall that answers a data-centre address with a
+- **One machine, one User-Agent.** A wall that answers a data-centre address with a
   403 may answer a reader's upload of the saved page with 200 bytes or 2,000. An uploaded copy of a
   Cloudflare challenge was not measured, because we could not get one: stage 1 never receives it.
 - **A wall can change its page.** The margins above are today's.

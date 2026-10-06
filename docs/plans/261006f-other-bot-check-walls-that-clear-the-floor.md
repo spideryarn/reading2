@@ -202,4 +202,31 @@ names the fixtures `ChallengePage` fires on. Its code already caught the refusal
 of `ALL_FIXTURES` (`tidy.mts`, `probe.mts`, `provenance.mts`, `table-oracle.mts`, `wcxb.mts`) needed
 nothing; `fixtures/verify.mts` reports *"38 fixtures, all matching"*.
 
-**Not yet done at the time of writing:** the full `npm test`, and GPT Sol's review of the code.
+## GPT Sol's code review, 2026-10-06 — land it, with its fixes
+
+On commit `61b440abd`:
+[261006f-other-bot-check-walls-code-review-sol.md](261006f-other-bot-check-walls-code-review-sol.md).
+Sol wrote the fixes itself; they were read as a proposal and committed with this section.
+
+- **F4 (P1, established; fixed by Sol, then widened).** An earlier element with
+  `id="anubis_version"` (a `<div>`, a script of another type, one that does not parse) hid the real
+  version script behind it, because `getElementById` answers with the first. Sol made the second
+  shape check every script of that id, four tests red first. **The first shape had the same
+  lookup**, a limit 261006c's review named and kept; it was closed here rather than left as a
+  sentence, with three more tests seen red. Both shapes now share one helper, `hasJsonScript`.
+  Written up as
+  [261006k](../postmortems/261006k-a-first-id-match-hid-a-later-valid-script.md). These were
+  constructed inputs; no live page with a duplicated id was seen.
+- **F5 (P2, established; fixed).** Resolving `src` against the document with a fallback for
+  uploads passed every test. A new `<base>` test catches it.
+- **F6 (P3; fixed).** The postmortem now names the introducing commit, `677404435`.
+- **F7 (P3; fixed).** *"The same afternoon"* was not in the kept evidence and is gone.
+
+Sol also confirmed the score-file claim (501 lines added, none removed, thirteen rows, every
+earlier row byte-identical) and found no real article the entry refuses.
+
+**In a browser** (Playwright, 1440, 820 and 390 wide, the live `bugs.winehq.org` address, on this
+worktree's dev server): the job fails at *Extracting the article* with the fetched sentence and
+`[jb-bot-check]`, no Retry, nothing on the shelf, no sideways scroll at any width. At 390 the code
+itself breaks across two lines (`[jb-` / `bot-check]`), which is 261006c's sentence and not this
+change's.

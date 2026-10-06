@@ -167,13 +167,13 @@ async function expectAnArticle(html: string, url: string, chars: number): Promis
 }
 
 /**
- * Refused as a challenge on both read paths and by `runExtract`. With no
- * address there is one read path: `readArticleWithProvenance` is the harness's
- * and always has one.
+ * Refused as a challenge on both read paths and by `runExtract`. The provenance
+ * API requires a string; `about:blank` gives it the same addressless source DOM
+ * that the shipping path gets with `null`.
  */
 async function expectAChallenge(html: string, url: string | null): Promise<void> {
   expect(readArticle(html, url).refusal).toBeInstanceOf(ChallengePage);
-  if (url !== null) expect(readArticleWithProvenance(html, url).refusal).toBeInstanceOf(ChallengePage);
+  expect(readArticleWithProvenance(html, url ?? "about:blank").refusal).toBeInstanceOf(ChallengePage);
   expect(await thrownBy(html, url)).toBeInstanceOf(ChallengePage);
 }
 
@@ -347,6 +347,18 @@ describe("negative controls — a real article is not refused", () => {
     expect(readArticleWithProvenance(html, "https://example.com/marked").refusal).toBeInstanceOf(ChallengePage);
     expect(await thrownBy(html, "https://example.com/marked")).toBeInstanceOf(ChallengePage);
   });
+
+  it.each([
+    { name: "a non-script element", earlier: '<div id="anubis_challenge"></div>' },
+    { name: "a script of another type", earlier: marker(PAYLOAD, "text/plain") },
+    { name: "an empty JSON object", earlier: marker("{}") },
+  ])("an earlier $name with the challenge id does not hide the real challenge script", async ({ earlier }) => {
+    /* The same existence rule as the second shape's version element: the limit
+       261006c's review named and kept, closed when F4 found its twin. */
+    const html = page({ body: PROSE + earlier + marker() });
+    await expectAChallenge(html, "https://example.com/duplicate-challenge-id");
+    await expectAChallenge(html, null);
+  });
 });
 
 describe("negative controls, second shape — neither half alone, and nothing that only resembles one", () => {
@@ -495,6 +507,38 @@ describe("negative controls, second shape — neither half alone, and nothing th
     /* The path is read off the attribute, not resolved against the document. */
     const html = page({ head: `<base href="https://cdn.example.net/deep/">${version()}`, body: PROSE + solver() });
     await expectAChallenge(html, `${ORIGIN}/based`);
+  });
+
+  it("a <base> cannot turn an unrelated src attribute into the solver's path", async () => {
+    const html = page({
+      head: `<base href="https://cdn.example.net${SOLVER_PATH.slice(0, SOLVER_PATH.lastIndexOf('/') + 1)}">${version()}`,
+      body: PROSE + solver("main.mjs"),
+    });
+    for (const url of [`${ORIGIN}/based`, null]) {
+      expect(readArticle(html, url).refusal).toBeNull();
+      expect(await thrownBy(html, url)).toBeNull();
+    }
+    expect(readArticleWithProvenance(html, `${ORIGIN}/based`).refusal).toBeNull();
+  });
+
+  it.each([
+    { name: "a non-script element", earlier: '<div id="anubis_version"></div>' },
+    { name: "a script of another type", earlier: version(undefined, "text/plain") },
+    { name: "an unparseable JSON script", earlier: version("not JSON") },
+    { name: "an empty version string", earlier: version('""') },
+  ])("an earlier $name with the version id does not hide the real version script", async ({ earlier }) => {
+    const html = page({ body: PROSE + earlier + version() + solver() });
+    await expectAChallenge(html, `${ORIGIN}/duplicate-version-id`);
+    await expectAChallenge(html, null);
+  });
+
+  it("duplicate version ids without any valid version are still an article", async () => {
+    const html = page({ body: PROSE + version('""') + version("not JSON") + solver() });
+    for (const url of [`${ORIGIN}/invalid-versions`, null]) {
+      expect(readArticle(html, url).refusal).toBeNull();
+      expect(await thrownBy(html, url)).toBeNull();
+    }
+    expect(readArticleWithProvenance(html, `${ORIGIN}/invalid-versions`).refusal).toBeNull();
   });
 });
 

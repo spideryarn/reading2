@@ -16,6 +16,8 @@ not by a report. The fix is
 `<script id="anubis_challenge" type="application/json">`, holding the challenge the page sets. That
 is what hal.science's page carries, and hal.science's page was the only one captured.
 
+That single-shape entry was introduced in commit `677404435` on 2026-10-06.
+
 WineHQ runs Anubis v1.15. That version's script fetches the challenge from the server once it is
 running, so the page has no such element. The entry returned false and the page went on to
 Readability like any other.
