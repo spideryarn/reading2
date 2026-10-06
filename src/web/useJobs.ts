@@ -22,6 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, ResetResponse, StepName } from "../types.js";
+import { retireAddSharing } from "./add-sharing-session.js";
 import { handOverAutoModesChoice } from "./auto-modes-setting.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { batchUpload } from "./batchUpload.js";
@@ -238,6 +239,13 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
       jobEngine.stop();
       uploadEngine.stop();
       batchUpload.stop();
+      /* **And the add page's sharing controllers**, the third thing in the
+         tab that outlives a mount and is one reader's: one of them holds a
+         private link's key. Retired, they forget it, and an answer still on
+         its way to one is drawn nowhere (add-sharing-session.ts; GPT Sol's
+         stage 2 plan review of 261005l, F1). No `start` beside the two
+         above: a controller is made for a reader by the page that shows it. */
+      retireAddSharing();
     };
   }, [readerId]);
 

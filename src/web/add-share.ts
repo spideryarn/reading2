@@ -60,12 +60,22 @@
  *  - **Giving up is not final** (P2-7). Five minutes of *not yet* is a job
  *    that sat queued, and `settle` at completion sends it again.
  *
+ * And one from its review of stage 2's plan (F1), now that the add page
+ * holds a private link's key beside this (add-share-link.ts):
+ *
+ *  - **A controller belongs to one reader.** The registry is keyed by reader
+ *    and slug, and a session change retires every controller in it
+ *    (add-sharing-session.ts). A retired one is `probing` for good: an answer
+ *    to a request it sent changes nothing, and nothing it is told to do sends
+ *    anything. The page it was on looks up a fresh one.
+ *
  * Framework-free, with the requests injected, so a test drives every answer
  * (tests/add-share.test.ts); `AddShare.tsx` draws it.
  */
 
 import type { VisibilityState } from "../types.js";
 import { MAX_NOT_YET, NOT_YET_RETRY_MS } from "./add-high-power.js";
+import { readerRegistry, retireAddSharing } from "./add-sharing-session.js";
 import { statusOf } from "./lib/api.js";
 
 /** One state at a time. */
@@ -169,6 +179,8 @@ export class ShareAtAdd {
   private held = false;
   /** `settle` was called while the probe was out, so it is owed when the probe answers. */
   private settleOwed = false;
+  /** The reader it belonged to has gone (`retire`). Nothing below may change state again. */
+  private retired = false;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -191,7 +203,7 @@ export class ShareAtAdd {
    * controller up during a render that may never commit.
    */
   start(): void {
-    if (this.started) return;
+    if (this.started || this.retired) return;
     this.started = true;
     this.ask();
   }
@@ -223,6 +235,7 @@ export class ShareAtAdd {
    * twice.
    */
   resume(): void {
+    if (this.retired) return;
     this.active = true;
     if (!this.detached) {
       this.kick();
@@ -233,8 +246,24 @@ export class ShareAtAdd {
     this.ask();
   }
 
+  /**
+   * **The reader this belonged to has changed, or gone** (F1). What it held
+   * is dropped and its page is told once, so nothing of one reader's is left
+   * drawn for the next. After this every answer still on its way is ignored
+   * and every method is inert: `set` is the one door, and it is shut.
+   */
+  retire(): void {
+    if (this.retired) return;
+    this.clearRetry();
+    this.active = false;
+    this.set({ kind: "probing" });
+    this.retired = true;
+    this.listeners.clear();
+  }
+
   /** Whether the page's job can still create the article's row. */
   observe(jobAlive: boolean): void {
+    if (this.retired) return;
     const wasAlive = this.jobAlive;
     this.jobAlive = jobAlive;
     if (jobAlive && !wasAlive && this.retryOnNextAlive) {
@@ -324,6 +353,7 @@ export class ShareAtAdd {
    * final. Resolves when no request is in flight; never rejects.
    */
   settle(): Promise<void> {
+    if (this.retired) return Promise.resolve();
     this.jobAlive = false;
     this.clearRetry();
     if (this.state.kind === "gave-up") {
@@ -340,7 +370,7 @@ export class ShareAtAdd {
 
   /** Run the probe, unless one is already out. */
   private ask(): void {
-    if (this.probeOut) return;
+    if (this.probeOut || this.retired) return;
     this.probeOut = true;
     void this.io.probe(this.slug).then(
       (found) => this.asked(found),
@@ -350,6 +380,7 @@ export class ShareAtAdd {
 
   private asked(found: Probe): void {
     this.probeOut = false;
+    if (this.retired) return;
     const owed = this.settleOwed;
     this.settleOwed = false;
     if (this.state.kind === "probing" || (this.state.kind === "unavailable" && found === "none")) {
@@ -380,11 +411,13 @@ export class ShareAtAdd {
   }
 
   private kick(): void {
+    if (this.retired) return;
     if (!this.active || this.held || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
     this.send("public");
   }
 
   private send(to: "public" | "private"): void {
+    if (this.retired) return;
     const before = this.state;
     /* **Before the request, not when it answers.** The server can commit a
        publish whose reply this page never sees, and a reload in that gap
@@ -396,6 +429,8 @@ export class ShareAtAdd {
     this.inFlight = this.io.put(this.slug, to).then(
       (answer) => {
         this.inFlight = null;
+        /* Its reader has gone: this answer is nobody's (F1). */
+        if (this.retired) return;
         /* The article published while this was out, and the controller has
            given way to Metadata (`asked`). Its answer is not this box's to draw. */
         if (this.state.kind !== "saving") return;
@@ -414,7 +449,7 @@ export class ShareAtAdd {
       },
       (e: unknown) => {
         this.inFlight = null;
-        if (this.state.kind !== "saving") return;
+        if (this.retired || this.state.kind !== "saving") return;
         const status = statusOf(e);
         const message = e instanceof Error ? e.message : "The request failed.";
         if (to === "public" && status === 404 && this.jobAlive) {
@@ -457,34 +492,31 @@ export class ShareAtAdd {
   }
 
   private set(next: ShareAtAddState): void {
+    if (this.retired) return;
     this.state = next;
     for (const listener of this.listeners) listener();
   }
 }
 
 /**
- * **The tab's controllers, by slug.** At module level so a page that
- * unmounted and the next one mounted on the same article find the same one,
- * whatever address each was reached by.
+ * **The tab's controllers, by reader and slug.** At module level so a page
+ * that unmounted and the next one mounted on the same article find the same
+ * one, whatever address each was reached by. Emptied when the reader changes
+ * (add-sharing-session.ts § `retireAddSharing`).
  */
-const controllers = new Map<string, ShareAtAdd>();
+const controllers = readerRegistry<ShareAtAdd>();
 
 /**
- * The one controller for `slug` in this tab, made on first asking. Making one
- * starts nothing (`start`), so this is safe to call during render. `io` is
- * the first caller's; the add page passes the same object every time.
+ * The one controller for this reader's `slug` in this tab, made on first
+ * asking. Making one starts nothing (`start`), so this is safe to call during
+ * render. `io` is the first caller's; the add page passes the same object for
+ * the same reader every time.
  */
-export function shareAtAddFor(slug: string, io: ShareIo): ShareAtAdd {
-  let held = controllers.get(slug);
-  if (!held) {
-    held = new ShareAtAdd(slug, io);
-    controllers.set(slug, held);
-  }
-  return held;
+export function shareAtAddFor(slug: string, io: ShareIo, readerId: string | null = null): ShareAtAdd {
+  return controllers.for(readerId, slug, () => new ShareAtAdd(slug, io));
 }
 
 /** A fresh tab, for a test: what a reload does to the registry. */
 export function resetShareAtAddForTests(): void {
-  for (const held of controllers.values()) held.pause();
-  controllers.clear();
+  retireAddSharing();
 }
