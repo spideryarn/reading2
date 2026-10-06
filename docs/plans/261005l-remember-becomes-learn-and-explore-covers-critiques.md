@@ -327,3 +327,84 @@ The full run was of the tree before `origin/dev` was merged (`8b7cc1a50` is the 
 The full suite was not run a second time on the merged tree: the 19 files this work touches or
 that were red, the five build-dependent ones and `npm run typecheck` were, and `npm run build`
 compiled the client.
+
+## Stage 3 — the two screenshots and the browser pass (`qi-qg6ydbp7`)
+
+Added 2026-10-06. This is what § What landed lists as not done. The blocker is gone: `npm run
+db:check` is green in this worktree (49 tables, no drift, 2026-10-06 09:40 UTC). Prior work checked
+the same minute: the last commit to touch either picture on `origin/dev` is `8c36c5caa`, which
+renamed `remember.png` to `learn.png` and did not reshoot it; no other session has this entry.
+
+**What is wrong today.** `src/web/assets/learn.png` is headed *Remembering* and `quiz.png` is headed
+*Remember*. Both show two chips (Recall, Quiz) where there are now three or four, and `learn.png`
+shows a *Reply: Balanced* picker. `/features` puts them under tiles titled *Learn.* and *Quiz.*
+
+### The reshoot
+
+By [marketing-pages.md § Shooting a screenshot of the product](../project/marketing-pages.md):
+playwright-core against system Chrome, signed in with `scripts/browser-sign-in.ts`, 1440×900 at
+`deviceScaleFactor: 2`, the band alone (the other band-only portraits show no bar), downscaled to
+720 wide, `pngquant --quality 65-92 --speed 1`.
+
+- `learn.png`: Learn open on Recall, empty, waiting for the reader. The heading, the chips and the
+  invitation are the picture. Same idea as the old shot, so the alt text stays.
+- `quiz.png`: Learn open on Quiz with question 1 showing, unanswered. Generating a quiz is one
+  paid call on the local app, a few cents.
+- **The article.** The old `quiz.png` is on Seth's essay, which most of the site's pictures once
+  were. The quiz question is the only place an article shows in either picture, so that one is shot
+  on a different piece from the local library if one gives a clean first question; Seth's if not.
+- **Dead space.** The old `quiz.png` is half empty below its question. The new one is cropped
+  below the last control, with a margin, so `h:` will shrink. `Gallery` draws three portraits in a
+  row and the frames need not match in height (`ideas.png` is 982 beside two at 1469).
+- `w:` and `h:` in `shots.ts`, and `alt:` if a picture now shows something else; the comment's
+  line about which portraits "were still true" on 2026-10-02 gains a dated sentence.
+  `tests/landing-assets.test.ts` green, and seen red first by running it between the new bytes and
+  the new numbers.
+- Then `/features` looked at, at 1440 and 390, one viewport at a time; `naturalWidth`, `complete`
+  and computed `opacity` read from the DOM for the two images, not judged from a picture.
+
+**One choice, named: the experimental switch is off for both pictures.** With it off the chips are
+Recall, Tutorial, Quiz; with it on, Explore is a fourth. Off is what somebody who signs up from
+`/features` will see, and a picture that shows a chip they cannot find is the kind of small untruth
+[261002b](261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md) retook the
+landscape shots to remove. The tile's caption already says Explore is *one of the Experimental
+Features*. What it gives up: the picture does not show Explore at all. The other option, on, shows
+the whole of Learn and matches the caption naming all of it, at the cost above. If Explore leaves
+the switch the picture is reshot with it.
+
+**The simpler option passed over:** crop or paint over the two headings. Passed over because the
+chips and the picker are also out of date, and a doctored screenshot is not a screenshot.
+
+### The browser pass
+
+A Sonnet subagent, with [browser-control.md](../project/browser-control.md) then
+[browser-testing.md](../project/browser-testing.md), on this worktree's dev server, at 1440 and
+390. Each line is a thing to see, and what it should say:
+
+| Where | Expected |
+|---|---|
+| The bar's button | *Learn* |
+| The tab title, in the mode | names Learn, not Remember |
+| Command bar, *learn* | the Learn row, and its sub-mode rows |
+| Command bar, *remember* | still finds Learn |
+| Command bar, *remember quiz* | the Quiz row |
+| The band's (i) card | says Learn; Explore's line (switch on) says the wider remit |
+| `/help` | Learn throughout; a search for *remember* finds the section |
+| `/features` | *Learn.* and *Quiz.* over the new pictures |
+| Chat's list | a Recall thread's row reads *From Learn › Recall* |
+| Explore, switch on | the empty state's two lines say the wider remit; four starters, the fourth *Where might this piece be wrong, or missing something?* |
+| One real Explore turn | from the fourth starter: sent word for word, a reply streams, it states one possible problem and cites a passage |
+| The address | `?mode=learn` (since 261006a); an old `?mode=remember&remember=quiz` link still opens Quiz |
+
+Screenshots of what it saw go in `docs/plans/261005l-shots/` as `s3-*.png`, and the record in this
+section. **What it finds:** a wrong word or a broken control that is plainly this report's is fixed
+here, red first; anything wider is written up and named for the Overseer's queue in my final
+message, since this session cannot write the queue.
+
+### Done is
+
+Both pictures replaced and `shots.ts` agreeing with them; `tests/landing-assets.test.ts`,
+`tests/features-page-modes.test.ts`, `npm test` on what was touched and `npm run typecheck` green;
+the table above filled in; GPT Sol's review of the diff; pushed to `dev`; the note
+`docs/user-feedback/261005_0748-…` saying all three parts have ended, and
+`scripts/feedback-endings.ts` run.
