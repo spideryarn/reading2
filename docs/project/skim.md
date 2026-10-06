@@ -361,8 +361,17 @@ twice as often as the old cue and misstated the context in one cue in ten. The o
 preferred to the old cue in 50 pairs of 88 against 19. On the dangling subset it was ahead 15 to 8,
 with 5 ties, not clearly outside the control's 11 to 10. Its judge marked 18 giveaways against the
 old cue's 19, and 3 misstatements against 1: these observations do not establish no regression.
-There was one run of the revised wording and one same-family judge per comparison. It remains a
-candidate pending the plan's target-case shipping gate. **What it cannot do** is name a referent
+There was one run of the revised wording and one same-family judge per comparison.
+
+**Not shown: that `skim/10` situates a quote that leans on something outside itself.** On the 13
+quotes hand-marked as truly dangling it was preferred to the old cue 7 to 5, no different from two
+runs of the old prompt (6 to 4). It shipped on the overall preference (50 to 19) and on the reported
+example, with the plan's dangling-case gate **not met**: GPT Sol's code review said so (F1), and an
+Opus arbiter agreed with the finding and still said land, because nothing got worse, no stored
+route changes, and it is one prompt section to revert. The first wording situates far better (11 to
+2 on those 13) and gives more away; which of the two Greg wants is an open question put to him.
+
+**What it cannot do** is name a referent
 that only the surrounding paragraph holds, because
 the prompt is still given no prose. Handing it each quote's paragraph was measured too, did not
 clearly do better on the quotes it was meant for, cost about a third more per route, and was removed

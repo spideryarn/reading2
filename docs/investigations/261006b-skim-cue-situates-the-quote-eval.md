@@ -449,6 +449,30 @@ regression. B2 is therefore a candidate, not a result that met the agreed shippi
 on the overall gain would be an explicit change to that gate; otherwise it needs further target-case
 measurement. The paragraph under B2's rules remains unmeasured.
 
+## After the review: a stricter dangling subset, and the decision
+
+GPT Sol's code review held the ship decision on one finding: 15 to 8 on the regex's 28 quotes does
+not clearly clear the plan's gate. An Opus arbiter then marked those 28 by hand, from the quote and
+its paragraph and before reading any cue: 13 truly dangling, 5 borderline, 10 that explain their
+own referent (`evals/results/skim-cue-2026-10-06-strict-dangling-marking.json`, tallied by the
+`.py` beside it from the stored judgments; no new model calls). Better prepared, first arm to second:
+
+| subset | old v B2 | control (old v old) | B v B2 |
+|---|---|---|---|
+| all 88 | 19 to 50, 19 ties | 31 to 35, 22 ties | 64 to 19, 5 ties |
+| regex 28 | 8 to 15, 5 ties | 11 to 10, 7 ties | 22 to 4, 2 ties |
+| strict 13 | 5 to 7, 1 tie | 6 to 4, 3 ties | 11 to 2 |
+| strict + borderline 18 | 5 to 11, 2 ties | 7 to 7, 4 ties | 15 to 3 |
+
+**So on the truly dangling quotes B2 is not shown to be better than the old cue.** The marking was
+made after the fact by one reader, which is its own limit. Arm B, given the same records, named the
+referent on 12 of the 13, so B2's shortfall is that it sets a scene too rarely, not that the prompt
+lacks the paragraph.
+
+**Decision: B2 landed as `skim/10`, with the dangling gate recorded as not met.** It is preferred
+overall, gives away no more, fixes the reported example, changes no stored route and is one prompt
+section to revert. Whether to go further towards B is Greg's call.
+
 ## Files
 
 - `evals/results/skim-coverage-2026-10-06T06-35-03-a1-b.json` (A1 and B),

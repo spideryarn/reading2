@@ -171,3 +171,21 @@ article). **Ship C only if it beats B on the dangling-reference cases; otherwise
   on the dangling cases; 15 to 8 with 5 ties does not clearly show it. B2 remains implemented as the
   candidate; shipping requires further target-case evidence or an explicit decision to change that
   gate. The investigation and reference doc now state those limits.
+- 2026-10-06: **Sol's stage 2 review: not ready, on F1** ([review](261006e-stage2-code-review-sol.md)):
+  the dangling gate is not clearly met. It also corrected two overclaims and hardened the scorer
+  (`2af878584`). **F1 is overruled, through an Opus arbiter, and the gate is recorded as not met,
+  not as passed.** The arbiter hand-marked the regex's 28 quotes before reading any cue (13 truly
+  dangling, 5 borderline, 10 self-explaining; `evals/results/skim-cue-2026-10-06-strict-dangling-*`)
+  and re-scored the stored judgments: on the 13, B2 against the old cue is 7 to 5 (control 6 to 4),
+  so the "the regex is blunt" defence fails and F1 is right as evidence. It still said land: B2 is
+  preferred overall 50 to 19 against a flat control, giveaways are not up, it fixes Greg's own
+  example, no stored route changes, and another $0.25 run cannot settle n=13. **This changes the
+  plan's ship rule after the fact**, which is the thing to be honest about: `skim/10` lands as "no
+  worse, and better overall", not as "shown to situate dangling quotes".
+- **The open product question, for Greg:** B (a scene on every cue) against B2. B is preferred 64 to
+  19 head to head and 11 to 2 on the truly dangling quotes, but gave the finding away about twice
+  as often and misstated context in one cue in ten. A B3 that sets a scene more readily waits for
+  his answer, and should be judged on about 40 hand-marked dangling quotes.
+- 2026-10-06: **browser check of stage 1** (Sonnet, Playwright, desktop 1440, iPad 820, phone 390,
+  phone landscape): all eight items pass. Two caveats in phone landscape only: the card is capped
+  near 131px, and a swipe on the band to bring the card into view may dismiss it. Not built for.
