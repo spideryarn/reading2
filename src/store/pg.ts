@@ -108,6 +108,7 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import { lookupContext, lookupContextHash } from "../citation-lookup.js";
+import { blockOf } from "./block-rows.js";
 import { findFromRow } from "./citation-lookup-row.js";
 import {
   attachInvestigations,
@@ -1589,25 +1590,7 @@ export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisi
 async function storedBlocksFor(revisionId: string): Promise<Block[]> {
   const rows = await blocksQuery(getDb(), revisionId);
 
-  return rows.map((row) => ({
-    id: row.blockId,
-    tag: row.tag,
-    kind: row.kind,
-    // Conditional spreads throughout: the file simply had no `level` key, and
-    // `level: undefined` is a different type under exactOptionalPropertyTypes.
-    ...(row.level === null ? {} : { level: row.level }),
-    text: row.text,
-    words: row.words,
-    html: row.html,
-    gistable: row.gistable,
-    ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment }),
-    ...(row.noteId === null ? {} : { noteId: row.noteId }),
-    ...(row.contextId === null || row.contextType === null
-      ? {}
-      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-  }));
+  return rows.map((row) => blockOf(row.blockId, row));
 }
 
 async function blocksFor(revisionId: string): Promise<Block[]> {

@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-DW (spya-ar65p3; the report itself shipped as one rule that
+  stops a sideways iPhone enlarging a band's text, this is the review's question) · should the same
+  kind of line be the same size in every mode? Today there are about 65 text sizes, and a row's
+  main line is 14px in Skim, 15px in Glossary and 16.5px in Quiz. Three choices: line up the five
+  or six kinds of line that recur across modes (about a session; recommended), design a full scale
+  for everything (several sessions, not yet defined), or leave it · qi-f8h393sb ·
+  [261006k § Questions for Greg](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md#questions-for-greg) ·
+  [note](261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-DY (spya-uc0asn) · AI (search, for example) for a signed-in
   reader on somebody else's public article: not built, because it does add complexity and every
   version that runs AI in place edits a listed security defence. We would pay, not the owner, and

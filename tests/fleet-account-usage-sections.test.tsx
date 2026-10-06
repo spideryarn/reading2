@@ -376,3 +376,66 @@ it("does not read an absent field as 'this box has one subscription'", () => {
   draw(parseAccountUsage(undefined), BASE);
   expect(screen()).toContain("nothing here has checked");
 });
+
+/* ------------------------------------------------------------------ *
+ * THE LAST UNEXPLAINED LABELS. qi-3sr3jht6, Greg, 2026-09-09: "Hide the less
+ * important stuff in a default-collapsed section […] and/or make them smaller
+ * and/or provide tooltips." A browser pass on 2026-10-06 found two labels on
+ * this tab with nothing behind them: the role chip and a model-specific
+ * limit's heading. `Explain` writes its tip into the DOM for a screen reader,
+ * which is what these read.
+ * ------------------------------------------------------------------ */
+
+it("explains what an account's role means, for both roles", () => {
+  draw(published([claudeSection(), codexSection()]), BASE);
+  const roleTip = (role: string): HTMLButtonElement => {
+    const chip = [...container.querySelectorAll('[data-slot="pill"]')].find((node) => node.textContent === role);
+    const button = chip?.closest("button");
+    expect(button).toBeInstanceOf(HTMLButtonElement);
+    return button as HTMLButtonElement;
+  };
+  expect(roleTip("pool").textContent).toContain("An account intended for dispatched sessions");
+  expect(roleTip("pool").textContent).toContain("Automatic pool selection currently applies to Claude launches");
+  expect(roleTip("orchestrator").textContent).toContain("An account reserved for the Overseer's own model calls");
+  expect(roleTip("orchestrator").textContent).toContain("The registry allows at most one orchestrator per provider");
+  expect(roleTip("orchestrator").textContent).toContain("with none configured it falls back to the ambient login");
+});
+
+it("explains a model-specific limit rather than leaving the provider's name bare", () => {
+  const withSpecific = codexSection();
+  if (withSpecific.family !== "codex" || withSpecific.reading.kind !== "buckets") throw new Error("fixture");
+  const general = withSpecific.reading.buckets[0]!;
+  draw(
+    published([
+      codexSection({
+        reading: {
+          ...withSpecific.reading,
+          buckets: [general, { ...general, limitId: "gpt-reserve", limitName: "GPT-Reserve" }],
+        },
+      }),
+    ]),
+    BASE,
+  );
+  const heading = [...container.querySelectorAll("h3")].find((node) => node.textContent?.startsWith("Model-specific limit — GPT-Reserve"));
+  expect(heading).toBeDefined();
+  // Heading navigation gets the short label; the focused button gets the explanation.
+  expect(heading?.getAttribute("aria-label")).toBe("Model-specific limit — GPT-Reserve");
+  const button = heading?.querySelector("button");
+  expect(button).not.toBeNull();
+  /* A <button> does not inherit `text-transform`, so the heading's uppercase
+     stops at the tip's button unless the button carries it too. Found in a
+     browser on 2026-10-06: this heading drew in lower case beside an uppercase
+     "GENERAL HEADROOM". jsdom cannot compute the style, so this reads the class. */
+  expect(button?.className).toContain("tw:uppercase");
+  expect(button?.textContent).toContain("An additional named limit reported by Codex alongside the general subscription limit");
+  expect(button?.textContent).toContain("does not infer which models it covers or how its allowance overlaps the general limit");
+});
+
+it("explains the Claude window's percentage as used, consistently with its figure", () => {
+  draw(published([claudeSection()]), BASE);
+  const windowCard = [...container.querySelectorAll("button")].find((node) => node.textContent?.startsWith("5 hours"));
+  expect(windowCard).toBeDefined();
+  const tip = windowCard?.querySelector("span.tw\\:sr-only");
+  expect(tip?.textContent).toContain("The percentage used in this window");
+  expect(tip?.textContent).not.toContain("remains");
+});

@@ -11,6 +11,13 @@ Greg asked for one place, and those two now point here.
 >
 > — Greg, 2026-09-02
 
+**Modes that do the same kind of thing should do it the same way**, through the same code: a read
+and its loading, empty and failed states, a threshold, a sort, the band's (i), the size of the same
+kind of line. A difference nobody chose is a defect, and the periodic sweep looks for them —
+[improve-the-codebase.md](../reusable/improve-the-codebase.md), *Look for siblings that have
+drifted apart*.
+Greg, 2026-10-06: *"looking for inconsistencies across modes is a good thing to try and improve"*.
+
 What a mode *is* is [reading-view-overview.md](reading-view-overview.md); the reasoning, the
 measured counts, and the shapes deliberately **rejected** — a mode registry, a sixteen-prop
 `<ModeBands>`, a `Record<Mode, BandSpec | null>`, a `makeArtefactStage()` factory, a generic

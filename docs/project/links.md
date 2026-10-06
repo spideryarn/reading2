@@ -791,6 +791,11 @@ Five things about it are worth knowing before touching it:
 - **The tab's own cache is keyed on the block too.** It sits in front of the server and never asks
   twice, so leaving it keyed on `(slug, url)` would have kept the bug alive on the client after the
   server was right.
+- **Saving the profile or the purpose empties it, and `forgetSummaries()` is a fence rather than a
+  clear.** It bumps a generation in [`src/web/link-facts.ts`](../../src/web/link-facts.ts), so a
+  stream already in flight cannot write its answer back in afterwards. What that guarantees is *no
+  stale summary survives the save settling*, not that none is ever shown: between a keepalive save
+  leaving and landing, a hover can still be answered from the old profile (`bddf8c0c8`, 2026-10-04).
 - **And where there is no block, the client does not ask at all.** A link in a chat answer, in the
   sources under one, or in a figure's lightbox sits in no paragraph; the server's `"first"` fallback
   would hand it a fluent paragraph about a passage the reader is nowhere near. The free card and the

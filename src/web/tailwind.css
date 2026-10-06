@@ -408,3 +408,21 @@
     height: auto;
   }
 }
+
+/* ------------------------------------- and a fourth: a phone held sideways --
+   Preflight's `html { -webkit-text-size-adjust: 100% }`. Greg's screenshot
+   strongly fits Safari on an iPhone in landscape enlarging wrapped text while
+   holding back on short text: Skim's 0.84rem quote measured 20.5px beside prose
+   at its own 17px (report spya-ar65p3, 2026-10-06; docs/plans/261006k-…).
+
+   `100%` and not `none`: it switches the autosizing off without touching the
+   reader's own zoom. The box's desktop Chrome cannot reproduce this, so the
+   diagnosis remains an inference until the result is checked on a real phone.
+   tests/preflight-substitute.test.ts holds the decision for each of the other
+   properties preflight sets on `html`. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}

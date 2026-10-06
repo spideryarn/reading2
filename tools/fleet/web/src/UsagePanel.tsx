@@ -309,7 +309,7 @@ export function usageWindowTip(window: UsageWindowCard): Tip {
     head: `The ${window.window} window`,
     what:
       window.kind === "value"
-        ? `How much of this window remains, and the instant it refills: ${whenLine(window.resetsAt)}.`
+        ? `The percentage used in this window, and the instant it resets: ${whenLine(window.resetsAt)}.`
         : "This window arrived with no usable percentage on it.",
     how: USAGE_TIPS["cached"]!.how,
   };
@@ -1405,6 +1405,7 @@ export function CodexBucketSection({
   skew: ClockSkew;
 }): ReactNode {
   const reached = bucket.rateLimitReachedType;
+  const heading = general ? "General headroom" : `Model-specific limit — ${bucket.limitName ?? bucket.limitId}`;
   const controlWhy =
     general && bucket.spendControlReached !== false
       ? "General headroom is unavailable because spend-control state was reached or unavailable."
@@ -1413,8 +1414,23 @@ export function CodexBucketSection({
         : null;
   return (
     <section className="tw:mt-3">
-      <h3 className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
-        {general ? "General headroom" : `Model-specific limit — ${bucket.limitName ?? bucket.limitId}`}
+      {/* Explain's hidden prose names its button; keep heading navigation concise. */}
+      <h3 aria-label={heading} className="tw:text-label tw:font-semibold tw:tracking-widest tw:text-ink-faint tw:uppercase">
+        {general ? (
+          heading
+        ) : (
+          <Explain
+            /* A button does not inherit `text-transform` from the <h3>. */
+            className="tw:uppercase"
+            tip={{
+              head: "Model-specific limit",
+              what: "An additional named limit reported by Codex alongside the general subscription limit.",
+              how: "The provider supplies the name and its own window percentages. This page does not infer which models it covers or how its allowance overlaps the general limit; it cannot substitute for the general limit.",
+            }}
+          >
+            {heading}
+          </Explain>
+        )}
       </h3>
       {reached !== null ? (
         <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">

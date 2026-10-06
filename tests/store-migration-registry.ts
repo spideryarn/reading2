@@ -3175,6 +3175,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-10-05 (plan 261005j). Its own throwaway article per run, and
      five columns read back through six reads. */
   "tests/reading-difficulty-pg.test.ts": "private-postgres",
+  /* New on 2026-10-06 (plan 261006j, cluster S5). Its own throwaway article per
+     run, and three block rows read back through four reads. */
+  "tests/block-row-mapper-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the
