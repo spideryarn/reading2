@@ -21,7 +21,7 @@
  * order of operations in `apiFetch`, not IndexedDB and not the SDK.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LibraryResponse } from "../src/types.js";
+import { NONE_YET_AS_NULL_HEADER, type LibraryResponse } from "../src/types.js";
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
@@ -367,6 +367,55 @@ describe("what gets written", () => {
     await settle();
     expect(writeCache).not.toHaveBeenCalled();
   });
+
+  /**
+   * **A `200 null` is "not made yet", and is not kept either** — the answer
+   * the three always-mounted reads ask for in place of that 404 (plan 261006g).
+   *
+   * The copy is filed under reader and URL and replayed as a 200 whatever the
+   * request's headers, so a `null` kept by this tab would be handed, offline,
+   * to a tab opened before the deploy — which reads `loaded.quiz` off it and
+   * shows an error. Not keeping it is also exactly what the 404 did: a copy
+   * of a real artefact saved earlier is left alone, not replaced and not
+   * thrown away.
+   */
+  for (const url of ["/api/quiz/x", "/api/crossrefs/x", "/api/citations/x"]) {
+    it(`does not save a null from ${url}, nor disturb the copy it has`, async () => {
+      vi.stubGlobal("fetch", () =>
+        Promise.resolve(
+          new Response("null", { status: 200, headers: { "content-type": "application/json" } }),
+        ),
+      );
+      const res = await apiFetch(url);
+      expect(await res.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+    });
+
+    it(`replays the earlier real copy of ${url} to an old tab after an opted-in null`, async () => {
+      const body = { artefact: "earlier real copy" };
+      readCache.mockResolvedValue({ body, savedAt: 123 });
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response("null", {
+        status: 200, headers: { "content-type": "application/json" },
+      })));
+      const none = await apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } });
+      expect(await none.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      const copy = await apiFetch(url);
+      expect(copy.headers.get("x-spideryarn-offline")).toBe("copy");
+      expect(await copy.json()).toEqual(body);
+    });
+
+    it(`${url} still fails offline when no copy was saved`, async () => {
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      await expect(apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } })).rejects.toThrow("offline");
+    });
+  }
 
   it("does not save a response that is not JSON", async () => {
     vi.stubGlobal("fetch", () =>

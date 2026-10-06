@@ -657,6 +657,19 @@ Three kinds of site deliberately do **not**:
   answering; `/api/public/…` answers 404 for a piece that is not shared. Those
   callers read the status before deciding, and throwing would report an ordinary
   state as a fault.
+  **Three reads no longer get that 404**: `useQuizRead`, `useCitationsRead` and `useCrossrefs` are
+  mounted on every owner's article view whichever mode is open, "not made yet" is their usual
+  answer, and a browser prints every 4xx in red — three failures that were not failures on every
+  ordinary page load. They send `NONE_YET_AS_NULL_HEADER` (`src/types.ts`) and the server answers
+  `200` with a `null` body (`orNullWhenNotMadeYet`, `src/routes.ts`), which each reads as it read
+  the 404 — and still reads a 404 the same way, for the minutes of a deploy. Without the header
+  the answer is the 404 it always was, because a tab left open across the deploy would show an
+  error for a `null`; "no such article" is a 404 either way. `apiFetch` does not keep the `null`
+  for offline, as it never kept the 404. Other artefact reads still use the 404, including
+  Glossary and Quotes on every owner view and the reads in Marginalia; this change covers only
+  these three routes. Moving another over is the typed error at its loader's throw and the
+  helper at its route.
+  [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md).
 - **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the
   Supabase settings probe in `lib/supabase.ts` both treat a non-2xx as *nothing
   to show*, which is not a thing to tell anybody about.

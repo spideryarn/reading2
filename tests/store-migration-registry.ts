@@ -2025,6 +2025,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/none-yet-is-not-a-404-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with `200 null` for an artefact not made yet (plan " +
+      "261006g, 2026-10-06). It seeds two articles with `scratchArticleInPg`, one with its quiz " +
+      "removed from the clone, and drives `GET /api/quiz/:slug`, `/api/crossrefs/:slug` and " +
+      "`/api/citations/:slug` through `handleApi` — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step, as for " +
+      "`tests/quiz-attempts-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/command-suggest-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2968,6 +2980,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      the owner's GET through the route, reading rows back out of
      `quiz_attempts`. The marker is a script; no model is called. */
   "tests/quiz-attempts-route.test.ts": "private-postgres",
+  /* Seeds two articles, one without a quiz, and drives the quiz, crossrefs
+     and citations GETs through the route, with and without the header that
+     asks for `200 null`. No model is called. */
+  "tests/none-yet-is-not-a-404-route.test.ts": "private-postgres",
   /* Seeds two articles, writes a purpose on each, and drives the command
      bar's suggest POST and the reader GET through the route. The model's
      address is stubbed; no model is called. */

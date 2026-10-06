@@ -188,7 +188,10 @@ tests, the production build, cycles, and the others marked **gate** in the table
 CSS. Before it was here, that class of failure was only ever discovered by a deploy. **It runs above
 the test gate**, because `tests/pdf-bundle-trace.test.ts` inspects the built API bundle and fails
 loudly when it is missing — with the order the other way round, `npm run check` was red on every
-clean checkout, which is this section's own rule breaking on this section's own command.
+clean checkout, which is this section's own rule breaking on this section's own command. The same
+thing recurred for the fleet dashboard's client, which three fleet test files need and `build` does
+not make; since 2026-10-06 `check` runs `build:fleet` as a gate between `build` and `test`, from the
+deploy gate's own list (`GATE_TOOLING_BUILDS`), and `tests/check-steps.test.ts` holds the order.
 
 A check earns promotion from advisory to gate on the day its findings reach zero, and not before.
 **`committed` is the first one to have earned it**: it landed advisory because `HEAD` had five

@@ -470,7 +470,10 @@ describe("where the links come from", () => {
     await act(async () => {
       answer(new Response(JSON.stringify(response(false)), { status: 200 }));
     });
-    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith("/api/crossrefs/the-slug");
+    /* With the header that asks for "none yet" as `200 null` (plan 261006g). */
+    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith("/api/crossrefs/the-slug", {
+      headers: { "x-spideryarn-none-yet-as-null": "1" },
+    });
     expect(row(A).querySelectorAll("mark.xref").length).toBeGreaterThan(0);
     expect(row(B).querySelectorAll("mark.xref").length).toBeGreaterThan(0);
   });

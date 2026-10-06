@@ -75,6 +75,7 @@ import {
 import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
 import { ContextMenu, DropdownMenu } from "radix-ui";
 import { ControlTip, Tooltip } from "../Tooltip.js";
+import { SCROLL_BOX, SidewaysScrollBox } from "./SidewaysScrollBox.js";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -602,24 +603,21 @@ export function DataTable<T>({
   table,
   rows,
   caption,
+  sidewaysCue = false,
 }: {
   table: Table<T>;
   rows: Row<T>[];
   /** Named for screen readers, which otherwise meet a table with no title. */
   caption: string;
+  /**
+   * Shade the edge of the box while columns are hidden past it —
+   * `SidewaysScrollBox`, which then *is* the scroll box, so what it measures
+   * is the element that scrolls. Off unless asked for: `/admin/costs` asks,
+   * and the shelf and `/admin/users` draw as they did (plan 261006g § Stage 2).
+   */
+  sidewaysCue?: boolean;
 }) {
-  return (
-    /* The table scrolls inside its own box rather than pushing the page
-       sideways: a horizontally scrolling *page* makes everything hard to read,
-       not just the table.
-
-       Tailwind's `sr-only` labels are absolutely positioned. `relative` makes
-       this wrapper their containing block, so its `overflow` clip contains
-       them too. Without it, the Actions label's static position at the table's
-       intrinsic right edge contributed to page overflow outside this box; the
-       page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
-       (plan 260928a). `relative` with no z-index creates no stacking context. */
-    <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+  const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
         <thead>
@@ -654,7 +652,23 @@ export function DataTable<T>({
           ))}
         </tbody>
       </table>
-    </div>
+  );
+  if (sidewaysCue) return <SidewaysScrollBox>{drawn}</SidewaysScrollBox>;
+  return (
+    /* The table scrolls inside its own box rather than pushing the page
+       sideways: a horizontally scrolling *page* makes everything hard to read,
+       not just the table.
+
+       Tailwind's `sr-only` labels are absolutely positioned. `relative` makes
+       this wrapper their containing block, so its `overflow` clip contains
+       them too. Without it, the Actions label's static position at the table's
+       intrinsic right edge contributed to page overflow outside this box; the
+       page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
+       (plan 260928a). `relative` with no z-index creates no stacking context.
+
+       `SidewaysScrollBox` above is this same box with a cue; `SCROLL_BOX` is
+       the one copy of its classes. */
+    <div className={SCROLL_BOX}>{drawn}</div>
   );
 }
 

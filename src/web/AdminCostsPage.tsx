@@ -90,6 +90,7 @@ import {
   naturalDirections,
   useSortedTable,
 } from "./lib/DataTable.js";
+import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import {
   isAllNatural,
   localeText,
@@ -807,6 +808,7 @@ function Ranking({
           table={table}
           rows={sorted}
           caption={`Recorded amount by ${DIMENSION_LABEL[dim].toLowerCase()}`}
+          sidewaysCue
         />
       </div>
     </>
@@ -866,7 +868,7 @@ function PivotTable({
         {plural(pivot.rows.length, "row")} · {DIMENSION_LABEL[rowDim]} by {DIMENSION_LABEL[colDim].toLowerCase()},
         recorded amount
       </p>
-      <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+      <SidewaysScrollBox>
         <table data-pivot="" className="tw:w-full tw:border-collapse tw:text-sm">
           <caption className="tw:sr-only">
             Recorded amount, {DIMENSION_LABEL[rowDim]} by {DIMENSION_LABEL[colDim]}
@@ -948,7 +950,7 @@ function PivotTable({
             </tr>
           </tfoot>
         </table>
-      </div>
+      </SidewaysScrollBox>
     </>
   );
 }
@@ -1049,8 +1051,6 @@ const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; show: 
 
 const CAUSE_COLUMNS = ["Failed", "Cause", "Status", "Upstream", "Model", DIMENSION_LABEL.task, "Attempts"] as const;
 
-const SCROLL_BOX = "tw:relative tw:mb-4 tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
-
 /**
  * Counts per value of one dimension. A plain table in its own scrolling box,
  * as the pivot is, with the label pinned. A null figure is drawn as words,
@@ -1078,7 +1078,7 @@ function FailureCountsTable({
   const folded = all.length - groups.length;
   return (
     <>
-    <div className={SCROLL_BOX}>
+    <SidewaysScrollBox className="tw:mb-4">
       <table data-failures-table={name} className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">
           Retries, calls that gave up, attempts that died part-way and attempts our own clock stopped, by {label}
@@ -1117,7 +1117,7 @@ function FailureCountsTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </SidewaysScrollBox>
     {fold && folded > 0 && (
       <p data-failures-unmeasured={name} className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>
         {folded.toLocaleString("en-US")} other {fold}: {NOT_MEASURED}.
@@ -1163,7 +1163,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
           {causes.length === 0 ? (
             <p className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>No failed attempt in this view recorded a cause.</p>
           ) : (
-            <div className={SCROLL_BOX}>
+            <SidewaysScrollBox className="tw:mb-4">
               <table data-failures-table="causes" className="tw:w-full tw:border-collapse tw:text-sm">
                 <caption className="tw:sr-only">Why attempts failed</caption>
                 <thead>
@@ -1198,7 +1198,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </SidewaysScrollBox>
           )}
         </>
       )}

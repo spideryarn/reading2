@@ -821,6 +821,19 @@ export const GATE_TOOLING_BUILDS: readonly { gate: string; script: string }[] = 
   { gate: "fleet client build", script: "build:fleet" },
 ];
 
+/**
+ * **Every npm script that has to have run before the suite can be green**, in
+ * the order to run them: the product build, then the tooling builds above.
+ *
+ * Setup (scripts/worktree-builds.ts) reads this list. The deploy gate and
+ * `npm run check` run the product build separately and read
+ * GATE_TOOLING_BUILDS above for the rest. Until 2026-10-06 only the deploy
+ * gate built both, so `check` was red on a clean checkout for three fleet
+ * files and every fresh worktree started with five red files.
+ * docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md.
+ */
+export const SUITE_BUILDS: readonly string[] = ["build", ...GATE_TOOLING_BUILDS.map((b) => b.script)];
+
 export function missingGateFixtures(exists: (relPath: string) => boolean): string[] {
   return GATE_FIXTURES.filter((rel) => !exists(rel));
 }
