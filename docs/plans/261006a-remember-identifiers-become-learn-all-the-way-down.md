@@ -217,3 +217,28 @@ are, and that the migration's shape is sound (drop and create the index; no `ALT
 GPT Sol reads this plan before stage 1 (read-only), then the code after stage 1 (write-capable, fixing inside the
 stage; stage 0 rides in the same review). Its doc edits are grepped for "Greg" before
 they are committed.
+
+## Stage 0's code review (GPT Sol, 2026-10-06)
+
+The review is [261006a-stage-0-code-review-sol.md](261006a-stage-0-code-review-sol.md). Both
+findings were checked against the code and were true. Each was reproduced by a failing test before
+it was fixed: `tests/unknown-thread-kind-refuses-cleanly.test.ts`.
+
+| Finding | What it said | What was done |
+|---|---|---|
+| S0-1 P1 | `rename` and `remove` in `pg-chat.ts` committed their write and then read the thread list. With a kind the code does not know on the article, the read threw after the commit: the reader was told the delete or rename failed, and it had happened | Both now read the list inside the same transaction, so the refusal rolls the write back. The test refuses a delete and a rename and finds the thread and message rows unchanged, then runs the same call with a readable list to show it does write |
+| S0-2 P1 | The refusal reached the browser as a 500. The chat client treats only a 409 as a refusal; a 500 is committed on screen, so a refused Retry blanked the answer and a refused Edit rewrote the question and dropped the later turns, though Postgres kept them, until a reload | `UnknownStoredThreadKind` now carries `status = 409` and a sentence for the reader (`CHAT_BEING_UPDATED`, `[db-updating]`). That is the existing mechanism: the store guard passes an error with a status and the route answers with it. No client change. The test sends a retry and an edit through the route, the browser's `runTurn` and the real controller, and finds the original rows on screen |
+
+Three things follow from the 409 and were left as they are:
+
+- **Every chat route answers this way, not only a turn.** Opening the panel in the window shows the
+  same sentence in place of the list.
+- **A 409 is not reported to Sentry**, and its log line is a warning carrying the reader's sentence
+  and not the stored value. The value is on the error's `stored` field, which nothing logs. Inside
+  a deploy that is right; a row that was simply wrong would now be quieter than it was as a 500.
+- **`exportArticle` throws the same class**, so a failed export prints the reader's sentence where
+  it used to print the stored kind.
+
+`sweepPending` still marks stale pending answers as failed before its own read refuses. It was
+left alone: those rows are past their lease and would be swept by the next read anyway, so nothing
+a reader had is lost.

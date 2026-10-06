@@ -126,7 +126,9 @@ dictation — the microphone, the recorder, or the transcription round trip; see
 [dictation.md](dictation.md). `db-` is this app's own database, and there are two
 of them: `[db-busy]` for a connection that
 dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
-and will answer "no" again. A reader quoting four characters, and whoever they
+and will answer "no" again. (A third, `[db-updating]`, is the minutes of a deploy
+in which the database holds a kind of conversation the running code has no name
+for yet: `CHAT_BEING_UPDATED`.) A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
 `jb-` is a job. `gl-` is the glossary's *Dig deeper* (was *Check the web*) refusing —

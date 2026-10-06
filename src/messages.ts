@@ -504,6 +504,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* The database is ahead of this code, most likely mid-deploy. CHAT_BEING_UPDATED. */
+  "db-updating": "retry",
   /* Reading something back out of this app's own API, `rd-`. Not a model call,
      not the database as the reader meets it, and not a job — it is the *check*
      that failed, behind a page that is still on screen. Its own prefix for the
@@ -2579,6 +2581,26 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
     "This app asked its database for something it would not do, so that did not go through. That is " +
     "a bug here rather than anything you did, and trying again will not help until somebody fixes " +
     "it. It has been recorded. [db-failed]",
+};
+
+/**
+ * The database holds a kind of conversation this copy of the app has no name
+ * for: `UnknownStoredThreadKind` in src/types.ts, which carries this sentence
+ * and a 409.
+ *
+ * In practice that is the few minutes of a deploy that renames a kind, when the
+ * database has already been changed and the new code is not serving yet. The
+ * app refuses to read or change the article's conversations rather than treat
+ * one as an ordinary chat. "Most likely", because the same refusal would fire
+ * for a row that was simply wrong, and this must not be false then. `retry`: a
+ * reload after the deploy is the whole fix.
+ */
+export const CHAT_BEING_UPDATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app is most likely being updated right now, so it could not open this article's " +
+    "conversations, and it has changed nothing. Reloading the page in a minute or two and trying " +
+    "again usually works. [db-updating]",
 };
 
 /* ── Checking whether there is a newer one ────────────────────────────────── */

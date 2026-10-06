@@ -30,7 +30,7 @@
  * A fourth, of types again: the difficulty rating's shapes belong to
  * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
-import type { FailureKind, PaperUnreadableReason } from "./messages.js";
+import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
 import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
@@ -4034,20 +4034,22 @@ export function isThreadKind(value: unknown): value is ThreadKind {
 /**
  * The database holds a thread kind this code has no name for.
  *
- * A class so the store's error guard can name it: `scrubDbError`
- * (src/store/db-errors.ts) drops the message of everything a Postgres store
- * throws and logs `errorType`, which is this class's name. The reader gets the
- * ordinary 500.
+ * **A 409, carried on the class**, which is the door src/store/db-errors.ts
+ * asks a refusal to use: the store's guard passes anything with a numeric
+ * `status`, and `serveApi` answers with it. 409 and not 500 because the browser
+ * has usually already drawn the Retry or Edit this refuses, and a 409 is the one
+ * answer it puts the screen back for (src/web/chat/effects.ts § `runTurn`); a
+ * 500 it commits, blanking an answer Postgres still holds.
+ *
+ * **So the message is the reader's**, since below 500 the message is what the
+ * response says. What was stored is on `stored`: a column a CHECK constrains to
+ * a handful of words chosen in a migration, never anybody's prose.
  */
 export class UnknownStoredThreadKind extends Error {
   override readonly name = "UnknownStoredThreadKind";
-  constructor(value: unknown) {
-    /* The value is ours to print: it is a column a CHECK constrains to a
-       handful of words chosen in a migration, never a reader's prose. */
-    super(
-      `chat_threads.kind is ${JSON.stringify(value)}, which is not one of: ${THREAD_KINDS.join(", ")}. ` +
-        "The database holds a kind this code does not know, most likely because a deploy is in progress.",
-    );
+  readonly status = 409;
+  constructor(readonly stored: unknown) {
+    super(CHAT_BEING_UPDATED.message);
   }
 }
 
