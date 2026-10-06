@@ -1,0 +1,19 @@
+**Verdict: approve with changes.** The rule is sound, but “exactly as `turn.refused`” inherits gaps in the existing repair.
+
+- **P1 F1 — Repair resurrects turns a committed edit deleted.** [`reduce.ts:1146`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/reduce.ts:1146) appends every local row absent from the server; an edit’s repair has `drop: []`. If the edit committed but its response was lost, repair shows the rewritten question and new answer **followed by the discarded old answers and questions**. Confirmed with a read-only reducer probe. Reconcile stored rows authoritatively while preserving genuinely optimistic sends.
+
+- **P1 F2 — Disconnect before `begin` still loses the previous answer.** [`effects.ts:201`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/effects.ts:201) sends stream stalls and network read failures to `sink.disconnected`; [`reduce.ts:1029`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/reduce.ts:1029) commits the drawing before `begin`. Include this ending in the same retry/edit reconciliation rule.
+
+- **P1 F3 — A held Stop can disappear while the server continues answering.** [`reduce.ts:799`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/reduce.ts:799) drops wishes waiting on the retiring turn. If the request committed before its response was lost, repair can discover a pending answer and recovery resumes it, with the Stop forgotten. Avoid carrying that wish blindly onto another attempt; explicitly handle or report the unconfirmed Stop.
+
+- **P1 F4 — Repair can remain live indefinitely.** The ordinary repair at [`controller.ts:660`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/controller.ts:660) has no deadline, and [`effects.ts:395`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/effects.ts:395) supplies none. Handing an opening timeout to a hung repair leaves the operation live and suppresses `onSettled` indefinitely. Bound the repair read.
+
+- **P3 F5 — “Screen stays as before” excludes the title.** [`reduce.ts:833`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/reduce.ts:833) writes a first-question edit’s title directly into `base`; [`reduce.ts:1149`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/web/chat/reduce.ts:1149) preserves it even when repair confirms the edit never committed. Existing policy deliberately keeps title writes. Qualify the plan’s restoration claim, or explicitly revise that policy.
+
+An **`error` frame can precede `begin`**: the server’s `try` starts at [`routes.ts:3358`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/src/routes.ts:3358), before header setup and the `begin` write; its catch emits `error` at line 3580. The store write already happened. Un-draw plus repair is appropriate, subject to F1.
+
+Leaving **send unchanged is reasonable for this scope**: it preserves typed words. Superseded turns and repairs remain safe through the existing admission gate, provided the helper stays behind it and retains `stranded`.
+
+The held-wish test at [`chat-reduce.test.ts:1518`](/var/tmp/spideryarn-worktrees/qi-wymmkx8q-chat-pre-stream-500/tests/chat-reduce.test.ts:1518) currently expects **no commands**; change it to expect repair and **no intent command**. No invariant requires committing a failed retry/edit.
+
+The simplest design remains one shared reconciliation helper, used by refused turns and both pre-`begin` failure endings. No server status remapping is needed.

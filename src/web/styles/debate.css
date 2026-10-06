@@ -213,50 +213,17 @@
 @media (hover: none) {
   .dbt-claim-check { opacity: 0.8; }
 }
-/* The mark takes a line of its own under the claim, so the opening of the
-   chat's latest answer has the width: the heading wraps for it and for
-   nothing else, since the quotation has no minimum width and its neighbours
-   are small. Indented past the disclosure triangle, and one line, cut with an
-   ellipsis. The words are the model's and take its face from voices.css
-   (`.voice-ai`); the count and "No answer yet" are ours. */
+/* The mark is the shared one (origin-chat.css § `.origin-chat`, since
+   2026-10-06), and **only its placement is set here**: a line of its own
+   under the claim, so the opening of the chat's latest answer has the width.
+   The heading wraps for it and for nothing else, since the quotation has no
+   minimum width and its neighbours are small. Indented past the disclosure
+   triangle, and with no gap above: the heading's own row gap is enough. */
 .dbt-group-claim { flex-wrap: wrap; }
 .dbt-group-claim > .dbt-claim-chat {
   flex: 0 1 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-left: 1.2rem;
-  padding: 0.15rem 0;
-  border: 0;
-  background: none;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 400;
-  text-align: left;
-  cursor: pointer;
-}
-.dbt-claim-chat > svg { flex: none; }
-.dbt-claim-chat:hover { color: var(--ink); }
-.dbt-claim-chat:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.dbt-claim-chat-count {
-  flex: none;
-  font-family: var(--font-ui);
-  font-variant-numeric: tabular-nums;
-}
-.dbt-claim-chat-count::after { content: " ·"; }
-.dbt-claim-chat-line,
-.dbt-claim-chat-waiting {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dbt-claim-chat-waiting { font-family: var(--font-ui); font-style: italic; }
-@media (pointer: coarse) {
-  /* A finger's height (docs/project/touch.md), without widening the row. */
-  .dbt-group-claim > .dbt-claim-chat { min-height: 2.5rem; }
+  width: auto;
+  margin: 0 0 0 1.2rem;
 }
 
 /* **Look at the debate from an angle** (DebatePanel.tsx § Angles, plan
@@ -270,7 +237,7 @@
    line of the list are a finger tall (docs/project/touch.md). The field's 1rem
    floor on a touch screen is narrow-window.css's, for every field.
 
-   A line of the list is the claim's mark again (`.dbt-claim-chat` above): an
+   A line of the list is the claim's mark again (origin-chat.css): an
    icon, the words on one line cut with an ellipsis, and a count. The words are
    the reader's and take their face from voices.css (`.voice-reader`); the
    quotation marks and the count are ours. */

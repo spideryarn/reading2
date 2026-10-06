@@ -67,6 +67,25 @@
         "detail": "415 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 108,
+        "descendant": 14,
+        "ancestor": 216,
+        "none": 0
+      },
+      "runs": {
+        "owner": 387,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 28,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": true,
     "article": {
       "chars": 50711,
@@ -158,6 +177,25 @@
         "exercised": 415,
         "detail": "415 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 108,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 415,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -268,6 +306,25 @@
         "detail": "415 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 108,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 415,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 54900,
@@ -364,6 +421,25 @@
         "detail": "313 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 41,
+        "descendant": 7,
+        "ancestor": 195,
+        "none": 0
+      },
+      "runs": {
+        "owner": 299,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 14,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 52769,
@@ -459,6 +535,25 @@
         "exercised": 3,
         "detail": "3 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 3
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -567,6 +662,25 @@
         "detail": "199 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 108,
+        "descendant": 14,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 171,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 28,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 6330,
@@ -667,6 +781,25 @@
         "exercised": 116,
         "detail": "115 problem(s): \"Somethingthatgrowsexponentiallycanbecomesovaluablethatit'swo\" is out of order — a reordering: the only place source element s44 has it is behind character 12584, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 116,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 115,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -774,6 +907,25 @@
         "detail": "188 problem(s): \"There'snowayyoucouldsearchthiswholespace,soyouhavetorelyonhe\" is out of order — a reordering: the only place source element s44 has it is behind character 54900, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 108,
+        "descendant": 14,
+        "ancestor": 216,
+        "none": 0
+      },
+      "runs": {
+        "owner": 199,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 28,
+        "behind": 188,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": true,
     "article": {
       "chars": 50711,
@@ -873,6 +1025,25 @@
         "detail": "4 problem(s): source element s113 says the same thing twice — a duplicate: \"not\""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 109,
+        "descendant": 15,
+        "ancestor": 216,
+        "none": 0
+      },
+      "runs": {
+        "owner": 387,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 28,
+        "behind": 3,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": true,
     "article": {
       "chars": 50711,
@@ -925,19 +1096,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9681925326659488,
-        "exercised": 1761,
-        "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+        "value": 0.9952051145444859,
+        "exercised": 810,
+        "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9955712490274702,
-        "exercised": 1761,
-        "basis": "33270 of 33418 own-text characters are the article region"
+        "value": 0.9956176714437996,
+        "exercised": 810,
+        "basis": "33624 of 33772 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.6666666666666666,
+        "value": 0.8333333333333334,
         "exercised": 6,
         "basis": "declared per-tag floors met"
       },
@@ -958,30 +1129,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 1528,
-        "detail": "1528 output node(s) each say what their own source element said"
+        "exercised": 804,
+        "detail": "804 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 1769,
-        "detail": "1769 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 958,
+        "detail": "958 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 804,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 958,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 33270,
-      "recall": 0.9681925326659488,
-      "precision": 0.9955712490274702,
-      "outputChars": 33418,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+      "chars": 33624,
+      "recall": 0.9952051145444859,
+      "precision": 0.9956176714437996,
+      "outputChars": 33772,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
     },
     "failures": [
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
-      "structure math: 116 against at least 142",
-      "structure table: 7 against at least 9"
+      "structure math: 0 against at least 142"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -990,9 +1179,9 @@
         "sourceOrder": true
       },
       "regressions": [],
-      "articleChars": 33270,
-      "gistableChars": 33859,
-      "articleRecall": 0.9681925326659488
+      "articleChars": 33624,
+      "gistableChars": 34975,
+      "articleRecall": 0.9952051145444859
     },
     "exercised": true
   },
@@ -1022,18 +1211,18 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 1,
-        "exercised": 1761,
-        "basis": "1761 of 1761 stamped region element(s) came back, holding 34363 of 34363 characters"
+        "exercised": 810,
+        "basis": "810 of 810 stamped region element(s) came back, holding 33786 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9926052167884688,
-        "exercised": 1761,
-        "basis": "34363 of 34619 own-text characters are the article region"
+        "value": 0.9924798777980142,
+        "exercised": 810,
+        "basis": "33786 of 34042 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 1,
+        "value": 0.8333333333333334,
         "exercised": 6,
         "basis": "declared per-tag floors met"
       },
@@ -1054,29 +1243,49 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 1775,
-        "detail": "1775 output node(s) each say what their own source element said"
+        "exercised": 824,
+        "detail": "824 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 2031,
-        "detail": "2031 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 985,
+        "detail": "985 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 824,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 985,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 34363,
+      "chars": 33786,
       "recall": 1,
-      "precision": 0.9926052167884688,
-      "outputChars": 34619,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "1761 of 1761 stamped region element(s) came back, holding 34363 of 34363 characters"
+      "precision": 0.9924798777980142,
+      "outputChars": 34042,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "810 of 810 stamped region element(s) came back, holding 33786 of 33786 characters"
     },
     "failures": [
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
-      "kept excluded text: \"Privacy Policy\""
+      "kept excluded text: \"Privacy Policy\"",
+      "structure math: 0 against at least 142"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1088,8 +1297,8 @@
         "exclusionPrecision",
         "regionPrecision"
       ],
-      "articleChars": 34363,
-      "gistableChars": 34153,
+      "articleChars": 33786,
+      "gistableChars": 35269,
       "articleRecall": 1
     },
     "exercised": true
@@ -1119,14 +1328,14 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.06955155254197828,
-        "exercised": 1761,
-        "basis": "70 of 1761 stamped region element(s) came back, holding 2390 of 34363 characters"
+        "value": 0.07073935949801693,
+        "exercised": 810,
+        "basis": "70 of 810 stamped region element(s) came back, holding 2390 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 0.9416863672182821,
-        "exercised": 1761,
+        "exercised": 810,
         "basis": "2390 of 2538 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -1162,15 +1371,34 @@
         "detail": "71 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 71,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 71,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 2390,
-      "recall": 0.06955155254197828,
+      "recall": 0.07073935949801693,
       "precision": 0.9416863672182821,
       "outputChars": 2538,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "70 of 1761 stamped region element(s) came back, holding 2390 of 34363 characters"
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "70 of 810 stamped region element(s) came back, holding 2390 of 33786 characters"
     },
     "failures": [
       "missing required text: \"Encoder:\"",
@@ -1182,7 +1410,7 @@
       "structure img: 0 against at least 3",
       "structure h2: 0 against at least 9",
       "structure h3: 0 against at least 12",
-      "2390 characters of the article region came back (7.0% of 34363), under minArticleChars 28000"
+      "2390 characters of the article region came back (7.1% of 33786), under minArticleChars 28000"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1198,7 +1426,7 @@
       ],
       "articleChars": 2390,
       "gistableChars": 2924,
-      "articleRecall": 0.06955155254197828
+      "articleRecall": 0.07073935949801693
     },
     "exercised": true
   },
@@ -1227,19 +1455,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9681925326659488,
-        "exercised": 1761,
-        "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+        "value": 0.9952051145444859,
+        "exercised": 810,
+        "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9942324358246422,
-        "exercised": 1761,
-        "basis": "33270 of 33463 own-text characters are the article region"
+        "value": 0.994292811307922,
+        "exercised": 810,
+        "basis": "33624 of 33817 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.6666666666666666,
+        "value": 0.8333333333333334,
         "exercised": 6,
         "basis": "declared per-tag floors met"
       },
@@ -1260,31 +1488,49 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 1535,
-        "detail": "1535 output node(s) each say what their own source element said"
+        "exercised": 811,
+        "detail": "811 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 1778,
-        "detail": "1778 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 967,
+        "detail": "967 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 811,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 967,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 33270,
-      "recall": 0.9681925326659488,
-      "precision": 0.9942324358246422,
-      "outputChars": 33463,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+      "chars": 33624,
+      "recall": 0.9952051145444859,
+      "precision": 0.994292811307922,
+      "outputChars": 33817,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
     },
     "failures": [
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
       "kept excluded text: \"Privacy Policy\"",
-      "structure math: 116 against at least 142",
-      "structure table: 7 against at least 9"
+      "structure math: 0 against at least 142"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1296,9 +1542,9 @@
         "exclusionPrecision",
         "regionPrecision"
       ],
-      "articleChars": 33270,
-      "gistableChars": 33906,
-      "articleRecall": 0.9681925326659488
+      "articleChars": 33624,
+      "gistableChars": 35022,
+      "articleRecall": 0.9952051145444859
     },
     "exercised": true
   },
@@ -1327,15 +1573,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.7708581904955912,
-        "exercised": 1761,
-        "basis": "1098 of 1761 stamped region element(s) came back, holding 26489 of 34363 characters"
+        "value": 0.9257384715562659,
+        "exercised": 810,
+        "basis": "548 of 810 stamped region element(s) came back, holding 31277 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9671047827674334,
-        "exercised": 1761,
-        "basis": "26489 of 27390 own-text characters are the article region"
+        "value": 0.9430725162068445,
+        "exercised": 810,
+        "basis": "31277 of 33165 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -1360,37 +1606,55 @@
       "attribution": {
         "name": "attribution",
         "passed": false,
-        "exercised": 1111,
-        "detail": "1 problem(s): a generated node says \"Deep-Att+PosUnkDeep-Att+PosUnkEnsembleGNMT+RLEnsembleConvS2S\", which is nowhere on the page: \"Complexity per LayerSelf-Attention (restricted)Training Cost\""
+        "exercised": 561,
+        "detail": "1 problem(s): a generated node says \"Deep-Att+PosUnk\\\\(1.0\\\\cdot10^{20}\\\\)\", which is nowhere on the page: \"\\\\[\\\\mathrm{Attention}(Q,K,V)=\\\\mathrm{softmax}(\\\\frac{QK^{T}}{\\\\\""
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 1294,
-        "detail": "7 problem(s): \"TrainingCost(FLOPs)EN-DEEN-FREN-DEEN-FRDeep-Att+PosUnk\" could not be placed in the source at all — the order gate can say nothing about where it belongs, and attribution should have reported the same text as invented"
+        "exercised": 746,
+        "detail": "10 problem(s): \"Self-Attention\\\\(O(n^{2}\\\\cdotd)\\\\)\\\\(O(1)\\\\)\\\\(O(1)\\\\)Recurrent\\\\(O\" could not be placed in the source at all — the order gate can say nothing about where it belongs, and attribution should have reported the same text as invented"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 560,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 717,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 19,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 10
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 26489,
-      "recall": 0.7708581904955912,
-      "precision": 0.9671047827674334,
-      "outputChars": 27390,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "1098 of 1761 stamped region element(s) came back, holding 26489 of 34363 characters"
+      "chars": 31277,
+      "recall": 0.9257384715562659,
+      "precision": 0.9430725162068445,
+      "outputChars": 33165,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "548 of 810 stamped region element(s) came back, holding 31277 of 33786 characters"
     },
     "failures": [
       "missing required text: \"Encoder:\"",
       "missing required text: \"Abstract\"",
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
-      "structure math: 42 against at least 142",
+      "structure math: 0 against at least 142",
       "structure table: 0 against at least 9",
       "structure figure: 0 against at least 9",
       "structure img: 2 against at least 3",
       "structure h2: 3 against at least 9",
-      "structure h3: 9 against at least 12",
-      "26489 characters of the article region came back (77.1% of 34363), under minArticleChars 28000"
+      "structure h3: 9 against at least 12"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1406,9 +1670,9 @@
         "attribution",
         "sourceOrder"
       ],
-      "articleChars": 26489,
-      "gistableChars": 27165,
-      "articleRecall": 0.7708581904955912
+      "articleChars": 31277,
+      "gistableChars": 36432,
+      "articleRecall": 0.9257384715562659
     },
     "exercised": true
   },
@@ -1437,19 +1701,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9139481418968076,
-        "exercised": 1761,
-        "basis": "455 of 1761 stamped region element(s) came back, holding 31406 of 34363 characters"
+        "value": 0.9661398212277275,
+        "exercised": 810,
+        "basis": "457 of 810 stamped region element(s) came back, holding 32642 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9953096279394055,
-        "exercised": 1761,
-        "basis": "31406 of 31554 own-text characters are the article region"
+        "value": 0.995486428789265,
+        "exercised": 810,
+        "basis": "32642 of 32790 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.6666666666666666,
+        "value": 0.8333333333333334,
         "exercised": 6,
         "basis": "declared per-tag floors met"
       },
@@ -1470,30 +1734,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 456,
-        "detail": "456 output node(s) each say what their own source element said"
+        "exercised": 458,
+        "detail": "458 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 628,
-        "detail": "628 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 535,
+        "detail": "535 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 458,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 535,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 31406,
-      "recall": 0.9139481418968076,
-      "precision": 0.9953096279394055,
-      "outputChars": 31554,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "455 of 1761 stamped region element(s) came back, holding 31406 of 34363 characters"
+      "chars": 32642,
+      "recall": 0.9661398212277275,
+      "precision": 0.995486428789265,
+      "outputChars": 32790,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "457 of 810 stamped region element(s) came back, holding 32642 of 33786 characters"
     },
     "failures": [
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
-      "structure math: 116 against at least 142",
-      "structure table: 7 against at least 9"
+      "structure math: 0 against at least 142"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1505,9 +1787,9 @@
         "articleRecall",
         "regionPrecision"
       ],
-      "articleChars": 31406,
-      "gistableChars": 32466,
-      "articleRecall": 0.9139481418968076
+      "articleChars": 32642,
+      "gistableChars": 34445,
+      "articleRecall": 0.9661398212277275
     },
     "exercised": true
   },
@@ -1537,13 +1819,13 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 0,
-        "exercised": 1761,
-        "basis": "0 of 1761 stamped region element(s) came back, holding 0 of 34363 characters"
+        "exercised": 810,
+        "basis": "0 of 810 stamped region element(s) came back, holding 0 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 0,
-        "exercised": 1761,
+        "exercised": 810,
         "basis": "0 of 102 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -1576,8 +1858,27 @@
         "name": "sourceOrder",
         "passed": false,
         "exercised": 4,
-        "detail": "2 problem(s): \"Abstract\" is out of order — a reordering: the only place the page has it is behind character 6574, which the output has already passed"
+        "detail": "2 problem(s): \"Abstract\" is out of order — a reordering: the only place the page has it is behind character 6563, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 4
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 2,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -1585,9 +1886,9 @@
       "recall": 0,
       "precision": 0,
       "outputChars": 102,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "0 of 1761 stamped region element(s) came back, holding 0 of 34363 characters"
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "0 of 810 stamped region element(s) came back, holding 0 of 33786 characters"
     },
     "failures": [
       "structure math: 0 against at least 142",
@@ -1596,7 +1897,7 @@
       "structure img: 0 against at least 3",
       "structure h2: 0 against at least 9",
       "structure h3: 0 against at least 12",
-      "0 characters of the article region came back (0.0% of 34363), under minArticleChars 28000",
+      "0 characters of the article region came back (0.0% of 33786), under minArticleChars 28000",
       "only 0.0% of the output is the declared article region (0 of 102 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
     ],
     "finding": {
@@ -1668,19 +1969,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9681925326659488,
-        "exercised": 1761,
-        "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+        "value": 0.9952051145444859,
+        "exercised": 810,
+        "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.955238450716357,
-        "exercised": 1761,
-        "basis": "33270 of 34829 own-text characters are the article region"
+        "value": 0.9556888269903078,
+        "exercised": 810,
+        "basis": "33624 of 35183 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.6666666666666666,
+        "value": 0.8333333333333334,
         "exercised": 6,
         "basis": "declared per-tag floors met"
       },
@@ -1701,30 +2002,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 1596,
-        "detail": "1596 output node(s) each say what their own source element said"
+        "exercised": 872,
+        "detail": "872 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 1837,
+        "exercised": 1026,
         "detail": "136 problem(s): source element s32 says the same thing twice — a duplicate: \"Ashish Vaswani\""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 872,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 958,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 68,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
-      "chars": 33270,
-      "recall": 0.9681925326659488,
-      "precision": 0.955238450716357,
-      "outputChars": 34829,
-      "regionChars": 34363,
-      "exercised": 1761,
-      "basis": "1527 of 1761 stamped region element(s) came back, holding 33270 of 34363 characters"
+      "chars": 33624,
+      "recall": 0.9952051145444859,
+      "precision": 0.9556888269903078,
+      "outputChars": 35183,
+      "regionChars": 33786,
+      "exercised": 810,
+      "basis": "803 of 810 stamped region element(s) came back, holding 33624 of 33786 characters"
     },
     "failures": [
       "kept excluded text: \"Provided proper attribution is provided, Google hereby grants permission\"",
-      "structure math: 116 against at least 142",
-      "structure table: 7 against at least 9"
+      "structure math: 0 against at least 142"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -1736,9 +2055,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 33270,
-      "gistableChars": 35463,
-      "articleRecall": 0.9681925326659488
+      "articleChars": 33624,
+      "gistableChars": 36579,
+      "articleRecall": 0.9952051145444859
     },
     "exercised": true
   },
@@ -1809,6 +2128,25 @@
         "exercised": 36,
         "detail": "36 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 25,
+        "descendant": 2,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 26,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 10,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -1903,6 +2241,25 @@
         "exercised": 239,
         "detail": "239 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 202,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 239,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -2009,6 +2366,25 @@
         "detail": "4 problem(s): \"Search\" is out of order — a reordering: the only place source element s72 has it is behind character 1967, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 50,
+        "descendant": 2,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 49,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 10,
+        "behind": 4,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 980,
@@ -2105,6 +2481,25 @@
         "exercised": 198,
         "detail": "198 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 158,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 194,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 4,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -2206,6 +2601,25 @@
         "detail": "29 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 18,
+        "descendant": 2,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 19,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 10,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 980,
@@ -2299,6 +2713,25 @@
         "exercised": 2,
         "detail": "2 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 2
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -2426,6 +2859,25 @@
         "detail": "25 problem(s): source element s152 says the same thing twice — a duplicate: \"view email\""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 33,
+        "descendant": 3,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 26,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 10,
+        "behind": 17,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 980,
@@ -2523,6 +2975,25 @@
         "detail": "277 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 194,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 277,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 26431,
@@ -2617,6 +3088,25 @@
         "exercised": 2839,
         "detail": "2839 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 2360,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2839,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -2724,6 +3214,25 @@
         "detail": "264 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 185,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 264,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 26431,
@@ -2822,6 +3331,25 @@
         "exercised": 2191,
         "detail": "2191 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1713,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2191,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -2926,6 +3454,25 @@
         "detail": "174 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 141,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 174,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 26230,
@@ -3022,6 +3569,25 @@
         "exercised": 3,
         "detail": "3 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 3
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -3125,6 +3691,25 @@
         "exercised": 201,
         "detail": "201 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 184,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 201,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -3241,6 +3826,25 @@
         "detail": "2810 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 2334,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2810,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 26431,
@@ -3345,6 +3949,25 @@
         "detail": "17 problem(s): source element s277 says the same thing twice — a duplicate: \"Just to clarify, we’re talking here about the randomness of \""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 200,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 277,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 11,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 26431,
@@ -3443,6 +4066,25 @@
         "detail": "581 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 416,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 581,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 16615,
@@ -3536,6 +4178,25 @@
         "exercised": 1146,
         "detail": "1146 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 975,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1146,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -3636,6 +4297,25 @@
         "exercised": 88,
         "detail": "88 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 76,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 88,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -3739,6 +4419,25 @@
         "detail": "126 problem(s): \"HTML\" is out of order — a reordering: the only place source element s79 has it is behind character 18647, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 947,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 987,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 126,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 16615,
@@ -3840,6 +4539,25 @@
         "exercised": 743,
         "detail": "743 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 571,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 742,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -3946,6 +4664,25 @@
         "detail": "443 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 323,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 443,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 16271,
@@ -4041,6 +4778,25 @@
         "exercised": 4,
         "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 4
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 4,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -4169,6 +4925,25 @@
         "detail": "949 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 780,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 949,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": true,
     "article": {
       "chars": 16615,
@@ -4262,6 +5037,25 @@
         "exercised": 591,
         "detail": "16 problem(s): source element s734 says the same thing twice — a duplicate: \"The directive does not guarantee revalidation for history na\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 422,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 581,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 10,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -4360,6 +5154,25 @@
         "detail": "4465 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3478,
+        "descendant": 1,
+        "ancestor": 62,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4463,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 589118,
@@ -4454,6 +5267,25 @@
         "exercised": 4547,
         "detail": "4547 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3614,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4547,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -4552,6 +5384,25 @@
         "exercised": 1094,
         "detail": "1094 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 911,
+        "descendant": 0,
+        "ancestor": 10,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1094,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -4657,6 +5508,25 @@
         "detail": "20 problem(s): \"TheProjectGutenbergeBookof\" is out of order — a reordering: the only place source element s33 has it is behind character 589925, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3550,
+        "descendant": 1,
+        "ancestor": 62,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4520,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 20,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 589118,
@@ -4756,6 +5626,25 @@
         "exercised": 4252,
         "detail": "5 problem(s): \"HeadingtoListofIllustrationsHeadingtoChapterI.“Hecamedowntos\" could not be placed in the source at all — the order gate can say nothing about where it belongs, and attribution should have reported the same text as invented"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3318,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4243,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 4,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 5
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -4864,6 +5753,25 @@
         "detail": "2965 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 2407,
+        "descendant": 1,
+        "ancestor": 62,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2963,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 584868,
@@ -4961,6 +5869,25 @@
         "exercised": 5,
         "detail": "2 problem(s): \"“Indeed!”\" is out of order — a reordering: the only place the page has it is behind character 378989, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 5
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 2,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -5071,6 +5998,25 @@
         "detail": "4403 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3478,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4401,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 588393,
@@ -5179,6 +6125,25 @@
         "detail": "4474 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3486,
+        "descendant": 1,
+        "ancestor": 62,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4472,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 589118,
@@ -5275,6 +6240,25 @@
         "exercised": 4490,
         "detail": "38 problem(s): source element s2936 says the same thing twice — a duplicate: \"“Two offences of a very different nature, and by no means of\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3491,
+        "descendant": 1,
+        "ancestor": 62,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4463,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 25,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -5376,6 +6360,25 @@
         "detail": "585 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 549,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 585,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 152489,
@@ -5470,6 +6473,25 @@
         "exercised": 743,
         "detail": "743 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 704,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 743,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -5567,6 +6589,25 @@
         "exercised": 198,
         "detail": "198 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 184,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 198,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -5671,6 +6712,25 @@
         "detail": "8 problem(s): \"Skiptomaincontent\" is out of order — a reordering: the only place source element s62 has it is behind character 158199, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 651,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 679,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 8,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 152489,
@@ -5770,6 +6830,25 @@
         "exercised": 678,
         "detail": "678 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 639,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 678,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -5872,6 +6951,25 @@
         "detail": "572 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 542,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 572,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 152464,
@@ -5968,6 +7066,25 @@
         "exercised": 3,
         "detail": "3 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 3
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -6092,6 +7209,25 @@
         "detail": "619 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 580,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 619,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 152489,
@@ -6188,6 +7324,25 @@
         "exercised": 586,
         "detail": "2 problem(s): source element s710 says the same thing twice — a duplicate: \"That said, we can offer some guidance on our current thinkin\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 550,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 585,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 1,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -6287,6 +7442,25 @@
         "detail": "334 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 184,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 334,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": true,
     "article": {
       "chars": 7260,
@@ -6378,6 +7552,25 @@
         "exercised": 358,
         "detail": "358 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 206,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 358,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -6477,6 +7670,25 @@
         "exercised": 48,
         "detail": "48 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 34,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 48,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -6584,6 +7796,25 @@
         "detail": "348 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 196,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 348,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 7238,
@@ -6686,6 +7917,25 @@
         "detail": "282 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 132,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 282,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 7028,
@@ -6783,6 +8033,25 @@
         "detail": "2 problem(s): \"EnterKing,Queen,Polonius,Ophelia,Rosencrantz,Guildenstern,\" is out of order — a reordering: the only place the page has it is behind character 251, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 5
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 2,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 0,
@@ -6872,15 +8141,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9981301545961467,
-        "exercised": 3988,
-        "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+        "value": 0.9981620718462824,
+        "exercised": 3964,
+        "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 1,
-        "exercised": 3988,
-        "basis": "29893 of 29893 own-text characters are the article region"
+        "exercised": 3964,
+        "basis": "29870 of 29870 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -6905,25 +8174,44 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 3985,
-        "detail": "3985 output node(s) each say what their own source element said"
+        "exercised": 3962,
+        "detail": "3962 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 4148,
-        "detail": "4148 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 4125,
+        "detail": "4125 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3962,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4125,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": true,
     "article": {
-      "chars": 29893,
-      "recall": 0.9981301545961467,
+      "chars": 29870,
+      "recall": 0.9981620718462824,
       "precision": 1,
-      "outputChars": 29893,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+      "outputChars": 29870,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
     },
     "failures": [],
     "finding": {
@@ -6933,9 +8221,9 @@
         "sourceOrder": true
       },
       "regressions": [],
-      "articleChars": 29893,
-      "gistableChars": 38330,
-      "articleRecall": 0.9981301545961467
+      "articleChars": 29870,
+      "gistableChars": 38307,
+      "articleRecall": 0.9981620718462824
     },
     "exercised": true
   },
@@ -6965,14 +8253,14 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 1,
-        "exercised": 3988,
-        "basis": "3988 of 3988 stamped region element(s) came back, holding 29949 of 29949 characters"
+        "exercised": 3964,
+        "basis": "3964 of 3964 stamped region element(s) came back, holding 29925 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9585520419920625,
-        "exercised": 3988,
-        "basis": "29949 of 31244 own-text characters are the article region"
+        "value": 0.9585201793721974,
+        "exercised": 3964,
+        "basis": "29925 of 31220 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -6997,25 +8285,44 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 4075,
-        "detail": "4075 output node(s) each say what their own source element said"
+        "exercised": 4051,
+        "detail": "4051 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 4248,
-        "detail": "4248 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 4224,
+        "detail": "4224 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 4051,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4224,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 29949,
+      "chars": 29925,
       "recall": 1,
-      "precision": 0.9585520419920625,
-      "outputChars": 31244,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3988 of 3988 stamped region element(s) came back, holding 29949 of 29949 characters"
+      "precision": 0.9585201793721974,
+      "outputChars": 31220,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3964 of 3964 stamped region element(s) came back, holding 29925 of 29925 characters"
     },
     "failures": [
       "kept excluded text: \"Previous topic\""
@@ -7030,8 +8337,8 @@
         "exclusionPrecision",
         "regionPrecision"
       ],
-      "articleChars": 29949,
-      "gistableChars": 39849,
+      "articleChars": 29925,
+      "gistableChars": 39825,
       "articleRecall": 1
     },
     "exercised": true
@@ -7061,14 +8368,14 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.0045410531236435275,
-        "exercised": 3988,
-        "basis": "2 of 3988 stamped region element(s) came back, holding 136 of 29949 characters"
+        "value": 0.004544695071010861,
+        "exercised": 3964,
+        "basis": "2 of 3964 stamped region element(s) came back, holding 136 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 1,
-        "exercised": 3988,
+        "exercised": 3964,
         "basis": "136 of 136 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -7104,15 +8411,34 @@
         "detail": "3 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 2,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 3,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 136,
-      "recall": 0.0045410531236435275,
+      "recall": 0.004544695071010861,
       "precision": 1,
       "outputChars": 136,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "2 of 3988 stamped region element(s) came back, holding 136 of 29949 characters"
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "2 of 3964 stamped region element(s) came back, holding 136 of 29925 characters"
     },
     "failures": [
       "missing required text: \"from itertools import (accumulate, batched, chain, combinations, compress,\\n     \"",
@@ -7120,7 +8446,7 @@
       "structure pre: 0 against at least 29",
       "structure table: 0 against exactly 3",
       "structure h2: 0 against exactly 2",
-      "136 characters of the article region came back (0.5% of 29949), under minArticleChars 29000"
+      "136 characters of the article region came back (0.5% of 29925), under minArticleChars 29000"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -7135,7 +8461,7 @@
       ],
       "articleChars": 136,
       "gistableChars": 162,
-      "articleRecall": 0.0045410531236435275
+      "articleRecall": 0.004544695071010861
     },
     "exercised": true
   },
@@ -7164,15 +8490,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9981301545961467,
-        "exercised": 3988,
-        "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+        "value": 0.9981620718462824,
+        "exercised": 3964,
+        "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9908843808008486,
-        "exercised": 3988,
-        "basis": "29893 of 30168 own-text characters are the article region"
+        "value": 0.9908774257754188,
+        "exercised": 3964,
+        "basis": "29870 of 30145 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -7197,25 +8523,44 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 4003,
-        "detail": "4003 output node(s) each say what their own source element said"
+        "exercised": 3980,
+        "detail": "3980 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 4166,
-        "detail": "18 problem(s): \"Theme\" is out of order — a reordering: the only place source element s64 has it is behind character 30417, which the output has already passed"
+        "exercised": 4143,
+        "detail": "18 problem(s): \"Theme\" is out of order — a reordering: the only place source element s64 has it is behind character 30393, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3980,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4125,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 18,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 29893,
-      "recall": 0.9981301545961467,
-      "precision": 0.9908843808008486,
-      "outputChars": 30168,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+      "chars": 29870,
+      "recall": 0.9981620718462824,
+      "precision": 0.9908774257754188,
+      "outputChars": 30145,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
     },
     "failures": [
       "kept excluded text: \"Previous topic\""
@@ -7231,9 +8576,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 29893,
-      "gistableChars": 38637,
-      "articleRecall": 0.9981301545961467
+      "articleChars": 29870,
+      "gistableChars": 38614,
+      "articleRecall": 0.9981620718462824
     },
     "exercised": true
   },
@@ -7262,15 +8607,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9856422585061271,
-        "exercised": 3988,
-        "basis": "3936 of 3988 stamped region element(s) came back, holding 29519 of 29949 characters"
+        "value": 0.9856975772765246,
+        "exercised": 3964,
+        "basis": "3914 of 3964 stamped region element(s) came back, holding 29497 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9636969083608109,
-        "exercised": 3988,
-        "basis": "29519 of 30631 own-text characters are the article region"
+        "value": 0.9636708157731386,
+        "exercised": 3964,
+        "basis": "29497 of 30609 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -7295,25 +8640,44 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 3990,
-        "detail": "3990 output node(s) each say what their own source element said"
+        "exercised": 3968,
+        "detail": "3968 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 4163,
-        "detail": "4163 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 4141,
+        "detail": "4141 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3968,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4141,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 29519,
-      "recall": 0.9856422585061271,
-      "precision": 0.9636969083608109,
-      "outputChars": 30631,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3936 of 3988 stamped region element(s) came back, holding 29519 of 29949 characters"
+      "chars": 29497,
+      "recall": 0.9856975772765246,
+      "precision": 0.9636708157731386,
+      "outputChars": 30609,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3914 of 3964 stamped region element(s) came back, holding 29497 of 29925 characters"
     },
     "failures": [
       "structure table: 0 against exactly 3",
@@ -7330,9 +8694,9 @@
         "regionPrecision",
         "structureFidelity"
       ],
-      "articleChars": 29519,
-      "gistableChars": 39093,
-      "articleRecall": 0.9856422585061271
+      "articleChars": 29497,
+      "gistableChars": 39071,
+      "articleRecall": 0.9856975772765246
     },
     "exercised": true
   },
@@ -7361,14 +8725,14 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.7761194029850746,
-        "exercised": 3988,
-        "basis": "1011 of 3988 stamped region element(s) came back, holding 23244 of 29949 characters"
+        "value": 0.7767418546365915,
+        "exercised": 3964,
+        "basis": "1011 of 3964 stamped region element(s) came back, holding 23244 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 1,
-        "exercised": 3988,
+        "exercised": 3964,
         "basis": "23244 of 23244 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -7404,19 +8768,38 @@
         "detail": "1139 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1011,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1139,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 23244,
-      "recall": 0.7761194029850746,
+      "recall": 0.7767418546365915,
       "precision": 1,
       "outputChars": 23244,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "1011 of 3988 stamped region element(s) came back, holding 23244 of 29949 characters"
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "1011 of 3964 stamped region element(s) came back, holding 23244 of 29925 characters"
     },
     "failures": [
       "missing required text: \"from itertools import (accumulate, batched, chain, combinations, compress,\\n     \"",
-      "23244 characters of the article region came back (77.6% of 29949), under minArticleChars 29000"
+      "23244 characters of the article region came back (77.7% of 29925), under minArticleChars 29000"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -7430,7 +8813,7 @@
       ],
       "articleChars": 23244,
       "gistableChars": 30970,
-      "articleRecall": 0.7761194029850746
+      "articleRecall": 0.7767418546365915
     },
     "exercised": true
   },
@@ -7460,13 +8843,13 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 0,
-        "exercised": 3988,
-        "basis": "0 of 3988 stamped region element(s) came back, holding 0 of 29949 characters"
+        "exercised": 3964,
+        "basis": "0 of 3964 stamped region element(s) came back, holding 0 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 0,
-        "exercised": 3988,
+        "exercised": 3964,
         "basis": "0 of 181 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -7499,8 +8882,27 @@
         "name": "sourceOrder",
         "passed": false,
         "exercised": 3,
-        "detail": "2 problem(s): \"Thismoduleimplementsanumberofiteratorbuildingblocks\" is out of order — a reordering: the only place the page has it is behind character 20788, which the output has already passed"
+        "detail": "2 problem(s): \"Thismoduleimplementsanumberofiteratorbuildingblocks\" is out of order — a reordering: the only place the page has it is behind character 20764, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 3
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 2,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -7508,16 +8910,16 @@
       "recall": 0,
       "precision": 0,
       "outputChars": 181,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "0 of 3988 stamped region element(s) came back, holding 0 of 29949 characters"
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "0 of 3964 stamped region element(s) came back, holding 0 of 29925 characters"
     },
     "failures": [
       "missing required text: \"from itertools import (accumulate, batched, chain, combinations, compress,\\n     \"",
       "structure pre: 0 against at least 29",
       "structure table: 0 against exactly 3",
       "structure h2: 0 against exactly 2",
-      "0 characters of the article region came back (0.0% of 29949), under minArticleChars 29000",
+      "0 characters of the article region came back (0.0% of 29925), under minArticleChars 29000",
       "only 0.0% of the output is the declared article region (0 of 181 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
     ],
     "finding": {
@@ -7565,15 +8967,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.6268656716417911,
-        "exercised": 3988,
-        "basis": "3482 of 3988 stamped region element(s) came back, holding 18774 of 29949 characters"
+        "value": 0.6273015873015872,
+        "exercised": 3964,
+        "basis": "3480 of 3964 stamped region element(s) came back, holding 18772 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 1,
-        "exercised": 3988,
-        "basis": "18774 of 18774 own-text characters are the article region"
+        "exercised": 3964,
+        "basis": "18772 of 18772 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -7598,28 +9000,47 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 3482,
-        "detail": "3482 output node(s) each say what their own source element said"
+        "exercised": 3480,
+        "detail": "3480 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 3492,
-        "detail": "3492 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 3490,
+        "detail": "3490 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3480,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 3490,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 18774,
-      "recall": 0.6268656716417911,
+      "chars": 18772,
+      "recall": 0.6273015873015872,
       "precision": 1,
-      "outputChars": 18774,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3482 of 3988 stamped region element(s) came back, holding 18774 of 29949 characters"
+      "outputChars": 18772,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3480 of 3964 stamped region element(s) came back, holding 18772 of 29925 characters"
     },
     "failures": [
-      "18774 characters of the article region came back (62.7% of 29949), under minArticleChars 29000"
+      "18772 characters of the article region came back (62.7% of 29925), under minArticleChars 29000"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -7630,9 +9051,9 @@
       "regressions": [
         "articleRecall"
       ],
-      "articleChars": 18774,
-      "gistableChars": 25288,
-      "articleRecall": 0.6268656716417911
+      "articleChars": 18772,
+      "gistableChars": 25286,
+      "articleRecall": 0.6273015873015872
     },
     "exercised": true
   },
@@ -7681,15 +9102,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9981301545961467,
-        "exercised": 3988,
-        "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+        "value": 0.9981620718462824,
+        "exercised": 3964,
+        "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9854293720125268,
-        "exercised": 3988,
-        "basis": "29893 of 30335 own-text characters are the article region"
+        "value": 0.9854183161784111,
+        "exercised": 3964,
+        "basis": "29870 of 30312 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -7714,25 +9135,44 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 3995,
-        "detail": "3995 output node(s) each say what their own source element said"
+        "exercised": 3972,
+        "detail": "3972 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 4167,
-        "detail": "29 problem(s): source element s3174 says the same thing twice — a duplicate: \"The primary purpose of the itertools recipes is educational.\""
+        "exercised": 4144,
+        "detail": "29 problem(s): source element s3150 says the same thing twice — a duplicate: \"The primary purpose of the itertools recipes is educational.\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3972,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4125,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 19,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": true,
     "article": {
-      "chars": 29893,
-      "recall": 0.9981301545961467,
-      "precision": 0.9854293720125268,
-      "outputChars": 30335,
-      "regionChars": 29949,
-      "exercised": 3988,
-      "basis": "3985 of 3988 stamped region element(s) came back, holding 29893 of 29949 characters"
+      "chars": 29870,
+      "recall": 0.9981620718462824,
+      "precision": 0.9854183161784111,
+      "outputChars": 30312,
+      "regionChars": 29925,
+      "exercised": 3964,
+      "basis": "3962 of 3964 stamped region element(s) came back, holding 29870 of 29925 characters"
     },
     "failures": [],
     "finding": {
@@ -7745,9 +9185,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 29893,
-      "gistableChars": 38853,
-      "articleRecall": 0.9981301545961467
+      "articleChars": 29870,
+      "gistableChars": 38830,
+      "articleRecall": 0.9981620718462824
     },
     "exercised": true
   },
@@ -7758,13 +9198,13 @@
     "metrics": {
       "requiredRecall": {
         "name": "requiredRecall",
-        "value": 0.3333333333333333,
+        "value": 1,
         "exercised": 3,
         "basis": "mustContain needles"
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.6666666666666666,
+        "value": 1,
         "exercised": 3,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -7776,19 +9216,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.56124918826377,
+        "value": 0.9685341519570223,
         "exercised": 1636,
-        "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+        "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9793963119398372,
+        "value": 0.9899233693356665,
         "exercised": 1636,
-        "basis": "9507 of 9707 own-text characters are the article region"
+        "basis": "16406 of 16573 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -7809,43 +9249,56 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 597,
-        "detail": "597 output node(s) each say what their own source element said"
+        "exercised": 1626,
+        "detail": "1626 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 1055,
-        "detail": "1055 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 2084,
+        "detail": "2084 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
-    "assertionsPassed": false,
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1614,
+        "descendant": 12,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2072,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 12,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
     "article": {
-      "chars": 9507,
-      "recall": 0.56124918826377,
-      "precision": 0.9793963119398372,
-      "outputChars": 9707,
+      "chars": 16406,
+      "recall": 0.9685341519570223,
+      "precision": 0.9899233693356665,
+      "outputChars": 16573,
       "regionChars": 16939,
       "exercised": 1636,
-      "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+      "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
     },
-    "failures": [
-      "missing required text: \"32,383,920\"",
-      "missing required text: \"23,034,637\"",
-      "kept excluded text: \"From Wikipedia, the free encyclopedia\"",
-      "structure table: 1 against at least 3",
-      "9507 characters of the article region came back (56.1% of 16939), under minArticleChars 16000"
-    ],
+    "failures": [],
     "finding": {
-      "assertionsHeld": false,
+      "assertionsHeld": true,
       "gates": {
         "attribution": true,
         "sourceOrder": true
       },
       "regressions": [],
-      "articleChars": 9507,
-      "gistableChars": 11027,
-      "articleRecall": 0.56124918826377
+      "articleChars": 16406,
+      "gistableChars": 19000,
+      "articleRecall": 0.9685341519570223
     },
     "exercised": true
   },
@@ -7917,6 +9370,25 @@
         "detail": "2634 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 2155,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2634,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 16939,
@@ -7941,7 +9413,8 @@
       },
       "regressions": [
         "exclusionPrecision",
-        "regionPrecision"
+        "regionPrecision",
+        "structureFidelity"
       ],
       "articleChars": 16939,
       "gistableChars": 26508,
@@ -7952,22 +9425,17 @@
   {
     "fixture": "wiki-gdp-table",
     "arm": "first-20-percent",
-    "exercised": false
-  },
-  {
-    "fixture": "wiki-gdp-table",
-    "arm": "article-plus-rail",
     "tier": "manifest",
     "metrics": {
       "requiredRecall": {
         "name": "requiredRecall",
-        "value": 0.3333333333333333,
+        "value": 0.6666666666666666,
         "exercised": 3,
         "basis": "mustContain needles"
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0,
+        "value": 1,
         "exercised": 3,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -7979,15 +9447,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.56124918826377,
+        "value": 0.486687525827971,
         "exercised": 1636,
-        "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+        "basis": "981 of 1636 stamped region element(s) came back, holding 8244 of 16939 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.8233307352559106,
+        "value": 0.9801450481512305,
         "exercised": 1636,
-        "basis": "9507 of 11547 own-text characters are the article region"
+        "basis": "8244 of 8411 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -8012,35 +9480,170 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 773,
-        "detail": "773 output node(s) each say what their own source element said"
+        "exercised": 993,
+        "detail": "993 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 1010,
+        "detail": "1010 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 981,
+        "descendant": 12,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 998,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 12,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": 8244,
+      "recall": 0.486687525827971,
+      "precision": 0.9801450481512305,
+      "outputChars": 8411,
+      "regionChars": 16939,
+      "exercised": 1636,
+      "basis": "981 of 1636 stamped region element(s) came back, holding 8244 of 16939 characters"
+    },
+    "failures": [
+      "missing required text: \"23,034,637\"",
+      "structure table: 2 against at least 3",
+      "structure h2: 1 against exactly 5",
+      "8244 characters of the article region came back (48.7% of 16939), under minArticleChars 16000"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [
+        "requiredRecall",
+        "articleRecall",
+        "regionPrecision",
+        "structureFidelity"
+      ],
+      "articleChars": 8244,
+      "gistableChars": 9566,
+      "articleRecall": 0.486687525827971
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "wiki-gdp-table",
+    "arm": "article-plus-rail",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": 1,
+        "exercised": 3,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0.3333333333333333,
+        "exercised": 3,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": 0.9685341519570223,
+        "exercised": 1636,
+        "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": 0.8910009232607397,
+        "exercised": 1636,
+        "basis": "16406 of 18413 own-text characters are the article region"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": 0.5,
+        "exercised": 2,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": 1,
+        "exercised": 1,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 1802,
+        "detail": "1802 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 1237,
+        "exercised": 2266,
         "detail": "156 problem(s): \"Mainmenu\" is out of order — a reordering: the only place source element s43 has it is behind character 22288, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1790,
+        "descendant": 12,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2098,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 12,
+        "behind": 156,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
-      "chars": 9507,
-      "recall": 0.56124918826377,
-      "precision": 0.8233307352559106,
-      "outputChars": 11547,
+      "chars": 16406,
+      "recall": 0.9685341519570223,
+      "precision": 0.8910009232607397,
+      "outputChars": 18413,
       "regionChars": 16939,
       "exercised": 1636,
-      "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+      "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
     },
     "failures": [
-      "missing required text: \"32,383,920\"",
-      "missing required text: \"23,034,637\"",
-      "kept excluded text: \"From Wikipedia, the free encyclopedia\"",
       "kept excluded text: \"Learn to edit\"",
       "kept excluded text: \"Toggle the table of contents\"",
-      "structure table: 1 against at least 3",
-      "structure h2: 6 against exactly 5",
-      "9507 characters of the article region came back (56.1% of 16939), under minArticleChars 16000"
+      "structure h2: 6 against exactly 5"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -8054,9 +9657,9 @@
         "structureFidelity",
         "sourceOrder"
       ],
-      "articleChars": 9507,
-      "gistableChars": 13026,
-      "articleRecall": 0.56124918826377
+      "articleChars": 16406,
+      "gistableChars": 20999,
+      "articleRecall": 0.9685341519570223
     },
     "exercised": true
   },
@@ -8128,6 +9731,25 @@
         "detail": "1840 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1139,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1612,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 228,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 12125,
@@ -8154,6 +9776,7 @@
       },
       "regressions": [
         "exclusionPrecision",
+        "articleRecall",
         "regionPrecision",
         "structureFidelity",
         "attribution"
@@ -8171,13 +9794,13 @@
     "metrics": {
       "requiredRecall": {
         "name": "requiredRecall",
-        "value": 0.3333333333333333,
+        "value": 1,
         "exercised": 3,
         "basis": "mustContain needles"
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.6666666666666666,
+        "value": 1,
         "exercised": 3,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8189,19 +9812,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.5160281008323986,
+        "value": 0.7689355924198595,
         "exercised": 1636,
-        "basis": "411 of 1636 stamped region element(s) came back, holding 8741 of 16939 characters"
+        "basis": "881 of 1636 stamped region element(s) came back, holding 13025 of 16939 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9776311374566603,
+        "value": 0.9873408126137053,
         "exercised": 1636,
-        "basis": "8741 of 8941 own-text characters are the article region"
+        "basis": "13025 of 13192 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0,
+        "value": 0.5,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -8222,33 +9845,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 424,
-        "detail": "424 output node(s) each say what their own source element said"
+        "exercised": 893,
+        "detail": "893 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 752,
-        "detail": "752 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 1221,
+        "detail": "1221 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 881,
+        "descendant": 12,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1209,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 12,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 8741,
-      "recall": 0.5160281008323986,
-      "precision": 0.9776311374566603,
-      "outputChars": 8941,
+      "chars": 13025,
+      "recall": 0.7689355924198595,
+      "precision": 0.9873408126137053,
+      "outputChars": 13192,
       "regionChars": 16939,
       "exercised": 1636,
-      "basis": "411 of 1636 stamped region element(s) came back, holding 8741 of 16939 characters"
+      "basis": "881 of 1636 stamped region element(s) came back, holding 13025 of 16939 characters"
     },
     "failures": [
-      "missing required text: \"32,383,920\"",
-      "missing required text: \"23,034,637\"",
-      "kept excluded text: \"From Wikipedia, the free encyclopedia\"",
-      "structure table: 1 against at least 3",
       "structure h2: 3 against exactly 5",
-      "8741 characters of the article region came back (51.6% of 16939), under minArticleChars 16000"
+      "13025 characters of the article region came back (76.9% of 16939), under minArticleChars 16000"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -8261,9 +9899,9 @@
         "regionPrecision",
         "structureFidelity"
       ],
-      "articleChars": 8741,
-      "gistableChars": 10226,
-      "articleRecall": 0.5160281008323986
+      "articleChars": 13025,
+      "gistableChars": 15091,
+      "articleRecall": 0.7689355924198595
     },
     "exercised": true
   },
@@ -8335,6 +9973,25 @@
         "detail": "3 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 3
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 3,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 0,
@@ -8401,13 +10058,13 @@
     "metrics": {
       "requiredRecall": {
         "name": "requiredRecall",
-        "value": 0.3333333333333333,
+        "value": 1,
         "exercised": 3,
         "basis": "mustContain needles"
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.6666666666666666,
+        "value": 1,
         "exercised": 3,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8419,19 +10076,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.56124918826377,
+        "value": 0.9685341519570223,
         "exercised": 1636,
-        "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+        "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9250754111121923,
+        "value": 0.9570086915942367,
         "exercised": 1636,
-        "basis": "9507 of 10277 own-text characters are the article region"
+        "basis": "16406 of 17143 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -8452,35 +10109,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 606,
-        "detail": "606 output node(s) each say what their own source element said"
+        "exercised": 1635,
+        "detail": "1635 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 1070,
-        "detail": "24 problem(s): source element s727 says the same thing twice — a duplicate: \"(GDP) is the of all final goods and services from a nation i\""
+        "exercised": 2099,
+        "detail": "24 problem(s): source element s691 says the same thing twice — a duplicate: \"(GDP) is the of all final goods and services from a nation i\""
       }
     },
-    "assertionsPassed": false,
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1623,
+        "descendant": 12,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 2072,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 12,
+        "behind": 15,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
     "article": {
-      "chars": 9507,
-      "recall": 0.56124918826377,
-      "precision": 0.9250754111121923,
-      "outputChars": 10277,
+      "chars": 16406,
+      "recall": 0.9685341519570223,
+      "precision": 0.9570086915942367,
+      "outputChars": 17143,
       "regionChars": 16939,
       "exercised": 1636,
-      "basis": "584 of 1636 stamped region element(s) came back, holding 9507 of 16939 characters"
+      "basis": "1614 of 1636 stamped region element(s) came back, holding 16406 of 16939 characters"
     },
-    "failures": [
-      "missing required text: \"32,383,920\"",
-      "missing required text: \"23,034,637\"",
-      "kept excluded text: \"From Wikipedia, the free encyclopedia\"",
-      "structure table: 1 against at least 3",
-      "9507 characters of the article region came back (56.1% of 16939), under minArticleChars 16000"
-    ],
+    "failures": [],
     "finding": {
-      "assertionsHeld": false,
+      "assertionsHeld": true,
       "gates": {
         "attribution": true,
         "sourceOrder": false
@@ -8489,9 +10159,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 9507,
-      "gistableChars": 11707,
-      "articleRecall": 0.56124918826377
+      "articleChars": 16406,
+      "gistableChars": 19680,
+      "articleRecall": 0.9685341519570223
     },
     "exercised": true
   },
@@ -8508,7 +10178,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.3333333333333333,
+        "value": 0.6666666666666666,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8520,19 +10190,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9712387483926275,
-        "exercised": 205,
-        "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+        "value": 0.9714723013477318,
+        "exercised": 210,
+        "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9448730244777115,
-        "exercised": 205,
-        "basis": "22659 of 23981 own-text characters are the article region"
+        "value": 0.9808971882378192,
+        "exercised": 210,
+        "basis": "22850 of 23295 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -8553,32 +10223,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 263,
-        "detail": "263 output node(s) each say what their own source element said"
+        "exercised": 193,
+        "detail": "193 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 315,
-        "detail": "315 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 246,
+        "detail": "246 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 191,
+        "descendant": 1,
+        "ancestor": 1,
+        "none": 0
+      },
+      "runs": {
+        "owner": 244,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 1
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 22659,
-      "recall": 0.9712387483926275,
-      "precision": 0.9448730244777115,
-      "outputChars": 23981,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+      "chars": 22850,
+      "recall": 0.9714723013477318,
+      "precision": 0.9808971882378192,
+      "outputChars": 23295,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"Loading metrics\"",
-      "kept excluded text: \"See all article types\"",
-      "structure h2: 11 against at least 12"
+      "kept excluded text: \"See all article types\""
     ],
     "finding": {
       "assertionsHeld": false,
@@ -8587,9 +10273,9 @@
         "sourceOrder": true
       },
       "regressions": [],
-      "articleChars": 22659,
-      "gistableChars": 27719,
-      "articleRecall": 0.9712387483926275
+      "articleChars": 22850,
+      "gistableChars": 27003,
+      "articleRecall": 0.9714723013477318
     },
     "exercised": true
   },
@@ -8606,7 +10292,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0,
+        "value": 0.3333333333333333,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8619,14 +10305,14 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 1,
-        "exercised": 205,
-        "basis": "205 of 205 stamped region element(s) came back, holding 23330 of 23330 characters"
+        "exercised": 210,
+        "basis": "210 of 210 stamped region element(s) came back, holding 23521 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.8409328479256029,
-        "exercised": 205,
-        "basis": "23330 of 27743 own-text characters are the article region"
+        "value": 0.875493188416586,
+        "exercised": 210,
+        "basis": "23521 of 26866 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -8651,29 +10337,46 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 472,
-        "detail": "472 output node(s) each say what their own source element said"
+        "exercised": 397,
+        "detail": "397 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 540,
-        "detail": "540 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 465,
+        "detail": "465 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 397,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 465,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 23330,
+      "chars": 23521,
       "recall": 1,
-      "precision": 0.8409328479256029,
-      "outputChars": 27743,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "205 of 205 stamped region element(s) came back, holding 23330 of 23330 characters"
+      "precision": 0.875493188416586,
+      "outputChars": 26866,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "210 of 210 stamped region element(s) came back, holding 23521 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"Loading metrics\"",
       "kept excluded text: \"See all article types\"",
       "kept excluded text: \"Submit Your Manuscript\"",
@@ -8689,8 +10392,8 @@
         "exclusionPrecision",
         "regionPrecision"
       ],
-      "articleChars": 23330,
-      "gistableChars": 32056,
+      "articleChars": 23521,
+      "gistableChars": 31127,
       "articleRecall": 1
     },
     "exercised": true
@@ -8713,7 +10416,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.16666666666666666,
+        "value": 0.5,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8725,19 +10428,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9712387483926275,
-        "exercised": 205,
-        "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+        "value": 0.9714723013477318,
+        "exercised": 210,
+        "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.8676290396691684,
-        "exercised": 205,
-        "basis": "22659 of 26116 own-text characters are the article region"
+        "value": 0.8985450255603618,
+        "exercised": 210,
+        "basis": "22850 of 25430 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -8758,33 +10461,49 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 371,
-        "detail": "371 output node(s) each say what their own source element said"
+        "exercised": 301,
+        "detail": "301 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 424,
+        "exercised": 355,
         "detail": "94 problem(s): source element s249 says the same thing twice — a duplicate: \"Loading metrics\""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 299,
+        "descendant": 1,
+        "ancestor": 1,
+        "none": 0
+      },
+      "runs": {
+        "owner": 272,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 81,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 1
+    },
     "assertionsPassed": false,
     "article": {
-      "chars": 22659,
-      "recall": 0.9712387483926275,
-      "precision": 0.8676290396691684,
-      "outputChars": 26116,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+      "chars": 22850,
+      "recall": 0.9714723013477318,
+      "precision": 0.8985450255603618,
+      "outputChars": 25430,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"Loading metrics\"",
       "kept excluded text: \"See all article types\"",
-      "kept excluded text: \"Submit Your Manuscript\"",
-      "structure h2: 11 against at least 12"
+      "kept excluded text: \"Submit Your Manuscript\""
     ],
     "finding": {
       "assertionsHeld": false,
@@ -8797,9 +10516,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 22659,
-      "gistableChars": 30118,
-      "articleRecall": 0.9712387483926275
+      "articleChars": 22850,
+      "gistableChars": 29402,
+      "articleRecall": 0.9714723013477318
     },
     "exercised": true
   },
@@ -8816,7 +10535,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.16666666666666666,
+        "value": 0.5,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8828,15 +10547,15 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.8433776253750536,
-        "exercised": 205,
-        "basis": "142 of 205 stamped region element(s) came back, holding 19676 of 23330 characters"
+        "value": 0.9951957824922409,
+        "exercised": 210,
+        "basis": "198 of 210 stamped region element(s) came back, holding 23408 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.844028826355525,
-        "exercised": 205,
-        "basis": "19676 of 23312 own-text characters are the article region"
+        "value": 0.9007927345493727,
+        "exercised": 210,
+        "basis": "23408 of 25986 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -8861,34 +10580,50 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 344,
-        "detail": "344 output node(s) each say what their own source element said"
+        "exercised": 321,
+        "detail": "321 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 412,
-        "detail": "412 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 389,
+        "detail": "389 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 321,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 389,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 19676,
-      "recall": 0.8433776253750536,
-      "precision": 0.844028826355525,
-      "outputChars": 23312,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "142 of 205 stamped region element(s) came back, holding 19676 of 23330 characters"
+      "chars": 23408,
+      "recall": 0.9951957824922409,
+      "precision": 0.9007927345493727,
+      "outputChars": 25986,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "198 of 210 stamped region element(s) came back, holding 23408 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"See all article types\"",
       "kept excluded text: \"Submit Your Manuscript\"",
       "kept excluded text: \"Related PLOS Articles\"",
-      "structure h2: 5 against at least 12",
-      "19676 characters of the article region came back (84.3% of 23330), under minArticleChars 22100"
+      "structure h2: 5 against at least 12"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -8898,12 +10633,12 @@
       },
       "regressions": [
         "exclusionPrecision",
-        "articleRecall",
-        "regionPrecision"
+        "regionPrecision",
+        "structureFidelity"
       ],
-      "articleChars": 19676,
-      "gistableChars": 26904,
-      "articleRecall": 0.8433776253750536
+      "articleChars": 23408,
+      "gistableChars": 30130,
+      "articleRecall": 0.9951957824922409
     },
     "exercised": true
   },
@@ -8920,7 +10655,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.3333333333333333,
+        "value": 0.6666666666666666,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -8932,19 +10667,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.963009001285898,
-        "exercised": 205,
-        "basis": "90 of 205 stamped region element(s) came back, holding 22467 of 23330 characters"
+        "value": 0.9633093831044598,
+        "exercised": 210,
+        "basis": "95 of 210 stamped region element(s) came back, holding 22658 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.9444677988901967,
-        "exercised": 205,
-        "basis": "22467 of 23788 own-text characters are the article region"
+        "value": 0.9807808847718812,
+        "exercised": 210,
+        "basis": "22658 of 23102 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -8965,32 +10700,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 180,
-        "detail": "180 output node(s) each say what their own source element said"
+        "exercised": 110,
+        "detail": "110 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 185,
-        "detail": "185 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 116,
+        "detail": "116 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 109,
+        "descendant": 0,
+        "ancestor": 1,
+        "none": 0
+      },
+      "runs": {
+        "owner": 115,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 1
     },
     "assertionsPassed": false,
     "article": {
-      "chars": 22467,
-      "recall": 0.963009001285898,
-      "precision": 0.9444677988901967,
-      "outputChars": 23788,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "90 of 205 stamped region element(s) came back, holding 22467 of 23330 characters"
+      "chars": 22658,
+      "recall": 0.9633093831044598,
+      "precision": 0.9807808847718812,
+      "outputChars": 23102,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "95 of 210 stamped region element(s) came back, holding 22658 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"Loading metrics\"",
-      "kept excluded text: \"See all article types\"",
-      "structure h2: 11 against at least 12"
+      "kept excluded text: \"See all article types\""
     ],
     "finding": {
       "assertionsHeld": false,
@@ -9002,9 +10753,9 @@
         "articleRecall",
         "regionPrecision"
       ],
-      "articleChars": 22467,
-      "gistableChars": 27591,
-      "articleRecall": 0.963009001285898
+      "articleChars": 22658,
+      "gistableChars": 26875,
+      "articleRecall": 0.9633093831044598
     },
     "exercised": true
   },
@@ -9034,13 +10785,13 @@
       "articleRecall": {
         "name": "articleRecall",
         "value": 0,
-        "exercised": 205,
-        "basis": "0 of 205 stamped region element(s) came back, holding 0 of 23330 characters"
+        "exercised": 210,
+        "basis": "0 of 210 stamped region element(s) came back, holding 0 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
         "value": 0,
-        "exercised": 205,
+        "exercised": 210,
         "basis": "0 of 103 own-text characters are the article region"
       },
       "structureFidelity": {
@@ -9076,20 +10827,39 @@
         "detail": "1 problem(s): \"LeonardP.Freedman\" is out of order — a reordering: the only place the page has it is behind character 2052, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 2
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 1,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 0,
       "recall": 0,
       "precision": 0,
       "outputChars": 103,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "0 of 205 stamped region element(s) came back, holding 0 of 23330 characters"
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "0 of 210 stamped region element(s) came back, holding 0 of 23521 characters"
     },
     "failures": [
       "structure h2: 0 against at least 12",
       "structure h3: 0 against at least 4",
-      "0 characters of the article region came back (0.0% of 23330), under minArticleChars 22100",
+      "0 characters of the article region came back (0.0% of 23521), under minArticleChars 22300",
       "only 0.0% of the output is the declared article region (0 of 103 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
     ],
     "finding": {
@@ -9134,102 +10904,7 @@
   {
     "fixture": "plos-biology",
     "arm": "region-padding-only",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": 1,
-        "exercised": 2,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 0.3333333333333333,
-        "exercised": 6,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": 0.9712387483926275,
-        "exercised": 205,
-        "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": 0.8917004446893078,
-        "exercised": 205,
-        "basis": "22659 of 25411 own-text characters are the article region"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": 0.5,
-        "exercised": 2,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": 1,
-        "exercised": 1,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 344,
-        "detail": "344 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": true,
-        "exercised": 403,
-        "detail": "403 text run(s) placed in source order; no DIRECTLY stamped node said twice"
-      }
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": 22659,
-      "recall": 0.9712387483926275,
-      "precision": 0.8917004446893078,
-      "outputChars": 25411,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
-    },
-    "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
-      "kept excluded text: \"Loading metrics\"",
-      "kept excluded text: \"See all article types\"",
-      "structure h2: 11 against at least 12"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": true
-      },
-      "regressions": [
-        "regionPrecision"
-      ],
-      "articleChars": 22659,
-      "gistableChars": 29339,
-      "articleRecall": 0.9712387483926275
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "plos-biology",
@@ -9244,7 +10919,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0.3333333333333333,
+        "value": 0.6666666666666666,
         "exercised": 6,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -9256,19 +10931,19 @@
       },
       "articleRecall": {
         "name": "articleRecall",
-        "value": 0.9712387483926275,
-        "exercised": 205,
-        "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+        "value": 0.9714723013477318,
+        "exercised": 210,
+        "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.8803030303030303,
-        "exercised": 205,
-        "basis": "22659 of 25740 own-text characters are the article region"
+        "value": 0.9120300151672388,
+        "exercised": 210,
+        "basis": "22850 of 25054 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
-        "value": 0.5,
+        "value": 1,
         "exercised": 2,
         "basis": "declared per-tag floors met"
       },
@@ -9289,32 +10964,48 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 271,
-        "detail": "271 output node(s) each say what their own source element said"
+        "exercised": 201,
+        "detail": "201 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": false,
-        "exercised": 330,
+        "exercised": 261,
         "detail": "23 problem(s): source element s424 says the same thing twice — a duplicate: \"Studies of reproducibility define the phenomenon in a number\""
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 199,
+        "descendant": 1,
+        "ancestor": 1,
+        "none": 0
+      },
+      "runs": {
+        "owner": 244,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 15,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 1
+    },
     "assertionsPassed": false,
     "article": {
-      "chars": 22659,
-      "recall": 0.9712387483926275,
-      "precision": 0.8803030303030303,
-      "outputChars": 25740,
-      "regionChars": 23330,
-      "exercised": 205,
-      "basis": "172 of 205 stamped region element(s) came back, holding 22659 of 23330 characters"
+      "chars": 22850,
+      "recall": 0.9714723013477318,
+      "precision": 0.9120300151672388,
+      "outputChars": 25054,
+      "regionChars": 23521,
+      "exercised": 210,
+      "basis": "177 of 210 stamped region element(s) came back, holding 22850 of 23521 characters"
     },
     "failures": [
-      "kept excluded text: \"View Article\"",
-      "kept excluded text: \"PubMed/NCBI\"",
       "kept excluded text: \"Loading metrics\"",
-      "kept excluded text: \"See all article types\"",
-      "structure h2: 11 against at least 12"
+      "kept excluded text: \"See all article types\""
     ],
     "finding": {
       "assertionsHeld": false,
@@ -9326,9 +11017,9 @@
         "regionPrecision",
         "sourceOrder"
       ],
-      "articleChars": 22659,
-      "gistableChars": 29770,
-      "articleRecall": 0.9712387483926275
+      "articleChars": 22850,
+      "gistableChars": 29054,
+      "articleRecall": 0.9714723013477318
     },
     "exercised": true
   },
@@ -9345,7 +11036,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0,
+        "value": 1,
         "exercised": 2,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -9389,18 +11080,37 @@
     "gates": {
       "attribution": {
         "name": "attribution",
-        "passed": true,
-        "exercised": 7,
-        "detail": "7 output node(s) each say what their own source element said"
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
       },
       "sourceOrder": {
         "name": "sourceOrder",
-        "passed": true,
-        "exercised": 7,
-        "detail": "7 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
       }
     },
-    "assertionsPassed": false,
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
     "article": {
       "chars": null,
       "recall": null,
@@ -9410,20 +11120,16 @@
       "exercised": 0,
       "basis": "no articleRegion declared — nobody has written down what the article is here"
     },
-    "failures": [
-      "kept excluded text: \"PAGE NOT FOUND\"",
-      "kept excluded text: \"Out of nothing, something.\"",
-      "this page is not an article and the extractor did not refuse it — it returned 185 characters as though they were one"
-    ],
+    "failures": [],
     "finding": {
-      "assertionsHeld": false,
+      "assertionsHeld": true,
       "gates": {
-        "attribution": true,
-        "sourceOrder": true
+        "attribution": null,
+        "sourceOrder": null
       },
       "regressions": [],
       "articleChars": null,
-      "gistableChars": 183,
+      "gistableChars": 0,
       "articleRecall": null
     },
     "exercised": true
@@ -9496,6 +11202,25 @@
         "detail": "16 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 14,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 16,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": null,
@@ -9517,7 +11242,9 @@
         "attribution": true,
         "sourceOrder": true
       },
-      "regressions": [],
+      "regressions": [
+        "exclusionPrecision"
+      ],
       "articleChars": null,
       "gistableChars": 249,
       "articleRecall": null
@@ -9527,97 +11254,7 @@
   {
     "fixture": "medium-about",
     "arm": "first-20-percent",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 0.5,
-        "exercised": 2,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": null,
-        "exercised": 0,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 1,
-        "detail": "1 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": null,
-        "exercised": 1,
-        "detail": "1 text run(s) placed in source order; no DIRECTLY stamped node said twice"
-      }
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": null,
-      "recall": null,
-      "precision": null,
-      "outputChars": 0,
-      "regionChars": 0,
-      "exercised": 0,
-      "basis": "no articleRegion declared — nobody has written down what the article is here"
-    },
-    "failures": [
-      "kept excluded text: \"PAGE NOT FOUND\"",
-      "this page is not an article and the extractor did not refuse it — it returned 14 characters as though they were one"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": null
-      },
-      "regressions": [],
-      "articleChars": null,
-      "gistableChars": 14,
-      "articleRecall": null
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "medium-about",
@@ -9692,6 +11329,25 @@
         "detail": "12 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 10,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 12,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": null,
@@ -9712,7 +11368,9 @@
         "attribution": true,
         "sourceOrder": true
       },
-      "regressions": [],
+      "regressions": [
+        "exclusionPrecision"
+      ],
       "articleChars": null,
       "gistableChars": 221,
       "articleRecall": null
@@ -9722,98 +11380,7 @@
   {
     "fixture": "medium-about",
     "arm": "drop-every-short-block",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 0,
-        "exercised": 2,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": null,
-        "exercised": 0,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 4,
-        "detail": "4 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": true,
-        "exercised": 4,
-        "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
-      }
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": null,
-      "recall": null,
-      "precision": null,
-      "outputChars": 0,
-      "regionChars": 0,
-      "exercised": 0,
-      "basis": "no articleRegion declared — nobody has written down what the article is here"
-    },
-    "failures": [
-      "kept excluded text: \"PAGE NOT FOUND\"",
-      "kept excluded text: \"Out of nothing, something.\"",
-      "this page is not an article and the extractor did not refuse it — it returned 171 characters as though they were one"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": true
-      },
-      "regressions": [],
-      "articleChars": null,
-      "gistableChars": 170,
-      "articleRecall": null
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "medium-about",
@@ -9863,7 +11430,7 @@
       },
       "exclusionPrecision": {
         "name": "exclusionPrecision",
-        "value": 0,
+        "value": 1,
         "exercised": 2,
         "basis": "named needles only — says nothing about junk nobody named"
       },
@@ -9907,18 +11474,37 @@
     "gates": {
       "attribution": {
         "name": "attribution",
-        "passed": true,
-        "exercised": 3,
-        "detail": "3 output node(s) each say what their own source element said"
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
       },
       "sourceOrder": {
         "name": "sourceOrder",
-        "passed": true,
-        "exercised": 4,
-        "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
       }
     },
-    "assertionsPassed": false,
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
     "article": {
       "chars": null,
       "recall": null,
@@ -9928,20 +11514,16 @@
       "exercised": 0,
       "basis": "no articleRegion declared — nobody has written down what the article is here"
     },
-    "failures": [
-      "kept excluded text: \"Checking your browser before accessing\"",
-      "kept excluded text: \"Click here if you are not automatically redirected\"",
-      "this page is not an article and the extractor did not refuse it — it returned 130 characters as though they were one"
-    ],
+    "failures": [],
     "finding": {
-      "assertionsHeld": false,
+      "assertionsHeld": true,
       "gates": {
-        "attribution": true,
-        "sourceOrder": true
+        "attribution": null,
+        "sourceOrder": null
       },
       "regressions": [],
       "articleChars": null,
-      "gistableChars": 130,
+      "gistableChars": 0,
       "articleRecall": null
     },
     "exercised": true
@@ -10014,6 +11596,25 @@
         "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": null,
@@ -10035,7 +11636,9 @@
         "attribution": true,
         "sourceOrder": true
       },
-      "regressions": [],
+      "regressions": [
+        "exclusionPrecision"
+      ],
       "articleChars": null,
       "gistableChars": 128,
       "articleRecall": null
@@ -10120,6 +11723,25 @@
         "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 3,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 4,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": null,
@@ -10141,7 +11763,9 @@
         "attribution": true,
         "sourceOrder": true
       },
-      "regressions": [],
+      "regressions": [
+        "exclusionPrecision"
+      ],
       "articleChars": null,
       "gistableChars": 128,
       "articleRecall": null
@@ -10151,99 +11775,7 @@
   {
     "fixture": "pmc-article",
     "arm": "drop-every-short-block",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 0.5,
-        "exercised": 2,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": null,
-        "exercised": 0,
-        "basis": "no articleRegion declared — nobody has written down what the article is here"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": null,
-        "exercised": 0,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 2,
-        "detail": "2 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": false,
-        "exercised": 2,
-        "detail": "1 problem(s): \"Clickifyouarenotautomaticallyredirectedafter5seconds.\" could not be placed in the source at all — the order gate can say nothing about where it belongs, and attribution should have reported the same text as invented"
-      }
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": null,
-      "recall": null,
-      "precision": null,
-      "outputChars": 0,
-      "regionChars": 0,
-      "exercised": 0,
-      "basis": "no articleRegion declared — nobody has written down what the article is here"
-    },
-    "failures": [
-      "kept excluded text: \"Checking your browser before accessing\"",
-      "this page is not an article and the extractor did not refuse it — it returned 125 characters as though they were one"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": false
-      },
-      "regressions": [
-        "sourceOrder"
-      ],
-      "articleChars": null,
-      "gistableChars": 125,
-      "articleRecall": null
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "pmc-article",
@@ -10348,6 +11880,25 @@
         "detail": "88 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 61,
+        "descendant": 0,
+        "ancestor": 2,
+        "none": 0
+      },
+      "runs": {
+        "owner": 86,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 2
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 6871,
@@ -10445,6 +11996,25 @@
         "exercised": 284,
         "detail": "284 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 252,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 284,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -10553,6 +12123,25 @@
         "detail": "42 problem(s): \"Physics\" is out of order — a reordering: the only place source element s69 has it is behind character 10656, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 112,
+        "descendant": 0,
+        "ancestor": 2,
+        "none": 0
+      },
+      "runs": {
+        "owner": 95,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 42,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 2
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 6871,
@@ -10659,6 +12248,25 @@
         "detail": "240 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 208,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 240,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 7491,
@@ -10762,6 +12370,25 @@
         "detail": "84 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 58,
+        "descendant": 0,
+        "ancestor": 2,
+        "none": 0
+      },
+      "runs": {
+        "owner": 82,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 2
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 6864,
@@ -10863,6 +12490,25 @@
         "exercised": 4,
         "detail": "4 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 4
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 4,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -10976,6 +12622,25 @@
         "exercised": 51,
         "detail": "50 problem(s): \"Physicistsdiscoveredstrangesupersolids,constructednewkindsof\" is out of order — a reordering: the only place source element s484 has it is behind character 1089, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 51,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 50,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 51
     },
     "assertionsPassed": false,
     "article": {
@@ -11091,8 +12756,27 @@
         "name": "sourceOrder",
         "passed": false,
         "exercised": 95,
-        "detail": "11 problem(s): source element s736 says the same thing twice — a duplicate: \"Lest you suspect that dark matter is the of the 21st century\""
+        "detail": "11 problem(s): source element s732 says the same thing twice — a duplicate: \"Lest you suspect that dark matter is the of the 21st century\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 65,
+        "descendant": 0,
+        "ancestor": 2,
+        "none": 0
+      },
+      "runs": {
+        "owner": 86,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 2,
+        "behind": 7,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 2
     },
     "assertionsPassed": false,
     "article": {
@@ -11126,6 +12810,507 @@
       "articleRecall": 0.9160111985068657
     },
     "exercised": true
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "shipped",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 1,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
+      }
+    },
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "raw-body",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 13,
+        "detail": "13 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 17,
+        "detail": "17 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 13,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 17,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"You are seeing this because the administrator of this website has set up Anubis\"",
+      "kept excluded text: \"Anubis uses a Proof-of-Work scheme in the vein of Hashcash\"",
+      "this page is not an article and the extractor did not refuse it — it returned 1168 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 1167,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "first-20-percent",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "article-plus-rail",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 1,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 7,
+        "detail": "7 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 11,
+        "detail": "11 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 7,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 11,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 104,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "restore-everything",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 2,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 12,
+        "detail": "12 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": true,
+        "exercised": 16,
+        "detail": "16 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 12,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 16,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"You are seeing this because the administrator of this website has set up Anubis\"",
+      "kept excluded text: \"Anubis uses a Proof-of-Work scheme in the vein of Hashcash\"",
+      "this page is not an article and the extractor did not refuse it — it returned 1157 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": true
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 1157,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "drop-every-short-block",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "needle-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "region-padded-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "drop-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "repeat-one-generated-node",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "reverse-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "region-padding-only",
+    "exercised": false
+  },
+  {
+    "fixture": "hal-anubis",
+    "arm": "duplicate-paragraph",
+    "exercised": false
   },
   {
     "fixture": "negative-controls",
@@ -11194,6 +13379,25 @@
         "exercised": 51,
         "detail": "51 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 50,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 51,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": true,
     "article": {
@@ -11286,6 +13490,25 @@
         "exercised": 56,
         "detail": "56 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 55,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 56,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -11388,6 +13611,25 @@
         "exercised": 6,
         "detail": "6 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 6,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 6,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -11498,6 +13740,25 @@
         "detail": "3 problem(s): \"Home\" is out of order — a reordering: the only place source element s11 has it is behind character 3783, which the output has already passed"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 54,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 52,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 3,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 3713,
@@ -11597,6 +13858,25 @@
         "exercised": 26,
         "detail": "26 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 24,
+        "descendant": 1,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 25,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 1,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -11711,6 +13991,25 @@
         "detail": "30 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 30,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 30,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
     "assertionsPassed": false,
     "article": {
       "chars": 3649,
@@ -11810,6 +14109,25 @@
         "exercised": 10,
         "detail": "3 problem(s): \"21.0\" is out of order — a reordering: the only place the page has it is behind character 1510, which the output has already passed"
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 10
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 7,
+        "behind": 3,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": false,
     "article": {
@@ -11939,6 +14257,25 @@
         "exercised": 52,
         "detail": "2 problem(s): source element s19 says the same thing twice — a duplicate: \"The bus from Aberdeen takes an hour and forty minutes and ar\""
       }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 51,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 51,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 1,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
     },
     "assertionsPassed": true,
     "article": {

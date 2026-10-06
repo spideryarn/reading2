@@ -105,18 +105,20 @@ function freezeDeep<T>(value: T): T {
 export function seal(state: ChatState): ChatState {
   if (walked.has(state)) return state;
   freezeDeep(state.base);
-  /* The three collections are frozen through their *contents* here and
-     booby-trapped below: an operation and everything on it, a tombstone's
-     `{ by, final }`, and the strings in `unnamed`, which need nothing. */
+  /* Collection contents are frozen here and mutators booby-trapped below:
+     operations, tombstones, repair exclusions, and unnamed conversation ids. */
   freezeDeep(state.operations);
   freezeDeep(state.tombstones);
+  freezeDeep(state.repairDrops);
   const mutable = state as {
     operations: ChatState["operations"];
     tombstones: ChatState["tombstones"];
+    repairDrops: ChatState["repairDrops"];
     unnamed: ChatState["unnamed"];
   };
   mutable.operations = sealed(state.operations, "operations");
   mutable.tombstones = sealed(state.tombstones, "tombstones");
+  mutable.repairDrops = sealed(state.repairDrops, "repairDrops");
   mutable.unnamed = sealed(state.unnamed, "unnamed");
   walked.add(state);
   return Object.freeze(state);
@@ -135,6 +137,7 @@ export function spread(state: ChatState): unknown {
     ...state,
     operations: [...state.operations.entries()],
     tombstones: [...state.tombstones],
+    repairDrops: [...state.repairDrops],
     unnamed: [...state.unnamed],
   };
 }

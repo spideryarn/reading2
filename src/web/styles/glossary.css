@@ -509,6 +509,9 @@
    because it is a different KIND of thing from either of them: not the article,
    not the model's memory, but a thing that was checked on a particular day. */
 .gloss-look { margin: 0.55rem 0 0; }
+/* *Ask in chat*, beside Dig deeper (OriginChat.tsx; plan 261006d). The two
+   are inline, so the gap is a margin and survives a wrap onto a second line. */
+.gloss-ask-chat { margin-left: 0.35rem; }
 .gloss-look.on {
   padding: 0.45rem 0.5rem;
   border-radius: var(--radius);

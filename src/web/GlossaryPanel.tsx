@@ -88,6 +88,14 @@ import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
+import {
+  ASK_ENTRY_IN_CHAT,
+  AskInChatButton,
+  type GlossaryEntryChats,
+  OPEN_ENTRY_CHAT,
+  OriginChatMark,
+} from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
    in this file, CommentDialog and ChatPanel should converge on it "when somebody
    is next in those files" — the hover card (ProseHoverCard.tsx) made this the
@@ -212,8 +220,17 @@ export type GlossaryAccess =
       glossary: { entries: GlossaryEntry[] } | null;
       /** The ones the owner hid, for the *Hidden (n)* section and nothing else; absent is none. Plan 261002c § 2. */
       hidden?: readonly GlossaryEntry[];
+      /**
+       * **A chat about one entry**: what an entry's *Ask in chat* and its
+       * mark need (OriginChat.tsx § `ItemChats`; plan 261006d). On the owner's
+       * arm because a visitor has no chat: with `chats?: never` below, a
+       * visitor's panel cannot be handed one. Optional, so a panel drawn
+       * without it (most tests) has no button; that `Reader` passes it is
+       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       */
+      chats?: GlossaryEntryChats;
     }
-  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never; hidden?: never };
+  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never; hidden?: never; chats?: never };
 
 interface Props {
   access: GlossaryAccess;
@@ -595,6 +612,9 @@ export function GlossaryPanel({
                   lookFailed={
                     owner?.lookFailed?.id === entry.id ? owner.lookFailed.message : null
                   }
+                  /* The owner's alone: a visitor's entry draws neither the
+                     button nor the mark. */
+                  chats={access.kind === "owner" ? (access.chats ?? null) : null}
                   onSelect={() => {
                     // Pressing the selected term again clears it, which is
                     // what takes the underlines back out of the prose.
@@ -1240,6 +1260,7 @@ function Term({
   lookBusy,
   lookDraft,
   lookFailed,
+  chats,
   onSelect,
   onJump,
   onHide,
@@ -1289,6 +1310,8 @@ function Term({
   /** This term's lookup as it arrives, or what arrived before it broke. */
   lookDraft: string | null;
   lookFailed: string | null;
+  /** `null` for a visitor: no *Ask in chat*, and no mark. `Looked` draws both. */
+  chats: GlossaryEntryChats | null;
   onSelect(): void;
   onJump(id: BlockId): void;
   /**
@@ -1482,6 +1505,7 @@ function Term({
             unquoted={unquoted}
             draft={lookDraft}
             failed={lookFailed}
+            chats={chats}
           />
 
           {entry.aliases.length > 0 && (
@@ -1969,6 +1993,7 @@ export function Looked({
   unquoted,
   draft,
   failed,
+  chats = null,
 }: {
   entry: GlossaryEntry;
   look: ((id: string) => Promise<unknown>) | null;
@@ -1993,8 +2018,20 @@ export function Looked({
       `worthRetrying` in src/messages.ts § The two places that deliberately do
       not ask. */
   failed: string | null;
+  /**
+   * **A chat about this entry**: its *Ask in chat*, beside Dig deeper, and the
+   * mark that reopens a chat already started from it (plan 261006d, D5).
+   * `null` or absent for a visitor, who gets neither.
+   */
+  chats?: GlossaryEntryChats | null;
 }) {
   const lookup = entry.lookup;
+  /* The chat started from this entry, if there is one: matched by the entry's
+     id alone, so it survives a regeneration that rewords the name. The name
+     in the origin built here is not compared (`sameOrigin`). */
+  const chat = chats
+    ? threadForOrigin(chats.summaries, { mode: "glossary", itemId: entry.id, quote: entry.name })
+    : undefined;
 
   /* **Nothing at all for a visitor**, rather than a disabled button. The
      marked-not-hidden rule is about controls a reader would otherwise go
@@ -2047,6 +2084,21 @@ export function Looked({
           {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
           {looking ? "Digging deeper…" : lookup ? "Dig deeper again" : "Dig deeper"}
         </button>
+        {/* **Not disabled for a term the article never quotes**, unlike its
+            neighbour: Dig deeper needs a passage to anchor to, a chat does
+            not. It spends nothing until Send, so it does not wait for a
+            running lookup either. It stays once a chat exists: a second one
+            can be started. */}
+        {chats && (
+          <AskInChatButton
+            label={ASK_ENTRY_IN_CHAT}
+            className="gloss-btn gloss-ask-chat"
+            onAsk={() => chats.onAsk(entry)}
+          />
+        )}
+        {/* The way back to the chat started from this entry, on a line of its
+            own under the buttons. */}
+        {chats && chat && <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />}
         {/* The wait needs saying, not just spinning through. This call sends the
             whole article and may run a web search on top, so it can sit for the
             better part of a minute — long enough that a bare spinner reads as

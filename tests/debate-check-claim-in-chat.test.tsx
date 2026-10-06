@@ -464,7 +464,7 @@ describe("checking a Debate claim in chat", () => {
     await until(() => param("mode") === "debate" && claims().length === 2, "Debate");
     expect(marks()).toHaveLength(0);
     await act(async () => releaseTurn?.());
-    await until(() => marks()[0]?.querySelector(".dbt-claim-chat-line")?.textContent === "A late answer.",
+    await until(() => marks()[0]?.querySelector(".origin-chat-line")?.textContent === "A late answer.",
       "the late answer on the claim");
   });
 
@@ -511,8 +511,8 @@ describe("checking a Debate claim in chat", () => {
     expect(summaryGets().length, "the summaries were asked for again on leaving Chat").toBeGreaterThan(fetchedAtLoad);
     const mark = marks()[0] as HTMLButtonElement;
     expect(claims()[0]?.contains(mark), "on the claim that was checked").toBe(true);
-    expect(mark.querySelector(".dbt-claim-chat-count")?.textContent).toBe("1");
-    expect(mark.querySelector(".dbt-claim-chat-line")?.textContent).toBe("It did not replicate.");
+    expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
+    expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("It did not replicate.");
 
     /* 4. The mark opens the conversation beside Debate. */
     await act(async () => mark.click());
@@ -531,10 +531,10 @@ describe("checking a Debate claim in chat", () => {
     const followUp = chatPosts()[1]?.body as { threadId: string; origin?: unknown };
     expect(followUp.threadId).toBe(fresh);
     await until(
-      () => marks()[0]?.querySelector(".dbt-claim-chat-line")?.textContent === "One lab still defends it.",
+      () => marks()[0]?.querySelector(".origin-chat-line")?.textContent === "One lab still defends it.",
       "the mark's line to follow the conversation",
     );
-    expect(marks()[0]?.querySelector(".dbt-claim-chat-count")?.textContent).toBe("2");
+    expect(marks()[0]?.querySelector(".origin-chat-count")?.textContent).toBe("2");
 
     /* 6. Chat's list shows where it came from. */
     await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());

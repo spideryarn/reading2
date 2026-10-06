@@ -341,8 +341,9 @@ No schema. Answers `spya-hyfqkq`.
   draws the same mark. Answers 261004a's `[Q-way-back]` with its option 1, by the words and not a
   hash. The mark goes when *Write it again* changes the paragraph.
 - **Glossary and Citations: an origin chat from an entry.** `{ mode: "glossary", itemId }` and
-  `{ mode: "citations", itemId }`, durable, so the mark survives regeneration. What happens to
-  their Dig deeper is `[Q-dig-deeper]`.
+  `{ mode: "citations", itemId }`, durable, so the mark survives regeneration. **Built on 2026-10-06**
+  as *Ask in chat* beside Dig deeper, which stays:
+  [261006d](261006d-glossary-and-citations-ask-in-chat-with-origin.md).
 - **A claim in your own words**, from a box in Debate › Claims. Built on 2026-10-05 as the box at
   the top of Debate, *Look at the debate from an angle*, which takes any angle and not only a
   claim: [261005k](261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md),
@@ -417,7 +418,7 @@ them. You said this kind of digging should be a chat.
 **What would decide it.** Whether the structured result (especially the citation check) is worth
 keeping as its own thing. A lets you find that out before anything is removed.
 
-**Decided: add an "Ask in chat" button beside Dig deeper, first.** Greg, 2026-10-06: "let's start with adding the "Ask in chat" button". Queued.
+**Decided: add an "Ask in chat" button beside Dig deeper, first.** Greg, 2026-10-06: "let's start with adding the "Ask in chat" button". Built: [261006d](261006d-glossary-and-citations-ask-in-chat-with-origin.md).
 
 ### [Q-thread-summary] Should the mode show a written summary of the chat, or its latest line?
 

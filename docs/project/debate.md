@@ -119,8 +119,25 @@ How it works, and what to know before changing it:
   first Send that fails. **Live is not offered on that conversation until then**: a spoken first
   turn creates the thread by another route, which would leave it with no origin for good.
 
-Not built yet, and in the plan: the same from a Summary paragraph, a glossary entry and a cited
-work. A claim typed in your own words is the angle box, next. Chat's list now shows Learn's
+**A glossary entry and a cited work are callers too, since 2026-10-06**
+([glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
+[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work)). What they
+changed here:
+
+- **`ThreadOrigin` has two more shapes**, `{ mode: "glossary" | "citations", itemId, quote }`.
+  Those have a durable id, so they are matched by the mode and the id alone and the name is only a
+  snapshot. A claim is still matched by its block and its exact words.
+- **The database says what each is made of**: `chat_threads_origin_item` requires the id and the
+  name and forbids a block and a lens on those two modes, as `chat_threads_origin_debate` does for
+  a claim and an angle. `summary` is still reserved, with no shape.
+- **Only a claim's block is checked against the article.** The route never looks an item's id up.
+- **The mark is one component**, `OriginChatMark` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx), with its own stylesheet
+  ([`origin-chat.css`](../../src/web/styles/origin-chat.css)). Debate's sheet sets only where the
+  mark sits on a claim's heading.
+
+Not built yet, and in the plan: the same from a Summary paragraph. A claim typed in your own words
+is the angle box, next. Chat's list now shows Learn's
 conversations, with a filter
 ([chat-tools.md](chat-tools.md#chats-list-shows-every-conversation-about-the-article)).
 

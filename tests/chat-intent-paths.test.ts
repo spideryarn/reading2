@@ -392,9 +392,10 @@ describe("a retry, whose row the server has already named", () => {
     // Nothing yet: the attempt has no name, so there is nothing to stop.
     expect(posts).toHaveLength(0);
 
-    // That attempt dies before it is ever named.
+    // That attempt dies before it is ever named, and the answer it had blanked
+    // is back: nothing was written, so nothing is taken away (261006d).
     await settle();
-    expect(threadIn(stored.id)?.messages.at(-1)).toMatchObject({ status: "error" });
+    expect(threadIn(stored.id)?.messages.at(-1)).toMatchObject({ text: "because.", status: "done" });
 
     // The reader tries again, and this one starts properly.
     act(() => {

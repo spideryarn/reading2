@@ -55,6 +55,11 @@ export const SOURCE_DEBATE_CLAIM = "Started from a claim in Debate";
 /** And for one started from an angle the reader typed into Debate's box (plan 261005k, A). */
 export const SOURCE_DEBATE_LENS = "Started from an angle in Debate";
 
+/** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
+export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
+/** And for one started from a cited work's *Ask in chat*. */
+export const SOURCE_CITED_WORK = "Started from a cited work";
+
 /** …and for a chat anchored to a block or to words in one: the "?" and a comment's question. */
 export const SOURCE_PASSAGE = "About a passage";
 
@@ -89,8 +94,13 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         return isLensOrigin(origin)
           ? { from: "debate", mode: "debate", label: SOURCE_DEBATE_LENS, quote: origin.lens, voice: "reader" }
           : { from: "debate", mode: "debate", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
+      /* The quote is the entry's name as it was when the chat started. */
+      case "glossary":
+        return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
+      case "citations":
+        return { from: "citations", mode: "citations", label: SOURCE_CITED_WORK, quote: origin.quote };
       default:
-        return origin.mode satisfies never;
+        return origin satisfies never;
     }
   }
   switch (kind) {
@@ -133,6 +143,8 @@ export function chatFrom(thread: SourcedThread): ChatFrom {
 export const CHAT_FROM_LABEL: Readonly<Record<ChatFrom, string>> = {
   chats: "Chats",
   debate: MODE_LABEL.debate,
+  glossary: MODE_LABEL.glossary,
+  citations: MODE_LABEL.citations,
   learn: MODE_LABEL.learn,
   passage: SOURCE_PASSAGE,
 };
