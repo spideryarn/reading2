@@ -1,9 +1,26 @@
 # Billing
 
-Parent: [security-map.md](security-map.md), beside [auth.md](auth.md) and [admin.md](admin.md) —
+Up: [security-map.md](security-map.md), beside [auth.md](auth.md) and [admin.md](admin.md) —
 the same family of questions. Who are you, what may you do, and what stops somebody who is not
 asking politely. The build is
 [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md).
+
+## In this doc
+
+- [§ What we sell, and the one promise](#what-we-sell-and-the-one-promise) — the tiers, prices and allowances
+- [§ Adding a tier or a currency](#adding-a-tier-or-a-currency) — tiers are rows; the steps to add one
+- [§ The first live sale](#the-first-live-sale-and-the-four-things-it-measured) — what a real purchase established (history)
+- [§ What a reader sees](#what-a-reader-sees) — the pricing page, the allowance box, the refusal copy
+- [§ We never touch a card](#we-never-touch-a-card) — hosted Checkout and Portal, PCI scope
+- [§ The quota, and the one thing it has to survive](#the-quota-and-the-one-thing-it-has-to-survive) — slots, admission locking, settlement, vouchers, High-powered AI
+- [§ Billing is a Postgres feature](#billing-is-a-postgres-feature) — why there is no filesystem path
+- [§ Test and live must never cross](#test-and-live-must-never-cross) — the three mode guards
+- [§ Setting it up](#setting-it-up) — `stripe:setup`, keys, dashboard steps
+- [§ The webhook](#the-webhook) — signature checking, idempotency, what grants entitlement
+- [§ The three billing routes](#the-three-billing-routes) — checkout, portal, confirm
+- [§ What `/admin/users` shows](#what-adminusers-shows) — plan and ingest columns
+- [§ Not built yet](#not-built-yet) — comps and other open items
+- [§ Where the code is](#where-the-code-is) — file-by-file table
 
 **Status: live, and it has taken real money.** Tiers are database rows as of
 2026-09-02; a job's ending settles its slot at all seven places a job can end and adding an article

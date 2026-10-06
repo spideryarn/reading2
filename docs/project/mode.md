@@ -1,5 +1,21 @@
 # Adding a mode
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Where else to look](#where-else-to-look) — visitors, auto-run on import, browser checks: what this list leaves to others
+- [§ Adjacent shapes](#adjacent-shapes-that-reuse-part-of-the-machinery) — a pipeline step with no band, or a per-reader setting
+- [§ The client](#the-client) — the total tables the compiler asks for, then the residue: band, surface, (i), voices, cacheable
+- [§ Patterns requested for existing modes](#patterns-requested-for-existing-modes) — marks in the prose, thresholds, Marginalia candidacy
+- [§ The card on the button](#the-card-on-the-button) — writing `description` and `how`
+- [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) — the three edits, and why nothing counts modes
+- [§ The artefact](#the-artefact-if-the-mode-shows-one) — store, step, route, export, public read, prompt version
+- [§ The words](#the-words-the-mode-puts-in-front-of-the-reader) — plain words, paperwork, JSON schema
+- [§ Its cost](#its-cost) — route table, `JOB_DISPOSITION`, cache group
+- [§ Retiring a mode](#retiring-a-mode) — `RETIRED_MODES`, aliases, the tests that list the rest
+- [§ Before you call it finished](#before-you-call-it-finished) — what a new mode turns red, and what only the suite finds
+
 The one checklist for adding a mode to the reader — the client half and, if the mode shows a
 generated artefact, the pipeline-and-store half. It was two sections until 2026-09-03,
 [web-client.md § Adding a mode](web-client.md#adding-a-mode) and
@@ -572,7 +588,7 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 |---|---|
 | [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
 | [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, in a run (`group`) — whether it is behind the switch is `MODE_CATALOG`'s `experimental` now |
 | [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
 | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `modeBand()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
@@ -613,7 +629,3 @@ stop.
 `src/web/help/`: the mode's own section (when to use it, how to read it) and its row in *Which mode
 when*. Write them for a reader, not a developer — [help-page.md](help-page.md). Retiring a mode keeps
 its `#mode-…` link working on its own, through `RETIRED_MODES`.
-
----
-
-Up: [reading-view-overview.md](reading-view-overview.md)

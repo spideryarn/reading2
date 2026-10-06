@@ -1,5 +1,7 @@
 # Testing it in a browser, with Playwright
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 [browser-testing.md](browser-testing.md) is **what to look at** — the URLs, the widths, the checks
 worth running, and the many ways the eye lies to you. Almost all of it is true whatever is driving
 the page. But its recipes are written in the Claude-in-Chrome extension's tools, because that is what
@@ -347,7 +349,3 @@ in [browser-testing.md](browser-testing.md) have still not been run on this mech
 
 Also untested: headed Chrome over noVNC, where the visibility findings above may well go back to
 behaving like the laptop, since then there is a real window again.
-
----
-
-Up: [code-quality-overview.md](code-quality-overview.md)

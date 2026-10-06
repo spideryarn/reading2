@@ -1,5 +1,7 @@
 # Cross-references: the article linked to itself
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 A phrase in the prose that sums up something the piece shows in detail elsewhere is underlined as a
 link. Two examples:
 
@@ -109,6 +111,12 @@ defence edits:
    article may carry, so an article cannot forge `xref` or `data-block-*` markup
    ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md)).
 2. **Visitors see the links** ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
+
+Tests: [`crossrefs.test.ts`](../../tests/crossrefs.test.ts) (the validation rules),
+[`crossrefs-revalidate.test.tsx`](../../tests/crossrefs-revalidate.test.tsx),
+[`xref-marks.test.ts`](../../tests/xref-marks.test.ts), [`xref-prose.test.tsx`](../../tests/xref-prose.test.tsx).
+The card itself is [tooltips.md](tooltips.md)'s block-link card; the fetch plumbing is `useCrossrefs`
+in [`src/web/useCrossrefs.ts`](../../src/web/useCrossrefs.ts).
 
 ## Deferred
 

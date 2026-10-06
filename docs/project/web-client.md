@@ -1,7 +1,24 @@
 # The web client (stage 6)
 
-The reading view: the article rendered as a table, one row per block, columns running coarse to
-verbatim. Greg's framing, 2026-08-24:
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Where the code is](#where-the-code-is) — which file owns what in `src/web/`, and which older file not to imitate
+- [§ Shared code (client)](#shared-code-client) — before writing a helper: API calls, session, streams, reloads, tooltips, tables
+- [§ The middle is a slot](#the-middle-is-a-slot) — why a mode is a band between spine and prose; `inMode` vs `bandOpen`
+- [§ Adding a mode](#adding-a-mode) — a pointer to mode.md
+- [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) — `FeatureBoundary`, `ModeBoundary`, what they cannot catch
+- [§ Tailwind and shadcn components](#tailwind-and-shadcn-components) — what Tailwind may touch, the four guards, the focus ring, never delete a semantic class
+- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes
+- [§ Reading an API response](#reading-an-api-response) — `readJson`/`fetchOk`, why a body never becomes a message, "none yet" as `200 null`
+- [§ Empty is not the same as not asked yet](#empty-is-not-the-same-as-not-asked-yet) — loading, failed and empty states; reload that must keep the list; the waiting spinner
+- [§ Three more ways client state goes wrong](#client-state-traps) — out-of-order replies, `[]`-dep effects, flags nobody clears
+- [§ A store React subscribes to tells React once per task](#a-store-react-subscribes-to-tells-react-once-per-task) — error #185 on a streamed burst
+- [§ The constraints it works under](#the-constraints-it-works-under) — block ids not offsets, one payload, text not HTML, the sticky-bar height
+
+The reading view: the article rendered as a table, one row per block, with the prose as its one
+column since 2026-09-29 (the gist columns, coarse to verbatim, are history). Greg's framing, 2026-08-24:
 
 > up-down is chronology in the document and left-right is granularity, with a column for each level
 > of the table of contents
@@ -19,7 +36,7 @@ Why the feature exists and what a gist may and may not be:
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, and nothing else: route choice, the session, and the services that must outlive whichever page is mounted (`useJobSession`, above every early return). 5,920 lines until 2026-09-06 — [260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md) took the modes, the reading view and the article out of it, and [`tests/reader-import-direction.test.ts`](../../tests/reader-import-direction.test.ts) is what stops them coming back |
 | [`src/web/article/`](../../src/web/article/) | **who may read this article, and on what footing.** `access.ts` is the two-step — the owned route, then the public one — and the one doorway `sanitizeArticle` stands in; `ArticlePage.tsx` fetches `/api/article/<slug>` **once for all of an article's views** and then branches into `OwnedArticle`/`OwnedReader` or `VisitorArticle`. Those boundaries are the capability seam and not a tidy-up: a hook cannot be skipped conditionally, so *a visitor does not do this* has to be a component that does not exist — [`reader-capability.ts`](../../src/web/reader-capability.ts) |
-| [`src/web/reader/`](../../src/web/reader/) | **the reading view.** `Reader.tsx` composes the prose, the spine, the granularity zoom, the dock and the band the modes take turns in — one component for the owner and for a visitor, differing by the `capability` prop. Beside it, `useReadingPosition.ts` (`?at=` both ways) and `measure.ts` (the window's usable width and the root font size, both state because both move while the page is open), and `passages.ts` — **which of the five passage slots the prose, the ring and the rail are drawn from**, one function total over `Mode` so a new mode cannot silently inherit the last one's marks ([mode.md](mode.md)) |
+| [`src/web/reader/`](../../src/web/reader/) | **the reading view.** `Reader.tsx` composes the prose, the spine, the dock and the band the modes take turns in — one component for the owner and for a visitor, differing by the `capability` prop. Beside it, `useReadingPosition.ts` (`?at=` both ways) and `measure.ts` (the window's usable width and the root font size, both state because both move while the page is open), and `passages.ts` — **which of the five passage slots the prose, the ring and the rail are drawn from**, one function total over `Mode` so a new mode cannot silently inherit the last one's marks ([mode.md](mode.md)) |
 | [`src/web/passage-lifecycle.ts`](../../src/web/passage-lifecycle.ts) | the other half of that: **the three rules every band that marks passages follows** — publish before paint, drop an open key that names nothing, and take the marks with you on the way out. Six producers held six copies until 2026-09-06, and the copies disagreed about the third; the clear is a *layout* cleanup, because two bands share Referee's slot and a passive one ran after the incoming band had already published — [260906d](../postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md) |
 | [`src/web/AppBoundary.tsx`](../../src/web/AppBoundary.tsx) | the last thing between a throw during render and a blank white page: `main.tsx` wraps the whole app in it. Hand-written rather than Sentry's, because reporting is optional and the fallback is not; it reports through `captureClientFailure` and `recordLog` and shows the reader `[render]` and no `error.message` — [260826p-error-boundary.md](../plans/260826p-error-boundary.md) |
 | [`src/web/FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) | **the smaller one**, around one mode's controller and panel, so a broken mode leaves the article readable — [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) |
@@ -29,7 +46,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md). **Any change to its sections or their controls keeps its search current**, because Greg asked (`spya-nkjpte`, 2026-10-02): *"any time we update the Metadata page, we keep that search and ToC up-to-date."* The contents list (ToC) needs nothing: it reads the page's `<Section>`s ([`PageSection.tsx`](../../src/web/PageSection.tsx), shared with `/profile` since 2026-10-03). The search needs words: every `<Section>` must carry `keywords` (a type error without them), written as the words a reader would *type* — *regenerate*, *get rid of* — not the ones the section prints; a new kind of word that means the same everywhere on the page goes in [`page-search.ts`](../../src/web/page-search.ts) § `METADATA_SYNONYMS`; and a new control gets a phrasing in [`tests/metadata-contents-reveal.test.tsx`](../../tests/metadata-contents-reveal.test.tsx) § the words a reader brings. A new thing to *do* there may want an alias on the command bar's Metadata row too (`CommandBar.tsx` § `articleRows`) — [261002c](../plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md) |
 | [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `TweetsPanel`, the thread's band — Summary's Thread view since 2026-10-03 ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); a mode before that, and a page at `/read/<slug>/tweets` until 2026-09-29 — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)): the article as a numbered thread, each post linking to its passages, with the line that says the thread is out of date; the read and the job live in [`useTweets.ts`](../../src/web/useTweets.ts) — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles — [library.md](library.md) |
-| [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) + [`useJobs.ts`](../../src/web/useJobs.ts) | paste a URL, watch the five stages tick over — [ingest-queue.md](ingest-queue.md). The poll is deliberate; `jobEngine.ts`'s header says why it is not server-sent events. `useJobs` has two ways in: `add(url)` for an ingest, `run({slug, steps})` for a named step on an article already on the shelf — the thread page is the only caller of the second |
+| [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) + [`useJobs.ts`](../../src/web/useJobs.ts) | paste a URL, watch the five stages tick over — [ingest-queue.md](ingest-queue.md). The poll is deliberate; `jobEngine.ts`'s header says why it is not server-sent events. `useJobs` has two ways in: `add(url)` for an ingest, `run(stepRunRequest(slug, step, …))` for a named step on an article already on the shelf — called by [`useStepJob.ts`](../../src/web/useStepJob.ts) (every mode's job) and by the command bar's *Run again* rows |
 | [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | **the one thing here that is not a component and not view state**: a module-scope service, one per tab, that polls the job list and walks each job through its steps. On Vercel the browser is the worker, and `App()` is a chain of early returns — so while this lived in `useJobs`, whether an import kept running depended on whether the route you opened happened to mount an unrelated feature hook. `useJobSession` (in `useJobs.ts`) starts and stops it on `user.id` and resumes it on a fresh access token; `useJobs` is a `useSyncExternalStore` subscriber over it. [ingest-queue.md § The browser is the worker](ingest-queue.md#the-browser-is-the-worker) |
 | [`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts) + [`useUpload.ts`](../../src/web/useUpload.ts) | **the second one**, and it exists for the same reason: getting a PDF from the reader's disk into an article — hash, grant, PUT, `POST /api/jobs` — takes minutes, and the reader is meant to walk away from it. Held in a mount, it died the moment they did. One transfer at a time, bound to `user.id` in the same `useJobSession`, every reply fenced so a PUT landing after a sign-out or a Stop writes nothing. It reports its queue POST through `jobEngine.epoch()` / `actionSucceeded` rather than waking the poller itself. [ingest-queue.md § Add commits, and does not wait](ingest-queue.md#add-commits-and-does-not-wait) |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
@@ -62,7 +79,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
-| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § plain, centred) |
+| [`src/web/layout.ts`](../../src/web/layout.ts) | what fits and how wide: the prose alone (`fitView`) or beside a mode band (`fitMode`) — it once fitted the gist columns too, which went on 2026-09-29, and [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) keeps that history. Since 2026-08-25 it says how wide the **mode band** is, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
@@ -216,8 +233,7 @@ no band is open.
 ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)).
 So *a mode is open* and *a band is open* are two questions now, named `inMode` and `bandOpen` in
 [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx). Reading either one as the other is the
-mistake `proseVisible`
-below already exists because of.
+mistake `proseVisible` existed because of, until it went with Hierarchy mode.
 
 "Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
 still true. It is not a promise the reader cannot put the rail away themselves: `?spine=0` does
@@ -225,8 +241,8 @@ exactly that, in every mode. There was a `Spine` pill in the controls bar until 
 was the one granularity-bar control that stayed on screen in a mode; now the rail is simply on
 unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose has no off switch at all any more: `?text=0`
-hid it in the (now removed) hierarchy mode and nowhere else — which is what `proseVisible` in
-[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice — and since 2026-09-05
+hid it in the (now removed) hierarchy mode and nowhere else — which `proseVisible` in
+[`layout.ts`](../../src/web/layout.ts) said once rather than twice, until it was deleted with that mode — and since 2026-09-05
 that address is rewritten on arrival — to `?mode=structure` since 2026-09-10, `?mode=outline` before — because the pill that put the prose back
 went with the controls bar ([url-state.md](url-state.md#the-parameters)).
 
@@ -290,8 +306,9 @@ Read that as **adopting shadcn components**, not switching the reading view to s
 the full accounting are [260825a-shadcn-migration.md](../plans/260825a-shadcn-migration.md); this section is
 what actually landed and what a future reader would otherwise have to reverse-engineer.
 
-**What shadcn now stands behind:** the granularity pills in
-[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), a
+**What shadcn stands behind:** the granularity pills (they left
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) with Hierarchy mode on 2026-09-29; `Toggle` and
+`PILL` are now only drawn on [`/design`](../../src/web/DesignPage.tsx)), a
 `Button` waiting for the comment dialog, and — since 2026-08-26 — **every "run this job" button in
 the app**, via [`JobProgress.tsx`](../../src/web/JobProgress.tsx).
 
@@ -379,16 +396,18 @@ keys from the reader the moment focus lands inside it. Check before you reach fo
 
 ### Never delete a semantic class name
 
-Seven files read the DOM by selector — `.controls`, `thead th[data-col]`, `tr[data-block]`,
+Several files read the DOM by selector — `.controls`, `thead th[data-nav-depth]`, `tr[data-block]`,
 `td.text .prose`, `[data-nav-depth]`, `mark.cmt[data-comment]`. If `.controls` ever becomes a
 Tailwind-styled flex row, keep `className="controls tw:flex …"`. Losing `.controls` makes
 `stickyOffset()` fall back to the safe-area inset alone, and then every deep link and arrow jump
 lands *under* the sticky bar while `scrollY` confirms the scroll happened.
 
-`thead th[data-col]` is the sharper case, because the row it reads is **invisible**: the table head
-has had no height since 2026-09-05 and exists for the fisheye panels' geometry and for a screen
-reader ([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)). A `display: none`
-on it renders identically and empties every panel.
+`thead th` is the sharper case, because the row it reads is **invisible**: the table head has had
+no height since 2026-09-05 and now exists only for a screen reader's column header and as the
+arrow keys' prose-column target (`data-nav-depth`, [`TableView.tsx`](../../src/web/TableView.tsx)); it also fed
+the fisheye panels' geometry until those went on 2026-09-29
+([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)). A `display: none`
+on it renders identically and silently drops the column header.
 
 ### How the migration finished
 
@@ -869,8 +888,8 @@ can set one and forget the other — which is how the four copies drifted in the
 first place. `tests/refused-job-reason-survives.test.tsx` drives the real
 sequence, polls and all.
 
-All four surfaces are on it: `useGlossary`, `useIdeas`, `useSummaries` and
-[`Tweets.tsx`](../../src/web/Tweets.tsx). The thread page came last, a day after
+The four surfaces then were `useGlossary`, `useIdeas`, `useSummaries` (deleted 2026-08-31) and
+[`Tweets.tsx`](../../src/web/Tweets.tsx); every mode's job now goes through `useStepJob`. The thread page came last, a day after
 the others, and was the one whose copy was **inline in a component** rather than
 in a hook — so `jscpd` never saw it, and it drifted furthest. For that day it
 went on reading `queue.error` at render, because the fix lived in the hook and
@@ -1022,12 +1041,12 @@ tripped it.
   `scroll.ts` that moves the page marks the window it owns, and the bar watcher sits it out — a
   destination is computed once, so chrome that answered to our own scrolling would land every jump
   44px out. [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
-- **On a phone the horizontal axis is a switch, not a scroll.** Below 732px `fitView` offers no gist
-  columns at all and the prose column *is* the window; a mode band stops taking horizontal room and
-  covers the article instead. Both are the same rule — the view would otherwise promise more columns
-  than the window has and cut every line of prose mid-word. What a phone loses, and the one thing
+- **On a phone the horizontal axis is a switch, not a scroll.** The prose column *is* the window,
+  and a mode band stops taking horizontal room and covers the article instead (`fitMode`'s cover
+  case in [`layout.ts`](../../src/web/layout.ts)) — the view would otherwise cut every line of prose
+  mid-word. (Gist columns followed the same rule until they were removed on 2026-09-29.) What a phone loses, and the one thing
   the spine cannot make up for on touch, is in
   [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
-- **Never substitute generated text for prose silently.** The verbatim column is the author's words;
-  a gist stands in for text only where the reader chose that level. See
+- **Never substitute generated text for prose silently.** The prose column is the author's words,
+  and no band replaces it; generated text sits beside it, labelled. See
   [vision.md](vision.md#principles) — "no hidden reformulation".

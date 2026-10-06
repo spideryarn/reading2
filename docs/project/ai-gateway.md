@@ -2,6 +2,27 @@
 
 Up: [architecture.md](architecture.md)
 
+## In this doc
+
+- [§ What it replaced](#what-it-replaced) — the two-vendor world before OpenRouter (history)
+- [§ One gateway, five wires](#one-gateway-five-wires) — adding a provider or wire; what `provider` means
+- [§ What the Skin gives us](#what-the-skin-gives-us-that-neither-half-had-alone) — why Messages-over-OpenRouter
+- [§ The four things that fail silently](#the-four-things-that-fail-silently) — when a call looks fine and is not
+- [§ What it cost](#what-it-cost) — the three money pockets, credits versus BYOK
+- [§ What an article costs to arrive](#what-an-article-costs) — the per-article figure
+- [§ Two spellings of one model](#two-spellings-of-one-model-and-why-both-survive) — `CAPABLE_MODEL` and friends
+- [§ What every call is written down as](#what-every-call-is-written-down-as) — the `ai_calls` row, its columns, the timing columns
+  - [§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong) — before summing any duration
+  - [§ A transport blip is retried](#transport-retry) — why a call appears as several rows
+  - [§ How a stream ends](#stream-end) — aborted, truncated, finished
+- [§ The three calls allowed round the outside](#the-three-calls-allowed-round-the-outside-and-the-test-that-keeps-them-to-three) — what bypasses the gateway
+- [§ The exception that arrived](#the-exception-that-arrived-and-what-it-costs-the-rule) — OpenAI realtime for live conversation
+- [§ What stops a reader spending our money](#what-stops-a-reader-spending-our-money-and-what-does-not) — caps and abuse
+- [§ A proposed second exception](#a-proposed-second-exception-calls-paid-by-the-readers-chatgpt-plan) — not built
+- [§ The box's key has a monthly limit](#the-boxs-key-has-a-monthly-limit-and-it-runs-out) — when local calls start failing
+- [§ The one thing still open](#the-one-thing-still-open) — the refusals contradiction
+- [§ See also](#see-also)
+
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
 *recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation, quick search and
 the PDF reader alike.
@@ -484,6 +505,16 @@ Since 2026-08-28 a finished call is not only reported, it is **kept**: one row i
 awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) reads it
 back for `npm run cost`. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
+
+**The table is `aiCalls` in [`src/db/schema.ts`](../../src/db/schema.ts)** (`spideryarn.ai_calls`).
+**What it records about time is three columns and nothing finer:** `started_at` and `finished_at`
+(the whole call) and `duration_ms` (the whole call, nullable only on a realtime row). There is no
+first-token or time-to-first-byte column anywhere in the schema, so a latency-to-first-token figure
+is new data to capture, not a fold of what is stored; a new column is a migration
+([database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) says
+how one is named and generated, and [§ Step two: apply the migrations](database.md#step-two-apply-the-migrations)
+how it is applied). How not to add `duration_ms` up is
+[§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong).
 
 ### `upstream` — the endpoint OpenRouter selected, not the frame's label
 

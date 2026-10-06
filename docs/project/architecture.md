@@ -35,7 +35,8 @@ then where the data lives.
 - **[fetching.md](fetching.md)** — stage 1: a URL fails to fetch, or fetches something that is not
   what it looks like, or you are changing what we ask other people's servers for.
 - **[content-extraction.md](content-extraction.md)** — stage 2 for a web page: Readability dropped
-  or kept the wrong part of an article. (A PDF is the other extractor, in
+  or kept the wrong part of an article, or a page is refused (no article, too little text, or a
+  bot-check page — and how to add a bot-check provider). (A PDF is the other extractor, in
   [260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).)
 - **[structure-step.md](structure-step.md)** — stage 4: the tree, its gists and the paragraph labels, and why
   labels are a separate step that a plain add does not run.
@@ -56,8 +57,9 @@ then where the data lives.
 - **[prompting-guide.md](prompting-guide.md)** — writing or changing a prompt that puts words in
   front of a reader: the shared plain-words rule, and how to measure the change.
 - **[email.md](email.md)** — anything that sends mail, or auth mail that did not arrive.
-- **[database.md](database.md)** — the operating manual for Postgres: migrations, which database a
-  command really reaches, checkpoints, and the traps that have each cost a day.
+- **[database.md](database.md)** — the operating manual for Postgres: how a new migration is named
+  and applied ([five lines](database.md#a-new-migration-in-five-lines)), which database a command
+  really reaches, checkpoints, and the traps that have each cost a day.
 - **[sql.md](sql.md)** — adding a column or a table: the shape we want the schema to have.
 - **[export.md](export.md)** — a reader's data leaving: the per-article zip, and the `db:export`
   rollback that shares its queries.

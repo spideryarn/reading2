@@ -2,6 +2,22 @@
 
 Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 
+## In this doc
+
+- [§ What logging is for here](#what-logging-is-for-here) — is this output a log or a CLI display? (the rule is the destination)
+- [§ The decision: Pino](#the-decision-pino) — why Pino, and what a production-only logger costs
+- [§ Three ways this differs from theirs](#three-ways-this-differs-from-theirs-deliberately) — no transports, `sync: true`, the `redact` list
+- [§ Levels](#levels-and-what-each-one-means-here) — which level to pick for a new line
+- [§ What gets logged, and where](#what-gets-logged-and-where) — adding a line; the two alarm counts, step/request cost, the failure line's fields
+- [§ What never gets logged](#what-never-gets-logged) — secrets and prose; the long run of ways an error object leaks, redaction tests, URLs that give things away
+- [§ Where to look when production breaks](#where-to-look-when-production-breaks) — a signpost to debugging.md and the Vercel and Sentry docs
+- [§ Vercel](#vercel) — stdout on Vercel, Fluid Compute, edge functions; the two traps
+- [§ The browser](#the-browser-nothing-yet) — what `src/web/` logs (no Pino) and the ring buffer
+- [§ Not built](#not-built) — no log drain, metrics dashboard or correlation id; Sentry is the only tracker
+- [§ What we took from theirs](#what-we-took-from-theirs-and-what-we-left) — the original version's logging, and the half-migration (history)
+- [§ The ways this fails silently](#the-ways-this-fails-silently) — a numbered checklist of how a log line can lie; read before trusting one
+- [§ Related docs](#related-docs) — neighbours
+
 ```bash
 npm run dev            # JSON to stdout
 npm run dev:pretty     # the same, piped through pino-pretty for a human

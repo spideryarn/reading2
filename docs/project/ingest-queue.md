@@ -1,5 +1,27 @@
 # The ingest queue
 
+Up: [architecture.md](architecture.md)
+
+## In this doc
+
+- [§ Uploading a PDF](#uploading-a-pdf) — how a file off disk becomes an article
+- [§ The add page](#the-add-page) — `/add/<url>`, the watching page, the bookmarklet
+- [§ Two URLs, one article](#two-urls-one-article) — de-duplicating near-identical URLs
+- [§ Opening a link starts a fetch](#opening-a-link-starts-a-fetch-and-that-is-new) — why arriving on `/add` is expensive
+- [§ The pipeline is a list](#the-pipeline-is-a-list-not-a-function) — `STEP_ORDER`, adding or reordering a step
+- [§ The queue](#the-queue-it-was-p-queue-and-now-it-is-an-index-and-a-loop) — claims, the loop, why p-queue went (history)
+- [§ Why polling](#why-polling) — `GET /api/jobs` cadence
+- [§ Idempotent is the goal](#idempotent-is-the-goal-this-is-a-step-towards-it) — surviving a restart, resuming a job
+- [§ The failures Retry is not offered under](#the-failures-retry-is-not-offered-under) — which errors hide the button
+- [§ The one security check](#the-one-security-check) — `isSlug`, the path-traversal guard
+- [§ The routes](#the-routes) — the job and article endpoints
+- [§ Naming the step is the point](#naming-the-step-is-the-point) — progress-list wording
+- [§ The box only shows this sitting](#the-box-only-shows-this-sitting) — what the Add box lists
+- [§ A finished job publishes the article](#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not) — `publishRevision`, why a done job left the shelf empty (history)
+- [§ When this becomes Postgres](#when-this-becomes-postgres) — the filesystem queue versus the table (history)
+- [§ The CLI is this queue](#they-are-the-same-functions-the-cli-runs) — `npm run extract` and friends
+- [§ See also](#see-also)
+
 Paste a URL on the homepage and an article appears on the shelf a minute or two later, with the
 stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
 `/add/<the URL>` — [§ The add page](#the-add-page).

@@ -1,5 +1,7 @@
 # Database
 
+Up: [architecture.md](architecture.md)
+
 **The database is Supabase Postgres, and since 2026-09-05 all relational application data is in
 it.** Raw source documents and article images use the blob seam: Supabase Storage when credentials
 are present, and `data/_blobs/` as the local fallback, described below.
@@ -30,6 +32,56 @@ manual; that one is the taste.
 
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
+
+## In this doc
+
+- [§ A new migration, in five lines](#a-new-migration-in-five-lines) — how a migration is named,
+  generated and applied; start here to add a column or a table
+- [§ There is one store, and nothing left of the flag](#there-is-one-store-and-nothing-left-of-the-flag) — why no
+  `SPIDERYARN_STORE` or filesystem store exists any more (history)
+- [§ The filesystem era](#the-filesystem-era-files-under-dataslug) — what `data/<slug>/` held, and
+  what outlived it: source documents, upload attempts, cache keys (history)
+- [§ Next: Supabase Postgres](#next-supabase-postgres) — the files that hold the schema, the
+  commands, how a job's writes reach a published revision, the `db:export` rollback, and the rules
+  that outrank convenience
+- [§ The four token columns](#the-four-token-columns-and-why-they-are-not-defaulted) — why
+  `ai_calls` token counts have no default
+- [§ Connecting to the remote](#connecting-to-the-remote) — reaching production's database, and
+  [the four migrations the local ledger said were applied](#the-four-migrations-that-were-not-there-and-the-command-that-said-they-were)
+- [§ A watermark is not a ledger](#a-watermark-is-not-a-ledger) — a migration that was skipped under
+  `✓ migrations applied`, the guard, and a journal mid-merge
+- [§ Two worktrees generated at once](#two-worktrees-generated-at-once) — `drizzle/meta/` forks, the
+  gates that stop them, and [repairing one](#repairing-a-fork-what-the-losing-migration-is-decides-everything)
+- [§ Roles](#roles) — the three database roles, applying migrations on the remote
+  ([step two](#step-two-apply-the-migrations)), and
+  [why `DATABASE_URL=… npm run db:migrate` reaches a different database than it names](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)
+- [§ A null column and an absent field](#a-null-column-and-an-absent-field-are-the-same-fact-and-you-must-choose-which) —
+  a field that was missing on disk and is `null` in a row
+- [§ `restrict` and `no action`](#restrict-and-no-action-are-the-same-rule-at-two-different-moments) —
+  choosing an `on delete` rule
+- [§ Tightening an invariant over stored data](#tightening-an-invariant-over-stored-data-is-a-migration) —
+  a new validator rule that makes stored data illegal: sweep the rows in the same commit
+- [§ Two traps recorded elsewhere](#two-traps-recorded-elsewhere-repeated-here-because-they-are-expensive) —
+  `supabase db reset --linked`, and the other expensive one
+- [§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for) — the cache of model work a
+  failed attempt already paid for
+- [§ What is not done yet](#what-is-not-done-yet) — known gaps (uplink, Vercel env, `restrict`)
+
+## A new migration, in five lines
+
+1. Change [`src/db/schema.ts`](../../src/db/schema.ts) (read [sql.md](sql.md) first for the shape).
+2. `npm run db:generate -- --name <what_it_does>` writes `drizzle/<yyyyMMddHHmmss>_<what_it_does>.sql`,
+   plus a snapshot and a journal entry under `drizzle/meta/`. The timestamp prefix is
+   `migrations.prefix` in [`drizzle.config.ts`](../../drizzle.config.ts); the files before 2026-09-02
+   are numbered `0000`–`0052`. For hand-written SQL, `-- --custom --name <what_it_does>`, never a
+   file created by hand ([§ What stops it now](#what-stops-it-now)).
+3. Read the generated `.sql`; hand-edit it if drizzle's guess is wrong (a default that must not
+   rewrite old rows: [sql.md § Store when it happened](sql.md#store-when-it-happened)).
+4. `npm run db:migrate` applies it to the local Supabase. Never `drizzle-kit push`, and never run the
+   DDL by hand in `psql` or Studio ([§ Next: Supabase Postgres](#next-supabase-postgres)).
+5. `npm run db:check` says whether the live schema and `schema.ts` now agree. Production's migrations
+   are applied by `npm run deploy`, which only the Overseer runs ([deployment.md](deployment.md)), and the one rule to read before pointing a command at it is
+   [`DATABASE_URL=… npm run db:migrate` does not do what it looks like](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
 
 ## There is one store, and nothing left of the flag
 

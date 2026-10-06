@@ -26,6 +26,26 @@ answer from the model only if you ask for one. Saving costs nothing.
 > *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
 > has changed is what a selection creates, and what a comment is allowed to hold.
 
+## In this doc
+
+- [§ What a comment is now](#what-a-comment-is-now) — the current model: bookmark, note, optional AI answer
+- [§ Intent](#intent) — Greg's words and the reasoning behind the design
+- [§ Several at once](#several-at-once) — asking about many passages together
+- [§ The answer arrives a few words at a time](#streaming) — how an answer streams in
+- [§ Two more ways to push back on an answer](#pushing-back) — follow-up and *Ask in chat* from a comment
+- [§ Anchoring](#anchoring) — how a comment finds its passage (block ids, quote)
+- [§ Why this call is not a pipeline stage](#why-this-call-is-not-a-pipeline-stage) — why it is a request, not a stage
+- [§ What the prompt asks for](#what-the-prompt-asks-for) — the model's brief for an answer
+- [§ The drawer that lists them, and what kind of thing it is](#the-drawer) — the comments list
+- [§ Where the code is](#where-the-code-is) — files and tests; start here to find code
+- [§ Three things that fail silently here, and one that used to](#three-things-that-fail-silently-here-and-one-that-used-to) — gotchas
+- [§ When it says "Failed to fetch"](#failed-to-fetch) — a known error and its cause
+- [§ A shared link carries them, since 2026-09-04](#a-shared-link-carries-them-since-2026-09-04) — what a visitor sees
+- [§ Deliberate limits](#deliberate-limits) — what a comment will not do
+- [§ Where the chat panel sits](#chat-dock) — dock placement beside the prose
+- [§ The other way to ask](#the-other-way-to-ask) — chat as the alternative to a comment's AI
+- [§ See also](#see-also)
+
 ## What a comment is now
 
 Three independent properties, and a comment may have any combination of them:

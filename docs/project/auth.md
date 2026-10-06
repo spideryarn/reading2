@@ -2,6 +2,21 @@
 
 Up: [security-map.md](security-map.md)
 
+## In this doc
+
+- [§ Where the pieces are](#where-the-pieces-are) — which file does what, before editing the gate
+- [§ Locally, signing in needs no Google at all](#locally-signing-in-needs-no-google-at-all) — the dev-admin password account
+- [§ The four things worth knowing](#the-four-things-worth-knowing-before-you-touch-any-of-it) — 401 vs 503, the gate's place in `handleApi`
+- [§ A request made for one reader is never sent as another](#a-request-made-for-one-reader-is-never-sent-as-another) — two accounts in one browser
+- [§ The signed-out page is the landing page](#the-signed-out-page-is-the-landing-page) — what a visitor sees instead of a form
+- [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet) — Google sign-in in production (history)
+- [§ Email](#email) — who sends auth mail
+- [§ What auth is for here](#what-auth-is-for-here) — the open proxy and the open wallet
+- [§ Whose data is it](#whose-data-is-it) — owner scoping from the gate to the store
+- [§ Why Supabase Auth](#why-supabase-auth) — the options weighed (history)
+- [§ The one test that has to exist](#the-one-test-that-has-to-exist) — the no-session refusal
+- [§ What is not done](#what-is-not-done) and [§ Still open](#still-open) — the gaps
+
 **Decided 2026-08-25: Supabase Auth.** The working that produced that is in
 [docs/research/260825a-auth-options.md](../research/260825a-auth-options.md) — this file is the decision and where
 its pieces live.

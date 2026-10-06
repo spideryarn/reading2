@@ -2,6 +2,25 @@
 
 Up: [security-map.md](security-map.md)
 
+## In this doc
+
+- [§ What was wrong](#what-was-wrong) — the original stored-XSS chain, before any fix (history)
+- [§ The fix, and where it lives](#the-fix-and-where-it-lives) — how the sanitiser is built and called, before touching it
+- [§ Four ways to break this silently](#four-ways-to-break-this-silently) — config changes that leave articles rendering but unclean
+- [§ Why the string path, not `IN_PLACE`](#why-the-string-path-not-in_place) — why DOMPurify is fed a string
+- [§ Stage 2's debug page](#stage-2s-debug-page) — the unsanitised debug file and the holes found with it (history)
+- [§ An artefact that was cleaned by nothing](#the-stamp) — the sanitiser-version stamp, and why old artefacts get re-cleaned
+- [§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) — path traversal, slug rules, what a capture may become
+- [§ A PDF](#pdfs) — the same untrusted content in a second format, and the parser's limits
+- [§ What the model returns](#a-third-untrusted-party-what-the-model-returns) — model output that becomes an `href`, `src` or `id`
+- [§ What the model asks us to fetch](#chat-tools) — chat tools, the address guard, and a GET as a channel
+- [§ The manuscript addressing the model](#hidden-instructions) — hidden-text injection, and what the scan cannot see
+- [§ The bibliographic registries](#registries) — Crossref, DataCite, OpenAlex strings on the page
+- [§ Whoever signs in](#the-gate) — the gate's two properties that belong to the system
+- [§ The database connection](#database-tls) — verified TLS or refusal
+- [§ Known gaps](#known-gaps) — where to look if you want work
+- [§ If you are changing any of this](#if-you-are-changing-any-of-this) — what to read and run first
+
 **Two untrusted parties, and neither is another user.**
 
 **The content**, which is what most of this document is about. Spideryarn is a local, single-user

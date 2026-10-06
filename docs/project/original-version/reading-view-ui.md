@@ -89,3 +89,7 @@ Two takeaways:
 - [url-state-and-keyboard.md](url-state-and-keyboard.md) — the state layer above this, and the loop it caused
 - [../web-client.md](../web-client.md) — our client, its constraints and what's outstanding
 - [../granularity-zoom.md#the-spine-a-birds-eye-rail](../granularity-zoom.md#the-spine-a-birds-eye-rail) — our fixed rail, and why it is not a column
+
+---
+
+Up: [overview.md](overview.md)

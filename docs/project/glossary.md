@@ -2,6 +2,33 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+This doc is long, and a read stops about line 860. **Jump with these.**
+
+- [§ Asking about an entry in chat](#asking-about-an-entry-in-chat) — **the *Ask in chat* button**
+  (Glossary and Citations; also the pattern to copy when another mode wants one): origin, line under
+  the buttons, what the server does not check. Line ~950.
+- [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
+  different *Ask in chat*, with no origin)
+- [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer
+- [§ Where it lives, and why that cost nothing](#where-it-lives-and-why-that-cost-nothing) — the
+  band's place in the page
+- [§ What is generated, and when](#what-is-generated-and-when) — the stage, Find more, regeneration
+- [§ The two bugs this feature is shaped around](#the-two-bugs-this-feature-is-shaped-around) — read
+  before changing the prompt or the dedup
+- [§ Finding the term in the prose](#finding-the-term-in-the-prose) — the matching rule, underlines,
+  the hover card
+- [§ Hiding an entry](#hiding-an-entry) · [§ What we deliberately do not do](#what-we-deliberately-do-not-do)
+- [§ What an entry says, and which half came from where](#what-an-entry-says-and-which-half-came-from-where)
+  — the two fields, provenance as the label, register traps
+- [§ The scores, and the condition attached to keeping them](#the-scores-and-the-condition-attached-to-keeping-them)
+  — prioritised order, the threshold slider
+- [§ Finding more](#finding-more) — appending to a list; ids inherited across regeneration
+- [§ Staleness, and the force cascade](#staleness-and-the-force-cascade)
+- [§ Six ways to break this quietly](#six-ways-to-break-this-quietly) — the checklist before a change
+- [§ What is still open](#what-is-still-open) · [§ See also](#see-also)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.

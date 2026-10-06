@@ -13,6 +13,24 @@ The design, the measurements and everything that was considered and rejected are
 [260828r-worktrees.md](../plans/260828r-worktrees.md). **This doc is the operational half**: what is
 true today, what was decided, and the two runbooks — both now run.
 
+## In this doc
+
+- [§ Where this stands](#where-this-stands) — which script or hook does what; what is still unbuilt
+- [§ Starting one](#starting-one) — the four commands; where the tree lands on the box; resuming a named tree; why a subagent loses its shell
+- [§ Why a worktree branches from HEAD, then merges the remote](#why-a-worktree-branches-from-head-and-then-merges-the-remote) — what `worktree:setup` merges, and why not `baseRef: "fresh"`
+- [§ What a worktree costs](#what-a-worktree-costs-measured-rather-than-assumed) — setup time, disk, and which test files are red on a fresh tree
+- [§ What Greg decided, 2026-09-01](#what-greg-decided-2026-09-01) — push straight to `dev`, shared Supabase, design for more than ten
+- [§ The workflow](#the-workflow) — merge `origin/dev`, push `HEAD:dev`, three-dot diffs
+- [§ Removing one](#removing-one) — `npm run worktree:remove`, what it proves, what it cannot
+- [§ Before you remove one](#before-you-remove-one) — `worktree:check`, each blocker, the `.gitignore` rule, `.env.local — DIFFERS`
+- [§ `ExitWorktree` refuses](#exitworktree-refuses-for-two-reasons-that-are-not-about-your-work) — the two scary-looking refusals
+- [§ Sweeping them up](#sweeping-them-up) — `worktree:sweep` from the primary; ghosts
+- [§ The database: one stack, and a lease](#the-database-one-stack-and-a-lease) — the unbuilt lease; why not a stack or a schema per worktree; the `busy` job-cap trap
+- [§ Ports and the ceiling](#ports-and-the-ceiling) — the 5273–5303 range, the port warning, "whose server is this?"
+- [§ Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) — flipping the trunk to `dev`, and what `deploy` refuses (history)
+- [§ Runbook B](#runbook-b-the-mac-done-2026-09-01) — the Mac move out of Dropbox (history)
+- [§ Traps](#traps) — empty `data/`, two-dot diffs, scanners walking into worktrees, timing numbers
+
 ## Where this stands
 
 **`claude --worktree <name>` plus `npm run worktree:setup` works end to end**, including sign-in.
@@ -42,6 +60,9 @@ What is built:
 | [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree — or from the primary as `npm run worktree:check -- --root <tree>`, which refuses anything but the top of one of this repository's work trees: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
 | [`.claude/hooks/primary-checkout-notice.sh`](../../.claude/hooks/primary-checkout-notice.sh) | `SessionStart` hook: in the primary it prints one line telling the agent to call `EnterWorktree` before editing code; in a worktree it says nothing. A nudge, not a refusal — Greg, 2026-09-02: a SessionStart print, "but not a hard refusal". |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
+
+The tests for all of it are `tests/worktree-*.test.ts` (admin, builds, check, freshen, inuse, port,
+remove, roots, setup-bootstrap, sweep).
 
 Still to build: an identity endpoint —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
@@ -768,7 +789,9 @@ success is the absence of something.
 
 ## The database: one stack, and a lease
 
-The lease is one file lock, on [`scripts/lockfile.ts`](../../scripts/lockfile.ts), around the three
+**The lease below is the design, and is not built** (see "half built" at the top: only the migrator's
+advisory lock exists, and `db:reset` takes nothing). The lease would be one file lock, on
+[`scripts/lockfile.ts`](../../scripts/lockfile.ts), around the three
 things that write schema: `db:migrate`, `db:reset`, and any database-backed test run. Held for the
 whole run, not per statement. It isolates nothing — it only means two of those never overlap, so one
 agent's migration cannot land in the middle of another's suite.
@@ -777,8 +800,8 @@ agent's migration cannot land in the middle of another's suite.
 something each worktree holds alone, and you delete it once you trust that. The thing that varies is
 one `DATABASE_URL` either way.
 
-Two more pieces belong with it, and the plan is emphatic that policy alone is too quiet here: a
-`test:db` that **fails when the database is absent** (about a dozen Postgres suites currently skip
+Two more pieces belong with it (neither exists yet: there is no `test:db` script), and the plan is
+emphatic that policy alone is too quiet here: a `test:db` that **fails when the database is absent** (about a dozen Postgres suites currently skip
 themselves silently, so a misconfigured worktree reports green while testing nothing), and an
 automated refusal on duplicate migration numbers — a lease stops two migrations running at once and
 does nothing about two branches independently minting `0044_`.
@@ -969,7 +992,9 @@ Half of this is worse than none, because each half hides the other's failure:
    *is this my tree*. `ss -ltnp | grep 527` names the owning pid, and `pgrep -af vite` shows which
    worktree's `node_modules` it was launched from. Worth doing at the start of any browser pass and
    again after anything heavy has run.
-2. ~~An **atomic port lease**~~ — **done as a persistent reservation, and nothing reads it yet.**
+2. ~~An **atomic port lease**~~ — **built, then deleted on 2026-09-01 (see the redesign above: there is
+   no allocator in `worktree-port.ts` now); what follows is the record of why it was not a lock.**
+   It was **done as a persistent reservation, and nothing read it.**
    [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), 27 tests. Not a hash: at ten worktrees
    in a 30-wide range that collides ~99.96% of the time. Not a scan-then-pick, whose failure is subtler
    (two setups starting together both see 5274 free and both take it) — the claim *is* the test, via
@@ -1212,7 +1237,7 @@ moment that flipped. Either spelling lands on `dev` today.
   `origin/dev` still works after a merge; for one commit,
   `git show --name-only --format="" <commit>`. Whether a red is yours is whether the failing file,
   or anything it imports, is in your commits.
-- **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
+- **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP_PATHS` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.
 - **A `git worktree lock` held by a running session is not proof of activity.** A `SIGKILL`ed session

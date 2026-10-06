@@ -56,6 +56,21 @@ The plan, the reasoning and the cross-family review:
                                         say until you have read it
 ```
 
+## In this doc
+
+- [§ Why this one is not the anti-goal](#why-this-one-is-not-the-anti-goal) — why a model that talks to you is still reading-augmenting
+- [§ One adaptive voice](#one-adaptive-voice) — how Recall decides what to say next
+- [§ The prompt is the feature](#the-prompt-is-the-feature) — before editing Recall's prompt; evals
+- [§ Tutorial, the third sub-mode](#tutorial-the-third-sub-mode) — Tutorial's intent and prompt
+- [§ Explore, the fourth sub-mode](#explore-the-fourth-sub-mode) — Explore's remit, critiques, reader notes
+- [§ A link after a quotation shows the quoted words](#a-link-after-a-quotation-shows-the-quoted-words) — the quote-then-link rendering
+- [§ A Recall question links its passage, and has a Hint button](#a-recall-question-links-its-passage-and-has-a-hint-button) — passage links and hints
+- [§ Recall's `learn` conversation IS a chat thread](#recalls-learn-conversation-is-a-chat-thread) — one thread per article, and why it is stored like chat
+- [§ Where each piece lands in the prompt, and why it costs what it does](#where-each-piece-lands-in-the-prompt-and-why-it-costs-what-it-does) — prompt-cache layout
+- [§ On screen](#on-screen) — the header, sub-mode chips, the UI
+- [§ What is deliberately not here](#what-is-deliberately-not-here) — refused features
+- [§ See also](#see-also)
+
 ## Why this one is not the anti-goal
 
 [vision.md § Anti-goals](vision.md#anti-goals) names *"a chatbot with the article stuffed in the

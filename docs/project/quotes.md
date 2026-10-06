@@ -1,5 +1,44 @@
 # Quotes — the lines worth keeping
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Whose words these are](#whose-words-these-are) — why "the article's", not "the author's"
+- [§ The one safety property](#the-one-safety-property) — verbatim verification; drops counted
+- [§ Two scores, combined with `max`](#two-scores-combined-with-max) — what ranks a quote
+- [§ The orders, and the bar](#the-orders-and-the-bar) — in order / prioritised / most important; the slider
+- [§ Every visible quote is marked](#every-visible-quote-is-marked-in-every-mode-and-the-bar-is-how-many)
+  — the underline in the prose, in every mode
+- [§ A highlighter pen](#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters) — the
+  fill and its fade, light and dark colours
+- [§ The reason is behind a button](#the-reason-is-behind-a-button)
+- [§ Your highlights are rows too](#your-highlights-are-rows-too) — the reader's own highlights
+  drawn as rows; "who and when" on every card
+- [§ The stage](#the-stage) — the model call; [Find more appends](#find-more-appends-only-a-stale-or-outdated-list-is-replaced);
+  [freshness](#freshness)
+- [§ Five ways to break this quietly](#five-ways-to-break-this-quietly) · [§ What is still open](#what-is-still-open)
+  · [§ See also](#see-also)
+
+**Why a quote could appear twice** (a signpost, not the mechanism). There are three places to look,
+and they are different things:
+
+1. **The server drops overlapping quotes**: `dedupeOverlaps` in [`src/quotes.ts`](../../src/quotes.ts),
+   within one run and, on Find more, against the lines already on the list, which always win —
+   [§ Find more appends](#find-more-appends-only-a-stale-or-outdated-list-is-replaced). Overlap is
+   by span in one block, so the *same sentence in two blocks* is two quotes.
+2. **Your highlights are separate rows, and nothing de-duplicates them against the model's quotes**
+   (`isReaderRow`, `bandRows` in [`src/web/quote-band-rows.ts`](../../src/web/quote-band-rows.ts)):
+   highlight words the AI also chose and you see both, one marked *yours* —
+   [§ Your highlights are rows too](#your-highlights-are-rows-too).
+3. **A replaced list** (stale, or outdated by an older prompt) is rewritten, not appended to; a
+   stale one mints every id fresh and an outdated one keeps an id only for exactly the same words
+   in the same block — same section as 1.
+
+Tests: [`tests/quotes-find-more.test.ts`](../../tests/quotes-find-more.test.ts),
+[`tests/quote-band-rows.test.ts`](../../tests/quote-band-rows.test.ts). Nothing here is specific
+to a phone; I found no phone-only quote rendering path.
+
 The sentences of a piece that are worth carrying out of it, in the band between the spine and the
 prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
 **every row the panel is showing is marked in the prose — in every mode, whether or not the band is
@@ -1074,6 +1113,10 @@ wrong — but worth knowing.
 
 ## See also
 
+- **Wanting an *Ask in chat* button on a quote?** This mode has none. Today only Glossary entries
+  and Citations rows have one (the shared `AskInChatButton` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
+  pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [glossary.md](glossary.md) — the mode this took its shape from: the prioritised order, the
   threshold slider, and the condition attached to keeping model scores
 - [ideas.md](ideas.md) — the mode this took its lifecycle from until 2026-09-11: replaces rather
@@ -1083,7 +1126,3 @@ wrong — but worth knowing.
 - [url-state.md](url-state.md) — `?mode=quotes`, `?quote=`, `?rank=`, `?bar=`
 - [security.md](security.md) — the sanitiser, and the `hit` class this mode's marks made it reserve
 - [architecture.md](architecture.md#pipeline) — where stage 5h sits
-
----
-
-Up: [reading-view-overview.md](reading-view-overview.md)

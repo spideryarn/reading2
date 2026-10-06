@@ -19,9 +19,28 @@ tabs in a different application; the two share a vocabulary and no code.
 Four sessions added tabs to this page on the night of 2026-09-08 and each worked the mechanism out
 for itself. Most of what is below is theirs, quoted and attributed.
 
+## In this doc
+
+**Only adding a datum to a panel that exists?** You need none of the tab checklist: go straight to
+[§ Where the panel's data comes from](#where-the-panels-data-comes-from-the-end-to-end-path), which
+is per datum. Readiness is the worked example: a run's `durationMs` rides on the record and is drawn
+by [`ReadinessPanel.tsx`](../../tools/fleet/web/src/ReadinessPanel.tsx) with no new route.
+
+- [§ What a mode is](#what-a-mode-is) — the four things a tab is made of
+- [§ The registrations](#the-registrations) — the five edits for a new tab, and the one nothing checks
+- [§ Ask this before you design the panel](#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about) — whether the tab may touch the fleet at all
+- [§ Where the panel's data comes from](#where-the-panels-data-comes-from-the-end-to-end-path) — pushed, on-demand or a write; the path for each
+- [§ The seam, which is invisible from the panel](#the-seam-which-is-invisible-from-the-panel) — why a tab compiles and shows nothing
+- [§ Absence is stated, never drawn](#absence-is-stated-never-drawn) — empty, missing and failed states
+- [§ The card on the button](#the-card-on-the-button) — the tooltip each mode button carries
+- [§ The test](#the-test) — what a tab's test must prove
+- [§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once) — merge etiquette for the shared lists
+- [§ Seeing it](#seeing-it) — checking the tab in a browser, phone width included
+- [§ What this costs](#what-this-costs) — the known untidiness
+
 ## What a mode is
 
-Four things a reader can see, spread over six places a writer must edit:
+Four things a reader can see, spread over five places a writer must edit:
 
 - a word in `MODES`, which is the closed vocabulary — [`mode.ts`](../../tools/fleet/web/src/mode.ts);
 - a button in the bar — [`Dock.tsx`](../../tools/fleet/web/src/Dock.tsx), which renders `MODES` and
@@ -46,33 +65,31 @@ rule (stale first, then who needs you, then the tab, `Fleet` last) is in
 | `MODE_ICONS` | `Dock.tsx` | the compiler. **Not decoration**: at the bar's narrowest rung the glyph is all that is left of an inactive button. House defaults, [icons.md](icons.md) |
 | `MODE_TIPS` | `Dock.tsx` | the compiler. [§ The card on the button](#the-card-on-the-button) |
 | the mount | `App.tsx` | **nothing** — a ternary, not a `switch` with a `never` default |
-| `.dock-modes { flex: N 0 auto }` | `tailwind.css`, under `@media (pointer: coarse)` | **nothing** — see below |
 
 The three maps are `Record<Mode, …>` rather than partials, so `npm run typecheck` catches a
 **half**-added mode. `Mode` is derived from `MODES`, so it cannot catch one removed from every
 register at once ([§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once)).
 
-**Two registers are checked by nothing, and the second is the one nobody found for a day.**
-
-- **The `App.tsx` mount.** A mode in all four registers with no arm there compiles, draws a button,
+**One register is checked by nothing: the `App.tsx` mount.** A mode in all four other registers with no arm there compiles, draws a button,
   switches the hash, and shows an empty page.
-- **The coarse-pointer weighting.** On a touch device `.dock-modes` is given `flex: 3 0 auto` — a
-  literal share count, written when there were three modes, so that the segment spreads against
-  Refresh's `1` in proportion to what is inside it. It is **not** derived from `MODES.length`, and
-  adding a fourth mode without changing it gives four buttons three shares. The measured fit ladder
-  stops the row clipping; it does not repair the proportion. GPT Sol found this on 2026-09-09, after
-  `deploys` had landed and left it saying `3`.
+
+The coarse-pointer weighting of `.dock-modes` (`flex: 3 0 auto`, a literal count nobody updated) was
+the register nobody found for a day, GPT Sol found it on 2026-09-09. It is now
+`flex: var(--dock-mode-count, 8) 0 auto` in `tailwind.css`, with `Dock.tsx` setting the property from
+`MODES.length`, and tests pin it
+([`fleet-questions-panel.test.tsx`](../../tests/fleet-questions-panel.test.tsx)). Adding a mode needs
+no CSS edit.
 
 So the count is not "four registrations in two files" as the doc first said, and as the session below
-found it. It is **six places in three files, two of them unchecked**.
+found it. It is **five places in three files, one of them unchecked**.
 
 > I went looking for the tab list expecting one place and found four, in two files, one of which
 > advertises itself as not needing edits.
 >
 > — session `usage-limits-tab`, 2026-09-09
 
-`Dock.tsx`'s own header says *"If a fourth mode arrives, nothing here needs touching"*. That is true
-of the bar's **fit measurement** and false of the file and of its stylesheet. It is a known cost, not
+`Dock.tsx`'s own header says *"If a fourth mode arrives, nothing here needs touching"*. That was true
+of the bar's **fit measurement** and false of the file; the header now says so itself. It is a known cost, not
 a design — [§ What this costs](#what-this-costs).
 
 ## Ask this before you design the panel: may the fleet touch what your tab is about?
@@ -433,26 +450,20 @@ not scroll the page sideways, and the last row of your panel is not underneath t
 has two rungs — Refresh loses its word, then the modes lose theirs except the active one — and past
 the last rung the row scrolls rather than clipping, so extra modes degrade visibly.
 
-**Do this at a touch viewport specifically, not merely a narrow one.** The coarse-pointer share count
-is the register nothing checks, and its symptom is proportion rather than breakage — the mode segment
-looking cramped against Refresh, which no test and no typecheck will ever mention.
+**Do this at a touch viewport specifically, not merely a narrow one.** The share count of the mode segment
+is now derived from `MODES.length`, and a test pins that. What nothing checks is how the bar *looks*: a
+cramped mode segment against Refresh is proportion rather than breakage, so look.
 
 ## What this costs
 
-Three things are worse than they need to be, written down rather than fixed on a night when four
-sessions were live in these files:
+Two things are worse than they need to be, written down rather than fixed on a night when four
+sessions were live in these files (a third, the hard-coded share count in CSS, has since been fixed):
 
-- **Six places across three files**, with `MODES`/`MODE_LABELS` in `mode.ts`,
-  `MODE_ICONS`/`MODE_TIPS` in `Dock.tsx`, the mount in `App.tsx` and a share count in
-  `tailwind.css`. One table in one file would make a mode one edit plus a mount, and would delete
-  most of this page.
-- **`.dock-modes { flex: 3 0 auto }` hard-codes the mode count in CSS**, where no type and no test
-  can see it. It wants to be `MODES.length` — set as a custom property from the one place that knows,
-  or the weighting reworked so it does not need a count at all. It was already wrong when GPT Sol
-  found it.
-- **`Dock.tsx`'s header advertises that a new mode needs no edit there.** It means the bar's fit
-  measurement; it reads as the file, and its own stylesheet contradicts it. Both sessions that went
-  looking for the tab list read it the wrong way first.
+- **Five places across three files**, with `MODES`/`MODE_LABELS` in `mode.ts`,
+  `MODE_ICONS`/`MODE_TIPS` in `Dock.tsx` and the mount in `App.tsx`. One table in one file would make
+  a mode one edit plus a mount, and would delete most of this page.
+- **`Dock.tsx`'s header once advertised that a new mode needs no edit there.** It now says the
+  opposite, but both sessions that went looking for the tab list read the old one the wrong way.
 
-None is worth a rewrite on its own. All three are worth doing the next time somebody is in these
+Neither is worth a rewrite on its own. Both are worth doing the next time somebody is in these
 files for another reason.

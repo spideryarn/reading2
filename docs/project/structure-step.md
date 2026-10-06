@@ -1,5 +1,7 @@
 # Structure (the step)
 
+Up: [architecture.md](architecture.md)
+
 Pipeline stage 4 — `structure`, `npm run structure -- <slug> [--force]`. Builds the nested tree that Structure,
 Marginalia, the Spine and the rest render. (The step was called `hierarchy` until 2026-10-02, and this file was
 `hierarchy.md` — [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md). The Hierarchy
@@ -32,6 +34,25 @@ the filesystem store's copies moved with a one-off script that was deleted on 20
 after the store itself.
 "Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
 rather than the step.
+
+## In this doc
+
+- [§ Intent](#intent) — what the tree is for
+- [§ We store a tree and derive the flat rows](#we-store-a-tree-and-derive-the-flat-rows) — why `tree.json`, not rows
+- [§ Schema](#schema) — the tree's shape and fields
+- [§ The tree the author's headings give us for free](#heading-tree) — using existing headings
+- [§ Entry length grows with depth](#granularity) — how long each level's text is
+- [§ Every block gets a leaf; not every leaf gets a row](#every-block-gets-a-leaf-not-every-leaf-gets-a-row) — coverage of blocks
+- [§ Headings: verbatim unless genuinely uninformative](#headings-verbatim-unless-genuinely-uninformative) — when a title is rewritten
+- [§ Building the tree over a flat article](#building-the-tree-over-a-flat-article) — articles with no headings
+- [§ Two passes: the structure, then the labels](#two-passes) — the `structure` and `labels` steps; why two
+- [§ The budget](#the-budget) — token and time limits
+- [§ When one answer will not fit](#when-one-answer-will-not-fit) — chunking long articles
+- [§ The generation prompt](#the-generation-prompt) — the prompt itself
+- [§ The question under the claim](#the-question-under-the-claim) — what each node is asked
+- [§ A new prompt reaches new articles only](#prompt-versions) — prompt versions and old trees
+- [§ Worked example: the derived sidebar](#worked-example-the-derived-sidebar) — one article end to end
+- [§ See also](#see-also) — neighbouring docs
 
 ## Intent
 

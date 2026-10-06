@@ -312,7 +312,7 @@ will eventually have to decide whether they are a system or an accident:
 - **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
   wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`
   for anything inline.
-- **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
+- **[marketing-pages.md](marketing-pages.md)** — `/`, `/features` and `/pricing`: the `site-*` block in
   [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.
 

@@ -81,7 +81,7 @@ listed here; the names under each are files in `docs/project/`.
   `touch.md` ·
   `phone-and-touch.md` (the map for a phone, an iPad and a finger: what Greg asked for, and where
   the code branches) · `url-state.md` · `library.md` (the shelf) ·
-  `shelf-terms.md` (the topics above it, picked without a model) ·
+  `shelf-terms.md` (the topics above it: a model names them, a program stands in when it has not) ·
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·
   `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
@@ -122,12 +122,14 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
+  `fleet-and-overseer-overview.md` (the hub for the fleet dashboard and the Overseer: which of their
+  docs to open for what, and where the code is) ·
   `overseer-direction.md` (where the Overseer and its fleet dashboard are going, and what talking to
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `overseer-queue.md` (the deferred work the Overseer may pick up in a lull, and what each waits on) ·
   `work-reports.md` (an agent's progress, blocks, decisions and completion, recorded as claims) ·
-  `fleet-dashboard-modes.md` (adding a tab to the dashboard: six places in three files, two of them
+  `fleet-dashboard-modes.md` (adding a tab to the dashboard: five places in three files, one of them
   checked by nothing) ·
   `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a
   claim it has to earn) ·

@@ -256,3 +256,7 @@ the only place the difference actually lives.
 - [ids.md](ids.md) — what gets attached to the elements this stage produces
 - [../testing.md](../testing.md) — where a fidelity check would live here
 - [../../reusable/silent-success.md](../../reusable/silent-success.md) — the failure mode the ratio check catches
+
+---
+
+Up: [overview.md](overview.md)

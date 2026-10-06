@@ -2,6 +2,32 @@
 
 Up: [code-quality-overview.md](code-quality-overview.md)
 
+## In this doc
+
+- [§ The runner: Vitest](#the-runner-vitest) — why vitest, and where its config lives
+- [§ A run is not the only thing on the machine](#a-run-is-not-the-only-thing-on-the-machine) — the worker cap, `NO TESTS RAN` / `REFUSING TO START`, `VITEST_MAX_WORKERS`
+- [§ Three lanes, and which one your test is in](#three-lanes-and-which-one-your-test-is-in) — adding a test that touches Postgres or Storage; `TEST_LANES`
+- [§ `TEST DATABASE CONTENDED`](#test-database-contended) and [§ `POLLUTED`](#polluted) — what those red banners mean
+- [§ What we test, and what we don't](#what-we-test-and-what-we-dont) — what each older suite pins, and what is deliberately untested
+- [§ Why the docs have a test](#why-the-docs-have-a-test) — `doc-links.test.ts`: a link or anchor goes red, how anchors are slugged
+- [§ Sweep a continuous input](#sweep-a-continuous-input-dont-sample-it) — testing widths and offsets by shape, not samples
+- [§ The three things to know before adding a test](#the-three-things-to-know-before-adding-a-test) — fixtures, the CLI subprocess, which artefact store to hand it
+- [§ What a brand-new test file owes the two registries](#what-a-brand-new-test-file-owes-the-two-registries) — a new route test trips a gate that reads as something else
+- [§ Rendering a component, without a testing library](#rendering-a-component-without-a-testing-library) — `renderToStaticMarkup`
+- [§ What an upload's tests are for](#what-an-uploads-tests-are-for) — the four upload suites
+- [§ Evals are not tests](#evals-are-not-tests-and-live-in-their-own-folder) — and why an eval in a worktree measures the fixture cut
+- [§ A test that spawns a process needs its own timeout](#a-test-that-spawns-a-process-needs-its-own-timeout) — a red that is the box, not the change
+- [§ A green run here proves less than it looks like](#a-green-run-here-proves-less-than-it-looks-like) — tmux, killed runs, scoped runs, raw NULs, `.env.local`, jsdom `localStorage`, nuqs
+- [§ Run the suite in tmux](#run-the-suite-in-tmux-because-a-killed-run-and-a-passing-run-look-the-same) — `scripts/tmux-job.ts`, and a log with no `Test Files` line
+- [§ `.env.local` is loaded into tests](#envlocal-is-loaded-into-tests) — secrets scrubbed, `SPIDERYARN_OWNER_ID`, `runAsOwner`
+- [§ A nuqs write outlives the test that started it](#a-nuqs-write-outlives-the-test-that-started-it) — green tests, red run
+- [§ Nothing under `tests/` may call a paid provider](#nothing-under-tests-may-call-a-paid-provider) — the fetch guard and its opt-out
+- [§ Mocks and fixtures that manufacture green](#mocks-and-fixtures-that-manufacture-green) — a test of a race that tests its own mock
+- [§ A suite that cannot run, and how to make it say so](#a-suite-that-cannot-run-and-how-to-make-it-say-so) — why a skip printed nothing (history), and `process.stderr.write`
+- [§ When a skip is not acceptable](#when-a-skip-is-not-acceptable-never-since-2026-09-05) — the database is mandatory; how to check the refusal
+- [§ One database, many suites](#one-database-many-suites-the-three-shared-resources) — run locks, the job claim and why a case went `busy` (mostly history)
+- [§ Mint a fixture id randomly, not by counting](#mint-a-fixture-id-randomly-not-by-counting) — a row deleted by another file
+
 > Start with deterministic TypeScript tests.
 >
 > — Greg, 2026-08-24
@@ -11,7 +37,7 @@ npm test           # once
 npm run test:watch # while working
 ```
 
-**`npm test` needs a build first, and does not make one**: three files read `dist/` or
+**`npm test` needs a build first, and does not make one**: several files read `dist/` or
 `api-dist/` and fail, naming the command, when it is missing — `npm run build`, then
 `npm run build:fleet` for the fleet tests. `npm run worktree:setup` and `npm run check` both build;
 a bare `npm test` in a fresh clone does not. (Until 2026-10-06 one of the three skipped instead.)
@@ -179,12 +205,13 @@ That scan is **syntactic**: it looks for `pgReady(`, `new Pool(`/`new Client(` a
 helpers, so it cannot see a test that reaches a database through application code — an aliased
 constructor, a dynamic import, a transitive `getDb()` — and it does not look for Storage at all.
 Those turn up the other way round, and then get a lane plus a declared entry in
-`LANES_BEYOND_THE_SCAN` saying how each was found. There are six, all of them Storage: they talk to
-the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught them.
-GPT Sol found four by reading the map against `src/store/blobs.ts`; poisoning `SUPABASE_URL` found
-the other two on its first full run — including one that names no store at all and reaches the
-bucket through the pipeline's own acquire step, which nothing but running it could have caught. Six
-is a working door; a page of them would mean the scan needs a better predicate.
+`LANES_BEYOND_THE_SCAN` saying how each was found. There are five today, all of them Storage: they
+talk to the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught
+them. GPT Sol found four by reading the map against `src/store/blobs.ts` (one of them,
+`upload-acquire`, calls `pgReady(`, so the scan sees it and it is not on the list); poisoning
+`SUPABASE_URL` found the other two on its first full run — including one that names no store at all
+and reaches the bucket through the pipeline's own acquire step, which nothing but running it could
+have caught. Five is a working door; a page of them would mean the scan needs a better predicate.
 
 `tests/health.test.ts` was the fifth and is not one any more: it reached Postgres through the health
 handler's own `getDb()` until it was given a real `pgReady(` gate, which the scan sees — so the
@@ -388,7 +415,7 @@ outright — [`tests/setup/no-provider-calls.ts`](../../tests/setup/no-provider-
 `fetch` and fails the request before it is sent.
 
 "No network" used to be part of that sentence and it was never true: the `shared-services` files
-talk to GoTrue over HTTP, the four Storage files talk to the bucket, and the whole
+talk to GoTrue over HTTP, the Storage files talk to the bucket, and the whole
 `private-postgres` lane talks to Postgres. What is true is that nothing here reaches the public
 internet, and the `unit` lane reaches nothing at all.
 
@@ -454,9 +481,11 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
   `buildTree` in [`src/structure.ts`](../../src/structure.ts) is the *deterministic* half of stage 4 — it takes
   the model's parsed proposal and grows the leaf layer — and it is exported and tested precisely so
   that only the genuinely nondeterministic part is untested.
-- **The React reading view.** No DOM tests yet. When they arrive: `environment: "jsdom"` and
-  `@testing-library/react`, and start with [`src/web/tree.ts`](../../src/web/tree.ts) `buildGeometry`,
-  which is pure and is where a rowSpan bug silently draws a wrong article.
+- **The React reading view, as a browser draws it.** Component tests exist now — hundreds of files
+  under `// @vitest-environment jsdom`, and `renderToStaticMarkup` (§ *Rendering a component, without
+  a testing library*) — but `@testing-library/react` was never added, and nothing in the suite
+  computes a style. The paragraphs below are the 2026-08-25 measurement of that gap, when there were
+  no DOM tests at all.
 
   **The gap is bigger than "no DOM tests" sounds, and 2026-08-25 measured it.** Adopting Tailwind
   produced three bugs the whole suite was blind to: a generated `.outline` utility drawing a border
@@ -467,7 +496,7 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
   nothing computes a style — and the third could not have gone red in a DOM test either, since jsdom
   has no OS to ask.
 
-  So this is the moment to reconsider `@testing-library/react`, and also the moment to be honest
+  So that was the moment to reconsider `@testing-library/react` (we went without), and to be honest
   about its ceiling: it would have caught the class names, not the cascade. Anything that depends on
   the *resolved* value has to be checked in a real browser
   ([browser-testing.md](browser-testing.md#do-not-judge-colour-from-a-screenshot)).
@@ -1274,15 +1303,14 @@ anything that is not failing, wherever it happens.** The interception is the mec
 timing. That is why moving a warning into a test body does not help, and why putting the reason in a
 test name does not either — the default reporter prints no passing test names at all.
 
-**Failing instead of skipping is the wrong fix.** It reddens the suite for everyone without a local
-Postgres, and a missing database is a fact about a laptop rather than a defect in the code. It is
-the right fix for one run in particular, which is the next section.
+**Failing instead of skipping was the wrong fix at the time** — it reddened the suite for everyone
+without a local Postgres, when a missing database was a fact about a laptop. That stopped being true
+on 2026-09-05, when the database became mandatory: the next section is where the failing went.
 
-**Most of the Postgres suites here still skip in silence**, because they warn with `console.warn` —
-`tests/store-artefacts-pg.test.ts` is the pattern the others copied. So a `skipped` count today
-usually comes with no reason at all. Until they move over: **if you see a skipped Postgres case,
-re-run that file with `--reporter=verbose` before believing anything about it.** A silent skip is
-[silent-success.md](../reusable/silent-success.md) in its quietest form — the count does change, so
+**Until then most of the Postgres suites skipped in silence**, because they warned with
+`console.warn`. No suite skips over a missing database any more, but **if you ever see a skipped
+case, re-run that file with `--reporter=verbose` before believing anything about it** — a skip is
+[silent-success.md](../reusable/silent-success.md) in its quietest form: the count changes, so
 something is visibly not happening, and only the *why* is missing.
 
 ### When a skip is not acceptable: never, since 2026-09-05

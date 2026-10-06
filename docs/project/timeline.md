@@ -267,6 +267,10 @@ page, which lists it. Greg accepted that on 2026-09-04 rather than inherit it.
 
 ## See also
 
+- **Wanting an *Ask in chat* button on an event?** This mode has none, and does not mention chat.
+  Today only Glossary entries and Citations rows have one (the shared `AskInChatButton` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's.
+  The pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [260831i-timeline-mode.md](../plans/260831i-timeline-mode.md) — the plan: the review that stopped the first
   design, the two spike runs, and everything deferred.
 - [ideas.md](ideas.md) — the sibling this is modelled on, and the source of the validate-every-id

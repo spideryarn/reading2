@@ -1,5 +1,7 @@
 # Fetching — stage 1, and the things other people's servers do
 
+Up: [architecture.md](architecture.md)
+
 Getting the bytes, and knowing what they are. One module,
 [`src/fetch.ts`](../../src/fetch.ts), reached one way: the [ingest queue](ingest-queue.md), whether
 an article is being added from a browser or from `npm run ingest -- <url>`
@@ -22,6 +24,20 @@ Where it sits: **stage 1** of [the pipeline](architecture.md#pipeline), feeding
 [content extraction](content-extraction.md). It is not runnable on its own — see
 [below](#npm-run-fetch-is-gone-and-what-went-with-it) for why a fetch-only job is a thing the queue
 cannot express. `npm run ingest -- <url>` runs it, and everything after it.
+
+## In this doc
+
+- [§ What it does that a bare `fetch` doesn't](#what-it-does-that-a-bare-fetch-doesnt) — the list of protections
+- [§ The shape](#the-shape) — the entry points and typed failures
+- [§ The evidence](#the-evidence) — size, encoding, document kind, certificates, redirects, timeouts, retries: why each rule exists
+- [§ What stage 1 leaves behind](#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk) — the stored object and manifest; `npm run fetch` is gone
+- [§ A paper source](#a-paper-source-one-paper-several-addresses) — a DOI or landing page leading to the paper
+- [§ Not everything gets fetched](#not-everything-gets-fetched-rawmanifest-has-an-origin) — uploads and `RawManifest.origin`
+- [§ The user-agent question](#the-user-agent-question) — why we send what we send
+- [§ Addresses we won't dial](#addresses-we-wont-dial) — SSRF and private addresses
+- [§ Dependencies, and the ones we didn't take](#dependencies-and-the-ones-we-didnt-take) — library choices
+- [§ What's still loose](#whats-still-loose) — known gaps
+- A bot-check page is stage 2's refusal, not this stage's: [content-extraction.md § Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor)
 
 ## What it does that a bare `fetch` doesn't
 
@@ -242,7 +258,11 @@ label loses to document markup:
 - Academic publishers serve real PDFs as `application/octet-stream` and `text/plain`. A `%PDF-`
   magic number is still a PDF.
 - A Cloudflare challenge page served from a `.pdf` URL is still HTML. `doi.org/10.1145/1629575.1629587`
-  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*.
+  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*. **Stage 1 does not
+  recognise a bot check; stage 2 does** — the typed refusal, the registry in
+  [`src/challenge-page.ts`](../../src/challenge-page.ts) and how to add a vendor are in
+  [content-extraction.md § The three ways this stage refuses](content-extraction.md#the-three-ways-this-stage-refuses)
+  and [§ Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor).
 - `httpbin.org/status/401` sends **no `Content-Type` header at all**, so "the header is absent" is a
   case, not an edge case.
 

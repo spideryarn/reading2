@@ -1,5 +1,7 @@
 # Content extraction (readability)
 
+Up: [architecture.md](architecture.md)
+
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
@@ -23,6 +25,24 @@ Strips a rich HTML page (article/blog post) down to the main content — drops n
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
 For background on why Readability was chosen over alternatives (trafilatura, defuddle, Diffbot, Jina Reader, LLM-based extraction, etc.), see the research discussion earlier in this project's chat history — no separate write-up exists yet.
+
+## In this doc
+
+- [§ The fetch above it](#the-fetch-above-it) — what stage 1 hands this stage
+- [§ Two extractors, one artefact](#two-extractors-one-artefact) — the PDF extractor beside Readability
+- [§ A LaTeXML page: arXiv's HTML](#a-latexml-page-arxivs-html) — arXiv/ar5iv pages
+- [§ Stage 2 and the document with no address](#stage-2-and-the-document-with-no-address) — uploaded files
+- [§ The three ways this stage refuses](#the-three-ways-this-stage-refuses) — a page rejected as no article, too short, or a bot check; adding a bot-check provider
+- [§ The one thing this pipeline deletes](#the-one-thing-this-pipeline-deletes) — what is removed on purpose
+- [§ The one thing this pipeline protects](#the-one-thing-this-pipeline-protects) — what must survive extraction
+- [§ The publisher's furniture, and the title it stole](#the-publishers-furniture-and-the-title-it-stole) — site chrome and wrong titles
+- [§ The byline, and the authors Readability drops](#the-byline-and-the-authors-readability-drops) — author extraction
+- [§ The journal and the publication day, from a registry](#the-journal-and-the-publication-day-from-a-registry) — venue and date; includes the backfill
+- [§ A title from outside is plain text](#a-title-from-outside-is-plain-text) — sanitising titles
+- [§ A title in capitals is tidied, and the original kept](#a-title-in-capitals-is-tidied-and-the-original-kept) — ALL-CAPS titles
+- [§ What it gets wrong, and how we know](#what-it-gets-wrong-and-how-we-know) — known failures and the eval corpus
+- [§ Where this sits](#where-this-sits) — neighbouring docs and code
+- [§ Prior art](#prior-art) — alternatives considered
 
 ## The fetch above it
 
@@ -430,6 +450,30 @@ entry; one is added when a page of that kind is seen to clear the floor, with it
 [260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md) for the design).
 It does not get past the check either: the address still cannot be imported, and the reader is told
 what works instead.
+
+### Adding a provider (a bot check from a new vendor)
+
+Fetching that hands you the page is [fetching.md](fetching.md); everything below is stage 2. Each
+place was checked against the code on 2026-10-07.
+
+- Capture the page the way [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  says (plain GET, no JavaScript, hashed, committed; the Anubis section there is the worked case).
+  `scripts/probes/261006f-bot-wall-probe.ts` finds candidate pages.
+- [`src/challenge-page.ts`](../../src/challenge-page.ts): the `ChallengeProvider` union, a recogniser
+  function, and its line in `RECOGNISERS` (a `Record` over the union, so the compiler lists what is missing).
+- [`evals/extraction/fixtures/`](../../evals/extraction/fixtures/): the `.html`, its `hashes.json` entry,
+  and a `<name>.manifest.json` with `"notAnArticle": true`.
+- [`evals/extraction/corpus.mts`](../../evals/extraction/corpus.mts): a row in `EXTRA_FIXTURES`.
+- [`evals/extraction/score.mts`](../../evals/extraction/score.mts): `MANIFESTS_EXPECTED`.
+- [`tests/extract-challenge-page.test.ts`](../../tests/extract-challenge-page.test.ts): the rungs and
+  negative controls; [`tests/extract-protect.test.ts`](../../tests/extract-protect.test.ts): `CHALLENGES`
+  and the corpus-size count; [`tests/extraction-visible-text.test.ts`](../../tests/extraction-visible-text.test.ts):
+  `NOT_ARTICLES`.
+- Nothing to add for the reader's sentence or the pipeline: `documentIsABotCheck` in
+  [`src/messages.ts`](../../src/messages.ts) and the `ChallengePage` branch in
+  [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider.
+- Count lines in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md) (the
+  manifest and fixture counts) are prose and need updating by hand.
 
 **Both rules are prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
 stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is

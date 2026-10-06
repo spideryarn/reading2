@@ -113,7 +113,9 @@ readers never are.
   nested list, chosen by the band's width. Open it for which plan decided what, how Outline and
   Hierarchy folded into it, and where the code is.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
-  wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
+  wherever it uses them. Open it for the two bugs from the previous version it is shaped around,
+  and for the **Ask in chat** button on an entry (§ Asking about an entry in chat — the pattern for
+  any other mode that wants one).
 - **[summaries.md](summaries.md)** — the piece in plain words, at two lengths (Brief, Fuller), each
   paragraph linked to its passages and checked against them, or as a thread: one three-way control.
   Its Parts and Sections outline went on 2026-10-01; Structure draws that tree.
@@ -126,8 +128,9 @@ readers never are.
 - **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
   they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
   rows on the test article carry no date, and drawing them alike throws away what the article said.
-- **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
-  search painted into the spine. Long; open it for the confidence unit or the colours.
+- **[search.md](search.md)** — one box, three matchers (words, quick, thorough), hits marked in the
+  prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
+  it for the confidence unit, the colours, or the URL parameters.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
   them a verdict: four sub-modes, an evidence base with two numbers in it, and a confidentiality
   notice written in the past tense on purpose. Open it for how much of it is actually built.
@@ -208,14 +211,15 @@ right instead, beside a band or without one.
   goes; also the measurement showing Readability-in-the-browser is a wall, not a decision.
 - **[cross-references.md](cross-references.md)** — the article linked to itself: a phrase that
   sums up what another passage shows in detail, underlined, previewed on hover, a jump on click.
-  Open it for why a forged mark cannot work, and the two defence edits still waiting on Greg.
+  Open it for why a forged mark cannot work, and the two defence edits Greg approved.
 - **[tooltips.md](tooltips.md)** — the library choice, and why there are two implementations: the
   glossary card's triggers are injected HTML with no React element to wrap.
 - **[keyboard.md](keyboard.md)** — every key the reading view answers to. Open it before binding a
   key or adding a focusable surface: the arrows, ⌘-K and the other chords, Tab, and the rules a
   handler has to keep.
 - **[touch.md](touch.md)** — reading on an iPad: the prose keeps momentum scrolling (a swipe over a
-  gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
+  gist column stepped, before the columns were removed). Open it for why not `scroll-snap`, and for
+  what a tap means on each surface, press-target sizes, the Enter key and the touch selection button.
 - **[phone-and-touch.md](phone-and-touch.md)** — the map for a phone, an iPad and a finger: what
   Greg has said he wants on each, every policy in a line with its owner, and where the code
   branches on the device. Open it first when a report says "on my iPhone".
@@ -490,9 +494,9 @@ The key itself, and the four things the chord refuses to do, are
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to
   one, and three sorting rules that look right in a browser and are wrong.
-- **[shelf-terms.md](shelf-terms.md)** — the Topics row above the shelf: phrases picked by a
-  program from the articles' own words, one count formula for every chip, and why the archived list
-  now stays up during a search.
+- **[shelf-terms.md](shelf-terms.md)** — the Topics row above the shelf: topics a model names,
+  broad to fine, for shelves up to 150 works (the articles' own phrases, picked by a program, are
+  the fallback), one count formula for every chip, and your own tags beside them.
 - **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
   has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
   changed about what sharing promises.
@@ -505,7 +509,7 @@ The key itself, and the four things the chord refuses to do, are
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
-  finished, on this page and at the end of the bottom bar. Off by default, some modes and four Diagram
+  finished, on /profile, at the end of the bottom bar and in the command bar. Off by default, some modes and four Diagram
   pictures behind it, and the rule that hiding a feature never breaks a link to it.
 - **[high-powered-ai.md](high-powered-ai.md)** — one article's capable-tier calls on Opus instead of
   Sonnet, for a difficult piece: the switch on `/metadata`, what moves and what does not, and why

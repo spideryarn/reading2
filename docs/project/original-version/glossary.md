@@ -26,7 +26,7 @@ itself. Entities are stored individually rather than as one JSON blob, so a late
 without rewriting the first.
 
 **This is directly our problem.** Our tree generation is many nodes' worth of generated text per
-article ([Q7](../open-questions.md#q7) is exactly "what does a tree cost"). The lesson generalises:
+article (Q7, "what does a tree cost", is [answered](../ai-gateway.md#what-an-article-costs)). The lesson generalises:
 *the thing that times out is the length of the answer, so cap the answer and paginate the work.*
 Our bottom-up per-node generation already has this shape by accident — one call per node is naturally
 bounded. Keep it that way; don't be tempted into "generate the whole tree in one call" without
@@ -170,3 +170,7 @@ now be checked. See [../glossary.md](../glossary.md) for the whole of it. In sho
 - [highlighting.md](highlighting.md) — the other feature that marked up the same prose, and why they collided
 - [difficulty-and-reading-time.md](difficulty-and-reading-time.md) — the other place they scored things for the reader
 - [llm-plumbing.md](llm-plumbing.md) — the output-token ceiling, in general
+
+---
+
+Up: [overview.md](overview.md)

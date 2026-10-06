@@ -32,7 +32,7 @@ expensive command is a trap that documentation sets, not one a careless reader w
 So: `npm run typecheck`, `npm run knip`, `npm run cycles` and the rest are what you reach for while
 working. `npm run check` is the pre-commit gate, and you should expect to wait — run it under
 [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
-*system* memory pressure here. `--fast` skips the build but **not** the suite. Start it early rather
+*system* memory pressure here. `--fast` narrows the build to its API pass but does **not** skip the suite. Start it early rather
 than waiting on it in series: commit on the fast gates — `npm run typecheck`, the suites you
 touched, and `npx vitest run tests/doc-links.test.ts` after any doc edit — and read `check`'s
 verdict when it lands.
@@ -42,7 +42,7 @@ took over half an hour, available memory fell to 6 GB of 30, and six waiters wer
 burst. Ending the `check` session let the suite finish in minutes.
 
 Its neighbours: [linting.md](linting.md) is Biome as a *linter* (why not ESLint, which rules are off
-and why), [typechecking.md](typechecking.md) is `tsc` and the three projects, and
+and why), [typechecking.md](typechecking.md) is `tsc` and its projects, and
 [testing.md](testing.md) is what we run rather than what we read.
 
 ## The one fact that decides everything here
@@ -120,7 +120,7 @@ harmless.
 
 There are **zero** import cycles, confirmed independently by four tools, which is exactly why this
 one gates: it is green, so a failure means something is newly wrong today. Biome parses with its own
-parser, so it is untouched by the TypeScript 7 problem, and it checks 183 files in 14ms.
+parser, so it is untouched by the TypeScript 7 problem, and it checks the whole tree in seconds.
 
 It was **proved red against a two-file fixture before being switched on**. A check nobody has watched
 fail is not yet a check — [silent-success.md](../reusable/silent-success.md).
@@ -145,8 +145,8 @@ recommendation 3 — a repo-wide check rather than one file's guard — is this,
 widest fix, and the one not yet done"*. It matters here because a dozen agents integrate with
 `git merge` in trees they share, so this is a standing risk rather than an accident.
 
-**Gates from day one**, on this page's own rule: zero findings over 3,935 tracked files today, no
-database, no network, about 400 ms.
+**Gates from day one**, on this page's own rule: zero findings over every tracked file, no
+database, no network, under a second.
 
 Most of the work is in *not* firing, because a marker is seven identical characters and this repo
 quotes merge conflicts in its own documentation. Three rules, each paying for a measured case:
@@ -168,7 +168,8 @@ skips a file with a NUL byte in its first 8 KB.
 
 `maxAllowedComplexity` is **25**, not the default 15, and the severity is `info`. At 15 it reports 41
 functions, which buries the ones that mean something — the same argument that turned
-`noNonNullAssertion` off in [linting.md](linting.md). At 25 it reports about 16.
+`noNonNullAssertion` off in [linting.md](linting.md). At 25 it reported about 16 when this was written;
+the repo has grown, and on 2026-10-07 it reports 455 — a to-do list for a lull, not a read-through.
 
 Read a high score as *go and look*, never as *this is wrong*. The metric punishes a long flat
 `switch` about as hard as genuinely nested logic, and the worst score in the repo is a route

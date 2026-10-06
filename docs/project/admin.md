@@ -1,5 +1,7 @@
 # The admin page
 
+Up: [security-map.md](security-map.md)
+
 **`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
 and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
 with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
@@ -15,6 +17,23 @@ Greg, 2026-08-27:
 
 Built the same day. The plan, the options weighed and the review are in
 [260827z-admin-page.md](../plans/260827z-admin-page.md).
+
+## In this doc
+
+- [§ Why this doc is filed under security](#why-this-doc-is-filed-under-security) — the one request that reads across owners
+- [§ The three refusals](#the-three-refusals-and-only-one-of-them-is-a-gate) — which check is the gate, which two are courtesies
+- [§ Who the administrator is](#who-the-administrator-is) — account ids, not an email address
+- [§ What it deliberately does not show](#what-it-deliberately-does-not-show) — the line between metadata and reading
+- [§ The accounts come from the Auth service](#the-accounts-come-from-the-auth-service-not-from-a-query) — why `auth.users` is not queried
+- [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
+- [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
+- [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+- [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
+- [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+- [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
+- [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
+- [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
+- [§ See also](#see-also) — neighbouring docs
 
 ## Why this doc is filed under security
 
