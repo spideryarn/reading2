@@ -336,7 +336,9 @@ export function useCitationsRead(slug: string): CitationsRead {
         /* Only an explicit null means none yet. Validate before publishing so
            a broken revalidation leaves the list already on screen intact. */
         if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
-          throw new ReaderFacingError("The server's reply did not contain a citations list. Try again.");
+          /* A plain `Error`, so the reader gets `PAGE_FAULT`, as for every
+             other malformed artefact (tests/read-error-matrix.test.tsx). */
+          throw new Error("the citations reply has no list");
         }
         setCitations(loaded.citations);
         setStale(loaded.stale);

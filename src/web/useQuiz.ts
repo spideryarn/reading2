@@ -460,7 +460,10 @@ export function useQuizRead(slug: string): QuizRead {
       }
       /* Derive before publishing: a malformed revalidation keeps the old batch. */
       if (!loaded?.quiz || !Array.isArray(loaded.quiz.questions) || typeof loaded.quiz.batchId !== "string") {
-        throw new ReaderFacingError("The server's reply did not contain quiz questions. Try again.");
+        /* A plain `Error`, so the reader gets `PAGE_FAULT` like every other
+           malformed artefact (tests/read-error-matrix.test.tsx): a reply of
+           the wrong shape is this app's bug, not something to "try again". */
+        throw new Error("the quiz reply has no questions");
       }
       const profiled = loaded.quiz.profileHash != null;
       setQuiz(loaded.quiz);
