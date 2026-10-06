@@ -64,6 +64,7 @@ import { ChevronDown, ChevronUp, LoaderCircle, MessageSquare, Square, X } from "
 import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation } from "./ChatPanel.js";
 import { chatDraftsFor } from "./chat-draft.js";
+import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
 /* **The client's own creation window, imported rather than restated.** This
@@ -260,7 +261,8 @@ function putBack(kept: Kept): void {
 /**
  * **The collapsed card's second line**: an answer on its way, else the first
  * line of the latest answer, else how many questions there are. The cut is the
- * one `summarise` makes for a summary's `lastLine` (src/routes.ts) — but this
+ * one `summarise` makes for a summary's `lastLine` (src/routes.ts), by the same
+ * `answerOpening`: plain words, no markdown, no block references. But this
  * reads the live transcript, so it is right while the summary is still stale.
  */
 type CardLine =
@@ -273,7 +275,7 @@ function cardLine(thread: ChatThread, streaming: boolean): CardLine {
   for (let i = thread.messages.length - 1; i >= 0; i--) {
     const m = thread.messages[i];
     if (m?.role !== "assistant") continue;
-    const first = m.text.trim().split(/\n/)[0]?.trim();
+    const first = answerOpening(m.text);
     if (first) return { kind: "answer", text: first };
   }
   return { kind: "questions", count: thread.messages.filter((m) => m.role === "user").length };

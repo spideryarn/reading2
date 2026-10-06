@@ -223,6 +223,8 @@ import {
   REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
+import { answerOpening } from "./answer-opening.js";
+import { answerAsSeen } from "./recall-hint.js";
 import { gptLiveSession } from "./live-gpt.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
@@ -4463,7 +4465,9 @@ interface LiveTicket extends LiveToken {
  * `turns` counts the reader's questions rather than all messages, because that
  * is what "three turns" means to a person looking at a tooltip.
  *
- * `lastLine` is the opening of the most recent **finished** answer. Deliberately
+ * `lastLine` is the opening of the most recent **finished** answer, in plain
+ * words: `answerOpening` takes the markdown and the block references out,
+ * because the line is drawn as text beside a claim or an entry. Deliberately
  * not the pending one: a half-written answer is not a summary of anything, and
  * an empty string in a tooltip reads as a bug. It is omitted rather than
  * blanked when there is nothing to show, so the client's test is `if
@@ -4473,9 +4477,11 @@ interface LiveTicket extends LiveToken {
  * quote is article prose, which docs/project/logging.md forbids; it travels in
  * this response body and nowhere else.
  */
-function summarise(thread: ChatThread): ThreadSummary {
+export function summarise(thread: ChatThread): ThreadSummary {
   const answers = thread.messages.filter((m) => m.role === "assistant" && m.status === "done");
-  const last = answers[answers.length - 1]?.text.trim().split(/\n/)[0]?.trim();
+  const newest = answers[answers.length - 1];
+  /* As the reader saw it: a Learn answer's unopened hint is not its opening. */
+  const last = newest ? answerOpening(answerAsSeen(newest, thread.kind)) : undefined;
   return {
     id: thread.id,
     title: thread.title,

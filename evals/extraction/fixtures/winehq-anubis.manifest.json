@@ -1,0 +1,17 @@
+{
+  "fixture": "winehq-anubis",
+  "file": "winehq_anubis.html",
+  "note": "NOT AN ARTICLE — an Anubis bot check, which is what bugs.winehq.org answered src/fetch.ts's fetchDocument with on 2026-10-06. It is the SECOND Anubis page here, and an older version of the software than hal-anubis (v1.15 against v1.26): this one fetches its challenge from the server afterwards, so the page has no <script id=\"anubis_challenge\"> element, which was the only thing src/challenge-page.ts read. 1,106 characters of it read as article text, so stage 2 published it as an article titled 'Making sure you're not a bot!' until the entry also recognised the page's <script id=\"anubis_version\"> element together with the module script that solves the check. NO EDIT TO THE BYTES: this version echoes no IP address. docs/plans/261006f-other-bot-check-walls-that-clear-the-floor.md.",
+  "mustContain": [],
+  "mustNotContain": [
+    {
+      "text": "You are seeing this because the administrator of this website has set up Anubis",
+      "why": "the check's own explanation of itself — the opening of the article stage 2 used to publish"
+    },
+    {
+      "text": "Anubis uses a Proof-of-Work scheme in the vein of Hashcash",
+      "why": "the second paragraph of the same explanation; long, well-formed prose, which is why no rule about how much text there is can refuse it"
+    }
+  ],
+  "notAnArticle": true
+}

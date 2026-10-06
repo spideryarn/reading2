@@ -28,9 +28,21 @@
  * carry the element (GPT Sol, 2026-10-06).
  *
  * **Adding an entry**: when a challenge page is seen that clears the floor, and
- * with its fixture. Cloudflare's, reCAPTCHA's and the *"enable JavaScript"*
- * shells are all refused by the floor today, and an entry written without a
- * captured page is a guess about somebody else's markup.
+ * with its fixture. An entry written without a captured page is a guess about
+ * somebody else's markup. Cloudflare's, reCAPTCHA's, hCaptcha's and the
+ * *"enable JavaScript"* shells have no entry because none was seen clearing
+ * the floor: of 109 walled addresses fetched on 2026-10-06, 61 never passed
+ * stage 1 (mostly a 403), and every bot check among the rest was unreadable,
+ * under the floor (the largest at 306 characters), or Anubis. One machine, one
+ * User-Agent —
+ * docs/investigations/261006c-which-bot-check-walls-clear-the-floor-through-our-fetcher.md.
+ *
+ * **An entry is fitted to the pages it was written from, and a provider's
+ * software has versions.** The one page that run found over the floor and
+ * unrecognised was Anubis again, an older version whose page lacks the element
+ * the entry read. So an entry may hold more than one shape, each with its own
+ * captured page.
+ * docs/postmortems/261006j-a-recogniser-fitted-to-one-sample-of-a-versioned-page.md.
  */
 
 /** Whose check it is. For the log and the eval; the reader's sentence does not name it. */
@@ -57,7 +69,32 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
- * **Anubis** (a proof-of-work check a browser's script has to solve).
+ * **Is there a `<script id=… type="application/json">` whose parsed text passes?**
+ *
+ * *Is there one*, not *is the first one*: ids are not unique in pages as they
+ * are found, and `getElementById` answers with the first element of that id,
+ * so an unrelated element in front would hide the real one —
+ * docs/postmortems/261006k-a-first-id-match-hid-a-later-valid-script.md.
+ */
+function hasJsonScript(doc: Document, id: string, passes: (payload: unknown) => boolean): boolean {
+  for (const el of doc.querySelectorAll(`[id="${id}"]`)) {
+    /* Preserve the old element predicate: CSS's script selector also matches
+       SVG and MathML scripts, whose tagName is lowercase in parsed HTML. */
+    if (el.tagName !== "SCRIPT") continue;
+    if ((el.getAttribute("type") ?? "").trim().toLowerCase() !== "application/json") continue;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(el.textContent ?? "");
+    } catch {
+      continue;
+    }
+    if (passes(payload)) return true;
+  }
+  return false;
+}
+
+/**
+ * **Anubis, the challenge in the page** (v1.26, v1.27 and `devel`, as seen).
  *
  * The page carries the challenge it is setting as
  * `<script id="anubis_challenge" type="application/json">`, a JSON object with
@@ -67,17 +104,67 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
  * challenge. Captured from hal.science on 2026-10-06:
  * evals/extraction/fixtures/hal_anubis.html.
  */
-function isAnubis(doc: Document): boolean {
-  const el = doc.getElementById("anubis_challenge");
-  if (el?.tagName !== "SCRIPT") return false;
-  if ((el.getAttribute("type") ?? "").trim().toLowerCase() !== "application/json") return false;
-  let payload: unknown;
-  try {
-    payload = JSON.parse(el.textContent ?? "");
-  } catch {
-    return false;
+function isAnubisWithItsChallenge(doc: Document): boolean {
+  return hasJsonScript(
+    doc,
+    "anubis_challenge",
+    (payload) => isObject(payload) && isObject(payload["rules"]) && isObject(payload["challenge"]),
+  );
+}
+
+/** Where every Anubis install serves the script that solves its check, after whatever prefix the install sits under. */
+const ANUBIS_SOLVER_PATH = "/.within.website/x/cmd/anubis/static/js/main.mjs";
+
+/**
+ * **Anubis, the challenge fetched afterwards** (v1.15, as seen).
+ *
+ * The older page has no `anubis_challenge` element: its script asks the server
+ * for the challenge once it is running. What the page does carry, and both are
+ * required:
+ *
+ * - `<script id="anubis_version" type="application/json">` holding a non-empty
+ *   JSON string. It says *Anubis wrote this page*.
+ * - a `<script type="module">` whose `src` has a path ending
+ *   `ANUBIS_SOLVER_PATH`. It is the script that solves the check, so it says
+ *   *and this page is a challenge*, not some other page Anubis writes.
+ *
+ * **The path is matched by its ending**, because an install may sit under a
+ * prefix (sourceware.org serves it from `/git/.within.website/…`), and the
+ * query string (`?cacheBuster=…`) is not part of it.
+ *
+ * **The `src` is read as the attribute and never resolved against the
+ * document.** An uploaded copy has no address, so its base is `about:blank`,
+ * and a root-relative path does not resolve against that; the copy a reader is
+ * told to save and upload would be the one missed (GPT Sol, 2026-10-06). The
+ * made-up base below is there only so `URL` will split the path from the query
+ * string, and an attribute it cannot parse is a non-match.
+ *
+ * Captured from bugs.winehq.org on 2026-10-06:
+ * evals/extraction/fixtures/winehq_anubis.html. Versions between v1.15 and
+ * v1.26 were not seen.
+ */
+function isAnubisFetchingItsChallenge(doc: Document): boolean {
+  if (!hasJsonScript(doc, "anubis_version", (version) => typeof version === "string" && version !== "")) return false;
+  for (const el of doc.querySelectorAll("script[src]")) {
+    if ((el.getAttribute("type") ?? "").trim().toLowerCase() !== "module") continue;
+    let pathname: string;
+    try {
+      ({ pathname } = new URL(el.getAttribute("src") ?? "", "https://anubis.invalid/"));
+    } catch {
+      continue;
+    }
+    if (pathname.endsWith(ANUBIS_SOLVER_PATH)) return true;
   }
-  return isObject(payload) && isObject(payload["rules"]) && isObject(payload["challenge"]);
+  return false;
+}
+
+/**
+ * **Anubis** (a proof-of-work check a browser's script has to solve): either
+ * of the two shapes its page has been seen in. Every newer page captured
+ * carries both; the older one carries only the second.
+ */
+function isAnubis(doc: Document): boolean {
+  return isAnubisWithItsChallenge(doc) || isAnubisFetchingItsChallenge(doc);
 }
 
 /** The registry. A `Record` over the union, so a new provider cannot be named and left out. */
