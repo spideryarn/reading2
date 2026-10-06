@@ -614,9 +614,10 @@ Two fields were added, and both are the kind that goes wrong quietly.
 
 `ChatThread.kind` is **required**, not optional — an optional field means a `?? "chat"` at every read
 site and one of them would eventually be missed, which is a Recall turn answered with chat's prompt
-and nothing on screen disagreeing. Stored threads that predate the field are normalised to `"chat"` once
-on load, in each store (`normaliseKind` in [`src/chat.ts`](../../src/chat.ts), and `threadsFor` in
-[`src/store/pg-chat.ts`](../../src/store/pg-chat.ts)). Making it required is what turned this from a
+and nothing on screen disagreeing. A fixture file that predates the field is normalised to `"chat"` on
+load (`normaliseKind` in [`src/chat.ts`](../../src/chat.ts)). A row from Postgres is not: its column
+cannot be absent, and since 2026-10-06 a kind the code does not know is refused rather than read as
+a chat (`storedThreadKind` in [`src/types.ts`](../../src/types.ts)). Making it required is what turned this from a
 question of discipline into four compiler errors.
 
 - **The prompt is chosen from `begun.thread.kind`**, never from the request body. Those agree only
