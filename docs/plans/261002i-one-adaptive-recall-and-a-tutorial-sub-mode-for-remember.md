@@ -1,6 +1,6 @@
 # One adaptive Recall, and a Tutorial sub-mode for Remember
 
-Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/remember-mode.md)
+Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/learn-mode.md)
 
 **Five of Greg's reports on Remember, 2026-10-01, all from one sitting on one article**
 (`melnikoff-bargh-2018-mythical-number-2-0-spya-bucuzj`). Overseer queue item `qi-p2ymf8dt`,
@@ -109,7 +109,7 @@ clarified, `disagreement` asked two questions. remember-mode.md § One adaptive 
 **Research first**, written up in
 [261002c-recall-and-tutorial-pedagogy-for-remember-mode.md](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
 (Sonnet's web research, then my synthesis), and
-[remembering-vision.md](../project/remembering-vision.md) for where the three sub-modes are going.
+[remembering-vision.md](../project/learning-vision.md) for where the three sub-modes are going.
 
 **A fourth `ThreadKind`, `tutorial`**, and one per article, like Remember's. It is Candidates'
 precedent (a third personality on the chat machinery, its own prompt branch) plus Remember's

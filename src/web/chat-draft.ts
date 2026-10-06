@@ -1,7 +1,7 @@
 /**
  * **What the reader has typed into Chat and not sent, kept while the mode is
  * away** — so a question half written before a look at Structure, or at
- * Remember, is in the box on the way back. Plan
+ * Learn, is in the box on the way back. Plan
  * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
  *
  * One store per article, held here rather than in a component because nothing
@@ -20,7 +20,7 @@
  *   panel's composer and by the floating dialog's (its conversation arm, not
  *   its passage arm), so the words follow the reader between the two.
  * - **The box under Chat's list**, one string: it belongs to no conversation.
- * - **Remember's unsent words, by kind** — Recall, Tutorial and Explore are
+ * - **Learn's unsent words, by kind** — Recall, Tutorial and Explore are
  *   each one conversation per article, and the band decides which conversation
  *   that is, so the words are handed to whichever it selects.
  * - **Where Chat was**: the conversation that was open, or the list. `?thread=`
@@ -79,8 +79,8 @@ export interface ChatDrafts {
   setList(text: string): void;
 
   /** Recall's, Tutorial's or Explore's unsent words. */
-  remember(kind: SingleThreadKind): string;
-  setRemember(kind: SingleThreadKind, text: string): void;
+  learn(kind: SingleThreadKind): string;
+  setLearn(kind: SingleThreadKind, text: string): void;
 
   /**
    * Where Chat was: a conversation's id, `null` for the list, or `undefined`
@@ -102,7 +102,7 @@ export function createChatDrafts(): ChatDrafts {
      order wrong must not be able to undo it. */
   const spent = new Set<string>();
   let list = "";
-  const remember = new Map<SingleThreadKind, string>();
+  const learnDrafts = new Map<SingleThreadKind, string>();
   let destination: string | null | undefined;
   return {
     thread: (id) => threads.get(id),
@@ -142,9 +142,9 @@ export function createChatDrafts(): ChatDrafts {
     setList(text) {
       list = text;
     },
-    remember: (kind) => remember.get(kind) ?? "",
-    setRemember(kind, text) {
-      remember.set(kind, text);
+    learn: (kind) => learnDrafts.get(kind) ?? "",
+    setLearn(kind, text) {
+      learnDrafts.set(kind, text);
     },
     destination: () => destination,
     setDestination(id) {
@@ -155,7 +155,7 @@ export function createChatDrafts(): ChatDrafts {
         for (const text of texts) if (text.trim() !== "") return true;
         return false;
       };
-      return list.trim() !== "" || some(threads.values()) || some(remember.values());
+      return list.trim() !== "" || some(threads.values()) || some(learnDrafts.values());
     },
   };
 }

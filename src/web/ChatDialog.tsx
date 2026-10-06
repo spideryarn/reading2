@@ -988,8 +988,8 @@ export function ChatDialog({
         updatedAt: new Date().toISOString(),
         anchor: target.anchor,
         /* Always a chat. This dialog is what a selection in the prose opens,
-           and a Remember turn has no selection to open from — the route refuses
-           an anchor sent with `kind: "remember"`. So every mark the reading view
+           and a Learn turn has no selection to open from — the route refuses
+           an anchor sent with `kind: "learn"`. So every mark the reading view
            draws belongs to a chat, which is the property the overlay in
            App.tsx relies on. */
         kind: "chat",
@@ -1265,7 +1265,7 @@ export function ChatDialog({
                answer stays where it starts). */
             sized={inCard ? "content" : "fixed"}
             /* Always a chat. This dialog is what a selection in the prose opens,
-               and a Remember turn cannot be anchored to one. */
+               and a Learn turn cannot be anchored to one. */
           kind="chat"
         />
         ) : loadFailed ? (

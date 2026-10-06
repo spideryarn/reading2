@@ -140,7 +140,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
  */
 const OWNERS_ONLY: Partial<Record<Mode, string>> = {
   chat: "the owner's own conversation, built with their profile — and every turn is a model call",
-  remember:
+  learn:
     "Recall is the owner's own answers, built with their profile; Quiz was excluded by Greg on 2026-09-29 as not small (plan 260929c § Decided)",
   referee: "the owner's own criteria, poles and marks on an unpublished paper — a reviewer's private working",
 };
@@ -201,7 +201,7 @@ describe("what a visitor is told, mode by mode", () => {
    * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "remember", "referee"] as const) {
+    for (const mode of ["chat", "learn", "referee"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -365,7 +365,7 @@ describe("what a visitor is told, mode by mode", () => {
        (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.skim,
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "referee", "remember"].sort(),
+      ["chat", "referee", "learn"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "citations", "debate"] as const) {

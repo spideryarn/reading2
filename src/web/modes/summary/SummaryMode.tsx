@@ -337,7 +337,7 @@ export function SummaryControls({
 
      **Armed before the "already there" check**, so pressing the length already
      open mints a fresh press — the only way back from a failed read, as
-     QuizPanel.tsx § `RememberSubModeToggle` has it. */
+     QuizPanel.tsx § `LearnSubModeToggle` has it. */
   const choose = (next: SummaryView) => {
     const target = activationForSummary(next);
     if (slug !== null && target !== null) armActivation(slug, target);

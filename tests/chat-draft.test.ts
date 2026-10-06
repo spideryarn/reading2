@@ -81,14 +81,14 @@ describe("the other three things it holds", () => {
     expect(d.list()).toBe("something new");
   });
 
-  it("keeps Remember's words by kind, not by conversation", () => {
+  it("keeps Learn's words by kind, not by conversation", () => {
     const d = createChatDrafts();
-    expect(d.remember("remember")).toBe("");
-    d.setRemember("remember", "what I took from it");
-    d.setRemember("tutorial", "what I remember");
-    expect(d.remember("remember")).toBe("what I took from it");
-    expect(d.remember("tutorial")).toBe("what I remember");
-    expect(d.remember("explore")).toBe("");
+    expect(d.learn("learn")).toBe("");
+    d.setLearn("learn", "what I took from it");
+    d.setLearn("tutorial", "what I remember");
+    expect(d.learn("learn")).toBe("what I took from it");
+    expect(d.learn("tutorial")).toBe("what I remember");
+    expect(d.learn("explore")).toBe("");
   });
 
   it("keeps where Chat was: unknown, the list, or a conversation", () => {

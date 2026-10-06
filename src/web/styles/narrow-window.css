@@ -899,7 +899,7 @@
    Every hand-styled text field in the reading view was under 16px on 2026-09-08
    — `.gloss-ask-input` 14.4, `.fb-input` 13.1, `.srch-input`, `.chat-input`,
    `.chat-edit-box`, `.prof-box-input` and `.quiz-answer` 15.0, `.cmt-note` 14.4,
-   `.cnd-box` 14.1, `.crit-text` 14.6, `.remember .chat-input` 15.7 — eleven of
+   `.cnd-box` 14.1, `.crit-text` 14.6, `.learn .chat-input` 15.7 — eleven of
    them, and only `.cmdbar-input` (16px, from a Tailwind utility) escaped. So
    this is one rule about *fields* rather than eleven rules about classes, and a
    twelfth field is covered the day it is written.
@@ -933,10 +933,10 @@
    how this rule shipped once applying to nothing at all — the chat composer
    stayed at 15.04px with the rule three lines above it, and a browser
    measurement caught what a green suite did not. One class is not the ceiling
-   either: `.remember .chat-input` in mode-band.css is (0,2,0). `:root` is a
+   either: `.learn .chat-input` in mode-band.css is (0,2,0). `:root` is a
    pseudo-class, so it counts in the same column and takes each half to (0,2,1),
    which clears both. tests/touch-controls.test.ts pins that against the
-   Remember rule by name.
+   Learn rule by name.
 
    `:not([hidden])` on the textarea half is true on its own terms — an unshown
    box is not focusable. `[readonly]` was the first choice and is wrong: the
@@ -977,7 +977,7 @@
 
    `:not([hidden])` earns its place here for a second reason beyond matching the
    textarea half. A rule holds a select under 1rem — `.place-pick select`
-   (dialogs.css); `.chat-stance select` was another until Remember's stance
+   (dialogs.css); `.chat-stance select` was another until Learn's stance
    picker went on 2026-10-02, and the measurements below were taken on it, and
    `.chat-live-mic select` a third until the noise-reduction picker moved into
    Live's Advanced disclosure the same day (261002j) — and each is (0,1,1). A bare `:root select` is **also**

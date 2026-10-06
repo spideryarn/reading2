@@ -1,6 +1,6 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Remember's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
+ * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
  * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Debate's Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
@@ -28,16 +28,16 @@
 import type { Mode } from "../modes.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import type { DebateView, RememberView, StructureView, SummaryView } from "./params.js";
+import type { DebateView, LearnView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
  * **One sub-mode, as the mode it is in and which one.** A discriminated union
- * rather than `{ mode: Mode; view: string }`, so `{ mode: "remember", view:
+ * rather than `{ mode: Mode; view: string }`, so `{ mode: "learn", view:
  * "illustrated" }` does not compile.
  */
 export type SubMode =
-  | { readonly mode: "remember"; readonly view: RememberView }
+  | { readonly mode: "learn"; readonly view: LearnView }
   | { readonly mode: "diagram"; readonly view: DiagramKind }
   | { readonly mode: "referee"; readonly view: RefereeView }
   | { readonly mode: "summary"; readonly view: SummaryView }
@@ -53,7 +53,7 @@ export type ModeWithSubModes = SubMode["mode"];
  * `description` is the bar's one line, in the voice of `MODE_CATALOG`'s; the
  * chips keep their own longer tooltips. `experimental` is whether the chip is
  * behind the experimental-features switch *within* its mode — four of Diagram's
- * pictures are, and Remember's Explore (since 2026-10-05); every other mode
+ * pictures are, and Learn's Explore (since 2026-10-05); every other mode
  * puts the whole mode behind it or none.
  *
  * `aliases` is for a sub-mode a reader knows by another word, and one has them:
@@ -70,8 +70,8 @@ export interface SubModeWords {
   readonly aliases?: readonly string[];
 }
 
-/** Remember's four parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
-export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = {
+/** Learn's four parts. The chip's words, QuizPanel.tsx § `LearnSubModeToggle`. */
+export const LEARN_SUB_MODES: Readonly<Record<LearnView, SubModeWords>> = {
   recall: {
     label: "Recall",
     description: "Say what you took from the piece, and find out where it holds up",
@@ -87,7 +87,7 @@ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = 
     /* Widened 2026-10-05 (Greg, spya-mvmpks): not only the reader's own ideas
        but *"potential problems and criticisms and concerns"* about the piece. */
     description: "Think it through for yourself: your own ideas, where the piece may be weak, and what others say. Starts from what you have marked and discussed",
-    /* The one part of Remember still behind the switch. Greg named Recall,
+    /* The one part of Learn still behind the switch. Greg named Recall,
        Quiz and Tutorial for the mainstream features on 2026-10-04
        (spya-cnqcjf) and left this one out; it is two days old.
        docs/project/experimental-features.md. */
@@ -101,21 +101,21 @@ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = 
 };
 
 /**
- * **The parts of Remember to draw**, in chip order: every part that is not
+ * **The parts of Learn to draw**, in chip order: every part that is not
  * behind the experimental-features switch, plus all of them when the switch is
  * on, plus the one the reader is in (`current`) — the bar's own rule,
- * experimental-visibility.ts. So an old `?remember=explore` link still shows
+ * experimental-visibility.ts. So an old `?learn=explore` link still shows
  * its chip pressed with the switch off.
  *
  * One function for the two places in the band that list the parts, the chips
- * (QuizPanel.tsx § `RememberSubModeToggle`) and the (i) (RememberAbout.tsx),
+ * (QuizPanel.tsx § `LearnSubModeToggle`) and the (i) (LearnAbout.tsx),
  * so they cannot show different sets. The command bar applies the same rule to
  * every mode's sub-modes at once (CommandBar.tsx § `subModeRows`).
  */
-export function visibleRememberViews(on: boolean, current: RememberView): readonly RememberView[] {
-  return (Object.keys(REMEMBER_SUB_MODES) as RememberView[]).filter((view) =>
+export function visibleLearnViews(on: boolean, current: LearnView): readonly LearnView[] {
+  return (Object.keys(LEARN_SUB_MODES) as LearnView[]).filter((view) =>
     shownBehindTheSwitch({
-      experimental: REMEMBER_SUB_MODES[view].experimental,
+      experimental: LEARN_SUB_MODES[view].experimental,
       on,
       current: view === current,
     }),
@@ -251,8 +251,8 @@ export const DEBATE_SUB_MODES: Readonly<Record<DebateView, SubModeWords>> = {
 /** The words for one sub-mode. A `switch` so a seventh mode with sub-modes fails to compile here. */
 export function subModeWords(sub: SubMode): SubModeWords {
   switch (sub.mode) {
-    case "remember":
-      return REMEMBER_SUB_MODES[sub.view];
+    case "learn":
+      return LEARN_SUB_MODES[sub.view];
     case "diagram":
       return DIAGRAM_SUB_MODES[sub.view];
     case "referee":
@@ -274,14 +274,14 @@ export function subModeWords(sub: SubMode): SubModeWords {
  * **A mode's sub-modes, in the order its chips are drawn.** Empty for a mode
  * without any. The orders are the vocabularies' own (`DIAGRAMS`,
  * `REFEREE_VIEWS`) — Greg's chip order, which DiagramPanel's refusal sentences
- * depend on — and Remember's, Summary's and Structure's are the record's, which
- * is the toggle's (`REMEMBER_VIEWS` and `SUMMARY_VIEWS` live in params.ts, which
+ * depend on — and Learn's, Summary's and Structure's are the record's, which
+ * is the toggle's (`LEARN_VIEWS` and `SUMMARY_VIEWS` live in params.ts, which
  * this pure module may not import as a value).
  */
 export function subModesOf(mode: Mode): readonly SubMode[] {
   switch (mode) {
-    case "remember":
-      return (Object.keys(REMEMBER_SUB_MODES) as RememberView[]).map((view) => ({ mode, view }));
+    case "learn":
+      return (Object.keys(LEARN_SUB_MODES) as LearnView[]).map((view) => ({ mode, view }));
     case "diagram":
       return DIAGRAMS.map((view) => ({ mode, view }));
     case "referee":
@@ -305,13 +305,13 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
  *
  * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
  * Criteria and Brief disappear from the address rather than leaving a redundant
- * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
- * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
+ * explicit default in metadata-page links. Learn's Quiz also clears `thread`: Learn's rule 1
+ * (ConversationModes.tsx § LearnBand) — no frame in which the URL says both,
  * and one Back undoes the whole trip.
  */
 export interface SubModeParams {
   readonly mode: ModeWithSubModes;
-  readonly remember?: RememberView | null;
+  readonly learn?: LearnView | null;
   readonly thread?: null;
   readonly diagram?: DiagramKind | null;
   readonly referee?: RefereeView | null;
@@ -322,7 +322,7 @@ export interface SubModeParams {
 
 export function subModeParams(sub: SubMode): SubModeParams {
   switch (sub.mode) {
-    case "remember": {
+    case "learn": {
       /* Each view by name: Recall is the default and so absent, Quiz clears
          `thread` (rule 1), and Tutorial and Explore keep it as Recall does —
          each band overrules a stale one and writes its own. Mapping "not quiz" to Recall
@@ -330,16 +330,16 @@ export function subModeParams(sub: SubMode): SubModeParams {
       const view = sub.view;
       switch (view) {
         case "quiz":
-          return { mode: "remember", remember: "quiz", thread: null };
+          return { mode: "learn", learn: "quiz", thread: null };
         case "tutorial":
-          return { mode: "remember", remember: "tutorial" };
+          return { mode: "learn", learn: "tutorial" };
         case "explore":
-          return { mode: "remember", remember: "explore" };
+          return { mode: "learn", learn: "explore" };
         case "recall":
-          return { mode: "remember", remember: null };
+          return { mode: "learn", learn: null };
         default: {
           const unknown: never = view;
-          throw new Error(`unknown Remember view: ${String(unknown)}`);
+          throw new Error(`unknown Learn view: ${String(unknown)}`);
         }
       }
     }
@@ -366,11 +366,11 @@ export function subModeParams(sub: SubMode): SubModeParams {
  * the answer: write `mode` and nothing else.
  *
  * A sub-mode parameter outlives its mode on purpose (url-state.md § a sub-mode
- * parameter outlives its mode), so pressing Remember with `remember=quiz` still
+ * parameter outlives its mode), so pressing Learn with `learn=quiz` still
  * in the address returns the reader to the Quiz. That return is a navigation
- * *to Quiz*, and Remember's rule 1 says Quiz and a cleared `thread` are one
+ * *to Quiz*, and Learn's rule 1 says Quiz and a cleared `thread` are one
  * navigation: coming from a Chat conversation, `mode` alone would mount the
- * Quiz with Chat's thread still selected, for `RememberBand` to drop an effect
+ * Quiz with Chat's thread still selected, for `LearnBand` to drop an effect
  * later (GPT Sol, F2 of the 261004l plan review). So that one return is
  * `subModeParams`' answer for Quiz, the same as the chip and the command bar's
  * row write, rather than a second copy of the rule.
@@ -382,10 +382,10 @@ export function subModeParams(sub: SubMode): SubModeParams {
  */
 export function returnToSubMode(
   next: Mode,
-  retained: { readonly remember: RememberView },
+  retained: { readonly learn: LearnView },
 ): SubModeParams | null {
-  return next === "remember" && retained.remember === "quiz"
-    ? subModeParams({ mode: "remember", view: "quiz" })
+  return next === "learn" && retained.learn === "quiz"
+    ? subModeParams({ mode: "learn", view: "quiz" })
     : null;
 }
 

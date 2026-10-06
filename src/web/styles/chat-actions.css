@@ -179,7 +179,7 @@
    flow**, a centred row of its own between the transcript and the composer, so
    it covers nothing. It was `position: absolute; bottom: 3.6rem`, a guess at the
    composer's height, which grows with the textarea, wraps, and starts six rows
-   tall in Remember: it straddled the two and hid a line of the transcript —
+   tall in Learn: it straddled the two and hid a line of the transcript —
    the last one, on a phone. While it shows, the scroller is a row shorter;
    `scrollTop` is untouched, so nothing moves, and it cannot flicker, because
    showing it only takes the reader further from the bottom. 2026-10-01,

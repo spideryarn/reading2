@@ -166,7 +166,7 @@ export interface ScratchArticle {
    * Here because several of these suites name a block id and quote a phrase
    * from it as **literals** — `spya-gp3g6s` / `"Berggruen Prize"` in
    * tests/comment-referee-mark.test.ts, `spya-tgnssb` in
-   * tests/remember-route.test.ts — and every one of those is an id of
+   * tests/learn-route.test.ts — and every one of those is an id of
    * `example/blocks.json`. They do not survive a move to a different source
    * article, and the honest repair is to take the id and the quote from the
    * fixture rather than to write down another pair of literals that will rot

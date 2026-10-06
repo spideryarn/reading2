@@ -1436,10 +1436,10 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "IdeasBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
-  remember: [
-    { label: "RememberBand", as: "owner" },
-    { label: "ConversationBand", as: "owner", extra: "&remember=recall" },
-    { label: "QuizSubBand", as: "owner", extra: "&remember=quiz" },
+  learn: [
+    { label: "LearnBand", as: "owner" },
+    { label: "ConversationBand", as: "owner", extra: "&learn=recall" },
+    { label: "QuizSubBand", as: "owner", extra: "&learn=quiz" },
     { label: "VisitorBand", as: "visitor" },
   ],
   quotes: [
@@ -1709,7 +1709,7 @@ describe("a throw inside any band leaves the article", () => {
    Ideas' and Debate's blocks above carry the full set of money cases. These are
    the same rule for the other five things a press can arm, at the seam that
    arms each: the bar's button for a fixed mode and for Diagram's picture, and
-   the chip inside the band for Referee and Remember. Each asserts the token is
+   the chip inside the band for Referee and Learn. Each asserts the token is
    gone — the direct statement of retirement — and that nothing was bought. */
 
 describe("a press that met any broken band is retired", () => {
@@ -1796,21 +1796,21 @@ describe("a press that met any broken band is retired", () => {
     );
   });
 
-  it("remember: the Quiz chip, when the panel throws under the real useQuiz", async () => {
+  it("learn: the Quiz chip, when the panel throws under the real useQuiz", async () => {
     who.set(OWNER_A);
-    await open("?mode=remember");
+    await open("?mode=learn");
     expect(text()).not.toContain("[mode-render]");
     trace.length = 0;
 
     probe.throwAt = "QuizPanel";
-    const chip = [...host.querySelectorAll<HTMLButtonElement>(".remember-submode-btn")].find(
+    const chip = [...host.querySelectorAll<HTMLButtonElement>(".learn-submode-btn")].find(
       (b) => (b.textContent ?? "").trim() === "Quiz",
     );
     expect(chip, "no Quiz chip").toBeDefined();
     await act(async () => chip?.click());
     await settle();
 
-    containedInside("remember");
+    containedInside("learn");
     expect(activation.pendingActivation(SLUG, "quiz"), "the Quiz press survived").toBeNull();
     expect(jobPosts()).toEqual([]);
   });

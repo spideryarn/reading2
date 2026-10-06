@@ -87,6 +87,9 @@ const PINNED_ANCHORS = [
   "faq-older-profile",
   "faq-find-archived",
   "faq-shared-personalised",
+  /* 2026-10-06: Learn's id followed its name. `mode-remember` above is the
+     anchor that shipped; it is an alias now (RETIRED_MODES), never deleted. */
+  "mode-learn",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);

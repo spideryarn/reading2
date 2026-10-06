@@ -65,6 +65,12 @@ function row(n: number, over: Partial<AiCallRow>): AiCallRow {
     finishedAt: "2033-07-10T10:00:01.000Z",
     durationMs: 1000,
     outcome: "ok",
+    /* Null, as on every row no retry loop counted and every call that did not
+       fail: drizzle/20261006*_ai_calls_attempt_and_failure.sql. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: 1_000_000,
     byokUpstreamNanos: null,
     isByok: false,
@@ -110,7 +116,8 @@ const FIXTURES: AiCallRow[] = [
     webSearches: 2,
     durationMs: 1234,
   }),
-  row(2, { ownerId: ASKER, articleSlug: ASKER_GONE_SLUG, creditsUsedNanos: 2_000_000 }),
+  /* A second go that answered. */
+  row(2, { ownerId: ASKER, articleSlug: ASKER_GONE_SLUG, creditsUsedNanos: 2_000_000, attempt: 2 }),
   row(3, {
     articleSlug: OTHER_SLUG,
     scopeKind: "request",
@@ -120,7 +127,15 @@ const FIXTURES: AiCallRow[] = [
     creditsUsedNanos: 5_000_000,
   }),
   row(4, { articleSlug: OTHER_GONE_SLUG, creditsUsedNanos: 3_000_000 }),
-  row(5, { outcome: "error", creditsUsedNanos: 7_000_000 }),
+  /* The last go, refused: a call that gave up. */
+  row(5, {
+    outcome: "error",
+    creditsUsedNanos: 7_000_000,
+    attempt: 3,
+    failurePhase: "before_answer",
+    failureClass: "refused",
+    failureStatus: 503,
+  }),
   row(6, { creditsUsedNanos: 0, byokUpstreamNanos: 6_000_000, isByok: true }),
   row(7, {
     providerAccount: "anthropic",
@@ -312,6 +327,30 @@ describe("the cost analysis's reads", () => {
     expect(sum(detail, (r) => r.byokUpstreamNanos)).toBe(sum(cube, (g) => g.byokNanos));
     expect(sum(detail, (r) => r.computedCostNanos)).toBe(sum(cube, (g) => g.computedNanos));
     expect(sum(cube, (g) => g.creditsNanos)).toBe(27_000_000);
+  });
+
+  it("carries which go a row was and why it failed, and the cube's three counts follow from them", async () => {
+    await written;
+    const { spendCube, spendDetail } = await import("../src/store/ai-calls-spend-pg.js");
+    const { assertReadsAgree } = await import("../src/cost-analysis.js");
+    const cube = await spendCube(SINCE, UNTIL, ASKER, KEY);
+    const detail = await spendDetail(SINCE, UNTIL, ASKER, KEY);
+    expect(detail.find((r) => r.id === FIXTURES[4]?.id)).toMatchObject({
+      attempt: 3,
+      failurePhase: "before_answer",
+      failureClass: "refused",
+      failureStatus: 503,
+    });
+    expect(detail.find((r) => r.id === FIXTURES[0]?.id)).toMatchObject({
+      attempt: null,
+      failurePhase: null,
+      failureClass: null,
+      failureStatus: null,
+    });
+    const sum = (pick: (g: (typeof cube)[number]) => number) => cube.reduce((n, g) => n + pick(g), 0);
+    expect([sum((g) => g.counted), sum((g) => g.retries), sum((g) => g.gaveUp)]).toEqual([2, 2, 1]);
+    /* The analysis's own check, over the two real reads. */
+    expect(() => assertReadsAgree(cube, detail)).not.toThrow();
   });
 
   it("refuses, rather than truncates, past the cap", async () => {

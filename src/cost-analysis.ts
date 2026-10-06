@@ -39,11 +39,18 @@ import {
   type CostCubeRow,
   type CubeGroup,
   type CubeTotals,
+  FAILURE_NOTES,
+  type FailureCause,
+  type FailureCounts,
+  type FailureGroup,
   type OwnerEmails,
   articleKeyOf,
   articleKeyString,
   dimensionValue,
   estimatedCashNanos,
+  failureCauses,
+  failureCountsBy,
+  failureCountsOf,
   groupRows,
   modelOf,
   pivotRows,
@@ -52,6 +59,7 @@ import {
 } from "./cost-cube.js";
 import { partitionByScope, spread } from "./cost-report.js";
 import type { SpendDetailRow } from "./store/ai-calls-spend-pg.js";
+import { TRANSPORT_ATTEMPTS } from "./transport-retry.js";
 
 /* ------------------------------------------------------------ thresholds -- */
 
@@ -263,6 +271,22 @@ export interface CostAnalysis {
     nanos: Record<string, Record<string, number>>;
   };
   cacheUse: CacheUse[];
+  /**
+   * Failures and retries, by the folds `/admin/costs` draws its section from
+   * (src/cost-cube.ts § failures and retries). Counts, never rates; a null
+   * figure is "not measured".
+   */
+  failures: {
+    total: FailureCounts;
+    /** Every UTC day with a call, oldest first. */
+    byDay: FailureGroup[];
+    /** The most retries, give-ups and part-way deaths first. */
+    byTask: FailureGroup[];
+    /** The commonest first. */
+    causes: FailureCause[];
+    /** What the counts are not, in plain words. */
+    notes: string[];
+  };
   /** Null unless `--lookup-unpriced` was given. */
   lookup: LookupSummary | null;
   /** Most money first. */
@@ -315,6 +339,21 @@ export function detailIsUnpriced(row: SpendDetailRow): boolean {
   return row.isByok === true ? row.byokUpstreamNanos === null : row.creditsUsedNanos === null;
 }
 
+/**
+ * The cube's three attempt measures, for one row: `COUNTED_ATTEMPTS`, `RETRIES`
+ * and `GAVE_UP` of src/store/ai-calls-spend-pg.ts written out again, and held
+ * to them by `assertReadsAgree`.
+ */
+export function detailAttempt(row: SpendDetailRow): { counted: number; retries: number; gaveUp: number } {
+  const gaveUp =
+    row.outcome === "error" && row.failurePhase === "before_answer" && row.attempt === TRANSPORT_ATTEMPTS;
+  return {
+    counted: row.attempt === null ? 0 : 1,
+    retries: row.attempt !== null && row.attempt > 1 ? 1 : 0,
+    gaveUp: gaveUp ? 1 : 0,
+  };
+}
+
 /** Throws `CostReadsDisagree` unless both reads hold the same calls and the same money. */
 export function assertReadsAgree(
   cube: readonly CostCubeGroup[],
@@ -323,12 +362,16 @@ export function assertReadsAgree(
   const totals = totalsOf(cube);
   const sum = (pick: (row: SpendDetailRow) => number | null) =>
     detail.reduce((n, row) => n + (pick(row) ?? 0), 0);
+  const cubeSum = (pick: (row: CostCubeGroup) => number) => cube.reduce((n, row) => n + pick(row), 0);
   const checks: [string, number, number][] = [
     ["the number of calls", totals.calls, detail.length],
     ["the credits pocket (nano-dollars)", totals.creditsNanos, sum((r) => r.creditsUsedNanos)],
     ["the BYOK pocket (nano-dollars)", totals.byokNanos, sum((r) => r.byokUpstreamNanos)],
     ["the computed pocket (nano-dollars)", totals.computedNanos, sum((r) => r.computedCostNanos)],
     ["the number of unpriced calls", totals.unpricedCalls, detail.filter(detailIsUnpriced).length],
+    ["the number of counted attempts", cubeSum((g) => g.counted), sum((r) => detailAttempt(r).counted)],
+    ["the number of retries", cubeSum((g) => g.retries), sum((r) => detailAttempt(r).retries)],
+    ["the number of calls that gave up", cubeSum((g) => g.gaveUp), sum((r) => detailAttempt(r).gaveUp)],
   ];
   for (const [what, fromCube, fromDetail] of checks) {
     if (fromCube !== fromDetail) throw new CostReadsDisagree(what, fromCube, fromDetail);
@@ -345,6 +388,9 @@ export function assertReadsAgree(
     byokNanos: number;
     computedNanos: number;
     unpricedCalls: number;
+    counted: number;
+    retries: number;
+    gaveUp: number;
   }
   const keyOf = (row: {
     day: string;
@@ -363,6 +409,9 @@ export function assertReadsAgree(
     costSource: string;
     isByok: boolean | null;
     outcome: string;
+    failurePhase: string | null;
+    failureClass: string | null;
+    failureStatus: number | null;
   }): string =>
     JSON.stringify([
       row.day,
@@ -381,6 +430,9 @@ export function assertReadsAgree(
       row.costSource,
       row.isByok,
       row.outcome,
+      row.failurePhase,
+      row.failureClass,
+      row.failureStatus,
     ]);
   const addAgreement = (
     groups: Map<string, AgreementTotals>,
@@ -393,12 +445,18 @@ export function assertReadsAgree(
       byokNanos: 0,
       computedNanos: 0,
       unpricedCalls: 0,
+      counted: 0,
+      retries: 0,
+      gaveUp: 0,
     };
     seen.calls += values.calls;
     seen.creditsNanos += values.creditsNanos;
     seen.byokNanos += values.byokNanos;
     seen.computedNanos += values.computedNanos;
     seen.unpricedCalls += values.unpricedCalls;
+    seen.counted += values.counted;
+    seen.retries += values.retries;
+    seen.gaveUp += values.gaveUp;
     groups.set(key, seen);
   };
   const cubeGroups = new Map<string, AgreementTotals>();
@@ -409,6 +467,9 @@ export function assertReadsAgree(
       byokNanos: row.byokNanos,
       computedNanos: row.computedNanos,
       unpricedCalls: row.unpricedCalls,
+      counted: row.counted,
+      retries: row.retries,
+      gaveUp: row.gaveUp,
     });
   }
   const detailGroups = new Map<string, AgreementTotals>();
@@ -419,6 +480,7 @@ export function assertReadsAgree(
       byokNanos: row.byokUpstreamNanos ?? 0,
       computedNanos: row.computedCostNanos ?? 0,
       unpricedCalls: detailIsUnpriced(row) ? 1 : 0,
+      ...detailAttempt(row),
     });
   }
   let cubeDifferent = 0;
@@ -1220,6 +1282,13 @@ export function analyseCosts(input: CostAnalysisInput): CostAnalysis {
       nanos,
     },
     cacheUse,
+    failures: {
+      total: failureCountsOf(rows),
+      byDay: failureCountsBy(rows, "day").sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
+      byTask: failureCountsBy(rows, "task"),
+      causes: failureCauses(rows),
+      notes: [...FAILURE_NOTES],
+    },
     lookup: unpriced.lookup,
     leads,
   };

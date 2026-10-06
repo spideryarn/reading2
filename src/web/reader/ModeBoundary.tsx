@@ -29,7 +29,7 @@
  *
  * `key={mode}` at the call site gives every mode its own boundary, so a broken
  * Quotes cannot follow the reader into Timeline. Within an owner's mode, the
- * sub-mode a band is showing — Diagram's picture, Referee's view, Remember's
+ * sub-mode a band is showing — Diagram's picture, Referee's view, Learn's
  * half — goes in `resetKey`, which is `FeatureBoundary`'s documented extension
  * point for it: Back from broken Claims to Criteria is a different band and
  * gets a fresh start. Visitors omit it because those parameters do not select
@@ -38,11 +38,11 @@
  * ## And the press it retires is the press it would have claimed
  *
  * `bandTarget` (activation.ts) answers from the same tables the presses arm
- * from. It needs the sub-mode for Diagram, Referee, Remember and Summary (whose
+ * from. It needs the sub-mode for Diagram, Referee, Learn and Summary (whose
  * thread arms nothing), and each also belongs in the boundary reset key.
  * This component therefore reads those parameters itself. That keeps them off
  * `Reader`'s own render, which the bands that own them each avoided for the
- * same reason (RememberBand, DiagramBand).
+ * same reason (LearnBand, DiagramBand).
  */
 import { useQueryStates } from "nuqs";
 import type { ReactNode } from "react";
@@ -53,7 +53,7 @@ import {
   diagramParam,
   type Mode,
   refereeParam,
-  rememberParam,
+  learnParam,
   structureParam,
   summaryParam,
 } from "../params.js";
@@ -85,7 +85,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   summary: BAND,
   diagram: BAND,
   ideas: BAND,
-  remember: BAND,
+  learn: BAND,
   quotes: BAND,
   timeline: BAND,
   debate: BAND,
@@ -121,12 +121,12 @@ export function ModeBoundary({
   const [sub] = useQueryStates({
     diagram: diagramParam,
     referee: refereeParam,
-    remember: rememberParam,
+    learn: learnParam,
     summary: summaryParam,
     structure: structureParam,
   });
   /* Only an owner's band is selected by the first three modes. A Diagram visitor
-     is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
+     is pinned to Sketch, and Referee/Learn visitors see `VisitorBand`, so an
      address change there is not a new band and must not retry a broken one.
      **Summary's is the exception**: a visitor gets the plain-words lengths
      and the thread too, off the payload (SummaryMode.tsx §
@@ -144,8 +144,8 @@ export function ModeBoundary({
           ? sub.diagram
           : mode === "referee"
             ? sub.referee
-            : mode === "remember"
-              ? sub.remember
+            : mode === "learn"
+              ? sub.learn
               : ""
         : "";
   return (

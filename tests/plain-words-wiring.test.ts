@@ -57,8 +57,8 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
     oldSentence: "Keeps the author's own distinctive words",
   },
   {
-    name: "Remember",
-    text: () => textOf(buildConverseMessages({ ...chatBase, kind: "remember" })[0]?.content),
+    name: "Learn",
+    text: () => textOf(buildConverseMessages({ ...chatBase, kind: "learn" })[0]?.content),
     kinds: ["explain"],
     oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
   },

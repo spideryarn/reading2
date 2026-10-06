@@ -199,7 +199,7 @@ Nothing in the type system, the tests or the linter could see any of them.
 | diagram | the press draws the picture; arriving by link draws nothing and states the price | [diagram.md § Why Force was the default, and why Sketch is now](../project/diagram.md) |
 | chat | runs nothing until asked; it can reach past the article, and the strip says when it did | [chat-tools.md](../project/chat-tools.md) |
 | debate | two searches of the open web; every row links out to its source | `MODE_TARGET` docblock, `DebatePanel.tsx` § `dbt-card-out` |
-| remember | you speak first; four stances change how hard it pushes back | [remember-mode.md](../project/remember-mode.md) |
+| remember | you speak first; four stances change how hard it pushes back | [remember-mode.md](../project/learn-mode.md) |
 
 ## What the test holds, and what it deliberately does not
 

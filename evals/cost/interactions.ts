@@ -9,7 +9,7 @@
  * The other half of [run.ts](run.ts). That one measures what an *article* costs
  * — the ingest and the eight modes, each a job through the production queue.
  * This measures what a *reader* costs after the article exists: a chat turn, a
- * Remember turn, an explanation, a glossary term checked on the web, a search, a
+ * Learn turn, an explanation, a glossary term checked on the web, a search, a
  * marked quiz answer, the four referee tasks, a dictated sentence, the
  * embeddings a diagram buys — the whole of the plan's stated per-interaction
  * inventory, with `--list` as the roll call. Per-article and per-interaction are
@@ -74,7 +74,7 @@
  *
  * Two of the tasks reach production through a **seam** rather than through the
  * whole route: `lookUpTerm` is built by `makeLookUpTerm` with a fabricated
- * glossary and a sink for the write, and Remember and Candidates are `converse`
+ * glossary and a sink for the write, and Learn and Candidates are `converse`
  * with a `kind`, because that is all the routes give them either.
  *
  * The idiom itself is not new — `evals/referee-claims.ts` and
@@ -233,7 +233,7 @@ const QUESTIONS = [
   "Which part of this does the piece itself treat as least settled?",
 ] as const;
 
-/** What a reader says they took from the piece, and the follow-up a Remember turn gets. */
+/** What a reader says they took from the piece, and the follow-up a Learn turn gets. */
 const RECOLLECTIONS = [
   "I think the argument is that the obvious explanation is the wrong one, and that the " +
     "evidence for the alternative is mostly indirect.",
@@ -243,7 +243,7 @@ const RECOLLECTIONS = [
 /**
  * **One turn of a conversation, whichever of the three kinds it is.**
  *
- * Chat, Remember and Candidates are all `converse` with a different `kind`
+ * Chat, Learn and Candidates are all `converse` with a different `kind`
  * (src/converse.ts § `systemFor`, `jobFor`, `defaultModel`) — the prompt, the
  * model, the timeout and the web-search tool all follow from it — so they are
  * one function here rather than three copies that would drift. Round 2 carries
@@ -298,22 +298,22 @@ const TASKS: readonly InteractionTask[] = [
       }),
   },
   {
-    name: "remember",
+    name: "learn",
     note:
-      "One Remember turn — the reader says what they took from the piece and finds out. It is " +
-      "`converse` with `kind: \"remember\"`, which is the whole difference: a different system " +
+      "One Learn turn — the reader says what they took from the piece and finds out. It is " +
+      "`converse` with `kind: \"learn\"`, which is the whole difference: a different system " +
       "prompt (one adaptive voice since 2026-10-02; until then a per-turn stance rode in the " +
       "final user message). It bills under the `chat` AI job, so " +
       "read its number beside chat's rather than as a new line in the model table. The wire " +
-      "validation in `streamChat` (thread kind, MAX_REMEMBER_CHARS) is not an input to the " +
+      "validation in `streamChat` (thread kind, MAX_LEARN_CHARS) is not an input to the " +
       "model call, so no thread is needed.",
     rounds: { kind: "cold-then-warm" },
     run: (ctx) =>
       oneTurn({
-        task: "remember",
+        task: "learn",
         ctx,
         question: RECOLLECTIONS[ctx.round - 1] ?? RECOLLECTIONS[0],
-        kind: "remember",
+        kind: "learn",
       }),
   },
   {
@@ -571,7 +571,7 @@ const TASKS: readonly InteractionTask[] = [
  * Round 1's question and answer, per task, so round 2 can carry it as history.
  *
  * **Keyed by task**, which a single `let` was not: three tasks have a second
- * turn now, and a shared slot would have Remember carrying chat's answer into a
+ * turn now, and a shared slot would have Learn carrying chat's answer into a
  * conversation it was never part of. Written and read by the same task, one
  * round after the other, in one process.
  */

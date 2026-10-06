@@ -34,7 +34,7 @@ import {
 } from "../scripts/cost-analysis-html.js";
 import { PRODUCTION_USERS_NOTE } from "../scripts/cost-analysis.js";
 import { type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
-import type { CostCubeGroup } from "../src/cost-cube.js";
+import { type CostCubeGroup, failureSummary } from "../src/cost-cube.js";
 import type { SpendDetailRow } from "../src/store/ai-calls-spend-pg.js";
 import { formatCostNanos } from "../src/web/admin-costs-view.js";
 import * as charts from "../src/web/cost-charts.js";
@@ -77,6 +77,10 @@ function call(over: Partial<SpendDetailRow> = {}): SpendDetailRow {
     costSource: "provider",
     isByok: false,
     outcome: "ok",
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     eventKind: null,
     creditsUsedNanos: CENT,
     byokUpstreamNanos: null,
@@ -113,6 +117,12 @@ function cubeOf(detail: readonly SpendDetailRow[]): CostCubeGroup[] {
       costSource: r.costSource,
       isByok: r.isByok,
       outcome: r.outcome,
+      failurePhase: r.failurePhase,
+      failureClass: r.failureClass,
+      failureStatus: r.failureStatus,
+      counted: r.attempt === null ? 0 : 1,
+      retries: r.attempt !== null && r.attempt > 1 ? 1 : 0,
+      gaveUp: r.outcome === "error" && r.failurePhase === "before_answer" && r.attempt === 3 ? 1 : 0,
       calls: 1,
       creditsNanos: r.creditsUsedNanos ?? 0,
       byokNanos: r.byokUpstreamNanos ?? 0,
@@ -129,12 +139,21 @@ function cubeOf(detail: readonly SpendDetailRow[]): CostCubeGroup[] {
  * and enough shape to fire every section and most leads.
  */
 const DETAIL: SpendDetailRow[] = [
-  call({ creditsUsedNanos: 123 * CENT, jobId: "job-A" }),
+  /* A second go that answered; the 12th, below, is a day nothing numbered. */
+  call({ creditsUsedNanos: 123 * CENT, jobId: "job-A", attempt: 2 }),
   call({ creditsUsedNanos: 40 * CENT, jobId: "job-B", startedAt: "2031-03-12T10:00:00.000Z" }),
   call({ creditsUsedNanos: 0, byokUpstreamNanos: 30 * CENT, isByok: true }),
   call({ costSource: "computed", creditsUsedNanos: null, computedCostNanos: 20 * CENT, scopeKind: "request", job: "live_conversation", stepName: null, wire: "realtime" }),
   call({ id: "unpriced-call", costSource: "none", creditsUsedNanos: null, outcome: "aborted" }),
-  call({ outcome: "error", creditsUsedNanos: 5 * CENT }),
+  /* The last go, refused: a call that gave up. Its class is hostile, as if the closed list had failed. */
+  call({
+    outcome: "error",
+    creditsUsedNanos: 5 * CENT,
+    attempt: 3,
+    failurePhase: "before_answer",
+    failureClass: `refused ${IMG}`,
+    failureStatus: 503,
+  }),
   /* Hostile values, as an attacker who could write a model name, a job or a slug would. */
   call({ answeredModel: `evil/${ATTACK}`, creditsUsedNanos: 7 * CENT }),
   call({ job: IMG, stepName: null, scopeKind: "request", creditsUsedNanos: 6 * CENT }),
@@ -490,6 +509,69 @@ describe("the report: its figures are the analysis's", () => {
     expect(text).toMatch(/Every date is UTC/);
     expect(text).toMatch(/opaque ids by design/);
     expect(text).toMatch(/src\/cost-cube\.ts/);
+  });
+});
+
+describe("the report: failures and retries", () => {
+  it("shows zero deaths beside unmeasured retries on an unnumbered phase-recorded failure", () => {
+    const detail = [call({ attempt: null, outcome: "error", failurePhase: "before_answer", failureClass: "refused", failureStatus: 503 })];
+    const report = parse(renderCostReport(analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null })), {
+      commentary: null, chart: null, commit: null,
+    }));
+    for (const table of ["failures-days", "failures-tasks"]) {
+      const cells = [...report.querySelectorAll(`[data-section="${table}"] tbody tr td`)].map((td) => td.textContent);
+      expect(cells.slice(1)).toEqual(["0", "not measured", "not measured", "0"]);
+    }
+    expect(report.querySelector("[data-failures-summary]")?.textContent).toContain("0 attempts died part-way.");
+  });
+
+  const doc = parse(REPORT);
+  const cells = (name: string) =>
+    [...doc.querySelectorAll(`table[data-section="${name}"] tbody tr`)].map((tr) =>
+      [...tr.querySelectorAll("td")].map((td) => td.textContent ?? ""),
+    );
+
+  it("has the section, with the totals in the analysis's own sentence", () => {
+    expect([...doc.querySelectorAll("h2")].map((h) => h.textContent)).toContain("Failures and retries");
+    expect(ANALYSIS.failures.total).toMatchObject({ counted: 2, retries: 2, gaveUp: 1, diedPartWay: 0 });
+    expect(doc.querySelector("[data-failures-summary]")?.textContent).toBe(failureSummary(ANALYSIS.failures.total));
+  });
+
+  it("counts per UTC day and per task, and writes not measured where nothing was counted", () => {
+    expect(cells("failures-days")).toEqual([
+      ["2031-03-10", "2", "2", "1", "0"],
+      ["2031-03-12", "0", "not measured", "not measured", "not measured"],
+    ]);
+    const glossary = cells("failures-tasks").find((row) => row[0] === "glossary");
+    expect(glossary).toEqual(["glossary", "2", "2", "1", "0"]);
+  });
+
+  it("lists the causes, and shows a hostile class as the text that was written", () => {
+    expect(cells("failures-causes")).toEqual([
+      ["before the answer began", `refused ${IMG}`, "503", "Anthropic", "anthropic/claude-sonnet-5", "glossary", "1"],
+    ]);
+  });
+
+  it("says what the counts are not, and draws no percentage", () => {
+    const section = doc.querySelector("[data-failures]")?.textContent ?? "";
+    for (const note of ANALYSIS.failures.notes) expect(section).toContain(note);
+    expect(section).toContain("Stalls are not measured.");
+    expect(section).not.toContain("%");
+  });
+
+  it("says not measured, with no table, when nothing in the ledger was counted", () => {
+    const plain = [call(), call()];
+    const report = parse(
+      renderCostReport(analyseCosts(input({ cube: cubeOf(plain), detail: plain, lookups: null })), {
+        commentary: null,
+        chart: null,
+        commit: null,
+      }),
+    );
+    expect(report.querySelector("[data-failures-summary]")?.textContent).toBe(
+      "Not measured: none of the 2 attempts was numbered by our retry loop.",
+    );
+    expect(report.querySelector("[data-failures] table")).toBeNull();
   });
 });
 

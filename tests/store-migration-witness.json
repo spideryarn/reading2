@@ -272,7 +272,7 @@
     "tests/referee-scan-route.test.ts": [
       "copy-artefacts:copyArtefacts"
     ],
-    "tests/remember-route.test.ts": [
+    "tests/learn-route.test.ts": [
       "copy-artefacts:copyArtefacts"
     ],
     "tests/retry-is-only-for-a-failed-job.test.ts": [
@@ -919,10 +919,10 @@
     "tests/refused-job-reason-survives.test.tsx",
     "tests/refused-writes-are-reported.test.tsx",
     "tests/relative-time.test.ts",
-    "tests/remember-panel.test.tsx",
-    "tests/remember-prompt.test.ts",
-    "tests/remember-store.test.ts",
-    "tests/remember-url-rules.test.tsx",
+    "tests/learn-panel.test.tsx",
+    "tests/learn-prompt.test.ts",
+    "tests/learn-store.test.ts",
+    "tests/learn-url-rules.test.tsx",
     "tests/request-spend.test.ts",
     "tests/reserved-article-address.test.ts",
     "tests/reserved.test.ts",

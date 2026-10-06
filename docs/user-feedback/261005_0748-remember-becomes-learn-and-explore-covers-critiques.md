@@ -29,7 +29,7 @@ parts, and the other two are queued and not built**, so the report as a whole is
 
 What we did. The plan, GPT Sol's three reviews and what landed are
 [261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md); the mode is
-[remember-mode.md](../project/remember-mode.md).
+[remember-mode.md](../project/learn-mode.md).
 
 - **Learn.** Every word a reader or a model sees says Learn: the bar, the tab title, the command
   bar, Help, Features, the prompts. Typing *remember*, or *remember quiz*, in the command bar still

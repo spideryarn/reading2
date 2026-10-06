@@ -645,11 +645,14 @@ function shiftForCard(windowWidth: number, left: number, right: number, rootFont
   return Math.max(0, Math.min(PROSE_SHIFT_MAX, cardFull - right, left / 2));
 }
 
-/** Keep the title over the shifted prose on wide windows only. The older
- * title alignment below the threshold must stay unchanged. Use the fitted
- * page width: a media query includes the scrollbar and cannot see the notch. */
-export function margTitleReserve(fit: Fit, windowWidth: number): number {
-  return fit.alone && windowWidth >= PROSE_SHIFT_FROM ? fit.margReserve : 0;
+/** Keep the title over the prose whenever the column or the card's shift has
+ * moved it left of centre: the masthead centres in the same narrowed box the
+ * table does. Until 2026-10-06 this applied from `PROSE_SHIFT_FROM` only, and
+ * from an iPad's width to about 1400px the title sat up to about 145px right
+ * of the prose (qi-kfmr6j93; measured in 261006c). Beside a band the title has its own rule, which reads
+ * `--marg-reserve` itself (narrow-window.css § the title over the column). */
+export function margTitleReserve(fit: Fit): number {
+  return fit.alone ? fit.margReserve : 0;
 }
 
 /**

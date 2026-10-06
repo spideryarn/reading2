@@ -109,7 +109,7 @@ function rowsIn(context: Context): readonly Command[] {
   };
   return [
     ...modes.map(modeCommand),
-    ...subModeRows(modes, context.experimentalOn, { diagram: "sketch", remember: "recall" }),
+    ...subModeRows(modes, context.experimentalOn, { diagram: "sketch", learn: "recall" }),
     ...besideTheModes({
       article: context.article
         ? {

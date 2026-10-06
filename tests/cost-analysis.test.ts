@@ -57,6 +57,10 @@ function call(over: Partial<SpendDetailRow> = {}): SpendDetailRow {
     costSource: "provider",
     isByok: false,
     outcome: "ok",
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     eventKind: null,
     creditsUsedNanos: CENT,
     byokUpstreamNanos: null,
@@ -107,6 +111,9 @@ function cubeOf(detail: readonly SpendDetailRow[]): CostCubeGroup[] {
       costSource: r.costSource,
       isByok: r.isByok,
       outcome: r.outcome,
+      failurePhase: r.failurePhase,
+      failureClass: r.failureClass,
+      failureStatus: r.failureStatus,
     };
     const key = JSON.stringify(dims);
     const g =
@@ -120,8 +127,15 @@ function cubeOf(detail: readonly SpendDetailRow[]): CostCubeGroup[] {
         unpricedCalls: 0,
         computedCalls: 0,
         settledCalls: 0,
+        counted: 0,
+        retries: 0,
+        gaveUp: 0,
       } satisfies CostCubeGroup);
     g.calls++;
+    if (r.attempt !== null) g.counted++;
+    if (r.attempt !== null && r.attempt > 1) g.retries++;
+    /* Three goes: src/transport-retry.ts § `TRANSPORT_ATTEMPTS`, written out again. */
+    if (r.outcome === "error" && r.failurePhase === "before_answer" && r.attempt === 3) g.gaveUp++;
     g.creditsNanos += r.creditsUsedNanos ?? 0;
     g.byokNanos += r.byokUpstreamNanos ?? 0;
     g.computedNanos += r.computedCostNanos ?? 0;
@@ -266,7 +280,36 @@ describe("the two reads", () => {
     ["cost source", { costSource: "other" }],
     ["BYOK status", { isByok: null }],
     ["outcome", { outcome: "error" }],
+    ["failure phase", { failurePhase: "mid_answer" }],
+    ["failure class", { failureClass: "unfinished" }],
+    ["failure status", { failureStatus: 503 }],
   ] satisfies [string, Partial<SpendDetailRow>][];
+
+  it("throws on a difference in the counted attempts, the retries and the give-ups", () => {
+    const attempts = [
+      call({ attempt: 1 }),
+      call({ attempt: 2 }),
+      call({ attempt: 3, outcome: "error", failurePhase: "before_answer", failureClass: "refused" }),
+      call({ attempt: 1, wire: "chat" }),
+    ];
+    expect(analyse(attempts).failures.total).toMatchObject({ counted: 4, retries: 2, gaveUp: 1 });
+    for (const [measure, words] of [
+      ["counted", /counted attempts/],
+      ["retries", /retries/],
+      ["gaveUp", /gave up/],
+    ] as const) {
+      const cube = cubeOf(attempts);
+      (cube[0] as CostCubeGroup)[measure] += 1;
+      expect(() => analyse(attempts, { cube }), measure).toThrow(words);
+    }
+    /* The same totals, moved between two groups: only the grouped check sees it. */
+    const moved = cubeOf(attempts);
+    const [from, to] = [moved.find((g) => g.retries > 0), moved.find((g) => g.retries === 0)];
+    if (!from || !to) throw new Error("the fixture needs a group with a retry and one without");
+    from.retries -= 1;
+    to.retries += 1;
+    expect(() => analyse(attempts, { cube: moved })).toThrow(/grouped population/);
+  });
 
   it.each(groupingChanges)(
     "rejects a different %s population even when the grand totals agree",
@@ -418,6 +461,89 @@ describe("over time", () => {
     expect(analysis.overTime.nanos["2031-03-13"]).toEqual({ "interactive request work": 6 * CENT });
     expect(Object.values(analysis.overTime.nanos["2031-03-10"] ?? {})).toEqual([4 * CENT]);
     expect(analysis.overTime.nanos["2031-03-11"]).toBeUndefined();
+  });
+});
+
+describe("failures and retries", () => {
+  const refused = { outcome: "error", failurePhase: "before_answer", failureClass: "refused", failureStatus: 503 } as const;
+  const detail = [
+    /* A day nothing numbered. */
+    call({ startedAt: "2031-03-09T10:00:00.000Z" }),
+    /* A glossary call that gave up, and one that answered on its second go. */
+    call({ ...refused, attempt: 1 }),
+    call({ ...refused, attempt: 2 }),
+    call({ ...refused, attempt: 3 }),
+    call({ attempt: 2 }),
+    /* A chat answer that broke half-way. */
+    call({
+      scopeKind: "request",
+      job: "chat",
+      stepName: null,
+      attempt: 1,
+      outcome: "error",
+      failurePhase: "mid_answer",
+      failureClass: "unfinished",
+      failureStatus: 200,
+    }),
+    /* An eval: out of scope unless asked for. */
+    call({ scopeKind: "eval", ...refused, attempt: 3 }),
+  ];
+
+  it("counts, for the scope, the attempts, the retries, the give-ups and the part-way deaths", () => {
+    expect(analyse(detail).failures.total).toEqual({
+      attempts: 6,
+      counted: 5,
+      retries: 3,
+      gaveUp: 1,
+      diedPartWay: 1,
+    });
+    expect(analyse(detail, { includeNonProduct: true }).failures.total).toMatchObject({ counted: 6, gaveUp: 2 });
+  });
+
+  it("has a line per UTC day, oldest first, and a day nothing counted is not measured", () => {
+    const { byDay } = analyse(detail).failures;
+    expect(byDay.map((d) => [d.label, d.counted, d.retries, d.gaveUp, d.diedPartWay])).toEqual([
+      ["2031-03-09", 0, null, null, null],
+      ["2031-03-10", 5, 3, 1, 1],
+    ]);
+  });
+
+  it("has a line per mode or task, the most trouble first", () => {
+    const { byTask } = analyse(detail).failures;
+    expect(byTask.map((t) => [t.label, t.counted, t.retries, t.gaveUp, t.diedPartWay])).toEqual([
+      ["glossary", 4, 3, 1, 0],
+      ["chat", 1, 0, 0, 1],
+    ]);
+  });
+
+  it("lists the causes with class, status, upstream, model and task", () => {
+    expect(analyse(detail).failures.causes).toMatchObject([
+      {
+        phase: "before the answer began",
+        failureClass: "refused",
+        status: "503",
+        upstream: "Anthropic",
+        model: "anthropic/claude-sonnet-5",
+        task: "glossary",
+        attempts: 3,
+      },
+      { phase: "part-way through the answer", failureClass: "unfinished", status: "200", task: "chat", attempts: 1 },
+    ]);
+  });
+
+  it("carries the notes that say what the counts are not", () => {
+    const notes = analyse(detail).failures.notes.join(" ");
+    expect(notes).toContain("counts, not rates");
+    expect(notes).toContain("one attempt, not one call");
+    expect(notes).toContain("Stalls are not measured");
+    expect(notes).toContain("PDF reader and the embeddings");
+  });
+
+  it("measures nothing in a ledger from before the columns", () => {
+    expect(analyse([call(), call()]).failures).toMatchObject({
+      total: { attempts: 2, counted: 0, retries: null, gaveUp: null, diedPartWay: null },
+      causes: [],
+    });
   });
 });
 

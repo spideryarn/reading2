@@ -71,7 +71,7 @@ His words are the spec:
 **Ending: Shipped**, on `dev`, with one part queued. Plan
 [261002i](../plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md), stage 3;
 research [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md); vision
-[remembering-vision.md](../project/remembering-vision.md).
+[remembering-vision.md](../project/learning-vision.md).
 
 What is built: chips **Recall · Tutorial · Quiz**. Tutorial is its own single conversation per
 article. Each turn: a brief reaction, one small cited piece of the article, one task (say it back,

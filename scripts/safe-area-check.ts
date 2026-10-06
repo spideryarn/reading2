@@ -57,7 +57,7 @@ const bottom = flag("bottom") ?? "34px";
    the resting state. */
 const scroll = Number(flag("scroll") ?? 1200);
 const shots = flag("shots");
-const modes = (flag("modes") ?? "glossary,summary,search,chat,ideas,outline,quotes,timeline,referee,diagram,remember").split(",");
+const modes = (flag("modes") ?? "glossary,summary,search,chat,ideas,outline,quotes,timeline,referee,diagram,learn").split(",");
 
 const { chromium } = await import("playwright-core");
 const browser = await chromium.launch({ headless: true, executablePath: chromePath(), args: ["--no-sandbox"] });

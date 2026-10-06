@@ -34,9 +34,8 @@
 
 /* The masthead is a page-wide bar and centres the title in its own box
    (narrow-window.css § plain, centred), so it has to keep the same room clear
-   when the prose shifts on a wide window. `margTitleReserve` in layout.ts
-   gates this on the fitted width; below 1600px even the old title alignment
-   stays unchanged, including the phone's padding shorthand.
+   whenever the column or the card's shift moves the prose left of centre.
+   `margTitleReserve` in layout.ts is 0 beside a band and with no column.
    The band case subtracts the reserve in its own rule (§ the title over the
    column). */
 .reader.text-alone .masthead {

@@ -285,35 +285,47 @@ describe("the marginalia column", () => {
         }
       });
 
-      it("leaves the masthead exactly as it was below 1600, including when notes fit on a phone", () => {
-        for (const c of CASES.filter((c) => c.windowWidth < 1600)) {
+      /* qi-kfmr6j93: until 2026-10-06 this was gated on `PROSE_SHIFT_FROM`, so
+         from an iPad's width to about 1400px (rule 2: the column pushes the
+         prose left) the title stayed centred in the whole bar, up to about
+         145px right of the prose. */
+      it("takes the title with the prose at every width without a band", () => {
+        let pushed = 0;
+        for (const c of CASES) {
           const fit = fitView({ ...c, margin: true });
-          expect(margTitleReserve(fit, c.windowWidth), JSON.stringify(c)).toBe(0);
+          expect(margTitleReserve(fit), JSON.stringify(c)).toBe(fit.margReserve);
+          if (c.windowWidth < PROSE_SHIFT_FROM && fit.margReserve > 0) pushed++;
         }
-        const phone = fitView({ windowWidth: 612, margin: true });
-        expect(phone.margReserve).toBe(200);
-        expect(margTitleReserve(phone, 612)).toBe(0);
+        expect(pushed).toBeGreaterThan(100);
+        const fit = fitView({ windowWidth: 1200, margin: true });
+        expect(fit.margReserve).toBe(196);
+        expect(margTitleReserve(fit)).toBe(196);
+        expect(margTitleReserve(fitView({ windowWidth: 1600, margin: true }))).toBe(200);
+        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(288);
       });
 
-      it("takes the title with the prose only on a wide window without a band", () => {
-        const fit = fitView({ windowWidth: 1600, margin: true });
-        expect(margTitleReserve(fit, 1599)).toBe(0);
-        expect(margTitleReserve(fit, 1600)).toBe(200);
-        const largeType = fitView({ windowWidth: 1600, rootFontPx: 24, margin: true });
-        expect(margTitleReserve(largeType, 1600)).toBe(288);
+      it("leaves the title to the band's own rule beside a band, and at 0 with no column", () => {
+        for (const c of BANDED) {
+          const fit = fitView({ ...c, modeBand: true, margin: true });
+          if (fit.alone) continue;
+          expect(margTitleReserve(fit), JSON.stringify(c)).toBe(0);
+        }
         const band = fitView({ windowWidth: 1600, modeBand: true, margin: true });
         expect(band.margReserve).toBeGreaterThan(0);
-        expect(margTitleReserve(band, 1600)).toBe(0);
+        expect(margTitleReserve(band)).toBe(0);
+        for (const c of CASES) {
+          expect(margTitleReserve(fitView(c)), JSON.stringify(c)).toBe(0);
+        }
       });
 
       /* This checks the CSS/Reader wiring; the width and band conditions are
          exercised as behavior above, rather than certified by a CSS regex. */
-      it("wires the masthead to the gated reserve, not the notes' always-present reserve", () => {
+      it("wires the masthead to the title reserve, which is 0 beside a band", () => {
         expect(MARG_CSS).toMatch(
           /\.reader\.text-alone \.masthead \{\s*padding-right: calc\(var\(--masthead-pad-r\) \+ var\(--marg-title-reserve, 0px\)\);/,
         );
         const reader = readFileSync(new URL("../src/web/reader/Reader.tsx", import.meta.url), "utf8");
-        expect(reader).toMatch(/"--marg-title-reserve": .*margTitleReserve\(fit, windowWidth\)/);
+        expect(reader).toMatch(/"--marg-title-reserve": .*margTitleReserve\(fit\)/);
       });
     });
 

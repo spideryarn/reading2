@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the plan:
 [261003i](../plans/261003i-tutorial-leans-to-retention-a-softer-blurb-quote-links-that-show-the-quote.md)
-· the mode: [remember-mode.md](../project/remember-mode.md)
+· the mode: [remember-mode.md](../project/learn-mode.md)
 
 **Question.** Greg asked (`spya-mtsf0y`, 2026-10-03) for Tutorial to focus *"more on retention of the
 article rather than helping me explore my own thoughts."* Does the changed `TUTORIAL_SYSTEM` ask
@@ -23,7 +23,7 @@ them (CR-5); they had been left in a scratch directory.
 [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change).
 
 - **Production's own function**: `converse` with `kind: "tutorial"`, through
-  [`evals/remember-tutorial.ts`](../../evals/remember-tutorial.ts). Sonnet 5, our tools off.
+  [`evals/remember-tutorial.ts`](../../evals/learn-tutorial.ts). Sonnet 5, our tools off.
 - **Two articles, six scripted readers, five turns each.** The Noema fixture
   (`data/noema-mythology-of-conscious-ai`): `notRead`, `remembers`, `expert`, and a new `richRecall`.
   The Entropy article Greg was reading (Levin, *Self-Improvising Memory*; 77 blocks, copied

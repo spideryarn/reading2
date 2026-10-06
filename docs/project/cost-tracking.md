@@ -61,6 +61,7 @@ so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
 | What has each account cost this month? | `/admin/users`, the spend column — [admin.md](admin.md#the-spend-column-and-the-two-things-that-keep-it-honest) |
 | Which user, article, mode or model is the money going on, and when? | `/admin/costs` — [admin-costs.md](admin-costs.md) |
 | Where are the inefficiencies, with a report Greg can read? | `npm run cost:analyse` — [admin-costs.md § Running an analysis](admin-costs.md#running-an-analysis) |
+| How often is a call asked again, given up on, or cut off part-way, and why? | `/admin/costs` and `npm run cost:analyse` — [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries) |
 | Is what the ledger records right, and what is it missing? | the 2026-10-05 audit — [261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md) |
 | Where did the money go, and how much of it can we see? | `npm run cost`, `npm run cost -- --owners` — [ai-gateway.md](ai-gateway.md), § *The pricing report* |
 | What does a fresh ingest or a mode cost, cold? | `npm run eval:cost` — [evals/cost/run.ts](../../evals/cost/run.ts) |

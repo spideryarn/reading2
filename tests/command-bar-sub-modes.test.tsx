@@ -28,7 +28,7 @@ import {
   diagramParam,
   modeParam,
   refereeParam,
-  rememberParam,
+  learnParam,
   structureParam,
   summaryParam,
   threadParam,
@@ -90,7 +90,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
   const [mode, setMode] = useQueryState("mode", modeParam);
   const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
-    remember: rememberParam,
+    learn: learnParam,
     thread: threadParam,
     diagram: diagramParam,
     referee: refereeParam,
@@ -107,7 +107,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
       /* Marginalia is a switch, not a band (`BandMode`); not under test here. */
       if (sub === undefined) {
         if (isBandMode(next) && next !== mode) {
-          const back = returnToSubMode(next, { remember: subNav.remember });
+          const back = returnToSubMode(next, { learn: subNav.learn });
           if (back === null) void setMode(next);
           else void setSubNav(back, { history: "push" });
         }
@@ -182,7 +182,7 @@ function press(key: string): void {
   });
 }
 
-const QUIZ: SubMode = { mode: "remember", view: "quiz" };
+const QUIZ: SubMode = { mode: "learn", view: "quiz" };
 const ILLUSTRATED: SubMode = { mode: "diagram", view: "illustrated" };
 const THREAD: SubMode = { mode: "summary", view: "thread" };
 
@@ -260,7 +260,7 @@ describe("which sub-mode rows the bar offers", () => {
     expect(modeRows).not.toContain("Referee");
     const names = subRows().map(fullName);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
-    /* Remember is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
+    /* Learn is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
        three of its four parts; Explore is still behind the switch. */
     expect(modeRows).toContain("Learn");
     expect(names.filter((n) => n.startsWith("Learn"))).toEqual([
@@ -279,8 +279,8 @@ describe("which sub-mode rows the bar offers", () => {
     reading();
     openBar();
     for (const [query, name] of [
-      ["learn", "Learn"],
       ["remember", "Learn"],
+      ["learn", "Learn"],
       ["recall", "Learn › Recall"],
       ["quiz", "Learn › Quiz"],
       ["illustrated diagram", "Diagram › Illustrated"],
@@ -313,19 +313,19 @@ describe("which sub-mode rows the bar offers", () => {
   });
 
   it.each(["article", "metadata"] as const)(
-    "with the switch off, offers Explore only for the carried Remember mode on %s",
+    "with the switch off, offers Explore only for the carried Learn mode on %s",
     (view) => {
       for (const [search, offered] of [
-        ["?mode=remember&remember=explore", true],
-        ["?mode=chat&remember=explore", false],
-        ["?remember=explore", false],
-        ["?mode=remember&remember=unknown", false],
-        ["?mode=remember&remember=quiz", false],
+        ["?mode=learn&learn=explore", true],
+        ["?mode=chat&learn=explore", false],
+        ["?learn=explore", false],
+        ["?mode=learn&learn=unknown", false],
+        ["?mode=learn&learn=quiz", false],
       ] as const) {
         if (view === "metadata") metadataPage({ experimental: EXPERIMENTAL_OFF }, search);
         else {
           history.replaceState(null, "", `/read/a-piece${search}`);
-          reading({ experimental: EXPERIMENTAL_OFF, mode: search.includes("mode=remember") ? "remember" : "chat" });
+          reading({ experimental: EXPERIMENTAL_OFF, mode: search.includes("mode=learn") ? "learn" : "chat" });
         }
         openBar();
         const names = subRows().map(fullName);
@@ -388,7 +388,7 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     openBar();
     type("quiz");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("remember", QUIZ);
+    expect(onMode).toHaveBeenCalledWith("learn", QUIZ);
     expect(pendingActivation("a-piece", "quiz")).not.toBeNull();
     expect(dialog().open).toBe(false);
   });
@@ -470,7 +470,7 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     type("recall");
     const recall = subRows().find((r) => fullName(r) === "Learn › Recall");
     act(() => recall?.click());
-    expect(onMode).toHaveBeenCalledWith("remember", { mode: "remember", view: "recall" });
+    expect(onMode).toHaveBeenCalledWith("learn", { mode: "learn", view: "recall" });
     expect(pendingActivation("a-piece", "quiz")).toBeNull();
   });
 
@@ -483,8 +483,8 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     await until(() => {
       const params = new URLSearchParams(location.search);
       return (
-        params.get("mode") === "remember" &&
-        params.get("remember") === "quiz" &&
+        params.get("mode") === "learn" &&
+        params.get("learn") === "quiz" &&
         params.get("thread") === null
       );
     });
@@ -502,12 +502,12 @@ describe("Enter on a sub-mode row, on the reading view", () => {
   });
 
   it("the Reader harness also clears a Chat thread on a plain return to retained Quiz", async () => {
-    readingThroughReader("?mode=chat&remember=quiz&thread=spya-k3m9qt");
+    readingThroughReader("?mode=chat&learn=quiz&thread=spya-k3m9qt");
     const push = vi.spyOn(history, "pushState");
-    const remember = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Learn"]');
-    expect(remember).not.toBeNull();
-    act(() => remember?.click());
-    await until(() => new URLSearchParams(location.search).get("mode") === "remember");
+    const learn = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Learn"]');
+    expect(learn).not.toBeNull();
+    act(() => learn?.click());
+    await until(() => new URLSearchParams(location.search).get("mode") === "learn");
     expect(push).toHaveBeenCalledTimes(1);
     expect(new URLSearchParams(location.search).get("thread")).toBeNull();
   });
@@ -607,8 +607,8 @@ describe("Enter on a sub-mode row, on the metadata page", () => {
     press("Enter");
     expect(location.pathname).toBe("/read/a-piece");
     const params = new URLSearchParams(location.search);
-    expect(params.get("mode")).toBe("remember");
-    expect(params.get("remember")).toBe("quiz");
+    expect(params.get("mode")).toBe("learn");
+    expect(params.get("learn")).toBe("quiz");
     expect(pendingActivation("a-piece", "quiz")).toBeNull();
   });
 
@@ -628,7 +628,7 @@ describe("the registry's two answers agree", () => {
   const DEFAULTS = {
     diagram: "sketch",
     referee: "criteria",
-    remember: "recall",
+    learn: "recall",
     summary: "brief",
   } as const;
 
@@ -652,9 +652,9 @@ describe("the registry's two answers agree", () => {
   });
 
   it("Quiz clears the thread, in the same write", () => {
-    expect(subModeParams(QUIZ)).toEqual({ mode: "remember", remember: "quiz", thread: null });
+    expect(subModeParams(QUIZ)).toEqual({ mode: "learn", learn: "quiz", thread: null });
     expect(withSubMode("?mode=chat&thread=spya-k3m9qt&at=spya-aaaaaa", QUIZ)).toBe(
-      "?mode=remember&at=spya-aaaaaa&remember=quiz",
+      "?mode=learn&at=spya-aaaaaa&learn=quiz",
     );
   });
 
@@ -666,7 +666,7 @@ describe("the registry's two answers agree", () => {
 
   it("omits parser defaults from both navigation paths", () => {
     for (const sub of [
-      { mode: "remember", view: "recall" },
+      { mode: "learn", view: "recall" },
       { mode: "diagram", view: "sketch" },
       { mode: "referee", view: "criteria" },
       /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */

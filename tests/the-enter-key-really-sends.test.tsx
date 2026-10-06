@@ -184,7 +184,7 @@ describe("the chat composer", () => {
     expect(e.defaultPrevented).toBe(true);
   });
 
-  /* Greg, from an iPad in Remember's tutorial, 2026-10-03 (spya-gmtt4b): *"I
+  /* Greg, from an iPad in Learn's tutorial, 2026-10-03 (spya-gmtt4b): *"I
      end up … pressing the carriage return button, and then sometimes I can
      actually press the sort of keyboard hide button because the keyboard
      doesn't disappear."* The message has gone and the answer is arriving under

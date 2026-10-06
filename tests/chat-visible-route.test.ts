@@ -179,25 +179,25 @@ describe("what the wire may carry", () => {
     expect(r.status).toBe(400);
   });
 
-  it("refuses one on a Remember turn, whose prompt is not to guess how far the reader has got", async () => {
+  it("refuses one on a Learn turn, whose prompt is not to guess how far the reader has got", async () => {
     const r = await post(`/api/chat/${SLUG}`, {
       threadId: "spya-aaaaaa",
       question: "He says the brain is a computer.",
-      kind: "remember",
+      kind: "learn",
       visible: [ids[0]],
     });
     expect(r.status).toBe(400);
     expect(String(r.body?.error)).toMatch(/visible/);
   });
 
-  it("refuses one on an existing Remember thread, judged by the thread and not the body", async () => {
+  it("refuses one on an existing Learn thread, judged by the thread and not the body", async () => {
     await post(`/api/chat/${SLUG}`, {
       threadId: "spya-aaaaaa",
       question: "He says the brain is a computer.",
-      kind: "remember",
+      kind: "learn",
     });
     const [thread] = await threads();
-    expect(thread?.kind).toBe("remember");
+    expect(thread?.kind).toBe("learn");
     const r = await post(`/api/chat/${SLUG}`, {
       threadId: thread!.id,
       question: "And then?",

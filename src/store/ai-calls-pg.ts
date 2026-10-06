@@ -89,6 +89,13 @@ function toRow(r: Row): AiCallRow {
     finishedAt: r.finishedAt.toISOString(),
     durationMs: r.durationMs,
     outcome: r.outcome as AiCallRow["outcome"],
+    attempt: r.attempt,
+    /* Casts, like `outcome`: both columns are `text`. `failure_phase` has a
+       CHECK behind it (`ai_calls_failure_phase_known`); `failure_class` has
+       only src/call-failure.ts, which is the one thing that writes it. */
+    failurePhase: r.failurePhase as AiCallRow["failurePhase"],
+    failureClass: r.failureClass as AiCallRow["failureClass"],
+    failureStatus: r.failureStatus,
     creditsUsedNanos: r.creditsUsedNanos,
     byokUpstreamNanos: r.byokUpstreamNanos,
     isByok: r.isByok,
@@ -163,6 +170,10 @@ export function aiCallInsertValues(
     finishedAt: new Date(row.finishedAt),
     durationMs: row.durationMs,
     outcome: row.outcome,
+    attempt: row.attempt,
+    failurePhase: row.failurePhase,
+    failureClass: row.failureClass,
+    failureStatus: row.failureStatus,
     creditsUsedNanos: row.creditsUsedNanos,
     byokUpstreamNanos: row.byokUpstreamNanos,
     isByok: row.isByok,

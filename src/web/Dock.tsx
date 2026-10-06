@@ -235,7 +235,7 @@ import {
   marginInSearch,
   type Mode,
   type Panel,
-  rememberInSearch,
+  learnInSearch,
   summaryInSearch,
   type SummaryView,
 } from "./params.js";
@@ -648,7 +648,7 @@ interface Props {
  *  - `critical` — reading it critically and against other work (Citations,
  *    Referee, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
- *    conversation, what they took from it (Search, Chat, Remember) — the
+ *    conversation, what they took from it (Search, Chat, Learn) — the
  *    same category docs/project/mode.md already names.
  *
  * Six runs became five later the same day, when Greg moved Glossary, Ideas
@@ -955,7 +955,7 @@ const MODES_UI = [
     mode: "debate",
     group: "critical",
   },
-  /* **First of the input run — Search, Chat, Remember — since 2026-09-29.**
+  /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**
      Greg: *"move Search into section with Chat"* (SPIDERYARN-READING2-57).
      First in it rather than after Chat, because the same day he had asked for
      Chat *"just before Recall"*. It is the reader coming to the article with
@@ -995,7 +995,7 @@ const MODES_UI = [
      flashcards. It was *Remember* from 2026-09-01 to 2026-10-05; both names'
      trade-offs are in the two rename plans, 260901d and 261005l. */
   {
-    mode: "remember",
+    mode: "learn",
     group: "input",
     /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
        reader talks — and Greg asked for its subject instead: what they kept.
@@ -1729,9 +1729,9 @@ export function modeLinkHref(slug: string, search: string, mode: Mode): string {
   /* **`mode` alone, with one exception**, the same one the reading view's
      button makes (sub-modes.ts § `returnToSubMode`). The carried string keeps
      everything but `panel=` (router.ts § `carriedSearch`), so a reader who came
-     here from a Chat conversation with `remember=quiz` retained carries both,
-     and a plain Remember link would open the Quiz with that thread selected. */
-  const back = returnToSubMode(mode, { remember: rememberInSearch(canonical) });
+     here from a Chat conversation with `learn=quiz` retained carries both,
+     and a plain Learn link would open the Quiz with that thread selected. */
+  const back = returnToSubMode(mode, { learn: learnInSearch(canonical) });
   if (back !== null) return readHref(slug, withSubModeParams(canonical, back), "article");
   return readHref(slug, withMode(canonical, mode), "article");
 }

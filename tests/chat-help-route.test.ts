@@ -387,18 +387,18 @@ describe("what help: true is allowed to claim", () => {
   });
 
   it("refuses a help flag on a thread of another kind", async () => {
-    /* Remember and Candidates are about the whole piece; the "?" is beside one
+    /* Learn and Candidates are about the whole piece; the "?" is beside one
        paragraph. Sent without an anchor, so the refusal under test is the kind
        one rather than the anchor rule that already refuses an anchored
-       Remember. */
+       Learn. */
     const r = await post(`/api/chat/${SLUG}`, {
       threadId: "spya-aaaaaa",
       question: "here is what I took from it",
-      kind: "remember",
+      kind: "learn",
       help: true,
     });
     expect(r.status).toBe(400);
-    expect(String(r.body?.error)).toMatch(/remember conversation is about the whole article/i);
+    expect(String(r.body?.error)).toMatch(/learn conversation is about the whole article/i);
     expect(await threads()).toHaveLength(0);
   });
 

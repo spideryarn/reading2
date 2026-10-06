@@ -82,7 +82,7 @@ describe("askedQuestions", () => {
       { ...base, id: "a", kind: "chat", anchor: { blockId: FIRST } },
       { ...base, id: "b", kind: "chat", anchor: { blockId: SECOND, quote: "q", start: 2 } },
       { ...base, id: "c", kind: "chat" },
-      { ...base, id: "d", kind: "remember", anchor: { blockId: FIRST } },
+      { ...base, id: "d", kind: "learn", anchor: { blockId: FIRST } },
     ];
     const got = askedQuestions(summaries, []);
     expect(got.map((q) => q.id)).toEqual(["a", "b"]);
