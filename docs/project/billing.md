@@ -522,10 +522,10 @@ before review caught it. There is exactly **one** `useBilling()` on that page, f
 buttons and the line. [website-text.md § The pricing page](website-text.md#the-pricing-page) has the
 reasoning, including how a stranger's press survives the sign-in in between.
 
-Note that the cancellation warning above means the `cancelling` detail this page renders is
-**currently always absent in production**: `cancelling` is computed from `cancel_at_period_end`,
-which Stripe no longer sets. So both surfaces stay silent about a plan that is ending, and fixing
-the sync fixes both at once.
+Note that the cancellation warning above means the ending date this page renders (`endsAt`, from
+`planEndsAt`) is **absent for the one live row that predates the `cancel_at` column**. Both
+surfaces stay silent about that plan ending until the row is synced again; every later cancellation
+arrives with the column there.
 
 **`GET /api/billing/usage`** is what it reads — [`src/billing/summary.ts`](../../src/billing/summary.ts),
 with the wire shape and the words in the pure [`src/billing-plan.ts`](../../src/billing-plan.ts).
@@ -617,8 +617,8 @@ one should be read as proposals to take on card-adjacent risk we have deliberate
 A slot is **one successful new ingest** — a URL added, or a file uploaded (a PDF, or since
 2026-09-07 a web page). Re-running a pipeline
 step on an article you already have is free. A failed ingest is free. Archiving an article does not
-give the slot back — and archiving is the only removal the interface offers
-([library.md](library.md#archive-and-undo-is-the-confirmation)).
+give the slot back, and neither does deleting it permanently
+([library.md](library.md#archive-and-undo-is-the-confirmation); the delete is below).
 
 **And a public article costs half of one**, **switching an article to High-powered AI costs one more article** (half while it is public), and **a paper added without AI processing costs a hundredth of one** — all three below.
 
@@ -790,8 +790,8 @@ That is also why it is not a second source of truth — the two are never both r
 2026-09-06, and
 [the plan](../plans/260906h-delete-an-article-permanently.md#stage-b-deleting-must-not-change-the-bill).
 
-**The trigger, rather than the store method that will call it.** There is no delete path in the
-product yet; this landed before one. Putting the stamp in application code would make the ledger
+**The trigger, rather than the store method that calls it.** The trigger landed before the delete
+path did (`DELETE /api/library/:slug`, 2026-09-06). Putting the stamp in application code would make the ledger
 right for exactly the route somebody remembered, and wrong for a future admin path, a cascade nobody
 has written, or a statement run by hand — and nothing about a wrongly-priced row looks wrong.
 
@@ -1358,7 +1358,7 @@ unavailable. It is the one route nobody is signed in to and the one that grants 
 - `currentOwnerId()` is **never** called; there is no request owner in webhook scope. The
   customer→owner mapping in the database is authoritative, and metadata on the Stripe object is
   recovery data, never a source of truth.
-- Four event types are acted on, and all four do the same thing: **resync from Stripe**. Payloads
+- Five event types are acted on (`HANDLED_EVENTS`), and all five do the same thing: **resync from Stripe**. Payloads
   are never trusted for state, because events arrive out of order and a handler that applies each
   payload's contents builds a picture no single event described.
 
@@ -1426,7 +1426,7 @@ per-machine and never travels:
 ```bash
 stripe listen --api-key "$STRIPE_SECRET_KEY" \
   --forward-to http://localhost:5273/api/webhooks/stripe \
-  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.finalization_failed
 ```
 
 It prints `whsec_…` on the line that says *Ready!*. Put that in `.env.local` and **restart the dev
@@ -1438,7 +1438,7 @@ authenticated last, which is not necessarily this one.
 **In production**, it is a registered endpoint at
 [dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) (the live URL, with no
 `/test/`), pointing at `https://www.spideryarn.com/api/webhooks/stripe`, subscribed to exactly the
-four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on the endpoint's own
+events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on the endpoint's own
 page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
 environment.
 

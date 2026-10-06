@@ -661,8 +661,9 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
   `slugPart` refuses a leading underscore, so this was a false invariant rather than a live hole —
   which is the kind most worth closing, because the next caller to reach a reader-state module by
   another path inherits the assumption without the screening. Found by cross-model review, 2026-08-26.
-- **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
-  is not fine on the public internet — see
+- **Nothing rate-limited or authenticated any of this when this was written**, which is fine for one
+  process on a laptop and is not fine on the public internet (the auth gate landed 2026-08-27; see
+  [§ whoever signs in](#the-gate)) — see
   [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md), which has this going online.
 
 ## The first untrusted party arrives in a second format: a PDF <a id="pdfs"></a>
@@ -778,8 +779,9 @@ Three things bound it, and only the last is new:
   denied until 2026-08-28 on the strength of a measurement that never happened
   ([260828a-the-config-file-is-not-the-bucket.md](../postmortems/260828a-the-config-file-is-not-the-bucket.md)). A
   second line under our own checks, never a replacement: a bucket cannot tell a PDF from a file named
-  one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, so the list is
-  `application/pdf` and `text/html`.
+  one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, and the article's
+  own images since 2026-08-29, so the list is `application/pdf`, `text/html`, `image/png`,
+  `image/jpeg` and `image/gif` (`supabase/config.toml`).
 - **`%PDF-` over the bytes, and our SHA-256 against the browser's**, in `acquireUpload` before
   anything expensive runs. Both over *one* download, because reading the object twice is the one
   sequence content addressing does not cover.
@@ -1119,7 +1121,7 @@ the second.
 [`src/routes.ts`](../../src/routes.ts) puts the verified `sub` into a request-scoped
 `AsyncLocalStorage`, and every path from a slug to an article carries
 `and(eq(articles.ownerId, currentOwnerId()))` through one predicate, `ownedSlug()` in
-[`src/store/pg.ts`](../../src/store/pg.ts). Comments, chat threads, searches and glossary lookups are
+[`src/store/owned-slug.ts`](../../src/store/owned-slug.ts). Comments, chat threads, searches and glossary lookups are
 reached only through an `articleId` that came from one of those paths, so the filter is transitive.
 A slug you do not own answers 404 rather than 403 — "there is no such article" is all a stranger
 should learn about it. The reasoning, and the four ways this fails silently, are in
@@ -1130,7 +1132,8 @@ rather than leaking a library.
 
 **What that does *not* close**: anybody with a Google account can still sign in and spend the model
 budget, which is the risk Greg accepted twice and which a spend limit is the real control for. The
-ingest queue is still on disk and carries no owner. And there is still no RLS — the filtering is in
+ingest queue was given an owner the same week (it is the `jobs` table now, filtered by
+`owner_id`; [auth.md](auth.md#whose-data-is-it)). And there is still no RLS — the filtering is in
 the queries, not in the database, so a query written without the predicate is the whole exposure.
 
 **An article may not address our own API.** The sanitiser keeps relative URLs by design — the block

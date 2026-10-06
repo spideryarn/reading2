@@ -69,14 +69,12 @@ that still prints a report like the one above is `npm run eval:pdf-read`.
 `src/web/` has no Pino or continuous remote log stream; it does have the
 structured client-side ring buffer in `log-buffer.ts`. A textual grep run on
 2026-09-06 returned 11 non-preview matching lines: three mentions in comments
-and eight executable direct `console.log`/`console.error` calls across the six
-files below. This is a dated inventory of direct spellings, not an enforced
-count; re-run it and inspect the matches.
-
-The command is `grep -rn 'console\.\(log\|warn\|error\|info\|debug\)' src/web/`,
-and the six files are `upload.ts`, `lib/api.ts` (five lines, three of them comments), `useTweets.ts` (the thread's read; it was `Tweets.tsx` until the thread became a mode on 2026-09-29), `perf.ts`,
-`live/useLiveConversation.ts` and `live/wiring.ts`. (It used to exclude the `preview-*.tsx` dev
-pages, which were deleted on 2026-09-11.) See [§ The browser](#the-browser-nothing-yet).
+and eight executable direct `console.log`/`console.error` calls across six
+files. That is a dated inventory of direct spellings, not an enforced count,
+and the file list went stale within weeks, so it is not kept here: the command
+is `grep -rn 'console\.\(log\|warn\|error\|info\|debug\)' src/web/`. Run it and
+inspect the matches. (It used to exclude the `preview-*.tsx` dev pages, which
+were deleted on 2026-09-11.) See [§ The browser](#the-browser-nothing-yet).
 
 ## The decision: Pino
 
@@ -190,7 +188,7 @@ the name you meant.
 | `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost in tokens** — model, tokens in and out, `ms`. Its `model` is the stamp name (`claude-sonnet-5`), not the wire id the request carried; [setup-dev.md](setup-dev.md) says why those differ |
 | `store` | [`src/store/pg.ts`](../../src/store/pg.ts) and the rest of `src/store/`; [`src/comments.ts`](../../src/comments.ts) and its siblings only for their surviving fixture readers | store-level failures — historically chiefly the fixture fallback, below, which no longer exists now the store is Postgres-only |
 | `auth` | [`src/auth.ts`](../../src/auth.ts) | **only ever our side failing.** A refused token is not logged here — that is an ordinary 401 and the `http` line already says so. Nothing in this component may carry a token, a `sub` or an email address |
-| `health` | [`src/vercel-health.ts`](../../src/vercel-health.ts) | the two errors `GET /api/health` catches — the store check and the schema check. The endpoint is public, so the caller gets the driver's message truncated to 200 characters and the whole of it comes here. Trimming the response is only safe while the untrimmed copy is somewhere |
+| `health` | [`src/vercel-health.ts`](../../src/vercel-health.ts) | the two errors `GET /api/health` catches — the store check and the schema check — and the two cold-start lines per function instance in [`src/cold-start.ts`](../../src/cold-start.ts). The endpoint is public, so the caller gets the driver's message truncated to 200 characters and the whole of it comes here. Trimming the response is only safe while the untrimmed copy is somewhere |
 | `email` | [`src/email.ts`](../../src/email.ts) | mail the server sends itself — sent (with Resend's id), skipped outside production, or failed. A label naming the kind of mail, never the recipient or the body. See [email.md](email.md) |
 | `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
 
@@ -286,8 +284,8 @@ a row written when the call *opens* rather than when it finishes
 ([260827q](../plans/260827q-ai-cost-tracking.md)).
 
 **Several fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
-thing nobody can guess from outside — one step is often several calls, since `summarise` batches per
-parent and `labels` fans out — so a total of $0.30 over nine calls and a total of $0.30 over one are
+thing nobody can guess from outside — one step is often several calls, since `labels` fans out into
+parallel batches — so a total of $0.30 over nine calls and a total of $0.30 over one are
 the same line without it. And `aiUnpriced` is what stops a total that is quietly short from reading
 as a cheap run: a call that was aborted or that failed mid-stream never reached the `message_delta`
 event carrying `cost`, so it is recorded as *happened, cost unknown* rather than as zero. **Its
@@ -319,7 +317,7 @@ and four zeroes on every line is noise that makes the lines that matter harder t
 already owns, not inside another agent's stage
 ([architecture.md § Stage ownership](architecture.md#stage-ownership)). It is a stronger case here
 than it was for tokens, because a step is *not* a model call: no stage can report its own total, and
-threading one up would be a return-type change on all seven of them plus a place to forget it in
+threading one up would be a return-type change on every one of them plus a place to forget it in
 each. `collectSpend` in [`src/ai-spend.ts`](../../src/ai-spend.ts) is an `AsyncLocalStorage`, so the
 stages say nothing at all and the seam still gets the whole bill —
 [`src/messages-stream.ts`](../../src/messages-stream.ts) records each call on their behalf.
@@ -860,8 +858,8 @@ most recent. This is why `store` logging is sparing and why per-block logging do
 So there is a rule, and it is about shape rather than volume: **if the number of lines a piece of
 code emits grows with the data, the caller says it once instead.** A line per skipped directory is a
 line per *article on the shelf*, on every homepage load — the cost grows with the library while the
-information in it does not. Both places this came up ([`loadFromDisk`](../../src/jobs.ts) reading the
-queue, `listArticles` walking the shelf) now collect into an array and emit one
+information in it does not. Both places this came up (`loadFromDisk` reading the
+queue, which was deleted with the filesystem store on 2026-09-05, and `listArticles` walking the shelf) collected into an array and emit one
 line carrying `{ count, first five names, of }`. The count is what tells you the scale, the names are
 what make it actionable, and the cap is what stops a long line being the one that gets truncated by
 whatever is collecting it. The loop that finds the problem is not the right place to report it.

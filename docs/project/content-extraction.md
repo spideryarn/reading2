@@ -374,9 +374,9 @@ address from `<link rel="canonical">` would cover more saved pages and is **deli
 done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
 fetching, which is a security question worth answering on its own rather than as a rider.
 
-One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
-after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
-relative links resolve against the wrong origin.
+For a fetched page, since 2026-10-05, the base is the URL stage 1 *ended up* at after redirects
+(`manifest.url`, which `fetchDocument` reports), not the one that was typed; the job's own address
+is used only where the manifest has none (the `extract` step in [`src/pipeline.ts`](../../src/pipeline.ts)).
 
 ## The three ways this stage refuses
 
@@ -1118,16 +1118,16 @@ Ids are preserved by matching on the `spya-` attribute already in the document, 
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
 The standalone styled HTML output doubles as a debug view; the durable artefacts are the same two
-things this stage returns, and where they land is the store's decision — `output/<slug>.html` plus
-`data/<slug>/meta.json` on a filesystem, columns on `article_revisions` in Postgres.
+things this stage returns, and where they land is the store's decision — columns on `article_revisions` in Postgres
+(`output/<slug>.html` plus `data/<slug>/meta.json` until the filesystem store went, 2026-09-05).
 
 The metadata landed on 2026-08-25, when the library needed something to put on a card: title,
 byline, site, language, source URL, fetch date and Readability's excerpt. **It is the only place the
 source URL and the byline survive past this script**, and it is rebuilt on every run, because
 re-extracting is how you refresh a page and the fetch date should follow. One subtlety worth reading
-before touching it — the **command line** derives the slug from the *output filename* rather than
-from the URL, because that is what stages 3 and 4 will name the data directory after; `runExtract`
-itself now takes the slug as an argument, since the queue has always known it. Both are in
+before touching it — the command line used to derive the slug from the *output filename* rather than
+from the URL (`slugForOutFile`, gone 2026-09-05); `runExtract` takes the slug as an argument, since
+the queue has always known it. The slug's story is in
 [library.md § meta.json](library.md#metajson-and-the-articles-identity).
 
 Why any of this exists at all: [vision.md](vision.md).

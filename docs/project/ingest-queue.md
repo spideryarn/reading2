@@ -65,7 +65,7 @@ The job row itself is behind `JobStore` in [`src/store/jobs.ts`](../../src/store
 >    `mkdir '/var/data'`. Now an injected, invocation-scoped root.
 > 2. **One invocation for the whole job.** Every `/advance` may land on a different instance, so
 >    step two looked for what step one wrote and found nothing. A claim now walks every step —
->    `advanceJobToCompletion`, [`src/jobs.ts`](../../src/jobs.ts).
+>    `walkClaim` ([`src/jobs.ts`](../../src/jobs.ts); it was called `advanceJobToCompletion` then).
 > 3. **Something that actually publishes.** This is the one that had been marked done and was not.
 >    `publishRevision` was called only from `revisions.ts`, the fixture loader and tests — **never
 >    from the job path**. So a job could run every stage, write every file, go `done`, and leave
@@ -113,9 +113,9 @@ the progress list.
 
 | File | What's in it |
 |---|---|
-| [`src/pipeline.ts`](../../src/pipeline.ts) | the six steps, as data — the only place that knows the pipeline's order |
-| [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, and the restart sweep |
-| [`src/routes.ts`](../../src/routes.ts) | six HTTP routes, all of which return immediately |
+| [`src/pipeline.ts`](../../src/pipeline.ts) | the steps, as data — each with its label, what it produces and the function that makes it (the order itself is `STEP_ORDER` in [`src/step-order.ts`](../../src/step-order.ts)) |
+| [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, the claim loop and the lease sweep |
+| [`src/routes.ts`](../../src/routes.ts) | the job and upload routes ([§ The routes](#the-routes)), all of which return immediately |
 | [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | the poll and the driver, for the whole tab — [§ The browser is the worker](#the-browser-is-the-worker) |
 | [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the subscription over the engine, and the actions |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
@@ -339,10 +339,11 @@ they come to disagree.
 
 ### The slug comes from the filename, and that is the ugly part
 
-`source.pdf` becomes the slug `source`; `paper.pdf` becomes `paper`, then `paper-2`. The reader
-sees the title everywhere that matters — the shelf card, the masthead, the tab — so this is a
-directory name rather than anything they read. But `document.pdf` and `download.pdf` are extremely
-common and the counters will pile up.
+`source.pdf` becomes the slug `source-spya-k3m9qt`; `paper.pdf` becomes `paper-spya-…`, and a
+second `paper.pdf` gets an id of its own (the `paper-2` counter went on 2026-08-31, above). The
+reader sees the title everywhere that matters — the shelf card, the masthead, the tab — so this is
+a directory name rather than anything they read. But `document.pdf` and `download.pdf` are
+extremely common, so the same stem will recur.
 
 The plan's alternative is to store under a provisional id, run pass 0, and reserve the final slug
 from the title. That is a **rename**, and [block-ids.md](block-ids.md) is largely about why renames
@@ -1089,7 +1090,7 @@ step went on reporting itself current. All six are now fingerprinted against the
 ([`src/source-hash.ts`](../../src/source-hash.ts)) — two functions, because `ideas` and `sketch` send
 a head with a `URL:` line and a synthetic title the other four never send; `assets` keeps the
 blocks-only hash because the blocks really are all it reads. Nothing was visibly broken, and that is the shape to notice: the
-pipeline's artefact reads return `null` today, so the stage re-runs whatever the stamp says. The
+pipeline's artefact reads returned `null` at that point (2026-08-31), so the stage re-ran whatever the stamp said. The
 fault would have arrived with the reads that make skipping work.
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
@@ -1152,7 +1153,8 @@ of date. A button that offers a re-run and makes no claim about whether you need
 answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md) for
 what saying it would still take, and for why `structure` — the workaround the 2026-09-05 postmortem
 names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
-free `labels` successor that would restore them is not built.
+free `labels` successor that restores them (built 2026-09-07, [above](#one-job-in-the-app-was-asked-for-by-nobody)) is the
+slowest and dearest pass, so one press would buy two metered calls.
 
 **One click, since 2026-09-30.** From 2026-09-07 every press, and every Retry, opened an inline
 confirm first; Greg asked for it to go:
@@ -1272,9 +1274,10 @@ to make interrupted work visible.
 
 #### Why it is a step at all
 
-Stage 1 used to be three lines inside `src/extract.ts`. It is now a step with an artefact,
-`data/<slug>/raw.html`, which [architecture.md § Storage](architecture.md#storage) has always listed
-and nothing had ever written.
+Stage 1 used to be three lines inside `src/extract.ts`. It is now a step with an artefact, the raw
+document (`raw.html`, or `raw.pdf`; first under `data/<slug>/`, now in Storage under its hash),
+which [architecture.md § Storage](architecture.md#storage) has always listed and nothing had ever
+written.
 
 The reason is retries. Extraction going wrong is the common failure — Readability is a heuristic —
 and when it does you want to try again **without asking the publisher a second time**, and without
@@ -1508,7 +1511,7 @@ claimant's work is still used. The whole story, including why aborting the aband
 been the wrong companion fix, is
 [260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md).
 
-**Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
+**Two OS processes over one `data/` were never fenced**, and that was left rather than fixed —
 `claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
 Postgres is the only store there is, since 2026-09-05.
 ### The browser is the worker
@@ -1588,7 +1591,7 @@ mapper nothing can test — and returns one of eight states: `waiting`, `working
 `interrupted`, `failed`, `stopped`, `done`. Four things about it are decisions rather than details.
 
 **It takes no lease, and cannot.** `Job` on the wire carries no `leaseExpiresAt`; it lives on the
-Postgres row and the filesystem `attempts` map and never reaches `publicJob`. So *running with an
+Postgres row (and, until 2026-09-05, the filesystem `attempts` map) and never reaches `publicJob`. So *running with an
 expired lease* is invisible to the browser until [the sweep](#the-browser-is-the-worker) settles it,
 and that is the design working: taking a lease here would re-derive ownership in the reader's
 browser. Elapsed time is a **display** clock and decides nothing.
@@ -1886,9 +1889,9 @@ before a window is granted, so an un-checkpointed paid call can be bought once p
 expensive fan-outs are checkpointed, which is why the number is the whole of the protection. The
 budget is per *job*: pressing Retry makes a new job with a fresh two, so the reader is the outer loop,
 and the machine gives up before the person does. `jobs.requeues` is the counter on Postgres; the
-filesystem adapter keeps it in memory, so a restart resets the cap there — weaker parity, accepted
-because a restart there is `sweepStopped`, which requeues with no budget at all, and because that
-store is not what ships.
+filesystem adapter (deleted 2026-09-05) kept it in memory, so a restart reset the cap there — weaker
+parity, accepted because a restart there was `sweepStopped`, which requeued with no budget at all,
+and because that store was not what shipped.
 
 ### A claimant that runs out of time puts the job down, and keeps its draft
 
@@ -2021,8 +2024,8 @@ no entry in `attempts` has always meant lapsed.
 
 **Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
-fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md), not
-built. What makes an expired lease mean something in the meantime is that the claimant sets **its own
+fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md),
+which has since been built (`pgStoreSession`), though nothing uses it to take a job away. What makes an expired lease mean something in the meantime is that the claimant sets **its own
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
 
@@ -2060,14 +2063,18 @@ than a shared path — see [block-ids.md § The freshness guard](block-ids.md#th
    specifies that `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. Three
    steps implement it — `tweets` and `summary` via the optional `isDone` above, `glossary` via the
    newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
-   `tree.json` and `arc.json` carry no hash at all, so `structure` and `arc` are still presence-only, and
-   `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
+   (Now: every mode step and `arc` and `assets` declare a `stamp`; only `structure` is still
+   presence-only, with an `isDone` that refuses a stand-in tree, and it deliberately has no stamp —
+   see its comment in `STEPS`.) `labels.json` *does* carry
    one, and since 2026-09-06 something **does** compare it: the `labels` step declares a `stamp()` of
    the blocks hash, its prompt version and its model, and `stepIsDone` checks it. What keeps that
    step honest across a *re-cut tree* is not the stamp but the receipt deletion in `writeArtefacts`
    ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
-2. **Atomic artefact writes across a step's whole set.** `structure` and `labels` write temp-then-rename,
-   and the store's `write` does too; the other stages still write in place, and none of it makes the
+2. **Atomic artefact writes across a step's whole set.** *(Built since: under Postgres a step's
+   artefacts, its completion and the job's transition commit in one transaction,
+   [`pg-session.ts`](../../src/store/pg-session.ts), as the section above says. What follows is the
+   filesystem-era reasoning.)* `structure` and `labels` wrote temp-then-rename,
+   and the store's `write` did too; the other stages wrote in place, and none of it made the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
 
    **And the state a kill leaves is worse than "one artefact of two", which is what this said until
@@ -2159,8 +2166,7 @@ same mistake on a chat message.
 nothing, so a retry never *forces* a step that already succeeded — but that is not the same as never
 rerunning one. Under Postgres a failed attempt's draft is discarded, and whatever its steps wrote
 went with it, so the new attempt's own freshness checks may find them gone and correctly rerun them
-anyway; only on the filesystem store, where an artefact really does stay on disk, is the skip
-guaranteed. A stage that failed while reading an artefact an earlier step wrote will read that
+anyway (the filesystem store, where an artefact really did stay on disk, is gone). A stage that failed while reading an artefact an earlier step wrote will read that
 identical artefact again. That is what separates the two lists:
 
 | Cannot come out differently | Might |
@@ -2248,8 +2254,9 @@ PDF and upload it, not that their page does not exist
 
 `isSlug` in [`src/ingest.ts`](../../src/ingest.ts) is a path-traversal guard, not a tidiness check.
 
-A slug arrives from the client on `POST /api/jobs` and is joined onto `data/` and `output/`, so
-`../../.ssh` has to be refused there or it is refused nowhere. It lives beside `slugFromUrl` because
+A slug arrives from the client on `POST /api/jobs` and was joined onto `data/` and `output/` until
+2026-09-05, so `../../.ssh` has to be refused there or it is refused nowhere; it is still the check
+that a client's slug is a plain name. It lives beside `slugFromUrl` because
 the two must not drift: everything `slugFromUrl` can produce must pass, and
 [`tests/ingest.test.ts`](../../tests/ingest.test.ts) asserts both halves.
 
@@ -2369,8 +2376,8 @@ the arithmetic assumed, which is precisely what let a claimant still be alive wh
 
 ## Naming the step is the point
 
-Each row of the progress list says what is happening: *Extracting the article*, *Building the table
-of contents*. Not "Step 3 of 5", and not "Loading…".
+Each row of the progress list says what is happening: *Extracting the article*, *Building the
+structure*. Not "Step 3 of 5", and not "Loading…".
 
 That is the one thing the previous version got right without a queue at all —
 [original-version/extraction.md § Document lifecycle](original-version/extraction.md#document-lifecycle-atomic-no-processing-state)
@@ -2537,8 +2544,8 @@ The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`,
 
 ## The CLI *is* this queue <a id="they-are-the-same-functions-the-cli-runs"></a>
 
-`npm run extract`, `npm run blocks` and `npm run structure` still work, and `npm run fetch` is
-`npm run ingest`. **Since 2026-09-05 they are this queue rather than a second caller of the same
+`npm run ingest` (stage 1 and the whole default ingest), `npm run extract`, `npm run blocks` and
+`npm run structure` still work; there is no `npm run fetch`. **Since 2026-09-05 they are this queue rather than a second caller of the same
 functions**: [`scripts/stage.ts`](../../scripts/stage.ts) enqueues a job and runs `advanceJob` in a
 loop, which is what a browser tab does. So "one code path per stage, and no way for the two to
 drift" stopped being a discipline and became a fact about the shape.

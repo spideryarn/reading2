@@ -213,8 +213,8 @@ dying with a `23514` a long way from the cause. `tests/db-step-constraint.test.t
 migrations statically and goes red the moment a step joins `STEP_ORDER`, which is what makes there
 not be a fourth. `drizzle/0035_timeline.sql` is the shape to copy.
 
-**Writing a migration is free; applying one is Greg's call, locally as well as remotely** —
-[AGENTS.md](../../AGENTS.md).
+**An ordinary additive migration is read, applied and reported; a destructive one on the remote
+is Greg's call** — [AGENTS.md](../../AGENTS.md).
 
 ## It starts itself when you press the mode
 

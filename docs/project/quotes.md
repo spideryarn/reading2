@@ -105,7 +105,7 @@ defaults rest on — is listed at the end, in [§ What is still open](#what-is-s
  │             │ │ imp·62  str·94      │                            │   │
  │             │ ┃…                    │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
- │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
+ │ ⊞Structure ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
  └───────────────────────────────────────────────────────────────────────┘
 
  EVERY WORD IN THE LIST IS FROM THE ARTICLE. The only things on screen that
@@ -1007,15 +1007,17 @@ false rather than merely dated, which is why the banner sits above the list and 
 
 ### Effort, and the cache
 
-`STAGE_EFFORT.quotes = "medium"`, `ARTICLE_RENDERER.quotes = "text"` — so this stage is
-**cache-compatible with `glossary`** and with nothing else: same model, same effort, same renderer,
-same bytes.
+`STAGE_EFFORT.quotes = "medium"`, `ARTICLE_RENDERER.quotes = "text"` — the same model, effort,
+renderer and article bytes as `glossary`. **It shares no cache with it any more**: the two stages
+send different output schemas, and the format is part of the cache key, so `sharesArticleCache`
+([`pipeline.ts`](../../src/pipeline.ts)) says no to every pairing (`ARTICLE_OUTPUT_FORMAT`; plan
+261001s, 2026-10-02).
 
-**Compatible is all it is.** A cache entry is only *written* when a later step in the same job would
-read it (`cacheArticle` in [`pipeline.ts`](../../src/pipeline.ts)), and a reader pressing *Find the
-terms* and then *Choose the quotes* has made two jobs minutes apart. The saving is real for
-`steps: ["glossary","quotes"]` in one job and for nothing else — the plan claimed more and GPT Sol
-caught it. It is still a constraint: moving either stage's effort ends the compatibility silently.
+**It was never real in a way that paid.** A cache entry is only *written* when a later step in the
+same job would read it (`cacheArticle` in [`pipeline.ts`](../../src/pipeline.ts)), and a reader
+pressing *Find the terms* and then *Choose the quotes* has made two jobs minutes apart. Until
+2026-10-02 the saving existed for `steps: ["glossary","quotes"]` in one job and for nothing else;
+the schemas now keep even that apart.
 
 `medium` is a guess, like every effort choice that has not been through
 `evals/results/effort-vs-quality.md`.
@@ -1108,8 +1110,6 @@ wrong — but worth knowing.
 - **Keyboard traversal of the list is ← / → since 2026-10-02**, not ↑ / ↓, which still belong to the
   article ([keyboard.md](keyboard.md) § ← / → in Quotes). The rows and the ⓘ are ordinary tab stops
   as before.
-- **Nothing generates quotes for the `example/` fixture**, consistent with the glossary and equally
-  unsatisfying.
 
 ## See also
 

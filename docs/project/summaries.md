@@ -279,7 +279,7 @@ It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept a
 not a digest**: a few paragraphs, capped by code; **every paragraph is a door** (below), and a
 paragraph that cites no passage is dropped when it is written. The words are plain text, never
 markdown; bold and bullets are [two fields beside them](#bold-and-bullets-since-2026-10-04). What it
-is — written by AI, the article says it better — is said in the slider's card, not in a line under
+is — written by AI, the article says it better — is said in each button's card, not in a line under
 the paragraphs.
 
 ### Three levels, one row, shaped by the reader (since 2026-10-01)

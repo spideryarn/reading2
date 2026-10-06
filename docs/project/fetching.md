@@ -356,7 +356,7 @@ the backoff applies (`src/retry-after.ts`).
 
 **`writeRaw` writes no files.** It used to write `data/<slug>/raw.html` (or `raw.pdf`) and a
 `raw.json` manifest beside it; it now returns the manifest and the *store* decides where that goes —
-`raw.json` on the filesystem, columns on `article_revisions` in Postgres. The bytes go where they
+columns on `article_revisions` in Postgres (`raw.json` on the filesystem, until that store went). The bytes go where they
 were already going: the content-addressed `sources` bucket, under `canonicalKey(storedSha256, kind)`,
 through [`src/store/blobs.ts`](../../src/store/blobs.ts), which is itself selected (`blobs-fs.ts`
 locally, `blobs-supabase.ts` deployed).
@@ -701,8 +701,8 @@ purpose rather than reproducing by default.
 
 ## Dependencies, and the ones we didn't take
 
-Two were added, both already present in the tree as jsdom's transitive dependencies, so neither cost
-an install:
+Two were added for decoding, both already present in the tree as jsdom's transitive dependencies,
+so neither cost an install:
 
 - **`html-encoding-sniffer`** — the spec's charset sniffing, as jsdom implements it.
 - **`@exodus/bytes`** — a WHATWG-conformant `TextDecoder`. Taken because Node's got windows-1252
@@ -712,10 +712,11 @@ an install:
 
 Deliberately not taken, each considered and rejected:
 
-- **`undici`** as a direct dependency, for `headersTimeout`/`bodyTimeout` stall detection and custom
-  TLS options. One whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and
-  a stall is bounded by it anyway. Add it if per-hop stall detection or AIA repair ever becomes
-  worth building.
+- **`undici`'s `headersTimeout`/`bodyTimeout` stall detection and custom TLS options.** (`undici`
+  itself *is* a direct dependency since 2026-08-29, for the DNS-pinned connection above.) One
+  whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and a stall is
+  bounded by it anyway. Use them if per-hop stall detection or AIA repair ever becomes worth
+  building.
 - **`iconv-lite` / `chardet`** — Node has shipped full ICU since v13, so the decoding table is
   there; the gap was conformance and detection, not coverage. `chardet` guesses statistically, and
   we always have headers and markup, so the deterministic algorithm is strictly better.

@@ -74,7 +74,7 @@ answers to.
  │             │ Ideas you could carry │                            │   │
  │             │ out of it …           │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
- │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …             │
+ │ ⊞Structure ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …             │
  └───────────────────────────────────────────────────────────────────────┘
 
  The heading over the passages is the whole of "this is a hypothesis". An
@@ -488,9 +488,6 @@ on the re-run — which is the right answer.
 - **No eval file yet.** The judging so far is two articles read by hand, written up in
   [the plan](../plans/260826ac-ideas-mode.md). A scored pass under [`evals/`](../../evals/README.md) is what
   would turn that into a number the next prompt change is compared against.
-- **Nothing generates ideas for the committed `example/` fixture**, so the panel there offers a
-  button that writes into `data/`. The same gap the glossary and the thread page have, and equally
-  unsatisfying in all three.
 - **The two-state fix has no test.** `resolveIdea` and the stepper's arithmetic are covered by
   [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts); the search → ideas → search
   mode handoff is not, and it is the one place a React-level test would earn its keep.

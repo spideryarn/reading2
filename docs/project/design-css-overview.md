@@ -1,7 +1,7 @@
 # Design and CSS: an overview
 
 **This is the map, and it is deliberately short.** It exists to answer one question —
-*where does a style live, and which mechanism owns it?* — because the answer is spread across four
+*where does a style live, and which mechanism owns it?* — because the answer is spread across several
 stylesheets and several other docs, and every new agent has to reconstruct it. What is written
 below is true and checked. What is missing is listed at the bottom, honestly, rather than left for
 you to discover.
@@ -21,12 +21,12 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
 | 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in. A **new sheet takes two edits**: the `@import`, at the position you want it in the cascade, and the same name at the same position in `MANIFEST` in [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts), which is the independent witness to that order |
-| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) last. Read `styles.css` for the rest of the order rather than guessing it from the file names |
-| 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
+| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) at the tail, with only `changelog.css`, `voices.css` and `logo-animations.css` after it. Read `styles.css` for the rest of the order rather than guessing it from the file names |
+| 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the font stacks (the `--font-*` tokens), imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
-`wc -l src/web/styles.css src/web/styles/*.css` on 2026-09-06: 65 lines of `@import` over 37 files,
-15,951 lines in all.
+How big that is: `wc -l src/web/styles.css src/web/styles/*.css`, and `grep -c '@import' src/web/styles.css`
+for the number of sheets.
 
 The nesting is the load-bearing part. Importing `styles.css` from `main.tsx` alongside
 `tailwind.css` **does not work** — it lands unlayered, outranks every utility, and Tailwind
@@ -91,11 +91,13 @@ lighter on the light one.
 
 ### Both of those are checked, because both had already happened
 
-[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads all four stylesheets and asserts
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads every stylesheet the client loads —
+`tailwind.css`, the two token files, and the hand-written sheets resolved from the `@import` graph by
+`readerSheets()` in [`tests/helpers/stylesheets.ts`](../../tests/helpers/stylesheets.ts) — and asserts
 two things. Neither was a hypothetical; `§ outline mode` had six instances of the second and three
 of the first, and the panel was half unreadable on screen for four days before Greg's screenshot.
 
-- **A `var(--x)` with no fallback names a token that exists** — in one of the four sheets, or set as
+- **A `var(--x)` with no fallback names a token that exists** — in one of those sheets, or set as
   an inline style from `src/web` (the test reads those too, including the `--h${i}` family
   `annotate.ts` emits). An undefined custom property with no fallback is *invalid at computed value
   time*: the whole declaration is dropped and the property inherits. Nothing errors, and the rule
@@ -107,8 +109,8 @@ of the first, and the panel was half unreadable on screen for four days before G
 
 A third checks the same mistake in Tailwind's spelling: `tw:text-muted` is not the text colour —
 the bridge at the top of `tailwind.css` maps `--color-muted` to `--muted`, the surface — and
-`tw:text-muted-foreground` is. All 88 call sites in `src/web` are already the right one, so that
-check arrives with a clean baseline, which is the only time one is cheap to add.
+`tw:text-muted-foreground` is. Every call site in `src/web` was already the right one, so that
+check arrived with a clean baseline, which is the only time one is cheap to add.
 
 ### And the other direction: a utility nothing generates
 
@@ -256,8 +258,7 @@ are native modal `<dialog>` elements in the browser's top layer, which is above 
 page by definition. That is the cheapest answer available for anything that must cover *everything*,
 and it is worth reaching for again rather than minting a bigger number.
 
-The full inventory is 31 declarations from 0 to 100, counted on 2026-09-06 with
-`grep -nE '^\s*z-index:' src/web/styles/*.css` — a dated example rather than a fact to maintain here.
+The full inventory is `grep -nE '^\s*z-index:' src/web/styles/*.css`, with values from 0 to 100.
 Run it before assuming a gap is free.
 
 ## What is not written down yet
@@ -270,8 +271,11 @@ will eventually have to decide whether they are a system or an accident:
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [controls.md](controls.md) — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.
-- **Breakpoints.** Exactly one, `max-width: 760px`, plus the widths at which the columns are given
-  up, computed in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The interesting
+- **Breakpoints.** The reading view has exactly one, `max-width: 731px` (`NARROW_WINDOW_MAX` in
+  [`layout.ts`](../../src/web/layout.ts), written as a literal in the stylesheets, and paired with
+  `max-height: 620px` where a short window needs the same rules), plus the widths at which the columns
+  are given up, computed in JS rather than in CSS (the same file). Outside it, the marketing pages add
+  `min-width: 640px` and `900px` in `site.css` and Illustrated adds `min-width: 1080px`. The interesting
   responsive behaviour is not in the stylesheet at all. (The spine used to be in that sentence too,
   collapsing from 13rem to a strip on width; the expanded rail was deleted on 2026-08-26 and it is
   now one width, on or off — 12px since 2026-08-28.)
@@ -279,16 +283,14 @@ will eventually have to decide whether they are a system or an accident:
   [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; narrower
   blocks under [`src/web/styles/`](../../src/web/styles/) remain, for the things that are *wrong*
   when reduced rather than merely fast (a tooltip's transform, the context panel's scroll-behaviour).
-  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css` — **18 across 13 files** on
-  2026-09-06. `tailwind.css` said "four" until that day, and had been wrong by more than four times
+  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css`. `tailwind.css` said "four" until 2026-09-06, and had been wrong by more than four times
   for long enough that nobody could say when it drifted. Written globally
   before most of the motion it guards exists — which is the lesson from the previous app, where
   the guard covered two class names while fifteen keyframe animations ran regardless. Individual
   durations are still per-rule.
 - **What "done" looks like.** Whether this project wants a design system, or whether this much
   well-commented CSS *is* the answer at this size, is genuinely undecided — and the number is the
-  sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`; on
-  2026-09-06 that was 15,951 lines over 38 files. This line said "~1200" until 2026-09-03, and it
+  sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`. This line said "~1200" until 2026-09-03, and it
   was right when it was written: there was one file and it was 1,211 lines on 2026-08-25.
 
 ## Under this doc

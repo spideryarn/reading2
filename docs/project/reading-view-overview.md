@@ -24,6 +24,19 @@ One of the features the app is for is the article at several levels of compressi
 **[granularity-zoom.md](granularity-zoom.md)**, which [Structure](structure.md) now draws. It is one
 of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 
+## In this doc
+
+- [§ True across the whole view](#true-across-the-whole-view) — the rules any change to the reader has to keep: block ids, URL state, streaming, when a press spends money
+- [§ The docs](#the-docs) — finding the doc for the surface you are about to change
+  - [The layout](#the-layout) — the columns, the margin, where the client code is, adding a mode
+  - [The article itself](#the-article-itself) — the prose: structure, reading time, maths
+  - [The modes in the band](#the-modes-in-the-band) — one line per mode; start here for "which doc owns this mode?"
+  - [Marking a passage, and asking about one](#marking-a-passage-and-asking-about-one) — comments, chat and its tools, voice, Learn
+  - [Hovering and moving around](#hovering-and-moving-around) — hover cards, tooltips, keys, touch, the URL
+  - [The command bar](#the-command-bar) — adding or changing a row in the bar, and what a row may claim
+  - [Getting in and out](#getting-in-and-out) — the shelf, the public pages, the profile, help and privacy
+- [§ Where the code is](#where-the-code-is) — which file to open first
+
 ## True across the whole view
 
 - **Text is addressed by block id, never by pixel offset or CSS selector** — scroll position, deep
@@ -154,7 +167,8 @@ readers never are.
   switch; a visitor to a public article sees the stored FAQ, while making it remains the owner's.
 - **[skim.md](skim.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
-  it for Greg's dictated brief, verbatim, and the questions still waiting for him.
+  it for Greg's dictated brief, verbatim, and the defaults taken on his behalf to keep the build
+  moving, each cheap for him to change.
 - **[tweets.md](tweets.md)** — the article as a numbered thread, in a wide band beside the prose,
   each post linked to the passages it came from. Summary's Thread view since 2026-10-03, a mode of
   its own (Tweets) before; `?mode=tweets` lands there. **The one view that writes on arrival**
@@ -190,9 +204,12 @@ right instead, beside a band or without one.
 - **[comments.md](comments.md)** — select a sentence and it is yours: a bookmark, a note on it if
   you want one, and an answer from the model only if you tick the box. **Saving costs nothing.**
   Open it for the anchoring, the four store operations and why there are four, and the streaming.
-- **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
+- **[chat-tools.md](chat-tools.md)** — the tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
   [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
+- **[chat-from-a-mode.md](chat-from-a-mode.md)** — an "Ask in chat" button on an item in a mode,
+  and the chat that remembers where it began: which modes have one, and the checklist of every place
+  a new one has to be told to, marked loud or silent. Open it before adding the button to a mode.
 - **[learn-mode.md](learn-mode.md)** — the other direction: the reader says what they took from
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
@@ -307,7 +324,7 @@ rather than oversight —
 
 **Every mode Metadata can re-run has a *Run again* row since 2026-10-02** — Greg,
 SPIDERYARN-READING2-8D: *"Add a lot more Metadata functionality to Commands, e.g. to reprocess (a
-particular mode)"*. *Glossary › Run again*, *Thread › Run again* and twelve more, one per step of
+particular mode)"*. *Glossary › Run again*, *Thread › Run again* and the rest, one per step of
 `METADATA_RERUN_STEPS`, whatever the experimental switch says, as on the page. They are **shown only
 once something is typed** (`typedOnly`), so the list the bar opens on did not grow, and they answer
 to whole phrases — `rerun glossary`, `regenerate terms`, `glossary again` — because the ranking
@@ -481,7 +498,7 @@ Three pieces of it are worth knowing about:
   would be *more* disclosed than the button beside it, which reverses a decision Greg made on
   2026-09-06. For a mode it is derived from `MODE_TARGET`
   ([`src/web/activation.ts`](../../src/web/activation.ts) § `modeGenerates`), which is already total,
-  so a fifteenth mode cannot arrive unmarked; every other row carries a **required** boolean, so one
+  so a new mode cannot arrive unmarked; every other row carries a **required** boolean, so one
   cannot arrive unmarked either. Required rather than optional deliberately: an optional flag moves
   the failure from a check nobody would think to change to a field somebody could forget, which is
   quieter and not safer. It over-warns when the artefact is already there; the Dock under-warns in

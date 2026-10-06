@@ -24,6 +24,19 @@ content hash is whichever declare a `stamp()` in [`src/pipeline.ts`](../../src/p
 one at first" is a design constraint, not an apology — keep it boring while the ideas are still
 moving.
 
+## In this doc
+
+- [§ Intent](#intent) — Greg's brief, and the one design constraint it sets
+- [§ The docs](#the-docs) — finding the doc for a pipeline stage, a model call, or where data lives
+- [§ Pipeline](#pipeline) — the stage diagram: what runs in what order and what each writes
+- [§ What a block is](#what-a-block-is) — the fields on a block, before reading or writing one
+- [§ Stage ownership](#stage-ownership) — which files a stage may touch, before reaching into another's
+- [§ Storage](#storage) — where an artefact lives, and whether a step's cache can be trusted (the fingerprints)
+- [§ Server and client](#server-and-client) — where a request goes, and adding a route
+- [§ Shared code (server)](#shared-code-server) — check here before writing a helper
+- [§ Conventions](#conventions) — adding or re-running a step: hashing, freshness, and
+  [adding an artefact-backed mode](#adding-an-artefact-backed-mode)
+
 ## The docs
 
 One line each on when you would open it. The pipeline's stages come first, then the calls to models,
@@ -95,8 +108,8 @@ then where the data lives.
    ├─────────────────────┐
    ▼                     ▼
  ┌──────────┐        ┌──────────────┐
- │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up — asked
- │ archy    │───────►│              │──►  for in the same call as 4, not a
+ │ 4 struc- │        │ 5 summarize  │   gist per node, bottom-up — asked
+ │ ture     │───────►│              │──►  for in the same call as 4, not a
  └──────────┘        └──────────────┘     step of its own:  tree (+ labels,
    │                                       an empty manifest until 4b)
    ▼
@@ -288,15 +301,15 @@ The layout the pipeline used to write, one directory per article, until 2026-09-
 Anything expensive is cached on a content hash. `tree.json` is keyed on
 `hash(blocks.json) + prompt version + model id` — change any of those and it regenerates.
 
-**That was aspirational until 2026-08-25, and six artefacts really do it now.** `tweets.json` was
+**That was aspirational until 2026-08-25, and the article-reading artefacts really do it now.** `tweets.json` was
 first, and the pipeline reads its hash (`isDone` on a step, see
 [ingest-queue.md](ingest-queue.md#a-step-can-now-say-whether-its-artefact-is-current-not-just-present));
 `arc.json` joined on 2026-08-29 with the first fingerprint that covered everything its prompt reads.
 
-**Since 2026-08-31 the six article-reading stages are fingerprinted against everything their prompt
+**Since 2026-08-31 the article-reading stages are fingerprinted against everything their prompt
 reads** — the blocks, the tree, *and the head* — in
-[`src/source-hash.ts`](../../src/source-hash.ts). Before that, four of the six hashed the blocks
-alone and two omitted the metadata, so the sections could be re-cut, or the page re-extracted under a
+[`src/source-hash.ts`](../../src/source-hash.ts). Before that, four of the six there were then hashed
+the blocks alone and two omitted the metadata, so the sections could be re-cut, or the page re-extracted under a
 new headline, and every one of them went on reporting itself current.
 
 **One function per prompt head**, and one function for all of them was the first attempt. Three
@@ -304,11 +317,11 @@ heads exist today and the list grows as stages arrive:
 
 | function | stages | what its head prints |
 |---|---|---|
-| `articleFingerprint` | `arc`, `tweets`, `glossary`, `summary`, `quotes` | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
-| `articleWithIdsFingerprint` | `ideas`, `sketch`, `quiz` | those three **and `URL:`** (`articleWithIds`) |
+| `articleFingerprint` | `arc`, `glossary`, `quotes` (and a `tweets` thread stored before its prompt sent block ids) | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
+| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `debate`, `citations` | those three **and `URL:`** (`articleWithIds`) |
 | `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
 
-The last two also hash the synthetic `TITLE: <tree.slug>` those two stages fall back to when there is
+The last two also hash the synthetic `TITLE: <tree.slug>` their stages fall back to when there is
 no `meta.json`, through the shared `fallbackHeadTitle` — `structureHash` does not cover `tree.slug`,
 so re-slugging a metadata-less article moved the prompt and nothing else. Widening the first function
 instead would have spent four model calls on a `URL:` line the model was never shown. GPT Sol found

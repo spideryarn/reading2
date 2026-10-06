@@ -401,12 +401,14 @@ it.
 - **Reading before the gate throws**, rather than falling back to the environment. The tempting
   fallback is a real person's data, and the request would have succeeded and returned it.
 - **Every path from a slug to an article carries an owner filter**, through one predicate —
-  `ownedSlug()` in [`src/store/pg.ts`](../../src/store/pg.ts). That is the whole of the isolation:
+  `ownedSlug()` in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from
+  `pg.ts`). That is the whole of the isolation:
   comments, chat threads, searches and glossary lookups are reached only through an `articleId` that
   came from one of those paths. There were five near-identical `articleIdFor` helpers across the pg
   modules and no way to tell by looking whether all five had been done, so
   [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) asserts that **no file under
-  `src/store/` writes `eq(articles.slug, …)` outside `pg.ts`**.
+  `src/store/` writes `eq(articles.slug, …)` outside the four one-function files it names**
+  (`ownedSlug` and the three deliberately ownerless ones).
 - **A slug you do not own is 404, not 403.** "There is no such article" is all a stranger should learn
   about it; a 403 confirms it exists. It falls out of the design rather than being a second decision —
   the row simply does not match the `where`.
@@ -443,12 +445,11 @@ And Sol put them together, which is the part worth remembering:
 > take its slug, then download its source.
 
 Jobs now carry an `ownerId`, stamped at `enqueue` and filtered on every read and
-every mutation. The predicate is `mine()` in [`src/jobs.ts`](../../src/jobs.ts),
-and it asks **"is there a reader to answer to"** rather than "who is it": inside
-a request there is, and they see their own; outside one — the housekeeping sweep,
-the CLI, the pipeline — there is not, and it sees everything. A sweep that could
-only tidy its own jobs would leave every real user's finished job on disk for
-ever, and would do it silently.
+every mutation. The filter is now the owner argument of the
+store ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) § `list` and `get`, which both take the owner),
+which `src/jobs.ts` passes from `currentOwnerId()`; the old `mine()` predicate, which let a
+housekeeping sweep see everything, is gone, and retention now runs on the finished job's own
+owner rather than sweeping everybody.
 
 Two more things came out of the same review and are fixed:
 
@@ -561,8 +562,9 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   just below, which is the current state and the two things that fix it. The `VITE_*` half of this
   bullet is done: both variables are on the Vercel project, Production only, and the site renders.
 - **A spend limit**, which is the control that is actually missing and always was.
-- **Email in production** needs SMTP: `mailer_autoconfirm` is false there, so a sign-up sends a
-  confirmation and Supabase's built-in mailer is not for production use. Google works without it.
+- ~~**Email in production** needs SMTP~~ — **done 2026-09-29**: sign-up confirmations go through
+  Resend ([§ Email](#email)). `mailer_autoconfirm` is still false there, so a sign-up sends a
+  confirmation.
 
 ## Still open
 

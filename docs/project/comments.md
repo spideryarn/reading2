@@ -787,7 +787,7 @@ it was fine" from "nobody has said".
 
 > [!NOTE]
 > The panel sits at `z-index: 70` — above everything structural, but **below** the tooltip layer
-> (`.tooltip-anchor`, 80). It was 90 first, on the reasoning that a hover should never cover
+> (`.tooltip-anchor`, 100; it was 80 until the drawer arrived at 95). It was 90 first, on the reasoning that a hover should never cover
 > something the reader deliberately opened. That was wrong and visibly so: the panel has a tooltip
 > of its own, and at 90 it buried it. A tooltip is dismissed the instant the pointer moves, so it
 > cannot obstruct anything.
@@ -1047,9 +1047,9 @@ ahead of time. Everything else about the stage discipline holds — the call is 
 function ([`src/explain.ts`](../../src/explain.ts)), the routes are a thin wrapper
 ([`src/routes.ts`](../../src/routes.ts)), and the artefact is a row in Postgres.
 
-It is also the only place the project talks to **OpenRouter** rather than the Anthropic SDK the
-pipeline uses, because `OPENROUTER_API_KEY` is the key this project has. The model defaults to
-`anthropic/claude-sonnet-5` and is overridable with `SPIDERYARN_EXPLAIN_MODEL`.
+Like every paid call here it goes through **OpenRouter** ([ai-gateway.md](ai-gateway.md)). The model
+is whichever one `src/models.ts` puts the `explain` task on for the article's power (`modelFor`),
+and `SPIDERYARN_EXPLAIN_MODEL` overrides it.
 
 ## What the prompt asks for
 
@@ -1225,10 +1225,11 @@ nothing to poll.
 2. **A 200 with no completion.** OpenRouter answers `200` with an empty `content` when the model
    stops for its own reasons. `explain` throws on that rather than storing a blank comment that
    looks answered.
-3. **The browser's own selection highlight** sits on top of the mark we just drew, so without
-   `removeAllRanges()` after asking, the new artefact is invisible until the reader clicks
-   elsewhere — and it looks exactly like a mark that was never drawn. The call is in
-   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `onSelect`.
+3. **The browser's own selection highlight** sits on top of the mark we just drew, so a new mark
+   can be invisible until the reader clicks elsewhere — and it looks exactly like a mark that was
+   never drawn. A mouse's selection is now put back over the new mark (`selectAnchor` in
+   [`selection.ts`](../../src/web/selection.ts)); a finger's is cleared with `removeAllRanges()` in
+   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `selectProse`.
 4. **Retry, which shipped broken and was caught in the browser.** `retry` fired the POST from
    inside a `setComments` updater. An updater must be pure — React StrictMode invokes it twice — so
    one click sent *two* requests; and because `CommentStore.create` refused a client id that was
@@ -1264,7 +1265,7 @@ agent's word for it, or your own from ten minutes ago:
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5273/api/article/<slug>
 ```
 
-A comment whose POST never reached the server is **not** written to disk, so it disappears on
+A comment whose POST never reached the server is **not** stored, so it disappears on
 reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 
 ## A shared link carries them, since 2026-09-04
@@ -1309,7 +1310,8 @@ hole in six lines.
 
 So `publicCommentsQuery` names its columns, joins `articles`, and **repeats the `publicSlug`
 predicate in its own `where`** — a naked `articleId` is not authority. The tripwire's allowlist grew
-from four tables to five, deliberately, and its comment says what a sixth line would have to prove.
+from four tables to five, deliberately, and its comment says what a further line would have to prove
+(it has grown since; the list in the test is the current one).
 
 ### Citations are re-judged, not copied
 
@@ -1357,8 +1359,9 @@ rather than blanked, and if none survives the key comes off entirely.
   same long-press is how a reader copies or looks a word up, so a touch selection gets a "Highlight
   or comment" button below it and the press applies the highlight —
   [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
-- **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
-  visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
+- **On the legacy answer path, the row goes `pending` before the model is called**, so a crash
+  mid-answer leaves a visible unanswered question rather than a selection that evaporated. The
+  dialog offers a retry. (A new comment is stored `none` and never calls the model.)
 - **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` in the
   store cannot distinguish "an answer is coming" from "the process writing it died" — so the server
   keeps the list of what it is actually answering, and anything else that is `pending` is swept to
@@ -1390,9 +1393,10 @@ rather than blanked, and if none survives the key comes off entirely.
   only takes the click when there is no selection to act on. (The one exception is the overlap rule
   in [§ The box a selection opens](#the-selection-box), which replaces a highlight made a moment
   ago and not yet touched.)
-- **No editing, no reply, no follow-up question.** Ask, read, delete. Anything more is a chatbot
-  with the article in the context window, which is
-  [an explicit anti-goal](vision.md#anti-goals).
+- **A comment holds one question and one answer, with no transcript.** The reader can edit their own
+  words, and a follow-up box hands the question to a chat rather than growing a thread in the dialog
+  ([§ pushing back](#pushing-back)). Anything more is a chatbot with the article in the context
+  window, which is [an explicit anti-goal](vision.md#anti-goals).
 - **Comments are per-article, not per-reader.** There is one reader.
 
 ## Where the chat panel sits <a id="chat-dock"></a>

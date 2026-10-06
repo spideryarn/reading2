@@ -703,9 +703,9 @@ identical and **cannot** prove the provider read them; the eval run above report
 
 ## On screen
 
-The mode band, the eighth value in `MODES`, last in the dock — the order runs outward from the
-article's own words to the conversation about it, and Learn is one step further out again as the
-only mode whose content comes from the reader.
+The mode band, last in the dock's input group (after Search and Chat; only the margin button
+follows) — the order runs outward from the article's own words to the conversation about it, and
+Learn is one step further out again as the only mode whose content comes from the reader.
 
 **Learn's conversational parts have no list; each opens its one conversation.** Until 2026-10-01
 the list was shared — both

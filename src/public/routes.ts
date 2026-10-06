@@ -401,16 +401,15 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
      malformed key for anybody to tell from a wrong one. */
   const access = accessFor(parseShareKey(request.key));
 
-  /* **Method, then slug, then store, then the read**, and the order is the
-     content of these four lines. The slug is validated before the store is
-     consulted so that a malformed request is a 400 whatever this server is
-     configured with — otherwise the same request would be a 400 on one machine
-     and a 501 on another, which is the sort of difference that gets discovered
-     from a bug report rather than from a test.
+  /* **Method, then slug, then the read**, and the order is the content of
+     these lines. The slug is validated before the store is consulted, so a
+     malformed request is a 400 and never reaches a read. (There was a fourth
+     step between them, a store check that answered 501 on the filesystem
+     store; it went with that store on 2026-09-05.)
 
      A loop over `PUBLIC_ROUTES` rather than one `if` per route, so that the
-     four checks happen once and a route added later cannot be added with three
-     of them. It was a loop over a single route between 2026-09-02 (when
+     checks happen once and a route added later cannot be added with one
+     missing. It was a loop over a single route between 2026-09-02 (when
      `metadata` was deleted) and 2026-09-04 (when `library` arrived), and staying
      a loop through that is what made the second one four lines rather than a
      project. The authenticated half is deliberately still an `if` chain — see
@@ -428,12 +427,10 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
        it is exhaustive — a third kind added to the union stops this file
        compiling rather than falling out of the loop into the 404 below.
 
-       `requirePostgres()` is called inside each arm rather than hoisted above
-       the switch, and that ordering is the point: a slug is validated *before*
-       the store is consulted, so a malformed request is a 400 whatever this
-       server is configured with. Hoisted, the same request would be a 400 on one
-       machine and a 501 on another. A collection has no slug to validate, so
-       there is nothing for its check to come after. */
+       (History: until the filesystem store was deleted on 2026-09-05 each arm
+       also called a `requirePostgres()` that answered 501 on that store, after
+       the slug had been validated. There is one store now, so that check and
+       its 501 are gone; a slug is still validated before anything is read.) */
     switch (route.kind) {
       case "slug": {
         const slug = slugFrom(matched);

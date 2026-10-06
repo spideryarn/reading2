@@ -54,7 +54,7 @@ because the browser tells it**, posting what each turn cost to `/api/live/:sessi
 the server prices it and writes an ordinary `ai_calls` row. That landed on 2026-09-02 (Stage 2B) and
 `src/live.ts` came out of `UNMETERED_SPEND` the same day — the register's second table means *money
 leaves and no row appears*, so leaving it there would have made the report overclaim in the one
-direction it exists to prevent. The two live-mode evals under `evals/live/` are still in it.
+direction it exists to prevent. The live-mode evals under `evals/live/` are still in it.
 
 **It is still not a declared bypass, and the reason changed on 2026-09-02.** It used to be that a
 `Declaration` for it could not be *typed*: `ProviderAccount` had no `"openai"` and `Wire` had no
@@ -658,8 +658,8 @@ re-litigated without one:
 - **Postgres only, and it never reads whole rows.** The aggregate is a `GROUP BY` in
   [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts) — `CostStore` was
   deliberately *not* widened, on GPT Sol's call: *"Do not widen `CostStore` merely to preserve
-  filesystem parity for a pricing query whose source of truth is Postgres."* On the filesystem store
-  the report refuses and says so.
+  filesystem parity for a pricing query whose source of truth is Postgres."* (The filesystem store
+  it was refusing on went on 2026-09-05; the aggregate is Postgres's alone now.)
 - **The categories are named for the mechanism, not for a provenance the schema cannot prove.**
   `scope_kind` does **not** separate ingest from reading: a reader asking for Glossary posts to
   `POST /api/jobs` and is recorded `job_step`, exactly like base ingest. So the category is
@@ -779,8 +779,9 @@ test, red, alongside the real files with the wrapper taken back out.
 new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
 `loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
 has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
-docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
-the old pair, because they were dirty with other agents' work on the day.
+docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight were on it that day and the other
+five still carried the old pair; the stage CLIs have since left for the queue (above), and
+`src/pdf-read.ts` is the paid CLI that ends this way now.
 
 The tempting way to accept two tails is to ask something weaker of each, which is the failure this
 gate already had once. So the two are checked separately, and the new one is checked *harder*: the
@@ -963,12 +964,12 @@ this; the bill was still using the weaker question.
 
 ### How a stream ends, and who decides what that means <a id="stream-end"></a>
 
-**One classification, seven callers, and the callers still decide.**
+**One classification, shared by every streaming caller, and the callers still decide.**
 [`classifyEnd`](../../src/ai-call.ts) turns a finished `openRouterStream` run into a
 `StreamOutcome` — `finished`, `truncated`, `filtered`, `wants-tools`, `provider-failed`,
 `abandoned`, `timed-out`, `went-quiet`, `unterminated`, or `unknown-finish-reason` with the reason
 and the terminator beside it. Every streaming caller switches on it with a `never` default, so a
-tenth way for a stream to end is a compile error at every site rather than a branch somebody forgot.
+new way for a stream to end is a compile error at every site rather than a branch somebody forgot.
 
 **Why it reports rather than decides.** The callers genuinely disagree, on evidence, about what
 `finish_reason: "length"` means: fatal to a quiz mark, success-with-a-flag to chat, left to the
@@ -1053,8 +1054,9 @@ types were never what stood in the way.
 - `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
   every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
   `ProviderAccount` and a `Wire`; these have both now and still cannot be declared, because a
-  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. Two
-  entries: the two live-mode evals under `evals/live/`, and
+  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. The
+  file lists them all (more than these two today, among them `scripts/run-claude.ts`); the two this
+  section began with are the live-mode evals under `evals/live/`, and
   [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
   every plan, which spawn another vendor's CLI on a third account and so are invisible to the
   capability scan as well as to the ledger.
