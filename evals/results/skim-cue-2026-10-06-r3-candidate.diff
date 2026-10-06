@@ -1,0 +1,66 @@
+--- src/skim-v10-eval-tmp.ts	2026-10-06 15:29:17.218376859 +0100
++++ src/skim.ts	2026-10-06 15:32:15.203948507 +0100
+@@ -151,7 +151,7 @@
+  * docs/plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md;
+  * measured in docs/investigations/261006b-skim-cue-situates-the-quote-eval.md.
+  */
+-export const PROMPT_VERSION = "skim/10";
++export const PROMPT_VERSION = "skim/11";
+ 
+ /**
+  * **A cue is a sentence or two, not a paragraph about the passage**: an
+@@ -1046,22 +1046,37 @@
+    SOME QUOTES LEAN ON WORDS THEY DO NOT EXPLAIN, AND THEIR CUE SETS THE
+    SCENE FIRST. A quote is cut out of its paragraph, so it may say "the
+    latter", "this approach", "these results", "their method", "such
+-   models" or "it" about something the paragraph had already named. Then
+-   the reader needs to know what is at stake before a pointer makes sense:
+-   the question being settled, the two things being compared, or what the
+-   quote's "this" or "the latter" stands for. SET THE SCENE as a question,
+-   or as a bare naming of the options, and THEN POINT at what to look for.
++   models" or "it" about something the paragraph had already named, or
++   use a short name ("the second group", "Model B") without saying what
++   it is. Then the reader needs to know what is at stake before a pointer
++   makes sense: the question being settled, the two things being compared,
++   or what the quote's "this" or "the latter" stands for. SET THE SCENE as
++   a question, as a bare naming of the options, or as a few words saying
++   what the leaning word stands for, and THEN POINT at what to look for.
+    GOOD: "Is the model reasoning, or recalling its training data? See which
+    reading their results favour.",
+    "Two measures are on offer, one simple and one exact. Which do they
+    choose, and what do they give up for it?",
+-   "Does the effect hold outside the lab as well as in it? Note the number."
++   "Does the effect hold outside the lab as well as in it? Note the number.",
++   "'This rule' is the ban on night shifts for trainees. What do they
++   say it cost?"
+    BAD, it leans on the quote's own unexplained words: "Which interpretation
+    does their evidence favour?" (which interpretations?), "Look for why this
+    approach fails." (which approach?)
+ 
+-   The scene names the question and the options. It is never a statement
+-   of what the passage says, shows or argues.
++   CHECK EVERY QUOTE FOR THIS BEFORE YOU WRITE ITS CUE. Read the quote as
++   somebody who has seen nothing else of the article, and ask: is there a
++   word in it that points at something the quote does not name? If there
++   is, the cue names that thing first, in a few words taken from the key
++   ideas, the outline or the quotes around it. Do not leave the scene out
++   because a shorter cue is possible, and do not repeat the leaning word
++   in the cue as if the reader knew what it meant ("such persons", "this
++   choice", "the people just described"). If there is no such word, the
++   cue is the one question or one instruction described above, and
++   questions are as welcome as they were.
++
++   The scene names the question, the options, or what a word stands for.
++   It is never a statement of what the passage says, shows or argues.
+ 
+    NEVER say what the passage found, concluded or chose. Leave the answer
+    in the passage.
+@@ -1075,7 +1090,7 @@
+    is not. No findings, no verdicts: the reader gets those from the passage.
+ 
+    ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you
+-   were given: the quote, the key ideas and the outline. Do not add a
++   were given: the quotes, the key ideas and the outline. Do not add a
+    place, a date, a method, a size or a motive to make the scene vivid
+    ("in mice", "last year", "by hand"), and do not sharpen what the quote
+    says ("never" for "rarely", "all" for "most"). If you cannot tell from
