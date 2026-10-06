@@ -230,3 +230,10 @@ worktree's dev server): the job fails at *Extracting the article* with the fetch
 `[jb-bot-check]`, no Retry, nothing on the shelf, no sideways scroll at any width. At 390 the code
 itself breaks across two lines (`[jb-` / `bot-check]`), which is 261006c's sentence and not this
 change's.
+
+**Round two, narrow** (on `4953bd666`, the shared helper only):
+[261006f-other-bot-check-walls-code-review-2-sol.md](261006f-other-bot-check-walls-code-review-2-sol.md).
+**F8 (P2, established; fixed by Sol):** the helper's CSS selector `script[id=…]` also matches an
+SVG or MathML `<script>`, which the old `tagName === "SCRIPT"` test did not, so four constructed
+articles were newly refused. The tag test is back; four tests seen red. Verdict *land it*.
+Discovery closed after this round.

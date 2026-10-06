@@ -77,7 +77,10 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
  * docs/postmortems/261006k-a-first-id-match-hid-a-later-valid-script.md.
  */
 function hasJsonScript(doc: Document, id: string, passes: (payload: unknown) => boolean): boolean {
-  for (const el of doc.querySelectorAll(`script[id="${id}"]`)) {
+  for (const el of doc.querySelectorAll(`[id="${id}"]`)) {
+    /* Preserve the old element predicate: CSS's script selector also matches
+       SVG and MathML scripts, whose tagName is lowercase in parsed HTML. */
+    if (el.tagName !== "SCRIPT") continue;
     if ((el.getAttribute("type") ?? "").trim().toLowerCase() !== "application/json") continue;
     let payload: unknown;
     try {

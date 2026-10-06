@@ -361,6 +361,26 @@ describe("negative controls — a real article is not refused", () => {
   });
 });
 
+describe("negative controls, shared JSON helper — foreign scripts are not HTML scripts", () => {
+  it.each([
+    { namespace: "SVG", container: "svg", shape: "challenge", script: marker(), companion: "" },
+    { namespace: "MathML", container: "math", shape: "challenge", script: marker(), companion: "" },
+    { namespace: "SVG", container: "svg", shape: "version", script: version(), companion: solver() },
+    { namespace: "MathML", container: "math", shape: "version", script: version(), companion: solver() },
+  ])("a $namespace $shape script does not refuse an article", async ({ container, script, companion }) => {
+    /* CSS's script selector also matches foreign elements; the old parser's
+       tagName check excluded them even with a unique id and valid JSON. */
+    const html = page({ body: `${PROSE}<${container}>${script}</${container}>${companion}` });
+    for (const url of ["https://example.com/foreign-script", null]) {
+      const shipping = readArticle(html, url);
+      expect(shipping.refusal).toBeNull();
+      expect(measured(shipping.article?.textContent)).toBeGreaterThanOrEqual(MIN_ARTICLE_CHARS);
+      expect(readArticleWithProvenance(html, url ?? "about:blank").refusal).toBeNull();
+      expect(await thrownBy(html, url)).toBeNull();
+    }
+  });
+});
+
 describe("negative controls, second shape — neither half alone, and nothing that only resembles one", () => {
   const asText = (h: string): string => h.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const ORIGIN = "https://example.com";

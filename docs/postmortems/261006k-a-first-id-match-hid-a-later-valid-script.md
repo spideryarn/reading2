@@ -29,6 +29,13 @@ red before the fix: an earlier non-script, wrong-type script, malformed JSON scr
 version string. They exercise both read paths and production extraction, including uploads.
 A negative control requires duplicate invalid version scripts to remain an article.
 
+Round-two review of `4953bd666` found that extracting the shared helper had also dropped the
+old `tagName === "SCRIPT"` predicate. A CSS `script` selector includes SVG and MathML scripts
+parsed from HTML; the old predicate did not, so four constructed article controls were newly
+refused even with unique IDs. All four were seen red. The fix scans matching IDs and retains the
+old element predicate before checking type, JSON and payload. The class is a lookup refactor changing the
+candidate domain as well as the quantifier; no captured real-article collision was established.
+
 1. **Put a nonmatching element before a matching element in an existence-test fixture.** Cheap,
    done here, and distinguishes existence from first-match lookup.
 2. **Keep the predicate's quantifier when choosing its lookup.** “There is a valid element”
