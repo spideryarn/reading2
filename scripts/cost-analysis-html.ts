@@ -33,7 +33,9 @@ import {
   type FailureGroup,
   NOT_MEASURED,
   OPENROUTER_CREDIT_FEE,
+  type Stopped,
   failureSummary,
+  stoppedFigure,
 } from "../src/cost-cube.js";
 
 /* --------------------------------------------------------------- escaping -- */
@@ -493,12 +495,18 @@ function failureCell(value: number | null): Safe {
     : html`<td class="n">${whole(value)}</td>`;
 }
 
+function stoppedCell(value: Stopped | null): Safe {
+  return value === null
+    ? html`<td class="n dim">${NOT_MEASURED}</td>`
+    : html`<td class="n">${stoppedFigure(value)}</td>`;
+}
+
 function failureCounts(section: string, label: string, groups: readonly FailureGroup[]): Safe {
   return html`<div class="scroll"><table data-section="${section}">
-    <thead><tr><th>${label}</th><th class="n">Counted attempts</th><th class="n">Retries</th><th class="n">Gave up after the last go</th><th class="n">Died part-way</th></tr></thead>
+    <thead><tr><th>${label}</th><th class="n">Counted attempts</th><th class="n">Retries</th><th class="n">Gave up after the last go</th><th class="n">Died part-way</th><th class="n">Stalled</th><th class="n">Timed out</th><th class="n">Stops not classified</th></tr></thead>
     <tbody>${groups.map(
       (g) =>
-        html`<tr><td>${g.label}</td><td class="n">${whole(g.counted)}</td>${failureCell(g.retries)}${failureCell(g.gaveUp)}${failureCell(g.diedPartWay)}</tr>`,
+        html`<tr><td>${g.label}</td><td class="n">${whole(g.counted)}</td>${failureCell(g.retries)}${failureCell(g.gaveUp)}${failureCell(g.diedPartWay)}${stoppedCell(g.stalled)}${stoppedCell(g.timedOut)}${failureCell(g.stopsNotClassified)}</tr>`,
     )}</tbody>
   </table></div>`;
 }

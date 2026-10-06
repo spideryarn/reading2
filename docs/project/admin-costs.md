@@ -77,13 +77,23 @@ terminal, the JSON and the HTML report. Per UTC day and per mode or task:
 
 | Figure | What it counts |
 |---|---|
-| Counted attempts | rows a retry loop of ours numbered. Context for the other three, not a denominator |
+| Counted attempts | rows a retry loop of ours numbered. Context for the others, not a denominator |
 | Retries | goes after the first |
 | Gave up after the last go | calls whose third and final allowed attempt failed before acceptance; earlier refusals appear in the causes table |
 | Died part-way | attempts that failed after the seam accepted the response, which can precede any answer content; see the shared definition below |
+| Stalled | `aborted` rows classed `stall`: we stopped the call because the provider had sent nothing for too long. Shown with how many were part-way, as `3 (2 part-way)` |
+| Timed out | `aborted` rows classed `deadline`: a time limit on the call ran out. Shown the same way |
+| Stops not classified | `aborted` rows with no class: they do not say who stopped them, so any could be a stall or a timeout |
+
+Stalled and timed out are never added to *died part-way*
+([261006d](../plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md)). That one is
+an **error** after acceptance; these are stops of ours, a row is never both, and the two are
+different evidence about paying twice for a broken answer.
 
 Under them, the causes: where the attempt failed, the cause, the HTTP status, the upstream, the
-model, and the mode or task. All of it follows the period, the evals switch and every filter.
+model, and the mode or task. A stall and a deadline are listed there as causes; a reader's Stop
+(`abort`) is not one and is left out. All of it follows the period, the evals switch and every
+filter.
 
 Two rules, both from GPT Sol's review of the plan
 ([F4 and F5](../plans/261006b-count-ai-calls-plan-review-sol.md)):
@@ -95,12 +105,20 @@ Two rules, both from GPT Sol's review of the plan
   Part-way deaths use separate evidence: a numbered attempt or an error with a recorded phase.
   An unnumbered failure before acceptance therefore shows zero deaths, while older rows alone
   cannot supply a measured figure. These are observed counts, with incomplete coverage.
+  Stalls and timeouts have evidence of their own again, a stop that says who stopped it: *not
+  measured* when a group's only stops have no class, a number when every stop has one (zero
+  included, and zero when nothing was stopped at all), and a number beside the *stops not
+  classified* when it holds both. A stop with no class is not only an old row: the realtime wire
+  (`src/live.ts`) still writes them.
 
 What it does not count is said on the page itself, from `FAILURE_NOTES` in
-[`src/cost-cube.ts`](../../src/cost-cube.ts): stalls, and the PDF reader's and the embeddings' own
-retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is missing. The folds
-are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file; `FAILURE_DEFINITIONS`
-states each seam's acceptance boundary and the distinction from answer content.
+[`src/cost-cube.ts`](../../src/cost-cube.ts): the stops that do not say who stopped them, the
+pipeline's deadline on a whole job (recorded as an ordinary stop), and the PDF reader's and the
+embeddings' own retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is
+missing. The folds are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file,
+and `nothingMeasured` is the one rule for folding a row away; `FAILURE_DEFINITIONS` states each
+seam's acceptance boundary and the distinction from answer content, and what a stall and a timeout
+are.
 
 **The existing "Failed or stopped calls" figure can rise after the recording fix**, because
 malformed and error-envelope bodies previously recorded as `ok` now count as failures.

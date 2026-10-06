@@ -475,7 +475,8 @@ export function pivotRows(
  *
  * **Null is "not measured", which is not zero.** With no counted attempt
  * nothing could have recorded a retry or give-up. Phase coverage is separate:
- * an unnumbered attempt can record where it failed.
+ * an unnumbered attempt can record where it failed. Who stopped a stopped row
+ * is a third coverage again, and has its own evidence: `stalled`.
  */
 export interface FailureCounts {
   /** Every ledger row. */
@@ -492,7 +493,34 @@ export interface FailureCounts {
    * a recorded phase demonstrates coverage.
    */
   diedPartWay: number | null;
+  /**
+   * Stopped by our stall clock: an `aborted` row classed `stall`. Never part of
+   * `diedPartWay`, which is an **error**; one row is never both.
+   *
+   * Null when the rows hold stops and none of them says who stopped it: an
+   * `aborted` row with no class is an older row or the realtime wire's
+   * (src/live.ts), and could be a stall. With no stopped row at all it is a
+   * zero, because nothing was stopped by anyone. Plan 261006d.
+   */
+  stalled: Stopped | null;
+  /** Stopped by a deadline of ours: an `aborted` row classed `deadline`. Null as `stalled` is. */
+  timedOut: Stopped | null;
+  /** `aborted` rows that say who stopped them, a reader's Stop included. */
+  stopsClassified: number;
+  /** `aborted` rows that do not. Beside a number, these are the stops it cannot speak for. */
+  stopsNotClassified: number;
 }
+
+/** Attempts one of our clocks stopped, and how many of them the provider had already accepted. */
+export interface Stopped {
+  attempts: number;
+  partWay: number;
+}
+
+/** The two classes of `aborted` row that are our own clock's doing; `abort` is everybody else's. */
+const OUR_CLOCK = { stall: "stalled", deadline: "timedOut" } as const;
+const isOurClock = (failureClass: string | null): failureClass is keyof typeof OUR_CLOCK =>
+  failureClass === "stall" || failureClass === "deadline";
 
 export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
   let attempts = 0;
@@ -501,6 +529,9 @@ export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
   let gaveUp = 0;
   let diedPartWay = 0;
   let phaseMeasured = false;
+  const stopped = { stalled: { attempts: 0, partWay: 0 }, timedOut: { attempts: 0, partWay: 0 } };
+  let stopsClassified = 0;
+  let stopsNotClassified = 0;
   for (const row of rows) {
     attempts += row.calls;
     counted += row.counted;
@@ -508,15 +539,38 @@ export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
     gaveUp += row.gaveUp;
     if (row.outcome === "error" && row.failurePhase !== null) phaseMeasured = true;
     if (row.outcome === "error" && row.failurePhase === "mid_answer") diedPartWay += row.calls;
+    if (row.outcome !== "aborted") continue;
+    if (row.failureClass === null) stopsNotClassified += row.calls;
+    else stopsClassified += row.calls;
+    if (isOurClock(row.failureClass)) {
+      const into = stopped[OUR_CLOCK[row.failureClass]];
+      into.attempts += row.calls;
+      if (row.failurePhase === "mid_answer") into.partWay += row.calls;
+    }
   }
   const measured = counted > 0;
+  const stopsMeasured = stopsClassified > 0 || stopsNotClassified === 0;
   return {
     attempts,
     counted,
     retries: measured ? retries : null,
     gaveUp: measured ? gaveUp : null,
     diedPartWay: measured || phaseMeasured ? diedPartWay : null,
+    stalled: stopsMeasured ? stopped.stalled : null,
+    timedOut: stopsMeasured ? stopped.timedOut : null,
+    stopsClassified,
+    stopsNotClassified,
   };
+}
+
+/**
+ * True when nothing in the group shows any of its figures was being measured:
+ * no numbered attempt, no failure with a phase, no stop that says who stopped
+ * it. Such a row is folded away rather than drawn. `stalled` alone cannot say
+ * this, because it is also a zero where nothing was stopped.
+ */
+export function nothingMeasured(c: FailureCounts): boolean {
+  return c.retries === null && c.gaveUp === null && c.diedPartWay === null && c.stopsClassified === 0;
 }
 
 export interface FailureGroup extends FailureCounts {
@@ -524,12 +578,13 @@ export interface FailureGroup extends FailureCounts {
   label: string;
 }
 
-const trouble = (c: FailureCounts): number => (c.retries ?? 0) + (c.gaveUp ?? 0) + (c.diedPartWay ?? 0);
+const trouble = (c: FailureCounts): number =>
+  (c.retries ?? 0) + (c.gaveUp ?? 0) + (c.diedPartWay ?? 0) + (c.stalled?.attempts ?? 0) + (c.timedOut?.attempts ?? 0);
 const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 /**
- * `FailureCounts` per value of one dimension: the most retries, give-ups and
- * part-way deaths first, then the most counted attempts.
+ * `FailureCounts` per value of one dimension: the most retries, give-ups,
+ * part-way deaths, stalls and timeouts first, then the most counted attempts.
  */
 export function failureCountsBy(
   rows: readonly CostCubeRow[],
@@ -572,14 +627,17 @@ const CAUSE_DIMENSIONS = [
 ] as const satisfies readonly Dimension[];
 
 /**
- * Why attempts failed: every row that recorded a phase, grouped by phase,
- * class, status, upstream, model and task, the commonest first. A stopped row
- * and a row from before the columns record no phase and are not here.
+ * Why attempts failed: every error that recorded a phase, and every stop our
+ * own stall clock or deadline made, grouped by phase, class, status, upstream,
+ * model and task, the commonest first. A reader's Stop has a phase too and is
+ * left out: it is not a cause of failure (GPT Sol's F19 on plan 261006d). A row
+ * from before the columns records no phase and is not here.
  */
 export function failureCauses(rows: readonly CostCubeRow[]): FailureCause[] {
   const causes = new Map<string, FailureCause>();
   for (const row of rows) {
     if (row.failurePhase === null) continue;
+    if (!(row.outcome === "error" || (row.outcome === "aborted" && isOurClock(row.failureClass)))) continue;
     const [phase, failureClass, status, upstream, model, task] = CAUSE_DIMENSIONS.map((dim) =>
       dimensionValue(row, dim),
     ) as [DimValue, DimValue, DimValue, DimValue, DimValue, DimValue];
@@ -613,16 +671,20 @@ type DimValue = { key: string; label: string };
 export const FAILURE_NOTES: readonly string[] = [
   "These are counts, not rates. Each row of the ledger is one attempt, not one call: a call that was retried once is two rows.",
   "Retries and give-ups are counted only on attempts our retry loop numbered. Part-way deaths are counted on any failed attempt that recorded where it failed, numbered or not. Where nothing shows a figure was being measured it reads not measured, which is not zero: that covers every call made before this was recorded.",
-  "Stalls are not measured. When our own clock stops a provider that has gone silent, the row is recorded as stopped, the same as a reader pressing Stop. One exception: if the provider had already sent an error, the row keeps that error.",
+  "Stalls and timeouts are counted only on stopped attempts that say who stopped them. Attempts from before this was recorded do not say, and neither does live conversation: where those are the only stops, the figure reads not measured, and where there are both, they are counted beside it as stops not classified.",
+  "A timeout, which the causes table calls a deadline, is any time limit on the call running out. The pipeline's limit on a whole job is a different clock: when it stops a call, the attempt is recorded as an ordinary stop, the same as a reader pressing Stop, and is in neither count.",
+  "A stopped call is not always recorded as a stop: if the provider had already sent an error, the row keeps that error.",
   "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
 ];
 
-/** The three counts, defined once for both readers. */
+/** The five counts, defined once for both readers. */
 export const FAILURE_DEFINITIONS =
   "A retry is a second or third go at a call, started because the go before it failed before the provider accepted it. " +
   "A call gave up when its third and last go failed that way too; a call refused outright on an earlier go is in the causes table. " +
   "An attempt died part-way when it failed after the provider had accepted it, which can be before any of the answer arrived. " +
-  "We do not ask again after that point, though the PDF reader's own loop may.";
+  "We do not ask again after that point, though the PDF reader's own loop may. " +
+  "An attempt stalled when we stopped it because the provider had sent nothing for too long, and timed out when we stopped it because the whole call had taken too long. " +
+  "Each is shown with how many were part-way, and neither is counted as died part-way.";
 
 /** What a null `FailureCounts` figure is drawn as. */
 export const NOT_MEASURED = "not measured";
@@ -630,19 +692,40 @@ export const NOT_MEASURED = "not measured";
 const things = (n: number, one: string, many = `${one}s`): string =>
   `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
-/** The totals as a sentence or two. Counts beside the counted attempts; never a share. */
+/** `3 (2 part-way)`: a `Stopped` figure as a table cell. A bare `0` when there were none. */
+export function stoppedFigure(stopped: Stopped): string {
+  const attempts = stopped.attempts.toLocaleString("en-US");
+  return stopped.attempts === 0 ? attempts : `${attempts} (${stopped.partWay.toLocaleString("en-US")} part-way)`;
+}
+
+/** The stalls and timeouts as a sentence, with the stops that could not say beside them. */
+function stoppedSummary(total: FailureCounts): string {
+  const unsaid = total.stopsNotClassified;
+  if (total.stalled === null || total.timedOut === null) {
+    return ` Stalls and timeouts are not measured: ${things(unsaid, "stop")} ${unsaid === 1 ? "does" : "do"} not say who stopped ${unsaid === 1 ? "it" : "them"}.`;
+  }
+  const partWay = (s: Stopped) => (s.attempts === 0 ? "" : ` (${s.partWay.toLocaleString("en-US")} part-way)`);
+  return (
+    ` ${things(total.stalled.attempts, "attempt")} stalled${partWay(total.stalled)} and ` +
+    `${total.timedOut.attempts.toLocaleString("en-US")} timed out${partWay(total.timedOut)}.` +
+    (unsaid > 0 ? ` ${things(unsaid, "stop")} not classified.` : "")
+  );
+}
+
+/** The totals as a few sentences. Counts beside the counted attempts; never a share. */
 export function failureSummary(total: FailureCounts): string {
   const died =
     total.diedPartWay === null ? "" : ` ${things(total.diedPartWay, "attempt")} died part-way.`;
+  const stopped = stoppedSummary(total);
   if (total.retries === null || total.gaveUp === null) {
     const none = `one of the ${things(total.attempts, "attempt")} was numbered by our retry loop`;
     return total.diedPartWay === null
-      ? `Not measured: n${none}.`
-      : `N${none}, so retries and give-ups are not measured.${died}`;
+      ? `Retries, give-ups and part-way deaths are not measured: n${none}.${stopped}`
+      : `N${none}, so retries and give-ups are not measured.${died}${stopped}`;
   }
   return (
     `Of ${things(total.attempts, "attempt")}, ${total.counted.toLocaleString("en-US")} ${total.counted === 1 ? "was" : "were"} numbered by our retry loop: ` +
-    `${things(total.retries, "retry", "retries")} and ${things(total.gaveUp, "call")} that gave up after the last go.${died}`
+    `${things(total.retries, "retry", "retries")} and ${things(total.gaveUp, "call")} that gave up after the last go.${died}${stopped}`
   );
 }
 

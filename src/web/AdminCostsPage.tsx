@@ -41,6 +41,8 @@ import {
   FAILURE_NOTES,
   type FailureGroup,
   NOT_MEASURED,
+  nothingMeasured,
+  stoppedFigure,
   type OwnerEmails,
   amountPerPricedCall,
   dimensionValue,
@@ -997,35 +999,53 @@ function OverTime({
 
 /* -------------------------------------------------- failures and retries -- */
 
-const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; pick: (g: FailureGroup) => number | null }[] = [
+const count = (n: number | null): string | null => (n === null ? null : n.toLocaleString("en-US"));
+
+/** `show` gives the cell's words, or null for a figure that was not measured. */
+const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; show: (g: FailureGroup) => string | null }[] = [
   {
     id: "counted",
     header: "Counted attempts",
     hint: "Attempts our retry loop numbered. Context for the counts beside it, not a denominator",
-    pick: (g) => g.counted,
+    show: (g) => count(g.counted),
   },
   {
     id: "retries",
     header: "Retries",
     hint: "Goes after the first: each started because the go before it failed before its answer began",
-    pick: (g) => g.retries,
+    show: (g) => count(g.retries),
   },
   {
     id: "gaveUp",
     header: "Gave up after the last go",
     hint: "Calls whose third and last go failed before the provider accepted it. A call refused outright on an earlier go is in the causes table",
-    pick: (g) => g.gaveUp,
+    show: (g) => count(g.gaveUp),
   },
   {
     id: "diedPartWay",
     header: "Died part-way",
     hint: "Attempts that failed after the provider accepted the call, which can be before any of the answer arrived",
-    pick: (g) => g.diedPartWay,
+    show: (g) => count(g.diedPartWay),
+  },
+  {
+    id: "stalled",
+    header: "Stalled",
+    hint: "Attempts we stopped because the provider had sent nothing for too long, and how many of them it had already accepted. Not counted as died part-way",
+    show: (g) => (g.stalled === null ? null : stoppedFigure(g.stalled)),
+  },
+  {
+    id: "timedOut",
+    header: "Timed out",
+    hint: "Attempts we stopped because the whole call had taken too long, and how many of them the provider had already accepted. Not counted as died part-way",
+    show: (g) => (g.timedOut === null ? null : stoppedFigure(g.timedOut)),
+  },
+  {
+    id: "stopsNotClassified",
+    header: "Stops not classified",
+    hint: "Stopped attempts that do not say who stopped them: live conversation, and attempts from before this was recorded. Any of them could be a stall or a timeout",
+    show: (g) => count(g.stopsNotClassified),
   },
 ];
-
-/** The three figures that can be unmeasured; the counted attempts beside them never are. */
-const MEASURED_COLUMNS = COUNT_COLUMNS.slice(1);
 
 const CAUSE_COLUMNS = ["Failed", "Cause", "Status", "Upstream", "Model", DIMENSION_LABEL.task, "Attempts"] as const;
 
@@ -1036,8 +1056,9 @@ const SCROLL_BOX = "tw:relative tw:mb-4 tw:overflow-x-auto tw:rounded-lg tw:bord
  * as the pivot is, with the label pinned. A null figure is drawn as words,
  * never as a zero: src/cost-cube.ts § `FailureCounts`.
  *
- * `fold` names the rows in the plural, and with it a row none of whose three
- * figures was measured is left out and counted in one line underneath. The
+ * `fold` names the rows in the plural, and with it a row nothing was measured
+ * for (src/cost-cube.ts § `nothingMeasured`) is left out and counted in one
+ * line underneath. The
  * task table passes it, because most tasks have nothing to say for weeks after
  * the counting began (41 rows of 42, on the day it was built). The day table
  * does not: a calendar with rows missing reads as days with no calls.
@@ -1053,14 +1074,15 @@ function FailureCountsTable({
   groups: FailureGroup[];
   fold?: string;
 }) {
-  const measured = (group: FailureGroup) => MEASURED_COLUMNS.some((col) => col.pick(group) !== null);
-  const groups = fold ? all.filter(measured) : all;
+  const groups = fold ? all.filter((group) => !nothingMeasured(group)) : all;
   const folded = all.length - groups.length;
   return (
     <>
     <div className={SCROLL_BOX}>
       <table data-failures-table={name} className="tw:w-full tw:border-collapse tw:text-sm">
-        <caption className="tw:sr-only">Retries, calls that gave up and attempts that died part-way, by {label}</caption>
+        <caption className="tw:sr-only">
+          Retries, calls that gave up, attempts that died part-way and attempts our own clock stopped, by {label}
+        </caption>
         <thead>
           <tr className="tw:border-b tw:border-border">
             <th scope="col" className={`${HEAD} ${PINNED} tw:text-left`}>
@@ -1080,14 +1102,14 @@ function FailureCountsTable({
                 <span className={`tw:block tw:truncate ${LABEL_WIDTH}`}>{group.label}</span>
               </th>
               {COUNT_COLUMNS.map((col) => {
-                const value = col.pick(group);
+                const value = col.show(group);
                 return value === null ? (
                   <td key={col.id} data-not-measured="" className={`${CELL} tw:text-muted-foreground`}>
                     {NOT_MEASURED}
                   </td>
                 ) : (
                   <td key={col.id} className={`${CELL} tw:text-foreground`}>
-                    {value.toLocaleString("en-US")}
+                    {value}
                   </td>
                 );
               })}
@@ -1106,9 +1128,9 @@ function FailureCountsTable({
 }
 
 /**
- * **Failures and retries**: how often a call was asked again, gave up, or died
- * after its answer began, and why. docs/project/admin-costs.md § Failures and
- * retries; plan 261006b.
+ * **Failures and retries**: how often a call was asked again, gave up, died
+ * after its answer began, or was stopped by our own clock, and why.
+ * docs/project/admin-costs.md § Failures and retries; plans 261006b, 261006d.
  *
  * Folds of the same visible rows as everything above it, so the period, the
  * evals switch and every filter apply. Counts with the counted attempts beside

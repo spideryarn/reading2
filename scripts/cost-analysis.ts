@@ -65,7 +65,10 @@ import {
   type FailureCounts,
   type FailureGroup,
   NOT_MEASURED,
+  type Stopped,
   failureSummary,
+  nothingMeasured,
+  stoppedFigure,
 } from "../src/cost-cube.js";
 import { partitionByScope } from "../src/cost-report.js";
 import { drizzleOver } from "../src/db/client.js";
@@ -504,20 +507,26 @@ function ranking(
   ];
 }
 
-const nothingMeasured = (g: FailureCounts): boolean =>
-  g.retries === null && g.gaveUp === null && g.diedPartWay === null;
-
-/** `counted 17  retries 3  gave up 1  died part-way 2`, or the words for a null. */
+/**
+ * `counted 17  retries 3  gave up 1  died part-way 2  stalled 3 (2 part-way)  timed out 0`,
+ * or the words for a null. The stops that do not say who stopped them are
+ * named only when there are some.
+ */
 function failureFigures(g: FailureCounts): string {
   if (nothingMeasured(g)) return NOT_MEASURED;
   const figure = (value: number | null): string => (value === null ? NOT_MEASURED : whole(value));
-  return `counted ${whole(g.counted)}  retries ${figure(g.retries)}  gave up ${figure(g.gaveUp)}  died part-way ${figure(g.diedPartWay)}`;
+  const stopped = (value: Stopped | null): string => (value === null ? NOT_MEASURED : stoppedFigure(value));
+  return (
+    `counted ${whole(g.counted)}  retries ${figure(g.retries)}  gave up ${figure(g.gaveUp)}  died part-way ${figure(g.diedPartWay)}` +
+    `  stalled ${stopped(g.stalled)}  timed out ${stopped(g.timedOut)}` +
+    (g.stopsNotClassified > 0 ? `  stops not classified ${whole(g.stopsNotClassified)}` : "")
+  );
 }
 
 /**
  * Failures and retries: the same folds `/admin/costs` draws
  * (src/cost-cube.ts § failures and retries). Counts; a day with none of the
- * three is counted in one line rather than listed as a row of zeros.
+ * five is counted in one line rather than listed as a row of zeros.
  */
 function failureLines(f: CostAnalysis["failures"]): string[] {
   const lines = ["", "Failures and retries (counts, not rates)", `  ${failureSummary(f.total)}`];
@@ -526,10 +535,15 @@ function failureLines(f: CostAnalysis["failures"]): string[] {
     return groups.map((g) => `    ${g.label.slice(0, width).padEnd(width)}  ${failureFigures(g)}`);
   };
   if (f.total.counted > 0 || f.causes.length > 0) {
-    const hasEvents = (d: FailureCounts) => (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) > 0;
+    const hasEvents = (d: FailureCounts) =>
+      (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) + (d.stalled?.attempts ?? 0) + (d.timedOut?.attempts ?? 0) > 0;
+    /* A measured day whose stops do not say who stopped them: not quiet, since a stall could be among them. */
+    const stopsUnsaid = (d: FailureCounts) => !nothingMeasured(d) && d.stalled === null;
     const unmeasured = f.byDay.filter(nothingMeasured).length;
-    const quiet = f.byDay.filter((d) => d.counted > 0 && !hasEvents(d)).length;
-    const shownDays = f.byDay.filter((d) => hasEvents(d) || (d.counted === 0 && d.diedPartWay === 0));
+    const quiet = f.byDay.filter((d) => d.counted > 0 && !hasEvents(d) && !stopsUnsaid(d)).length;
+    const shownDays = f.byDay.filter(
+      (d) => hasEvents(d) || stopsUnsaid(d) || (d.counted === 0 && d.diedPartWay === 0),
+    );
     if (shownDays.length > 0) lines.push("  By UTC day:", ...labelled(shownDays));
     lines.push(
       `  ${whole(quiet)} other ${quiet === 1 ? "day" : "days"} had counted attempts and none of these; ` +

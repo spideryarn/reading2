@@ -180,4 +180,29 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
   - The aborted arm of both unions is narrowed to the three abort labels, so an abort carrying
     `refused` does not compile.
   Until stage 2 lands, a reader's Stop shows in the causes table (F19); the two are pushed together.
-- [ ] Stage 2
+- [ ] Stage 2. Built, not yet reviewed by GPT Sol or checked in a browser. The folds, the
+  section, the three renderings of `cost:analyse` and the docs landed as designed: `FailureCounts`
+  gains `stalled` and `timedOut` (each `{ attempts, partWay }`, or null for *not measured*) and the
+  two counts of stops, classified and not; `failureCauses` takes an error, or a stop classed `stall`
+  or `deadline` (F19). Five things differ from the plan or were not in it:
+  - **The stops not classified are a column of their own**, not words inside the stalled cell: the
+    tables already had a column per figure, and a cell reading `3 (2 part-way), 4 stops not
+    classified` twice over would not fit a phone. A stalled cell reads `3 (2 part-way)`, or `0`.
+  - **Which rows are folded away has one rule now**, `nothingMeasured` in `src/cost-cube.ts`, shared
+    by the page and the terminal. It had to change: a stall figure is a zero wherever nothing was
+    stopped, so "has a figure that is not null" would have unfolded every task. A row is kept when
+    one of the first three figures was measured or a stop in it says who stopped it.
+  - **A day with no stops reads `0` for stalls beside *not measured* for retries**, older days
+    included. That is the plan's rule (no stopped row, nothing stopped) and it is true of an old
+    day too, but it looks odd on the first screen, and the summary's opening words changed from
+    "Not measured:" to "Retries, give-ups and part-way deaths are not measured:" so that the
+    sentence after it can give the zero.
+  - **The terminal lists a day whose stops do not say who stopped them** rather than counting it
+    among the days that "had counted attempts and none of these", which it could not claim.
+  - **A stop that says who stopped it does not make *died part-way* measured.** A row with a stall
+    and no numbered attempt reads *not measured* for deaths, as before. It could be argued the
+    other way (only code that records a phase writes a class); left, because borrowing one
+    measure's coverage for another is the mistake 261006b's F11 was.
+  No class has a human label anywhere: the causes table prints `stall` and `deadline` as it prints
+  `refused` and `in_band`, and the note says a timeout is what that table calls a deadline. The log
+  lines are listed only in `ai-gateway.md`; `logging.md` and `/help` do not list them.

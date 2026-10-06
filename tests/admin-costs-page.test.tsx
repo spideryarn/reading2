@@ -704,8 +704,8 @@ describe("failures and retries", () => {
 
   it("shows zero deaths for an unnumbered PDF failure with a recorded phase", async () => {
     await show("", [row({ job: "pdf", stepName: null, wire: "chat", ...refused })]);
-    expect(failureTable("day")).toEqual([["2033-05-01", "0", "not measured", "not measured", "0"]]);
-    expect(failureTable("task")).toEqual([["pdf", "0", "not measured", "not measured", "0"]]);
+    expect(failureTable("day")).toEqual([["2033-05-01", "0", "not measured", "not measured", "0", "0", "0", "0"]]);
+    expect(failureTable("task")).toEqual([["pdf", "0", "not measured", "not measured", "0", "0", "0", "0"]]);
     expect(section()?.textContent).toContain("0 attempts died part-way.");
   });
 
@@ -724,7 +724,7 @@ describe("failures and retries", () => {
     expect(section()?.querySelector('[data-failures-unmeasured="task"]')?.textContent).toMatch(
       /^\d+ other modes or tasks: not measured\.$/,
     );
-    expect(failureTable("day")[0]).toEqual(["2033-05-01", "0", "not measured", "not measured", "not measured"]);
+    expect(failureTable("day")[0]).toEqual(["2033-05-01", "0", "not measured", "not measured", "not measured", "0", "0", "0"]);
     expect(section()?.querySelector('[data-failures-unmeasured="day"]')).toBeNull();
   });
 
@@ -732,12 +732,13 @@ describe("failures and retries", () => {
     await show("", ATTEMPTS);
     expect(section()?.querySelector("h2")?.textContent).toBe("Failures and retries");
     expect(failureTable("day")).toEqual([
-      ["2033-05-01", "0", "not measured", "not measured", "not measured"],
-      ["2033-05-02", "17", "3", "1", "2"],
-      ["2033-05-03", "4", "1", "0", "0"],
+      ["2033-05-01", "0", "not measured", "not measured", "not measured", "0", "0", "0"],
+      ["2033-05-02", "17", "3", "1", "2", "0", "0", "0"],
+      ["2033-05-03", "4", "1", "0", "0", "0", "0", "0"],
     ]);
     expect(section()?.querySelector("[data-failures-summary]")?.textContent).toBe(
-      "Of 27 attempts, 21 were numbered by our retry loop: 4 retries and 1 call that gave up after the last go. 2 attempts died part-way.",
+      "Of 27 attempts, 21 were numbered by our retry loop: 4 retries and 1 call that gave up after the last go. 2 attempts died part-way. " +
+        "0 attempts stalled and 0 timed out.",
     );
   });
 
@@ -745,15 +746,96 @@ describe("failures and retries", () => {
     await show("", ATTEMPTS);
     const first = host.querySelector('[data-failures-table="day"] tbody tr');
     expect(first?.querySelectorAll("[data-not-measured]")).toHaveLength(3);
-    expect(first?.textContent).not.toMatch(/not measured.*\b0\b/);
+    /* The retries, the give-ups and the deaths. Nothing was stopped that day, which is a zero. */
+    expect(failureTable("day")[0]?.slice(2, 5)).toEqual(["not measured", "not measured", "not measured"]);
+  });
+
+  describe("the calls our own clock stopped", () => {
+    const stop = (day: string, failureClass: string | null, failurePhase: string | null, calls = 1) =>
+      row({
+        day,
+        scopeKind: "request",
+        job: "chat",
+        stepName: null,
+        outcome: "aborted",
+        failureClass,
+        failurePhase,
+        calls,
+        /* A row that says who stopped it came from a numbered loop; one that does not, did not. */
+        counted: failureClass === null ? 0 : calls,
+      });
+    /* The 1st: stops from before anything said who. The 2nd: two stalls, a deadline and a reader's Stop.
+       The 3rd: one stall, and four stops that do not say. The 4th: nothing stopped. */
+    const STOPS: CostCubeRow[] = [
+      stop("2033-05-01", null, null, 2),
+      stop("2033-05-02", "stall", "mid_answer", 2),
+      stop("2033-05-02", "stall", "before_answer"),
+      stop("2033-05-02", "deadline", "before_answer"),
+      stop("2033-05-02", "abort", "mid_answer", 7),
+      stop("2033-05-03", "stall", "mid_answer"),
+      stop("2033-05-03", null, null, 4),
+      row({ day: "2033-05-04", calls: 3, counted: 3 }),
+    ];
+    const stops = (name: string) => failureTable(name).map((cells) => [cells[0], ...cells.slice(4)]);
+
+    it("heads the columns in plain words", async () => {
+      await show("", STOPS);
+      const heads = [...host.querySelectorAll('[data-failures-table="day"] thead th')].map((th) => th.textContent);
+      expect(heads.slice(4)).toEqual(["Died part-way", "Stalled", "Timed out", "Stops not classified"]);
+    });
+
+    it("shows stalls and timeouts beside the deaths, each with how many were part-way, and adds none to the deaths", async () => {
+      await show("", STOPS);
+      expect(stops("day")).toEqual([
+        ["2033-05-01", "not measured", "not measured", "not measured", "2"],
+        ["2033-05-02", "0", "3 (2 part-way)", "1 (0 part-way)", "0"],
+        ["2033-05-03", "0", "1 (1 part-way)", "0", "4"],
+        ["2033-05-04", "0", "0", "0", "0"],
+      ]);
+      expect(host.querySelector('[data-failures-table="day"] tbody tr')?.querySelectorAll("[data-not-measured]")).toHaveLength(5);
+    });
+
+    it("says them in the summary, with the stops that do not say who stopped them", async () => {
+      await show("", STOPS);
+      expect(section()?.querySelector("[data-failures-summary]")?.textContent).toContain(
+        "4 attempts stalled (3 part-way) and 1 timed out (0 part-way). 6 stops not classified.",
+      );
+    });
+
+    it("says in the summary that they are not measured where no stop says who stopped it", async () => {
+      await show("", [stop("2033-05-01", null, null, 2)]);
+      expect(section()?.querySelector("[data-failures-summary]")?.textContent).toContain(
+        "Stalls and timeouts are not measured: 2 stops do not say who stopped them.",
+      );
+    });
+
+    it("lists a stall and a deadline among the causes, and never a reader's Stop", async () => {
+      await show("", STOPS);
+      expect(failureTable("causes").map((c) => [c[0], c[1], c[6]])).toEqual([
+        ["part-way through the answer", "stall", "3"],
+        ["before the answer began", "deadline", "1"],
+        ["before the answer began", "stall", "1"],
+      ]);
+    });
+
+    it("keeps a task whose only news is a stall, and folds one whose stops do not say", async () => {
+      await show("", [
+        stop("2033-05-02", "stall", "mid_answer"),
+        row({ day: "2033-05-02", job: "quiz", stepName: null, outcome: "aborted", calls: 2 }),
+      ]);
+      expect(stops("task")).toEqual([["chat", "0", "1 (1 part-way)", "0", "0"]]);
+      expect(section()?.querySelector('[data-failures-unmeasured="task"]')?.textContent).toBe(
+        "1 other modes or tasks: not measured.",
+      );
+    });
   });
 
   it("counts them per mode or task, the most trouble first", async () => {
     await show("", ATTEMPTS);
     expect(failureTable("task")).toEqual([
-      ["structure", "15", "3", "1", "0"],
-      ["chat", "2", "0", "0", "2"],
-      ["glossary", "4", "1", "0", "0"],
+      ["structure", "15", "3", "1", "0", "0", "0", "0"],
+      ["chat", "2", "0", "0", "2", "0", "0", "0"],
+      ["glossary", "4", "1", "0", "0", "0", "0", "0"],
     ]);
   });
 
@@ -767,12 +849,12 @@ describe("failures and retries", () => {
 
   it("follows the page's filters and its scope, like every other table", async () => {
     await show(`?user=${BEN}`, ATTEMPTS);
-    expect(failureTable("day")).toEqual([["2033-05-03", "4", "1", "0", "0"]]);
+    expect(failureTable("day")).toEqual([["2033-05-03", "4", "1", "0", "0", "0", "0", "0"]]);
     expect(failureTable("causes")).toEqual([]);
     expect(section()?.textContent).toContain("No failed attempt in this view recorded a cause.");
     await click(host.querySelector('[data-filter="user"] button'), "the user filter's remove button");
     await click(host.querySelector("input[data-include-evals]"), "the evals switch");
-    expect(failureTable("day").at(-1)).toEqual(["2033-05-03", "9", "4", "1", "0"]);
+    expect(failureTable("day").at(-1)).toEqual(["2033-05-03", "9", "4", "1", "0", "0", "0", "0"]);
     expect(failureTable("causes").map((c) => c[2])).toEqual(["529", "503", "200"]);
   });
 
@@ -781,7 +863,10 @@ describe("failures and retries", () => {
     const text = section()?.textContent ?? "";
     expect(text).toContain("These are counts, not rates.");
     expect(text).toContain("one attempt, not one call");
-    expect(text).toContain("Stalls are not measured.");
+    expect(text).not.toContain("Stalls are not measured.");
+    expect(text).toContain("Stalls and timeouts are counted only on stopped attempts that say who stopped them.");
+    expect(text).toContain("neither does live conversation");
+    expect(text).toContain("An attempt stalled when we stopped it because the provider had sent nothing for too long");
     expect(text).toContain("The PDF reader and the embeddings retry in loops of their own");
     /* No rate anywhere in it. */
     expect(text).not.toContain("%");
@@ -790,10 +875,10 @@ describe("failures and retries", () => {
   it("says not measured, with no table, for a view no attempt was counted in", async () => {
     await show();
     expect(section()?.querySelector("[data-failures-summary]")?.textContent).toBe(
-      "Not measured: none of the 10 attempts was numbered by our retry loop.",
+      "Retries, give-ups and part-way deaths are not measured: none of the 10 attempts was numbered by our retry loop. 0 attempts stalled and 0 timed out.",
     );
     expect(section()?.querySelector("table")).toBeNull();
-    expect(section()?.textContent).toContain("Stalls are not measured.");
+    expect(section()?.textContent).toContain("Stalls and timeouts are counted only on stopped attempts");
   });
 
   it("is under every view of the explorer: the pivot and the calendar too", async () => {
