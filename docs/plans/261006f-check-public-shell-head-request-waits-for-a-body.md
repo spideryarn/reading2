@@ -101,6 +101,23 @@ Verdict: change the plan first. Two findings, both taken.
 - **F2 (P2).** `--self-test` had no case for a HEAD whose status or shell hash differs from GET's.
   One of each added, each asserting its own message and no other.
 
+## The code review, and what it changed
+
+GPT Sol, 2026-10-06, write-capable, on `38c26ee01`:
+[the prompt](261006f-check-public-shell-head-request-waits-for-a-body-review-code-prompt.md),
+[the answer](261006f-check-public-shell-head-request-waits-for-a-body-review-code-sol.md).
+Verdict: land it, after one fix it made itself.
+
+- **C1 (P0), fixed by the reviewer.** With curl no longer reading `Content-Length`, the judge is
+  the only thing that does, and it read it with `Number(first value)`: `22.0`, `2.2e1`, `+22` and a
+  second, conflicting `Content-Length: 23` all matched a 22-byte GET. The judge now wants decimal
+  digits and checks every occurrence. `tests/check-public-shell-head-headers.test.ts` is the
+  reviewer's, as is the write-up,
+  [261006j](../postmortems/261006j-bypassing-transport-framing-leaves-the-judge-responsible-for-field-validation.md).
+  I re-ran its curl table against a local server for three of the five rows and got the same exit
+  codes. One thing its write-up makes sound larger than it is: the old flags failed on *every*
+  response with a length, correct ones included, so nothing was being protected before.
+
 ## What landed
 
 As planned plus the two findings. Seen red, in order: `/honest` on the original code (curl 28,

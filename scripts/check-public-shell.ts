@@ -578,10 +578,16 @@ export function judgeHeadMatchesGet(
   const headSha = headerValues(headR.head, "x-spideryarn-shell-sha256")[0];
   if (getSha !== headSha) problems.push(`x-spideryarn-shell-sha256 differs: GET '${getSha}', HEAD '${headSha}'`);
 
-  const cl = headerValues(headR.head, "content-length")[0];
-  if (cl === undefined) problems.push("content-length: missing on the HEAD response");
-  else if (Number(cl) !== getR.bodyBuffer.length)
-    problems.push(`content-length: HEAD said ${cl}, GET's body is actually ${getR.bodyBuffer.length} bytes`);
+  /* HEAD uses --ignore-content-length, so curl no longer checks this field.
+     Validate every occurrence: Number alone accepts hex, fractions and signs,
+     and checking only the first value hides a conflicting second length. */
+  const lengths = headerValues(headR.head, "content-length");
+  if (lengths.length === 0) problems.push("content-length: missing on the HEAD response");
+  for (const cl of lengths) {
+    if (!/^[0-9]+$/.test(cl)) problems.push(`content-length: invalid decimal byte count '${cl}'`);
+    else if (Number(cl) !== getR.bodyBuffer.length)
+      problems.push(`content-length: HEAD said ${cl}, GET's body is actually ${getR.bodyBuffer.length} bytes`);
+  }
 
   if (headR.bodyBuffer.length !== 0) problems.push(`HEAD returned a body of ${headR.bodyBuffer.length} bytes, expected none`);
 
