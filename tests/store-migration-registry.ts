@@ -2255,6 +2255,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`articleMetadata`'s glossary verdict against a list stamped the way the job stamps one. " +
       "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
   },
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran (plan 261006a, stage 0's code review). A Postgres suite from " +
+      "birth: what a refused rename, delete, retry or edit leaves in `chat_threads` and on screen. " +
+      "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
+  },
 
   /* ---- Invisible to an import walk, found by the grep --------------------- */
 
@@ -2688,6 +2697,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      doing the same job — this file is what it looks like when the second one
      feeds the first. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": "private-postgres",
+  /* The deploy window of plan 261005l: job rows seeded with the keys the build
+     before the paper-source resolver wrote, then `enqueue`. The queue only. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` below. Found by the
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
@@ -3386,6 +3398,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Drops the `chat_threads_kind` CHECK, but only inside a transaction it
      always rolls back, so nothing a peer file can see changes. */
   "tests/unknown-stored-thread-kind.test.ts": "private-postgres",
+  /* Its sibling, for what the refusal leaves behind. Drives `pgChatStore` and
+     `handleApi` against a scratch article of its own and changes no schema: the
+     unknown kind is put in the reader's hand, never in a row. */
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from `spideryarn.
      uploads` rather than from the bucket: this file mints records and never
      issues a real grant — the issuer is a stand-in and no bytes are PUT — so
@@ -3531,6 +3547,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      It seeds `…dd` itself through `seedAuthUser`. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
+  },
+  /* Plan 261005l. `seedAuthUser` in `beforeAll`: its jobs spend real ingest
+     reservations, which hang off the `auth.users` foreign key. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": {
+    "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },
   "tests/admin-costs-store.test.ts": {
     "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },

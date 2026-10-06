@@ -504,6 +504,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* The database is ahead of this code, most likely mid-deploy. CHAT_BEING_UPDATED. */
+  "db-updating": "retry",
   /* Reading something back out of this app's own API, `rd-`. Not a model call,
      not the database as the reader meets it, and not a job — it is the *check*
      that failed, behind a page that is still on screen. Its own prefix for the
@@ -549,6 +551,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fetch-empty": "retry",
   "fetch-declined": "blocked",
   "fetch-incomplete": "retry",
+  /* Not one of the fetcher's codes: a paper source's own PDF address answered
+     that it has no such document. See `FETCH_PAPER_MISSING`. */
+  "fetch-paper-missing": "blocked",
   "up-pdf": "blocked",
   /* The page cap, as the *upload record* states it. The job card gets
      `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
@@ -2349,6 +2354,37 @@ const FETCH_INCOMPLETE: ReaderFacingFailure = {
 };
 
 /**
+ * **A paper whose PDF is not where its source usually keeps it.**
+ *
+ * For a link a paper source recognises (src/paper-sources.ts) the fetch step
+ * asks for the paper's PDF at an address it worked out, never the page that
+ * was pasted. When the last of those addresses answers that it has no such
+ * document, `not-found`'s sentence would be wrong: it tells the reader to
+ * check their address for a slip, and their address is fine. What is missing is
+ * an address they never saw. ⟨GPT Sol's plan review, G12⟩
+ *
+ * `blocked`: the same address answers the same way next time. The way out is
+ * the one every `blocked` fetch names, an upload, and here the reader has a
+ * page in front of them with the PDF's real link on it.
+ *
+ * Raised by the pipeline's fetch step and nowhere else, and only for a paper
+ * source: an ordinary address that is absent still gets `[fetch-not-found]`.
+ *
+ * **Written without Greg**, on 2026-10-06, and recorded as his to change:
+ * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § What a wrong rule costs. It does not say "we found the page": the pasted
+ * page is never fetched. And it does say to check the link, because for a
+ * source whose rule is complete (arXiv) a missing paper is a mistyped id.
+ */
+export const FETCH_PAPER_MISSING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This site did not have the paper where it usually keeps it. Trying again will not help. " +
+    "Check the link is right, or download the PDF from the site and upload it here. " +
+    "[fetch-paper-missing]",
+};
+
+/**
  * **The sentence for one `FetchFailure`**, given its code and the status it
  * kept. Called by the pipeline's fetch step and nowhere else: a link preview, a
  * figure and a bibliographic lookup classify a failed fetch their own way and
@@ -2579,6 +2615,26 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
     "This app asked its database for something it would not do, so that did not go through. That is " +
     "a bug here rather than anything you did, and trying again will not help until somebody fixes " +
     "it. It has been recorded. [db-failed]",
+};
+
+/**
+ * The database holds a kind of conversation this copy of the app has no name
+ * for: `UnknownStoredThreadKind` in src/types.ts, which carries this sentence
+ * and a 409.
+ *
+ * In practice that is the few minutes of a deploy that renames a kind, when the
+ * database has already been changed and the new code is not serving yet. The
+ * app refuses to read or change the article's conversations rather than treat
+ * one as an ordinary chat. "Most likely", because the same refusal would fire
+ * for a row that was simply wrong, and this must not be false then. `retry`: a
+ * reload after the deploy is the whole fix.
+ */
+export const CHAT_BEING_UPDATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app is most likely being updated right now, so it could not open this article's " +
+    "conversations, and it has changed nothing. Reloading the page in a minute or two and trying " +
+    "again usually works. [db-updating]",
 };
 
 /* ── Checking whether there is a newer one ────────────────────────────────── */

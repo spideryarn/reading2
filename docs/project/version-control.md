@@ -865,7 +865,8 @@ The recipe's list of paths is typed by hand. On 2026-09-07 a commit of fourteen 
 `npm run check` were green throughout, because all three read the working tree, which had the
 row. GPT Sol found it by extracting the commit to a scratch directory and running the visitor
 tests against that. After the commit the omitted file is still there as a ` M` line in
-`git status --porcelain`.
+`git status --porcelain`. So after every pathspec commit, run `git status --porcelain` and read it:
+a ` M` line for a file that belongs to the change is a file that did not go in.
 
 **And the variant where the import is not yours at all.** The recipe's trailing `--` pathspec commits
 a named file *from the working tree*, so naming a file a peer is halfway through commits their half

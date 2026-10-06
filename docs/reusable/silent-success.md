@@ -28,7 +28,7 @@ assumption with the code. That is why it agrees with it.
 | A focus ring that fails contrast, drawn over the browser's own | The ring is there, it is the colour it was asked to be, the class is on the element, and the page looks right | The **contrast ratio** of the composited ring against its background — and whether the component suppressed the native indicator in order to draw it |
 | The browser quietly correcting a scroll position you set yourself | The maths is right, the CSS is right, and reading `scrollTop` back gives a plausible number — the browser's *adjusted* one | Where the element actually is on screen, measured after a **content change above it**, not the number you wrote |
 
-## Fourteen more, from the checks rather than the code
+## Seventeen more, from the checks rather than the code
 
 The twelve above are mostly the *product* lying to you. These are the *checking apparatus* doing it
 — gates, corpora, guards, reports — which is worse, because that is the thing you were going to
@@ -50,6 +50,9 @@ believe.
 | A claim that a reader can reach the bug | The code demonstrably handles the state | The mount, and what keys it — handling a state and reaching it are two questions |
 | A signal that grows | The count climbed 3 → 58 → 87 over six hours, so something is still doing it | The newest thing the artefact contains — a stale snapshot and an active corruption both grow, and only content separates them |
 | An assertion that reddens above the line you care about | The test fails when the bug is introduced, so it covers it | *Which* assertion fired — a mutation can redden a test without ever reaching the one it is named for |
+| A fallback chained onto an existence check | `ls X \|\| git show Y` printed a commit header, so the file is there | The check alone, by exit code — `test -e X && echo PRESENT \|\| echo ABSENT`, so both branches say which happened — and in *your* tree: a peer's commit being on the trunk does not put its file in a worktree that has not merged it |
+| A rule derived from a census of what is running | All seventeen live instances agree, so the rule is obvious | One specimen made on purpose of the state nothing is in right now — just created, just failed, empty. A new session showed a greyed hint in its input box that no used session has, and the rule would have made every new session unsendable |
+| A count that came from one join | Zero unknowns, and a plausible number | A second join, derived independently, kept beside the first so the two can disagree; `unknown` as its own column, never folded into "no", and the disagreements as a column too, row by row, so the next reader can audit the misses. A pid join returned unknown for 4 of 4, an ancestry join returned zero unknowns and the wrong answer, and only the disagreement pointed at the cause. Send the unfavourable reading to whoever is deciding, at the time, not in a footnote |
 
 Three rules generalise out of those, and they are the ones worth carrying:
 
@@ -200,7 +203,12 @@ relationship between them.
 
 **Reasoning about it is not checking it.** A regex reviewed by eye looked correct and matched the
 wrong thing; the mutation run found it in seconds. Reasoning is the natural check par excellence,
-because it re-runs the same assumption that produced the code.
+because it re-runs the same assumption that produced the code. **Re-reading your own work is the
+same check, and it buys nothing.** On the night of 2026-09-07/08 five separate holes in one
+migration's safety net each survived repeated reading by its author, and every one fell to
+something external: a peer session, a cross-family review, or a probe run against a case that
+should fail. When you catch yourself planning to read it carefully once more, spend that on one of
+those three instead.
 
 **Mutate what you just *added*, not only what you changed.** Red-first tests the diff; the thing you
 just added is precisely the thing no existing test was written against. A guard written to close a

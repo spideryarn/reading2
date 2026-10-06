@@ -104,7 +104,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { jobs as jobsTable } from "../src/db/schema.js";
+import { articles as articlesTable, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { enqueue } from "../src/jobs.js";
 import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
@@ -118,7 +118,7 @@ loadEnvLocal();
 
 await pgReady({
   suite: "tests/one-article-for-one-address.test.ts",
-  tables: ["spideryarn.jobs"],
+  tables: ["spideryarn.jobs", "spideryarn.articles"],
 });
 
 /**
@@ -131,6 +131,8 @@ await pgReady({
  * of a value the app already owns.
  */
 const made: string[] = [];
+/** Slugs of the bare article rows the last `describe` seeds, removed the same way. */
+const madeArticles: string[] = [];
 
 /**
  * **`VERCEL`, so `enqueue` does not start driving what it queues.** `pump`
@@ -155,6 +157,11 @@ afterEach(async () => {
   const ids = made.splice(0);
   if (ids.length > 0) {
     await getDb().delete(jobsTable).where(inArray(jobsTable.id, ids));
+  }
+  /* After the jobs. These rows have no revision, so nothing points at them. */
+  const slugs = madeArticles.splice(0);
+  if (slugs.length > 0) {
+    await getDb().delete(articlesTable).where(inArray(articlesTable.slug, slugs));
   }
 });
 
@@ -444,5 +451,149 @@ describe("one address, one article", () => {
       expect(await activeSlugsFor(url), "one address, two active articles").toHaveLength(1);
     });
     expect(retry.id, "the retry inserted a second row instead of taking the holder").toBe(holder.id);
+  });
+});
+
+/* ------------------------------- an article row nobody has published into -- */
+
+/**
+ * **An article row with no published revision does not stand in for the holder
+ * a request adopted its name from** — GPT Sol's F14, reviewing the built stage 1
+ * of docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md.
+ *
+ * A job's first claim makes its article row; the first publish is much later.
+ * In between, the shelf lookup cannot see the row — `slugForUrlKey`
+ * (src/store/find-article.ts) matches the *published* revision's address — so
+ * the row keeps nobody away from the address. The store used to treat it as if
+ * it did: an adoption from the queue was let in on the row's existence alone,
+ * holder or no holder.
+ *
+ *   1. holder H is active on slug S and has made S's article row, unpublished;
+ *   2. request B looks, sees H, and adopts S — reserving nothing;
+ *   3. H ends before B inserts (the reader stopped it, or it failed);
+ *   4. request C looks, sees no published article and no active job, and mints
+ *      and reserves S2;
+ *   5. B's insert finds the bare row, skips the holder check, and lands on S.
+ *
+ * Two active jobs for one address on two slugs, each carrying its own slot.
+ * Sol's sequence has one more adopter between H and B; it is not needed, and
+ * this is the shortest form.
+ *
+ * ## The interleaving
+ *
+ * The spy is the barrier, as it is for the retry cases above: B's first
+ * `enqueueOrGet` is the moment after its lookup and before its insert, so steps
+ * 3 and 4 run there, through the real `requestCancel` and the real `enqueue`,
+ * and then B's insert goes to the real store. The spy checks the ticket it
+ * interrupts is the queue adoption, so a B that never entered the window fails
+ * the case rather than passing it.
+ *
+ * H's work differs from B's (two steps against one), so the look before the
+ * insert does not simply hand H back.
+ */
+describe("an article nobody has published into", () => {
+  /** An active, reserving first ingest of `url` on `slug`, which has made its article row and published nothing. */
+  async function aHolderWithABareArticle(slug: string, url: string): Promise<Job> {
+    const id = mintId();
+    made.push(id);
+    const outcome = await pgJobStore.enqueueOrGet(
+      {
+        id,
+        ownerId: currentOwnerId(),
+        slug,
+        url,
+        steps: [
+          { name: "fetch", label: "Fetching the page", status: "pending" },
+          { name: "extract", label: "Extracting", status: "pending" },
+        ],
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      },
+      { workKey: `holder-${id}`, reservesName: true, urlKey: urlKey(url) },
+    );
+    if (outcome.kind !== "created") throw new Error(`the holder fixture was refused: ${outcome.kind}`);
+    madeArticles.push(slug);
+    await getDb().insert(articlesTable).values({ ownerId: currentOwnerId(), slug });
+    return outcome.job;
+  }
+
+  async function activeFor(url: string): Promise<Job[]> {
+    const jobs = await pgJobStore.list(currentOwnerId());
+    return jobs.filter(
+      (j) =>
+        (j.status === "queued" || j.status === "running") &&
+        j.url !== undefined &&
+        urlKey(j.url) === urlKey(url),
+    );
+  }
+
+  it("does not let a request onto the slug of a holder that ended, while another mints a second", async () => {
+    const url = anAddress();
+    const slug = `bare-${mintId()}`;
+
+    await runAsOwner(DEV_OWNER_ID, async () => {
+      const holder = await aHolderWithABareArticle(slug, url);
+
+      const real = pgJobStore.enqueueOrGet.bind(pgJobStore);
+      let entered = false;
+      let c: Job | undefined;
+      vi.spyOn(pgJobStore, "enqueueOrGet").mockImplementation(async (job, ticket) => {
+        if (entered) return real(job, ticket);
+        entered = true;
+        /* B, after its lookup and before its insert: it adopted H's name. */
+        expect(ticket.adoptedFromJob, "B did not adopt from the holder, so this is not the window").toBe(holder.id);
+        expect(ticket.reservesName).toBe(false);
+        expect(job.slug).toBe(slug);
+        /* Step 3: the holder ends. */
+        const ended = await pgJobStore.requestCancel(holder.id, DEV_OWNER_ID);
+        expect(ended?.status, "the holder is still active, so nothing has been raced").toBe("cancelled");
+        /* Step 4: C, start to finish, with nothing in its way. */
+        c = await enqueue({ slug: "c", url, steps: ["fetch"] });
+        made.push(c.id);
+        expect(c.slug, "C was expected to mint a name of its own").not.toBe(slug);
+        /* Step 5: B's insert. */
+        return real(job, ticket);
+      });
+
+      const b = await enqueue({ slug: "b", url, steps: ["fetch"] }).then(
+        (job) => ({ kind: "queued" as const, job }),
+        (err: unknown) => ({ kind: "refused" as const, status: (err as { status?: number }).status }),
+      );
+      if (b.kind === "queued") made.push(b.job.id);
+      vi.restoreAllMocks();
+
+      expect(entered, "the spy never ran, so nothing was interleaved").toBe(true);
+      const second = c as Job | undefined;
+      if (second === undefined) throw new Error("C was never queued");
+      const active = await activeFor(url);
+      expect(
+        [...new Set(active.map((j) => j.slug))],
+        "one address has active jobs on two slugs, and each is charged",
+      ).toEqual([second.slug]);
+      /* What B is told: the thing it was joining has gone, add it again. A second
+         paste then finds C and joins it. */
+      expect(b).toEqual({ kind: "refused", status: 409 });
+      expect(active.map((j) => j.id)).toEqual([second.id]);
+    });
+  });
+
+  /**
+   * **The positive control, and the ordinary case**: the holder is still there.
+   * A guard that refused every adoption onto an unpublished article would pass
+   * the case above; this is what it would fail.
+   */
+  it("still lets a request join a live holder whose article is unpublished", async () => {
+    const url = anAddress();
+    const slug = `bare-${mintId()}`;
+
+    await runAsOwner(DEV_OWNER_ID, async () => {
+      const holder = await aHolderWithABareArticle(slug, url);
+      const b = await enqueue({ slug: "b", url, steps: ["fetch"] });
+      made.push(b.id);
+
+      expect(b.id).not.toBe(holder.id);
+      expect(b.slug, "it did not join the holder's article").toBe(slug);
+      expect((await activeFor(url)).map((j) => j.id).sort()).toEqual([holder.id, b.id].sort());
+    });
   });
 });

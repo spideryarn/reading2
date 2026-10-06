@@ -50,6 +50,7 @@ import { jsdom } from "./jsdom-lazy.js";
 import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
+import { arxivIdOf } from "./paper-sources.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -1439,8 +1440,24 @@ export function keysOf(work: Pick<CitedWork, "title" | "authors" | "year" | "url
   /* The decoded DOI, not its spelling in the link. Legacy percent links are
      ambiguous (doiOfUrl); idsByKey still inherits by the stored c.key. */
   if (work.linkFrom === "doi") idKey = `doi:${(doiOfUrl(work.url) ?? work.url).toLowerCase()}`;
-  else if (work.linkFrom === "arxiv") idKey = `arxiv:${work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
-  else if (work.linkFrom === "article") idKey = `url:${canonicalUrl(work.url)}`;
+  /* **Which arXiv paper is the registry's answer** (src/paper-sources.ts §
+     `arxivIdOf`), never a version. The slice is what this did before, kept for
+     a stored link the registry would not read.
+
+     An address the article itself gave is asked the same question, so a work
+     linked to a page *about* an arXiv paper (Hugging Face's, alphaXiv's) has
+     the key the arXiv link gets and is one work with it
+     (docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § The arXiv mirrors are arXiv). The link itself is not rewritten. A row
+     stored under its old `url:` key keeps its id through `idsByKey`'s unique
+     migration alias, even if its model-written metadata changes at the same
+     time. */
+  else if (work.linkFrom === "arxiv") {
+    idKey = `arxiv:${arxivIdOf(work.url)?.workId ?? work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
+  } else if (work.linkFrom === "article") {
+    const arxiv = arxivIdOf(work.url);
+    idKey = arxiv === null ? `url:${canonicalUrl(work.url)}` : `arxiv:${arxiv.workId}`;
+  }
   const workKey = `work:${keyWords(work.title)}|${keyWords(firstAuthor(work.authors))}|${keyWords(work.year ?? "")}`;
   return { idKey, workKey };
 }
@@ -1564,13 +1581,26 @@ export function idsByKey(
   const ambiguous = new Set<string>();
   const workClaims = new Map<string, number>();
   const workOwners = new Map<string, string>();
+  const claim = (key: string, id: string) => {
+    if (seen.has(key)) ambiguous.add(key);
+    else seen.set(key, id);
+  };
   for (const c of onDisk?.citations ?? []) {
     if (!c || typeof c.id !== "string" || typeof c.key !== "string") continue;
     const fields = article ? locateArticleFields(c, article, emptyDrops()) : c;
     const { idKey, workKey } = keysOf({ ...fields, url: c.url, linkFrom: c.linkFrom });
     const key = article && idKey === null ? workKey : c.key;
-    if (seen.has(key)) ambiguous.add(key);
-    else seen.set(key, c.id);
+    claim(key, c.id);
+    /* Before plan 261005m, a Hugging Face or alphaXiv link supplied by the
+       article was an ordinary `url:` key. It is an `arxiv:` key now. Record
+       that newly recognised identifier as an alias for the old row, so the
+       row keeps its id even if the model also changes its metadata on this
+       re-run. The collision pass below still removes the alias when two old
+       rows claim it (including one already stored under the arXiv key), rather
+       than moving either row's Find/Investigate state onto the other. */
+    if (c.key.startsWith("url:") && idKey?.startsWith("arxiv:") && idKey !== key) {
+      claim(idKey, c.id);
+    }
     workClaims.set(workKey, (workClaims.get(workKey) ?? 0) + 1);
     if (!workOwners.has(workKey)) workOwners.set(workKey, c.id);
   }

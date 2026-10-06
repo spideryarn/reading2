@@ -688,7 +688,12 @@ const rawPgChatStore: ChatStore = {
        not racing with itself — it is racing with `begin`, which reads the title
        under the lock and upserts what it read. Without this, a rename that
        lands in the middle of a turn is written back to the old name. */
-    await db.transaction(async (tx) => {
+    /* **The list is read back inside the transaction, not after it.** That read
+       can refuse (an unknown stored kind, `storedThreadKind`), and a refusal
+       that arrives after the commit tells the reader the rename failed while
+       the new title stays. Thrown in here, it rolls the write back.
+       tests/unknown-thread-kind-refuses-cleanly.test.ts. */
+    const threads = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .update(chatThreads)
@@ -696,9 +701,10 @@ const rawPgChatStore: ChatStore = {
            column, so the reader's act is kept and the sort is not disturbed. */
         .set({ title: titleFrom(title), renamedAt: DB_NOW })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
     logger.info({ slug, threadId }, "chat thread renamed");
-    return threadsFor(articleId);
+    return threads;
   },
 
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
@@ -707,13 +713,15 @@ const rawPgChatStore: ChatStore = {
     // Messages go with it: `chat_messages_thread_fk` is `on delete cascade`.
     // Under the lock for the same reason as `rename`: a `begin` in flight would
     // otherwise re-create the thread it just read.
-    await db.transaction(async (tx) => {
+    // The list is read back inside the transaction, for `rename`'s reason: a
+    // refused read must take the delete with it.
+    const remaining = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .delete(chatThreads)
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
-    const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
   },

@@ -323,10 +323,12 @@ export interface EnqueueTicket {
    * would then queue a job on a slug with nothing under it — which the worker
    * would helpfully create. GPT Sol's F41, same plan.
    *
-   * So the store re-asks, under the article lock and **only when the article is
-   * absent**: is that exact job still `queued` or `running`? A holder that
-   * finished normally leaves an article behind, and adopting it then is an
-   * ordinary shelf adoption rather than a resurrection.
+   * So the store re-asks, under the article lock and **only when no published
+   * article is there**: is that exact job still `queued` or `running`? A holder
+   * that finished normally leaves a published article behind, and adopting it
+   * then is an ordinary shelf adoption rather than a resurrection. An article
+   * row with nothing published into it does not excuse the question — GPT Sol's
+   * F14, at `lockAdoptedHolder` in ./pg-jobs.ts.
    *
    * **A miss buys one restart rather than a refusal**, because *"the article is
    * absent"* is itself a fact nothing was holding — the holder can create it and

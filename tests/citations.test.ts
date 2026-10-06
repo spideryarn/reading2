@@ -281,6 +281,28 @@ describe("the link comes from the article, by code", () => {
     expect(key("https://doi.org/10.1023/A:1010933404324")).toBe("doi:10.1023/a:1010933404324");
   });
 
+  it("a work linked to a page about an arXiv paper has the arXiv work's key (plan 261005m)", () => {
+    const key = (url: string, linkFrom: "arxiv" | "article" | "search" | "doi") =>
+      keysOf({ title: "T", authors: "A", year: "2020", url, linkFrom }).idKey;
+    const arxiv = key("https://arxiv.org/abs/2001.08361", "arxiv");
+    expect(arxiv).toBe("arxiv:2001.08361");
+    for (const url of [
+      "https://huggingface.co/papers/2001.08361",
+      "https://huggingface.co/papers/2001.08361v2",
+      "https://alphaxiv.org/abs/2001.08361",
+      "https://www.alphaxiv.org/overview/2001.08361",
+    ]) {
+      expect(key(url, "article"), url).toBe(arxiv);
+    }
+    /* Old-style, and upper case: the registry's lower-cased work id. */
+    expect(key("https://arxiv.org/abs/math.gt/0309136", "arxiv")).toBe("arxiv:math.gt/0309136");
+    expect(key("https://huggingface.co/papers/math.GT/0309136", "article")).toBe("arxiv:math.gt/0309136");
+    /* What does not change: any other article-given address, a Scholar search, and a DOI link. */
+    expect(key("https://huggingface.co/blog/openai", "article")).toBe("url:huggingface.co/blog/openai");
+    expect(key("https://huggingface.co/papers/2001.08361", "search")).toBeNull();
+    expect(key("https://doi.org/10.48550/arXiv.2001.08361", "doi")).toBe("doi:10.48550/arxiv.2001.08361");
+  });
+
   it("rule 2: no DOI and one arXiv id — found in gwern's data-url-original — becomes arxiv.org/abs", () => {
     const ref = block("spya-ref002", "Kaplan et al 2020, Scaling Laws for Neural Language Models", {
       html:
@@ -673,6 +695,50 @@ describe("one row per work, and ids that survive a re-run", () => {
     expect(byKey.get("doi:10.1140/epje/i2004-10074-4")).toBe(first.citations[0]!.id);
     const fresh = second.citations.find((c) => c.title === "Elements of Episodic Memory")!;
     expect(fresh.id).not.toBe(first.citations[0]!.id);
+  });
+
+  it("a mirror citation stored under its old URL key keeps its id when its metadata changes", () => {
+    const body = block("spya-b00006", "The revised name is the work used here.", {
+      html: '<p><a href="https://huggingface.co/papers/1706.03762">The revised name</a> is the work used here.</p>',
+    });
+    const raw = {
+      title: "The revised name",
+      why: "The work used here.",
+      ...scored,
+      mentions: [{ block: body.id, quote: "The revised name" }],
+    };
+    const first = build([raw], [body]).citations;
+    const row = first.citations[0]!;
+    expect(row.key).toBe("arxiv:1706.03762");
+
+    /* This is the artefact the build before plan 261005m wrote: the mirror was
+       an ordinary article URL. The model changing the title on the same re-run
+       must not orphan Find/Investigate rows attached to this id. */
+    const previous = {
+      ...first,
+      citations: [
+        {
+          ...row,
+          title: "The earlier name",
+          key: "url:huggingface.co/papers/1706.03762",
+        },
+      ],
+    };
+    const inherit = idsByKey(previous, { blocks: [body], referenceList: null });
+    const second = buildCitations(
+      { works: [raw] },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: [body],
+        sourceHash: "moved",
+        elapsedMs: 1,
+        inherit,
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+      },
+    );
+    expect(second.citations[0]?.id).toBe(row.id);
   });
 });
 

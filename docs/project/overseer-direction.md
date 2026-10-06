@@ -1268,7 +1268,11 @@ enriches rows that already look busy, and catches the backgrounded and wedged ca
 **8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
 originally offered as the reason this dashboard might be unnecessary. It is reliable at launch and
 unreliable an hour later, which is exactly when you would reach for it, and **the only evidence
-anywhere is one word at the bottom of a terminal nobody is looking at.**
+anywhere is one word at the bottom of a terminal nobody is looking at.** The word is `/rc failed`
+in the status bar (`tmux capture-pane -p -t <pane> | grep /rc`). `bridgeSessionId` in
+`~/.claude/sessions/<pid>.json` was the launch-time sign on 2026-09-07 (non-null in 11 of 19, with
+no flag passed); on 2026-10-05 one of eight files carried the field and it was null, so do not
+read it as the test.
 
 So the redundancy argument was right about launch and wrong about steady state. Recorded here rather
 than only in the dashboard's plan because it is the same shape as **A27**: a thing that reports fine

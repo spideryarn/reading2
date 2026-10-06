@@ -689,13 +689,13 @@ describe("a key phrase and a list are two fields, never markup in the text (plan
 
   /* 350 and 430 until 2026-10-04, when Brief began to be shown first and the
      longer Fuller stopped costing the reader a wait (plan 261004f stage 2). */
-  it("asks Fuller for about 500 words and never more than 600, and Brief for about 100 and never more than 150", () => {
+  it("asks Fuller for about 500 words and never more than 600, and Brief for about 80 and never more than 130", () => {
     const fuller = flat(SIMPLE_SYSTEMS.fuller);
     expect(fuller).toContain("Five to eight paragraphs, each two to five sentences. Every sentence under 30 words.");
     expect(fuller).toContain("About 500 words in all, and never more than 600.");
     expect(fuller).not.toContain("leave detail to the article");
     expect(fuller).toContain("the limits the piece itself names");
-    expect(flat(SIMPLE_SYSTEMS.brief)).toContain("About 100 words in all, and never more than 150.");
+    expect(flat(SIMPLE_SYSTEMS.brief)).toContain("About 80 words in all, and never more than 130.");
     /* Byte for byte, line break included. */
     expect(SIMPLE_SYSTEMS.brief).toContain(
       "Shorter is fine; this is an\norientation, not a digest, so leave detail to the article.",
@@ -1544,7 +1544,7 @@ describe("the prompt version (plans 261001p and 261003c)", () => {
     expect(out.version).toBe("simple/2");
     /* A literal pin, not a value derived from the output under test: otherwise
        changing both the producer and this imported constant stays green. */
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/11");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/12");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
     /* Pipeline freshness and artefact copies read this generic stamp. If they
@@ -1567,7 +1567,7 @@ describe("the prompt version (plans 261001p and 261003c)", () => {
   });
 
   it("pins the changed ask, not merely its new stamp", () => {
-    expect(SIMPLE_SYSTEMS.brief).toContain("About 100 words");
+    expect(SIMPLE_SYSTEMS.brief).toContain("About 80 words");
     for (const system of Object.values(SIMPLE_SYSTEMS)) {
       expect(system).toContain("PAPERWORK IS NOT THE PIECE");
       expect(system).toContain("the reference list or\nbibliography");

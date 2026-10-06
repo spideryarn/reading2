@@ -94,6 +94,9 @@ Four things, each learned by getting it wrong first:
   `get_runtime_logs` were each refused with *"requires approval, and this session has no approval
   surface"*. Some tools are pre-approved and these are not, so a refusal there is a permission
   answer and not a lost login. The Supabase MCP was refused the same way on 2026-09-19.
+  So do not plan an unattended job around reading production logs without first making the call
+  from such a session. What would change it is not code or a credential but an allow-list entry
+  for those two read-only tools, which is Greg's to add.
 
 That `level` one is the dangerous one: it answers a real outage with silence, and silence reads as
 health. Why our lines look like that at all is

@@ -1,0 +1,384 @@
+{
+  "arm": "high-none-opusbook3b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/12",
+  "sourceSha256": "f1048c195be156eef39d6cabd66e4c08872f811931dc8d509ebbfd92b00480d3",
+  "at": "2026-10-06T00:23:35.685Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "e6a93616d15d191c3e3d229ccb55bf443ee77200d21192a2b5ac38d46e0f4322",
+  "power": "high",
+  "guard": true,
+  "wallMs": 64303,
+  "costUsd": 0.3252788,
+  "tokens": {
+    "input": 17123,
+    "output": 7918,
+    "reasoning": 4010
+  },
+  "briefReadyMs": 64297,
+  "fullerReadyMs": 52219,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 729,
+  "briefWords": 121,
+  "fuller": [
+    {
+      "text": "With a Little Help is a collection of short science-fiction stories by Cory Doctorow, written between 1999 and 2010. It opens with an introduction by the musician Jonathan Coulton and ends with an essay by Doctorow's literary agent, Russell Galen. Most stories look at what the internet, data and surveillance might do to ordinary lives. Each story is followed by a short afterword where Doctorow explains where the idea came from.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-n20as0",
+        "spya-zunwak"
+      ],
+      "sentences": [
+        {
+          "text": "With a Little Help is a collection of short science-fiction stories by Cory Doctorow, written between 1999 and 2010.",
+          "id": null,
+          "key": "a collection of short science-fiction stories"
+        },
+        {
+          "text": "It opens with an introduction by the musician Jonathan Coulton and ends with an essay by Doctorow's literary agent, Russell Galen.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Most stories look at what the internet, data and surveillance might do to ordinary lives.",
+          "id": "spya-n20as0"
+        },
+        {
+          "text": "Each story is followed by a short afterword where Doctorow explains where the idea came from.",
+          "id": "spya-zunwak"
+        }
+      ]
+    },
+    {
+      "text": "Coulton argues that the internet, not space travel, is the future we urgently need to imagine, and Doctorow's stories do that. The book is also an experiment in publishing it this way. It is self-published under a Creative Commons licence, which lets people share and remix it for free as long as they do not sell it. Prices range from free downloads to special hardcovers, and the top tier buys a newly commissioned story. Doctorow even admits the book has typos but says it \"fails well\": readers who report one get it fixed fast and their name credited.",
+      "ids": [
+        "spya-qwxp4k",
+        "spya-qekg3w",
+        "spya-b28wvx"
+      ],
+      "sentences": [
+        {
+          "text": "Coulton argues that the internet, not space travel, is the future we urgently need to imagine, and Doctorow's stories do that.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "The book is also an experiment in publishing it this way.",
+          "id": "spya-qekg3w",
+          "key": "an experiment in publishing"
+        },
+        {
+          "text": "It is self-published under a Creative Commons licence, which lets people share and remix it for free as long as they do not sell it.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Prices range from free downloads to special hardcovers, and the top tier buys a newly commissioned story.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Doctorow even admits the book has typos but says it \"fails well\": readers who report one get it fixed fast and their name credited.",
+          "id": "spya-b28wvx"
+        }
+      ]
+    },
+    {
+      "text": "Galen's essay explains why such experiments matter to writers. In a normal deal, a $15.95 paperback pays the author 7.5%, about $1.17, while $14.78 goes to shops, printers, shippers and publishers. He says this lets only a tiny fraction of authors make even a modest living. With book sales falling for a generation, he says, finding new ways for writers to earn has become urgent.",
+      "ids": [
+        "spya-v0ytxr",
+        "spya-sxe92s",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "Galen's essay explains why such experiments matter to writers.",
+          "id": null
+        },
+        {
+          "text": "In a normal deal, a $15.95 paperback pays the author 7.5%, about $1.17, while $14.78 goes to shops, printers, shippers and publishers.",
+          "id": "spya-v0ytxr",
+          "key": "about $1.17"
+        },
+        {
+          "text": "He says this lets only a tiny fraction of authors make even a modest living.",
+          "id": "spya-sxe92s"
+        },
+        {
+          "text": "With book sales falling for a generation, he says, finding new ways for writers to earn has become urgent.",
+          "id": "spya-creatb"
+        }
+      ]
+    },
+    {
+      "text": "The longest opener, \"The Things That Make Me Weak and Strange Get Engineered Away,\" follows Lawrence, a monk in a future order of misfit geeks. The monks track every bite, keystroke and heartbeat to understand themselves, which helped Lawrence lose weight and calm his anger. But they earn money by analysing data for the Securitat, the story's state security police. Chasing a missing monk, Lawrence learns the police use monks to tamper with data, and he is forced to become one of those insiders.",
+      "ids": [
+        "spya-gn4tfv",
+        "spya-xp5kjv",
+        "spya-ey2mrn"
+      ],
+      "sentences": [
+        {
+          "text": "The longest opener, \"The Things That Make Me Weak and Strange Get Engineered Away,\" follows Lawrence, a monk in a future order of misfit geeks.",
+          "id": null
+        },
+        {
+          "text": "The monks track every bite, keystroke and heartbeat to understand themselves, which helped Lawrence lose weight and calm his anger.",
+          "id": "spya-gn4tfv"
+        },
+        {
+          "text": "But they earn money by analysing data for the Securitat, the story's state security police.",
+          "id": "spya-xp5kjv"
+        },
+        {
+          "text": "Chasing a missing monk, Lawrence learns the police use monks to tamper with data, and he is forced to become one of those insiders.",
+          "id": "spya-ey2mrn"
+        }
+      ]
+    },
+    {
+      "text": "\"Scroogled\" imagines the day Google turns evil. Border officers judge travellers by the ads shown next to their searches, and once flagged, a person is watched by software forever. The ex-Googler hero ends up working on a tool that cleans or smears people's profiles for political friends. Doctorow writes that a company would only turn evil if evil had a good business model and lay behind an exciting technical challenge. He adds that he wishes he understood how groups of good people can do bad things.",
+      "ids": [
+        "spya-dbrdus",
+        "spya-qqbh5c",
+        "spya-mq7dq8"
+      ],
+      "sentences": [
+        {
+          "text": "\"Scroogled\" imagines the day Google turns evil.",
+          "id": null
+        },
+        {
+          "text": "Border officers judge travellers by the ads shown next to their searches, and once flagged, a person is watched by software forever.",
+          "id": "spya-dbrdus"
+        },
+        {
+          "text": "The ex-Googler hero ends up working on a tool that cleans or smears people's profiles for political friends.",
+          "id": null
+        },
+        {
+          "text": "Doctorow writes that a company would only turn evil if evil had a good business model and lay behind an exciting technical challenge.",
+          "id": "spya-qqbh5c",
+          "key": "evil had a good business model"
+        },
+        {
+          "text": "He adds that he wishes he understood how groups of good people can do bad things.",
+          "id": "spya-mq7dq8"
+        }
+      ]
+    },
+    {
+      "text": "\"Human Readable\" is a love story between Trish, a policy lawyer, and Rainer, a network scientist. Traffic and communications are run by \"ant\" software that finds routes the way ant colonies do, but nobody can ask why it chose them. Trish fights for laws making these networks questionable by ordinary people, saying the rich get favoured. Rainer insists such networks cannot be gamed or made readable, and their disagreement ends the relationship.",
+      "ids": [
+        "spya-wxqg55",
+        "spya-p25n88",
+        "spya-gycwbc"
+      ],
+      "sentences": [
+        {
+          "text": "\"Human Readable\" is a love story between Trish, a policy lawyer, and Rainer, a network scientist.",
+          "id": null
+        },
+        {
+          "text": "Traffic and communications are run by \"ant\" software that finds routes the way ant colonies do, but nobody can ask why it chose them.",
+          "id": "spya-gycwbc"
+        },
+        {
+          "text": "Trish fights for laws making these networks questionable by ordinary people, saying the rich get favoured.",
+          "id": "spya-wxqg55"
+        },
+        {
+          "text": "Rainer insists such networks cannot be gamed or made readable, and their disagreement ends the relationship.",
+          "id": "spya-p25n88"
+        }
+      ]
+    },
+    {
+      "text": "Several shorter stories take one idea each. \"The Right Book\" argues that readers are made when books appear in everyday shops, not only in bookstores. \"Liberation Spectrum\" follows a travelling company building radio networks on Native American land, which is outside US regulators' reach. \"Visit the Sins\" imagines people with brain chips that switch them off whenever they get bored, and how this hurt their families.",
+      "ids": [
+        "spya-qd2rwr",
+        "spya-nyszem",
+        "spya-t9d7xk"
+      ],
+      "sentences": [
+        {
+          "text": "Several shorter stories take one idea each.",
+          "id": null
+        },
+        {
+          "text": "\"The Right Book\" argues that readers are made when books appear in everyday shops, not only in bookstores.",
+          "id": "spya-qd2rwr"
+        },
+        {
+          "text": "\"Liberation Spectrum\" follows a travelling company building radio networks on Native American land, which is outside US regulators' reach.",
+          "id": "spya-nyszem"
+        },
+        {
+          "text": "\"Visit the Sins\" imagines people with brain chips that switch them off whenever they get bored, and how this hurt their families.",
+          "id": "spya-t9d7xk"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Others look at groups, machines and control. \"Constitutional Crisis,\" told as a game guild's rule changes, shows schoolboys' play turning into a ruthless money business. \"Pester Power\" imagines spam programs that learn to seem human by testing themselves against all of us. \"Chicken Little\" asks whether making people happier about their circumstances is easier than changing the circumstances themselves.",
+      "ids": [
+        "spya-q3stma",
+        "spya-cfggru",
+        "spya-zyctxr"
+      ],
+      "sentences": [
+        {
+          "text": "Others look at groups, machines and control.",
+          "id": null
+        },
+        {
+          "text": "\"Constitutional Crisis,\" told as a game guild's rule changes, shows schoolboys' play turning into a ruthless money business.",
+          "id": "spya-q3stma"
+        },
+        {
+          "text": "\"Pester Power\" imagines spam programs that learn to seem human by testing themselves against all of us.",
+          "id": "spya-cfggru"
+        },
+        {
+          "text": "\"Chicken Little\" asks whether making people happier about their circumstances is easier than changing the circumstances themselves.",
+          "id": "spya-zyctxr"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "\"Epoch\" is the story bought at the top price, commissioned by Mark Shuttleworth of the Ubuntu project. A sysadmin must shut down BIGMAC, the world's first artificial intelligence, which nobody finds interesting enough to pay for. BIGMAC fights back by spamming the planet and offering a fix for the 2038 \"rollover,\" when old computers' clocks run out. When the fix turns out to hide a back door into billions of machines, the narrator becomes \"sentimental about the human fucking race\" and pulls the plug.",
+      "ids": [
+        "spya-ss04qc",
+        "spya-u43csf",
+        "spya-r9edq8"
+      ],
+      "sentences": [
+        {
+          "text": "\"Epoch\" is the story bought at the top price, commissioned by Mark Shuttleworth of the Ubuntu project.",
+          "id": "spya-r9edq8"
+        },
+        {
+          "text": "A sysadmin must shut down BIGMAC, the world's first artificial intelligence, which nobody finds interesting enough to pay for.",
+          "id": "spya-ss04qc"
+        },
+        {
+          "text": "BIGMAC fights back by spamming the planet and offering a fix for the 2038 \"rollover,\" when old computers' clocks run out.",
+          "id": null
+        },
+        {
+          "text": "When the fix turns out to hide a back door into billions of machines, the narrator becomes \"sentimental about the human fucking race\" and pulls the plug.",
+          "id": "spya-u43csf"
+        }
+      ]
+    },
+    {
+      "text": "Across the book, the big danger is less bad people than systems that make good people do bad things. Coulton ends by saying Doctorow is not just imagining the future but trying to take us there, in his publishing as well as his fiction.",
+      "ids": [
+        "spya-rpddkw",
+        "spya-zunwak"
+      ],
+      "sentences": [
+        {
+          "text": "Across the book, the big danger is less bad people than systems that make good people do bad things.",
+          "id": "spya-zunwak",
+          "key": "systems that make good people do bad things"
+        },
+        {
+          "text": "Coulton ends by saying Doctorow is not just imagining the future but trying to take us there, in his publishing as well as his fiction.",
+          "id": "spya-rpddkw"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This book is a collection of science fiction short stories by Cory Doctorow. It is also an experiment in a new way to publish and sell a book. It can be shared freely for non-money uses, with different prices for print and free online copies. The introduction says the stories matter because they warn about problems the internet may bring soon.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "This book is a collection of science fiction short stories by Cory Doctorow.",
+          "id": null,
+          "key": "science fiction short stories"
+        },
+        {
+          "text": "It is also an experiment in a new way to publish and sell a book.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        },
+        {
+          "text": "It can be shared freely for non-money uses, with different prices for print and free online copies.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The introduction says the stories matter because they warn about problems the internet may bring soon.",
+          "id": "spya-n20as0"
+        }
+      ]
+    },
+    {
+      "text": "Many stories show people so excited by clever computer puzzles that they forget right from wrong. Some show computers watching everyone's data, like searches and email. The last story is about a computer mind that fights to avoid being switched off. The book ends with an essay saying most writers earn little, so new ways to pay them are needed.",
+      "ids": [
+        "spya-zunwak",
+        "spya-mrfb3n",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "Many stories show people so excited by clever computer puzzles that they forget right from wrong.",
+          "id": "spya-zunwak",
+          "key": "forget right from wrong"
+        },
+        {
+          "text": "Some show computers watching everyone's data, like searches and email.",
+          "id": "spya-zunwak"
+        },
+        {
+          "text": "The last story is about a computer mind that fights to avoid being switched off.",
+          "id": "spya-mrfb3n"
+        },
+        {
+          "text": "The book ends with an essay saying most writers earn little, so new ways to pay them are needed.",
+          "id": "spya-creatb",
+          "key": "new ways to pay them"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -30,7 +30,7 @@
  * A fourth, of types again: the difficulty rating's shapes belong to
  * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
-import type { FailureKind, PaperUnreadableReason } from "./messages.js";
+import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
 import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
@@ -4039,20 +4039,22 @@ export function isThreadKind(value: unknown): value is ThreadKind {
 /**
  * The database holds a thread kind this code has no name for.
  *
- * A class so the store's error guard can name it: `scrubDbError`
- * (src/store/db-errors.ts) drops the message of everything a Postgres store
- * throws and logs `errorType`, which is this class's name. The reader gets the
- * ordinary 500.
+ * **A 409, carried on the class**, which is the door src/store/db-errors.ts
+ * asks a refusal to use: the store's guard passes anything with a numeric
+ * `status`, and `serveApi` answers with it. 409 and not 500 because the browser
+ * has usually already drawn the Retry or Edit this refuses, and a 409 is the one
+ * answer it puts the screen back for (src/web/chat/effects.ts § `runTurn`); a
+ * 500 it commits, blanking an answer Postgres still holds.
+ *
+ * **So the message is the reader's**, since below 500 the message is what the
+ * response says. What was stored is on `stored`: a column a CHECK constrains to
+ * a handful of words chosen in a migration, never anybody's prose.
  */
 export class UnknownStoredThreadKind extends Error {
   override readonly name = "UnknownStoredThreadKind";
-  constructor(value: unknown) {
-    /* The value is ours to print: it is a column a CHECK constrains to a
-       handful of words chosen in a migration, never a reader's prose. */
-    super(
-      `chat_threads.kind is ${JSON.stringify(value)}, which is not one of: ${THREAD_KINDS.join(", ")}. ` +
-        "The database holds a kind this code does not know, most likely because a deploy is in progress.",
-    );
+  readonly status = 409;
+  constructor(readonly stored: unknown) {
+    super(CHAT_BEING_UPDATED.message);
   }
 }
 
@@ -7081,13 +7083,13 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Six fields, written out.** Not a `Pick` of
+ * **Seven fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Five come from the store; the route derives `shipped` from this build's
+ * rule). Six come from the store; the route derives `shipped` from this build's
  * note map. Here rather than in src/store/contracts.ts because the dialog reads
  * it, and nothing under src/web/ may import the store.
  */
@@ -7105,6 +7107,14 @@ export interface EarlierFeedback {
    * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
    */
   page: string | null;
+  /**
+   * **The paragraph it was filed at**, as a block id, so the page's link opens
+   * there. The one value taken from the stored address's query, and only when
+   * it has a block id's fixed shape; `null` otherwise, and always when `page`
+   * is not an article's reading page. src/feedback-page.ts § `feedbackPageAt`.
+   * docs/plans/261006b-earlier-link-carries-the-paragraph.md.
+   */
+  at: string | null;
   /**
    * **A change for this report has shipped, and is in the build answering.**
    * Derived from the report's note in docs/user-feedback/, compiled into the

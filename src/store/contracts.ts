@@ -2601,11 +2601,11 @@ export interface FeedbackStore {
    * whether there were more — the Feedback dialog's Earlier tab.
    * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
    *
-   * Owner-scoped like `read`, and the owner is never an argument. Five fields a
+   * Owner-scoped like `read`, and the owner is never an argument. Six fields a
    * report and no more: see `EarlierFeedback` in src/types.ts for why the email,
    * the address, the diagnostics and the screenshot are not among them. `page`
-   * is made from the address here, in the store, by src/feedback-page.ts, so
-   * the address itself is never part of the answer.
+   * and `at` are made from the address here, in the store, by
+   * src/feedback-page.ts, so the address itself is never part of the answer.
    *
    * `filter` narrows by report id — kept `in` or left `out` of the list —
    * **beside** the owner predicate, never instead of it; the Earlier tab's

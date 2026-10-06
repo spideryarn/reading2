@@ -74,8 +74,16 @@ class RolledBack extends Error {}
 describe("storedThreadKind", () => {
   it("passes every kind we know and refuses anything else by name", () => {
     for (const kind of types.THREAD_KINDS) expect(types.storedThreadKind(kind)).toBe(kind);
-    expect(() => types.storedThreadKind(FUTURE)).toThrow(/kind-from-the-future/);
     expect(() => types.storedThreadKind(FUTURE)).toThrow(types.UnknownStoredThreadKind);
+    /* The name is on `stored`, not in the message: the message is the sentence
+       a reader is shown with the 409. */
+    let thrown: unknown;
+    try {
+      types.storedThreadKind(FUTURE);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toMatchObject({ stored: FUTURE, status: 409 });
   });
 });
 

@@ -170,6 +170,7 @@ import {
   chatCard,
   chatDock,
   fitView,
+  margTitleReserve,
   NARROW_WINDOW_MAX,
 } from "../layout.js";
 import { isFolded, subscribeFold } from "../fold.js";
@@ -3591,6 +3592,7 @@ export function Reader({
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
           "--marg-w": `${fit.margW}px`,
           "--marg-reserve": `${fit.margReserve}px`,
+          "--marg-title-reserve": `${margTitleReserve(fit, windowWidth)}px`,
           "--marg-left": `${fit.margLeft}px`,
         } as CSSProperties
       }

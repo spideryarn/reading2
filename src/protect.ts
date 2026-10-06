@@ -1003,7 +1003,10 @@ const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
  * purpose — Readability legitimately re-wraps and merges blocks between two
  * parses of the same page, and this check is about text the reader lost, not
  * about the elements it arrived in. A run split down the middle in the treatment
- * would read as lost; nothing measured does that.
+ * would read as lost, and one thing measured does that: a rescued table standing
+ * inside the run. Such a run is read a second time with the treatment's tables
+ * taken out — `textRoundTables`, below, which says why that costs the check
+ * nothing.
  *
  * **The invariant is *the words are retained somewhere*, not *the prose
  * occurrence is retained*, and the difference is a real blind spot.** A
@@ -1042,6 +1045,47 @@ export function proseRetention(
        publisher's `<div class="noprint">` as a `<p>` and may split or trim it —
        what survives of a marked-up region is still that region's words. */
     .filter((run) => !notForPrint.some((chrome) => chrome.includes(run)));
-  const lost = runs.filter((run) => !kept.includes(run)).length;
+  const missing = runs.filter((run) => !kept.includes(run));
+  /* **A run the treatment's own table interrupts is not a lost run.** Parsed
+     only when something is missing, which is almost never. */
+  const roundTables = missing.length === 0 ? [] : textRoundTables(treatment);
+  const lost = missing.filter((run) => !roundTables.some((candidate) => candidate.includes(run))).length;
   return { runs: runs.length, lost, retained: lost === 0 };
+}
+
+/**
+ * **Each treatment prose run that contains a `<table>`, with its tables taken
+ * out** — the second readings a missing run is given before it is called lost.
+ *
+ * A rescued table can stand in the middle of a run. Ten tables of arXiv
+ * 2610.01658v1 sit inside list items, and six of those items carry on after
+ * their table: the control's `<li>` reads *"words before, words after"*, the
+ * treatment's reads *"words before, the table's cells, words after"*, and the
+ * first is not a substring of the second. `proseRetention` counted six lost
+ * runs on a page that had lost nothing, and rule A's rescue — which had kept
+ * all ten tables — was withdrawn. Measured 2026-10-05;
+ * tests/extract-protect-list-item-tables.test.ts.
+ *
+ * **Why this is not the loosening it looks like.** The run still has to be in
+ * one treatment prose element whole and in order; all that is forgiven is a
+ * `<table>` standing inside that same element. Removing tables from the whole
+ * document would join unrelated fragments on either side of one and could hide
+ * a genuinely missing paragraph. In the failure the fallback exists for, the
+ * rescued table has won candidacy and been rewritten as a `<div>`, and the
+ * prose is gone: there is then no `<table>` to take out and no prose to find,
+ * so the run is lost on this reading exactly as on the first. Prose that
+ * survives only *inside* a table cell is found by the first reading and never
+ * reaches this one — the blind spot `proseRetention` already names, neither
+ * widened nor narrowed.
+ *
+ * A clone, because `treatment` is the arm that may be about to ship.
+ */
+function textRoundTables(treatment: Element): string[] {
+  return Array.from(treatment.querySelectorAll(PROSE_RUN_TAGS))
+    .filter((run) => run.querySelector("table") !== null)
+    .map((run) => {
+      const clone = run.cloneNode(true) as Element;
+      for (const table of Array.from(clone.querySelectorAll("table"))) table.remove();
+      return flatten(clone.textContent ?? "");
+    });
 }

@@ -113,6 +113,12 @@ will read is not doing its job, however true it is.
 - **A doc whose wording is a rule changes differently** — one approved set of changes at a time, with
   the before and after shown: [edit-important-docs.md](edit-important-docs.md). Signposting is not a
   rule, so adding a line for a new doc, or tweaking a pointer, needs no approval.
+- **Never pass prose through a shell string.** Backticks inside a double-quoted shell argument are
+  command substitution, so each code span is run and removed: a plan section appended that way on
+  2026-09-08 landed with four spans missing, the script printed its success line, and the result
+  read as clumsy writing, not as damage. `$`, `!` and `\` are the same family. Write prose with the
+  Write tool, or have a script read it from a file; a heredoc with a quoted delimiter is safe. Then
+  read what landed.
 - **Edit a doc with the Edit tool.** If it must be a script, write `assert old and s.count(old) == 1`
   before every replace, and never pass `-q` to `git commit`: a replace whose target came out empty
   succeeds everywhere and silently grew one plan to 22 MB

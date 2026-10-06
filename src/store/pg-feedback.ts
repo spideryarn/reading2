@@ -49,7 +49,7 @@ import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
-import { feedbackPageLabel } from "../feedback-page.js";
+import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
@@ -403,6 +403,7 @@ const rawPgFeedbackStore: FeedbackStore = {
           kind: row.kind === null ? null : (row.kind as FeedbackKind),
           body: row.body,
           page: feedbackPageLabel(row.url),
+          at: feedbackPageAt(row.url),
         })),
         more: rows.length > limit,
         counts: { all: counted?.all ?? 0, in: counted?.in ?? 0 },

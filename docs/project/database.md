@@ -552,7 +552,9 @@ same query via 5432 says `off`; `reset default_transaction_read_only` via 6543 c
 imported by absolute path from a tree's `node_modules`, the committed CA passed as `ssl: { ca }`,
 and every query inside `begin read only` … `rollback`. Without `ssl` the pooler answers
 `ESSLREQUIRED`. The auto-mode classifier refuses `rejectUnauthorized: false` as TLS weakening, and
-on 2026-09-30 a session that reached for it lost the lookup.
+on 2026-09-30 a session that reached for it lost the lookup. The Overseer's notes of the same day
+say the bucket can be read with `GET /storage/v1/object/info/sources/sha256/<hash>.<ext>`, a made-up
+hash answering 400 as the control; that has not been re-checked since.
 
 **SSL is enforced**, so a plain connection is refused — and `pg` does not use SSL by default, so the
 refusal arrives looking like a credentials error. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)

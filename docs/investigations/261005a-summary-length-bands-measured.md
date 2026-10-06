@@ -22,7 +22,11 @@ cover the whole of it.
 
 **Later the same day Brief's ask went from about 80 words to about 100**, still for every piece,
 on Greg's word and a third round: [§ A slightly longer Brief](#a-slightly-longer-brief-round-three).
-Everything below that says "about 80" describes the day's first two rounds.
+The first two rounds below retain their original asks.
+
+**After the 2026-10-06 review Brief went back to about 80 for every piece**, books included:
+the longer book variant missed both shipping conditions.
+[§ Short, and slightly longer for a book](#short-and-slightly-longer-for-a-book-round-four).
 
 ## What was asked
 
@@ -306,6 +310,89 @@ not established that either increase clears the "not padded" bar.
 - The four arms cost about $4.50 for 24 writes. Four writes came back unpriced by the provider
   and are estimated from their twins in the other draw.
 
+## Short, and slightly longer for a book: round four
+
+> Re longer Summary Brief - I wanted it to stay short for most articles, but allow it to go
+> slightly larger for really long ones (e.g. books). Is that what's been done?
+>
+> — Greg, 2026-10-06
+
+Round three had made Brief about 100 words for every piece. The question now: with every other
+piece back at about 80, can a book's Brief be a little longer and worth it? Twice already a
+longer Brief for a book had lost (asked for 140, padded both times; asked for 100, the old one
+preferred both test pairs). Round three's four losses combine two at 90 and two at 100.
+Those earlier book summaries concentrated on the opening. So the new arm
+pairs the number with a sentence saying what the extra is for.
+
+### What was run
+
+Two books, two writes each, on Opus with the guard on, as a press does:
+*Geometric Deep Learning* (47,957 words, a survey, the book of the earlier rounds) and *With a
+Little Help* (110,745 words, a story collection, new here so that "a book" is not one book).
+
+| arm | what Brief was asked | Brief's words |
+|---|---|---|
+| `len0a`, `len0b` (first book), `opusbook80a`, `opusbook80b` (second) | about 80, never more than 130 | 113, 95; 98, 90 |
+| `brief100a`, `brief100b` (first book, round three) | about 100, never more than 150 | 116, 122 |
+| **`opusbook3a`, `opusbook3b`**, both books: rejected after review | about 100, never more than 150, then: *"This piece is a whole book. Keep to two short paragraphs all the same. Let the second one say, in a sentence or two, where the book goes after its opening and where it ends up."* | 102, 101; 108, 121 |
+
+All four writes of the new arm were stored; one Brief needed its second try. Their recorded
+prompt hash (`e6a93616d15d191c3e3d229ccb55bf443ee77200d21192a2b5ac38d46e0f4322`)
+is SHA-256 of `JSON.stringify(SIMPLE_SYSTEMS_BY_BAND.book)` at candidate commit `1e7111452`.
+It does not match the final book prompts after review, which restored the 80-word Brief.
+
+### The blind judge
+
+Eight pairs, seed 261011 (the first from 261010 that put the new side on A as often as B in the
+test pairs, picked before judging), judged by a subagent that read only the pairs file, with
+the books' headings above each pair. `npx tsx evals/simple/length-bands.ts score book`:
+
+| pairs | prefers | padded side | truer picture of the whole book |
+|---|---|---|---|
+| test, survey (2) | new 2 | neither 2 | new 2 |
+| test, story collection (2) | old 2 | new 2 | new 1, old 1 |
+| control, old against old (2) | draw `a` in both books | neither 2 | draw `a` in both books |
+| new against the plain 100, survey (2) | new 2 | the plain 100 once | new 2 |
+
+- **Four test pairs: two to two.** The rule written down first was three of four and no more
+  padding than the old. Both conditions failed, so the final change keeps Brief at 80 everywhere.
+- **The observed split follows the two books; chance is not ruled out.** For the survey the new Brief was preferred in all
+  four pairs it was in, each time for the same reason: *"then a map of what the book covers,
+  which is what I want before starting it"*. For the story collection the old one was
+  preferred both times: the new one gave a sentence to *"The introduction says the stories
+  matter because…"*, which the judge called a blurb's praise at one remove.
+- **At the same ask of 100, the judge preferred the sentence in both survey pairs.** This is
+  evidence for that wording on this book; it does not establish the cause or generalise to books.
+
+### What went wrong first: ten writes on the wrong model
+
+The probe then defaulted to Sonnet unless told `--power high`; it now defaults to high,
+as Summary is always written on Opus. Ten longer-variant writes ran on Sonnet, plus two
+80-word baselines. Three wordings of the sentence were tried there:
+
+| arm | the sentence | what Sonnet wrote |
+|---|---|---|
+| `bookwholea`, `bookwholeb` | "…a little more room than usual. Spend it on covering the whole of the book: say in a plain phrase what its later parts do and where it ends up, not only how it opens. Do not spend it on more detail about any one part." | three failures of four (six paragraphs, four paragraphs, a broken answer); 198 words |
+| `bookwhole2a`, `bookwhole2b` | "…It is still two or three short paragraphs: do not go through its parts one by one. Say what the book as a whole sets out to do and where it ends up, not only how it opens." | two failures of four (an answer that did not stop); 215 and 219 words |
+| `bookwhole3a` | the final tested wording, rejected after review | one failure of two (Brief did not stop); 162 words |
+
+At 80 words Sonnet wrote 94 and 92 and failed nothing (`book80a|b`). A judge preferred the four
+long Sonnet Briefs to the 80-word ones, four pairs of four (`score booksonnet`), with one book's
+two sides written by different models. It also selects only the four successful longer writes.
+**This cannot establish a benefit on the production model**; the failures and overlength Briefs
+show why changing the model would require measuring again.
+
+### What this does not show
+
+- **Two books, two writes each, one judge model.** A two-to-two preference split does not
+  establish superiority or equivalence. The two padding flags against zero are adverse evidence;
+  control preferences do not erase them.
+- **No narrative book in one voice**: a survey and a story collection. A novel or a memoir may
+  go either way.
+- **Nothing over 111,000 words.**
+- **The judge saw headings, not the books**, so "truer picture" rewards a Brief that names what
+  the headings name.
+
 ## What reading them found
 
 - The banded Fuller of the short essay is the essay's argument in four paragraphs: the puzzle, the
@@ -318,7 +405,7 @@ not established that either increase clears the "not padded" bar.
   groups"* where every other summary of that article gives 85% within local populations. The
   guard passed it. It was not checked against the article here; that Brief prompt did not ship.
 
-## What this does not show
+## What the first two rounds do not show
 
 - **One judge model, two writes a cell.** The Fuller result is 8 of 8 with a stated reason in
   each; the smaller results are within what a control pair moves by.
