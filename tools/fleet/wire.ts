@@ -1164,7 +1164,7 @@ export type SelfCheckVerdict =
   | { kind: "socket-matches"; socketPath: string }
   /** Neither anchor could be used. Not a fault, and not a pass. */
   | { kind: "cannot-check"; why: string }
-  /** The listing is of another server or socket. A collection that gets this is refused. */
+  /** The server/socket differs, or our pane is missing. This collection is refused. */
   | { kind: "absent"; why: string };
 
 /** The verdict as served: `not-collected` when there is no snapshot for it to be about. */
@@ -1279,7 +1279,7 @@ export type FleetState<Row, Health> = {
    * Whether the listing behind `rows` was checked to be of this box, and how.
    * It describes the rows being served: a later attempt that was refused keeps
    * the previous rows and their verdict, and shows up in `error`.
-   * `cannot-check` here on every payload means the check is not running.
+   * `cannot-check` means neither anchor could be verified for those rows.
    */
   selfCheck: SelfCheckFeed;
   tookMs: number;

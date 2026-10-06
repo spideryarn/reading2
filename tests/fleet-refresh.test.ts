@@ -33,6 +33,7 @@ import { createRateLimiter } from "../tools/fleet/routes-steer.js";
 import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
+import { fleetState, type FleetState } from "../tools/fleet/state.js";
 
 const HOST = "100.90.80.70:8787";
 const ORIGIN = `http://${HOST}`;
@@ -215,6 +216,47 @@ function refreshHarness(over: Partial<RefreshDeps> = {}) {
  * ================================================================== */
 
 describe("one refresh turn", () => {
+  it("publishes the retained verdict through refusal and then replaces it on recovery", async () => {
+    const first = snap({ selfCheck: { kind: "present", paneId: PANE } });
+    const recovered = snap({
+      collectedAt: "2026-09-08T12:01:00.000Z",
+      selfCheck: { kind: "socket-matches", socketPath: "/tmp/tmux-1000/default" },
+    });
+    let held: FleetSnapshot | null = null;
+    let error: string | null = null;
+    let publication = 0;
+    let inventory: number | null = null;
+    const published: FleetState[] = [];
+    const { deps, logs } = refreshHarness({
+      collect: async () => {
+        if (publication === 1) throw new Error("this is not a listing of this box: another socket");
+        return publication === 0 ? first : recovered;
+      },
+      keep: (result) => {
+        publication += 1;
+        if ("snapshot" in result) {
+          held = result.snapshot;
+          error = null;
+          inventory = publication;
+        } else error = result.error;
+      },
+      publish: () => {
+        published.push(JSON.parse(JSON.stringify(fleetState(
+          held, error, null, 60_000, false, null,
+          { kind: "not-asked" }, { kind: "not-asked" }, { kind: "not-asked" },
+          { kind: "not-asked" }, { kind: "checkpoint-absent" },
+          { instance: "1a2b3c4d", publication, inventory },
+        ))) as FleetState);
+      },
+    });
+    for (let turn = 0; turn < 3; turn += 1) await refreshOnce(deps);
+    expect(published.map((state) => state.selfCheck)).toEqual([first.selfCheck, first.selfCheck, recovered.selfCheck]);
+    expect(published.map((state) => state.collectedAt)).toEqual([first.collectedAt, first.collectedAt, recovered.collectedAt]);
+    expect(published.map((state) => state.error)).toEqual([null, "this is not a listing of this box: another socket", null]);
+    expect(published[1]?.rows).toEqual(first.rows);
+    expect(logs.filter((line) => line.startsWith("collection failed:"))).toHaveLength(1);
+  });
+
   it("delivers a message posted to the action route, to the pane the snapshot names", async () => {
     const { routes, sent, queue } = actionRoutes();
     const status = await enqueueOverHttp(routes, {

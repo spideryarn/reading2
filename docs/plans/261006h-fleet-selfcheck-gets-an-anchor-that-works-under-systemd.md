@@ -32,37 +32,43 @@ One stage, three parts.
 
 ### 1. An anchor for a process that is not in a pane
 
-A process outside tmux reaches tmux through the **default socket for its user**:
+A process with no usable `TMUX` normally reaches tmux through the **default socket for its user**:
 `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`. That is the box it means to be reading. So:
 
 - `list-panes` gains a fifth field, `#{socket_path}`, last on the line (a path may contain a
   space; the first four fields may not). `PaneListing`'s `read` arm carries
-  `socketPath: string | null`, parsed beside `tmuxServerPid`.
+  `socketPath: string | null`, parsed beside `tmuxServerPid`. Malformed rows or disagreeing
+  socket fields return null; a newline in a pathname must not become a truncated socket path.
+  An expected or canonical expected path containing a newline gives `cannot-check`, including
+  when its continuation itself looks like a pane row.
 - `selfCheck`, **only when `TMUX` is absent or empty**, compares the listing's socket path with
   the expected default socket, both through `realpath` (macOS reports `/private/tmp/…`).
-  - Both resolve and are equal → a new arm, `{ kind: "socket-matches"; socketPath }`.
-  - Both resolve and differ → `absent`, with a sentence naming both paths.
+  - Both resolve and are equal, or different names have the same device/inode → a new arm,
+    `{ kind: "socket-matches"; socketPath }`.
+  - Both resolve and name different filesystem objects → `absent`, naming both paths.
   - The listing carried no socket path, the uid cannot be read, or **either `realpath` fails** →
-    `cannot-check`, with why. `absent` is reserved for two successfully resolved paths that
-    differ (Sol F3: a socket removed after the listing must not become a wrong-box refusal).
-- With `TMUX` and `TMUX_PANE` both set, nothing changes: the pane and server-pid checks stay as
+    `cannot-check`, with why. Failure to compare device/inode also gives `cannot-check`.
+    `absent` requires a verified difference (Sol F3: a socket removed after the listing must
+    not become a wrong-box refusal).
+- With `TMUX` and `TMUX_PANE` both populated, nothing changes: the pane and server-pid checks stay as
   they are, and touch no filesystem.
 - With `TMUX` set and `TMUX_PANE` missing, the answer stays `cannot-check` as today. tmux picks
   its socket from `TMUX` alone, so comparing against `default` there would refuse a correctly
   selected named server (Sol F2).
 
 The expected path is computed by us from the uid and the server's own environment, and the
-listed path is reported by the tmux child. They disagree in exactly the cases `41de8c8d` named:
+listed path is reported by the tmux child. Intended mismatches include the cases `41de8c8d` named:
 a `TMUX` or `TMUX_TMPDIR` that differs in the child, a `-S`/`-L` in a wrapper, a different `tmux`
 on `PATH`.
 
-**It is a weaker check than the pane one, and the code says so.** It proves which server
-answered. The pane check can also notice that our own pane went missing; neither anchor proves
-the whole listing survived (Sol F6). And it trusts the `tmux` executable: a wrapper that
+**It is a weaker check than the pane one, and the code says so.** It compares the server's
+reported socket with the expected default. The pane check can also notice that our own pane
+went missing; neither anchor proves the whole listing survived (Sol F6). And it trusts the `tmux`
+executable: a wrapper that
 fabricates output is outside what it can see.
 
-`collect()` takes the environment, uid and realpath as an optional parameter with production
-defaults, so a test can drive the wiring instead of grepping the source for it. This is item 2
+`collect()` takes the environment, uid, realpath and file comparison as an optional parameter
+with production defaults, so a test can drive the wiring instead of grepping the source. This is item 2
 of the postmortem's "what would have caught it".
 
 ### 2. The verdict is published
@@ -103,14 +109,14 @@ filesystem failure cannot happen; those land in `cannot-check`, not `absent`. If
 paths in its `why`, published but not refusing. The plan would then say *documented*, not
 *closed*.
 
-The mechanism the "this cannot fire wrongly" argument rests on is **tmux's default-socket rule**
-(`TMUX_TMPDIR` or `/tmp`, then `tmux-<uid>/default`), plus `realpath` on both sides. The test for
-it is the live run above, and a unit test per arm.
+The refusal relies on **tmux's default-socket rule**, intact socket metadata and a verified
+filesystem identity difference. The live run validates the recorded service configuration;
+it does not prove every valid pathname or alias was handled. Tests exercise those separately.
 
 ## Passed over
 
 - **Simpler: only publish the verdict, add no anchor.** It makes the gap visible and leaves it
-  open. The anchor is about thirty lines in a function that already exists, and the item asks
+  open. The anchor extends the existing check, and the item asks
   for both.
 - **Simpler: set `TMUX` in the unit file.** A made-up pane id would make the check answer
   `absent` for ever, and a real one does not exist for a service.
@@ -134,7 +140,7 @@ it is the live run above, and a unit test per arm.
 
 - **[Q-selfcheck-page]** Should the dashboard page itself show a warning when the verdict is
   `cannot-check`? Recommendation: not yet. With this change the production path answers
-  `socket-matches`, so the warning would never show; add it only if `cannot-check` comes back.
+  `socket-matches` in the recorded live run; add a warning if `cannot-check` becomes useful to show.
 - **[Q-unit-header]** `infra/hetzner/systemd/fleet-dashboard.service` still opens with
   "INSTALLED BUT NOT ENABLED … The dashboard is up under scripts/tmux-job.ts". That has been
   false since 2026-09-08. Recommendation: let an agent correct the comment.
@@ -145,8 +151,8 @@ it is the live run above, and a unit test per arm.
 - 2026-10-06 — GPT Sol plan review,
   [261006h-fleet-selfcheck-plan-review-sol.md](261006h-fleet-selfcheck-plan-review-sol.md):
   *build with changes*, F1–F6. All six checked against the source and accepted; the plan above is
-  the revised one. F1 and F4 were established and I confirmed both (`types.ts:521` derives from
-  the wire type; `refresh.ts:130` already logs). The logging part was cut.
+  the revised one. F1 and F4 were established and I confirmed both (`FleetState` in `types.ts`
+  derives from the wire type; `refreshOnce` already logs). The logging part was cut.
 - 2026-10-06 — built by an Opus subagent, red first (30 failing before any code), 20 mutations
   each turning a test red. What landed beyond the plan's wording: `selfCheck(listing, anchor)`
   with both required; `snapshotFrom` takes the verdict as a required argument; both source-text
@@ -159,6 +165,24 @@ it is the live run above, and a unit test per arm.
   `absent` naming both paths; pointed at `/nonexistent` gave `cannot-check`. No second live tmux
   server was available, so "a real other server answers" was simulated from the anchor side, not
   observed.
+- 2026-10-06 — code review found a false refusal for newline-fractured socket metadata and a
+  pathname-versus-inode alias risk. Regressions were seen red before fixes: ambiguous metadata
+  now yields `cannot-check`, and differing canonical names are compared by device/inode before
+  refusal. File comparison failure also yields `cannot-check`. Scratch files exercise these
+  paths without tmux contact; a live connection through a hardlink was not observed. Root cause:
+  [261006l-a-resolved-path-is-not-a-socket-identity.md](../postmortems/261006l-a-resolved-path-is-not-a-socket-identity.md).
+- 2026-10-06 — reviewer validation: the original collector suite passed 77 tests; after fixes
+  it passed 83. Ten fleet/client/ordering files passed 798 tests; doc links passed 17. All four
+  TypeScript projects passed using `node --import tsx scripts/typecheck.ts` because the `tsx`
+  CLI's IPC listener is denied in this sandbox. Scoped lint passed with one existing `useConst`
+  warning. No tmux server was contacted, and no restart or deployed-state check was performed.
+- 2026-10-06 — the reviewer's diff read as a proposal and accepted whole. Every change moves a
+  verdict away from `absent`, towards `cannot-check` or `socket-matches`, so none can add a
+  refusal. Re-run after its fixes with the service's environment: still `socket-matches`
+  (13 sessions, server 132280). Typecheck, `fleet-collect`, `fleet-refresh` and `doc-links`
+  green. No second review round: F10 (a pathname swapped between the tmux reply and the
+  comparison) is left open as reasoned and out of scope, and is the `/proc` option under
+  "Passed over".
 
 ---
 

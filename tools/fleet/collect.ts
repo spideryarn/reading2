@@ -17,7 +17,7 @@
  * on the box it wants to ask.
  */
 import { execFile } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
@@ -220,8 +220,8 @@ export type FleetSnapshot = {
   tmuxServerPid: number | null;
   /**
    * Whether the listing these rows were joined from was checked to be of this
-   * box, and by which anchor — see `selfCheck`. Never `absent`: that listing is
-   * refused, not published. Kept on the snapshot so the answer is served, where
+   * box, and by which anchor — see `selfCheck`. `collect` refuses `absent`
+   * before building a snapshot. Kept so the answer is served, where
    * it used to be computed and dropped.
    */
   selfCheck: SelfCheck;
@@ -288,14 +288,20 @@ export function tmuxServerPid(listPanesOutput: string): number | null {
  *
  * `#{socket_path}` is the fifth field and the LAST one, because a path may
  * contain a space and the four before it may not: this takes the rest of the
- * line rather than the fifth word. Null when the field is missing or empty.
+ * line rather than the fifth word. Null when a nonempty line has no complete
+ * field, or the rows disagree. A newline in a pathname fractures the framing;
+ * using its first-line prefix could wrongly refuse this user's default socket.
  */
 export function tmuxSocketPath(listPanesOutput: string): string | null {
+  let socket: string | null = null;
   for (const line of listPanesOutput.split("\n")) {
+    if (line === "") continue;
     const rest = /^\S+ \S+ \S+ \S+ (.*)$/.exec(line)?.[1];
-    if (rest !== undefined && rest.trim() !== "") return rest;
+    if (rest === undefined || rest.trim() === "") return null;
+    if (socket !== null && socket !== rest) return null;
+    socket = rest;
   }
-  return null;
+  return socket;
 }
 
 /**
@@ -571,11 +577,10 @@ type ReadPaneListing = Extract<PaneListing, { kind: "read" }>;
  * Every pane on the box, keyed by its session, and the server they are on, or
  * the reason no listing arrived.
  *
- * Failure is a separate arm rather than an empty map. `selfCheck` must find
- * this process's own pane, or the socket it expects, in the listing before
- * anything is published, so a failed listing cannot safely produce a snapshot;
- * calling it empty made that guard blame a different box instead of the tmux
- * failure that actually happened.
+ * Failure is a separate arm rather than an empty map. A failed listing cannot
+ * safely produce a snapshot; calling it empty made `selfCheck` blame a
+ * different box instead of the tmux failure that actually happened. A read
+ * listing whose anchor cannot be verified may still be published.
  */
 export async function panes(owner: ProbeOwner): Promise<PaneListing> {
   try {
@@ -669,7 +674,8 @@ export function snapshotFrom(
  * `cannot-check` on every production collection for four weeks, and nothing
  * said so (postmortem 260910b).
  *
- * THE SOCKET ANCHOR IS THE WEAKER OF THE TWO. It proves which server answered.
+ * THE SOCKET ANCHOR IS THE WEAKER OF THE TWO. It compares the server's reported
+ * socket with this user's default.
  * The pane check can also notice that our own pane went missing; neither anchor
  * proves the whole listing survived. And both trust the `tmux` executable: a
  * wrapper that fabricates output is outside what either can see.
@@ -693,10 +699,21 @@ export type SelfAnchor = {
   uid: number | undefined;
   /** May throw, as `fs.realpathSync` does for a path that is not there. */
   realpath: (path: string) => string;
+  /** Compare device/inode for different canonical names; may throw if either disappeared. */
+  sameFile: (left: string, right: string) => boolean;
 };
 
 export function productionAnchor(): SelfAnchor {
-  return { env: process.env, uid: process.getuid?.(), realpath: (path) => realpathSync(path) };
+  return {
+    env: process.env,
+    uid: process.getuid?.(),
+    realpath: (path) => realpathSync(path),
+    sameFile: (left, right) => {
+      const a = statSync(left, { bigint: true });
+      const b = statSync(right, { bigint: true });
+      return a.dev === b.dev && a.ino === b.ino;
+    },
+  };
 }
 
 export function selfCheck(
@@ -705,8 +722,8 @@ export function selfCheck(
 ): SelfCheck {
   const pane = anchor.env.TMUX_PANE;
   const tmux = anchor.env.TMUX;
-  // ONLY WITH NO `TMUX` AT ALL. tmux picks its socket from `TMUX` alone, so a
-  // process with `TMUX` and no `TMUX_PANE` may be reading a named server quite
+  // ONLY WITH ABSENT OR EMPTY `TMUX`. tmux can select a socket from `TMUX`
+  // alone, so a process with `TMUX` and no `TMUX_PANE` may read a named server
   // correctly, and comparing that with `default` would refuse it.
   if (typeof tmux !== "string" || tmux === "") return socketAnchor(listing.socketPath, anchor);
   if (typeof pane !== "string" || pane === "") {
@@ -746,8 +763,8 @@ export function selfCheck(
  * `TMUX_TMPDIR` set only for it, a `-S` or `-L` in a wrapper, another `tmux` on
  * `PATH`.
  *
- * `absent` IS ONLY FOR TWO PATHS THAT BOTH RESOLVED AND DIFFER. A socket removed
- * after the listing was read must not turn into a wrong-box refusal, so a
+ * `absent` REQUIRES TWO RESOLVED PATHS NAMING DIFFERENT FILESYSTEM OBJECTS.
+ * A socket removed after the listing must not turn into a wrong-box refusal, so a
  * `realpath` that throws is `cannot-check`. Both go through `realpath` because
  * macOS reports `/private/tmp/…` for `/tmp/…`.
  */
@@ -760,6 +777,9 @@ function socketAnchor(listed: string | null, anchor: SelfAnchor): SelfCheck {
   }
   // tmux ignores an empty `TMUX_TMPDIR`, so `||` rather than `??`.
   const expected = `${anchor.env.TMUX_TMPDIR || "/tmp"}/tmux-${anchor.uid}/default`;
+  if (expected.includes("\n")) {
+    return { kind: "cannot-check", why: "the expected tmux socket contains a newline, so listing boundaries are ambiguous" };
+  }
   const resolved: string[] = [];
   for (const [what, path] of [["listed", listed], ["expected", expected]] as const) {
     try {
@@ -775,7 +795,23 @@ function socketAnchor(listed: string | null, anchor: SelfAnchor): SelfCheck {
   if (listedReal === undefined || expectedReal === undefined) {
     return { kind: "cannot-check", why: "the tmux socket paths were not resolved" };
   }
+  // A symlink target may introduce a newline even when TMUX_TMPDIR has none.
+  // Its continuation can itself look like a valid pane record, so validating
+  // each apparent row cannot establish an intact pathname in that case.
+  if (expectedReal.includes("\n")) {
+    return { kind: "cannot-check", why: "the resolved expected tmux socket contains a newline, so listing boundaries are ambiguous" };
+  }
   if (listedReal === expectedReal) return { kind: "socket-matches", socketPath: listedReal };
+  // realpath removes symlink aliases, but two hardlinks still have different
+  // canonical names. Different names alone do not establish a different socket.
+  try {
+    if (anchor.sameFile(listedReal, expectedReal)) return { kind: "socket-matches", socketPath: listedReal };
+  } catch (cause) {
+    return {
+      kind: "cannot-check",
+      why: `the tmux sockets ${listedReal} and ${expectedReal} could not be compared: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
   return {
     kind: "absent",
     why:

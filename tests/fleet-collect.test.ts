@@ -12,7 +12,7 @@
  * and its options, an unknown status showing its reason, the stale banner
  * keeping the last good rows, and agent-authored markup rendering as text.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -243,7 +243,10 @@ describe("panesBySession", () => {
     tmuxServerPid: number | null,
     env: SelfAnchor["env"],
     socketPath: string | null = null,
-  ) => selfCheck({ panes, tmuxServerPid, socketPath }, { env, uid: 1000, realpath: realpathMustNotRun });
+  ) => selfCheck({ panes, tmuxServerPid, socketPath }, {
+    env, uid: 1000, realpath: realpathMustNotRun,
+    sameFile: () => { throw new Error("the pane anchor compared socket files"); },
+  });
 
   /** A `realpath` over a table: a path that is not in it does not resolve. */
   const resolving = (table: Record<string, string>) =>
@@ -256,7 +259,7 @@ describe("panesBySession", () => {
   const outside = (socketPath: string | null, anchor: Partial<SelfAnchor> = {}) =>
     selfCheck(
       { panes: PANES, tmuxServerPid: 132280, socketPath },
-      { env: {}, uid: 1000, realpath: resolving({ [DEFAULT_SOCKET]: DEFAULT_SOCKET }), ...anchor },
+      { env: {}, uid: 1000, realpath: resolving({ [DEFAULT_SOCKET]: DEFAULT_SOCKET }), sameFile: (a, b) => a === b, ...anchor },
     );
 
   it("recognises this box by finding its own pane in the listing", () => {
@@ -342,6 +345,7 @@ describe("panesBySession", () => {
     expect(outside(DEFAULT_SOCKET)).toEqual({ kind: "socket-matches", socketPath: DEFAULT_SOCKET });
     // An empty `TMUX` is an absent one.
     expect(outside(DEFAULT_SOCKET, { env: { TMUX: "" } }).kind).toBe("socket-matches");
+    expect(outside(DEFAULT_SOCKET, { env: { TMUX: "", TMUX_PANE: "%9999" } }).kind).toBe("socket-matches");
   });
 
   it("refuses a listing read from another socket, naming both", () => {
@@ -375,6 +379,16 @@ describe("panesBySession", () => {
     const expectedGone = outside("/elsewhere/sock", { realpath: resolving({ "/elsewhere/sock": "/elsewhere/sock" }) });
     expect(expectedGone.kind).toBe("cannot-check");
     expect(expectedGone.kind === "cannot-check" ? expectedGone.why : "").toContain(DEFAULT_SOCKET);
+  });
+
+  it("cannot check, rather than refusing, when different pathnames cannot be compared", () => {
+    const other = "/tmp/tmux-1000/other";
+    const out = outside(other, {
+      realpath: resolving({ [DEFAULT_SOCKET]: DEFAULT_SOCKET, [other]: other }),
+      sameFile: () => { throw new Error("socket disappeared before stat"); },
+    });
+    expect(out.kind).toBe("cannot-check");
+    expect(out.kind === "cannot-check" ? out.why : "").toContain("socket disappeared before stat");
   });
 
   it("treats two names for one socket as the same socket", () => {
@@ -420,6 +434,14 @@ describe("panesBySession", () => {
 
   it("keeps a socket path with a space in it whole", () => {
     expect(tmuxSocketPath("$1 %10 100 132280 /tmp/my tmp/tmux-1000/default\n")).toBe("/tmp/my tmp/tmux-1000/default");
+  });
+
+  it("does not use a path prefix when a newline fractures the socket field", () => {
+    expect(tmuxSocketPath("$1 %10 100 132280 /tmp/prefix\nrest/tmux-1000/default\n")).toBeNull();
+  });
+
+  it("cannot establish a socket from rows carrying different paths", () => {
+    expect(tmuxSocketPath("$1 %10 100 132280 /tmp/a\n$2 %20 200 132280 /tmp/b\n")).toBeNull();
   });
 
   it("is null about the socket rather than taking another field for it", () => {
@@ -723,8 +745,8 @@ describe("owned tmux probes", () => {
 
   /**
    * `collect()` WIRED TO THE CHECK, BY CALLING IT. This replaced a test that
-   * grepped collect.ts for the call, which was the strongest thing available
-   * while `collect()` read `process.env` itself — postmortem 260910b, item 2.
+   * grepped collect.ts for the call. The injected anchor lets this test drive
+   * the decision directly — postmortem 260910b, item 2.
    */
   const emptyBox = (listPanes: string): ProbeOwner => {
     inventoryRunMock.mockResolvedValue({ stdout: `${ROW_COUNT} 0\n${SESSION_SENTINEL}`, stderr: "" });
@@ -742,13 +764,14 @@ describe("owned tmux probes", () => {
       env: {},
       uid: 1000,
       realpath: sameFile,
+      sameFile: (a, b) => a === b,
     });
     expect(snap.selfCheck).toEqual({ kind: "socket-matches", socketPath: "/tmp/tmux-1000/default" });
   });
 
   it("refuses a listing from another socket when it is not under tmux", async () => {
     await expect(
-      collect(emptyBox("$1 %1 100 132280 /tmp/tmux-1000/s3a-sock\n"), { env: {}, uid: 1000, realpath: sameFile }),
+      collect(emptyBox("$1 %1 100 132280 /tmp/tmux-1000/s3a-sock\n"), { env: {}, uid: 1000, realpath: sameFile, sameFile: (a, b) => a === b }),
     ).rejects.toThrow(/not a listing of this box.*s3a-sock/);
   });
 
@@ -759,6 +782,7 @@ describe("owned tmux probes", () => {
         env: { TMUX: "/tmp/tmux-1000/default,132280,1", TMUX_PANE: "%9999" },
         uid: 1000,
         realpath: sameFile,
+        sameFile: (a, b) => a === b,
       }),
     ).rejects.toThrow("not a listing of this box");
   });
@@ -799,6 +823,54 @@ describe("owned tmux probes", () => {
     it("and refuses on them", async () => {
       const { other } = standInSockets();
       await expect(collect(emptyBox(`$1 %1 100 132280 ${other}\n`))).rejects.toThrow("not a listing of this box");
+    });
+
+    it("recognises two hardlinked names for the default socket", async () => {
+      const { real } = standInSockets();
+      const alias = path.join(path.dirname(real), "alias");
+      linkSync(real, alias);
+      const snap = await collect(emptyBox(`$1 %1 100 132280 ${alias}\n`));
+      expect(snap.selfCheck).toEqual({ kind: "socket-matches", socketPath: alias });
+    });
+
+    it("does not refuse its default socket when a pathname contains a newline", async () => {
+      const { real } = standInSockets();
+      const uid = process.getuid?.();
+      const prefix = path.join(dir, "prefix");
+      mkdirSync(prefix);
+      const parent = `${prefix}\nrest`;
+      mkdirSync(path.join(parent, `tmux-${uid}`), { recursive: true });
+      const socket = path.join(parent, `tmux-${uid}`, "default");
+      writeFileSync(socket, "");
+      // Also cover a normal-looking environment path whose canonical target
+      // contains a newline, as tmux canonicalizes its socket's parent.
+      symlinkSync(parent, path.join(dir, "newline-link"));
+      for (const tmpdir of [parent, path.join(dir, "newline-link")]) {
+        vi.stubEnv("TMUX_TMPDIR", tmpdir);
+        const snap = await collect(emptyBox(`$1 %1 100 132280 ${socket}\n`));
+        expect(snap.selfCheck.kind).toBe("cannot-check");
+      }
+      // A normal listing remains checkable after the ambiguous one.
+      vi.stubEnv("TMUX_TMPDIR", path.join(dir, "link"));
+      expect((await collect(emptyBox(`$1 %1 100 132280 ${real}\n`))).selfCheck.kind).toBe("socket-matches");
+    });
+
+    it("cannot check when a newline continuation itself looks like a pane record", async () => {
+      dir = mkdtempSync(path.join(os.tmpdir(), "sc-"));
+      const uid = process.getuid?.();
+      const prefix = path.join(dir, "p", `tmux-${uid}`, "default");
+      mkdirSync(prefix, { recursive: true });
+      const parent = `${prefix}\n$2 %20 200 132280 ${path.join(dir, "p")}`;
+      const socket = path.join(parent, `tmux-${uid}`, "default");
+      mkdirSync(path.dirname(socket), { recursive: true });
+      writeFileSync(socket, "");
+      symlinkSync(parent, path.join(dir, "link"));
+      vi.stubEnv("TMUX", "");
+      for (const tmpdir of [parent, path.join(dir, "link")]) {
+        vi.stubEnv("TMUX_TMPDIR", tmpdir);
+        const snap = await collect(emptyBox(`$1 %1 100 132280 ${socket}\n`));
+        expect(snap.selfCheck.kind).toBe("cannot-check");
+      }
     });
   });
 });
