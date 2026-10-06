@@ -768,11 +768,11 @@ The rule the split turns on:
 A label's job is to tell its paragraph apart from *its neighbours*
 ([entry length](#granularity)), so every pair a reader compares has to have been written in the same
 call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
-does not split one that a call can hold. Batching on a token window instead would break exactly
-that and nothing else, which is why it would be hard to notice.
+keeps them whole while the packed batches can be asked. Batching on a token window instead would
+break exactly that and nothing else, which is why it would be hard to notice.
 
-**The one exception is a section no single answer could label** (over 2,032 blocks under one
-title: `labelCallBudget` throws `TooLongForOnePass`). Since 2026-10-06 `planBatches` asks about it
+**The one exception is a section in a batch no single answer could label** (over 2,032 blocks
+in the packed batch: `labelCallBudget` throws `TooLongForOnePass`). `planBatches` asks about it
 in consecutive near-equal windows of at most 60 blocks, a window not ending on a heading where it
 can help it (`cutIntoWindows`, the cut the [bounded headings tree](#when-one-answer-will-not-fit)
 uses for its sections). Each window is a sibling set of its own with the section's node, crumb
@@ -781,16 +781,17 @@ the floor and the tail merge below join sets: pack as always, and if any batch c
 asked, cut every section over 60 in that batch and pack again. So no plan holds a batch too long
 to ask, and a tree that planned fine plans exactly as it did, which its checkpoint keys depend
 on. What it gives up: that section's labels are written without the far windows in view. A
-section between 61 and 2,032 blocks is still one call (`oversizedSets` counts those, and nothing
-more); cutting them too would be the better call and would move the batches of trees that label
-fine today.
+section between 61 and 2,032 blocks stays whole unless the floor or tail merge puts it in an
+unaskable batch (`oversizedSets` counts those left whole, and nothing more); cutting the rest too
+would move the batches of trees that label fine today.
 
 **There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
 `MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
 `MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
 than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
-backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
-case here — which is the same give the cap already has for an oversized sibling set. Measured before
+backwards into the batch before it. The floor and tail merge can each add up to twelve beyond the
+60, even with no oversized set: sets of `[12, 60, 12]` pack into 84. The widest real case measured
+here was 71. Measured before
 it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
 three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
 merge into. The residue is `acceptGap`'s to refuse.

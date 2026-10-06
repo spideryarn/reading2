@@ -532,9 +532,9 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
  * Both halves of that are for a consumer that cannot cope with less. The client
  * takes one section depth for the whole article (src/web/position.ts §
  * `sectionDepth`), and the labels step writes a section's labels in one call
- * (src/labels.ts § `planBatches`, which cuts one only when no call could hold
- * it), so a flat or mixed-depth tree breaks the first and one long run under a
- * heading makes the second a call too big to trust.
+ * (src/labels.ts § `planBatches`, which cuts one only when its packed batch
+ * cannot be asked), so a flat or mixed-depth tree breaks the first and one long
+ * run under a heading makes the second a call too big to trust.
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md.
  *
  * Parts are `buildHeadingTree`'s, by the same two rules. Sections are a part's

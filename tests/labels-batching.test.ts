@@ -4,8 +4,9 @@
  *
  * The design's whole claim is that labels can be written in separate calls
  * without becoming incoherent, and that claim rests on one rule: every leaf
- * under one lowest-level parent goes in the same call, because a label's job is
- * to tell its paragraph apart from its *neighbours*. A batching bug that split a
+ * under one lowest-level parent goes in the same call while its packed batch
+ * is askable, because a label's job is to tell its paragraph apart from its
+ * *neighbours*. A batching bug that split a
  * sibling set would not fail anything — it would produce a complete, valid tree
  * whose labels were subtly worse in a way only a reader would notice. That is
  * docs/reusable/silent-success.md, and it is what most of this file is about.
@@ -177,7 +178,7 @@ describe("planBatches", () => {
     expect(seen.sort()).toEqual(blocks.map((b) => b.id).sort());
   });
 
-  it("never splits a sibling set across two calls — the rule the design rests on", () => {
+  it("keeps sibling sets whole when the packed batches are askable", () => {
     // Sections of 7 against a 40-block target: the packing must round to whole
     // sections rather than cutting one at 40.
     const { tree, blocks } = fixture(20, 7);
@@ -189,9 +190,9 @@ describe("planBatches", () => {
       }
     }
     // And every section appears in exactly one batch.
-    /* **Narrowed on 2026-10-06, by name: this holds for a section one call can
-       hold, which is every section here.** A section whose call would be
-       refused is planned as several windows that share its node id, so "one
+    /* **Narrowed on 2026-10-06, by name: this holds when the packed batches
+       can be asked, which is every batch here.** A section in a batch that
+       would be refused is planned as windows that share its node id, so "one
        set per parent" is no longer true of every plan. What stays true of all
        of them is asked below, in "a section too long for one labels call". */
     const sets = batches.flatMap((b) => b.sets.map((s) => s.nodeId));
@@ -433,9 +434,10 @@ const MOST = ((): number => {
 })();
 
 /**
- * **`planBatches` as it stood before 2026-10-06**, comments removed and nothing
- * else changed: the control for "a tree that planned fine plans exactly as it
- * did". A checkpoint is keyed on a batch's sets and blocks, so a plan that
+ * The default-cap packing of `planBatches` before 2026-10-06: the control for
+ * "a tree that planned fine plans exactly as it did". This copy omits the
+ * configurable cap and the final coverage assertion; the fixtures are valid
+ * trees. A checkpoint is keyed on a batch's sets and blocks, so a plan that
  * moved for an ordinary tree would buy every stored batch again.
  */
 function planBatchesBefore(tree: Tree, blocks: Block[]): Batch[] {

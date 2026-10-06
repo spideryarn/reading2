@@ -54,11 +54,11 @@
  * A label's documented job is to tell its paragraph apart from its neighbours
  * (docs/project/structure-step.md), so every pair a reader compares must have
  * been written in the same call. `planBatches` therefore packs whole sibling
- * sets and does not split one. Batching on a token window instead would break
- * exactly that and nothing else, which is why it would be hard to notice.
+ * sets while the packed batches can be asked. Batching on a token window instead
+ * would break exactly that and nothing else, which is why it would be hard to notice.
  *
  * **One exception, since 2026-10-06, and it is not a preference.** A section
- * whose labels no single answer could hold is asked about in windows, because
+ * in a batch no single answer could hold is asked about in windows, because
  * the other choice was no labels for it at all, and until then no model tree
  * for the article either. See `planBatches`.
  */
@@ -354,8 +354,9 @@ export const LABEL_HEADROOM = 16_000;
  * `MIN_BATCH` cannot be shift-checked, so it is not a batch we are able to
  * stand behind — see `MIN_BATCH`, and `acceptGap`. And the small call is not
  * cheap: on the corpus here it is where three of fourteen articles put their
- * tail. So the merge happens and it does breach this cap, by at most
- * `MIN_BATCH - 1` blocks — 71 on the widest real case measured. The cap is a
+ * tail. So the merge happens and adds at most `MIN_BATCH - 1` blocks to the
+ * preceding batch, which the floor may already have taken past the cap.
+ * The widest real case measured was 71 blocks. The cap is a
  * preference, and the things it gives way to are the sibling rule (a section
  * larger than this still gets one call to itself) and now this.
  *
@@ -441,7 +442,7 @@ const CONTEXT_BLOCKS = 1;
 
 /**
  * A lowest-level section and the blocks it holds: the unit that is not split
- * while one call can hold it.
+ * while its packed batch can be asked.
  *
  * **Or one window of such a section**, when no call could hold the plan it
  * would be part of (`planBatches`). Windows of one section share its `nodeId`,
@@ -736,9 +737,9 @@ function windowsOf(set: SiblingSet, max: number): SiblingSet[] {
  * alike. Until 2026-10-06 the structure step threw the model's whole tree away
  * instead (`labels-could-not-ask`), which cost the reader every gist.
  *
- * Not done: cutting a section between `max` and that limit. It would be the
- * better call (see `oversizedSets`), and it would move the batches of trees
- * that label fine today.
+ * Not done: cutting a section between `max` and that limit in an askable batch.
+ * It would be the better call (see `oversizedSets`), and it would move the batches
+ * of trees that label fine today.
  */
 export function planBatches(
   tree: Tree,
@@ -937,11 +938,11 @@ export function unaskableBatches(tree: Tree, blocks: Block[]): Batch[] {
 /**
  * A sibling set larger than `MAX_BATCH` is the unbounded call coming back.
  *
- * `planBatches` does not cut one that a call can still hold — the sibling rule
- * outranks the cap — so a tree with one enormous section produces one enormous
+ * `planBatches` keeps one whole while its packed batch can be asked — the sibling
+ * rule outranks the cap — so a tree with one enormous section produces one enormous
  * call. Nothing else notices: the budget for a 400-label batch is well under
  * the limit, so it runs, and 400 labels in one answer is the shape that dropped
- * one at 42. Only past the limit itself (2,032 blocks) is a section cut, and
+ * one at 42. Only when the packed batch passes 2,032 blocks is a section cut, and
  * its windows are at most `max`, so they are not counted here.
  *
  * We do not refuse it, because refusing would fail an article that will probably
