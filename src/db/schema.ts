@@ -3873,13 +3873,16 @@ export const chatThreads = spideryarn.table(
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
-     * - `origin_mode`: which mode. `debate` is the only one written today.
+     * - `origin_mode`: which mode. `debate`, `glossary` and `citations` are
+     *   written; `summary` is reserved.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work). Null for a claim, which has none.
+     *   entry, a cited work). Null for a claim, which has none. Never
+     *   dereferenced, and no foreign key: the entry may be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
      *   like `anchor_block_id`, so it survives a re-extraction.
-     * - `origin_quote`: the item's own words when the chat started. Article
-     *   prose or a model's: never logged.
+     * - `origin_quote`: the item's own words when the chat started: a claim's
+     *   words, or a glossary entry's or a cited work's name. Article prose or
+     *   a model's: never logged.
      * - `origin_lens`: the angle the reader typed to look at the debate from
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
      *   debate origin has this **or** a block and a quote, never both.
@@ -3946,8 +3949,15 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_debate",
       sql`${t.originMode} is distinct from 'debate' or (${t.originItemId} is null and ((${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null) or (${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)))`,
     ),
-    /* Only Debate takes a lens. The three modes the list above reserves have
-       no shape of their own yet, and must not get one by accident. */
+    /* A glossary entry or a cited work is an id and a snapshot of its name,
+       with no block and no lens (plan 261006d, D2). Spelled null-safe: a row
+       with no mode, or another mode, passes without the last arm being read. */
+    check(
+      "chat_threads_origin_item",
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+    ),
+    /* Only Debate takes a lens. `summary`, which the list above reserves, has
+       no shape of its own yet, and must not get one by accident. */
     check(
       "chat_threads_origin_lens_debate_only",
       sql`${t.originLens} is null or ${t.originMode} = 'debate'`,

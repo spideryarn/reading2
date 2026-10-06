@@ -29,6 +29,7 @@ import {
   type ReaderFacingFailure,
   articleHadNoText,
   documentHadTooLittleText,
+  documentIsABotCheck,
   documentHasNoArticle,
   fetchFailed,
   pdfChunkTooBig,
@@ -194,6 +195,9 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
      invariant in this file, which is the exact shape the header above records
      `placingFailed` shipping in. */
   documentHasNoArticle: [documentHasNoArticle("url"), documentHasNoArticle("upload")],
+  /* Stage 2's third refusal, 2026-10-06, and both origins for the same reason:
+     two sentences, two codes. */
+  documentIsABotCheck: [documentIsABotCheck("url"), documentIsABotCheck("upload")],
   /* Stage 3's, and both origins for the same reason. It was a constant that the
      first sweep of this split missed — reachable from an uploaded scan, where a
      PDF's only text is a publisher record stage 2 withholds. ⟨GPT Sol, F24⟩ */

@@ -85,7 +85,7 @@ import { isMain } from "../../src/is-main.js";
 import { ALL_FIXTURES } from "./corpus.mjs";
 import { probeHtml } from "./probe.mjs";
 import { splitIntoBlocks } from "../../src/blocks.js";
-import { readArticle } from "../../src/extract.js";
+import { ChallengePage, readArticle } from "../../src/extract.js";
 import { loadMathsRenderer } from "../../src/maths-server.js";
 
 /* temml, loaded before anything reads a page: stage 2's maths conversion and
@@ -430,9 +430,13 @@ async function main(): Promise<void> {
        C1a; src/extract.ts § `capabilityFloor`. */
     const refusal = readArticle(html, c.url).refusal;
     if (refusal) {
+      const why =
+        refusal instanceof ChallengePage
+          ? `a bot check, ${refusal.provider}`
+          : `${refusal.chars} characters of article text`;
       console.log(
-        `\n${name}  —  NOT EXERCISED: stage 2 refuses this page (${refusal.chars} characters of ` +
-          "article text), so there is nothing here that would ever be published",
+        `\n${name}  —  NOT EXERCISED: stage 2 refuses this page (${why}), so there is nothing ` +
+          "here that would ever be published",
       );
       continue;
     }

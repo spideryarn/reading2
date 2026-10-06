@@ -358,9 +358,9 @@ One thing it does **not** yet buy, and should: `fetchDocument` reports the URL i
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.
 
-## The two ways this stage refuses
+## The three ways this stage refuses
 
-Neither of them publishes anything, and both end the job `error` — which **releases** the reader's
+None of them publishes anything, and all three end the job `error` — which **releases** the reader's
 slot rather than spending it, since only `done` charges
 ([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
 
@@ -373,6 +373,15 @@ slot rather than spending it, since only `done` charges
   `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
   paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
   `documentHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+- **`ChallengePage`** — the document is a site's **bot check**, not the page behind it, since
+  2026-10-06. The first two ask whether there is an article and how much of one; this asks what the
+  page *is*, and it is answered only by markup the check's own software wrote for its own script:
+  a registry in [`src/challenge-page.ts`](../../src/challenge-page.ts), with one entry, Anubis.
+  hal.science's check explains itself in 1,034 characters of prose, twice the floor, and was
+  published as an article titled *"Making sure you're not a bot!"*. **It wins over the other two**:
+  a bot check that is also short, or that Readability declines, is reported as a bot check, because
+  that is the sentence with a move in it. The reader gets `documentIsABotCheck`, `[jb-bot-check]`:
+  open the page in your own browser, save it, upload the file.
 
 **Each of those refusals is two sentences, chosen by where the document came from**, since
 2026-09-08. Both were written for a fetched page, and both told a reader who had *uploaded* a file
@@ -384,6 +393,7 @@ upload gets its own wording and its own code, because two different sentences ma
 |---|---|---|
 | `ReadabilityRefused` | `[jb-no-article]` | `[jb-file-no-article]` |
 | `TooLittleTextToRead` | `[jb-too-little-text]` | `[jb-file-too-little-text]` |
+| `ChallengePage` | `[jb-bot-check]` | `[jb-file-bot-check]` |
 | `NoBlocksProduced` — **stage 3, not this stage** | `[jb-no-text]` | `[jb-file-no-text]` |
 
 The origin comes from `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)), the same evidence
@@ -391,18 +401,28 @@ the masthead uses, and the split arrived with the stage-1 rewrite that sends far
 in the first place —
 [260908a](../plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md).
 
-**The third row is stage 3's**, listed here because it is the same defect and was missed by the sweep
+**The last row is stage 3's**, listed here because it is the same defect and was missed by the sweep
 that fixed the first two: an article *was* extracted and had no prose in it. It is reachable from an
 uploaded **scan** — a PDF whose only text is a publisher record, which `renderHtml`
 ([`src/pdf-read.ts`](../../src/pdf-read.ts)) withholds on purpose — so its uploaded sentence names a
 picture of a page rather than a login wall. Found by GPT Sol reviewing the fix for the other two.
 
-**It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
-fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by
-its own markup is a separate registry that has not been built yet
-([260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md)).
+**The floor decides nothing about what the page is** — no markup is read and no wall is diagnosed,
+so it fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot
+check by its own markup is the registry's job, and the two are kept apart on purpose: for a month
+the floor stood in for the registry because every wall we had seen was short
+([the postmortem](../postmortems/261006c-a-size-floor-stood-in-for-a-recogniser-of-kind.md)).
 
-**It is prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
+**The registry reads markup, never wording, and gets an entry only with a captured page.** Visible
+text is not evidence: `acx.html`, a real essay, says *"just a moment"* twice. Cloudflare's check,
+reCAPTCHA's and the *"enable JavaScript"* shells are all refused by the floor today, so none has an
+entry; one is added when a page of that kind is seen to clear the floor, with its fixture
+([261006c](../plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md), and
+[260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md) for the design).
+It does not get past the check either: the address still cannot be imported, and the reader is told
+what works instead.
+
+**Both rules are prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
 stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
 finished from the artefacts, and an unforced job skips a step that has one. So an article published
 from a short page before 2026-09-06 stays published and stays readable, its slot stays spent, and a
@@ -416,7 +436,8 @@ change and is not this one. GPT Sol, reviewing C1a.
 **The floor lives in a helper both read paths call** (`capabilityFloor` in
 [`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
 separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
-would have been correct in production and permanently invisible to the corpus.
+would have been correct in production and permanently invisible to the corpus. The bot check is
+decided the same way, one helper up (`refusalFor`), on the document before anything rewrites it.
 
 ## The one thing this pipeline deletes
 

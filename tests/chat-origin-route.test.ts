@@ -198,7 +198,7 @@ describe("an origin on the way in", () => {
   it.each([
     ["something that is not an object", "debate"],
     ["no mode", { blockId: "spya-aaaaaa", quote: "some words" }],
-    ["a mode nobody has built", { mode: "glossary", itemId: "spya-aaaaaa" }],
+    ["a mode nobody has built", { mode: "summary", blockId: "spya-aaaaaa", quote: "some words" }],
     ["a mode that does not exist", { mode: "elsewhere", blockId: "spya-aaaaaa", quote: "some words" }],
     ["a claim with no block", { mode: "debate", quote: "some words" }],
     ["a malformed block id", { mode: "debate", blockId: "not-a-block", quote: "some words" }],
@@ -329,6 +329,112 @@ describe("a lens origin on the way in", () => {
     const out = await ask({ threadId: THREAD, question: "what?", kind: "explore", origin: lens() });
     expect(out.status).toBe(400);
     expect(await threads()).toHaveLength(0);
+  });
+});
+
+/**
+ * **The item shapes: a glossary entry and a cited work**
+ * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3).
+ * An id and a snapshot of the name. The id is never dereferenced, so a made-up
+ * one is accepted; only the shape is checked.
+ */
+describe.each(["glossary", "citations"] as const)("a %s origin on the way in", (mode) => {
+  const ITEM = "spya-ttm222";
+  const item = (over: Record<string, unknown> = {}) => ({ mode, itemId: ITEM, quote: "qualia", ...over });
+
+  it("stores the id and the name on the thread it creates, and reads them back equal", async () => {
+    const out = await ask({ threadId: THREAD, question: "what more?", origin: item() });
+    expect(out.frames[0]?.event, "no block to check, so nothing refuses it").toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(item());
+    const thread = await stored();
+    expect(thread?.origin).toEqual({ mode, itemId: ITEM, quote: "qualia" });
+    expect(thread?.kind).toBe("chat");
+    expect(thread && "anchor" in thread).toBe(false);
+    const summaries = (await call("GET", `/api/chat/${SLUG}?summary=1`)).body?.threads as ThreadSummary[];
+    expect(summaries.find((t) => t.id === THREAD)?.origin).toEqual(item());
+  });
+
+  it("writes the item's own columns and no block or lens", async () => {
+    await ask({ threadId: THREAD, question: "what more?", origin: item() });
+    const [row] = await getDb()
+      .select({
+        mode: chatThreads.originMode,
+        item: chatThreads.originItemId,
+        block: chatThreads.originBlockId,
+        quote: chatThreads.originQuote,
+        lens: chatThreads.originLens,
+      })
+      .from(chatThreads)
+      .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
+    expect(row).toEqual({ mode, item: ITEM, block: null, quote: "qualia", lens: null });
+  });
+
+  it("accepts a name at the cap, and refuses one over it with a 413", async () => {
+    const atCap = await ask({ threadId: THREAD, question: "what?", origin: item({ quote: "x".repeat(300) }) });
+    expect(atCap.frames[0]?.event).toBe("begin");
+    const over = await ask({ threadId: OTHER_THREAD, question: "what?", origin: item({ quote: "x".repeat(301) }) });
+    expect(over.status).toBe(413);
+    expect(await stored(OTHER_THREAD)).toBeUndefined();
+  });
+
+  it.each([
+    ["no item id", { mode, quote: "qualia" }],
+    ["a malformed item id", { mode, itemId: "not-an-id", quote: "qualia" }],
+    ["no name", { mode, itemId: ITEM }],
+    ["an empty name", { mode, itemId: ITEM, quote: "  " }],
+    ["a name that is not a string", { mode, itemId: ITEM, quote: 7 }],
+    ["a block as well", { mode, itemId: ITEM, quote: "qualia", blockId: "spya-aaaaaa" }],
+    ["a lens as well", { mode, itemId: ITEM, quote: "qualia", lens: "an angle" }],
+  ])("refuses %s", async (_name, origin) => {
+    const out = await ask({ threadId: THREAD, question: "what?", origin });
+    expect(out.status).toBe(400);
+    expect(JSON.stringify(out.body), "the name is not repeated back").not.toContain("qualia");
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("is the same origin whatever the name says, and the first name is kept", async () => {
+    await ask({ threadId: THREAD, question: "what more?", origin: item() });
+    const out = await ask({ threadId: THREAD, question: "and now?", origin: item({ quote: "Qualia (reworded)" }) });
+    expect(out.frames[0]?.event, "matched by mode and id only").toBe("begin");
+    expect((await stored())?.origin).toEqual(item());
+  });
+
+  it("refuses another item, the other item mode, and a claim, with a 409", async () => {
+    await ask({ threadId: THREAD, question: "what more?", origin: item() });
+    const otherMode = mode === "glossary" ? "citations" : "glossary";
+    for (const other of [item({ itemId: "spya-ttm333" }), item({ mode: otherMode }), claim(), lens()]) {
+      expect((await ask({ threadId: THREAD, question: "and now?", origin: other })).status).toBe(409);
+    }
+    expect((await stored())?.origin).toEqual(item());
+    expect((await stored())?.messages).toHaveLength(2);
+  });
+
+  it("refuses it on a conversation that is not a chat", async () => {
+    const out = await ask({ threadId: THREAD, question: "what?", kind: "explore", origin: item() });
+    expect(out.status).toBe(400);
+  });
+
+  it("exports it, and the restore puts it back in its own columns", async () => {
+    await ask({ threadId: THREAD, question: "what more?", origin: item() });
+    const out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-item-"));
+    const exported = path.join(process.cwd(), "data", SLUG);
+    const stub = globalThis.fetch;
+    globalThis.fetch = realFetch;
+    try {
+      await asTestOwner(() =>
+        exportArticle(SLUG, { dataRoot: path.join(process.cwd(), "data"), outputRoot: path.join(out, "output") }),
+      );
+      const file = JSON.parse(await readFile(path.join(exported, "chat.json"), "utf8")) as {
+        threads: ChatThread[];
+      };
+      expect(file.threads.find((t) => t.id === THREAD)?.origin).toEqual(item());
+      await asTestOwner(() => seedChatFromFiles(SLUG));
+      expect((await stored())?.origin).toEqual(item());
+    } finally {
+      globalThis.fetch = stub;
+      await rm(exported, { recursive: true, force: true });
+      await rm(out, { recursive: true, force: true });
+    }
   });
 });
 
@@ -530,6 +636,35 @@ describe("the origin's columns", () => {
     expect(await refusedBy({ kind: "explore", originMode: "debate", originLens: "an angle" })).toMatch(
       /chat_threads_origin_chat_only/,
     );
+  });
+
+  /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
+     with no block and no lens. `summary` is still reserved and has no shape. */
+  describe.each(["glossary", "citations"])("a %s origin", (mode) => {
+    const good = { originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" };
+
+    it("accepts an id and a name", async () => {
+      expect(await refusedBy(good)).toBeNull();
+    });
+
+    it("refuses one without its id or without its name", async () => {
+      expect(await refusedBy({ ...good, originItemId: null })).toMatch(/chat_threads_origin_item/);
+      expect(await refusedBy({ ...good, originQuote: null })).toMatch(/chat_threads_origin_item/);
+      expect(await refusedBy({ originMode: mode })).toMatch(/chat_threads_origin_item/);
+    });
+
+    it("refuses one with a block", async () => {
+      expect(await refusedBy({ ...good, originBlockId: BLOCK })).toMatch(/chat_threads_origin_item/);
+    });
+
+    it("refuses one with a lens", async () => {
+      /* Either constraint may be the one named: both forbid it. */
+      expect(await refusedBy({ ...good, originLens: "an angle" })).toMatch(/chat_threads_origin_(item|lens_debate_only)/);
+    });
+  });
+
+  it("still accepts the reserved summary mode with no shape of its own", async () => {
+    expect(await refusedBy({ originMode: "summary" })).toBeNull();
   });
 });
 

@@ -227,8 +227,8 @@ describe("the owner's claims", () => {
     const mark = marks()[0] as HTMLButtonElement;
     expect(groups()[0]?.contains(mark), "on the first claim, not the second").toBe(true);
     expect(mark.getAttribute("aria-label")).toBe(DEBATE_OPEN_CLAIM_CHAT);
-    expect(mark.querySelector(".dbt-claim-chat-count")?.textContent).toBe("2");
-    const line = mark.querySelector(".dbt-claim-chat-line");
+    expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("2");
+    const line = mark.querySelector(".origin-chat-line");
     expect(line?.textContent).toBe("The strongest reply is that it depends on the flour.");
     expect(line?.classList.contains("voice-ai"), "a model's words, in the model's face").toBe(true);
     /* The button to start another stays. */
@@ -238,8 +238,8 @@ describe("the owner's claims", () => {
   it("say so when the chat has no finished answer yet", () => {
     paintOwner([summary({ id: "spya-aaa222", origin: { mode: "debate", blockId: BLOCK, quote: FIRST } })]);
     const mark = marks()[0] as HTMLButtonElement;
-    expect(mark.querySelector(".dbt-claim-chat-count")?.textContent).toBe("1");
-    expect(mark.querySelector(".dbt-claim-chat-line")).toBeNull();
+    expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
+    expect(mark.querySelector(".origin-chat-line")).toBeNull();
   });
 
   it("open that conversation from the mark, without folding the claim", () => {

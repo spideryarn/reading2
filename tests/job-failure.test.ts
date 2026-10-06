@@ -706,6 +706,77 @@ describe("the failures a retry cannot change", () => {
     expect(reader.message).toMatch(/usually/);
     expect(reader.message).not.toMatch(/Readability/);
   });
+
+  /**
+   * **The third refusal: the document is a site's bot check** — the rung of
+   * tests/extract-challenge-page.test.ts's ladder that says what the READER is
+   * told, and it is here rather than there because the real step reads Storage.
+   * docs/plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md.
+   *
+   * `hal_anubis.html` is what hal.science answers a plain GET with. It has
+   * 1,034 characters of article text, so neither test above can reach it: until
+   * 2026-10-06 it was published, titled *"Making sure you're not a bot!"*.
+   */
+  const botCheck = new TextEncoder().encode(
+    readFileSync(
+      path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures", "hal_anubis.html"),
+      "utf-8",
+    ),
+  );
+
+  it("tells a reader whose address answered with a bot check what works instead", async () => {
+    const store = memoryArtefacts();
+    const put = await storeRawSource(botCheck, "html");
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://hal.science/hal-05779468",
+      url: "https://hal.science/hal-05779468",
+      contentType: "text/html",
+      encoding: "utf-8",
+      bytes: botCheck.byteLength,
+      sha256: put.sha256,
+      storedSha256: put.sha256,
+      storedBytes: botCheck.byteLength,
+      fetchedAt: new Date().toISOString(),
+    });
+    const err = await threw(() =>
+      STEPS.extract.run(ctx({ url: "https://hal.science/hal-05779468" }), store, nullCheckpointStore()),
+    );
+    /* `blocked` for its neighbours' reason: Retry never re-runs the fetch, so
+       it would read the same stored copy. */
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+    expect(reader.message).toContain("[jb-bot-check]");
+    expect(reader.message).toMatch(/not a bot/i);
+    /* **The move that works**, which is the reason this is not
+       `[jb-no-article]`: we know what the page is, so we can say what to do. */
+    expect(reader.message).toMatch(/your own browser/i);
+    expect(reader.message).toMatch(/upload/i);
+    /* Plain words: not the product, not the mechanism, not the library. */
+    expect(reader.message).not.toMatch(/Anubis|proof.of.work|Readability|challenge/i);
+    /* And it does not hedge. The other two refusals say "usually" because they
+       do not know what the page is; this one does. */
+    expect(reader.message).not.toMatch(/usually/);
+  });
+
+  it("tells a reader who uploaded a saved bot check about the file", async () => {
+    const store = memoryArtefacts();
+    store.plant("a-slug", "fetch", "raw", uploaded(botCheck, await storeRawSource(botCheck, "html")));
+
+    const err = await threw(() => STEPS.extract.run(ctx(), store, nullCheckpointStore()));
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+
+    expect(reader.message).toContain("[jb-file-bot-check]");
+    expect(reader.message).toMatch(/file you uploaded/i);
+    expect(reader.message).toMatch(/not a bot/i);
+    expect(reader.message).toMatch(/same file/i);
+    expect(reader.message).toMatch(/browser/i);
+    /* No address, and nothing that implies one — the upload split's whole point. */
+    expect(reader.message).not.toMatch(/address|fetched|came from|answered/i);
+    expect(reader.message).not.toMatch(/Anubis|proof.of.work|Readability|challenge/i);
+  });
 });
 
 /**

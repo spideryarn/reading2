@@ -160,7 +160,7 @@ Each stage: `npm test`, `npm run typecheck`, a GPT Sol code review, a commit.
 
 ## Progress
 
-- [x] GPT Sol review of this plan ([the review](261006d-plan-review-sol.md), *change first*).
+- [x] GPT Sol review of this plan ([the review](261006d-count-stalls-plan-review-sol.md), *change first*).
   F15 (P1, two per-call deadlines the mapping missed), F16 and F17 (P2, the Messages wire), F18 and
   F19 (P3) all taken, as marked above. **F20 is wrong**: it says `e5a9c07a7` is on `origin/main`;
   `merge-base --is-ancestor e5a9c07a7 origin/main` exits 1 here, so the sentence stands.
@@ -236,7 +236,7 @@ these tables already behaved with five columns; eight makes it matter more.
 
 ## The reviews, and what each ended as
 
-IDs continue 261006b's chain. Reviews: [plan](261006d-plan-review-sol.md),
+IDs continue 261006b's chain. Reviews: [plan](261006d-count-stalls-plan-review-sol.md),
 [stage 1](261006d-stage-1-code-review-sol.md), [stage 2](261006d-stage-2-code-review-sol.md).
 
 | | | what happened |

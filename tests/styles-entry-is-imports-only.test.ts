@@ -175,6 +175,9 @@ const MANIFEST = [
   "structure-mode.css",
   "quotes.css",
   "timeline.css",
+  /* Before the two sheets that place its mark: `.origin-chat` is complete
+     here, and debate.css and citations.css add placement only. */
+  "origin-chat.css",
   "debate.css",
   /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
      setting nothing they set on the same element — citations.css's header. */

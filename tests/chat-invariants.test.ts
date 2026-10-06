@@ -161,7 +161,7 @@ describe("a stale or terminal operation can never change state", () => {
       { type: "turn.delta", opId: TURN_A, text: "more" },
       { type: "turn.tool", opId: TURN_A, index: 0, run: { name: "search", status: "running" } as never },
       { type: "turn.done", opId: TURN_A, done: DONE },
-      { type: "turn.failed", opId: TURN_A, error: "late" },
+      { type: "turn.failed", opId: TURN_A, error: "late", repair: { id: REPAIR } },
       { type: "turn.disconnected", opId: TURN_A, error: "late", recovery: { id: RECOVER, until: 1 } },
       { type: "turn.refused", opId: TURN_A, error: "late", repair: { id: REPAIR } },
       { type: "repair.succeeded", opId: REPAIR, thread: thread(THREAD, "a stale copy") },
@@ -624,7 +624,7 @@ describe("success and failure are admitted by the same rule", () => {
     ["repair", { type: "repair.succeeded", opId: REPAIR, thread: conversation() }, { type: "repair.failed", opId: REPAIR, error: "no" }],
     ["recovery", { type: "recovery.found", opId: RECOVER, message: message({ id: "a1", status: "done" }) }, { type: "recovery.givenUp", opId: RECOVER, error: "no" }],
     ["intent", { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
-    ["turn", { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no" }],
+    ["turn", { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no", repair: { id: REPAIR } }],
   ];
 
   it("treats both endings alike when the operation is gone", () => {
@@ -693,7 +693,7 @@ describe("success and failure are admitted by the same rule", () => {
       ["rename", quiet, { type: "rename.succeeded", opId: RENAME_A }, { type: "rename.failed", opId: RENAME_A, error: "no" }],
       ["intent", quiet, { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
       ["repair", settled, { type: "repair.succeeded", opId: REPAIR, thread: conversation() }, { type: "repair.failed", opId: REPAIR, error: "no" }],
-      ["turn", discarded, { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no" }],
+      ["turn", discarded, { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no", repair: { id: REPAIR } }],
     ] as [string, ChatState, ChatEvent, ChatEvent][]) {
       const a = twice(from, won).state;
       const b = twice(from, lost).state;

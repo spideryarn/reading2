@@ -9,7 +9,7 @@ Committed: the single commit at `HEAD` whose subject starts `261006d stage 1`.
 
 The spec is `docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md`
 (§ The design, and § Progress for what the build learned). Your own plan review is
-`docs/plans/261006d-plan-review-sol.md` (F15–F20). Start with `src/call-failure.ts`,
+`docs/plans/261006d-count-stalls-plan-review-sol.md` (F15–F20). Start with `src/call-failure.ts`,
 `src/ai-call.ts` (`Meter.stopped`, `Meter.failed`, `Meter.finish`, `openRouterStream`'s `finally`),
 `src/messages-stream.ts` (`recordFailure`, the `abort` listener, the retry loop), and the call
 sites: the eight runners, `src/structure-slices.ts`, `src/collect-pdf-figures.ts`. That is where to

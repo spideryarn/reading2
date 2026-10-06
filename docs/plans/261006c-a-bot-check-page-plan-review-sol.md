@@ -1,0 +1,17 @@
+The consumer sweep is incomplete. I found one established blocker; the recogniser’s broader safety claim remains reasoned. No files changed.
+
+- **F1 — P1, established: the new refusal breaks consumers omitted from the plan.** Adding HAL to `ALL_FIXTURES` makes the [block census](/var/tmp/spideryarn-worktrees/qi-ptvjnvdm-bot-check-page/evals/extraction/block-census.mts:124) rethrow `ChallengePage` and abort. The [protection test’s corpus runner](/var/tmp/spideryarn-worktrees/qi-ptvjnvdm-bot-check-page/tests/extract-protect.test.ts:152) likewise catches only `TooLittleTextToRead`, so its shared corpus promise rejects.
+
+  Widening `refusal` also breaks typechecking: [probe.mts](/var/tmp/spideryarn-worktrees/qi-ptvjnvdm-bot-check-page/evals/extraction/probe.mts:174), [tidy.mts](/var/tmp/spideryarn-worktrees/qi-ptvjnvdm-bot-check-page/evals/extraction/tidy.mts:434), and several [floor-test assertions](/var/tmp/spideryarn-worktrees/qi-ptvjnvdm-bot-check-page/tests/extract-capability-floor.test.ts:100) access `.chars` without narrowing. `ChallengePage` has no such property. Extend the plan to these consumers, preserving the distinction between challenge refusals and floor refusals. Also explicitly register both new codes in `CODE_KINDS`; registering the factory in the test inventory is a separate step.
+
+- **F2 — P2, reasoned: “conclusive” exceeds the evidence.** The predicate accepts any JSON object, including `{}` or `{"example":true}`, without establishing that it contains a challenge. DOM parsing excludes escaped examples, but cannot establish that genuine articles never carry an actual inert data script with this ID. I found no captured genuine-article counterexample, so this does **not** justify refusing the plan. State the guarantee narrowly, and consider requiring the captured challenge payload’s identifying fields plus a valid-JSON negative control without those fields.
+
+- **F3 — P2, reasoned: the tests do not exercise “wins over both.”** HAL clears the floor and Readability accepts it, so it cannot detect either precedence error. Add a marked short page and a marked page Readability declines, through both read paths and `runExtract`. Document that `article: null` can now coexist with a non-null refusal.
+
+The shared check **is achievable** with a helper used by `readingArm` and `provenanceArm` that recognises the source before preparing it. Avoid making `sourceDom` an unconditional throwing guard: it also parses extracted fragments and the provenance copy.
+
+The counterfactual **checks out**. My local extraction probe found **1,034 collapsed characters** on both paths, with and without the unique **602-character script**. Extracted content was byte-identical, and `runExtract` succeeded for both. Once the original produces the asserted typed refusal, this pair distinguishes recognition from the floor; it does not establish absence of false positives.
+
+PDF and HTML uploads are supported. Say “HTML file” instead of “web page” to avoid implying support for browser archive formats, and tie retry futility explicitly to the stored copy. The documented IP redaction is acceptable; `--refetch` drift is informational.
+
+VERDICT: change first — cover the omitted refusal consumers.
