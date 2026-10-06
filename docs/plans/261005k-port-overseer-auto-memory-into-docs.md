@@ -1,6 +1,8 @@
 # Port the Overseer's auto-memory into docs in Git, once
 
-Queue item `qi-8836whem`. Status: **in progress** (2026-10-05).
+Queue item `qi-8836whem`. Status: **done bar five proposals waiting on Greg** (2026-10-06) —
+evidence: 75 of 85 memory files deleted, ten kept, each named with what it waits on in
+[the mapping § The second half](../investigations/261005d-overseer-auto-memory-ported-to-docs-the-mapping.md#the-second-half-2026-10-06).
 
 ## What this is for
 
@@ -130,3 +132,11 @@ existing `tests/doc-links.test.ts`. The check on meaning is Sol's sample, not a 
   the quote above marked. One round only: the fixes are narrower than the findings and every
   affected row is now *retain*, which is the safe direction.
 
+- 2026-10-06 — the second half. Greg gave blanket approval for the remaining proposals (his words
+  are in the mapping). AP1–AP10 were applied by the Overseer. This job applied 34 more (BP1, BP2,
+  BP5, BP6, BP8–BP11, CP1–CP3, CP5–CP11, DP1–DP10, RP1–RP6), placed the six lessons no proposal
+  carried and the two rows the result review left open, and held back five for Greg: BP12 and CP4,
+  which each loosen an `AGENTS.md` rule, and BP3, BP4, BP7, which duplicate F1 and K3 of the
+  2026-10-01 sweep. Rule 8 above ("the memory files are not deleted") was the first half's; the
+  Overseer handed the deletion to this job, and 43 files went after the hashes were checked,
+  leaving ten.

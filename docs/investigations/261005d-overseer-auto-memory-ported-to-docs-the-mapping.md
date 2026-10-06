@@ -9,7 +9,13 @@ plan: [261005k](../plans/261005k-port-overseer-auto-memory-into-docs.md) · queu
 if we were to start a new box, it would not have lost valuable insights."* This file says, for each
 of the 85 memory files, where its lessons now are, and whether the file can be deleted.
 
-**Where it stands (2026-10-05).** 27 files are *eligible*: every lesson in them is in a
+**Where it stands (2026-10-06).** 75 of the 85 files are deleted, every lesson in a doc or dropped
+for a stated reason. Ten remain, each holding one lesson that waits on Greg: five proposals were
+held back for him (BP3, BP4, BP7, BP12, CP4). The proposal-by-proposal and file-by-file record is
+[§ The second half, 2026-10-06](#the-second-half-2026-10-06) at the end; everything between here
+and there is the 2026-10-05 state, kept as the record of how each verdict was reached.
+
+**Where it stood (2026-10-05).** 27 files are *eligible*: every lesson in them is in a
 doc, or was dropped for a stated reason. 58 are *retain*: at least one lesson is a rule, so
 it is one of the 49 proposals below, and proposals need Greg's yes before they land.
 **Nothing was deleted.** The 25 direct edits are on `dev` in the same commit as this file.
@@ -1438,3 +1444,123 @@ Why here: the Overseer's dispatch rules cover sessions it starts; this is for an
 work itself. The Overseer's notes record that Greg, asked on 2026-09-07 whether to build tooling
 for this, said to just tell him and build nothing; that is a paraphrase, not a quote. Carries
 `announce-before-taking-a-queued-slice` L1 and L3.
+
+## The second half, 2026-10-06
+
+Greg, 2026-10-06, as the Overseer relayed it in this job's brief:
+
+> it's ok to assume all the auto-memories you have written for yourself are probably fine to port
+> into doc .md files. they all seem to have come directly from me. ask only if there are some that
+> you are unsure about
+
+Under that, every remaining proposal was applied except the five below. Each target doc was read
+again first; every anchor in the proposals still matched `dev` once, and none of the texts
+contradicted anything newer.
+
+### What happened to each proposal
+
+| proposal | fate |
+|---|---|
+| AP1–AP10 | Applied by the Overseer before this job. AP4 replaced the old rationing paragraph; AP5 carries Greg's two conditions; AP6 landed without its `flock` line. |
+| BP1, BP2 | Applied as written. |
+| **BP3, BP4, BP7** | **Not applied: waiting on Greg.** They overlap F1 and K3 in `docs/plans/261001i-probes/proposals.md`. Recommendation: land these three and retire F1 and K3. F1 and K3 are one-sentence sketches with no before and after; these have the dates and the measurements, and put the subagent lessons in `engineering-manager.md` § Delegate, where a brief is written, not in `long-waits.md`. F1's fourth clause (`kill -0` fails from the sandbox) did not reproduce on 2026-10-05, so retiring F1 loses nothing true. |
+| BP5, BP6 | Applied as written. BP6 keeps "the full gate for the tree you push", so it loosens nothing. |
+| BP8, BP9, BP10, BP11 | Applied as written. BP8 follows the `pgrep -x` paragraph directly, since BP7 is not there. |
+| **BP12** | **Not applied: waiting on Greg.** It loosens `AGENTS.md`'s "`npm run check` before you commit". |
+| CP1, CP2 | Applied as written. |
+| CP3 | Applied. The "Commit before every merge" paragraph sits after the fast-forward paragraph AP8 added, beside the other merge paragraphs, not after "Type the three dots". |
+| **CP4** | **Not applied: waiting on Greg.** It permits a push over a red full suite, which `AGENTS.md` does not. |
+| CP5 – CP11 | Applied as written. CP10 sits after the `silent-success.md` line, as proposed. |
+| DP1 – DP10 | Applied as written. DP2 renames the heading to "Seventeen more"; nothing links to its anchor. |
+| RP1 – RP4, RP6 | Applied as written. |
+| RP5 | Applied as a new sentence in `feedback-reports.md` § Where the queue lives, written against `scripts/feedback-unswept.ts` (`--since`, default 30d, exit 2). |
+
+Applying DP4, RP6, CP10 and AP8 also settles four more of the 2026-10-01 sweep's pending
+proposals, which said the same in a sentence each: E1, K2, K4 and K1. E2 was settled by CE7 on
+2026-10-05. `proposals.md` there says so.
+
+### The six lessons no proposal carried
+
+| memory file | the lesson | where it is now |
+|---|---|---|
+| `a-named-worktree-may-hold-a-dead-sessions-work` | Look for an existing worktree before assuming a fresh start. | `worktrees.md` § Two things about `EnterWorktree`, the end of the first paragraph. |
+| `a-comment-is-not-a-traced-equality` | A fingerprint built for caching can be weaker than a safety comparison needs. | `docs/reusable/name-is-evidence.md` § The one that is not about identity at all — "A hash is a predicate too." |
+| `two-joins-that-disagree-are-a-measurement` | Report disagreements row by row; send the unfavourable reading to whoever decides, at the time. | `silent-success.md`, the "A count that came from one join" row DP2 adds. |
+| `a-codex-self-review-looks-like-an-independent-one` | Brief the independent reviewer to treat the first artefact as a claim. | `codex-cli-as-subagent.md`, the last sentence of DP7's paragraph. |
+| `full-suite-needs-tmux-on-this-box` | No deadline on a long command. | `testing.md` § Run the suite in tmux, the end of the `timeout` paragraph. |
+| `tmux-outlives-closed-tabs` | Where the source of `sessions.mjs` lives. | `hetzner-remote-server-box.md`, the `sessions.mjs` bullet, as the Overseer's note and marked unchecked. |
+
+Two rows the result review left open are settled the same way, as a labelled note and not a
+verified fact. `no-production-db-access-from-this-laptop` L5 (the bucket's `object/info` read and
+its 400 control) is in `database.md` beside the `psql` paragraph, marked as not re-checked.
+`remote-control-is-already-on-for-box-sessions` L3 (the `bridgeSessionId` check, and the status-bar
+check that replaces it) is in `overseer-direction.md` § Remote Control fails quietly, with both
+days' counts.
+
+One lesson was dropped by the Overseer and not by this job: `session-cap-covers-greg-directed-work`
+L2, the `flock /var/tmp/spideryarn-heavy.lock` line that AP6 landed without. The lock file exists on
+the box and no doc names it.
+
+### What happened to each remaining memory file
+
+53 files were left when this job started; the 2026-10-05 *eligible* rows and the five carried by
+AP1–AP5 had already gone. Their hashes were checked against the table above before anything was
+deleted, and none had moved.
+
+**Kept, 10** — each holds a lesson only a held-back proposal carries:
+
+| memory file | waits on |
+|---|---|
+| `full-suite-needs-tmux-on-this-box` | BP3 (L7) |
+| `grep-c-fallback-fires-immediately` | BP3 |
+| `long-waits-need-a-persistent-monitor` | BP3 (L8) |
+| `polling-a-log-burns-turns-not-time` | BP3 |
+| `wait-for-real-notifications` | BP3 |
+| `subagents-end-turns-while-their-jobs-run` | BP4 |
+| `taskoutput-on-a-running-agent-dumps-its-transcript` | BP4 |
+| `vitest-process-count-is-five-per-suite` | BP7 |
+| `npm-run-check-runs-the-full-suite` | BP12 |
+| `diff-against-a-base-includes-the-merge` | CP4 |
+
+**Deleted, 43** — every lesson is in a doc, by the proposals named in the file's row above, or was
+dropped there with its reason: `a-check-can-answer-a-weaker-question`,
+`a-codex-self-review-looks-like-an-independent-one`, `a-comment-is-not-a-traced-equality`,
+`a-fallback-makes-a-failed-check-look-answered`,
+`a-fixing-reviewer-can-attribute-your-words-to-greg`, `a-header-comment-is-not-a-traced-check`,
+`a-named-worktree-may-hold-a-dead-sessions-work`, `a-port-you-bound-may-be-a-strangers-now`,
+`a-refused-merge-can-wipe-uncommitted-edits`, `a-sibling-sweep-may-have-already-measured`,
+`a-survey-cannot-see-an-absent-state`, `a-truncated-grep-becomes-an-exhaustive-list`,
+`an-unchecked-brief-claim-becomes-a-source-comment`, `announce-before-taking-a-queued-slice`,
+`ask-the-reviewer-to-check-the-conclusion`, `biome-formatter-is-off-on-purpose`,
+`browser-agents-measure-a-moving-tree`, `classifier-accepts-fleet-restart-script`,
+`classifier-refuses-production-reads-in-auto-mode`, `codex-cli-404s-on-this-box`,
+`commit-pathspec-drops-files-silently`, `em-dash-heading-anchor-fails-both-ways`,
+`granularity-zoom-is-one-of-several-core-features`, `killed-codex-run-still-writes-its-answer`,
+`merge-can-duplicate-what-it-does-not-conflict-on`, `name-the-fallback-before-the-reviewer-does`,
+`no-github-cli-credential-on-this-box`, `no-production-db-access-from-this-laptop`,
+`no-vercel-credential-on-this-machine`, `npm-run-forwards-a-bare-argument`,
+`postgres-suites-fail-from-contention`, `prose-through-a-shell-loses-its-markup`,
+`prove-an-empty-queue-with-a-control-query`, `prove-the-relaunch-before-stopping-the-old-process`,
+`ps-grep-counts-its-own-apparatus`, `pull-latest-on-waking-up`,
+`re-reading-your-own-work-is-a-zero-check`, `remote-control-is-already-on-for-box-sessions`,
+`session-cap-covers-greg-directed-work`, `supabase-access-token-needs-greg-each-time`,
+`tmux-outlives-closed-tabs`, `two-joins-that-disagree-are-a-measurement`,
+`writing-escapes-produces-raw-bytes`.
+
+`check-mapping.py` now reports a row with no file for each of the 75 deleted, which is what a
+finished port looks like to it; for the ten kept it still checks the hash.
+
+### For Greg, through the Overseer
+
+1. **BP12** — may an agent commit on the fast gates (typecheck, the suites it touched, the doc-links
+   test) and read `npm run check`'s verdict when it lands, instead of waiting for it first?
+   Recommendation: yes. `check` takes about 26 minutes because it contains the whole suite, and
+   its verdict is still read, only later. If yes, the "`npm run check` before you commit" line in
+   `AGENTS.md` § Writing code wants the matching change.
+2. **CP4** — may an agent push when the full suite is red only in files that are not its own,
+   having shown its own files are disjoint from the failing ones and its own tests pass?
+   Recommendation: yes, it is what "be tolerant" already implies, but it is a permission
+   `AGENTS.md` does not give today. BP6, which is applied, is the safe half: choose the re-run
+   from what the merge brought in.
+3. **BP3, BP4, BP7 or F1, K3** — the same lessons proposed twice. Recommendation above: land the
+   three, retire the two.
