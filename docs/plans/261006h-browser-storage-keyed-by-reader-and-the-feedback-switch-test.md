@@ -166,3 +166,17 @@ its arrival identity when sign-out/sign-in remounted the page. A real App test r
 inheriting A's URL and overwriting B's saved view. `useLastView` now lives in `App`, above both
 auth branches; a non-article route advances the reader identity without reading or saving a view.
 An explicit link opened after switching away from the article still wins.
+
+**Code review round two, D1 (P1, reproduced by Sol, on its own C1 fix):** `App` handed the hook
+`!loading` as "the session is known", and `useSession` ends `loading` after eight seconds with no
+answer. The late answer then looked like a change of reader and stripped a cold shared link.
+`useSession` now reports `known`, and `App` passes that;
+`tests/last-view-late-session.test.tsx` was seen red first. D2 (P3, a comment in `App.tsx` that
+the move had made false) is corrected. Discovery closed here; D1's fix got one narrow check
+([261006h-code-review-3-sol.md](261006h-code-review-3-sol.md)).
+
+**Left open, and outside this plan's claim:** a session that expires on an article sends the
+reader to the sign-in screen with a return address (`src/web/auth-return.ts`). If a different
+reader signs in there, they are returned to the first reader's address. Sol modelled it in round
+two and did not establish an exposure; it is an explicit return, and it is named here so that
+nobody takes this plan to have covered it.

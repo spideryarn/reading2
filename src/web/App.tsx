@@ -149,7 +149,7 @@ function drawsCornerFeedback(route: Exclude<Route, { kind: "callback" }>, user: 
  */
 export function App() {
   const route = useRoute();
-  const { session, user, loading } = useSession();
+  const { session, user, loading, known } = useSession();
 
   /**
    * **The one thing that keeps an import moving while the reader reads.**
@@ -196,9 +196,10 @@ export function App() {
    * same notification pass as `useSession` — src/web/experimental-store.ts
    * § the store listens for it itself.
    *
-   * **And nothing here wakes it, either.** The store starts listening on its
-   * first subscriber and asks the server for nobody until then. This component
-   * subscribes through `useLastView`, before an article fetch finishes. The
+   * **The store starts listening on its first subscriber**, and asks the
+   * server for nobody until then. Since 2026-10-06 that subscriber is this
+   * component, on every route, through `useLastView` below; so a signed-in
+   * visit to any page asks once, and a store update re-renders `App`. The
    * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
    * in PublicPages.tsx — also call `useExperimental()` and hand the answer
    * down as a prop, because the bar is told rather than going and getting it
@@ -210,14 +211,19 @@ export function App() {
    * what it heard — so that the switch was read once up front rather than when
    * a page mounted. It bought a round trip's head start and existed mainly to
    * keep a trace assertion true, which is the wrong way round. What replaced it
-   * is the real subscriber in `Reader`.
+   * was the real subscriber in `Reader`, and since 2026-10-06 the one above.
    */
 
   /* Keep the arrival identity above the auth branches: signing out remounts
      ArticlePage while this tab's address can still hold the previous reader's
-     view. A non-article route advances the identity without reading or saving. */
+     view. A non-article route advances the identity without reading or saving.
+
+     `known`, not `!loading`: the loading deadline passes without an answer on
+     a slow start, and taking that for "signed out" would make the answer that
+     follows look like a change of reader and strip a shared link's parameters
+     (tests/last-view-late-session.test.tsx). */
   useLastView(
-    !loading && route.kind === "read" ? route.slug : null,
+    known && route.kind === "read" ? route.slug : null,
     route.kind === "read" ? route.view : "article",
     user?.id ?? null,
   );
