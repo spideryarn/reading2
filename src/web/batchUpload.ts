@@ -134,8 +134,8 @@ export interface BatchUploadDeps {
   queue(uploadId: string): Promise<Job | AlreadyAnArticle>;
   /** `POST /api/jobs/:id/retry` — the replacement job. */
   retryJob(jobId: string): Promise<Job>;
-  /** `DELETE /api/uploads/:id`. Fire and forget. */
-  cancelUpload(uploadId: string): Promise<void>;
+  /** `DELETE /api/uploads/:id`, for the reader whose operation minted it. */
+  cancelUpload(uploadId: string, madeFor: string | null): Promise<void>;
   /** The job engine's action seam and its terminal seam. */
   jobs: {
     epoch(): number;
@@ -403,6 +403,8 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
     epoch: number,
     live: () => boolean,
   ): Promise<string | null> => {
+    // Cleanup can outlive this binding: retain the reader whose grant this is.
+    const madeFor = readerId;
     if (it.sha === null) {
       setRow(id, { kind: "hashing" });
       let sha: string;
@@ -455,7 +457,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
     }
     if (!live()) {
       /* Stopped while the grant was out: give it straight back. */
-      void deps.cancelUpload(grant.uploadId).catch(() => {});
+      void deps.cancelUpload(grant.uploadId, madeFor).catch(() => {});
       return null;
     }
     it.uploadId = grant.uploadId;
@@ -500,7 +502,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
 
       if (step.from === "start") {
         const uploadId = await sendIt(id, it, epoch, live);
-        if (uploadId === null) return;
+        if (!live() || uploadId === null) return;
         step = { from: "queue", uploadId };
       }
 
@@ -633,7 +635,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
           it.attempt += 1;
           it.controller?.abort();
           it.controller = null;
-          if (it.uploadId) void deps.cancelUpload(it.uploadId).catch(() => {});
+          if (it.uploadId) void deps.cancelUpload(it.uploadId, readerId).catch(() => {});
         }
         active.delete(r.id);
         pending.delete(r.id);
@@ -730,11 +732,11 @@ export const batchUpload: BatchUpload = createBatchUpload({
         batchUpload.reader(),
       ),
     ),
-  cancelUpload: async (uploadId) => {
+  cancelUpload: async (uploadId, madeFor) => {
     await apiFetch(
       `/api/uploads/${encodeURIComponent(uploadId)}`,
       { method: "DELETE" },
-      batchUpload.reader(),
+      madeFor,
     );
   },
   jobs: {

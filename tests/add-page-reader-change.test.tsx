@@ -72,6 +72,8 @@ interface FakeSession {
   user: { id: string; email: string };
 }
 let signedIn: FakeSession | null = null;
+let holdSessions = false;
+let heldSessions: (() => void)[] = [];
 const listeners = new Set<(event: string, session: FakeSession | null) => void>();
 const sessionOf = (id: string): FakeSession => ({
   access_token: `TOKEN-${id}`,
@@ -81,7 +83,9 @@ const sessionOf = (id: string): FakeSession => ({
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
-      getSession: async () => ({ data: { session: signedIn } }),
+      getSession: () => holdSessions
+        ? new Promise((resolve) => { heldSessions.push(() => resolve({ data: { session: signedIn } })); })
+        : Promise.resolve({ data: { session: signedIn } }),
       refreshSession: async () => ({ data: { session: signedIn } }),
       onAuthStateChange: (fn: (event: string, session: FakeSession | null) => void) => {
         listeners.add(fn);
@@ -134,9 +138,20 @@ const queue: UseJobs = {
   retry: async () => null,
   forget: async () => {},
 };
-vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => queue, useJobSession: () => {} }));
+let realJobs = false;
+vi.mock("../src/web/useJobs.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
+  return {
+    useJobs: (...args: Parameters<typeof actual.useJobs>) => {
+      const live = actual.useJobs(...args);
+      return realJobs ? live : queue;
+    },
+    useJobSession: (...args: Parameters<typeof actual.useJobSession>) => {
+      actual.useJobSession(realJobs ? args[0] : null, realJobs ? args[1] : null);
+    },
+  };
+});
 vi.mock("../src/web/useUpload.js", () => ({ useUpload: () => null }));
-vi.mock("../src/web/uploadEngine.js", () => ({ uploadEngine: { retry: () => {}, cancel: () => {} } }));
 
 /* ---- The network: every request, with the token it carried. ---- */
 
@@ -155,6 +170,7 @@ let patchAnswer: () => Promise<Response>;
 let putAnswer: () => Promise<Response>;
 
 function answer(method: string, url: string): Promise<Response> {
+  if (url === "/api/jobs") return Promise.resolve(json(method === "GET" ? { jobs: [] } : makeJob("real-add")));
   if (method === "PATCH" && url.startsWith("/api/library/")) return patchAnswer();
   if (method === "PUT" && url.endsWith("/high-power")) return putAnswer();
   if (url.startsWith("/api/reader")) {
@@ -172,6 +188,7 @@ const powerWrites = (): Sent[] => writesOf("PUT", "/high-power");
 const purposeReads = (): Sent[] => sent.filter((r) => r.url === `/api/reader?slug=${SLUG}`);
 
 const { App } = await import("../src/web/App.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 const { resetAddPurposeForTests } = await import("../src/web/AddPage.js");
 const { ADD_PURPOSE_IDLE_MS } = await import("../src/web/add-purpose.js");
 const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
@@ -244,6 +261,9 @@ const WORDS = "Reader A wants the dosing table";
 beforeEach(() => {
   vi.useFakeTimers();
   signedIn = null;
+  realJobs = false;
+  holdSessions = false;
+  heldSessions = [];
   jobs = [];
   adds = [];
   sent = [];
@@ -271,6 +291,7 @@ afterEach(async () => {
   act(() => root.unmount());
   await settle();
   host.remove();
+  jobEngine.reset();
   listeners.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -323,6 +344,30 @@ describe("what reader B sees", () => {
 });
 
 describe("no import starts for reader B from reader A's page", () => {
+  it.each([
+    [URL_PATH, "A"], [URL_PATH, "B"], [UPLOAD_PATH, "A"], [UPLOAD_PATH, "B"],
+  ])("binds the first POST at %s to A when its token lookup answers %s", async (path, next) => {
+    realJobs = true;
+    holdSessions = true;
+    await open(path, "A");
+    expect(jobEngine.reader()).toBe("A");
+    expect(heldSessions.length).toBeGreaterThan(0);
+    expect(sent.filter((r) => r.method === "POST" && r.url === "/api/jobs")).toEqual([]);
+
+    await become(next);
+    holdSessions = false;
+    for (const resolve of heldSessions.splice(0)) resolve();
+    await settle();
+    const posts = sent.filter((r) => r.method === "POST" && r.url === "/api/jobs");
+    if (next === "B") {
+      expect(stoppedPage()).not.toBeNull();
+      expect(posts).toEqual([]);
+    } else {
+      expect(stoppedPage()).toBeNull();
+      expect(posts.map((r) => r.token)).toEqual(["TOKEN-A"]);
+    }
+  });
+
   it("directly: another tab signs in as B", async () => {
     await open(URL_PATH, "A");
     expect(adds).toEqual(["A"]);

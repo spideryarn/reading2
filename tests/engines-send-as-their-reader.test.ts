@@ -138,6 +138,69 @@ describe("uploadEngine", () => {
 });
 
 describe("batchUpload", () => {
+  it.each(["A", "B", null])("keeps a late grant's cleanup bound to A after switching to %s", async (next) => {
+    let answerGrant: (r: Response) => void = () => {};
+    vi.stubGlobal("fetch", (input: string, init: RequestInit = {}) => {
+      const token = new Headers(init.headers).get("Authorization")?.replace("Bearer ", "") ?? "nobody";
+      sent.push(`${(init.method ?? "GET").toUpperCase()} ${input} as ${token}`);
+      if (input === "/api/uploads") return new Promise<Response>((resolve) => { answerGrant = resolve; });
+      return Promise.resolve(json({}));
+    });
+    batchUpload.start("A");
+    batchUpload.add([pdf("a.pdf")]);
+    await settle();
+    expect(sent).toContain("POST /api/uploads as TOKEN-A");
+
+    signedIn = as(next ?? "B");
+    batchUpload.stop();
+    if (next) batchUpload.start(next);
+    // The grant was minted for A; its answer can settle after teardown.
+    answerGrant(json({ uploadId: "upload-A", url: "signed-url", expiresAt: "", slug: "a" }));
+    await settle();
+    expect(sent.filter((r) => r.startsWith("DELETE"))).toEqual(next === "A"
+      ? ["DELETE /api/uploads/upload-A as TOKEN-A"] : []);
+    expect(sent.filter((r) => r.startsWith("POST /api/jobs"))).toEqual([]);
+  });
+
+  it.each([false, true])("queues A's completed file only in its live session (switch: %s)", async (switchReader) => {
+    let completePut: () => void = () => {};
+    class HeldPut {
+      status = 200;
+      upload = {};
+      onload: (() => void) | null = null;
+      open() {}
+      setRequestHeader() {}
+      abort() {}
+      send() { completePut = () => this.onload?.(); }
+    }
+    vi.stubGlobal("XMLHttpRequest", HeldPut);
+    vi.stubGlobal("fetch", (input: string, init: RequestInit = {}) => {
+      const token = new Headers(init.headers).get("Authorization")?.replace("Bearer ", "") ?? "nobody";
+      sent.push(`${(init.method ?? "GET").toUpperCase()} ${input} as ${token}`);
+      return Promise.resolve(json(input === "/api/uploads"
+        ? { uploadId: "upload-A", url: "signed-url", expiresAt: "", slug: "a" }
+        : { article: "a" }));
+    });
+    batchUpload.start("A");
+    batchUpload.add([pdf("a.pdf")]);
+    await settle();
+    expect(batchUpload.getSnapshot().rows[0]?.state.kind).toBe("sending");
+
+    completePut();
+    // sendIt's continuation runs first; run's continuation follows this switch.
+    queueMicrotask(() => {
+      if (!switchReader) return;
+      signedIn = as("B");
+      batchUpload.stop();
+      batchUpload.start("B");
+    });
+    await settle();
+    expect(sent.filter((r) => r.startsWith("POST /api/jobs"))).toEqual(switchReader
+      ? [] : ["POST /api/jobs as TOKEN-A"]);
+    if (switchReader) expect(batchUpload.getSnapshot().rows).toEqual([]);
+    else expect(batchUpload.getSnapshot().rows[0]?.state.kind).toBe("shelved");
+  });
+
   it("asks for a grant as the reader it was started for", async () => {
     batchUpload.start("A");
     batchUpload.add([pdf("a.pdf")]);

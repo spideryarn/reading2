@@ -194,6 +194,22 @@ is what the code does.
 - `tests/dock-corner-controls.test.tsx` › *signed in at /add/https://example.com/a* was already
   red before this work (its stub answers the add POST with `{jobs: []}`).
 
+### What the code review changed
+
+GPT Sol, 2026-10-06 ([its answer](261006e-code-review-sol.md)), on `4fc001a6d`. Three established
+P1s, each fixed by the reviewer red first; its own write-up is
+[postmortem 261006h](../postmortems/261006h-a-current-service-reader-is-not-an-operations-reader.md).
+
+- **F7: the add POST at boot was unfenced.** The page's posting effect ran before `App`'s
+  `useJobSession` effect had bound the engine, so the engine's reader was still `null`. The
+  session is now bound in a layout effect, which runs before any child's passive effect.
+- **F8: a batch grant's late cleanup went out as B.** `cancelUpload` now takes the reader the
+  operation captured when it started.
+- **F9: a batch queued its job after teardown**, in the microtask after the PUT. It now checks
+  `live()` again after `sendIt`.
+
+F5 stays as *What is not promised* has it; the review raised no objection to that.
+
 ## Done looks like
 
 After a change of account on an open add page, direct or through signing out, B sees none of A's

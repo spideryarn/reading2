@@ -459,6 +459,16 @@ describe("a request made for one reader", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("sends the matching cached reader offline without asking the SDK to refresh", async () => {
+    announce("SIGNED_IN", as("A"));
+    vi.stubGlobal("navigator", { onLine: false });
+    const calls = stubFetch(ok());
+    await expect(apiFetch("/api/jobs", { method: "POST", body: "{}" }, "A")).resolves.toHaveProperty("status", 200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A");
+    expect(getSession).not.toHaveBeenCalled();
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
   /**
    * **Whose a token is has to come with the token.** The cache drawer falls
    * back to the reader the tab last saw when a session names nobody, which is

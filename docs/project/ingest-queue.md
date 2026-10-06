@@ -700,6 +700,20 @@ Three things, all in the browser, in
   reader to wherever they came from rather than dropping them here to watch a job that has already
   finished.
 
+**And a visit is one reader's**, since 2026-10-06. The page starts an import by arriving and holds
+one reader's typed purpose, their High-powered tick and their job. So if a different reader turns
+up at the same address, because another tab signed in as somebody else or this one signed out and
+in again, they get a short stopped page that posts nothing
+([`AddStopped.tsx`](../../src/web/AddStopped.tsx)) until the address is left, and they add the
+article from the shelf. A fresh page would have started the import for them unasked. Somebody who
+arrives signed out and then signs in is a first arrival, and the page runs as usual. `App` keeps
+whose visit it is, above its signed-out branch; the rule is a table in
+[`src/web/add-visit.ts`](../../src/web/add-visit.ts). Every request the page and the engines make
+also names its reader
+([auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another));
+the plan is
+[261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md).
+
 ### Three ways the address can lie about itself
 
 All three were found by review rather than by use, and together they are the argument for the
