@@ -322,6 +322,16 @@ const EFFORT = "low" as const;
 export const LABEL_HEADROOM = 16_000;
 
 /**
+ * The reservation a truncated batch is re-drawn with: room to think, twice
+ * over. The one home of "the retry's headroom", because two readers must
+ * agree on it: `generateLabels` sends the re-draw with it, and `planBatches`
+ * asks whether a batch would fit *with it* before planning one. A batch whose
+ * first call fits and whose only retry could not be sent is not a batch we can
+ * stand behind.
+ */
+export const LABEL_RETRY_HEADROOM = LABEL_HEADROOM * 2;
+
+/**
  * How many gistable blocks a batch aims for, and the most it will take.
  *
  * Sibling sets are packed until adding the next one would pass this, so batches
@@ -720,8 +730,11 @@ function windowsOf(set: SiblingSet, max: number): SiblingSet[] {
  * block that lands in no call at all, or one that lands in two. None of those
  * would throw. See tests/labels-batching.test.ts.
  *
- * **No batch it returns is too long to ask** (at the default `max`; a caller's
- * own cap past what one answer holds is the caller's). That is a promise about
+ * **No batch it returns is too long to ask, and "ask" includes the re-draw**
+ * (at the default `max`; a caller's own cap past what one answer holds is the
+ * caller's). A truncated batch is asked for again with `LABEL_RETRY_HEADROOM`,
+ * so that is the budget a batch must fit: 1,741 blocks today, where the first
+ * call alone would take 2,032. That is a promise about
  * the finished plan and not about a section, because the floor and the tail
  * merge below join sets: a section one call could just hold became a call none
  * could beside a one-paragraph neighbour (GPT Sol, F1 of
@@ -731,6 +744,13 @@ function windowsOf(set: SiblingSet, max: number): SiblingSet[] {
  * with no such batch is returned from the first packing untouched, which is
  * what keeps every ordinary article's batches, and so its checkpoint keys,
  * exactly what they were.
+ *
+ * **Plans with a packed batch of 1,742 to 2,032 blocks moved on 2026-10-06**,
+ * the day after windows arrived, and their stored batches are bought again.
+ * Accepted: such a batch's first call fitted but its only retry threw
+ * `TooLongForOnePass` before it was sent, so one truncated answer lost the
+ * article's labels (GPT Sol, A1 of
+ * docs/plans/261005j-stage-1a-rest-A-code-review-sol.md).
  *
  * What a windowed section gives up is the sibling rule, for that section: its
  * labels are written without the far windows in view, so two can come out
@@ -913,10 +933,10 @@ export function labelCallBudget(count: number, headroom: number = LABEL_HEADROOM
   return budgetFor("nav labels", labelAnswerTokens(count), headroom);
 }
 
-/** Could one labels call be asked for `count` blocks at all? */
+/** Could a labels call for `count` blocks be asked, and asked again if it came back truncated? */
 function canAskFor(count: number): boolean {
   try {
-    labelCallBudget(count);
+    labelCallBudget(count, LABEL_RETRY_HEADROOM);
     return true;
   } catch (err) {
     if (err instanceof TooLongForOnePass) return false;
@@ -925,8 +945,8 @@ function canAskFor(count: number): boolean {
 }
 
 /**
- * The planned batches of `tree` whose first call would be refused as too long
- * for one answer. **Empty for every tree since 2026-10-06**, when `planBatches`
+ * The planned batches of `tree` whose call, or its re-draw after a truncation,
+ * would be refused as too long for one answer. **Empty for every tree since 2026-10-06**, when `planBatches`
  * began cutting such a section into windows; the structure step used to ask
  * this and fall back to the headings tree. Kept as the measure of that promise:
  * the tests and the long-document evals still ask it.
@@ -942,7 +962,7 @@ export function unaskableBatches(tree: Tree, blocks: Block[]): Batch[] {
  * rule outranks the cap — so a tree with one enormous section produces one enormous
  * call. Nothing else notices: the budget for a 400-label batch is well under
  * the limit, so it runs, and 400 labels in one answer is the shape that dropped
- * one at 42. Only when the packed batch passes 2,032 blocks is a section cut, and
+ * one at 42. Only when the packed batch passes 1,741 blocks is a section cut, and
  * its windows are at most `max`, so they are not counted here.
  *
  * We do not refuse it, because refusing would fail an article that will probably
@@ -2744,7 +2764,7 @@ export async function generateLabels(opts: {
                 outline,
                 signal,
                 opts.power,
-                LABEL_HEADROOM * 2,
+                LABEL_RETRY_HEADROOM,
               );
               /* Both requests' usage, not just the one that worked. The first
                  attempt was truncated or displaced, and it was paid for; a

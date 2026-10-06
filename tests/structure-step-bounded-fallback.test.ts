@@ -42,7 +42,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 });
 
 const { buildTree, generateStructure, parseWholeDocumentAnswer } = await import("../src/structure.js");
-const { labelCallBudget, MAX_BATCH, planBatches, unaskableBatches } = await import("../src/labels.js");
+const { LABEL_RETRY_HEADROOM, labelCallBudget, MAX_BATCH, planBatches, unaskableBatches } = await import("../src/labels.js");
 const { generatorFor } = await import("../src/models.js");
 const { TooLongForOnePass } = await import("../src/token-budget.js");
 const { memoryCheckpoints } = await import("./helpers/memory-checkpoints.js");
@@ -66,11 +66,14 @@ function answer(sizes: number[]): string {
   });
 }
 
-/** The most blocks one labels call may be asked for, found from the labels step's own arithmetic. */
+/**
+ * The most blocks one labels call may be asked for, re-draw included, found
+ * from the labels step's own arithmetic (src/labels.ts § `LABEL_RETRY_HEADROOM`).
+ */
 const MOST_IN_ONE_LABELS_CALL = ((): number => {
   for (let n = 1; ; n++) {
     try {
-      labelCallBudget(n + 1);
+      labelCallBudget(n + 1, LABEL_RETRY_HEADROOM);
     } catch (err) {
       if (err instanceof TooLongForOnePass) return n;
       throw err;
@@ -92,7 +95,9 @@ function expectModelTreeKept(out: Awaited<ReturnType<typeof run>>, blocks: Block
   expect(out.parts.tree.generator).toBe(generatorFor("standard"));
   expect(out.model).toBe(generatorFor("standard"));
   expect(unaskableBatches(out.parts.tree, blocks)).toEqual([]);
-  for (const batch of planBatches(out.parts.tree, blocks)) expect(() => labelCallBudget(batch.blocks.length)).not.toThrow();
+  for (const batch of planBatches(out.parts.tree, blocks)) {
+    expect(() => labelCallBudget(batch.blocks.length, LABEL_RETRY_HEADROOM)).not.toThrow();
+  }
 }
 
 describe("a model tree with a section too long for one labels call", () => {

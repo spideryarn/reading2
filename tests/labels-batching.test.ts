@@ -35,6 +35,7 @@ import {
   detectShift,
   generateLabels,
   isHeading,
+  LABEL_RETRY_HEADROOM,
   labelCallBudget,
   MAX_BATCH,
   mergeLabels,
@@ -416,9 +417,10 @@ function sized(sizes: number[], headings: number[] = []): { tree: Tree; blocks: 
   return { tree: { version: "test", generator: "test", slug: "test", rootId, nodes }, blocks };
 }
 
+/* Askable means askable twice: the re-draw of a truncated batch needs more room. */
 const askable = (count: number): boolean => {
   try {
-    labelCallBudget(count);
+    labelCallBudget(count, LABEL_RETRY_HEADROOM);
     return true;
   } catch (err) {
     if (err instanceof TooLongForOnePass) return false;
@@ -426,7 +428,7 @@ const askable = (count: number): boolean => {
   }
 };
 
-/** The most blocks one labels call may be asked for, from the labels step's own arithmetic. */
+/** The most blocks one labels call may be asked for and re-drawn, from the labels step's own arithmetic. */
 const MOST = ((): number => {
   let n = 1;
   while (askable(n + 1)) n++;
@@ -515,6 +517,9 @@ describe("planBatches: a section too long for one labels call", () => {
     expect(MOST).toBeGreaterThan(1000);
     expect(askable(MOST)).toBe(true);
     expect(askable(MOST + 1)).toBe(false);
+    /* The first call alone would take more: the limit is the re-draw's. */
+    expect(() => labelCallBudget(MOST + 1)).not.toThrow();
+    expect(() => labelCallBudget(MOST + 1, LABEL_RETRY_HEADROOM)).toThrow(TooLongForOnePass);
   });
 
   for (const sizes of [[1, MOST], [MOST, 1], [MOST, MIN_BATCH - 1]]) {
