@@ -226,3 +226,16 @@ A third question for Greg came out of the review:
 - **[Q-read-the-switch-before-publication]** Add a small owner-only read of an article's
   visibility that works before publication, so a reloaded or second tab shows the box as it
   really is?
+
+## Greg's answers, 2026-10-06
+
+- **[Q-private-link-at-import]** — yes, and tidy it: *"yeah ok, might as well include that. perhaps
+  bundle all sharing-related stuff in a default-collapsed section, because most people won't want
+  to use it"*. So the add page gets "Create a private link" beside "Make it public", and both sit
+  in one sharing section that starts collapsed.
+- **[Q-visitor-before-publication]** — a "still being added" page: *"if it's not too complex, a
+  "still being added" page sounds good. i'm not too worried about the security tradeoff"*. The
+  trade-off he accepted: the server tells a stranger who holds the link that an unpublished
+  article exists at that address.
+- **[Q-read-the-switch-before-publication]** was not answered; its recommendation was "B when
+  someone is next in that file", which is now.
