@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-DQ (spya-jghnva; the report itself shipped as `skim/10`, this is
+  its deferred half) · should Skim's cue set a scene more often? What shipped sets one only when the
+  quote leans on words it does not explain. A wording that sets one on every cue was preferred 64 to
+  19 for preparing the reader, but gave the finding away about twice as often and got the context
+  wrong in one cue in ten. A middle wording (B3) is not written or measured yet; it waits on a yes ·
+  qi-pjrr5g86 ·
+  [261006e § Progress](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md#progress) ·
+  [note](261006_0545-skim-cue-should-situate-the-quote.md)
+
 - 2026-10-05 · SPIDERYARN-READING2-DB (spya-dxufdw) · the reading-time line "appeared a minute
   late": no matching delay was found. Most likely Experimental features was off when the article
   loaded and the line drew the instant it was switched on; with it off nothing is recorded either.
