@@ -404,6 +404,46 @@ describe("the sink", () => {
     expect(rows[0]?.computedCostNanos).toBeNull();
   });
 
+  it("flattens which go it was, and where and why it failed, into the row's four columns", async () => {
+    const rows = await rowsFrom({}, () => {
+      recordSpend(
+        call({
+          outcome: "error",
+          attempt: 2,
+          failure: { phase: "before_answer", class: "refused", status: 503 },
+        }),
+      );
+    });
+    expect([rows[0]?.attempt, rows[0]?.failurePhase, rows[0]?.failureClass, rows[0]?.failureStatus]).toEqual([
+      2,
+      "before_answer",
+      "refused",
+      503,
+    ]);
+  });
+
+  it("writes null, not undefined, for a record that says nothing about either", async () => {
+    /* A declared bypass and every older caller build a `SpendRecord` without
+       the two fields. `undefined` reaching the insert would be a column left
+       to its default; `null` is the row saying it was not told. */
+    const rows = await rowsFrom({}, () => {
+      recordSpend(call());
+      recordSpend(call({ outcome: "aborted", attempt: 1, failure: null }));
+    });
+    expect([rows[0]?.attempt, rows[0]?.failurePhase, rows[0]?.failureClass, rows[0]?.failureStatus]).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect([rows[1]?.attempt, rows[1]?.failurePhase, rows[1]?.failureClass, rows[1]?.failureStatus]).toEqual([
+      1,
+      null,
+      null,
+      null,
+    ]);
+  });
+
   it("puts the upstream figure on the row only when the call was BYOK", async () => {
     /* **The write path for the double-count trap.** OpenRouter reports
        `cost_details.upstream_inference_cost` on an ordinary call as well as a

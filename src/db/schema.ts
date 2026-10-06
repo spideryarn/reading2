@@ -3383,6 +3383,39 @@ export const aiCalls = spideryarn.table(
      */
     outcome: text("outcome").notNull(),
     /**
+     * **Which go this row was, inside one call's transport retry** — 1-based.
+     * A row with `attempt > 1` is a retry that really started, and that is the
+     * only place a retry is recorded: there is no "was retried" column, because
+     * a failed attempt's row is written before the backoff and a Stop during
+     * the backoff means nothing follows it.
+     *
+     * Null where no retry loop of the gateways' counted: every row from before
+     * 2026-10-06, every realtime row, and a call made with
+     * `retryTransport: false`, whose caller owns the loop (src/pdf-read.ts,
+     * src/embeddings.ts). **So null is "not counted", and a count of retries
+     * has to say how many rows it could see.**
+     * docs/plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md.
+     */
+    attempt: smallint("attempt"),
+    /**
+     * `before_answer` or `mid_answer`, on a row whose `outcome` is `error`;
+     * null on an `ok` row, on an `aborted` one and on every older row. The
+     * boundary is each seam's own acceptance boundary and is stated on
+     * `FailurePhase` in src/call-failure.ts.
+     */
+    failurePhase: text("failure_phase"),
+    /**
+     * Why, as a label from the closed list in src/call-failure.ts §
+     * `FailureClass` — `refused`, `network:ECONNRESET`, `in_band`, …. **Mapped,
+     * never sanitised**: no string off an error is ever stored here, which is
+     * what lets this column sit in a table whose rule is that it carries no
+     * prose. No CHECK, unlike the phase: the list is expected to grow, and a
+     * constraint would make each new label a migration that has to land first.
+     */
+    failureClass: text("failure_class"),
+    /** The HTTP status of the response, when there was one — `200` on a call that died after a `200`. */
+    failureStatus: integer("failure_status"),
+    /**
      * **Which bill this call lands on** — `openrouter`, `anthropic` or `openai`.
      *
      * Not derivable from `credential_fingerprint`, which identifies a key
@@ -3712,6 +3745,14 @@ export const aiCalls = spideryarn.table(
      * refund through this column — so this constrains nothing that happens
      * today, which is exactly when a constraint is cheap to add.
      */
+    /**
+     * The two phases, and nothing else. Passes on null, which is every row that
+     * did not fail and every row from before the column.
+     */
+    check(
+      "ai_calls_failure_phase_known",
+      sql`${t.failurePhase} is null or ${t.failurePhase} in ('before_answer','mid_answer')`,
+    ),
     check(
       "ai_calls_costs_not_negative",
       sql`(${t.creditsUsedNanos} is null or ${t.creditsUsedNanos} >= 0)

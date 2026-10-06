@@ -716,3 +716,329 @@ describe("the callers that count their asks make one request per ask", () => {
     expect(t.sent()).toBe(1);
   });
 });
+
+/* ------------------------------------- what each attempt's row says of itself --
+
+   Plan docs/plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md.
+   The retry above writes a row per attempt; these are about what a row can be
+   asked afterwards: which go it was, whether it failed before or after the
+   answer began, and why. `said` is compared whole, so a row that gained a
+   field it should not have is as red as one that lost one. */
+
+/** `[attempt, outcome, failure]` for every row, in order. Nothing defaulted: a field never set is `undefined`, not `null`. */
+const said = (report: SpendReport): unknown[] => report.calls.map((c) => [c.attempt, c.outcome, c.failure]);
+
+const beforeAnswer = (cls: string, status: number | null = null) => ({ phase: "before_answer", class: cls, status });
+const midAnswer = (cls: string, status: number | null = 200) => ({ phase: "mid_answer", class: cls, status });
+
+/** `fetch failed`, with the code where undici puts it. */
+const droppedWith = (code: unknown) =>
+  new TypeError("fetch failed", { cause: Object.assign(new Error("socket"), { code }) });
+
+const WHOLE = SEAMS.filter((s) => s.name !== "openRouterStream");
+
+describe.each(SEAMS)("$name — every attempt's row says which go it was, and how it failed", (seam) => {
+  it("a blip then an answer is (1, error, before_answer) and (2, ok)", async () => {
+    script(dropped(), seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "ok", null],
+    ]);
+  });
+
+  it("a 503 then an answer carries the status on the failed row", async () => {
+    script(refused(503), seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)).toEqual([
+      [1, "error", beforeAnswer("refused", 503)],
+      [2, "ok", null],
+    ]);
+  });
+
+  it("three failures end at attempt 3", async () => {
+    script(dropped(), dropped(), refused(503), seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "error", beforeAnswer("network")],
+      [3, "error", beforeAnswer("refused", 503)],
+    ]);
+  });
+
+  it("a Stop during the backoff leaves one row, and no attempt 2", async () => {
+    const stop = new AbortController();
+    script(dropped(), seam.good);
+    const run = await drive(async () => {
+      setTimeout(() => stop.abort(new Error("the reader pressed Stop")), 50);
+      return seam.ask({ signal: stop.signal });
+    });
+    expect(said(run.report)).toEqual([[1, "error", beforeAnswer("network")]]);
+  });
+
+  it("leaves `attempt` null when the caller owns the loop", async () => {
+    script(dropped(), seam.good);
+    const run = await drive(() => seam.ask({ retryTransport: false }));
+    /* Phase, class and status are still the row's own; only the ordinal is
+       somebody else's to count. */
+    expect(said(run.report)).toEqual([[null, "error", beforeAnswer("network")]]);
+  });
+
+  it("names a network code it knows, from the cause", async () => {
+    script(droppedWith("ECONNRESET"), seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)[0]).toEqual([1, "error", beforeAnswer("network:ECONNRESET")]);
+  });
+
+  it("keeps nothing of a cause code or an error name it was not told about", async () => {
+    const odd = Object.assign(droppedWith("reader_search_term"), { name: "reader_search_term" });
+    script(odd, seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)[0]).toEqual([1, "error", beforeAnswer("network")]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("reader_search_term");
+  });
+
+  it("says nothing about why on an abort, and still counts the go", async () => {
+    const stop = new AbortController();
+    const reason = new Error("the reader pressed Stop");
+    vi.stubGlobal("fetch", async () => {
+      stop.abort(reason);
+      throw reason;
+    });
+    const run = await drive(() => seam.ask({ signal: stop.signal }));
+    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+  });
+
+  it("is `other` for a failure it cannot place, and keeps none of its words", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("the reader asked about badgers");
+    });
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)).toEqual([[1, "error", beforeAnswer("other")]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
+  });
+});
+
+describe.each(WHOLE)("$name — the acceptance boundary is the 2xx headers", (seam) => {
+  /** Headers of `status`, then a body that dies as a dropped socket does. */
+  const brokenBody = (status: number, cause?: unknown) => (): Response =>
+    ({
+      ok: status >= 200 && status < 300,
+      status,
+      headers: new Headers(),
+      text: async () => {
+        throw new TypeError("terminated", cause === undefined ? undefined : { cause });
+      },
+    }) as unknown as Response;
+
+  it("503 headers and a body that breaks is before_answer, with the 503", async () => {
+    const t = script(brokenBody(503), seam.good);
+    const run = await drive(() => seam.ask({}));
+    /* Not asked again, as before: this records what happened, and changes
+       nobody's retry. */
+    expect(t.sent()).toBe(1);
+    expect(errorOf(run.outcome)).toBeInstanceOf(TypeError);
+    expect(said(run.report)).toEqual([[1, "error", beforeAnswer("refused", 503)]]);
+  });
+
+  it("a 200 whose body breaks is mid_answer", async () => {
+    script(brokenBody(200, Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" })), seam.good);
+    const run = await drive(() => seam.ask({}));
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("network:UND_ERR_SOCKET")]]);
+  });
+});
+
+describe("a 200 that is not an answer is not an `ok` row", () => {
+  const NOT_JSON = "<html>the reader asked about badgers</html>";
+  const ENVELOPE = { error: { code: 502, message: "the reader asked about badgers" } };
+  const json = () => openRouterJson("pdf", { model: "m", messages: [] });
+
+  it("openRouterJson: a body that will not parse is error / mid_answer / unreadable, and still returns null", async () => {
+    script(whole(200, NOT_JSON));
+    const run = await drive(json);
+    /* The return contract is untouched: `src/pdf-read.ts` is handed the `null`
+       it has always been handed, and says its own sentence about it. */
+    expect(run.outcome).toMatchObject({ ok: true, value: { json: null } });
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("unreadable")]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
+  });
+
+  it("openRouterJson: a literal JSON null parsed, and is the caller's to judge", async () => {
+    script(whole(200, "null"));
+    const run = await drive(json);
+    expect(said(run.report)).toEqual([[1, "ok", null]]);
+  });
+
+  it("openRouterJson: an error envelope is error / mid_answer / in_band, and is still handed back", async () => {
+    script(whole(200, ENVELOPE));
+    const run = await drive(json);
+    expect(run.outcome).toMatchObject({ ok: true, value: { json: ENVELOPE } });
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
+  });
+
+  it("openRouterJson: an answer that also carries an `error` is an answer", async () => {
+    script(whole(200, { error: { code: 1 }, choices: [{ message: { content: "ok" } }] }));
+    const run = await drive(json);
+    expect(said(run.report)).toEqual([[1, "ok", null]]);
+  });
+
+  it("openRouterJson: neither is asked again", async () => {
+    const t = script(whole(200, NOT_JSON), whole(200, ENVELOPE));
+    await drive(json);
+    expect(t.sent()).toBe(1);
+  });
+
+  it.each(WHOLE.filter((s) => s.name !== "openRouterJson"))(
+    "$name: a body that will not parse is unreadable, and an envelope is in_band",
+    async (seam) => {
+      script(whole(200, NOT_JSON));
+      const garbled = await drive(() => seam.ask({}));
+      expect(garbled.outcome.ok).toBe(false);
+      expect(said(garbled.report)).toEqual([[1, "error", midAnswer("unreadable")]]);
+      script(whole(200, ENVELOPE));
+      const enveloped = await drive(() => seam.ask({}));
+      expect(enveloped.outcome.ok).toBe(false);
+      expect(said(enveloped.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+    },
+  );
+
+  it.each(WHOLE.filter((s) => s.name !== "openRouterJson"))(
+    "$name: a body that parsed and still was not an answer is unreadable",
+    async (seam) => {
+      script(whole(200, { nothing: "useful" }));
+      const run = await drive(() => seam.ask({}));
+      expect(run.outcome.ok).toBe(false);
+      expect(said(run.report)).toEqual([[1, "error", midAnswer("unreadable")]]);
+    },
+  );
+});
+
+describe("openRouterStream — a death after the 200 is mid_answer, and says which kind", () => {
+  const ERROR_CHUNK = frame({ error: { message: "the reader asked about badgers" } });
+
+  /** A 200 that yields `parts` and then dies as a dropped socket does, code and all. */
+  function dies(...parts: string[]): () => Response {
+    return () => {
+      const encoder = new TextEncoder();
+      let i = 0;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: new ReadableStream<Uint8Array>({
+          pull(c) {
+            if (i < parts.length) c.enqueue(encoder.encode(parts[i++] as string));
+            else
+              c.error(
+                new TypeError("terminated", { cause: Object.assign(new Error("closed"), { code: "UND_ERR_SOCKET" }) }),
+              );
+          },
+        }),
+      } as unknown as Response;
+    };
+  }
+
+  const open = (opts: { signal?: AbortSignal; malformedFrames?: "throw" } = {}) =>
+    openRouterStream(
+      "chat",
+      { model: "m", messages: [] },
+      {
+        signal: opts.signal ?? new AbortController().signal,
+        onActivity: () => {},
+        end: { terminated: false },
+        ...(opts.malformedFrames ? { malformedFrames: opts.malformedFrames } : {}),
+      },
+    );
+
+  /** Drain the way every real consumer does: throw on an in-band error chunk. */
+  function consume(opts: { signal?: AbortSignal; onChunk?: () => void; malformedFrames?: "throw" } = {}) {
+    return async () => {
+      for await (const c of open(opts)) {
+        if (c.error) throw new Error("the provider stopped mid-answer");
+        opts.onChunk?.();
+      }
+    };
+  }
+
+  it("a stream that breaks after a chunk", async () => {
+    script(dies(WORD));
+    const run = await drive(consume());
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("network:UND_ERR_SOCKET")]]);
+  });
+
+  it("a stream that ends without [DONE]", async () => {
+    script(streamed(WORD));
+    const run = await drive(consume());
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("unfinished")]]);
+  });
+
+  it("an in-band error chunk is an error, not the abort the consumer's throw looks like", async () => {
+    script(streamed(WORD, ERROR_CHUNK, DONE));
+    const run = await drive(consume());
+    expect(run.outcome.ok).toBe(false);
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+    expect(JSON.stringify(run.report.calls)).not.toContain("badgers");
+  });
+
+  it("an in-band error chunk is an error for a consumer that reads on past it", async () => {
+    script(streamed(ERROR_CHUNK));
+    const run = await drive(async () => {
+      for await (const _ of open()) {
+        /* drained */
+      }
+    });
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("in_band")]]);
+  });
+
+  it("a consumer that simply stops is still `aborted`, with nothing said about why", async () => {
+    script(streamed(WORD, WORD, DONE));
+    const run = await drive(async () => {
+      for await (const _ of open()) break;
+    });
+    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+  });
+
+  it("a Stop mid-answer is `aborted`, with nothing said about why", async () => {
+    const stop = new AbortController();
+    script(streamed(WORD, WORD, DONE));
+    const run = await drive(consume({ signal: stop.signal, onChunk: () => stop.abort(new Error("stop")) }));
+    expect(said(run.report)).toEqual([[1, "aborted", null]]);
+  });
+
+  it("a frame that is not JSON, where the caller asked for that to throw, is unreadable", async () => {
+    script(streamed(WORD, "data: {the reader asked about badgers\n\n", DONE));
+    const run = await drive(consume({ malformedFrames: "throw" }));
+    expect(run.outcome.ok).toBe(false);
+    expect(said(run.report)).toEqual([[1, "error", midAnswer("unreadable")]]);
+  });
+
+  it("the accepted attempt of a retried stream is attempt 2, and its death is mid_answer", async () => {
+    script(dropped(), dies(WORD));
+    const run = await drive(consume());
+    expect(said(run.report)).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "error", midAnswer("network:UND_ERR_SOCKET")],
+    ]);
+  });
+
+  it("a 200 with no body never reached the boundary", async () => {
+    script(
+      () => ({ ok: true, status: 200, headers: new Headers(), body: null, text: async () => "" }) as unknown as Response,
+    );
+    const run = await drive(consume());
+    expect(said(run.report)).toEqual([[1, "error", beforeAnswer("unreadable", 200)]]);
+  });
+});
+
+describe("a caller with a loop of its own gets the cause on every row, and no ordinal", () => {
+  it("the PDF reader: three 503s are three rows, each with `attempt` null", async () => {
+    script(...Array.from({ length: 10 }, () => refused(503)));
+    const run = await drive(() => openRouterReader("openai/gpt-5.1").read(new Uint8Array([1, 2, 3]), "read it", undefined));
+    expect(said(run.report)).toEqual([
+      [null, "error", beforeAnswer("refused", 503)],
+      [null, "error", beforeAnswer("refused", 503)],
+      [null, "error", beforeAnswer("refused", 503)],
+    ]);
+  });
+});
