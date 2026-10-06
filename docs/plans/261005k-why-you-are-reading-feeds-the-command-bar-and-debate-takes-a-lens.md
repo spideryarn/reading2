@@ -2,7 +2,7 @@
 
 Owned by [plans.md](../project/plans.md). Queue item `qi-wjb27jre`, part 3 of report `spya-thpsnd`
 ([the note](../user-feedback/261003_1010-fewer-modes-part-3-why-you-are-reading-feeds-the-bar.md)).
-Session `why-reading-feeds-the-bar`. **Status: both stages built, reviewed and on `dev` (`b4500cd96`, 2026-10-05). Not yet seen in full in a browser, and one part is a question for Greg: see the Log's last entries.**
+Session `why-reading-feeds-the-bar`. **Status: both stages built, reviewed and on `dev` (`b4500cd96`, 2026-10-05). Seen in a browser on 2026-10-06 (the Log's first entry). One part is a question for Greg, `[Q-suggest-together]`.**
 
 ## What Greg asked for, and what he has decided
 
@@ -258,6 +258,38 @@ Opus subagent, tests red first.
 - [ ] The feedback note's ending; the queue item; push to `dev`; `worktree:check`; remove the tree.
 
 ## Log
+
+- 2026-10-06: **seen in a browser, after the Overseer repaired the local database.** A Sonnet
+  subagent, Playwright, desktop 1440, iPad 820 and phone 390, on `fowler-phrenology`. Every check
+  passed: the Suggest row first with its description; one press, one call, 2.2 to 2.5 seconds; the
+  list under *From why you're reading* with the model's words in the model's face; hidden while
+  typing and back when cleared; kept across a close and reopen with no second call; arrows and
+  Enter; a search row, a mode row and the Chat row each pressed; a held Enter sends nothing and
+  adds no lines, in the bar's handoff and in Debate's; the reason edited and the list gone; Debate's
+  box there with no run; `/privacy` and `/help`. **The one paid Send** (twice, because the
+  database lost the origin columns for ten minutes mid-check): the angle's question did make Chat
+  search the web (*searched the web (2 searches)*, links and a *From the web* list), the thread is
+  titled *Angle: …* with Debate's icon, and *Your angles* lists it and opens it beside Debate.
+  Spent: about six suggest calls and three chat turns, 10 to 20 cents.
+  **Two layout faults found and fixed**, then looked at again: Debate's box was 117px wide on an
+  iPad, so the button now goes under it when the band is narrow (226px there now); and a suggested
+  row's grey sentence was cut, losing *"Nothing is sent until you press Send"*, so on a suggested
+  row it now takes a line of its own and wraps. **That second fix was seen on a phone only**: the
+  re-look found the sentence still cut to *"Pu…"* on desktop and iPad, so the own-line rule was
+  then applied at every width, and that last step is covered by tests and not by a browser.
+  **Seen and left**: suggested rows are tall on a phone (about four fill the bar); a quick-search
+  row carries *generates*, as 261005i decided; on a cold load the Suggest row arrived several
+  seconds after the bar opened, so a fast Enter ran the row under it (a dev server compiling, or
+  a real wait on the profile read: not established).
+  Shots: [the list](261005k-shot-desktop-suggestions.png),
+  [on a phone, fixed](261005k-shot-fix-phone-bar-suggested.png),
+  [the Chat row's question, unsent](261005k-shot-desktop-seeded-composer.png),
+  [Debate's box on an iPad, fixed](261005k-shot-fix-ipad-debate-box.png),
+  [and on a phone](261005k-shot-fix-phone-debate-box.png),
+  [the angle's answer](261005k-shot-desktop-lens-answer.png),
+  [opened from Your angles](261005k-shot-desktop-angle-opened.png),
+  [Your angles on a phone](261005k-shot-phone-your-angles.png),
+  [the privacy page](261005k-shot-desktop-privacy.png).
 
 - 2026-10-05: **merged with `dev`, the full suite, and pushed** (`b4500cd96`). Six conflicts with
   two sibling sessions, both sides kept (the merge commit `b600f2830` lists them). The migration
