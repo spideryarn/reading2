@@ -366,7 +366,7 @@ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
  * words are here so this eager file does not import that one.
  */
-export const CHAT_FROM_WORDS = ["chats", "debate", "remember", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "remember", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({

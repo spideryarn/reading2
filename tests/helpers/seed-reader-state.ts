@@ -94,7 +94,7 @@ import { currentOwnerId } from "../../src/owner.js";
 import { loadRuns } from "../../src/searches.js";
 import { loadShelf } from "../../src/shelf.js";
 import { originColumns } from "../../src/thread-origin.js";
-import { isLensOrigin, isThreadKind } from "../../src/types.js";
+import { isClaimOrigin, isThreadKind } from "../../src/types.js";
 
 /**
  * Find the article row for `slug`, or say which call was missing.
@@ -264,12 +264,12 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
 
   /* An origin's block points at an identity through the same kind of foreign
      key (`chat_threads_origin_identity_fk`), so it is minted here too. Only a
-     claim has one: a lens origin names no block. */
+     claim has one: a lens, a glossary entry and a cited work name no block. */
   const anchors = [
     ...new Set(
       threads.flatMap((t) => [
         ...(t.anchor ? [t.anchor.blockId] : []),
-        ...(t.origin && !isLensOrigin(t.origin) ? [t.origin.blockId] : []),
+        ...(t.origin && isClaimOrigin(t.origin) ? [t.origin.blockId] : []),
       ]),
     ),
   ];

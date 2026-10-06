@@ -238,6 +238,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             The icon says what kind of thing the term is: a person, place, organisation, event, or a
             work such as a book or paper. Ideas and ordinary terms have none.
           </li>
+          <li>
+            <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
+            in <HelpRef to="mode-chat">Chat</HelpRef> with the term quoted and a question ready, and
+            sends nothing until you press <strong>Send</strong>. Use it when you want to go back and
+            forth about a term; <strong>Dig deeper</strong> gives one researched answer and keeps it
+            on the entry. Once you have asked, a line under the buttons shows how the chat’s latest
+            answer begins; press it to open that conversation again beside the Glossary. The
+            conversation is also in Chat’s list, marked with the Glossary’s icon. Only whoever added
+            the article has this.
+          </li>
         </ul>
         <p>
           The list opens on <strong>prioritised</strong>: only the terms that are hard and carry the
@@ -830,6 +840,15 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             Crossref has none on file, not that nobody has cited the work. Most rows have no count,
             because most works are cited without a DOI. It sits beside influence and does not change
             the order or what the slider hides.
+          </li>
+          <li>
+            <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
+            in <HelpRef to="mode-chat">Chat</HelpRef> with the work named and a question ready, and
+            sends nothing until you press <strong>Send</strong>. Use it to go back and forth about a
+            work; <strong>Dig deeper</strong> gives one researched reading and keeps it on the row.
+            Once you have asked, a line under the row shows how the chat’s latest answer begins; press
+            it to open that conversation again beside Citations. The conversation is also in Chat’s
+            list, marked with Citations’ icon. Only whoever added the article has this.
           </li>
           <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}

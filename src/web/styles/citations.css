@@ -207,6 +207,8 @@
    list stays a list. Labels reuse `.cite-lookup-label`. Every long thing wraps
    anywhere: a source's title or host at 288px must not push the band wide. */
 .cite-investigate { font-size: 0.74rem; }
+/* *Ask in chat*, beside it and the same size (OriginChat.tsx; plan 261006d). */
+.cite-ask-chat { font-size: 0.74rem; }
 
 .cite-inv { margin: 0.3rem 0 0; }
 .cite-inv-wait,
@@ -304,6 +306,7 @@
    narrow-window.css gives. */
 @media (pointer: coarse) {
   .cite-investigate,
+  .cite-ask-chat,
   .cite-inv-toggle,
   .cite-inv-again { min-height: var(--control-h); }
 }

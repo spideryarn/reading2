@@ -59,4 +59,41 @@ describe("origin checked against the transaction's thread snapshot", () => {
     const third = withTurn(second.threads, { threadId: ID, question: "third" }, AT);
     expect(third.thread.origin).toEqual(LENS);
   });
+
+  /* Plan 261006d, D1: an entry is matched by its id, so the name sent with a
+     resend may differ, and the name stored first is the one kept. */
+  describe.each(["glossary", "citations"] as const)("a %s origin", (mode) => {
+    const ITEM: ThreadOrigin = { mode, itemId: "spya-ttm222", quote: "qualia" };
+
+    it("accepts a resend whose name has changed, and keeps the first name", () => {
+      const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);
+      const second = withTurn(
+        first.threads,
+        { threadId: ID, question: "second", origin: { ...ITEM, quote: "Qualia, reworded" } },
+        AT,
+      );
+      expect(second.thread.origin).toEqual(ITEM);
+      expect(second.thread.messages).toHaveLength(4);
+    });
+
+    it("refuses another item's id, the other mode's, and a claim", () => {
+      const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);
+      const otherMode = mode === "glossary" ? "citations" : "glossary";
+      for (const wanted of [
+        { ...ITEM, itemId: "spya-ttm333" },
+        { ...ITEM, mode: otherMode } as ThreadOrigin,
+        CLAIM,
+        LENS,
+      ]) {
+        expect(() => withTurn(first.threads, { threadId: ID, question: "second", origin: wanted }, AT)).toThrow(
+          ChatConflict,
+        );
+      }
+    });
+
+    it("names the chat after the entry, not after the seeded first message", () => {
+      const made = withTurn([], { threadId: ID, question: "About this term…", origin: ITEM }, AT);
+      expect(made.thread.title).toBe(mode === "glossary" ? "Glossary: qualia" : "Cited work: qualia");
+    });
+  });
 });

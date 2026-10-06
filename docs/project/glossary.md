@@ -946,6 +946,59 @@ for an unquoted term — its own prompt, saying honestly that the glossary named
 alludes to — is a real option and nobody has decided it.
 [The postmortem](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) has the rest.
 
+### Asking about an entry in chat
+
+Since 2026-10-06 the open entry has a second button beside Dig deeper, **Ask in chat**. Dig deeper
+is unchanged. Asked what should happen to Dig deeper once a chat can remember the entry it was
+started from:
+
+> let's start with adding the "Ask in chat" button
+>
+> — Greg, 2026-10-06
+
+What the owner gets:
+
+- **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
+  after it. Nothing is sent until Send, so a press spends nothing, and Back returns to the Glossary.
+- **A line under the buttons once a chat exists**: how many questions were asked, and how the
+  chat's latest answer begins. Pressing it opens that conversation beside the Glossary
+  (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
+- **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
+  the filter above the list gains *Glossary*.
+- **A visitor has neither** the button nor the line.
+
+It is Debate's *Check this claim in chat* with a different origin, and nearly all of it is that
+machinery: read [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) first. What
+is this mode's own:
+
+- **The origin is the entry's id, and a snapshot of its name**:
+  `{ mode: "glossary", itemId, quote }`. **It is matched by the mode and the id alone**
+  (`sameOrigin` in [`src/types.ts`](../../src/types.ts)), so the line survives a regeneration that
+  rewords the entry, which a claim's does not. The name is kept so the chat's title
+  (*Glossary: qualia*) and the card in Chat's list need no look-up and still read once the entry
+  has gone. An id is not inherited across every regeneration
+  ([§ Where the previous list comes from](#where-the-previous-list-comes-from-and-the-four-answers-it-can-give)):
+  when it is not, the line goes and the conversation stays in Chat's list.
+- **The name is cut to 300 characters before it is sent** (`originName`, `MAX_ORIGIN_NAME_CHARS`),
+  because a glossary name has no length limit of its own and the route refuses a longer snapshot.
+  The question in the box still quotes the whole name.
+- **The server never looks the id up.** It checks the shape and nothing else, so a chat about an
+  entry that has since been hidden or regenerated away is still a chat.
+- **It is offered on a term the article never quotes**, where Dig deeper is disabled: Dig deeper
+  needs a passage to anchor to, and a chat does not.
+- **It is not the *Ask in chat* the *Look up a term* box offers** for a word the article does not
+  contain ([§ Looking a term up](#looking-a-term-up)). That one has no entry to remember, records
+  no origin, and is unchanged.
+- **The hover card in the prose has no *Ask in chat*.** Its Dig deeper is as it was.
+
+The button and the line are shared with Debate and Citations:
+[`OriginChat.tsx`](../../src/web/OriginChat.tsx) and
+[`origin-chat.css`](../../src/web/styles/origin-chat.css). The seed is `askAboutGlossaryEntry` in
+[`chat-handoff.ts`](../../src/web/chat-handoff.ts). The plan is
+[261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md); the journey through
+the whole app is held by
+[`glossary-and-citations-ask-in-chat.test.tsx`](../../tests/glossary-and-citations-ask-in-chat.test.tsx).
+
 ### Looking a term up
 
 A reader asked for one, the day after the bug above:

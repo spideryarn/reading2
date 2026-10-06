@@ -239,6 +239,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
+import { OriginChatMark } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseCiters } from "./useCiters.js";
@@ -2092,9 +2093,9 @@ function ReceptionList({
  * **The owner's heading also starts a chat about the claim, and shows the way
  * back to one** (`chats`; `null` for a visitor, who gets neither). The button
  * wears Chat's icon from the bar, because it takes the reader into Chat
- * (docs/project/icons.md). The mark wears the floating chat's, because it
- * opens the conversation beside Debate; it sits on a line of its own under
- * the claim, so the latest answer's opening has room.
+ * (docs/project/icons.md). The mark is the shared `OriginChatMark`
+ * (OriginChat.tsx); it sits on a line of its own under the claim, so the
+ * latest answer's opening has room.
  */
 function ClaimsList({
   groups,
@@ -2144,29 +2145,15 @@ function ClaimsList({
               >
                 {group.rows.length}
               </span>
+              {/* The shared mark (OriginChat.tsx), which Glossary's entries and
+                  Citations' rows draw too. Its press does not fold the claim. */}
               {chats && chat && (
-                <Tooltip placement="bottom" content={<TipNote>{claimChatTip(chat.turns, Boolean(chat.lastLine))}</TipNote>}>
-                  <button
-                    type="button"
-                    className="dbt-claim-chat"
-                    aria-label={DEBATE_OPEN_CLAIM_CHAT}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      chats.onOpen(chat.id);
-                    }}
-                  >
-                    <MessageSquare size={12} aria-hidden="true" />
-                    <span className="dbt-claim-chat-count">{chat.turns}</span>
-                    {/* The chat's own latest answer, clipped: a model's words,
-                        so in the model's face (docs/project/fonts.md). Absent
-                        while the newest question is unanswered. */}
-                    {chat.lastLine ? (
-                      <span className="dbt-claim-chat-line voice-ai">{chat.lastLine}</span>
-                    ) : (
-                      <span className="dbt-claim-chat-waiting">No answer yet</span>
-                    )}
-                  </button>
-                </Tooltip>
+                <OriginChatMark
+                  chat={chat}
+                  label={DEBATE_OPEN_CLAIM_CHAT}
+                  className="dbt-claim-chat"
+                  onOpen={chats.onOpen}
+                />
               )}
             </summary>
             <Rows rows={group.rows} keyRows={keyRows} />
@@ -2175,12 +2162,6 @@ function ClaimsList({
       })}
     </>
   );
-}
-
-/** The mark's tooltip: what a press does, what the number is, and what the words are. */
-function claimChatTip(turns: number, answered: boolean): string {
-  const asked = `${turns} ${turns === 1 ? "question" : "questions"} so far.`;
-  return `${DEBATE_OPEN_CLAIM_CHAT}. ${asked}${answered ? " The words are how its latest answer begins." : ""}`;
 }
 
 /**

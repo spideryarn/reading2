@@ -4122,21 +4122,26 @@ export type ChatAnchor =
  *
  * **A union on `mode`**, so a claim cannot exist without its block and its
  * words. A claim has no id: its identity is `(blockId, quote)`, the article's
- * own words as they were when the chat started. Later callers add arms
- * (`summary`, `glossary`, `citations`); `chat_threads_origin_mode` in
- * src/db/schema.ts already lists all four, and the route accepts only the
- * modes that are built (`ORIGIN_MODES`).
+ * own words as they were when the chat started. `summary` is reserved and
+ * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
+ * route accepts only the modes that are built (`ORIGIN_MODES`).
+ *
+ * **A glossary entry and a cited work since 2026-10-06**
+ * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
+ * each has a durable id, so the id is its identity and the name beside it is
+ * a snapshot. See `GlossaryOrigin`.
  *
  * **Debate has two shapes since 2026-10-05, and `mode` does not tell them
  * apart** (plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A):
  * a claim, and a *lens*, an angle the reader typed to look at the debate from.
  * Both say `mode: "debate"`, so narrowing on `mode` reaches neither's fields.
- * Ask `isLensOrigin`; a claim never equals a lens (`sameOrigin`).
+ * Ask `isLensOrigin` or `isClaimOrigin`; a claim never equals a lens
+ * (`sameOrigin`).
  *
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin;
 
 /** One of Debate's claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
@@ -4147,6 +4152,42 @@ export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
  * may share one lens; they are then two lines in Debate's *Your angles*.
  */
 export type LensOrigin = { mode: "debate"; lens: string };
+
+/**
+ * **One entry of the Glossary**: its id, and its name when the chat started.
+ *
+ * The id is durable (inherited across regenerations, src/glossary.ts), so
+ * **the origin is matched by `mode` and `itemId` alone** (`sameOrigin`) and
+ * the entry's mark survives a regeneration that rewords it. `quote` is a
+ * snapshot of the name, kept so the chat's title and the tooltip in Chat's
+ * list need no look-up and still read once the entry has gone. At most
+ * `MAX_ORIGIN_NAME_CHARS`; the sender cuts it with `originName`.
+ */
+export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string };
+
+/** One work the article cites: its id, and its title when the chat started. `GlossaryOrigin`'s rules. */
+export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
+
+/**
+ * The most the name snapshot of a glossary or citations origin may be. The
+ * route refuses a longer one, so **every sender cuts with `originName`**: a
+ * glossary name has no length limit of its own (plan 261006d's review, F1).
+ */
+export const MAX_ORIGIN_NAME_CHARS = 300;
+
+/**
+ * An entry's name as its origin stores it: trimmed, and cut to
+ * `MAX_ORIGIN_NAME_CHARS` without leaving half a surrogate pair. A cut is
+ * fine here, unlike a lens: the name is a label and the id is the identity.
+ */
+export function originName(name: string): string {
+  const clean = name.trim();
+  if (clean.length <= MAX_ORIGIN_NAME_CHARS) return clean;
+  return clean
+    .slice(0, MAX_ORIGIN_NAME_CHARS)
+    .replace(/[\uD800-\uDBFF]$/, "")
+    .trimEnd();
+}
 
 /**
  * The most a lens may be. The cap of *why you're reading this*, because the
@@ -4160,19 +4201,36 @@ export function isLensOrigin(origin: ThreadOrigin): origin is LensOrigin {
   return "lens" in origin;
 }
 
+/** Is this origin one of Debate's claims: the one shape that names a block? */
+export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
+  return origin.mode === "debate" && !isLensOrigin(origin);
+}
+
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * Are these the same origin? What the route's 409 and the caller's way back
  * both ask, so there is one answer. Exact: a claim reworded by a new search is
  * a different claim. **A claim and a lens are never the same**, whatever their
  * words, so the shapes are compared before any field is.
+ *
+ * **A glossary entry or a cited work is its id**: the name is a snapshot and
+ * is not compared, so a reworded entry is still the same origin (plan
+ * 261006d, D1).
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
-  if (a.mode !== b.mode) return false;
-  if (isLensOrigin(a)) return isLensOrigin(b) && a.lens === b.lens;
-  return !isLensOrigin(b) && a.blockId === b.blockId && a.quote === b.quote;
+  switch (a.mode) {
+    case "glossary":
+    case "citations":
+      return b.mode === a.mode && a.itemId === b.itemId;
+    case "debate":
+      if (b.mode !== "debate") return false;
+      if (isLensOrigin(a)) return isLensOrigin(b) && a.lens === b.lens;
+      return !isLensOrigin(b) && a.blockId === b.blockId && a.quote === b.quote;
+    default:
+      return a satisfies never;
+  }
 }
 
 export interface ChatThread {

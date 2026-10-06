@@ -438,9 +438,10 @@ import {
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
 import {
-  isLensOrigin,
+  isClaimOrigin,
   isThreadKind,
   MAX_LENS_CHARS,
+  MAX_ORIGIN_NAME_CHARS,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
   sameOrigin,
@@ -3142,10 +3143,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* A claim's block is one of this article's. The foreign key would say so
      too, as a 500 out of a transaction. The quote is not compared with the
      block: it is a snapshot of the item's words, kept for the list to show.
-     A lens has no block, so there is nothing of it to check here. */
+     **Only a claim names a block.** A lens has none, and a glossary entry or
+     a cited work is an id this server never dereferences (plan 261006d, D3):
+     a made-up one gives its owner a chat with no mark, and nothing else. */
   if (
     wantedOrigin &&
-    !isLensOrigin(wantedOrigin) &&
+    isClaimOrigin(wantedOrigin) &&
     !article.blocks.some((b) => b.id === wantedOrigin.blockId)
   ) {
     throw httpError(400, "origin.blockId is not a block of this article");
@@ -4570,8 +4573,9 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
 /**
  * The `origin` field of a chat request, as a `ThreadOrigin` or nothing.
  *
- * Shape only; whether the block is the article's is checked by the caller,
- * which has the article. A mode that is not built is a 400, including the ones
+ * Shape only; whether a claim's block is the article's is checked by the
+ * caller, which has the article. A glossary or citations `itemId` is never
+ * checked against anything. A mode that is not built is a 400, including the ones
  * the database's CHECK already lists.
  *
  * **No part of the quote reaches a thrown message**, for `parseAnchor`'s
@@ -4608,10 +4612,39 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
       }
       return { mode: built, blockId, quote };
     }
+    case "glossary":
+    case "citations":
+      return parseItemOrigin(built, origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
   }
+}
+
+/**
+ * **A glossary entry's or a cited work's origin**: the entry's durable id,
+ * and a snapshot of its name (plan 261006d, D1 and D3).
+ *
+ * **Shape only.** The id is not looked up, so a regenerated or removed entry
+ * never refuses its own chat. The name is at most `MAX_ORIGIN_NAME_CHARS`,
+ * which every sender cuts to (`originName` in src/types.ts), so only a
+ * hand-made body meets the 413. No part of the name reaches a thrown message.
+ */
+function parseItemOrigin(mode: "glossary" | "citations", body: Record<string, unknown>): ThreadOrigin {
+  const { itemId, quote, blockId, lens } = body;
+  if (blockId !== undefined || lens !== undefined) {
+    throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
+  }
+  if (typeof itemId !== "string" || !isSpideryarnId(itemId)) {
+    throw httpError(400, "origin.itemId must be an item id");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode, itemId, quote };
 }
 
 /**

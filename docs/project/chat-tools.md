@@ -470,7 +470,9 @@ From 2026-10-01 it showed chats only.
   origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
   Learn's three sub-modes as one. It is drawn only when there is more than one source. The
-  choice is `?chatfrom=` ([url-state.md](url-state.md)).
+  choice is `?chatfrom=` ([url-state.md](url-state.md)). The sources are Debate, Glossary and
+  Citations (a chat started from a claim or an angle, an entry, a cited work), Learn, and a
+  passage.
 
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
 `tests/chat-list-sources.test.tsx` (the panel).
