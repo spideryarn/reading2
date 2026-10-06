@@ -122,6 +122,46 @@ shelf, which readers see, does not change in this stage.
   goes when scrolled to the end, and is absent at desktop where everything fits; both themes.
 - `docs/project/admin-costs.md` gets a sentence.
 
+### Stage 2 code-review evidence — 2026-10-06
+
+Candidate `9a7898a9d`: nine deliberate mutations checked mount measurement, scrolling, both resize
+targets, end tolerance, the fit case, the inner/outer layout and the shared table's default. Eight
+failed their tests. Removing the scroll listener's cleanup survived: the test claiming that
+listening stopped checked only `ResizeObserver` disconnection. The class is **partial lifecycle
+verification** — one resource's cleanup standing in for all resources.
+
+The test now calibrates a position-read spy with a live scroll, then dispatches another scroll on
+the detached box after unmount and requires no reads. With cleanup removed it failed (two reads,
+exit 1); with cleanup restored the three requested suites passed (69 tests, exit 0). Production
+code was already correct and is unchanged. The previously unproved fit and inner/outer tests both
+failed their respective mutations. Browser layout and appearance remain the separate check above.
+
+### Stage 2: what landed — 2026-10-06
+
+Built as planned, in `9a7898a9d` and the follow-up commit after it. Four things differ from the
+plan's wording or were decided on the way:
+
+- **A tint, not a fade to the page colour.** The shade is a wash of the text colour, because a fade
+  to the page colour would be invisible over the opaque pinned label cells and would rub out their
+  first letters.
+- **`SidewaysScrollBox.tsx` is now in the reader's shelf bundle** (`SHARED_WITH_READER` in
+  `tests/eager-client-graph.test.ts`), because `DataTable` imports it for the opt-in prop: about a
+  hundred lines the shelf downloads and never runs. Accepted; the way back out is to hand
+  `DataTable` the box as a component prop.
+- **Browser check** (Playwright, local admin, 390 / 820 / 1440, both themes): the cue appears,
+  clears at the end of the scroll, follows *then by* with no resize (so a real `ResizeObserver` does
+  fire on the table), disappears where the table fits, lets clicks through, and leaves
+  `/admin/users` unwrapped. The shade was clear on the light theme and faint on the dark one, so the
+  dark tint was doubled (15% → 30%) afterwards; **that last change has not been looked at in a
+  browser again**. Not seen: the causes table (the local data has no failure causes) and the shelf's
+  table (none in the local data).
+- **GPT Sol's code review** ([the answer](261006g-stage-2-code-review-sol.md)): land it with its
+  fix. F1 (a test that claimed listening stopped checked only the observer) it fixed; F3 (the box's
+  classes written twice) was done afterwards as one exported `SCROLL_BOX`. **F2 is left open and is
+  wider than this stage:** no sideways-scrolling box in the app can be focused from the keyboard,
+  this one included, so a keyboard-only user in a browser that does not focus scrollers by itself
+  cannot scroll these tables. That predates this work and wants one shared change.
+
 ## Reviews
 
 GPT Sol on this plan before building (read-only), and on each stage's code after (write-capable).

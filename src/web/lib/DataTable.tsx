@@ -75,7 +75,7 @@ import {
 import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
 import { ContextMenu, DropdownMenu } from "radix-ui";
 import { ControlTip, Tooltip } from "../Tooltip.js";
-import { SidewaysScrollBox } from "./SidewaysScrollBox.js";
+import { SCROLL_BOX, SidewaysScrollBox } from "./SidewaysScrollBox.js";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -666,9 +666,9 @@ export function DataTable<T>({
        page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
        (plan 260928a). `relative` with no z-index creates no stacking context.
 
-       `SidewaysScrollBox` above is this same box with a cue, and repeats these
-       classes: change one and change the other. */
-    <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">{drawn}</div>
+       `SidewaysScrollBox` above is this same box with a cue; `SCROLL_BOX` is
+       the one copy of its classes. */
+    <div className={SCROLL_BOX}>{drawn}</div>
   );
 }
 

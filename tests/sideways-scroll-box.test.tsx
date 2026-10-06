@@ -202,9 +202,19 @@ describe("SidewaysScrollBox", () => {
     Object.assign(layout, { content: 900, box: 360 });
     mount(wide);
     const el = box();
+    if (!el) throw new Error("no scroll box to unmount");
+    const readPosition = vi.spyOn(el, "scrollLeft", "get");
+    /* Calibrate the probe: a live scroll handler must read the position. */
+    act(() => el.dispatchEvent(new Event("scroll")));
+    expect(readPosition).toHaveBeenCalled();
     act(() => root.render(null));
     expect(FakeResizeObserver.instances.every((o) => o.targets.size === 0)).toBe(true);
-    expect(el ? FakeResizeObserver.resized(el) : -1).toBe(0);
+    expect(FakeResizeObserver.resized(el)).toBe(0);
+    /* A leaked listener still measures a detached box, even though React
+       ignores its state update. Observer cleanup alone cannot catch that. */
+    readPosition.mockClear();
+    act(() => el.dispatchEvent(new Event("scroll")));
+    expect(readPosition).not.toHaveBeenCalled();
   });
 });
 

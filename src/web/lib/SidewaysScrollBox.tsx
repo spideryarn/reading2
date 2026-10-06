@@ -86,7 +86,17 @@ function useMoreSideways(): [React.RefObject<HTMLDivElement | null>, More] {
   return [ref, more];
 }
 
-const SHADE = "tw:pointer-events-none tw:absolute tw:inset-y-px tw:z-20 tw:w-6 tw:from-foreground/15 tw:to-transparent";
+/* 15% of the text colour on a light page; twice that on a dark one, where a
+   light wash over a dark ground was too faint to notice at the same strength
+   (browser check, 2026-10-06). */
+const SHADE =
+  "tw:pointer-events-none tw:absolute tw:inset-y-px tw:z-20 tw:w-6 tw:from-foreground/15 tw:dark:from-foreground/30 tw:to-transparent";
+
+/**
+ * The scrolling box itself. Exported for `DataTable`, which draws the same box
+ * without the cue, so the two cannot drift apart.
+ */
+export const SCROLL_BOX = "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
 
 export function SidewaysScrollBox({
   className,
@@ -109,7 +119,7 @@ export function SidewaysScrollBox({
       <div
         ref={box}
         data-scroll-box=""
-        className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border"
+        className={SCROLL_BOX}
       >
         {children}
       </div>
