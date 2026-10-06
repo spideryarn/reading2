@@ -1541,6 +1541,12 @@ describe("judgeServedRobots", () => {
     expect(judgeServedRobots(200, "text/plain; charset=utf-8", shipped)).toEqual([]);
   });
 
+  it("accepts CRLF and CR line endings, including comments between groups", () => {
+    for (const ending of ["\r\n", "\r"]) {
+      expect(judgeServedRobots(200, "text/plain; charset=utf-8", shipped.replaceAll("\n", ending))).toEqual([]);
+    }
+  });
+
   it("fails a file that restricts one named bot and leaves every other crawler unrestricted", () => {
     const twitterbotOnly = "User-agent: *\nAllow: /\n\nUser-agent: Twitterbot\nDisallow: /\n";
     expect(judgeServedRobots(200, "text/plain", twitterbotOnly)).not.toEqual([]);

@@ -104,8 +104,8 @@ on it. It does make one extra fetch when the first answer names an interval othe
 and it keeps the last good number, so a failing answer does not change it. Reported, not changed.
 Every other fleet panel polls on a constant.
 
-**One behaviour changed besides the fix.** Refresh used to restart the timer as well as fetch. Now
-it only fetches, so the next poll can land sooner after a Refresh than a full interval.
+**Refresh still restarts the timer**, as it did before the split. The first build of this stage
+lost that; the review below put it back.
 
 ## Claims that turned out false
 
@@ -125,3 +125,40 @@ it only fetches, so the next poll can land sooner after a Refresh than a full in
 - `npm run cycles`, `npm run lint:hook-deps`: clean. `npm run build:fleet`: builds.
 - `npx biome lint` on the touched files: three complexity notes on functions this work did not
   change, nothing new.
+
+## Review
+
+GPT Sol, 2026-10-06: **"ship with these fixes (applied)"** for S7 and for S8.
+[The prompt](261006j-sixth-sweep-s7-s8-code-review-prompt.md),
+[its answer](261006j-sixth-sweep-s7-s8-code-review-sol.md). Both findings were reproduced red
+first and fixed by Sol. The counts under Gates above are from before the review; the polling file
+now holds eleven tests and the checker's self-test 126 cases.
+
+- **C1, S7: the judge was sensitive to line endings.** The real robots file served with CRLF gave
+  22 problems: `/#.*$/` stops at a carriage return, so the comments between the groups read as
+  rules. Sol normalised the body inside `judgeServedRobots` and added the regression test.
+  **Follow-up, by the builder:** Sol thought `scripts/check-public-shell.ts` was out of scope, so
+  the standalone checker still had the defect. Two cases were added to its `--self-test` (CRLF and
+  lone CR, with a comment between the groups) and both failed. The fix now lives in
+  `judgeRobotsTxt` itself, which splits on any line ending, and the copy in `judgeServedRobots` is
+  gone. One place. Sol's test still passes through it.
+- **C2, S8: splitting the effect lost the way Refresh invalidated pending polls.** A poll started
+  before Refresh stayed live, so its older "dev is green" could overwrite the refreshed "dev is not
+  green". Refresh just before a tick also made two adjacent requests. Sol added `refreshNonce` to
+  the timer effect's dependencies, with two tests. **Checked by the builder:** with the dependency
+  taken out again, both tests fail. The guarantee is the effect's own `live` flag: a Refresh
+  re-runs the timer effect, its cleanup sets `live = false` for that timer's requests, and every
+  one of them checks `live` before it sets the view, whenever it resolves.
+- **One race is left, and it is older than this work.** The fetch that Refresh starts stays live
+  until the next Refresh. If it takes longer than a whole interval (15 seconds at the least), a
+  later poll can answer first and then be overwritten by it. The single effect had the same gap.
+- **The one-line fix, tried independently by Sol:** six of the original seven polling tests fail,
+  with 51 requests in the alternating-answer case where at most five are allowed.
+- Sol also added two controls: polling carries on after a failed fetch, and each new interval is
+  waited for when successful answers alternate between two numbers.
+
+## For the Overseer
+
+**A `robots.txt` change the judge does not expect now fails the deploy's verification step, and
+that step runs after the deploy has shipped.** The fix is to change `judgeRobotsTxt` (and the lists
+beside it in `scripts/check-public-shell.ts`) and `public/robots.txt` together, in one commit.

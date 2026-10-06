@@ -389,6 +389,7 @@ function useReadinessView(api: ReadinessApi, refreshNonce: number): ReadinessVie
   }, [api, refreshNonce]);
 
   const everyMs = Math.min(10 * 60_000, Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refresh restarts the timer and invalidates pending polls from before Refresh.
   useEffect(() => {
     let live = true;
     const timer = setInterval(() => {
@@ -400,7 +401,7 @@ function useReadinessView(api: ReadinessApi, refreshNonce: number): ReadinessVie
       live = false;
       clearInterval(timer);
     };
-  }, [api, everyMs]);
+  }, [api, everyMs, refreshNonce]);
 
   return view;
 }
