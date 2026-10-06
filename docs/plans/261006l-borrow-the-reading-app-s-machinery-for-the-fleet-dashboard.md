@@ -12,7 +12,8 @@ Queue item `qi-czanp63a`. Owner doc: [fleet-dashboard-modes.md](../project/fleet
 >
 > — Greg, 2026-09-09
 
-**Status: plan revised after GPT Sol's review; building.**
+**Status: finished, 2026-10-07.** All three stages landed, reviewed by GPT Sol and checked in a
+browser. What is left is for Greg or the Overseer, under [§ Left over](#left-over).
 
 ## What the inventory found (stage 0, done 2026-10-06)
 
@@ -270,3 +271,28 @@ Sonnet subagent after stages 1 and 2 against a private port, never `:8787`.
     position (`expected 10 to be 362`). The three "does not steal" tests were green from the start
     and are held by mutation instead.
   - Not checked in a real browser: all three.
+- 2026-10-07 — **Closed.** Sol's narrow check of the F19 fix found F21 (the focused title was read
+  during render, which can precede its commit) and replaced it with a `getSnapshotBeforeUpdate`
+  boundary; verdict ship with its fixes. Two browser passes on a private port at 1440, 1000, 800,
+  iPad and phone: history lengths, Back and Forward, the scroll restore (800 → 800), focus after
+  Back, no preview under a finger, and the preview 10px right of its card at one width. No console
+  errors. The first pass is what found the preview opening over its own card.
+  - **The full suite caught what the stage gates did not:** `tests/fleet-readiness-route.test.ts`
+    grepped `App.tsx` for `mode === "readiness"`, which Stage 3's `switch` removed. None of the
+    suites named in the stage briefs included it. It now reads the `case "readiness"` arm for its own
+    panel, seen red with another panel in the arm. Full suite and typecheck green on the tree merged
+    with `dev`.
+
+## Left over
+
+- **Recent messages in the preview.** Greg's "rich tooltips" could mean a look at what the session
+  last said. That needs a transcript read per hover, which the shared-path rule in
+  fleet-dashboard-modes.md forbids; it would want its own route. A product call.
+- **The preview's `:focus-visible` behaviour on a real iPad**, and Safari's own scroll restoration
+  racing ours on Back. Emulated touch passed; a real device has not been tried.
+- **Import the product's `Tooltip.tsx` instead of keeping the port.** It is a true leaf. The port now
+  has two props the product's lacks, so the two have drifted a little further.
+- **After a refused History API push the entry is never made**, so Back from that session leaves the
+  tab. Reachable only past Safari's 100 calls in 30 s. Accepted in the plan review.
+- **`overseer-queue.md` still lists the `.dock-modes` share count as open work**; closed 2026-09-09.
+
