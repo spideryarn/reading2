@@ -81,7 +81,79 @@ describe("identityOf", () => {
   });
 });
 
+describe("identityOf — a page about an arXiv paper is the arXiv paper", () => {
+  /* docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § The arXiv mirrors are arXiv. The id comes from the registry
+     (src/paper-sources.ts § arxivIdOf), so a shape learned there is known here. */
+  it.each([
+    "https://huggingface.co/papers/2001.08361",
+    "https://huggingface.co/papers/2001.08361v2",
+    "https://alphaxiv.org/abs/2001.08361",
+    "https://www.alphaxiv.org/abs/2001.08361v2",
+    "https://www.alphaxiv.org/overview/2001.08361",
+    "https://browse.arxiv.org/abs/2001.08361",
+    "https://arxiv.org/format/2001.08361",
+  ])("gives %s what it gives the arXiv address", (url) => {
+    expect(identityOf(url)).toEqual({ arxiv: "2001.08361" });
+    expect(identityOf(url)).toEqual(identityOf("https://arxiv.org/abs/2001.08361"));
+  });
+
+  it("still reads an old-style id, an encoded slash and a trailing dot on the host, as it did", () => {
+    expect(identityOf("https://arxiv.org/abs/hep-th/9901001v2")).toEqual({ arxiv: "hep-th/9901001" });
+    expect(identityOf("https://arxiv.org/abs/hep-th%2F9901001")).toEqual({ arxiv: "hep-th/9901001" });
+    expect(identityOf("https://arxiv.org./abs/2001.08361")).toEqual({ arxiv: "2001.08361" });
+    expect(identityOf("https://ARXIV.org/ABS/2001.08361V3")).toEqual({ arxiv: "2001.08361" });
+  });
+
+  it("still calls arXiv's own DOI a DOI, so a work keyed by it goes on matching", () => {
+    expect(identityOf("https://doi.org/10.48550/arXiv.2001.08361")).toEqual({ doi: "10.48550/arxiv.2001.08361" });
+  });
+
+  it("takes nothing from a mirror's other pages, a look-alike host, or an id hidden behind an escape", () => {
+    for (const url of [
+      "https://huggingface.co/papers",
+      "https://huggingface.co/papers/trending",
+      "https://huggingface.co/openai/whisper-large-v3",
+      "https://huggingface.co/papers/2001.08361/discussion",
+      "https://huggingface.co.evil.example/papers/2001.08361",
+      "https://huggingface.co:8443/papers/2001.08361",
+      "https://alphaxiv.org/",
+      "https://notalphaxiv.org/abs/2001.08361",
+      "https://arxiv.org/abs/2001.08361%3Fx",
+      "https://arxiv.org/abs/2001.08361%23x",
+      "https://arxiv.org/abs%5C2001.08361",
+      "https://arxiv.org/abs/2001.08361%2Fextra",
+    ]) {
+      expect(identityOf(url), url).toEqual({});
+    }
+  });
+});
+
 describe("matchOf", () => {
+  it("matches a work cited by its Hugging Face or alphaXiv page to the article stored under arXiv's PDF", () => {
+    /* End to end, the way Citations meets it: the article linked the mirror
+       page, so the work's link is that page (`linkFrom: "article"`), and the
+       article we hold was fetched from the PDF the arXiv source names. */
+    const held = candidate({ urls: ["https://arxiv.org/pdf/2001.08361"] });
+    for (const url of [
+      "https://huggingface.co/papers/2001.08361",
+      "https://www.alphaxiv.org/abs/2001.08361",
+      "https://www.alphaxiv.org/overview/2001.08361v2",
+    ]) {
+      const cited = work({ url, linkFrom: "article" });
+      expect(matchOf(cited, held), url).toBe("arxiv");
+      expect(matchOf(cited, candidate({ urls: ["https://arxiv.org/pdf/2001.08361v3"] })), url).toBe("arxiv");
+      expect(matchOf(cited, candidate({ urls: ["https://arxiv.org/pdf/2001.08362"] })), url).toBeNull();
+      expect(matchOf(cited, candidate({ guessedUrl: "https://arxiv.org/abs/2001.08361" })), url).toBe("guessed-id");
+    }
+    /* And the other way round: the article we hold was added by its mirror page. */
+    expect(matchOf(ARXIV_WORK, candidate({ urls: ["https://huggingface.co/papers/2001.08361"] }))).toBe("arxiv");
+    /* A Hugging Face page that is not a paper stays an address. */
+    const model = work({ url: "https://huggingface.co/openai/whisper-large-v3", linkFrom: "article" });
+    expect(matchOf(model, held)).toBeNull();
+    expect(matchOf(model, candidate({ urls: ["https://huggingface.co/openai/whisper-large-v3"] }))).toBe("address");
+  });
+
   it("matches an arXiv work to an article fetched from its PDF, any version", () => {
     expect(matchOf(ARXIV_WORK, candidate({ urls: ["https://arxiv.org/pdf/2001.08361v2"] }))).toBe("arxiv");
     expect(matchOf(ARXIV_WORK, candidate({ urls: ["https://arxiv.org/abs/2001.08362"] }))).toBeNull();

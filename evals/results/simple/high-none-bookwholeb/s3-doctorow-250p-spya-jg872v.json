@@ -1,0 +1,26 @@
+{
+  "arm": "high-none-bookwholeb",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/11",
+  "sourceSha256": "edea9e1d8f0e6889d7c80a2d29875c0a9e8b8c7cd4460d87580a96d33395365b",
+  "at": "2026-10-05T23:50:58.979Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "f3dab4d1b7438cff0f6d5a16ddcac1dc4df7e1b9991ba1e2d59e69c879261d5b",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 26003,
+  "costUsd": null,
+  "tokens": {
+    "input": 6256,
+    "output": 1605,
+    "reasoning": null
+  },
+  "ok": false,
+  "error": "The model wrote 4 \"brief\" paragraphs and the limit is 3. Nothing is kept rather than a cut-down version, because a truncated orientation is a wrong one."
+}

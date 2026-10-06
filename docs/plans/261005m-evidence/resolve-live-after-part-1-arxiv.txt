@@ -1,0 +1,30 @@
+resolve-live, 2026-10-06T02:11:14.894Z
+pasted address | source | candidates asked | what arrived | does urlKey of the address it ended on equal the paper's key
+
+ok      Attention
+        https://huggingface.co/papers/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 2
+        html 188707 bytes; ended on https://arxiv.org/html/1706.03762; urlKey(end) === key: true
+ok      DeepSeek-R1
+        https://huggingface.co/papers/2501.12948
+        source arxiv; key arxiv.org/abs/2501.12948; slug arxiv-2501-12948
+        asked 1 of 2
+        html 2063382 bytes; ended on https://arxiv.org/html/2501.12948; urlKey(end) === key: true
+ok      Attention
+        https://www.alphaxiv.org/abs/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 2 (the same candidates as a row above: not fetched again)
+        html 188707 bytes; ended on https://arxiv.org/html/1706.03762; urlKey(end) === key: true
+ok      DeepSeek-R1
+        https://www.alphaxiv.org/abs/2501.12948
+        source arxiv; key arxiv.org/abs/2501.12948; slug arxiv-2501-12948
+        asked 1 of 2 (the same candidates as a row above: not fetched again)
+        html 2063382 bytes; ended on https://arxiv.org/html/2501.12948; urlKey(end) === key: true
+ok      alphaXiv /overview/
+        https://www.alphaxiv.org/overview/1706.03762
+        source arxiv; key arxiv.org/abs/1706.03762; slug arxiv-1706-03762
+        asked 1 of 2 (the same candidates as a row above: not fetched again)
+        html 188707 bytes; ended on https://arxiv.org/html/1706.03762; urlKey(end) === key: true
+
+5 cases, 5 ok, 0 not ok

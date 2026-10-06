@@ -69,6 +69,11 @@ const SHARED = new Set([
      (types only) and nothing else. Plan 261003m, stage 2. */
   "citation-effective-influence.js",
   "ids.js", // minting and validating block ids
+  /* Which pasted addresses name a paper a source knows (arXiv), and that
+     paper's one key and slug: `ingest.js` asks it in `urlKey` and
+     `slugFromUrl`, which the add page calls. Pure string work; imports
+     nothing. Plan 261005l. */
+  "paper-sources.js",
   /* Whether a section title is the author's heading kept (`sameHeading`), and
      the heading tree's own preamble title — the pipeline checks the claim with
      it and the client voices the title with it (src/web/tree.ts §

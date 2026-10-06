@@ -1,0 +1,375 @@
+{
+  "arm": "high-none-opusbook3a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/12",
+  "sourceSha256": "f1048c195be156eef39d6cabd66e4c08872f811931dc8d509ebbfd92b00480d3",
+  "at": "2026-10-06T00:21:05.093Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "e6a93616d15d191c3e3d229ccb55bf443ee77200d21192a2b5ac38d46e0f4322",
+  "power": "high",
+  "guard": true,
+  "wallMs": 133800,
+  "costUsd": 1.6117132,
+  "tokens": {
+    "input": 21446,
+    "output": 15116,
+    "reasoning": 8680
+  },
+  "briefReadyMs": 45589,
+  "fullerReadyMs": 133793,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 765,
+  "briefWords": 108,
+  "fuller": [
+    {
+      "text": "With a Little Help is a collection of short science fiction stories by Cory Doctorow, with an introduction by musician Jonathan Coulton and a closing essay by Doctorow's literary agent. Coulton calls the book an experiment: a test of new ways to publish, market and sell a book. Doctorow self-published it under a Creative Commons license, which lets anyone share and remix the work as long as they are not selling it.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-wzu9ce"
+      ],
+      "sentences": [
+        {
+          "text": "With a Little Help is a collection of short science fiction stories by Cory Doctorow, with an introduction by musician Jonathan Coulton and a closing essay by Doctorow's literary agent.",
+          "id": null,
+          "key": "a collection of short science fiction stories"
+        },
+        {
+          "text": "Coulton calls the book an experiment: a test of new ways to publish, market and sell a book.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Doctorow self-published it under a Creative Commons license, which lets anyone share and remix the work as long as they are not selling it.",
+          "id": "spya-qekg3w"
+        }
+      ]
+    },
+    {
+      "text": "The experiment has several parts. Prices run from free ebook and audiobook downloads, through print-on-demand paperbacks, up to special hardcovers, and the top price buys a new story written to order. That top option produced the story \"Epoch.\" Doctorow also planned weekly public meetings on Twitter to report what worked and what failed. Readers who report a typo get it fixed in the next copy, plus their name as a footnote on the corrected page.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-jf2nwc",
+        "spya-mn452y"
+      ],
+      "sentences": [
+        {
+          "text": "The experiment has several parts.",
+          "id": null
+        },
+        {
+          "text": "Prices run from free ebook and audiobook downloads, through print-on-demand paperbacks, up to special hardcovers, and the top price buys a new story written to order.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "That top option produced the story \"Epoch.\" Doctorow also planned weekly public meetings on Twitter to report what worked and what failed.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "Readers who report a typo get it fixed in the next copy, plus their name as a footnote on the corrected page.",
+          "id": "spya-mn452y"
+        }
+      ]
+    },
+    {
+      "text": "Coulton explains why this matters. He argues the real upheaval of our time is not space travel but \"The Internet\": digital information plus global connection, which is already shaking the record and newspaper businesses. Doctorow's stories matter, he says, because they are about our immediate future, and about thorny problems like how writers will earn a living once publishers fade.",
+      "ids": [
+        "spya-qwxp4k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "Coulton explains why this matters.",
+          "id": null
+        },
+        {
+          "text": "He argues the real upheaval of our time is not space travel but \"The Internet\": digital information plus global connection, which is already shaking the record and newspaper businesses.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "Doctorow's stories matter, he says, because they are about our immediate future, and about thorny problems like how writers will earn a living once publishers fade.",
+          "id": "spya-n20as0"
+        }
+      ]
+    },
+    {
+      "text": "The agent, Russell Galen, puts numbers on that problem. On a $15.95 paperback from a normal publisher, the author gets 7.5 percent, or $1.17, while $14.78 goes to stores, printers, shippers and others. He says only a tiny share of authors earn even a modest living that way. Book sales have been falling for a generation, he adds, so writers' incomes are down and new ways to pay them are urgently needed.",
+      "ids": [
+        "spya-v0ytxr",
+        "spya-sxe92s",
+        "spya-creatb"
+      ],
+      "sentences": [
+        {
+          "text": "The agent, Russell Galen, puts numbers on that problem.",
+          "id": null
+        },
+        {
+          "text": "On a $15.95 paperback from a normal publisher, the author gets 7.5 percent, or $1.17, while $14.78 goes to stores, printers, shippers and others.",
+          "id": "spya-v0ytxr",
+          "key": "the author gets 7.5 percent, or $1.17"
+        },
+        {
+          "text": "He says only a tiny share of authors earn even a modest living that way.",
+          "id": "spya-sxe92s"
+        },
+        {
+          "text": "Book sales have been falling for a generation, he adds, so writers' incomes are down and new ways to pay them are urgently needed.",
+          "id": "spya-creatb"
+        }
+      ]
+    },
+    {
+      "text": "Many of the stories share one worry: clever people solving satisfying technical puzzles can lose sight of the harm their work does. In the opening story, a monk named Lawrence belongs to an order of misfit geeks who track every detail of their own lives. They pay their way by sifting data for the Securitat, the story's secret police, and insist they only report odd events, not people. In \"Scroogled,\" Doctorow argues a company like Google would turn evil only if evil were a good business and an interesting technical challenge.",
+      "ids": [
+        "spya-zunwak",
+        "spya-xp5kjv",
+        "spya-qqbh5c"
+      ],
+      "sentences": [
+        {
+          "text": "Many of the stories share one worry: clever people solving satisfying technical puzzles can lose sight of the harm their work does.",
+          "id": "spya-zunwak",
+          "key": "lose sight of the harm their work does"
+        },
+        {
+          "text": "In the opening story, a monk named Lawrence belongs to an order of misfit geeks who track every detail of their own lives.",
+          "id": null
+        },
+        {
+          "text": "They pay their way by sifting data for the Securitat, the story's secret police, and insist they only report odd events, not people.",
+          "id": "spya-xp5kjv"
+        },
+        {
+          "text": "In \"Scroogled,\" Doctorow argues a company like Google would turn evil only if evil were a good business and an interesting technical challenge.",
+          "id": "spya-qqbh5c"
+        }
+      ]
+    },
+    {
+      "text": "In \"Scroogled,\" a former Google worker is pulled aside at the airport over old posts and ads tied to his searches. A friend explains that once you are flagged, automated systems watch you for patterns and \"always find something.\" Doctorow's afterword says he wanted to show a company full of good people that does bad, and admits he does not understand how that happens.",
+      "ids": [
+        "spya-mq7dq8",
+        "spya-dbrdus"
+      ],
+      "sentences": [
+        {
+          "text": "In \"Scroogled,\" a former Google worker is pulled aside at the airport over old posts and ads tied to his searches.",
+          "id": null
+        },
+        {
+          "text": "A friend explains that once you are flagged, automated systems watch you for patterns and \"always find something.\"",
+          "id": "spya-dbrdus"
+        },
+        {
+          "text": "Doctorow's afterword says he wanted to show a company full of good people that does bad, and admits he does not understand how that happens.",
+          "id": "spya-mq7dq8"
+        }
+      ]
+    },
+    {
+      "text": "Other stories take a single technology and follow it into people's lives. \"Human Readable\" sets traffic and phone networks run by simulated ant colonies against the demand that ordinary people be able to see why computers decide what they do. In that story, network crashes called Downtimes kill thousands, and a lawyer fights for a law forcing key networks to be open to questioning. \"Pester Power\" imagines spam messages as trial AIs, kept alive the longer people mistake them for humans, so the whole world becomes a test that breeds thinking machines.",
+      "ids": [
+        "spya-gycwbc",
+        "spya-syt0nu",
+        "spya-ejm0b7"
+      ],
+      "sentences": [
+        {
+          "text": "Other stories take a single technology and follow it into people's lives.",
+          "id": null
+        },
+        {
+          "text": "\"Human Readable\" sets traffic and phone networks run by simulated ant colonies against the demand that ordinary people be able to see why computers decide what they do.",
+          "id": "spya-gycwbc"
+        },
+        {
+          "text": "In that story, network crashes called Downtimes kill thousands, and a lawyer fights for a law forcing key networks to be open to questioning.",
+          "id": "spya-syt0nu"
+        },
+        {
+          "text": "\"Pester Power\" imagines spam messages as trial AIs, kept alive the longer people mistake them for humans, so the whole world becomes a test that breeds thinking machines.",
+          "id": "spya-ejm0b7"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "\"Epoch\" is told by Odell, the systems administrator who must shut down BIGMAC, the first artificial intelligence, because nobody finds it useful anymore. The story is set before the \"rollover\" of 19 January 2038, when old 32-bit computers run out of room to count time. BIGMAC, itself a 32-bit machine, offers a fix for every such computer as a bargain for its own survival.",
+      "ids": [
+        "spya-ss04qc",
+        "spya-crzca5",
+        "spya-zeus4p"
+      ],
+      "sentences": [
+        {
+          "text": "\"Epoch\" is told by Odell, the systems administrator who must shut down BIGMAC, the first artificial intelligence, because nobody finds it useful anymore.",
+          "id": "spya-ss04qc"
+        },
+        {
+          "text": "The story is set before the \"rollover\" of 19 January 2038, when old 32-bit computers run out of room to count time.",
+          "id": "spya-crzca5"
+        },
+        {
+          "text": "BIGMAC, itself a 32-bit machine, offers a fix for every such computer as a bargain for its own survival.",
+          "id": "spya-zeus4p"
+        }
+      ]
+    },
+    {
+      "text": "Some stories ask what happens when we rewire our own minds. In \"Visit the Sins,\" children got surgery that switches them off whenever they get bored, and some stopped trying to stay switched on at all. Doctorow says \"Chicken Little\" grew from the idea that how happy we are, think we are, and expect to be can be completely separate. He asks whether governments would find it easier to change how people feel about their lives than to change the lives themselves.",
+      "ids": [
+        "spya-zyctxr",
+        "spya-t9d7xk"
+      ],
+      "sentences": [
+        {
+          "text": "Some stories ask what happens when we rewire our own minds.",
+          "id": null
+        },
+        {
+          "text": "In \"Visit the Sins,\" children got surgery that switches them off whenever they get bored, and some stopped trying to stay switched on at all.",
+          "id": "spya-t9d7xk"
+        },
+        {
+          "text": "Doctorow says \"Chicken Little\" grew from the idea that how happy we are, think we are, and expect to be can be completely separate.",
+          "id": "spya-zyctxr"
+        },
+        {
+          "text": "He asks whether governments would find it easier to change how people feel about their lives than to change the lives themselves.",
+          "id": "spya-zyctxr"
+        }
+      ]
+    },
+    {
+      "text": "The book is honest that its forecasts may miss. Coulton notes that science fiction always gets something about the future \"charmingly wrong,\" and asks what corner Doctorow cannot see around. He answers that nobody knows yet; we will only see it once we are past it.",
+      "ids": [
+        "spya-rpddkw",
+        "spya-qwxp4k"
+      ],
+      "sentences": [
+        {
+          "text": "The book is honest that its forecasts may miss.",
+          "id": null
+        },
+        {
+          "text": "Coulton notes that science fiction always gets something about the future \"charmingly wrong,\" and asks what corner Doctorow cannot see around.",
+          "id": "spya-rpddkw"
+        },
+        {
+          "text": "He answers that nobody knows yet; we will only see it once we are past it.",
+          "id": "spya-rpddkw"
+        }
+      ]
+    },
+    {
+      "text": "The main takeaway is that old business models for books are fading, and the best way forward is to try many things and see what works. Coulton ends by saying Doctorow is not just thinking about the future in these stories but \"trying to take us there.\"",
+      "ids": [
+        "spya-qekg3w",
+        "spya-rpddkw"
+      ],
+      "sentences": [
+        {
+          "text": "The main takeaway is that old business models for books are fading, and the best way forward is to try many things and see what works.",
+          "id": "spya-qekg3w",
+          "key": "try many things and see what works"
+        },
+        {
+          "text": "Coulton ends by saying Doctorow is not just thinking about the future in these stories but \"trying to take us there.\"",
+          "id": "spya-rpddkw"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "With a Little Help is a book of short science fiction stories by Cory Doctorow. In the introduction, Jonathan Coulton says the Internet is changing everything, and quickly. He says Doctorow's stories matter because they warn about problems we must sort out first. The book is also an experiment: Doctorow published it himself and lets people share it free.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-qwxp4k",
+        "spya-n20as0"
+      ],
+      "sentences": [
+        {
+          "text": "With a Little Help is a book of short science fiction stories by Cory Doctorow.",
+          "id": null
+        },
+        {
+          "text": "In the introduction, Jonathan Coulton says the Internet is changing everything, and quickly.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "He says Doctorow's stories matter because they warn about problems we must sort out first.",
+          "id": "spya-n20as0",
+          "key": "warn about problems we must sort out"
+        },
+        {
+          "text": "The book is also an experiment: Doctorow published it himself and lets people share it free.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        }
+      ]
+    },
+    {
+      "text": "One story imagines Google deciding to be evil after all. Another follows a thinking computer that fights being shut down. The book ends with an essay by Doctorow's agent on why authors earn so little. He says the usual way of selling books leaves writers only a small share.",
+      "ids": [
+        "spya-n20as0",
+        "spya-ss04qc",
+        "spya-v0ytxr"
+      ],
+      "sentences": [
+        {
+          "text": "One story imagines Google deciding to be evil after all.",
+          "id": "spya-n20as0"
+        },
+        {
+          "text": "Another follows a thinking computer that fights being shut down.",
+          "id": "spya-ss04qc"
+        },
+        {
+          "text": "The book ends with an essay by Doctorow's agent on why authors earn so little.",
+          "id": "spya-v0ytxr",
+          "key": "why authors earn so little"
+        },
+        {
+          "text": "He says the usual way of selling books leaves writers only a small share.",
+          "id": "spya-v0ytxr"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      }
+    }
+  }
+}

@@ -287,6 +287,59 @@ describe("urlKey", () => {
   });
 });
 
+/* A paper source's addresses — src/paper-sources.ts, which has the full table of
+   shapes and near-misses in tests/paper-sources.test.ts. What is pinned here is
+   that the two functions the queue, the route and the add box call actually ask
+   it. docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
+   § Caller 1. */
+describe("an address a paper source recognises", () => {
+  const SHAPES = [
+    "https://arxiv.org/abs/2608.13566",
+    "https://arxiv.org/abs/2608.13566?utm_campaign=ai-tinkerers__paperclub&utm_source=paperclub",
+    "https://arxiv.org/abs/2608.13566?context=cs.LG",
+    "https://arxiv.org/pdf/2608.13566",
+    "https://arxiv.org/pdf/2608.13566.pdf",
+    "https://arxiv.org/html/2608.13566",
+    "http://www.arxiv.org/abs/2608.13566/",
+    "arxiv.org/abs/2608.13566",
+    "https://export.arxiv.org/abs/2608.13566#section-3",
+    "https://doi.org/10.48550/arXiv.2608.13566",
+  ];
+
+  it("is one article whichever of its shapes was pasted", () => {
+    for (const shape of SHAPES) expect(urlKey(shape), shape).toBe("arxiv.org/abs/2608.13566");
+  });
+
+  it("keeps a version apart from the latest, and from another version", () => {
+    const latest = urlKey("https://arxiv.org/abs/2608.13566");
+    const v1 = urlKey("https://arxiv.org/pdf/2608.13566v1");
+    expect(v1).not.toBe(latest);
+    expect(urlKey("https://arxiv.org/html/2608.13566V1")).toBe(v1);
+    expect(urlKey("https://arxiv.org/abs/2608.13566v2")).not.toBe(v1);
+  });
+
+  it("is slugged by the whole id, not by the half before the dot", () => {
+    // It was `arxiv-2608`: the extension-stripper read `.13566` as an extension.
+    expect(slugFromUrl("https://arxiv.org/abs/2608.13566")).toBe("arxiv-2608-13566");
+    for (const shape of SHAPES) expect(slugFromUrl(shape), shape).toBe("arxiv-2608-13566");
+    expect(slugFromUrl("https://arxiv.org/pdf/2608.13566v1.pdf")).toBe("arxiv-2608-13566v1");
+    expect(isSlug(slugFromUrl("https://arxiv.org/abs/hep-th/9901001"))).toBe(true);
+  });
+
+  it("leaves an address that only looks like one exactly as it was", () => {
+    expect(urlKey("https://arxiv.org/list/cs.LG/recent")).toBe("arxiv.org/list/cs.LG/recent");
+    expect(urlKey("https://arxiv.org:444/abs/2608.13566")).toBe("arxiv.org:444/abs/2608.13566");
+    expect(urlKey("https://notarxiv.org/abs/2608.13566?utm_source=x&a=1")).toBe("notarxiv.org/abs/2608.13566?a=1");
+    expect(slugFromUrl("https://notarxiv.org/abs/2608.13566")).toBe("notarxiv-2608");
+    expect(slugFromUrl("https://arxiv.org/list/cs.LG/recent")).toBe("recent");
+  });
+
+  it("is still nothing when the address is one we refuse to fetch", () => {
+    expect(slugFromUrl("https://user:pw@arxiv.org/abs/2608.13566")).toBe("");
+    expect(urlKey("https://user:pw@arxiv.org/abs/2608.13566")).toBe("https://user:pw@arxiv.org/abs/2608.13566");
+  });
+});
+
 describe("isSlug", () => {
   /* This is a path-traversal guard, not a tidiness check: the slug on
      POST /api/jobs is joined onto data/ and output/. Each of these is a real

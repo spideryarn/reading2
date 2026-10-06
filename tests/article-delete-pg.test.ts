@@ -746,7 +746,8 @@ describe("what a delete can take out from under a request already in flight", ()
    *
    * **The positive control is *lets the delete refuse when the job got there
    * first*** above: an adoption whose article is still there inserts, and this
-   * guard is only ever asked when the article is absent.
+   * guard is only ever asked when no published article is there (it was *"when
+   * the article is absent"* until 2026-10-06 — `lockAdoptedHolder`).
    */
   it("refuses a paste whose queue holder finished and was deleted, and queues nothing", async () => {
     if (!pool) return;
@@ -819,7 +820,7 @@ describe("what a delete can take out from under a request already in flight", ()
 
   /**
    * **The second positive control, and the reason the guard is asked only when
-   * the article is absent.**
+   * no published article is there.**
    *
    * Same window as the refusal above and the same holder finishing inside it —
    * but this time it finishes the way it was supposed to, publishing the article
@@ -827,9 +828,10 @@ describe("what a delete can take out from under a request already in flight", ()
    * is *there*, which is an ordinary shelf adoption in all but provenance, and
    * refusing it would take a legitimate second paste away for no reason.
    *
-   * The guard reads nothing but whether the article row is there; the published
-   * revision is here because that is what actually puts one there, not because
-   * anything looks at it.
+   * The guard reads whether the article has a published revision, since
+   * 2026-10-06 (GPT Sol's F14, `lockAdoptedHolder` in src/store/pg-jobs.ts): the
+   * bare row `givenArticle()` makes would not let the paste in, and the
+   * revision the holder publishes below is what does.
    */
   it("still lets the paste in when the holder finished by publishing rather than dying", async () => {
     if (!pool) return;

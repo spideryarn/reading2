@@ -52,6 +52,7 @@ import {
   cameFromAnUpload,
   decodeHtml,
   FetchFailure,
+  type FetchedDocument,
   fetchDocument,
   type RawManifest,
   RawDocumentUnavailable,
@@ -134,8 +135,9 @@ import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
-import { stageFailure } from "./job-failure.js";
+import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
+import { type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
 import { modelTitleTidier } from "./title-tidy-model.js";
 import { plainTitle } from "./html.js";
 import type { TitleTidier } from "./title-tidy.js";
@@ -189,8 +191,10 @@ import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   articleHadNoText,
+  codeOfMessage,
   documentHadTooLittleText,
   documentHasNoArticle,
+  FETCH_PAPER_MISSING,
   fetchFailed,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
@@ -2191,6 +2195,175 @@ function fetchStepFailure(err: unknown): unknown {
   return stageFailure(failure, { authored: `The fetch by address failed: ${err.code}${status}.` });
 }
 
+/**
+ * One address the fetch step may try. A paper source's candidates carry
+ * `expect` (src/paper-sources.ts § `PaperCandidate`); an ordinary pasted address
+ * is one candidate with none, and is taken as whatever it turns out to be.
+ */
+export interface FetchCandidate {
+  url: string;
+  expect?: FetchedDocument["kind"];
+  /** For HTML: a string the page must contain to be the paper and not an error page served with a 200. */
+  marker?: string;
+}
+
+/** Whether a fetched document is the one its candidate promised. A candidate that promised nothing always is. */
+function isWhatItPromised(candidate: FetchCandidate, doc: FetchedDocument): boolean {
+  if (candidate.expect === undefined) return true;
+  if (doc.kind !== candidate.expect) return false;
+  return candidate.marker === undefined || (doc.kind === "html" && doc.text.includes(candidate.marker));
+}
+
+/**
+ * Whether a failed fetch is the far end saying it has no such document, which
+ * is the only failure that moves on to the next candidate. `classifyStatus`
+ * (src/fetch.ts) codes a 404 and a 410 alike as `not-found`; the two statuses
+ * are named as well so that this does not depend on that staying true.
+ */
+function saysItIsNotThere(err: unknown): boolean {
+  return err instanceof FetchFailure && (err.code === "not-found" || err.status === 404 || err.status === 410);
+}
+
+/**
+ * **The first of a source's candidates that is there and is what it promised**
+ * — the whole of what the fetch step does differently for a paper source.
+ * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
+ * § Caller 2.
+ *
+ * `fetchDocument` is called once per candidate, exactly as the step always
+ * called it, so every defence in src/fetch.ts runs on every one. It is an
+ * argument only so a test can count the requests.
+ *
+ * **Only absence moves on.** A 404 or a 410, or a document of the wrong kind or
+ * without its marker, tries the next candidate when there is one. A timeout, a
+ * rate limit, a blocked address, an oversized body and everything else is this
+ * step's failure, as it is for a pasted address: falling back past those would
+ * hide the real cause, and for an HTML candidate would quietly spend money on
+ * reading the PDF. Nor does anything move on once the job's signal has fired.
+ *
+ * **The last candidate must be what it promised too.** A PDF address that
+ * served an HTML error page is not stored as the paper. It fails with the
+ * sentence for a page that did not arrive in a usable form
+ * (src/messages.ts § `fetchFailed`, `http-error` with no status), which is
+ * `retry`: such a page is usually a rate limit or a challenge, and the next go
+ * can come out differently. The diagnostic is fixed words and the two kinds,
+ * never the address.
+ *
+ * A failure leaves here already mapped by `fetchStepFailure`.
+ */
+export async function fetchFirstCandidate(
+  candidates: readonly FetchCandidate[],
+  deps: {
+    signal: AbortSignal;
+    fetchDocument: (url: string, options: { signal: AbortSignal }) => Promise<FetchedDocument>;
+  },
+): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
+  for (const [index, candidate] of candidates.entries()) {
+    const mayMoveOn = () => index < candidates.length - 1 && !deps.signal.aborted;
+    let doc: FetchedDocument;
+    try {
+      doc = await deps.fetchDocument(candidate.url, { signal: deps.signal });
+    } catch (err) {
+      if (saysItIsNotThere(err) && mayMoveOn()) continue;
+      throw fetchStepFailure(err);
+    }
+    if (isWhatItPromised(candidate, doc)) return { doc, candidate, tried: index + 1 };
+    if (mayMoveOn()) continue;
+    throw stageFailure(fetchFailed("http-error", null), {
+      authored:
+        `The fetched document is not what its source promised: expected ${candidate.expect ?? "anything"}` +
+        `${candidate.marker === undefined ? "" : " with its marker"}, got ${doc.kind}.`,
+    });
+  }
+  throw stageFailure("ours", { generic: "The fetch step was given no address to try." });
+}
+
+/**
+ * **A paper source's fetch, and what its failure is called.** The loop is
+ * `fetchFirstCandidate`, unchanged: this decides nothing about which candidate
+ * is tried or when it moves on. It adds two things for a failure, and nothing
+ * for a success.
+ * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § What a wrong rule costs.
+ *
+ * **A paper that is not there gets its own sentence.** When the last address
+ * asked answered that it has no such document, the failure is
+ * `FETCH_PAPER_MISSING` and not `not-found`'s: that one tells the reader to
+ * check their address, and the address that is missing is one we worked out
+ * and they never saw. The fetcher is wrapped only to learn that, per request,
+ * so a 404 from an earlier candidate is forgotten once a later one has
+ * answered with anything else.
+ *
+ * **And a line in the log**, at `warn`: the source's name, how many addresses
+ * were asked and the failure's bracketed code. A rule that keeps missing shows
+ * up as one source's name repeating. No address is written, here or in the
+ * diagnostic: a log of article addresses is a reading history
+ * (docs/project/logging.md).
+ *
+ * A Stop or a deadline passes through untouched and unlogged. It is not the
+ * source's failure, and `runStep` in src/jobs.ts writes its own sentence for it.
+ */
+async function fetchFromPaperSource(
+  paper: ResolvedPaper,
+  ctx: { slug: string; signal: AbortSignal },
+): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
+  let asked = 0;
+  let lastWasAbsent = false;
+  try {
+    return await fetchFirstCandidate(paper.candidates, {
+      signal: ctx.signal,
+      fetchDocument: async (address, options) => {
+        asked += 1;
+        lastWasAbsent = false;
+        try {
+          return await fetchDocument(address, options);
+        } catch (err) {
+          lastWasAbsent = saysItIsNotThere(err);
+          throw err;
+        }
+      },
+    });
+  } catch (err) {
+    if (ctx.signal.aborted) throw err;
+    const failure = lastWasAbsent
+      ? stageFailure(FETCH_PAPER_MISSING, {
+          authored: `No address the paper source gave had the paper: ${paper.source}, ${asked} asked.`,
+        })
+      : err;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "fetch",
+        source: paper.source,
+        tried: asked,
+        code: codeOfMessage(declaredFailure(failure)?.message ?? "") ?? "undeclared",
+      },
+      `fetch ${ctx.slug}: the paper source's fetch failed`,
+    );
+    throw failure;
+  }
+}
+
+/** How a paper source is written on the job card. One the table does not know is shown by its registry name. */
+const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
+  arxiv: "arXiv",
+  acl: "ACL Anthology",
+  pmlr: "PMLR",
+  neurips: "NeurIPS",
+  cvf: "CVF",
+  jmlr: "JMLR",
+};
+
+/**
+ * What the fetch step says it fetched: the size, and for a paper source which
+ * of its renderings was used (`1040 KB, arXiv PDF`). An ordinary address gets
+ * the size alone, as it always has.
+ */
+export function fetchDetail(kb: number, via: { source: string; format: FetchedDocument["kind"] } | null): string {
+  if (via === null) return `${kb} KB`;
+  return `${kb} KB, ${PAPER_SOURCE_LABEL[via.source] ?? via.source} ${via.format === "pdf" ? "PDF" : "HTML"}`;
+}
+
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 1. Its own step, and its own artefact, so that a failed or wrong
      extraction can be retried without asking the publisher again — and without
@@ -2225,9 +2398,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
-      const doc = await fetchDocument(url, { signal: ctx.signal }).catch((err: unknown) => {
-        throw fetchStepFailure(err);
-      });
+      /* **Resolved here, from the job's own address, and not only at the
+         route**, so a retry, a refresh and a job queued by any other path fetch
+         the paper too. An address no source recognises is one candidate that
+         promises nothing, which is the single `fetchDocument(url)` this always
+         was. See `fetchFirstCandidate`. */
+      const paper = resolvePaperSource(url);
+      const { doc, tried } =
+        paper === null
+          ? await fetchFirstCandidate([{ url }], { signal: ctx.signal, fetchDocument })
+          : await fetchFromPaperSource(paper, ctx);
+      const via = paper === null ? null : { source: paper.source, format: doc.kind };
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on
          what stage 1 decided the bytes *are*, never on the address — a `.pdf`
@@ -2252,8 +2433,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          GPT/Codex review, 2026-08-26.) The host and the size are what you want
          when a page comes back suspiciously small, or when one publisher keeps
          failing. See log.ts's note on `url` not being redacted, and why. */
-      plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
-      return { parts: { raw: manifest }, detail: `${kb} KB` };
+      /* For a paper source, which source and which of its renderings, and how
+         many candidates it took: names from a fixed list and an integer. The
+         candidate's address is not logged either. */
+      plog.debug(
+        { slug: ctx.slug, step: "fetch", host, kb, ...(via === null ? {} : { ...via, tried }) },
+        `fetch ${ctx.slug}: ${kb} KB`,
+      );
+      return { parts: { raw: manifest }, detail: fetchDetail(kb, via) };
     },
   },
 
@@ -2437,7 +2624,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            until 2026-09-08, and the second one did not exist — so an upload got
            a refusal telling it to go and look at "the address it came from". */
         const origin = cameFromAnUpload(manifest) ? "upload" : "url";
-        const url = origin === "upload" ? null : requireUrl(ctx);
+        /* **The address the bytes came from, where the manifest has it**, and
+           the job's own only where it does not. They differ whenever stage 1
+           was redirected, and whenever it fetched a paper source's rendering
+           rather than the address pasted: arXiv's HTML names its figures
+           relatively, which is right against `arxiv.org/html/<id>` and wrong
+           against the `abs/` address in the job. The manifest's `url` survives
+           the store as `final_url`. `runExtract` also writes what it is given
+           into `meta.url`, which the store does not keep: `final_url` is the
+           one address an article has, and it is this same value.
+           docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
+           § Caller 3. */
+        const url = origin === "upload" ? null : (manifest.url ?? requireUrl(ctx));
         /* `TextDecoder`, and no encoding branch: `writeRaw` stores the
            *decoded* string for an HTML page, so these bytes are already UTF-8
            whatever the publisher served. The manifest records the original

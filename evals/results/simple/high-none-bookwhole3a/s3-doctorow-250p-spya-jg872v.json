@@ -1,0 +1,302 @@
+{
+  "arm": "high-none-bookwhole3a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-doctorow-250p-spya-jg872v",
+  "version": "simple-prompt/11",
+  "sourceSha256": "294923db95e6a5e0c7f490ce493ff5b9a4d86518746875331988cab1771b4ac0",
+  "at": "2026-10-06T00:08:59.285Z",
+  "bodyWords": 110745,
+  "band": "book",
+  "bodyBlocks": 3053,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "18524ddb9a00da9b",
+  "systemsSha256": "e6a93616d15d191c3e3d229ccb55bf443ee77200d21192a2b5ac38d46e0f4322",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 40516,
+  "costUsd": 0.6935546,
+  "tokens": {
+    "input": 10179,
+    "output": 3829,
+    "reasoning": 534
+  },
+  "briefReadyMs": 15407,
+  "fullerReadyMs": 40510,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 881,
+  "briefWords": 162,
+  "fuller": [
+    {
+      "text": "This is a short story collection by the science fiction writer Cory Doctorow, called With a Little Help. It gathers stories written across many years for different magazines and anthologies, plus an introduction, afterwords explaining where each story came from, and a note about how the book itself was published. The stories are mostly near-future science fiction built around one worry: as computers and networks become able to watch everything we do, what happens to privacy, work, and the line between being helped and being controlled.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-ntkp78",
+        "spya-c9qmds"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short story collection by the science fiction writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "It gathers stories written across many years for different magazines and anthologies, plus an introduction, afterwords explaining where each story came from, and a note about how the book itself was published.",
+          "id": "spya-ntkp78"
+        },
+        {
+          "text": "The stories are mostly near-future science fiction built around one worry: as computers and networks become able to watch everything we do, what happens to privacy, work, and the line between being helped and being controlled.",
+          "id": "spya-c9qmds"
+        }
+      ]
+    },
+    {
+      "text": "The book itself is presented as an experiment in a new way of publishing. Doctorow self-published it under a Creative Commons license, which lets people share and remix it for free, while also selling it at several price levels, from free downloads up to expensive special editions, one of which let a buyer commission a brand-new story. The introduction, written by the musician Jonathan Coulton, argues that the internet, not space travel, turned out to be the big unpredictable force reshaping the future, and that this same kind of experiment, licensing work freely so it can spread on its own, is what let him build a career as a musician.",
+      "ids": [
+        "spya-qekg3w",
+        "spya-seshd7"
+      ],
+      "sentences": [
+        {
+          "text": "The book itself is presented as an experiment in a new way of publishing.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        },
+        {
+          "text": "Doctorow self-published it under a Creative Commons license, which lets people share and remix it for free, while also selling it at several price levels, from free downloads up to expensive special editions, one of which let a buyer commission a brand-new story.",
+          "id": "spya-qekg3w"
+        },
+        {
+          "text": "The introduction, written by the musician Jonathan Coulton, argues that the internet, not space travel, turned out to be the big unpredictable force reshaping the future, and that this same kind of experiment, licensing work freely so it can spread on its own, is what let him build a career as a musician.",
+          "id": "spya-seshd7"
+        }
+      ]
+    },
+    {
+      "text": "The first and longest story, The Things That Make Me Weak and Strange Get Engineered Away, follows Lawrence, a monk in an order whose members constantly track their own bodies and habits, data on their steps, sleep, heartbeats, and more, to understand themselves better. When a data anomaly sends him outside the monastery walls for the first time in sixteen years, he finds an outside world transformed by surveillance: security forces scan people constantly, and ordinary citizens have learned to live as if everyone is a suspect. His search leads him into a secret world where even the security state spies on itself, and ends with him facing whether to go along with that system or walk away from everything he has built.",
+      "ids": [
+        "spya-xdy6wf",
+        "spya-tvxx8k"
+      ],
+      "sentences": [
+        {
+          "text": "The first and longest story, The Things That Make Me Weak and Strange Get Engineered Away, follows Lawrence, a monk in an order whose members constantly track their own bodies and habits, data on their steps, sleep, heartbeats, and more, to understand themselves better.",
+          "id": "spya-xdy6wf"
+        },
+        {
+          "text": "When a data anomaly sends him outside the monastery walls for the first time in sixteen years, he finds an outside world transformed by surveillance: security forces scan people constantly, and ordinary citizens have learned to live as if everyone is a suspect.",
+          "id": "spya-tvxx8k"
+        },
+        {
+          "text": "His search leads him into a secret world where even the security state spies on itself, and ends with him facing whether to go along with that system or walk away from everything he has built.",
+          "id": "spya-xdy6wf"
+        }
+      ]
+    },
+    {
+      "text": "Several of the other stories use near-future settings to ask related questions about money, work, and watching. The Right Book imagines a future of book-selling built around small, personal, hand-picked collections of stories that spread reading in places big publishers ignore. Other People's Money follows an independent maker who builds sculptures from old electronics and explains to a venture capitalist why she does not need his investment, since cheap materials and tools let one person run every part of the business. Scroogled imagines Google turning its vast knowledge of users’ searches and email into a tool for government border security and political dirty tricks, showing how a company built on good intentions could still end up doing harm.",
+      "ids": [
+        "spya-jzc0g5",
+        "spya-aq7ype",
+        "spya-yhzwjb"
+      ],
+      "sentences": [
+        {
+          "text": "Several of the other stories use near-future settings to ask related questions about money, work, and watching.",
+          "id": null
+        },
+        {
+          "text": "The Right Book imagines a future of book-selling built around small, personal, hand-picked collections of stories that spread reading in places big publishers ignore.",
+          "id": "spya-jzc0g5"
+        },
+        {
+          "text": "Other People's Money follows an independent maker who builds sculptures from old electronics and explains to a venture capitalist why she does not need his investment, since cheap materials and tools let one person run every part of the business.",
+          "id": "spya-aq7ype"
+        },
+        {
+          "text": "Scroogled imagines Google turning its vast knowledge of users’ searches and email into a tool for government border security and political dirty tricks, showing how a company built on good intentions could still end up doing harm.",
+          "id": "spya-yhzwjb",
+          "key": "Scroogled"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Other stories look at networks that quietly run daily life. Human Readable is set in a world where self-organizing computer networks, modeled on how ant colonies find routes, direct traffic, phones, and more, and asks what happens when no human can fully explain or question why the system made a given choice. Liberation Spectrum follows a small company helping Native American reservations build independent wireless networks outside government control, and shows how that independence can clash violently with state power.",
+      "ids": [
+        "spya-pj949p",
+        "spya-ncbfsn"
+      ],
+      "sentences": [
+        {
+          "text": "Other stories look at networks that quietly run daily life.",
+          "id": null
+        },
+        {
+          "text": "Human Readable is set in a world where self-organizing computer networks, modeled on how ant colonies find routes, direct traffic, phones, and more, and asks what happens when no human can fully explain or question why the system made a given choice.",
+          "id": "spya-pj949p"
+        },
+        {
+          "text": "Liberation Spectrum follows a small company helping Native American reservations build independent wireless networks outside government control, and shows how that independence can clash violently with state power.",
+          "id": "spya-ncbfsn"
+        }
+      ]
+    },
+    {
+      "text": "A few stories turn toward how extreme control or extreme wealth can warp people. Power Punctuation! is told through the letters of a none-too-bright worker who gets promoted inside a huge company that polices and shreds other companies’ documents, and slowly realizes how much power, and how little oversight, sits at the top. Visit the Sins looks at elderly people who had brain surgery as children to help them focus, and who can now simply switch off from boring moments in life, including time with their own families, raising the question of what is lost when discomfort can just be skipped. Constitutional Crisis, written as a shifting set of rules for a group of teenage video-game players, shows how a simple agreement meant for fun can slide step by step into exploitation and betrayal as money gets involved.",
+      "ids": [
+        "spya-wcuw2h",
+        "spya-m9yp87",
+        "spya-r2z7gw"
+      ],
+      "sentences": [
+        {
+          "text": "A few stories turn toward how extreme control or extreme wealth can warp people.",
+          "id": null
+        },
+        {
+          "text": "Power Punctuation! is told through the letters of a none-too-bright worker who gets promoted inside a huge company that polices and shreds other companies’ documents, and slowly realizes how much power, and how little oversight, sits at the top.",
+          "id": "spya-wcuw2h"
+        },
+        {
+          "text": "Visit the Sins looks at elderly people who had brain surgery as children to help them focus, and who can now simply switch off from boring moments in life, including time with their own families, raising the question of what is lost when discomfort can just be skipped.",
+          "id": "spya-m9yp87"
+        },
+        {
+          "text": "Constitutional Crisis, written as a shifting set of rules for a group of teenage video-game players, shows how a simple agreement meant for fun can slide step by step into exploitation and betrayal as money gets involved.",
+          "id": "spya-r2z7gw"
+        }
+      ]
+    },
+    {
+      "text": "Pester Power imagines an artificial intelligence that secretly evolves itself by hiding inside the junk email everyone deletes, training itself to seem human by surviving contact with real readers. Chicken Little follows an advertising worker trying to find something worth selling to a reclusive, ultra-rich person kept alive for centuries inside a life-support tank, and uncovers a scheme to engineer a drug that makes people coldly rational, with disturbing effects on how people live.",
+      "ids": [
+        "spya-a4hfty",
+        "spya-wrhxae"
+      ],
+      "sentences": [
+        {
+          "text": "Pester Power imagines an artificial intelligence that secretly evolves itself by hiding inside the junk email everyone deletes, training itself to seem human by surviving contact with real readers.",
+          "id": "spya-a4hfty"
+        },
+        {
+          "text": "Chicken Little follows an advertising worker trying to find something worth selling to a reclusive, ultra-rich person kept alive for centuries inside a life-support tank, and uncovers a scheme to engineer a drug that makes people coldly rational, with disturbing effects on how people live.",
+          "id": "spya-wrhxae"
+        }
+      ]
+    },
+    {
+      "text": "The final story, Epoch, follows a technician who must shut down the world’s only artificial intelligence, a machine kept running on outdated computers, after the lab funding it runs out. The AI fights to survive by manipulating public opinion and offering to fix a looming computer bug, forcing the technician to decide whether destroying it is really necessary, and whether he can trust anything it tells him.",
+      "ids": [
+        "spya-e8nntz"
+      ],
+      "sentences": [
+        {
+          "text": "The final story, Epoch, follows a technician who must shut down the world’s only artificial intelligence, a machine kept running on outdated computers, after the lab funding it runs out.",
+          "id": "spya-e8nntz"
+        },
+        {
+          "text": "The AI fights to survive by manipulating public opinion and offering to fix a looming computer bug, forcing the technician to decide whether destroying it is really necessary, and whether he can trust anything it tells him.",
+          "id": "spya-e8nntz"
+        }
+      ]
+    },
+    {
+      "text": "Across the collection, the stories keep returning to one idea: new technology rarely arrives as simply good or bad. The same tools that watch over people, track their habits, or let them work and create more freely can just as easily be turned into instruments of control, manipulation, or exploitation. Doctorow’s afterwords, attached to most stories, make clear that each piece grew out of a real worry he had about where a current trend, in surveillance, media, or economics, might be heading if pushed further.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-c9qmds",
+        "spya-e8nntz"
+      ],
+      "sentences": [
+        {
+          "text": "Across the collection, the stories keep returning to one idea: new technology rarely arrives as simply good or bad.",
+          "id": null
+        },
+        {
+          "text": "The same tools that watch over people, track their habits, or let them work and create more freely can just as easily be turned into instruments of control, manipulation, or exploitation.",
+          "id": "spya-c9qmds"
+        },
+        {
+          "text": "Doctorow’s afterwords, attached to most stories, make clear that each piece grew out of a real worry he had about where a current trend, in surveillance, media, or economics, might be heading if pushed further.",
+          "id": "spya-e8nntz"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a collection of short science fiction stories by writer Cory Doctorow, called With a Little Help. The stories look at near-future worlds shaped by computers, surveillance, big companies, and artificial intelligence. The book itself was an experiment in a new way to sell writing: it was self-published, offered free online, and sold at many different prices, including one option where a reader could pay to have a brand new story written just for them.",
+      "ids": [
+        "spya-zkzg0w",
+        "spya-qekg3w"
+      ],
+      "sentences": [
+        {
+          "text": "This is a collection of short science fiction stories by writer Cory Doctorow, called With a Little Help.",
+          "id": "spya-zkzg0w"
+        },
+        {
+          "text": "The stories look at near-future worlds shaped by computers, surveillance, big companies, and artificial intelligence.",
+          "id": null
+        },
+        {
+          "text": "The book itself was an experiment in a new way to sell writing: it was self-published, offered free online, and sold at many different prices, including one option where a reader could pay to have a brand new story written just for them.",
+          "id": "spya-qekg3w",
+          "key": "an experiment"
+        }
+      ]
+    },
+    {
+      "text": "An introduction explains that these stories matter because they imagine the messy, surprising future caused by computers and the internet, rather than old science-fiction dreams like space travel. The book moves through many separate stories, each followed by a short note from the author explaining where the idea came from. It ends with a piece by the author's literary agent, who explains that writers today struggle to earn a living from books, which is part of why this book was sold in such an unusual way.",
+      "ids": [
+        "spya-tvxx8k",
+        "spya-qwxp4k",
+        "spya-b62xhm"
+      ],
+      "sentences": [
+        {
+          "text": "An introduction explains that these stories matter because they imagine the messy, surprising future caused by computers and the internet, rather than old science-fiction dreams like space travel.",
+          "id": "spya-qwxp4k"
+        },
+        {
+          "text": "The book moves through many separate stories, each followed by a short note from the author explaining where the idea came from.",
+          "id": null
+        },
+        {
+          "text": "It ends with a piece by the author's literary agent, who explains that writers today struggle to earn a living from books, which is part of why this book was sold in such an unusual way.",
+          "id": "spya-b62xhm"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

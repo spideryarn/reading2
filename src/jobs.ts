@@ -3531,6 +3531,29 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      right, because two uploads of one file are two documents. */
   const source = request.url === undefined ? undefined : urlKey(request.url);
 
+  /**
+   * **Hand back the job already doing this work, and insert nothing.** One
+   * function for the two places that reach that answer: the insert's own
+   * `sameWork` outcome, and the look at an adopted holder just before the
+   * insert. The long comment on what it does, and why it pumps, is at the
+   * first of those, in the loop below.
+   */
+  const handBackTheSameWork = (holder: Job): Job => {
+    if (
+      request.reset !== undefined &&
+      (holder.reset === undefined || !sameResetPlan(holder.reset, request.reset))
+    ) {
+      throw Object.assign(
+        new Error(
+          "A reset with different regeneration options is already queued for this article.",
+        ),
+        { status: 409 },
+      );
+    }
+    drive(holder.id);
+    return holder;
+  };
+
   /* **The loop is the deduplication, and the insert is what decides.**
    *
    * This used to be: look for an active job on this slug, compare it with
@@ -3570,6 +3593,78 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       throw Object.assign(new Error("Too many articles already have that name."), {
         status: 409,
       });
+    }
+
+    /**
+     * **A holder whose stored keys are an older build's.**
+     *
+     * The insert below finds the same work by comparing `workKey`, which every
+     * job row stored when it was queued. `urlKey` can come to answer
+     * differently for an address a job is already carrying: it did on
+     * 2026-10-05, when a paper source's addresses became one key
+     * (src/ingest.ts § `urlKey`). A job queued from `arxiv.org/pdf/<id>` before
+     * that deploy keeps the key of the `pdf/` address. A paste of the `abs/`
+     * link while it is still active finds it all the same, because
+     * `inFlightSlugForUrlKey` recomputes each active job's key from its
+     * address, and adopts its slug; but the stored work keys differ, so the
+     * index sees two pieces of work, a second job lands on the same article,
+     * and its slot is charged for a run in which every step is skipped.
+     *
+     * So when the allocation adopted a live job's slug, that job is read and
+     * compared here with `sameWork`, the prose form of the work key, which
+     * compares addresses by today's `urlKey` rather than a stored one. If it is
+     * the same work it is handed back exactly as the index's own `sameWork`
+     * answer is. Nothing was inserted, so the request's reservation is on no
+     * job and its caller gives it back (src/billing/admission.ts § `holding`).
+     *
+     * For a job queued by this build the index gives the same answer one
+     * statement later, as it always has. This is a look and not a lock, and it
+     * leans on nothing: a holder that has finished, gone, or is doing different
+     * work is simply not handed back, and the insert decides as before.
+     *
+     * **`request.url` and the rest of the request**, the very arguments
+     * `workKeyFor` was given above, so the two answer one question.
+     *
+     * **A retry never reaches this.** `slugForRetry` adopts only from the
+     * shelf, and both refusals below hand a retry its holder rather than
+     * reallocating, so a retry's allocation is never `from: "queue"`.
+     *
+     * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
+     * § Caller 1, *Jobs already queued when this deploys*;
+     * tests/a-paper-queued-before-the-resolver.test.ts.
+     */
+    if (allocation.kind === "adopted" && allocation.from === "queue") {
+      const holder = await store.get(allocation.holder, owner);
+      if (
+        holder !== undefined &&
+        (holder.status === "queued" || holder.status === "running") &&
+        /* **Not one the reader has pressed Stop on.** It is still `running`
+           until its claimant unwinds, and then it ends `cancelled`: handed
+           back, the new request would end with it, and its slot would have
+           been given back for nothing. `jobs_active_work` leaves `cancelling`
+           rows out for exactly this (src/db/schema.ts § `jobs`), and so does
+           the store's own `sameWork` re-read; this look answers the same
+           question, so it carries the same exclusion. The request goes on to
+           the insert and becomes a job of its own behind the stopping one.
+           GPT Sol's F15, reviewing the built stage 1. */
+        holder.cancelling !== true &&
+        sameWork(
+          holder,
+          names,
+          forced,
+          request.profile,
+          request.upload,
+          request.url,
+          request.reset,
+          request.illustrationNote,
+        )
+      ) {
+        log("jobs").info(
+          { jobId: holder.id, slug: holder.slug },
+          `request handed back the active job already doing this work on ${holder.slug}`,
+        );
+        return handBackTheSameWork(holder);
+      }
     }
 
     /* **Never for an upload**, and not only because it would find nothing. It
@@ -3678,19 +3773,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          off, and takes the next step when the first releases — which is the
          same arrangement as a pump plus an open browser tab, and the whole
          reason the claim exists. */
-      if (
-        request.reset !== undefined &&
-        (outcome.job.reset === undefined || !sameResetPlan(outcome.job.reset, request.reset))
-      ) {
-        throw Object.assign(
-          new Error(
-            "A reset with different regeneration options is already queued for this article.",
-          ),
-          { status: 409 },
-        );
-      }
-      drive(outcome.job.id);
-      return outcome.job;
+      return handBackTheSameWork(outcome.job);
     }
 
     if (outcome.kind === "sourceTaken") {

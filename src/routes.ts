@@ -8924,9 +8924,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than five fields still sends five — `page` among them
+     day hands back more than six fields still sends six — `page` among them
      since 261003g, the store's label for where the report was filed and never
-     the address it was made from — and a sixth,
+     the address it was made from, and `at` since 261006b, the paragraph and
+     nothing else from that address's query — and a seventh,
      `shipped`, which is ours: whether this build carries a note saying a change
      for the report shipped. `?show=shipped|unshipped` narrows by the same map,
      in the query, so the cap applies after the filter; any other value is a
@@ -8955,12 +8956,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       );
       const counted = page.counts;
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom }) => ({
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at }) => ({
           id,
           createdAt,
           kind,
           body,
           page: filedFrom,
+          at,
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,

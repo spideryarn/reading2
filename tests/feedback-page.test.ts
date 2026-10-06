@@ -3,7 +3,7 @@
  * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
  */
 import { describe, expect, it } from "vitest";
-import { feedbackPageLabel } from "../src/feedback-page.js";
+import { feedbackPageAt, feedbackPageLabel } from "../src/feedback-page.js";
 import { parseRoute, type Route } from "../src/web/router.js";
 
 /**
@@ -119,5 +119,69 @@ describe("feedbackPageLabel", () => {
     expect(feedbackPageLabel("not a url")).toBeNull();
     expect(feedbackPageLabel("javascript:alert(1)")).toBeNull();
     expect(feedbackPageLabel("file:///etc/passwd")).toBeNull();
+  });
+});
+
+/* docs/plans/261006b-earlier-link-carries-the-paragraph.md. */
+describe("feedbackPageAt", () => {
+  const READ = "https://www.spideryarn.com/read/why-trees-spya-k3m9qt";
+
+  it("is the block id the reading page was at", () => {
+    expect(feedbackPageAt(`${READ}?at=spya-tgnssb`)).toBe("spya-tgnssb");
+    expect(feedbackPageAt(`${READ}/?mode=glossary&at=spya-tgnssb`)).toBe("spya-tgnssb");
+    expect(feedbackPageAt("http://localhost:5273/read/%61-piece?at=spya-tgnssb")).toBe("spya-tgnssb");
+  });
+
+  it("takes at and nothing else from the query or the fragment", () => {
+    expect(feedbackPageAt(`${READ}?mode=search&q=my+private+search&at=spya-tgnssb#spya-abc234`)).toBe("spya-tgnssb");
+    expect(feedbackPageAt(`${READ}?mode=search&q=spya-tgnssb#spya-abc234`)).toBeNull();
+    expect(feedbackPageAt(`${READ}#at=spya-tgnssb`)).toBeNull();
+  });
+
+  it("is null when there is no at, or it is empty", () => {
+    expect(feedbackPageAt(READ)).toBeNull();
+    expect(feedbackPageAt(`${READ}?at=`)).toBeNull();
+    expect(feedbackPageAt(`${READ}?at`)).toBeNull();
+  });
+
+  /* A block id is one fixed shape (src/ids.ts), and anything else is
+     somebody's text. */
+  it.each([
+    "spya-tgnssb0",
+    "spya-tgnss",
+    "SPYA-TGNSSB",
+    "spya-3gnssb",
+    "spya-tgnsso",
+    "tgnssb",
+    "spya-tgnssb%20private+words",
+    "spya-tgnssb%0A",
+    "%20spya-tgnssb",
+    "/read/elsewhere",
+    "%3Cscript%3E",
+    "https://elsewhere.example/",
+  ])("is null for an at that is not a block id: %s", (bad) => {
+    expect(feedbackPageAt(`${READ}?at=${bad}`)).toBeNull();
+  });
+
+  it("goes by the first at when it is repeated", () => {
+    expect(feedbackPageAt(`${READ}?at=spya-tgnssb&at=spya-k3m9qt`)).toBe("spya-tgnssb");
+    expect(feedbackPageAt(`${READ}?at=private+words&at=spya-k3m9qt`)).toBeNull();
+  });
+
+  it("is null on every page but an article's reading page", () => {
+    expect(feedbackPageAt(`${READ}/metadata?at=spya-tgnssb`)).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/read/public?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/profile?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/add/https://example.com/a?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/reset/a-secret-token?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("https://www.spideryarn.com/read/Not_A_Slug?at=spya-tgnssb")).toBeNull();
+  });
+
+  it("is null when there is no address, or it is not a web address", () => {
+    expect(feedbackPageAt(null)).toBeNull();
+    expect(feedbackPageAt("")).toBeNull();
+    expect(feedbackPageAt("not a url?at=spya-tgnssb")).toBeNull();
+    expect(feedbackPageAt("javascript:alert(1)?at=spya-tgnssb")).toBeNull();
   });
 });

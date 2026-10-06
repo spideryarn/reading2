@@ -80,8 +80,12 @@ export function canonicaliseMaths(doc: Document): number {
   return converted;
 }
 
-/** The TeX source a `<math>` carries: its x-tex annotation, else its `alttext`. */
-function texOfMathML(math: Element): string | null {
+/**
+ * The TeX source a `<math>` carries: its x-tex annotation, else its `alttext`.
+ * Exported for src/latexml.ts, which joins an aligned equation's cells into one
+ * formula and must read each cell's source the way this module does.
+ */
+export function texOfMathML(math: Element): string | null {
   for (const annotation of math.querySelectorAll("annotation")) {
     /* A nested `<math>` owns its own annotation. Treating that as the outer
        formula's source would replace the outer formula and delete its siblings. */
@@ -163,13 +167,23 @@ function onlyElement(el: Element, child: Element): boolean {
  * delete the link's target — stage 3 repoints fragment links to our ids by the
  * author's id (src/blocks.ts § retargetAnchors) — so it is left alone (K3).
  */
-function isLinkTarget(el: Element): boolean {
+export function isLinkTarget(el: Element): boolean {
   const ids = [el, ...el.querySelectorAll("[id], [name]")]
     .flatMap((node) => [node.getAttribute("id"), node.getAttribute("name")])
     .filter((id): id is string => !!id);
   if (!ids.length) return false;
-  const targets = new Set(
-    [...el.ownerDocument.querySelectorAll('a[href^="#"]')].map((a) => {
+  const targets = fragmentTargets(el.ownerDocument);
+  return ids.some((id) => targets.has(id));
+}
+
+/**
+ * Every fragment a link in the page points at, percent-decoded. Exported for
+ * src/latexml.ts, whose rewrites ask it of many elements on one page and keep
+ * the linked ids rather than only declining.
+ */
+export function fragmentTargets(doc: Document): Set<string> {
+  return new Set(
+    [...doc.querySelectorAll('a[href^="#"]')].map((a) => {
       const fragment = (a.getAttribute("href") ?? "").slice(1);
       try {
         return decodeURIComponent(fragment);
@@ -178,7 +192,6 @@ function isLinkTarget(el: Element): boolean {
       }
     }),
   );
-  return ids.some((id) => targets.has(id));
 }
 
 /** Swap `el` for `\(tex\)` / `\[tex\]`, if the reading view would draw it. */
