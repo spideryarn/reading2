@@ -461,7 +461,10 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <AddPage source={{ kind: "url", url: route.url }} />
+        {/* `readerId`: the held job and the sharing controllers on this page
+            are one reader's, and a direct change of account can leave it
+            mounted (AddPage.tsx § `readerId`). */}
+        <AddPage source={{ kind: "url", url: route.url }} readerId={user.id} />
       </>
     );
   /* The same page, given a file that is already in the object store rather than
@@ -471,7 +474,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <AddPage source={{ kind: "upload", uploadId: route.uploadId }} />
+        <AddPage source={{ kind: "upload", uploadId: route.uploadId }} readerId={user.id} />
       </>
     );
   if (route.kind === "design")

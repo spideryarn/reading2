@@ -236,4 +236,28 @@ describe("the session effect App runs", () => {
     });
     expect(stored.has("spideryarn.add.generate-main-modes"), "the key outlived the hand-over").toBe(false);
   });
+
+  /**
+   * **The add page's sharing controllers end with the session** — plan
+   * 261005l, stage 2, GPT Sol's F1. One of them holds a private link's key,
+   * and a direct change of account can leave the add page mounted. What a
+   * retired controller then does and does not do is
+   * tests/add-share-link.test.ts; this holds that the effect `App` runs is
+   * what retires them, and that a refreshed token does not.
+   */
+  it("retires the add page's sharing controllers when the reader changes, and not while the reader stays", async () => {
+    const { linkAtAddFor } = await import("../src/web/add-share-link.js");
+    const never = () => new Promise<never>(() => {});
+    const io = { probe: never, read: never, create: never, remove: never };
+
+    await show("reader-a", "token-1");
+    /* Made after Strict Mode's start → stop → start, as a page's would be. */
+    const forA = linkAtAddFor("an-essay", io, "reader-a");
+
+    await show("reader-a", "token-2");
+    expect(linkAtAddFor("an-essay", io, "reader-a"), "a refreshed token retired it").toBe(forA);
+
+    await show("reader-b", "token-3");
+    expect(linkAtAddFor("an-essay", io, "reader-a"), "reader A's controller outlived reader A").not.toBe(forA);
+  });
 });

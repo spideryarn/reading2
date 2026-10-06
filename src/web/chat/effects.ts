@@ -168,11 +168,9 @@ export async function runTurn(
       // question over the size cap. After it starts, failures arrive as an
       // `error` frame inside a 200, and `drainTurn` handles those.
       const refusal = await failure(response);
-      /* **409 is the one status the screen cannot survive being wrong about.**
-         It means the server refused a retry or an edit this client had already
-         performed on screen — and an edit performs by *destroying*: the
-         question is rewritten and every turn below it is gone. The refusal
-         drops the operation, which is the whole of putting it back. */
+      /* A 409 proves the write was refused. Other failures leave its outcome
+         uncertain. The reducer withdraws and repairs a refused turn, and also
+         a retry or edit of a confirmed conversation that failed before `begin`. */
       if (response.status === 409) {
         sink.refused(refusal.message);
         return;

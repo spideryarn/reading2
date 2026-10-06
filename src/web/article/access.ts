@@ -57,6 +57,17 @@ type ArticleAccess =
   /** Not yours, and not shared. The two pages this ends at are in App above. */
   | { kind: "not-shared" }
   /**
+   * **Shared, and not published yet**: the public route answered
+   * `409 still-being-added` (public-api.ts § `StillBeingAddedRead`). Not the
+   * reader's own readable article, and not *not shared* either: an import for
+   * it is queued or running, and this reader may read it once it lands.
+   *
+   * It says nothing about *whose*. A signed-in reader may be its owner, whose
+   * own read is a 404 until publication, so `ArticlePage` asks their job
+   * list before it draws the visitor's page. Plan 261005l § 2c, F3.
+   */
+  | { kind: "still-being-added" }
+  /**
    * **We could not tell whose this is, and nobody has shared it either.**
    *
    * The owned route answered 401 — after `apiFetch` had already refreshed once
@@ -364,7 +375,12 @@ export async function resolveAccess(
   shareKey: ShareKey | null = null,
 ): Promise<ResolvedAccess> {
   const found = await findArticle(slug, readerId, load.signal, shareKey);
-  if (found.kind === "not-shared" || found.kind === "reauth-required" || found.kind === "unread") {
+  if (
+    found.kind === "not-shared" ||
+    found.kind === "still-being-added" ||
+    found.kind === "reauth-required" ||
+    found.kind === "unread"
+  ) {
     return { access: found, withImages: NO_SECOND_ANSWER };
   }
   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
@@ -529,6 +545,7 @@ async function findArticle(
   shareKey: ShareKey | null,
 ): Promise<
   | { kind: "not-shared" }
+  | { kind: "still-being-added" }
   | { kind: "reauth-required" }
   | { kind: "owned"; article: Article }
   | { kind: "unread"; paper: UnreadPaper }
@@ -588,9 +605,22 @@ async function findArticle(
      is a complete answer to a reader we could identify; to one we could not it
      is only half of one, and the reader needs a way back in rather than a
      sentence about a document we cannot say is theirs. */
-  if (read.kind === "not-shared")
-    return sessionUnconfirmed ? { kind: "reauth-required" } : { kind: "not-shared" };
-  return { kind: "public", article: read.body, sessionUnconfirmed };
+  switch (read.kind) {
+    case "not-shared":
+      return sessionUnconfirmed ? { kind: "reauth-required" } : { kind: "not-shared" };
+    case "still-being-added":
+      /* Passed on as it is, an unconfirmed session included: the public
+         route has said this reader may read the article once it lands, which
+         is more than a sign-in page knows, and the page that waits for it
+         needs no session (StillBeingAddedVisitor.tsx). */
+      return { kind: "still-being-added" };
+    case "ok":
+      return { kind: "public", article: read.body, sessionUnconfirmed };
+    default: {
+      const never: never = read;
+      return never;
+    }
+  }
 }
 
 /**
