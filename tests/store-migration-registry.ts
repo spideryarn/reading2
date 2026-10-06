@@ -3182,6 +3182,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the public reads with a key. The bucket is a temp directory, mocked at
      the `blobStore()` selector as `asset-route` mocks it. */
   "tests/share-link-pg.test.ts": "private-postgres",
+  /* A visitor before publication, plan 261005l § 2c: thirteen seeded articles
+     and their jobs, read through the public route. The bucket is a temp
+     directory, mocked as `share-link-pg` mocks it. */
+  "tests/public-still-being-added-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane is decided by the one case
      that publishes: *a revision landing between the two reads* is now a second
      real publication onto a seeded article, taken while a request is halfway

@@ -32,7 +32,7 @@
 import type { PublicLibrary } from "../public-library-types.js";
 import type { PublicArticle } from "../public-types.js";
 import { type ShareKey, withShareKey } from "../share-key.js";
-import { readJson } from "./lib/api.js";
+import { detailsOf, readJson } from "./lib/api.js";
 
 /**
  * What a public GET came back with.
@@ -138,12 +138,47 @@ export async function loadPublicArticle(
   slug: string,
   signal?: AbortSignal,
   key: ShareKey | null = null,
-): Promise<PublicRead<PublicArticle>> {
-  return read<PublicArticle>(
+): Promise<PublicRead<PublicArticle> | StillBeingAddedRead> {
+  const res = await publicFetch(
     withShareKey(`/api/public/article/${encodeURIComponent(slug)}`, key),
     signal,
   );
+  if (res.status === 409) {
+    /* `readJson` throws on any non-2xx, with the body's fields on the error
+       (lib/api.ts § `detailsOf`). Only this one code is an answer; any other
+       409 is rethrown as the failure it always was. */
+    try {
+      await readJson<unknown>(res);
+    } catch (err) {
+      if (detailsOf(err).code === STILL_BEING_ADDED_CODE) return { kind: "still-being-added" };
+      throw err;
+    }
+    throw new Error("The public article route answered 409 with no refusal in it.");
+  }
+  return answered<PublicArticle>(res);
 }
+
+/**
+ * **The article is shared, and not published yet**: this request may read it
+ * (it is public, or the key is its private link's), it has no published
+ * revision, and an import for it is queued or running. The server's
+ * `409 { error, code: "still-being-added" }` (src/still-being-added.ts), and
+ * only on the article read. Plan 261005l § 2c; Greg, 2026-10-06, accepted
+ * that the holder of a shared address learns this much.
+ *
+ * Not a member of `PublicRead`, on purpose: that is the namespace's rule,
+ * shared with the library listing, which has no such answer. Adding it here
+ * makes every caller of *this* loader say what it does with it, and the
+ * compiler refuses one that reads `.body` without having asked.
+ */
+export type StillBeingAddedRead = { kind: "still-being-added" };
+
+/**
+ * The code on that 409. Spelled here and not imported: the server's class is
+ * a server module (tests/client-imports.test.ts), and the string is the wire
+ * format either way. tests/public-still-being-added.test.ts holds this side.
+ */
+const STILL_BEING_ADDED_CODE = "still-being-added";
 
 /**
  * `GET /api/public/library` — the shelf of every article somebody has shared.
@@ -174,7 +209,11 @@ export async function loadPublicLibrary(): Promise<PublicRead<PublicLibrary>> {
  * that, which is why the second loader is two lines.
  */
 async function read<T>(path: string, signal?: AbortSignal): Promise<PublicRead<T>> {
-  const res = await publicFetch(path, signal);
+  return answered<T>(await publicFetch(path, signal));
+}
+
+/** The namespace's rule, over a response already in hand. */
+async function answered<T>(res: Response): Promise<PublicRead<T>> {
   /* Read before the body, because `readJson` throws on a 404 and this is the
      one place a 404 is the answer rather than the problem. */
   if (res.status === 404) return { kind: "not-shared" };

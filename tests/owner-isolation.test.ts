@@ -649,6 +649,14 @@ describe("the one query that lists articles for nobody in particular", () => {
            read. docs/plans/261002g-a-banner-on-every-public-readable-article.md
            § Decisions 3; tests/public-reads.test.ts reads its SQL. */
         "publicSourceGuessQuery",
+        /* Added 2026-10-06: *is an import under way for an article this
+           request may read?* It reads `articles` by `publicAccessWhere` like
+           the four above and selects a constant. It is the one of them that
+           names `owner_id`, and only to tie a `jobs` row to the article's own
+           owner, column to column; no owner is bound or selected.
+           docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+           § 2c; tests/public-reads.test.ts reads its SQL. */
+        "publicPendingImportQuery",
       ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },

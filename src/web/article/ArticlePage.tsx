@@ -57,6 +57,7 @@ import {
 import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import { OwnerNotShared } from "./StillBeingAdded.js";
+import { StillBeingAddedVisitor } from "./StillBeingAddedVisitor.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
 /**
@@ -173,14 +174,30 @@ export function ArticlePage({
      yet**, opened from the link its job card hands out. `OwnerNotShared` looks
      for that job and draws it; with none it is `NotSharedPage`, as it always
      was. A signed-out visitor is untouched. StillBeingAdded.tsx, plan 261005l. */
-  if (access.kind === "not-shared")
-    return signedIn ? (
+  /* **Or the address is shared and its import has not published**: the
+     public read said *still being added* (access.ts). Then anybody who is not
+     its owner waits on `StillBeingAddedVisitor`, which asks again and has
+     this page read once more when the answer changes. A signed-out visitor
+     gets it at once. A signed-in reader goes through `OwnerNotShared` first,
+     exactly as for a 404, because their own read is a 404 until publication
+     too, and the import's card is the better page for the person running it;
+     the visitor's page is what that falls back to where it would have said
+     *Not shared* (GPT Sol's stage 2 plan review, F3). Plan 261005l § 2c. */
+  if (access.kind === "not-shared" || access.kind === "still-being-added") {
+    const waiting =
+      access.kind === "still-being-added" ? (
+        <StillBeingAddedVisitor slug={slug} shareKey={shareKey} onChanged={reread} />
+      ) : null;
+    if (!signedIn) return waiting ?? <LandingPage />;
+    return (
       <OwnerNotShared
         slug={slug}
         onPublished={rereadImport}
         retryCompleted={checkedImport?.slug !== slug || checkedImport.readerId !== readerId}
+        otherwise={waiting ?? undefined}
       />
-    ) : <LandingPage />;
+    );
+  }
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
      this one, and the error page is a `<pre>` with nothing to press. It draws

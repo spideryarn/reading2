@@ -84,8 +84,11 @@ import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
 import { asVisibilityState } from "./AccessSharing.js";
-import { type ShareAtAdd, shareAtAddFor, type ShareIo, shareUnsettled } from "./add-share.js";
-import { AddShare } from "./AddShare.js";
+import { type Probe, type ShareAtAdd, shareAtAddFor, type ShareIo, shareUnsettled } from "./add-share.js";
+import { type LinkAtAdd, linkAtAddFor, type LinkIo, linkUnsettled } from "./add-share-link.js";
+import { addSharingEpoch, subscribeAddSharing } from "./add-sharing-session.js";
+import { AddSharing } from "./AddSharing.js";
+import { asShareLinkState } from "./PrivateLink.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -217,45 +220,121 @@ const putHighPower: PutHighPower = (slug, on) =>
  * the box then starts at off as it does in any other tab.
  */
 const SHARE_MARK_PREFIX = "spideryarn.share-at-add.";
-const shareIo: ShareIo = {
-  marks: {
-    recall(slug) {
-      try {
-        return window.sessionStorage.getItem(SHARE_MARK_PREFIX + slug) !== null;
-      } catch {
-        return false;
-      }
+
+/** The two sharing controls' requests, for one reader. */
+interface SharingIo {
+  share: ShareIo;
+  link: LinkIo;
+}
+
+/**
+ * **One per reader** (GPT Sol's stage 2 plan review, F1), for the two things
+ * in it that outlive a request:
+ *
+ *  - **the marks** carry the reader's id in their key, so what reader A's tab
+ *    remembers is never read as a hint about reader B's article of the same
+ *    slug;
+ *  - **the probe in flight** is shared by the two controls, which ask at the
+ *    same moment about the same slug: one request, not two. Shared only
+ *    within one reader's object, so reader B's controllers never wait on a
+ *    request sent as reader A.
+ *
+ * ***Create a private link*'s three requests are the Metadata card's own**
+ * (PrivateLink.tsx), and its replies go through that card's own parser,
+ * which is what makes sure a key is a key. The read's `404` is *no row yet*.
+ * `apiFetch` never keeps a copy of this route (lib/api.ts § `NEVER_KEPT`), so
+ * there is no offline copy to mistake for an answer. The key is in what
+ * these return and nowhere else.
+ */
+function sharingIo(readerId: string | null): SharingIo {
+  /* `null` only where there is no session to name, which is a test. */
+  const mark = (slug: string): string =>
+    readerId === null ? SHARE_MARK_PREFIX + slug : `${SHARE_MARK_PREFIX}${readerId}.${slug}`;
+  const probing = new Map<string, Promise<Probe>>();
+  const probe = (slug: string): Promise<Probe> => {
+    const out = probing.get(slug);
+    if (out) return out;
+    const asked = (async (): Promise<Probe> => {
+      const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
+      if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
+      if (res.status === 404) return "none";
+      return res.status === 200 ? "article" : "unknown";
+    })();
+    probing.set(slug, asked);
+    const done = (): void => {
+      if (probing.get(slug) === asked) probing.delete(slug);
+    };
+    void asked.then(done, done);
+    return asked;
+  };
+  const linkPath = (slug: string): string => `/api/article/${encodeURIComponent(slug)}/share-link`;
+  return {
+    share: {
+      marks: {
+        recall(slug) {
+          try {
+            return window.sessionStorage.getItem(mark(slug)) !== null;
+          } catch {
+            return false;
+          }
+        },
+        remember(slug) {
+          try {
+            window.sessionStorage.setItem(mark(slug), "1");
+          } catch {
+            /* Not remembered: a reload shows the box off, as another tab would. */
+          }
+        },
+        forget(slug) {
+          try {
+            window.sessionStorage.removeItem(mark(slug));
+          } catch {
+            /* A storage that cannot be written held no mark we could have set. */
+          }
+        },
+      },
+      probe,
+      put: (slug, to) =>
+        apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            to === "public" ? { visibility: to, rightsConfirmed: true } : { visibility: to },
+          ),
+        }).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
     },
-    remember(slug) {
-      try {
-        window.sessionStorage.setItem(SHARE_MARK_PREFIX + slug, "1");
-      } catch {
-        /* Not remembered: a reload shows the box off, as another tab would. */
-      }
+    link: {
+      probe,
+      async read(slug) {
+        const res = await apiFetch(linkPath(slug));
+        if (res.status === 404) return "none";
+        return asShareLinkState(await readJson<unknown>(res));
+      },
+      create: (slug) =>
+        apiFetch(linkPath(slug), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          /* Exactly this. The server refuses any other body. */
+          body: JSON.stringify({ rightsConfirmed: true }),
+        }).then(async (r) => asShareLinkState(await readJson<unknown>(r))),
+      remove: (slug) =>
+        apiFetch(linkPath(slug), { method: "DELETE" }).then(async (r) =>
+          asShareLinkState(await readJson<unknown>(r)),
+        ),
     },
-    forget(slug) {
-      try {
-        window.sessionStorage.removeItem(SHARE_MARK_PREFIX + slug);
-      } catch {
-        /* A storage that cannot be written held no mark we could have set. */
-      }
-    },
-  },
-  async probe(slug) {
-    const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
-    if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
-    if (res.status === 404) return "none";
-    return res.status === 200 ? "article" : "unknown";
-  },
-  put: (slug, to) =>
-    apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        to === "public" ? { visibility: to, rightsConfirmed: true } : { visibility: to },
-      ),
-    }).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
-};
+  };
+}
+
+/** The object above for each reader this tab has had. Small, and holds nothing of theirs but an id. */
+const sharingIos = new Map<string | null, SharingIo>();
+function sharingIoFor(readerId: string | null): SharingIo {
+  let io = sharingIos.get(readerId);
+  if (!io) {
+    io = sharingIo(readerId);
+    sharingIos.set(readerId, io);
+  }
+  return io;
+}
 
 /**
  * The purpose session's three requests (src/web/add-purpose.ts). `save` and
@@ -378,9 +457,48 @@ function offerAutoModes(
   return activeJob || awaitingJob;
 }
 
-export function AddPage({ source: origin }: { source: AddSource }) {
+/**
+ * **The job this page is watching, and what it is the answer to.**
+ *
+ * `source` and `reader` are what make a record inert when it is not this
+ * page's any more: state updates run after render, so the first render at a
+ * new address, or for a new reader, still holds the old record.
+ *
+ * `job` is the job as the POST (or Retry, or the upload engine) answered
+ * with it, **held so the card does not wait for the list** (plan 261005l
+ * § 2a): the list is polled, and its next answer can be eight seconds away,
+ * which is most of a web import. It is drawn only until the list has a job
+ * with this id; from then on the list's copy is the job.
+ */
+interface Started {
+  id: string;
+  source: string;
+  reader: string | null;
+  job: Job;
+}
+
+export function AddPage({
+  source: origin,
+  readerId = null,
+}: {
+  source: AddSource;
+  /**
+   * **Who is adding**: `user.id` from `App`. A direct change of account can
+   * leave this page mounted, and three things on it belong to one reader: the
+   * held job, and the two sharing controllers, one of which holds a private
+   * link's key (GPT Sol's stage 2 plan review, F1). Each is tagged or keyed
+   * with this, so nothing of reader A's is drawn for reader B.
+   *
+   * `null` only where there is no session to name, which is a test.
+   */
+  readerId?: string | null;
+}) {
   const queue = useJobs("watches-queue");
-  const [started, setStarted] = useState<{ id: string; source: string } | null>(null);
+  const [started, setStarted] = useState<Started | null>(null);
+  /* Read when a POST is sent, so its answer is tagged with the reader it was
+     sent for and not with whoever is here when it lands. */
+  const readerRef = useRef(readerId);
+  readerRef.current = readerId;
   const url = origin.kind === "url" ? origin.url : "";
   /**
    * **This tab's transfer, if it is the one this address is about.**
@@ -601,6 +719,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     setArticleAnswer(null);
     setPhase({ kind: "running" });
     claimed.current = null;
+    const reader = readerRef.current;
     /* On `uploadId` rather than on `origin.kind`, so the effect reads only
        plain strings it also depends on — and so the union narrows, which
        `origin.kind === "upload"` does not do for a field read inside a
@@ -634,7 +753,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         setArticleAnswer({ slug: queued.article, source: wanted });
         return;
       }
-      setStarted({ id: queued.id, source: wanted });
+      /* The job itself is kept, and not only its id: it is what the page
+         draws until the polled list has it (`Started`). */
+      setStarted({ id: queued.id, source: wanted, reader, job: queued });
     });
     /* The two plain strings, never `origin` itself. That object is a fresh
        literal on every render of the component above, so depending on it would
@@ -653,9 +774,19 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * navigation on `done`, the tab title — goes on reading one variable and does
    * not have to know which of the two routes produced it.
    */
-  const queuedJobId = mine?.phase.kind === "queued" ? mine.phase.job.id : null;
+  const queuedJob = mine?.phase.kind === "queued" ? mine.phase.job : null;
+  const queuedJobId = queuedJob?.id ?? null;
+  /* The engine's own copy of the job goes with the id, so an upload's card
+     does not wait for the list either (GPT Sol's stage 2 plan review, F4).
+     Through a ref: the effect is about a new id, and must not run again, over
+     a Retry's replacement, because the snapshot object was rebuilt. */
+  const queuedJobRef = useRef(queuedJob);
+  queuedJobRef.current = queuedJob;
   useEffect(() => {
-    if (queuedJobId) setStarted({ id: queuedJobId, source: wanted });
+    const job = queuedJobRef.current;
+    if (queuedJobId && job) {
+      setStarted({ id: queuedJobId, source: wanted, reader: readerRef.current, job });
+    }
   }, [queuedJobId, wanted]);
 
   /* The file turned out to be an article the reader already has, and retention
@@ -729,8 +860,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   /* State updates run after render, so an old `started` can still be present in
      the first render for a new address. The source tag makes it inert during
      that render instead of letting its completed job reopen the old article. */
-  const startedId = started?.source === wanted ? started.id : null;
-  const job = queue.jobs.find((j) => j.id === startedId) ?? null;
+  /* And the reader tag does the same across a change of account, which can
+     leave this page mounted: reader A's job is not reader B's to see (F1). */
+  const current = started?.source === wanted && started.reader === readerId ? started : null;
+  const startedId = current?.id ?? null;
+  /* **The list's copy, and until it has one, the copy the POST answered
+     with** (plan 261005l § 2a). Everything keyed on the job's slug below
+     (the card and its link button, High-powered AI, Sharing, the purpose
+     box) so starts with the POST's answer and not a poll later. The held
+     copy is the job as it was at that moment and never changes; what
+     happens to the job afterwards is the list's to say. */
+  const job = queue.jobs.find((j) => j.id === startedId) ?? current?.job ?? null;
 
   /**
    * **The three ways an add finishes, as one value.** A job reaching `done`, the
@@ -791,26 +931,53 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * unsent retries without undoing anything it shared. Effect replay under
    * StrictMode reattaches the same controller.
    */
-  const shareSlugRef = useRef<{ source: string; slug: string } | null>(null);
+  /*
+   * **And *Create a private link* beside it** (plan 261005l § 2b): its own
+   * controller, `LinkAtAdd`, looked up, attached, paused and settled exactly
+   * as the one above, for the same slug.
+   *
+   * **Both belong to this reader** (GPT Sol's stage 2 plan review, F1). The
+   * registries are keyed by reader and slug, and a session change retires
+   * every controller in them (add-sharing-session.ts). The epoch read here
+   * is what makes this page look its controllers up again when that happens
+   * while it is on screen; the slug it remembers is tagged with the reader
+   * for the same reason `started` is.
+   */
+  useSyncExternalStore(subscribeAddSharing, addSharingEpoch);
+  const shareSlugRef = useRef<{ source: string; reader: string | null; slug: string } | null>(null);
   const shareSlug =
-    highPowerSlug ?? (shareSlugRef.current?.source === wanted ? shareSlugRef.current.slug : null);
-  const share = shareSlug === null ? null : shareAtAddFor(shareSlug, shareIo);
-  /* What the completion effect reads: the controller on the committed screen. */
+    highPowerSlug ??
+    (shareSlugRef.current?.source === wanted && shareSlugRef.current.reader === readerId
+      ? shareSlugRef.current.slug
+      : null);
+  const sharingIo = sharingIoFor(readerId);
+  const share = shareSlug === null ? null : shareAtAddFor(shareSlug, sharingIo.share, readerId);
+  const link = shareSlug === null ? null : linkAtAddFor(shareSlug, sharingIo.link, readerId);
+  /* What the completion effect reads: the controllers on the committed screen. */
   const shareRef = useRef<ShareAtAdd | null>(null);
+  const linkRef = useRef<LinkAtAdd | null>(null);
   useLayoutEffect(() => {
-    shareSlugRef.current = shareSlug === null ? null : { source: wanted, slug: shareSlug };
+    shareSlugRef.current =
+      shareSlug === null ? null : { source: wanted, reader: readerId, slug: shareSlug };
     shareRef.current = share;
-  }, [share, shareSlug, wanted]);
+    linkRef.current = link;
+  }, [share, link, shareSlug, wanted, readerId]);
   useLayoutEffect(() => {
     share?.start();
     share?.resume();
     return () => share?.pause();
   }, [share]);
-  /* Whether a 404 from the switch is *not yet*: the same question High-powered
+  useLayoutEffect(() => {
+    link?.start();
+    link?.resume();
+    return () => link?.pause();
+  }, [link]);
+  /* Whether a 404 from either is *not yet*: the same question High-powered
      AI asks, with the same answer. */
   useEffect(() => {
     share?.observe(highPowerAlive);
-  }, [share, highPowerAlive]);
+    link?.observe(highPowerAlive);
+  }, [share, link, highPowerAlive]);
 
   /**
    * **The purpose session for this address and this article** (plan 261004l
@@ -894,12 +1061,18 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        Only the share for this completion's own article. */
     const sharing = shareRef.current?.slug === completionSlug ? shareRef.current : null;
     if (sharing) void sharing.settle();
+    /* The private link's controller the same, for the same reason. A create
+       that did not come back is not among what it sends (add-share-link.ts). */
+    const linking = linkRef.current?.slug === completionSlug ? linkRef.current : null;
+    if (linking) void linking.settle();
     /* **A third reason not to leave by itself**: the sharing confirmation is
        open, or there is an answer about sharing the reader has not had the
        chance to read. A fast import would otherwise navigate out from under
        the question. A share that is on, or a box never touched, holds nothing
        up. GPT Sol's plan review, P2-5. */
-    const sharingUnsettled = sharing !== null && shareUnsettled(sharing.get());
+    const sharingUnsettled =
+      (sharing !== null && shareUnsettled(sharing.get())) ||
+      (linking !== null && linkUnsettled(linking.get()));
     /* **Nothing to wait for**: the box is not focused, and it holds nothing
        the server does not have. Never typed in, or typed and saved with no
        write in flight. Read from the session in this tick, not from a render. */
@@ -1226,7 +1399,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           job={job}
           queue={queue}
           onHide={() => navigate(LIBRARY_HREF)}
-          onRetried={(replacement) => setStarted({ id: replacement.id, source: wanted })}
+          /* The replacement itself is held, as the add POST's answer is: the
+             card moves to it, under its own id and slug, without waiting for
+             the list to have it (GPT Sol's stage 2 plan review, F4). */
+          onRetried={(replacement) =>
+            setStarted({ id: replacement.id, source: wanted, reader: readerId, job: replacement })
+          }
         />
       )}
 
@@ -1275,10 +1453,20 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </label>
       )}
       {(showAutoModes || deciding) && <AddHighPower intent={highPower} />}
-      {/* Under High-powered AI, once the job has a slug to share. `offer` is
-          the interval the two boxes above are drawn for; a share that has
-          been asked for stays up outside it (AddShare.tsx). */}
-      {share && <AddShare share={share} offer={showAutoModes || deciding} />}
+      {/* Under High-powered AI, once the job has a slug to share: one row,
+          shut until the reader opens it or a control has something to say
+          (AddSharing.tsx). `offer` is the interval the two boxes above are
+          drawn for; sharing that has been asked for stays up outside it.
+          Keyed on the reader and the slug, so the row's own open-or-shut
+          belongs to one article and one reader. */}
+      {share && link && (
+        <AddSharing
+          key={JSON.stringify([readerId, share.slug])}
+          share={share}
+          link={link}
+          offer={showAutoModes || deciding}
+        />
+      )}
 
       {showPurpose && (
         <PurposeBox
