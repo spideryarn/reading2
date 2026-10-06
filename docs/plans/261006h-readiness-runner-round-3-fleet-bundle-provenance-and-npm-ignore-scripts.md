@@ -143,7 +143,28 @@ Rewritten after P3R-04 — see the plan-review section. Prove real preparation i
 it is clean; wait for the live loop to be between checks; stop it; confirm its children are gone and
 the lock released; start the new loop from `.claude/worktrees/readiness-checks`; read one tick.
 
-**Status: not started.**
+**Status: done 2026-10-06.**
+
+- **Full suite** on the merged tree: 1739 files passed, 4 failed, none of them this work's. Two
+  want `npm run build` (*has a build to inspect*); the other two
+  (`a-broken-mode-leaves-the-article-readable`, `describe-fetch-failure`) fail on
+  `src/web/useCitations.ts:341`, which arrived in the merge from `dev`. Pushed as `5539d76ce`.
+- **Real preparation, proved in this worktree, not the live one:** `prepareRunner` with its real
+  dependencies, started with `npm_config_script_shell=/bin/true`, `npm_config_ignore_scripts=true`
+  and `npm_config_dry_run=true` in the environment. 33 s: `node_modules/.package-lock.json`
+  rewritten, the bundle and manifest rebuilt, latched at the sha. A second call: 93 ms. (The first
+  attempt at this proof printed nothing and exited 0, because it was launched with `npx` under that
+  same environment — the hollowing, one level up, in the proof itself.)
+- **The swap.** The old process (pid 972645, running since 2026-09-09) ticked at 14:21:26Z, which
+  fast-forwarded the runner worktree onto the new code; no check was running. `SIGTERM`: gone within
+  a second, children gone, lock file removed, log ends `EXIT=143`. New loop started from
+  `.claude/worktrees/readiness-checks` under `tmux-job.ts` as `readiness-loop-1521-3777246`
+  (pid 3777818 in the lock). Its first tick reinstalled, rebuilt the fleet client at 14:22:32Z with
+  `build-files.json` and a stamp for `277503ef`, clean, and printed its decision line (a skip: the
+  box was swapping).
+- **Rollback, if wanted:** revert `8649ab8d8` and `618217791` on `dev` and restart the loop; the
+  runner follows `dev`, so there is no old checkout to keep.
+
 
 ## Plan review (GPT Sol, 2026-10-06): REFUSE, five findings, all taken
 
