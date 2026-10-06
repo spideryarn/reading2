@@ -213,13 +213,28 @@ this section is the truth.
 - **Left as found:** `HighPowerIntent.dispose()` is called during render in `AddPage.tsx`
   (Sol's F15, older than this change).
 
-**Not checked in a browser.** A Sonnet subagent started the dev server and could not sign in:
-`npm run db:check` reported the shared local database 16 columns behind `dev` (the private link,
-reading difficulty and citation counts, none of them this change's), so `/api/library` answered
-500. Applying the migration was refused to the subagent by the permission classifier and was not
-then done by its parent. What stands in for it is component tests through the real `AddPage`,
-`JobCard` and `OwnerNotShared`, which cannot see layout. **The widths (desktop, iPad, phone) are
-unchecked**, and that check is still owed.
+**Checked in a browser, 2026-10-06**, by a Sonnet subagent with Playwright, once the local
+database had been brought up to `dev` (the first attempt could not sign in: it was 16 columns
+behind). Desktop 1440, iPad 820, phone 390; nine screenshots in [261005l-shots/](261005l-shots/).
+
+- **The link button**: in the title row between the title and Stop at all three widths, nothing
+  clipped; the clipboard held `/read/<slug>`; *Copied* shown.
+- **The confirmation**: no sideways scroll at 390 or 820, the chips wrap, *Share it* is disabled
+  until the rights box is ticked. After the press: *Sharing this article…*, then *Public.* with
+  the link and the allowance sentence. Metadata then said public, and a signed-out browser read
+  the article. Tick then untick, with no press, shared nothing.
+- **The owner's early visit** (desktop, one PDF import): *Still being added* with the card, then
+  the article with no reload. A nonsense slug still says *Not shared*.
+- **A reload after sharing** (desktop, the PDF): the *You asked to make this public…* line with the
+  box ticked, and the page waited at *Open the article*.
+- **Not seen**: the early visit and the reload at iPad and phone widths (they need a slow import,
+  and one PDF was the budget); the *Will be made public…* waiting line (the row always existed by
+  the press); the *already on your shelf* line.
+- **Found: on a fast web import the card often never appears.** The add page says *Queueing it…*
+  until the job list next arrives, about eight seconds after the POST, and a web import now takes
+  about ten. At 390 two imports showed no card at all, so no link button and no sharing box. The
+  first list request races the POST and misses the job. This is older than this change, but it
+  takes most of the value away for web pages. Fixed in stage 2, below.
 
 A third question for Greg came out of the review:
 
@@ -237,5 +252,118 @@ A third question for Greg came out of the review:
   "still being added" page sounds good. i'm not too worried about the security tradeoff"*. The
   trade-off he accepted: the server tells a stranger who holds the link that an unpublished
   article exists at that address.
-- **[Q-read-the-switch-before-publication]** was not answered; its recommendation was "B when
-  someone is next in that file", which is now.
+- **[Q-read-the-switch-before-publication]** — no: *"eh, it sounds like more hassle than it's worth"*.
+  The owner-only visibility read is not built, and the second-tab limit stays as documented.
+## Stage 2: one sharing section with both controls, a visitor's "still being added", and the card that never appears
+
+**Status: proposed, 2026-10-06.** From Greg's answers above and the browser check's finding.
+Stage 1's design sections above stay as the record of stage 1.
+
+### 2a. The job card appears at once
+
+`queue.add` and `queue.addUpload` already hand back the `Job` the POST created
+(`src/web/useJobs.ts`). The add page looks its job up only in the polled list, so it draws
+*Queueing it…* until the next list, about eight seconds later. It will hold the returned job and
+draw that until the list has one with the same id; from then on the list's copy wins. Everything
+keyed on the job's slug (the link button, the sharing section, High-powered AI, the purpose box)
+then starts with the POST's answer. The upload engine's path (`mine`, where `uploadEngine` posts
+and not the page) keeps the list as its only source; a PDF import is long enough not to need it.
+
+The simpler option, a faster first poll, was passed over: it is still a race, only shorter.
+
+### 2b. One sharing section, collapsed, with two controls
+
+Greg: *"bundle all sharing-related stuff in a default-collapsed section, because most people
+won't want to use it"*. Under High-powered AI the add page gets one row, **Sharing**, closed by
+default, which opens to two controls:
+
+- **Make it public**, stage 1's box, unchanged in behaviour.
+- **Create a private link**, new. The same confirmation the Metadata card's private link uses
+  (`PRIVATE_LINK_CONFIRM_TITLE`, `privateLinkConfirmBody`, the inventory, `Personalisation`,
+  `PRIVATE_LINK_CANNOT_UNRING`, the rights tick-box, *Create the link*). It sends the Metadata
+  card's own requests: `POST /api/article/:slug/share-link` with `{ rightsConfirmed: true }`, and
+  the route that turns a link off. Once on it shows the whole link with *Copy*, *Turn off*, and a
+  line saying it opens for whoever has it once the import has finished.
+
+The private link is easier than the public switch in one way that matters:
+**`GET /api/article/:slug/share-link` reads the owner's row and needs no published revision**
+(`src/store/pg-share-link.ts` § `read`). So its controller reads the truth whenever it is attached
+(first mount, a reload, a second tab) and needs no `sessionStorage` mark: 404 is *no row yet*, and
+otherwise the answer is the state. It is still one controller per slug per tab, still gives way to
+the *already on your shelf* line once the article has published, and a 404 on the create while the
+job is alive is still *not yet*.
+
+**How the two share code**: the implementer generalises what `ShareAtAdd` already has (the
+per-slug registry, pause and resume, revalidation on attachment, the not-yet retry, `settle`,
+`unsettled`) rather than copying the class, if that comes out smaller than two classes; the
+public switch keeps its mark, the link has none.
+
+**The section opens itself when it has something to say**: a control that is on, waiting, refused
+or unknown, including the reload warning. Closed, its one row says what is on (*Sharing: public*,
+*Sharing: private link*), so a reader is never public behind a closed row. The page still does
+not leave by itself while either control is unsettled.
+
+`PRIVATE_LINK_ALSO_PUBLIC` is shown when both are on, as on Metadata.
+
+### 2c. A visitor before publication: "still being added"
+
+Greg accepted the trade-off: a person holding the address learns that an unpublished article
+exists there.
+
+**Server, one place.** `pgPublicReader.loadArticle` (`src/store/public-reader.ts`), when its
+current-revision read finds nothing, asks one more question before answering 404: is there an
+`articles` row for this slug that this request may read (`publicAccessWhere(slug, access)`: public,
+or the request's key is its private link's) **and** a queued or running job for that article?
+If so it throws a new `StillBeingAdded` error, which the route answers as **409 with
+`{ error, code: "still-being-added" }`**, the way `NotProcessed` answers `not-processed`. Otherwise
+the same 404 as today.
+
+- **Only the article read.** The page head, assets, comments, searches, the source guess, the
+  public shelf and the showcase are untouched, so the document is still a 404 with the default
+  head and no title is given out.
+- **The body carries nothing about the article**: no title, no owner, no progress.
+- **A live job is required**, so a failed or abandoned import is an ordinary 404 and the page never
+  says *still being added* about something that is not.
+- **A private article with no key, or a wrong key, is still a 404**: the row does not match
+  `publicAccessWhere`.
+
+**Client.** `loadPublicArticle` (`src/web/public-api.ts`) gains a third answer,
+`{ kind: "still-being-added" }`; `findArticle` (`src/web/article/access.ts`) passes it through; and
+`ArticlePage` draws a small page for a visitor, signed in or not: *This article is still being
+added. This page will open it when it is ready.* It asks again every ten seconds while the tab is
+visible, and has a *Check now* button. The owner never reaches it: stage 1's `OwnerNotShared` is
+asked first, and when the public read says *still being added* for the owner it is the same
+import their own job list shows.
+
+What this does not do: tell a visitor about an import that has not been shared yet, or one that
+failed.
+
+### What stage 2 changes on the server, and what it does not
+
+One new arm in one public read, and its error code. No new route, no column, no change to who may
+read what once published. The private link at import uses routes that exist. This is an edit
+inside a listed defence (the public read), made on Greg's instruction of 2026-10-06, and it goes
+to GPT Sol with the question *does anything else leak*.
+
+### Done looks like
+
+- 2a: a test through `AddPage` that the card, the link button and the sharing row are drawn from
+  the POST's answer before any list has it, and that the list's copy replaces it. Red first.
+- 2b: controller tests for the link (every answer, not-yet, revalidation, the read on attachment);
+  page tests that nothing is sent without the rights tick and the press, that the section starts
+  closed, opens itself when a control has something to say, and names what is on when closed.
+- 2c: database tests through the real public route for each row of this table, red first:
+
+  | Article | Job | Request | Answer |
+  |---|---|---|---|
+  | public, unpublished | running | no key | 409 `still-being-added` |
+  | link on, unpublished | queued | right key | 409 `still-being-added` |
+  | link on, unpublished | running | wrong key / no key | 404 |
+  | private, unpublished | running | no key | 404 |
+  | public, unpublished | none, or failed | no key | 404 |
+  | public, published | any | no key | 200, as today |
+
+  and that the page head, an asset and the comments read still answer 404 for the first row.
+  Client tests for the visitor page and its re-asking.
+- `npm test`, `npm run typecheck`, GPT Sol on this plan and on the code, a browser check at three
+  widths.

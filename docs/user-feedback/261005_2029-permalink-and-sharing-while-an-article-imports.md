@@ -29,9 +29,11 @@ What was built, in the browser only
 - **A *Make it public* box on the add page**, with the same confirmation as the Metadata page. The
   article becomes readable by others when the import finishes.
 
-Not built, and put to Greg as questions in the plan: a private link from the add page; a "still
-being added" page for a visitor who arrives early; and a small server read so that a second tab
-shows the box as it really is before the import has published.
+Put to Greg as questions, and answered on 2026-10-06: a private link from the add page (yes, in
+one collapsed sharing section) and a "still being added" page for a visitor who arrives early
+(yes) are the plan's stage 2; a small server read so that a second tab shows the box as it really
+is was declined.
 
-**Not checked in a browser.** The local database was behind `dev` when the check was tried, so no
-page would load. The plan's § What landed says so.
+Checked in a browser at desktop, iPad and phone widths on 2026-10-06; the plan's § What landed
+has what was seen. Greg's answers to the three questions, and the second stage they started, are
+in the plan too.
