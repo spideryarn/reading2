@@ -1,6 +1,6 @@
 # A fresh worktree builds once, so the five standing reds stop
 
-Status as of 2026-10-06: **built, one stage** — evidence: `scripts/worktree-builds.ts`,
+Status as of 2026-10-06: **built, one stage, pushed to `dev`; not deployed** — evidence: `scripts/worktree-builds.ts`,
 `tests/check-steps.test.ts`, and the run under [What happened](#what-happened).
 
 Two entries from the Overseer's queue, handed over under Greg's 2026-10-04 "If you're confident,
@@ -130,3 +130,15 @@ vitest run <the five files> + 2     Test Files  7 passed (7)   Tests 198 passed
 ```
 
 `npx tsx scripts/check.ts --list` prints `typecheck build build:fleet test …`.
+
+**GPT Sol's code review: approve**
+([prompt](261006g-fresh-worktree-builds-once-code-review-prompt.md),
+[answer](261006g-fresh-worktree-builds-once-code-review-sol.md)). F4 to F6 it fixed itself, in the
+second commit; F7 is an unused variable in `tests/feedback-dialog-has-its-reader.test.tsx` that
+failed `npm run typecheck` on `dev`, not this stage's; another session fixed it before this was
+pushed, and typecheck is clean after the last merge.
+
+**The full suite**, in this worktree, 2026-10-06, 73 minutes at load 8 to 17: 1,737 files passed,
+1 failed, 1 skipped (38,531 tests passed, 3 failed). The one red file is
+`tests/worktree-remove.test.ts`, three tests; run alone straight afterwards it passed 53 of 53, so
+it is read as load, not this change. None of the five build-reading files was red.
