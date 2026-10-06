@@ -389,7 +389,10 @@ describe("no suite gates itself on `reachable`, the alias 103 of them shared", (
    *   `isLocalDatabaseUrl`, because the block asserts things about *the schema
    *   this laptop actually has*. Pointed at production it would be asking the
    *   wrong database, and its first case asserts the connection happened, so
-   *   "0 tests, all green" cannot read as "every probe verified".
+   *   "0 tests, all green" cannot read as "every probe verified". (The sixth
+   *   sweep's cluster S4, 2026-10-06, replaces that `describe.skip` with a
+   *   throw at module scope when there is no local database. Once it has
+   *   landed this bullet is history and the first file is the only one.)
    *
    * **Widening the regex to the structural form was measured and rejected**: a
    * bare `\?\s*describe\s*:\s*describe\.skip` also catches the platform gates in

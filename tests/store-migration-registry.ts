@@ -1308,7 +1308,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["fixture-loader"],
     reason:
       "The suite written *because* of the 501 postmortem — it pins `postgres`, owns the sentence " +
-      "*these routes work under Postgres*, and fails rather than skips under `REQUIRE_POSTGRES`. " +
+      "*these routes work under Postgres*, and failed rather than skipped under `REQUIRE_POSTGRES`, a flag no code reads now. " +
       "It reaches the filesystem only through `scratchArticleInPg`, and its header's argument for " +
       "existing separately is the thing the hinge makes moot.",
   },
@@ -2670,7 +2670,8 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  * By running, not by reading — 260903e's own instruction, and the reason this
  * map could not be written in stage A. Every entry below was run against a
  * database minted by the factory, one file at a time, under `REQUIRE_POSTGRES=1`
- * so that a skip counted as a failure. The results, the tail of suites that
+ * so that a skip counted as a failure (no code reads that flag now; `pgReady`
+ * throws instead). The results, the tail of suites that
  * assume seeded local state, and what was fixed against what was catalogued are
  * in
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md

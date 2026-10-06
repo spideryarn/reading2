@@ -128,6 +128,14 @@ weakness is reported without changing `useBilling.ts`. No current producer or pe
   kind, and the copy functions then return `undefined`. No server sends one today. It goes to the
   umbrella's list.
 
+## Two comments touched at landing, for cluster S4
+
+S4 turns `tests/migration-reconciliations.test.ts`'s `describe.skip` into a module-scope throw.
+The bullet about it in `tests/one-store-only.test.ts` was true when S1 landed (S4 had not), so it
+now carries a note saying what S4 changes; whoever lands S4 can cut the bullet. Two mentions of
+`REQUIRE_POSTGRES` in `tests/store-migration-registry.ts` read as if the flag still worked; no code
+reads it, and both now say so.
+
 ## Proof the surviving checks can fail
 
 - Removed `tests/candidates-route.test.ts` from `TEST_LANES`: the lane case went red and named the
@@ -141,6 +149,8 @@ weakness is reported without changing `useBilling.ts`. No current producer or pe
 - `npm run knip`: no "Unused files" section; 538 unused exports, the umbrella's figure.
 - `npx vitest run` on `store-migration-registry`, `one-store-only`, `unit-lane-has-no-database`,
   `billing-plan`, `free-allowance-box`, `plan-help-copy`, `doc-links`, `deepen-eval`, `db-ssl`: pass.
+- Full `npm test`, run by the orchestrator on `e6a1cf04d` plus Sol's then-uncommitted fixes: 1,749
+  files passed, 1 skipped; 39,152 tests passed; 4,467 s on a loaded box.
 - `npx biome lint` on the touched files: one info, pre-existing (a complexity note).
 
 ## Final grep counts
