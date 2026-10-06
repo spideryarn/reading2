@@ -101,3 +101,32 @@ GPT Sol on this plan before building (read-only), and on the code after (write-c
 (three loaders fold "unusable" into the same throw as "absent" — move the throw whole), F2 (a clean
 network log proves nothing unless all ten requests were seen), F3 ("one convention" overstated:
 five other artefact reads keep the 404).
+
+**Code review, 2026-10-06** — [the answer](261006h-none-yet-rest-code-review-sol.md), of commit
+`a78132470`. Verdict: land it with its fixes; no P0 or P1, and no production file changed by the
+review. **F1 (P2), fixed by it:** the "same ten" test skipped any route whose pattern it did not
+recognise before comparing, so a wrapped route written differently could vanish from the
+comparison, and an extra name in the offline pattern had nothing to catch it. It now counts every
+real call to the helper and compares the whole pattern
+([postmortem](../postmortems/261006m-an-exact-inventory-check-silently-narrows-its-universe.md)).
+It also added tests the builder's set lacked: a reply that finishes after the reader has moved to
+another article (removing the second `current()` check had survived the original suite), and the
+flags being cleared on "none". Its mutation runs are in
+[the evidence file](261006h-none-yet-rest-review-mutation-evidence.txt).
+
+## What landed — 2026-10-06
+
+Built as planned in `a78132470`, by an Opus subagent, red first (140 of 314 tests failing before the
+production change, none after). Things decided on the way:
+
+- **Each hook checks only that the reply has its artefact**, not what is inside it. A reply
+  without one is a page fault and leaves what is on screen alone.
+- **`useSimple` no longer draws `{ simpleSummary: null }` as ready.** It did, on purpose. Sol
+  checked that the owner route has never sent that and the offline cache never saved one.
+- **`tests/a-broken-mode-leaves-the-article-readable.test.tsx` was already red on `dev`**: 24 of
+  its 88 tests, confirmed by Sol against the parent commit's bytes. Its fetch mock answered any
+  URL it did not know with `{}`, and since 261006g's last fix `useCitationsRead` reports that as a
+  fault. The mock now answers 404 for the reads it has nothing for, which is what the server says.
+- **Not one convention yet.** Tweets, relations, Skim, Sketch and Arc still answer a plain 404 for
+  "not made yet". The docs and the header's comment name them. Moving them is the same three edits
+  each plus a name in the offline pattern, and the test now fails if one is done without the other.

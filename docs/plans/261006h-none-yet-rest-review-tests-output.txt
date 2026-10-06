@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /var/tmp/spideryarn-worktrees/qi-4t3hmw7c-none-yet-rest
+
+
+ Test Files  5 passed (5)
+      Tests  444 passed (444)
+   Start at  14:37:32
+   Duration  82.67s (transform 23.65s, setup 817ms, import 34.43s, tests 81.87s, environment 2.94s)
+

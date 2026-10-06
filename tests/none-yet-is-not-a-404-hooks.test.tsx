@@ -68,8 +68,8 @@ let host: HTMLDivElement;
 let root: Root;
 let seen: unknown;
 
-function Probe({ use }: { use: (slug: string) => unknown }) {
-  seen = use(SLUG);
+function Probe({ use, slug = SLUG }: { use: (slug: string) => unknown; slug?: string }) {
+  seen = use(slug);
   return null;
 }
 
@@ -229,6 +229,60 @@ describe.each(SEVEN)("%s", (name, use, held, body, sent) => {
 
   it("accepts a real response", async () => {
     answer = () => json(body);
+    await mount(use);
+    expect(read()).toMatchObject({ status: "ready", error: null, [held]: artefact });
+  });
+
+  for (const late of [null, body]) {
+    it(`ignores ${late === null ? "absence" : "an artefact"} parsed after moving to another article`, async () => {
+      let release!: (text: string) => void;
+      const pending = new Promise<string>((resolve) => { release = resolve; });
+      answer = () => {
+        const response = json(body);
+        response.text = () => pending;
+        return response;
+      };
+      await mount(use);
+      expect(read().status).toBe("loading");
+      expect(asked.some((ask) => ask.url === url)).toBe(true);
+
+      const nextArtefact = { ...artefact as object, slug: "next-article" };
+      const next = { ...body, [sent]: nextArtefact };
+      answer = () => json(next);
+      await act(async () => root.render(createElement(Probe, { use, slug: "next-article" })));
+      await settle();
+      expect(read()).toMatchObject({ status: "ready", [held]: nextArtefact });
+      expect(asked.some((ask) => ask.url === `/api/${name}/next-article`)).toBe(true);
+
+      await act(async () => release(JSON.stringify(late)));
+      await settle();
+      expect(read()).toMatchObject({ status: "ready", error: null, [held]: nextArtefact });
+    });
+  }
+
+  for (const [what, reply] of ANSWERS) {
+    it(`${what} clears an earlier artefact and its flags`, async () => {
+      answer = () => json({ ...body, [sent]: { ...artefact as object, profileHash: "earlier-profile" },
+        stale: true, outdated: true, profileChanged: true, panelRun: "rewrite" });
+      await mount(use);
+      expect(read()).toMatchObject({ status: "ready", stale: true, outdated: true });
+      if ("profileChanged" in read()) expect(read().profileChanged).toBe(true);
+      if ("profiled" in read()) expect(read().profiled).toBe(true);
+      if (name === "glossary") expect(read().panelRun).toBe("rewrite");
+      answer = reply;
+      await act(async () => read().retryRead());
+      await settle();
+      expect(read()).toMatchObject({ status: "none", error: null, [held]: null, stale: false, outdated: false });
+      if ("profileChanged" in read()) expect(read().profileChanged).toBe(false);
+      if ("profiled" in read()) expect(read().profiled).toBe(false);
+      if (name === "glossary") expect(read().panelRun).toBeUndefined();
+    });
+  }
+
+  it("accepts a saved real copy served offline", async () => {
+    answer = () => new Response(JSON.stringify(body), { status: 200, headers: {
+      "content-type": "application/json", "x-spideryarn-offline": "copy", "x-spideryarn-saved-at": "123",
+    } });
     await mount(use);
     expect(read()).toMatchObject({ status: "ready", error: null, [held]: artefact });
   });

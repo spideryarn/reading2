@@ -97,6 +97,14 @@ describe.each(READS)("%s catch boundary", (kind, load) => {
     expect(stores.candidates).not.toHaveBeenCalled();
   });
 
+  it("keeps typed absence as a 404 without the opt-in header", async () => {
+    load.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+    const res = await get(kind, false);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
   for (const asks of [false, true]) {
     it(`leaves a generic 404 alone (header=${asks})`, async () => {
       load.mockRejectedValue(Object.assign(new Error("missing article"), { status: 404 }));
@@ -143,3 +151,32 @@ it("a profile failure after a successful quiz load remains a failure", async () 
   expect(res.status).toBe(500);
   expect(JSON.parse(res.body)).toHaveProperty("error");
 });
+
+// These four added routes resolve the profile as well as loading the artefact.
+describe.each(READS.filter(([kind]) => ["simple", "ideas", "glossary", "quotes"].includes(kind)))(
+  "%s profile boundary", (kind, load) => {
+    for (const asks of [false, true]) {
+      it(`a profile failure after a made artefact stays a 500 (header=${asks})`, async () => {
+        stores.profile.mockRejectedValue(new Error("profile failed"));
+        const res = await get(kind, asks);
+        expect(res.status).toBe(500);
+        expect(JSON.parse(res.body)).toHaveProperty("error");
+      });
+
+      it(`absence retains precedence over a concurrent profile failure (header=${asks})`, async () => {
+        let rejectArtefact!: (error: Error) => void;
+        load.mockImplementation(() => new Promise((_, reject) => { rejectArtefact = reject; }));
+        stores.profile.mockRejectedValue(new Error("profile failed"));
+        const reading = get(kind, asks);
+        await vi.waitFor(() => expect(stores.profile).toHaveBeenCalled());
+        // The profile has failed before the later artefact absence arrives.
+        await Promise.resolve();
+        rejectArtefact(new ArtefactNotMadeYet("none yet"));
+        const res = await reading;
+        expect(res.status).toBe(asks ? 200 : 404);
+        if (asks) expect(res.body).toBe("null");
+        else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+      });
+    }
+  },
+);

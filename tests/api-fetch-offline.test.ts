@@ -23,6 +23,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NONE_YET_AS_NULL_HEADER, type LibraryResponse } from "../src/types.js";
+import { parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
@@ -89,6 +90,64 @@ const NONE_YET_READS = [
   "glossary",
   "quotes",
 ] as const;
+
+function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NULL): void {
+  /* Use actual call locations: comments must not stand in for a wrapper, and
+     every call must be accounted for in the route where it appears. */
+  const ast = parseSource(source);
+  expect(ast.errors).toHaveLength(0);
+  const helperCalls: number[] = [];
+  walkAst(ast, (node) => {
+    if (node.type !== "CallExpression") return;
+    const callee = node.callee as { type?: string; name?: string };
+    if (callee.type === "Identifier" && callee.name === "orNullWhenNotMadeYet") {
+      helperCalls.push(node.start as number);
+    }
+  });
+  const BY_SLUG = String.raw`\/\^\\\/api\\\/([a-z-]+)\\\/\(\[\\w\.%-\]\+\)\$\/`;
+  /* `GLOSSARY_PATTERN` and its like: a route may name its pattern. */
+  const named = new Map<string, string>();
+  for (const [, constant, name] of source.matchAll(new RegExp(String.raw`const (\w+) = ${BY_SLUG};`, "g"))) {
+    named.set(constant!, name!);
+  }
+  const wrapped: string[] = [];
+  const plain: string[] = [];
+  const entries = [...source.matchAll(/kind: "pattern",/g)];
+  for (const [index, match] of entries.entries()) {
+    const start = match.index + match[0].length;
+    const end = entries[index + 1]?.index ?? source.length;
+    const entry = source.slice(start, end);
+    const calls = helperCalls.filter((at) => at >= start && at < end);
+    if (!/^\s*method: "GET",/.test(entry)) {
+      expect(calls, "a helper-using entry must resolve to a GET route").toHaveLength(0);
+      continue;
+    }
+    const literal = new RegExp(String.raw`^\s*method: "GET",\s*pattern: ${BY_SLUG},`).exec(entry)?.[1];
+    const constant = /^\s*method: "GET",\s*pattern: (\w+),/.exec(entry)?.[1];
+    const name = literal ?? (constant ? named.get(constant) : undefined);
+    if (!name) {
+      expect(calls, "a helper-using GET must have a recognised pattern").toHaveLength(0);
+      continue;
+    }
+    expect(calls.length).toBeLessThanOrEqual(1);
+    (calls.length ? wrapped : plain).push(name);
+  }
+  expect(wrapped, "every helper call must belong to a recognised GET route").toHaveLength(helperCalls.length);
+  expect(wrapped.sort()).toEqual([...NONE_YET_READS].sort());
+
+  /* Membership probes alone never see an extra alternative. Check the whole
+     expression too, while permitting the names in any order. */
+  const names = /\(\?:([a-z|-]+)\)/.exec(offlinePattern.source)?.[1]?.split("|") ?? [];
+  expect([...names].sort()).toEqual(wrapped);
+  expect(offlinePattern.source).toBe(
+    new RegExp(String.raw`^\/api\/(?:${names.join("|")})\/[^/?]+$`).source,
+  );
+  expect(offlinePattern.flags).toBe("");
+  /* The scan saw the routes that were not moved, so "no others" means it. */
+  expect(plain).toEqual(expect.arrayContaining(["tweets", "relations", "skim", "sketch", "arc"]));
+  for (const name of wrapped) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(true);
+  for (const name of plain) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(false);
+}
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -442,27 +501,34 @@ describe("what gets written", () => {
    */
   it("matches exactly the GET routes that go through orNullWhenNotMadeYet", () => {
     const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
-    const BY_SLUG = String.raw`\/\^\\\/api\\\/([a-z-]+)\\\/\(\[\\w\.%-\]\+\)\$\/`;
-    /* `GLOSSARY_PATTERN` and its like: a route may name its pattern. */
-    const named = new Map<string, string>();
-    for (const [, constant, name] of source.matchAll(new RegExp(String.raw`const (\w+) = ${BY_SLUG};`, "g"))) {
-      named.set(constant!, name!);
-    }
-    const wrapped: string[] = [];
-    const plain: string[] = [];
-    for (const entry of source.split('kind: "pattern",').slice(1)) {
-      if (!/^\s*method: "GET",/.test(entry)) continue;
-      const literal = new RegExp(String.raw`^\s*method: "GET",\s*pattern: ${BY_SLUG},`).exec(entry)?.[1];
-      const constant = /^\s*method: "GET",\s*pattern: (\w+),/.exec(entry)?.[1];
-      const name = literal ?? (constant ? named.get(constant) : undefined);
-      if (!name) continue;
-      (entry.includes("await orNullWhenNotMadeYet(") ? wrapped : plain).push(name);
-    }
-    expect(wrapped.sort()).toEqual([...NONE_YET_READS].sort());
-    /* The scan saw the routes that were not moved, so "no others" means it. */
-    expect(plain).toEqual(expect.arrayContaining(["tweets", "relations", "skim", "sketch", "arc"]));
-    for (const name of wrapped) expect(NONE_YET_AS_NULL.test(`/api/${name}/x`), name).toBe(true);
-    for (const name of plain) expect(NONE_YET_AS_NULL.test(`/api/${name}/x`), name).toBe(false);
+    assertNoneYetInventory(source);
+  });
+
+  it("refuses a wrapped GET whose pattern the inventory cannot recognise", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const fixture = source.replace('const AUTH_ROUTES: readonly AuthRoute[] = [', String.raw`const AUTH_ROUTES: readonly AuthRoute[] = [
+      { kind: "pattern", method: "GET", pattern: /^\/api\/extra\/([\w-]+)$/,
+        handler: async () => { await orNullWhenNotMadeYet({ req, res }, load); } },`);
+    expect(fixture).not.toBe(source);
+    expect(() => assertNoneYetInventory(fixture)).toThrow();
+  });
+
+  it("does not let a commented wrapper compensate for an unrecognised real call", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const fixture = source
+      .replace("const found = await orNullWhenNotMadeYet(", "/* await orNullWhenNotMadeYet( */ const found = await unwrappedRead(")
+      .replace('const AUTH_ROUTES: readonly AuthRoute[] = [', String.raw`const AUTH_ROUTES: readonly AuthRoute[] = [
+        { kind: "pattern", method: "GET", pattern: /^\/api\/extra\/([\w-]+)$/,
+          handler: async () => { await orNullWhenNotMadeYet({ req, res }, load); } },`);
+    expect(fixture).not.toBe(source);
+    expect(() => assertNoneYetInventory(fixture)).toThrow();
+  });
+
+  it("refuses an offline-pattern name with no wrapped route", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const extra = new RegExp(NONE_YET_AS_NULL.source.replace("(?:", "(?:extra|"));
+    expect(extra.test("/api/extra/x")).toBe(true);
+    expect(() => assertNoneYetInventory(source, extra)).toThrow();
   });
 
   it("does not save a response that is not JSON", async () => {
