@@ -2496,8 +2496,21 @@ export async function advanceJobWith(
     /* Held by another claimant, or the single running slot is taken by a
        different job, or Stop has been pressed and the abort has not landed.
        All three are *wait and ask again*, which is what the client does. */
-    case "busy":
-      return { job: (await store.get(id, owner)) as Job, ran: null, busy: true, done: false };
+    case "busy": {
+      /* **Read, not assumed.** One of the three refusals, the queue's lock
+         being held by another claim, is answered before the store has looked
+         for the job at all (`claim`'s `NOWAIT` branch; its transaction is
+         already aborted, so it cannot look afterwards). Until 2026-10-07 this
+         line cast the read to `Job`, so a job that did not exist, or was not
+         this owner's, answered 200 `{ran: null, busy: true, done: false}` with
+         no job in it while the lock was held and 404 once it was free.
+         `get` is scoped to the owner, so a job that is really there is always
+         found and still told to wait. tests/jobs-walk.test.ts § the exits of
+         a claim. */
+      const job = await store.get(id, owner);
+      if (!job) return null;
+      return { job, ran: null, busy: true, done: false };
+    }
     case "stopping":
       return { job: outcome.job, ran: null, busy: true, done: false };
   }

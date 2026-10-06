@@ -132,7 +132,7 @@
  */
 import { vi } from "vitest";
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -1384,6 +1384,28 @@ describe("one claim walks the whole job", () => {
         expect(advanced?.job.steps[0]?.status, "the step is shown as finished").toBe("done");
         expect(draft).toBe("failed");
       });
+    });
+
+    /* ------------------------------------------------------------- PQ2 -- */
+
+    it("answers null for a job that does not exist while another claim is being decided", async () => {
+      const { job, parts } = await fixture("test-walk-lock-contended", ["fetch"]);
+      const missing = mintId();
+      let forMissing: Awaited<ReturnType<typeof advanceAsOwner>> | "unasked" = "unasked";
+      let forLive: Awaited<ReturnType<typeof advanceAsOwner>> | "unasked" = "unasked";
+
+      /* One connection holds the queue's lock, as a claim being decided does;
+         the advances below run on others from the same pool. */
+      await getDb().transaction(async (tx) => {
+        await tx.execute(sql`select 1 from spideryarn.queue_state where id = 1 for update`);
+        forMissing = await advanceAsOwner(missing, parts);
+        forLive = await advanceAsOwner(job.id, parts);
+      });
+
+      expect(forMissing, "null is what the route turns into 404").toBeNull();
+      /* The mechanism the 404 rests on: a job that exists is still told to wait. */
+      expect(forLive).toMatchObject({ ran: null, busy: true, done: false, job: { id: job.id } });
+      expect(await advanceAsOwner(missing, parts), "and the same answer once the lock is free").toBeNull();
     });
   });
 });

@@ -176,3 +176,40 @@ The product is discarded, not kept, as both reviews and the orchestrator's corre
 **What the investigation got wrong.** "`assets` is the last step of every import" (it is not the
 last step of a minimal one, as the Sol review says). Nothing else.
 
+### PQ2: a missing job is a 404 while the queue's lock is held too
+
+- [x] Red, against real Postgres, with the lock held on a second connection.
+- [x] Fix, in `src/jobs.ts` § `advanceJobWith`, `case "busy"`.
+- [x] `ingest-queue.md` § The routes says so.
+
+**Evidence:** R against Postgres at the coordinator (`advanceJobWith` answers a job-less object;
+after the fix, `null`). The route's half is C: `src/routes.ts` already answers 404 for `null`
+(`if (!advanced) throw httpError(404, "No such job")`), and no line of it changed. The Opus review
+reproduced the 200 through the route itself.
+**Files:** `src/jobs.ts`, `tests/jobs-walk.test.ts`, `docs/project/ingest-queue.md`.
+
+**Done when** an advance for an id that was never inserted answers `null` both while a second
+connection holds `queue_state` `for update` and after it lets go.
+
+**Red.**
+
+```
+× answers null for a job that does not exist while another claim is being decided
+    AssertionError: null is what the route turns into 404:
+    expected { job: undefined, ran: null, busy: true, done: false } to be null
+```
+
+**What landed.** The read in the `busy` branch is checked instead of cast: no row, `null`. Both
+reviews agree on this fix and on not classifying inside the store's transaction, which Postgres
+has already aborted by then.
+
+**The retreat rule.** This adds a 404 on a path every advance takes. The argument that no live job
+can meet it rests on `store.get(id, owner)` finding any row that owner can advance. The same case
+tests that: with the lock held, an advance for a job that exists still answers
+`{busy: true, done: false}` carrying the job. `get` hides a dismissed job, and so does `claim`
+(`gone`), so the two answers agree there too. The refusal is kept.
+
+**What the investigation got wrong.** The first investigation said the browser "fails"; the Opus
+review is right that the driver catches the throw and asks again, so the cost was one wasted
+request and no visible effect.
+

@@ -2321,6 +2321,13 @@ the server asks whether to spend, and a client is not where a spending rule live
 job stays a **404** (`null`), because *no such job of yours* and *that job is not a candidate* are
 different answers.
 
+**Advance answers 404 for a job that is not there, whatever the queue is doing**, since
+2026-10-07. `claim` takes the queue's lock with `NOWAIT` and answers `busy` when another claim holds
+it, before it has looked for the job. `advanceJobWith` then read the job and assumed it was there,
+so for the moment the lock was held a missing job, or somebody else's, got 200
+`{ran: null, busy: true, done: false}` with no `job` field, and the browser's driver threw on it.
+The read is now checked. A job that exists is still told to wait.
+
 Cancelling stops a queued job outright, and a running one as fast as the step it is in allows. Every
 step gets the `AbortSignal`: the fetch layer folds it into its own deadline, and the Anthropic SDK
 takes one directly, so a model call stops mid-stream. The tokens already streamed are paid for
