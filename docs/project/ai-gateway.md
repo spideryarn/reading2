@@ -814,20 +814,30 @@ the names do not say:
 [261006d](../plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md)). Its
 `failure_class` is `stall` when our stall clock stopped a provider that had gone silent, `deadline`
 when a recognised deadline expired while the attempt was active, and `abort` for anything else,
-a reader's Stop included. A deadline can cap one call, a turn or a processing step; it does not
-establish how long that particular provider request ran.
-`failure_phase` and `failure_status` are filled as on an error, and `outcome` stays `aborted`.
-`abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things it
-does not tell apart:
+a reader's Stop included. A deadline can cap one call, a turn, a processing step or a whole
+pipeline job; it does not establish how long that particular provider request ran.
+On gateway rows, `failure_phase` and `failure_status` are filled as on an error, and `outcome`
+stays `aborted`.
+`abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things to
+know about what it tells apart:
 
-- **The pipeline's deadline on a whole job** (`DeadlineReached` in `src/jobs.ts`) is our clock too,
-  and is recorded as `abort`.
-- **A `deadline` is any `AbortSignal.timeout` on the call's signal**, whoever set it, plus the two
-  clocks that say so by name (`CallDeadlineReached`). Every one that reaches a gateway today is
-  ours; that is a convention, not a guarantee.
-- **An `aborted` row with no class does not say.** It is a row from before this was recorded, or
-  one from the realtime wire (`src/live.ts`), which is not instrumented. The counts treat it as
-  *not classified*, never as "not a stall".
+- **The pipeline's deadline on a whole job** (`DeadlineReached` in `src/jobs.ts`) is a `deadline`
+  since [261006f](../plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md):
+  it extends `CallDeadlineReached`. Previously classified job-deadline stops say `abort`;
+  older rows can have no class.
+- **A `deadline` is any `AbortSignal.timeout` on the call's signal**, whoever set it, plus the
+  clocks that say so by name (`CallDeadlineReached`, the job's among them). Every one that reaches
+  a gateway today is ours; that is a convention, not a guarantee.
+- **An `aborted` row with no class does not say.** It is a row from before this was recorded. The
+  counts treat it as *not classified*, never as "not a stall".
+
+**The realtime wire (`src/live.ts`) classes its own stops, without a gateway.** A response row is
+`aborted` when OpenAI's status is `cancelled` or `incomplete`, and since 261006f it carries the
+class `abort` with no phase and no status: no timer of ours sends `response.cancel`, so a terminal
+event that arrived was the reader talking over the model, or the reply hitting its length cap or a
+content filter. An unfinished response without a terminal usage report has no response row.
+Our time limits and a lost connection can close a conversation without that report; closing it
+does not create a response row.
 
 On an OpenRouter stream, an in-band provider error already observed remains an error even if a
 later body read aborts (the F9 fix).

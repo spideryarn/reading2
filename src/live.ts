@@ -61,7 +61,7 @@ import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
-import { webLinks } from "./urls.js";
+import { withoutBlockIds } from "./answer-opening.js";
 import { stageFailure } from "./job-failure.js";
 import { plainWords } from "./plain-words.js";
 import { LIVE_UPSTREAM } from "./messages.js";
@@ -523,54 +523,9 @@ export function liveSeedItems(
   }));
 }
 
-/**
- * Take our block ids out of a line of prose, leaving it readable.
- *
- * **Not `splitCitations` from src/web/citations.ts**, and the difference is the
- * job rather than the pattern. That one has to know *where* each citation sits
- * so the renderer can put a chip there; this one only has to make the text
- * safe to say out loud, and deleting is strictly simpler than locating. Sharing
- * the harder function to get the easier answer would drag the client's
- * rendering rules onto the server for nothing.
- *
- * **Links are protected**, for the reason `citedBlockIds` gives: a URL a model
- * found on the web can contain something id-shaped, and mangling somebody's
- * link is worse than leaving an id in a place nobody reads aloud. That was a
- * real bug in the first version of this function and the test that caught it is
- * `leaves an id inside a URL alone`.
- */
-export function withoutBlockIds(text: string): string {
-  /* **Links are held out of the way first, and this was a bug before it was a
-     comment.** The first version stripped ids from the raw string, so
-     `https://example.com/notes/spya-k3m9qt` came back as
-     `https://example.com/notes/` — a stranger's URL quietly broken, in an
-     answer the reader might follow. `webLinks` is the SAME matcher the renderer
-     and the citation counters use (src/urls.ts), so the three agree about what
-     a link is rather than each deciding for itself.
-
-     Spans are collected and skipped rather than blanked-then-restored, because
-     `withoutWebLinks` replaces a link with spaces of equal length — right for
-     counting offsets, useless when the text has to survive. */
-  const spans = webLinks(text).map((l) => [l.index, l.end] as const);
-  const insideLink = (at: number): boolean => spans.some(([from, to]) => at >= from && at < to);
-
-  const stripped = text.replace(
-    /* A bracketed citation, or a bare id. One pass, so a bracket cannot be
-       eaten by the first rule and its contents by the second. */
-    /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}/g,
-    (match, offset: number) => (insideLink(offset) ? match : ""),
-  );
-
-  return (
-    stripped
-      /* Tidy the holes. A stripped citation otherwise leaves a double space and
-         a space before the full stop — and a text-to-speech pass does hear the
-         difference. */
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/\s+([.,;:!?])/g, "$1")
-      .trim()
-  );
-}
+/* `withoutBlockIds` is in src/answer-opening.ts since 2026-10-06, where the
+   browser can reach it too; re-exported because this is where callers look. */
+export { withoutBlockIds };
 
 /** What the browser is handed. Deliberately not the session — see `mintLiveToken`. */
 export interface LiveToken {
@@ -1464,11 +1419,23 @@ export function acceptRealtimeUsage(opts: RealtimeAcceptance): AiCallRow | null 
     };
   }
 
+  const outcome = REALTIME_OUTCOME[usage.status];
   return {
     ...common,
     requestedModel: session.model,
-    outcome: REALTIME_OUTCOME[usage.status],
+    outcome,
     providerStatus: usage.status,
+    /* **A stopped response is an ordinary stop, and says so.** No timer of ours
+       sends `response.cancel`: our time limits close the whole conversation,
+       and closing it creates no response row for an unfinished response without
+       a terminal usage report. So a terminal event that did arrive saying
+       `cancelled` or `incomplete` was not made by
+       our clock: it is the reader talking over the model, or the reply hitting
+       its length cap or a content filter. `abort` rather than null, so the row
+       does not read as a stop that might have been a stall. The phase and the
+       status stay null: the browser does not report how far the response had
+       got. Plan docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md. */
+    failureClass: outcome === "aborted" ? ("abort" as const) : null,
     ...money,
     /* The totals stay on the columns every other wire uses; the splits say what
        they were made of. `reported_`, because a realtime input count is the
@@ -1555,7 +1522,9 @@ function ledgerBase(
     durationMs: startedAt === null ? null : finishedAt - startedAt,
     /* A live session's call is made by the browser, on a wire this process
        never touches: no retry loop of ours counted it and no gateway saw how it
-       failed. `provider_status` is where a realtime row says what happened. */
+       failed. `provider_status` is where a realtime row says what happened.
+       These nulls are the default; the one exception is a stopped Realtime
+       response, which `acceptRealtimeUsage` classes as `abort`. */
     attempt: null,
     failurePhase: null,
     failureClass: null,

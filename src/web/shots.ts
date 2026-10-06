@@ -32,6 +32,18 @@
  * `meaningPanel`) show no bar and were still true, so they stayed.
  * docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md.
  *
+ * **`learn` and `quiz` were retaken on 2026-10-06**, after the mode was renamed:
+ * the old pair were headed *Remembering* and *Remember* and showed two chips
+ * where there are four. Both are the band alone at a 916×700 window, which is
+ * the width where Learn's band is 360 CSS px (src/web/layout.ts § `bandWidth`;
+ * at 1440 it is 544, and the text would draw at two thirds of its size), at 2×
+ * so the file is 720 wide with no resampling. The experimental switch was on,
+ * so Explore's chip is in both. `quiz` is small because it is mostly flat
+ * background: at `--quality 65-92` it came to 18KB, under the 20KB floor in
+ * tests/landing-assets.test.ts, so that one file was quantised at
+ * `--quality 80-98`.
+ * docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md § Stage 3.
+ *
  * **Every landscape shot is 2160 wide since that retake, and that is the
  * width to keep.** The pages draw a landscape shot at 1152px (SiteBits.tsx §
  * Showcase), so 1440 was 1.25× and visibly soft; 2160 is about 1.9×. The
@@ -140,14 +152,14 @@ export const SHOTS = {
     src: learnShot,
     file: "learn.png",
     w: 720,
-    h: 1428,
+    h: 1232,
     alt: "Learn mode, waiting for the reader to say what they took from the piece.",
   },
   quiz: {
     src: quizShot,
     file: "quiz.png",
     w: 720,
-    h: 1469,
+    h: 962,
     alt: "Quiz mode: short-answer questions generated from the article, one at a time.",
   },
   referee: {
