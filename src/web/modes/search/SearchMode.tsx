@@ -142,8 +142,8 @@ export function SearchBand({
      at mount and is right here because the band cannot outlive its reader:
      it is under `ArticlePage`'s access gate, which answers `loading` and
      unmounts everything below it the moment the reader changes (access.ts
-     § `useArticleAccess`). `ArticlePage` itself is *not* remounted, which is
-     why `useLastView` up there takes the prop instead. */
+     § `useArticleAccess`). `useLastView` cannot use the frozen answer: it
+     lives in `App`, which outlives every reader, and is told the current one. */
   const readerId = useMadeFor();
   const storedPairs = useMemo(() => storedPairsFor(readerId), [readerId]);
   /* `loaded` is true for a failed read too, and a failed read's empty list
