@@ -46,7 +46,16 @@ export type ReadingView = {
   why: string | null;
   /** Whatever numbers the check reported, unvalidated beyond its arm. */
   counts: unknown;
+  /**
+   * The test files this run named as failing, or null when that is **not
+   * known** — never an empty list, which would read as "none failed". Only a
+   * `fail` carries one. `total` exceeds `files.length` when the server's cap
+   * cut the list. The server's type is `FailedTestFiles` in `readiness.ts`.
+   */
+  failedTestFiles: FailedTestFilesView | null;
 };
+
+export type FailedTestFilesView = { files: [string, ...string[]]; total: number };
 
 export type EvidenceView = {
   check: string;
@@ -127,6 +136,32 @@ function parseTree(v: unknown): TreeView {
   return { kind: "unknown", why: str(v["why"]) ?? "no reason was given" };
 }
 
+/**
+ * The failing files, or null for anything short of a well-formed list.
+ *
+ * The browser-side copy of the server's `asFailedTestFiles`, and looser in one
+ * place only: it does not know the server's cap, so it takes any length up to
+ * a bound of its own. Everything else is the same all-or-nothing — one entry
+ * that is not a plain path and the answer is *not known*, because these strings
+ * are drawn on the page and a list that had been quietly trimmed would show a
+ * count nobody could reconcile with it.
+ */
+function parseFailedTestFiles(v: unknown): FailedTestFilesView | null {
+  if (!isRecord(v)) return null;
+  const raw = v["files"];
+  const total = num(v["total"]);
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 100) return null;
+  if (total === null || !Number.isInteger(total) || total < raw.length) return null;
+  const files: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string" || item.length > 300 || !/^[^\s/][^\s]*$/.test(item)) return null;
+    if (files.includes(item)) return null;
+    files.push(item);
+  }
+  const [first, ...rest] = files;
+  return first === undefined ? null : { files: [first, ...rest], total };
+}
+
 function parseReading(raw: unknown): ReadingView | null {
   if (!isRecord(raw)) return null;
   const record = raw["record"];
@@ -154,6 +189,95 @@ function parseReading(raw: unknown): ReadingView | null {
     logPath: str(record["logPath"]),
     why: str(raw["why"]),
     counts: record["counts"],
+    /* Only beside a failure. A pass or a run still going, drawn with failing
+       files next to it, would be the page saying two things about one run. */
+    failedTestFiles: state === "fail" ? parseFailedTestFiles(record["failedTestFiles"]) : null,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * The day's failing files.
+ * ------------------------------------------------------------------ */
+
+/** One test file, across every failed run in the window that named its failures. */
+export type FailingFileRow = {
+  file: string;
+  /** How many of the named failed runs it failed in. A lower bound when `cappedRuns > 0`. */
+  runs: number;
+  firstAtMs: number;
+  lastAtMs: number;
+  /** Did it fail in the most recent named failed run? */
+  inLatest: boolean;
+};
+
+export type FailingFilesSummary = {
+  rows: FailingFileRow[];
+  /** Failed runs that named their failing files — the denominator for `runs`. */
+  namedRuns: number;
+  /**
+   * Failed wrapper runs with no names: recorded before names were kept, or
+   * failed somewhere that is not a test (a typecheck, say), or printed a
+   * summary the scanner would not vouch for.
+   * **Counted so that their absence from the rows is not read as a clean run.**
+   */
+  unnamedRuns: number;
+  /** Named runs whose list was cut by the cap, so a file may be missing from them. */
+  cappedRuns: number;
+  /** How many failing files those cut lists left out, in all. Zero when none was cut. */
+  unlistedFiles: number;
+};
+
+/**
+ * **"Red for hours, or a flake?"**, from the records alone.
+ *
+ * Every failed WRAPPER run in the window, whatever tree it ran on — that is a
+ * different question from the headline's, which is about one commit, and the
+ * card says so. A file that failed in nine of ten runs since this morning is a
+ * red test; one that failed once in ten is a flake; and neither is a claim
+ * about dev.
+ *
+ * Log reconstructions are left out altogether rather than counted as unnamed:
+ * they can never carry names, and most of them are an agent running one file
+ * while it works on it, so counting them would bury the number that matters —
+ * wrapper runs that failed and could not say where.
+ *
+ * Rows are ordered newest failure first, then by how often, then by name, so
+ * the order is the same on every poll.
+ */
+export function failingFilesOverDay(readings: readonly ReadingView[]): FailingFilesSummary {
+  const failed = readings.filter((r) => r.state === "fail" && r.source === "wrapper");
+  const named = failed.filter((r) => r.failedTestFiles !== null);
+  const latestAtMs = Math.max(...named.map((r) => r.atMs));
+  const byFile = new Map<string, FailingFileRow>();
+  for (const reading of named) {
+    for (const file of reading.failedTestFiles?.files ?? []) {
+      const row = byFile.get(file);
+      if (row === undefined) {
+        byFile.set(file, {
+          file,
+          runs: 1,
+          firstAtMs: reading.atMs,
+          lastAtMs: reading.atMs,
+          inLatest: reading.atMs === latestAtMs,
+        });
+        continue;
+      }
+      row.runs += 1;
+      row.firstAtMs = Math.min(row.firstAtMs, reading.atMs);
+      row.lastAtMs = Math.max(row.lastAtMs, reading.atMs);
+      row.inLatest = row.inLatest || reading.atMs === latestAtMs;
+    }
+  }
+  const cut = named.map((r) => (r.failedTestFiles?.total ?? 0) - (r.failedTestFiles?.files.length ?? 0));
+  const rows = [...byFile.values()].sort(
+    (a, b) => b.lastAtMs - a.lastAtMs || b.runs - a.runs || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0),
+  );
+  return {
+    rows,
+    namedRuns: named.length,
+    unnamedRuns: failed.length - named.length,
+    cappedRuns: cut.filter((n) => n > 0).length,
+    unlistedFiles: cut.reduce((sum, n) => sum + n, 0),
   };
 }
 

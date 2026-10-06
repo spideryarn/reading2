@@ -56,6 +56,7 @@ import {
   footerRequired,
   joinEnds,
   makeAdmissionRefusalCapture,
+  makeFailedTestFilesCapture,
   outcomeAfterAdmissionRefusal,
   parseBanner,
   parseOutput,
@@ -67,6 +68,8 @@ import { runnerChildEnv, stampTree } from "../tools/fleet/readiness-git.js";
 import {
   CHECK_KINDS,
   SCRIPT_FOR_KIND,
+  describeFailedTestFiles,
+  failedTestFilesForOutcome,
   outcomeFromExit,
   type CheckKind,
   type FinishedRecord,
@@ -265,6 +268,14 @@ async function main(): Promise<void> {
      have an unrelated stdout chunk spliced into its middle by arrival order. */
   const stdoutAdmissionRefusal = makeAdmissionRefusalCapture(admissionToken);
   const stderrAdmissionRefusal = makeAdmissionRefusalCapture(admissionToken);
+  /* The same problem, for the names of the test files that failed: vitest's
+     failure summary is in the middle of a full check's output and in neither
+     retained window. A stream per pipe, for the reason given just above. It
+     cannot throw and it cannot change the outcome — it only ever fills in
+     `failedTestFiles` on a run that has already been judged a failure. */
+  const failedTestFilesSeen = makeFailedTestFilesCapture();
+  const stdoutFailedTestFiles = failedTestFilesSeen.stream();
+  const stderrFailedTestFiles = failedTestFilesSeen.stream();
   const child = spawn("npm", ["run", script], {
     cwd: root,
     env: checkChildEnv(admissionToken),
@@ -280,11 +291,13 @@ async function main(): Promise<void> {
   child.stdout.on("data", (c: string) => {
     capture.push(c);
     stdoutAdmissionRefusal.push(c);
+    stdoutFailedTestFiles.push(c);
     process.stdout.write(c);
   });
   child.stderr.on("data", (c: string) => {
     capture.push(c);
     stderrAdmissionRefusal.push(c);
+    stderrFailedTestFiles.push(c);
     process.stderr.write(c);
   });
 
@@ -364,6 +377,9 @@ async function main(): Promise<void> {
     treeAtEnd: stampTree(cwd),
     logPath: null,
     why,
+    /* Decided AFTER the outcome and from nothing the outcome reads, so the
+       names can be wrong without the verdict being wrong. Null is "not known". */
+    failedTestFiles: failedTestFilesForOutcome(outcome, failedTestFilesSeen.result()),
   };
 
   try {
@@ -374,6 +390,13 @@ async function main(): Promise<void> {
       `readiness-run: the check finished ${outcome} but could not be recorded — ${(err as Error).message}`,
     );
     process.exit(EXIT_NOT_RECORDED);
+  }
+
+  /* The last thing in the log, so whoever opens a 14 MB one to find out which
+     file failed can read its final lines instead. Said only when known: silence
+     here means the names were not recorded, not that nothing failed. */
+  if (finished.failedTestFiles !== null) {
+    console.error(`readiness-run: ${describeFailedTestFiles(finished.failedTestFiles)}`);
   }
 
   /* A signal becomes 128+n rather than 0, so the layer above sees a kill.

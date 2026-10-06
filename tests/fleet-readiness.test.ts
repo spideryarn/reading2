@@ -14,7 +14,7 @@
  * box tonight.
  */
 import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, utimesSync, mkdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -31,15 +31,18 @@ import {
 } from "../tools/fleet/readiness-backfill.js";
 import {
   joinEnds,
+  makeFailedTestFilesCapture,
   parseBanner,
   parseCheckTable,
   parseExitLine,
+  parseFailedTestFiles,
   parseTypecheck,
   parseVitest,
   scopeOf,
   stripAnsi,
 } from "../tools/fleet/readiness-parse.js";
 import {
+  MAX_RECORD_BYTES,
   openReadinessStore,
   procStartToken,
   processStillAlive,
@@ -49,9 +52,15 @@ import {
 } from "../tools/fleet/readiness-store.js";
 import { canVote, readinessVerdict } from "../tools/fleet/readiness-verdict.js";
 import {
+  describeFailedTestFiles,
+  describeReadingOutcome,
+  failedTestFilesForOutcome,
+  failedTestFilesFrom,
   outcomeFromExit,
   parseRunRecord,
   resolveRecord,
+  FAILED_TEST_FILES_CAP,
+  FAILED_TEST_FILE_PATH_MAX,
   PENDING_TRUST_MS,
   type FinishedRecord,
   type Reading,
@@ -90,6 +99,7 @@ function finished(over: Partial<FinishedRecord> = {}): FinishedRecord {
     treeAtEnd: clean(SHA_A),
     logPath: null,
     why: null,
+    failedTestFiles: null,
     ...over,
   };
 }
@@ -1409,5 +1419,365 @@ describe("the readiness verdict", () => {
        produce them. */
     const out = verdict([fresh, stale, reading(finished({ check: "typecheck", runId: "tc" }))]);
     expect(out.kind).toBe("ready");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Which test files failed.
+ * docs/plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md
+ * ------------------------------------------------------------------ */
+
+describe("which test files failed", () => {
+  /* **Three fixtures, all real, and unlike their neighbours NOT ANSI-stripped**
+     — reading through the colour codes is half of what is being tested.
+       - `check-test-step-names-three-files.log`: the loop's own failing
+         `npm run check` of 2026-10-06 05:06, head, vitest's failure summary
+         and tail, cut from a 14 MB log whose summary sat 92,000 lines in.
+       - `vitest-failed-suites-and-tests.log`: a suite with BOTH headings, a
+         file that would not load (`[ path ]`), and one file failing twice.
+       - `vitest-fail-no-colour.log`: a one-test probe run on this box with no
+         colour, where the project badge is `|unit|` instead of a painted one. */
+  const THREE = [
+    "tests/dock-corner-controls.test.tsx",
+    "tests/fleet-child.test.ts",
+    "tests/store-roundtrip.test.ts",
+  ];
+
+  it("names the files in a real failing check run, sorted, through the colour codes", () => {
+    const text = fixture("check-test-step-names-three-files.log");
+    expect(text).toContain("\u001b[41m");
+    expect(parseFailedTestFiles(text)).toEqual({ files: THREE, total: 3 });
+  });
+
+  it("agrees with vitest's own count of failed files, across both headings", () => {
+    const text = fixture("vitest-failed-suites-and-tests.log");
+    const named = parseFailedTestFiles(text);
+    expect(named?.files).toEqual([
+      "tests/chat-web-links.test.ts",
+      "tests/doc-links.test.ts",
+      "tests/every-ai-code-is-registered.test.ts",
+      "tests/messages.test.ts",
+      "tests/store-parity.test.ts",
+      "tests/store-roundtrip.test.ts",
+    ]);
+    /* Seven FAIL lines, six files: doc-links failed twice. The footer is
+       vitest's own count, and it is the check on ours. */
+    expect(named?.total).toBe(parseVitest(text).counts.files?.failed);
+    expect(named?.total).toBe(6);
+  });
+
+  it("reads the uncoloured badge too", () => {
+    expect(parseFailedTestFiles(fixture("vitest-fail-no-colour.log"))).toEqual({
+      files: ["tests/zzz-stream-probe.test.ts"],
+      total: 1,
+    });
+  });
+
+  it("says NOT KNOWN, never an empty list, when there is no failure summary", () => {
+    /* `vitest-fail.log` is a real failing run with its summary cut out, which
+       is exactly what the wrapper's bounded windows hold of a long one. */
+    expect(parseFailedTestFiles(fixture("vitest-fail.log"))).toBeNull();
+    expect(parseFailedTestFiles(fixture("vitest-pass.log"))).toBeNull();
+    expect(parseFailedTestFiles("")).toBeNull();
+  });
+
+  it("finds the same names however the stream is chunked", () => {
+    const text = fixture("check-test-step-names-three-files.log");
+    for (const size of [1, 7, 4096]) {
+      const capture = makeFailedTestFilesCapture();
+      const stream = capture.stream();
+      for (let at = 0; at < text.length; at += size) stream.push(text.slice(at, at + size));
+      expect(capture.result(), `chunks of ${size}`).toEqual({ files: THREE, total: 3 });
+    }
+  });
+
+  it("does not read a FAIL line printed before vitest's own summary", () => {
+    /* Megabytes of test output come first, and any test may print anything —
+       one in this suite is called "prints FAIL for each and exits 1". */
+    const text = fixture("check-test-step-names-three-files.log");
+    const forged = ` FAIL  unit  tests/printed-by-a-test.test.ts > not a failure\n${text}`;
+    expect(parseFailedTestFiles(forged)).toEqual({ files: THREE, total: 3 });
+    expect(parseFailedTestFiles(" FAIL  unit  tests/printed-by-a-test.test.ts > not a failure\n")).toBeNull();
+  });
+
+  it("keeps the two streams apart: a heading on one does not open the other", () => {
+    /* Vitest writes the heading and the FAIL lines to stderr and the footer to
+       stdout (probed, 2026-10-06), so stdout never legitimately names a file. */
+    const capture = makeFailedTestFilesCapture();
+    const stderr = capture.stream();
+    const stdout = capture.stream();
+    stderr.push("⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n\n");
+    stdout.push(" FAIL  unit  tests/on-the-wrong-stream.test.ts > x\n");
+    stderr.push(" FAIL  unit  tests/real.test.ts > x\n");
+    expect(capture.result()).toEqual({ files: ["tests/real.test.ts"], total: 1 });
+  });
+
+  /* The rest of this block is SYNTHETIC: none of the real logs these fixtures
+     were cut from fails in more than twenty files, or prints a FAIL line in a
+     shape vitest does not use. */
+  const summaryOf = (paths: string[]): string =>
+    `⎯⎯⎯⎯⎯⎯⎯ Failed Tests ${paths.length} ⎯⎯⎯⎯⎯⎯⎯\n\n${paths.map((p) => ` FAIL  unit  ${p} > a test\n`).join("")}`;
+
+  it("lists the first twenty in sorted order and still says how many there were", () => {
+    const paths = Array.from({ length: 25 }, (_, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`);
+    const named = parseFailedTestFiles(summaryOf([...paths].reverse()));
+    expect(FAILED_TEST_FILES_CAP).toBe(20);
+    expect(named?.files).toEqual(paths.slice(0, 20));
+    expect(named?.total).toBe(25);
+
+    const exactly = parseFailedTestFiles(summaryOf(paths.slice(0, 20)));
+    expect(exactly?.files).toHaveLength(20);
+    expect(exactly?.total).toBe(20);
+  });
+
+  it("gives up on the whole list when one FAIL line cannot be read with certainty", () => {
+    /* A partial list with a confident total is the one answer worse than none. */
+    const good = " FAIL  unit  tests/a.test.ts > a test\n";
+    const heading = "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯\n\n";
+    expect(parseFailedTestFiles(`${heading}${good}`)?.total).toBe(1);
+    expect(parseFailedTestFiles(`${heading}${good} FAIL  a project with spaces  tests/b.test.ts > x\n`)).toBeNull();
+    expect(parseFailedTestFiles(`${heading}${good} FAIL  unit  /abs/olute.test.ts > x\n`)).toBeNull();
+    expect(parseFailedTestFiles(`${heading}${good} FAIL  unit  tests/${"x".repeat(200)}.test.ts > x\n`)).toBeNull();
+  });
+
+  it("cannot throw into the wrapper, and reports not-known if its reader does", () => {
+    const capture = makeFailedTestFilesCapture(() => {
+      throw new Error("a bug in the line reader");
+    });
+    const stream = capture.stream();
+    expect(() => stream.push(summaryOf(["tests/a.test.ts"]))).not.toThrow();
+    expect(() => stream.push("more\n")).not.toThrow();
+    expect(capture.result()).toBeNull();
+  });
+
+  it("reads a FAIL line however long the test's name is, and holds no more than a line's start", () => {
+    const capture = makeFailedTestFilesCapture();
+    const stream = capture.stream();
+    stream.push(summaryOf(["tests/a.test.ts"]));
+    for (let i = 0; i < 200; i += 1) stream.push("x".repeat(10_000));
+    stream.push(`\n FAIL  unit  tests/b.test.ts > ${"long name ".repeat(2000)}\n`);
+    expect(capture.result()).toEqual({ files: ["tests/a.test.ts", "tests/b.test.ts"], total: 2 });
+  });
+
+  describe("on the record", () => {
+    const failing = (over: Partial<FinishedRecord> = {}): FinishedRecord =>
+      finished({ outcome: "fail", exit: 1, failedTestFiles: { files: ["tests/a.test.ts"], total: 1 }, ...over });
+
+    it("round-trips", () => {
+      const record = failing();
+      expect(parseRunRecord(JSON.stringify(record))).toEqual(record);
+    });
+
+    it("reads a record written before the field existed, as not-known", () => {
+      const { failedTestFiles: _dropped, ...old } = failing();
+      const parsed = parseRunRecord(JSON.stringify(old));
+      expect(parsed?.state === "finished" && parsed.outcome).toBe("fail");
+      expect(parsed?.state === "finished" && parsed.failedTestFiles).toBeNull();
+    });
+
+    it("drops a malformed list and KEEPS the record, so names can never cost a reading", () => {
+      for (const bad of [
+        { files: [], total: 0 },
+        { files: ["tests/a.test.ts"], total: 0 },
+        { files: ["tests/a.test.ts"], total: 3 },
+        { files: ["tests/a.test.ts"], total: 1.5 },
+        { files: ["tests/a.test.ts", "tests/a.test.ts"], total: 2 },
+        { files: ["tests/a.test.ts", 7], total: 2 },
+        { files: ["has a space.test.ts"], total: 1 },
+        { files: ["/abs/a.test.ts"], total: 1 },
+        { files: Array.from({ length: 21 }, (_, i) => `tests/f${i}.test.ts`), total: 21 },
+        { files: "tests/a.test.ts", total: 1 },
+        "tests/a.test.ts",
+        [],
+      ]) {
+        const parsed = parseRunRecord(JSON.stringify({ ...failing(), failedTestFiles: bad }));
+        expect(parsed?.state === "finished" && parsed.outcome, JSON.stringify(bad)).toBe("fail");
+        expect(parsed?.state === "finished" && parsed.failedTestFiles, JSON.stringify(bad)).toBeNull();
+      }
+    });
+
+    it("accepts a total larger than the list only when the list is at the cap", () => {
+      const twenty = Array.from({ length: 20 }, (_, i) => `tests/f${String(i).padStart(2, "0")}.test.ts`);
+      const capped = parseRunRecord(
+        JSON.stringify({ ...failing(), failedTestFiles: { files: twenty, total: 31 } }),
+      );
+      expect(capped?.state === "finished" && capped.failedTestFiles?.total).toBe(31);
+      expect(capped?.state === "finished" && capped.failedTestFiles?.files).toEqual(twenty);
+    });
+
+    it("never shows failing files beside a pass or a void", () => {
+      const names = { files: ["tests/a.test.ts"], total: 1 };
+      const pass = parseRunRecord(JSON.stringify({ ...finished(), failedTestFiles: names }));
+      expect(pass?.state === "finished" && pass.outcome).toBe("pass");
+      expect(pass?.state === "finished" && pass.failedTestFiles).toBeNull();
+      const gone = parseRunRecord(JSON.stringify({ ...finished(), outcome: "void", exit: 137, failedTestFiles: names }));
+      expect(gone?.state === "finished" && gone.outcome).toBe("void");
+      expect(gone?.state === "finished" && gone.failedTestFiles).toBeNull();
+    });
+
+    it("does not change the verdict by being there", () => {
+      const shape = (readings: Reading[]) => {
+        const v = readinessVerdict({ readings, devSha: SHA_A, caveat: "…", unreadable: 0 });
+        return { kind: v.kind, sha: v.sha, evidence: v.evidence.map((e) => [e.check, e.state, e.why]) };
+      };
+      const typecheck = reading(finished({ check: "typecheck", runId: "tc" }));
+      const bare = shape([reading(failing({ failedTestFiles: null })), typecheck]);
+      expect(bare.kind).toBe("not-ready");
+      expect(shape([reading(failing()), typecheck])).toEqual(bare);
+    });
+
+    it("the largest record the wrapper can write still fits what the store will read", () => {
+      const dir = mkdtempSync(join(tmpdir(), "readiness-names-"));
+      try {
+        const opened = openReadinessStore(dir);
+        if (opened.kind !== "open") throw new Error(opened.why);
+        const worst = failedTestFilesFrom(
+          Array.from({ length: 300 }, (_, i) => `tests/${String(i).padStart(3, "0")}${"x".repeat(FAILED_TEST_FILE_PATH_MAX - 9)}`),
+        );
+        expect(worst?.files).toHaveLength(FAILED_TEST_FILES_CAP);
+        expect(worst?.files[0]).toHaveLength(FAILED_TEST_FILE_PATH_MAX);
+        expect(worst?.total).toBe(300);
+        const record = failing({ failedTestFiles: worst });
+        opened.store.put(record);
+        const bytes = readFileSync(join(opened.dir, readdirSync(opened.dir)[0] ?? "")).length;
+        expect(bytes).toBeGreaterThan(4000);
+        expect(bytes).toBeLessThan(MAX_RECORD_BYTES / 8);
+        const back = opened.store.read({ sinceMs: 0, nowMs: Date.parse("2026-09-09T11:00:00.000Z"), isAlive: () => false });
+        expect(back.unreadable).toEqual([]);
+        expect(back.readings[0]?.record).toEqual(record);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("the wrapper itself, run for real against a fake npm", () => {
+    /* Everything above tests the scanner. This tests that the wrapper is
+       WIRED to it — the half a unit test agrees with by construction.
+
+       The real `scripts/readiness-run.ts`, as a child process, with an `npm`
+       on its PATH that prints what a failing `npm run check` prints: vitest's
+       real failure summary on STDERR, buried under more output on both sides
+       than the wrapper's retained head (8 KB) and tail (64 KB) put together,
+       so the names can only have come from the streaming capture. The record
+       goes to a temp directory through `FLEET_READINESS_DIR`, never the box's
+       own. */
+    let scratch: string;
+
+    beforeEach(() => {
+      scratch = mkdtempSync(join(tmpdir(), "readiness-wrapper-"));
+      mkdirSync(join(scratch, "bin"));
+      writeFileSync(
+        join(scratch, "bin", "npm"),
+        [
+          "#!/bin/sh",
+          "printf '\\n> spideryarn@1.0.0 check\\n> tsx scripts/check.ts\\n\\n'",
+          'if [ "$FAKE_NPM_SUMMARY" != "" ]; then',
+          "  yes 'a line of some test printing something' | head -c 200000 >&2",
+          '  cat "$FAKE_NPM_SUMMARY" >&2',
+          "  yes 'a line of a later advisory printing something' | head -c 200000 >&2",
+          "  echo >&2",
+          "fi",
+          'exit "$FAKE_NPM_EXIT"',
+          "",
+        ].join("\n"),
+      );
+      chmodSync(join(scratch, "bin", "npm"), 0o755);
+    });
+    afterEach(() => rmSync(scratch, { recursive: true, force: true }));
+
+    const runWrapper = (
+      env: Record<string, string>,
+    ): { status: number | null; stderr: string; record: FinishedRecord; written: Record<string, unknown> } => {
+      const root = join(__dirname, "..");
+      const ran = spawnSync(join(root, "node_modules", ".bin", "tsx"), [join(root, "scripts", "readiness-run.ts"), "check"], {
+        cwd: scratch,
+        env: {
+          ...process.env,
+          PATH: `${join(scratch, "bin")}:${process.env["PATH"] ?? ""}`,
+          FLEET_READINESS_DIR: join(scratch, "store"),
+          ...env,
+        },
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+      });
+      const files = readdirSync(join(scratch, "store", "runs"));
+      expect(files).toHaveLength(1);
+      const bytes = readFileSync(join(scratch, "store", "runs", files[0] ?? ""), "utf8");
+      const record = parseRunRecord(bytes);
+      if (record?.state !== "finished") throw new Error(`no finished record: ${ran.stderr.slice(-2000)}`);
+      /* `written` is the file as the wrapper wrote it, before the record parser
+         has had the chance to tidy it: the parser drops names beside anything
+         but a failure, so reading only through it cannot tell whether the
+         wrapper wrote them. */
+      return { status: ran.status, stderr: ran.stderr, record, written: JSON.parse(bytes) as Record<string, unknown> };
+    };
+
+    it("records the names from the middle of the output, and says them last", () => {
+      const ran = runWrapper({
+        FAKE_NPM_SUMMARY: join(FIXTURES, "check-test-step-names-three-files.log"),
+        FAKE_NPM_EXIT: "1",
+      });
+      expect(ran.record.outcome).toBe("fail");
+      expect(ran.status).toBe(1);
+      expect(ran.record.failedTestFiles).toEqual({ files: THREE, total: 3 });
+      expect(ran.stderr.trimEnd().split("\n").at(-1)).toBe(`readiness-run: 3 test files failed: ${THREE.join(", ")}`);
+    }, 60_000);
+
+    it("records a failure with no summary as a failure whose files are not known", () => {
+      const ran = runWrapper({ FAKE_NPM_SUMMARY: "", FAKE_NPM_EXIT: "1" });
+      expect(ran.record.outcome).toBe("fail");
+      expect(ran.status).toBe(1);
+      expect(ran.record.failedTestFiles).toBeNull();
+      expect(ran.stderr).not.toContain("failed:");
+    }, 60_000);
+
+    it("does not let a failure summary change what an exit of 0 is read as", () => {
+      /* Exit 0 with no `check` footer is VOID by the footer rule, summary or
+         no summary — and a void carries no names. */
+      const ran = runWrapper({
+        FAKE_NPM_SUMMARY: join(FIXTURES, "check-test-step-names-three-files.log"),
+        FAKE_NPM_EXIT: "0",
+      });
+      expect(ran.record.outcome).toBe("void");
+      expect(ran.record.failedTestFiles).toBeNull();
+      expect(ran.written["outcome"]).toBe("void");
+      expect(ran.written["failedTestFiles"]).toBeNull();
+      expect(ran.stderr).not.toContain("failed:");
+    }, 60_000);
+  });
+
+  describe("for the wrapper and the loop to print", () => {
+    it("names them all when the cap did not cut", () => {
+      expect(describeFailedTestFiles({ files: ["tests/a.test.ts", "tests/b.test.ts"], total: 2 })).toBe(
+        "2 test files failed: tests/a.test.ts, tests/b.test.ts",
+      );
+      expect(describeFailedTestFiles({ files: ["tests/a.test.ts"], total: 1 })).toBe("1 test file failed: tests/a.test.ts");
+    });
+
+    it("says how many it left out", () => {
+      const twenty = Array.from({ length: 20 }, (_, i) => `t/${i}.test.ts`) as [string, ...string[]];
+      expect(describeFailedTestFiles({ files: twenty, total: 23 })).toMatch(
+        /^23 test files failed: t\/0\.test\.ts, .*t\/19\.test\.ts and 3 more$/,
+      );
+    });
+
+    it("puts them on the loop's outcome line, and leaves a run without names as it was", () => {
+      const names = { files: ["tests/a.test.ts"] as [string, ...string[]], total: 1 };
+      expect(describeReadingOutcome(reading(finished({ outcome: "fail", exit: 1, failedTestFiles: names })))).toBe(
+        "fail (1 test file failed: tests/a.test.ts)",
+      );
+      expect(describeReadingOutcome(reading(finished({ outcome: "fail", exit: 1 })))).toBe("fail");
+      expect(describeReadingOutcome(reading(finished()))).toBe("pass");
+      expect(describeReadingOutcome(reading(started(), true))).toBe("running");
+    });
+
+    it("gives names only to a run that failed", () => {
+      const names = { files: ["tests/a.test.ts"] as [string, ...string[]], total: 1 };
+      expect(failedTestFilesForOutcome("fail", names)).toEqual(names);
+      expect(failedTestFilesForOutcome("pass", names)).toBeNull();
+      expect(failedTestFilesForOutcome("void", names)).toBeNull();
+      expect(failedTestFilesForOutcome("fail", null)).toBeNull();
+    });
   });
 });

@@ -212,6 +212,104 @@ export type Counts =
   | { kind: "none" };
 
 /* ------------------------------------------------------------------ *
+ * Which test files failed.
+ * ------------------------------------------------------------------ */
+
+/** At most this many paths are kept on a record. `total` says how many there were. */
+export const FAILED_TEST_FILES_CAP = 20;
+
+/** A path longer than this is not kept, and takes the whole list with it — see {@link failedTestFilesFrom}. */
+export const FAILED_TEST_FILE_PATH_MAX = 200;
+
+/**
+ * The test files a failed run named, as vitest printed them: relative to the
+ * checkout, distinct, sorted, capped at {@link FAILED_TEST_FILES_CAP}.
+ *
+ * **There is no empty list, by type and by the record parser.** The field this
+ * sits in is `FailedTestFiles | null`, and `null` means *the names are not
+ * known* — an older record, a failure that was not a test's, a summary the
+ * scanner could not read with certainty. An empty array would be a third thing
+ * that reads as "no file failed", and whether none failed is the tally's and
+ * the exit status's to say. So this can say "these failed" or nothing.
+ *
+ * **Nothing that decides anything reads it.** `readiness-verdict.ts` does not,
+ * and must not: a list of names is for a person asking "red for hours, or a
+ * flake?", and it comes from matching text.
+ * docs/plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md.
+ */
+export type FailedTestFiles = {
+  /**
+   * Sorted rather than in the order printed, so two capped runs list the same
+   * twenty and "the same files as last time" compares like with like.
+   */
+  files: [string, ...string[]];
+  /** How many distinct files failed. Greater than `files.length` only when the cap cut it. */
+  total: number;
+};
+
+/**
+ * Is this a path we are willing to write down and draw?
+ *
+ * Relative, one token of printable ASCII, and short. Vitest prints paths relative to its root, so
+ * an absolute one or one with a space in it is not what this was built to read
+ * — and the caller treats that as *not known* rather than guessing.
+ */
+export function isFailedTestFilePath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    path.length <= FAILED_TEST_FILE_PATH_MAX &&
+    !path.startsWith("/") &&
+    /* Printable ASCII with no space in it. A path with anything else in it is
+       not one this repo has, and "not known" is the honest answer to it. */
+    /^[\x21-\x7e]+$/.test(path)
+  );
+}
+
+/**
+ * **The one constructor**, so the sort, the cap and the count are decided in
+ * one place: every distinct path a run named, in.
+ *
+ * Null for no paths at all, and null if ANY of them is not a path we would
+ * keep. Dropping the odd one out would leave a list that looks complete beside
+ * a total that is one short.
+ */
+export function failedTestFilesFrom(paths: Iterable<string>): FailedTestFiles | null {
+  const distinct = new Set<string>();
+  for (const path of paths) {
+    if (!isFailedTestFilePath(path)) return null;
+    distinct.add(path);
+  }
+  /* Plain code-unit order, not `localeCompare`: the same list must sort the
+     same way in a wrapper on any box and in the test that reads it back. */
+  const [first, ...rest] = [...distinct].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  if (first === undefined) return null;
+  return { files: [first, ...rest.slice(0, FAILED_TEST_FILES_CAP - 1)], total: distinct.size };
+}
+
+/**
+ * What a finished run's record carries: names for a failure, nothing otherwise.
+ *
+ * Its own function because it is the rule the record parser applies as well —
+ * a pass or a void drawn with failing files beside it would be two claims
+ * about one run.
+ */
+export function failedTestFilesForOutcome(
+  outcome: Outcome,
+  named: FailedTestFiles | null,
+): FailedTestFiles | null {
+  return outcome === "fail" ? named : null;
+}
+
+/** One line for a log: `3 test files failed: a, b, c`, and ` and 4 more` when the cap cut it. */
+export function describeFailedTestFiles(named: FailedTestFiles): string {
+  const more = named.total - named.files.length;
+  return (
+    `${named.total} test file${named.total === 1 ? "" : "s"} failed: ${named.files.join(", ")}` +
+    (more > 0 ? ` and ${more} more` : "")
+  );
+}
+
+/* ------------------------------------------------------------------ *
  * The record on disk.
  * ------------------------------------------------------------------ */
 
@@ -315,6 +413,17 @@ export type FinishedRecord = RunCommon & {
   logPath: string | null;
   /** Why this is void, or any other caveat worth carrying. Null when there is none. */
   why: string | null;
+  /**
+   * Which test files failed, or null when that is **not known** — which is not
+   * the same as none. Only ever non-null on a `fail`.
+   *
+   * Optional ON DISK and required here: records from before 2026-10-06 have no
+   * such key and read back as null, and making every builder of a record say
+   * `null` out loud is what stops a new one forgetting it had names to give.
+   * A log reconstruction always says null — it holds two ends of a log and
+   * could name some failures without knowing how many it missed.
+   */
+  failedTestFiles: FailedTestFiles | null;
 };
 
 export type RunRecord = StartedRecord | FinishedRecord;
@@ -367,6 +476,18 @@ export const PENDING_TRUST_MS = 6 * 60 * 60 * 1000;
  * it. See {@link RunCommon.procStartToken}.
  */
 export type IsRunProcessAlive = (record: RunRecord) => boolean;
+
+/**
+ * A reading's state for a log line, with the failing test files when it has
+ * them: `fail (2 test files failed: tests/a.test.ts, tests/b.test.ts)`.
+ *
+ * What `scripts/readiness-loop.ts` prints after each run, so the loop's own
+ * log answers "the same file again?" without opening the run's.
+ */
+export function describeReadingOutcome(reading: Reading): string {
+  const named = reading.record.state === "finished" ? reading.record.failedTestFiles : null;
+  return named === null ? reading.state : `${reading.state} (${describeFailedTestFiles(named)})`;
+}
 
 export function resolveRecord(
   record: RunRecord,
@@ -542,6 +663,40 @@ function asCounts(v: unknown): Counts {
   }
 }
 
+/**
+ * The names a record carries, **or null for anything that is not exactly what
+ * the wrapper writes.**
+ *
+ * Deliberately the opposite of {@link asTree}, which returns null to make the
+ * whole record unreadable. An unreadable record forces the headline to
+ * `unknown`; that is right for a tree stamp, which decides whether a run may
+ * vote, and wrong for a list of names, which decides nothing. So a bad list is
+ * dropped and the record — the part that says whether the check passed — is
+ * kept.
+ *
+ * All or nothing, like the constructor: one bad entry, a repeat, a total that
+ * disagrees with its list, and the answer is *not known* rather than a
+ * repaired list nobody wrote.
+ */
+function asFailedTestFiles(v: unknown): FailedTestFiles | null {
+  if (!isRecord(v)) return null;
+  const raw = v["files"];
+  const total = v["total"];
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > FAILED_TEST_FILES_CAP) return null;
+  if (typeof total !== "number" || !Number.isInteger(total) || total < raw.length) return null;
+  /* A total larger than the list means the cap cut it — so the list must be AT
+     the cap. Anything else is a count and a list that disagree. */
+  if (total > raw.length && raw.length !== FAILED_TEST_FILES_CAP) return null;
+  const files: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string" || !isFailedTestFilePath(item) || files.includes(item)) return null;
+    files.push(item);
+  }
+  const [first, ...rest] = files;
+  if (first === undefined) return null;
+  return { files: [first, ...rest], total };
+}
+
 /** A full commit id, and nothing that merely looks like one. */
 const SHA = /^[0-9a-f]{40}$/;
 
@@ -668,6 +823,7 @@ export function parseRunRecord(text: string): RunRecord | null {
     treeAtEnd,
     logPath: asString(parsed["logPath"]),
     why: asString(parsed["why"]),
+    failedTestFiles: failedTestFilesForOutcome(outcome, asFailedTestFiles(parsed["failedTestFiles"])),
   };
 }
 

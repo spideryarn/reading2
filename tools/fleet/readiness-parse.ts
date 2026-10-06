@@ -31,9 +31,12 @@
 import {
   CHECK_KINDS,
   SCRIPT_FOR_KIND,
+  failedTestFilesFrom,
+  isFailedTestFilePath,
   type CheckKind,
   type CheckStep,
   type Counts,
+  type FailedTestFiles,
   type Outcome,
   type Scope,
   type TestTally,
@@ -345,6 +348,175 @@ export function parseVitest(text: string): { counts: Extract<Counts, { kind: "vi
      has not printed its whole footer, and treating half of one as proof of
      completion is the guard letting through exactly what it exists to catch. */
   return { counts: { kind: "vitest", files, tests }, hasFooter: files !== null && tests !== null };
+}
+
+/* ------------------------------------------------------------------ *
+ * Which test files failed.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The ruled heading vitest prints over its failure summary, once per kind:
+ *
+ *     ⎯⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+ *     ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ *
+ * Matched whole, on a stripped and trimmed line, so a test that prints the
+ * words "Failed Tests" does not open the section.
+ */
+const FAILURE_HEADING = /^⎯+ Failed (?:Suites|Tests) \d+ ⎯+$/;
+
+/**
+ * What one line of the failure summary says, once its colour is stripped:
+ *
+ *      FAIL  unit  tests/x.test.ts > a describe > a test
+ *      FAIL  |unit| tests/x.test.ts > a test            (no colour)
+ *      FAIL  tests/x.test.ts > a test                   (one project)
+ *      FAIL  unit  tests/x.test.ts [ tests/x.test.ts ]  (the file would not load)
+ *
+ * All four shapes are in real logs or were produced by a probe on this box —
+ * tests/fixtures/readiness/tmux-jobs/, the three fixtures the plan names.
+ *
+ * **Three answers, not two.** A line that is not a `FAIL` line is `none`. One
+ * that is, and whose path is not where these shapes put it, is `unreadable` —
+ * and the caller gives up on the whole list, because the alternative is a list
+ * one short of the truth with nothing to say so.
+ */
+export type FailedLine = { kind: "none" } | { kind: "file"; path: string } | { kind: "unreadable" };
+
+export function failedTestFileOnLine(cleanLine: string): FailedLine {
+  if (!/^ FAIL\s/.test(cleanLine)) return { kind: "none" };
+  /* Everything before the first ` > ` or ` [ ` is the badge and the path. A
+     path has no spaces in it, so neither separator can be inside one. */
+  const cut = /\s(?:>|\[)\s/.exec(cleanLine);
+  const before = cut === null ? cleanLine : cleanLine.slice(0, cut.index);
+  const tokens = before.trim().split(/\s+/).slice(1);
+  /* One token is a path; two are a project badge and a path. More than that is
+     a project whose name has a space in it, or a format this has never seen. */
+  const path = tokens.length === 1 ? tokens[0] : tokens.length === 2 ? tokens[1] : undefined;
+  if (path === undefined || !isFailedTestFilePath(path)) return { kind: "unreadable" };
+  return { kind: "file", path };
+}
+
+/**
+ * How much of one line is held while waiting for its newline. A `FAIL` line's
+ * path is in its first couple of hundred characters; what follows is the test's
+ * name, which can be any length and is not wanted.
+ */
+const FAILED_LINE_HELD_CHARS = 1024;
+
+/**
+ * More distinct failing files than this and the answer is *not known*. There
+ * are about 1,750 test files; the bound is so that this cannot grow without
+ * limit inside a wrapper whose job is to watch a box that runs out of memory.
+ */
+const FAILED_FILES_SEEN_MAX = 10_000;
+
+/**
+ * Collect the failing test files **while the output streams past**.
+ *
+ * The same reason {@link makeAdmissionRefusalCapture} exists. In a full `npm
+ * run check` vitest's failure summary sits about 96,000 lines into a 14 MB
+ * log, and the wrapper keeps the first 8 KB and the last 64 KB — so the names
+ * are in neither window, which is why 30 failed `check` records on disk said
+ * `test FAILED` and nothing finer.
+ *
+ * ## One `stream()` per pipe
+ *
+ * Each has its own line buffer, so a line split across two stderr chunks does
+ * not get a stdout chunk spliced into it, and **its own latch**: nothing is
+ * read on a stream until vitest's own heading has gone past on it. Vitest
+ * writes the heading and every `FAIL` line to stderr and its footer to stdout
+ * (probed, 2026-10-06), so the megabytes before the summary — where any test
+ * may print anything, including a line that starts ` FAIL ` — are never looked
+ * at. The latch does not close again: nothing after the summary has matched in
+ * 35 real logs, and closing it on the footer would mean ordering two pipes
+ * against each other.
+ *
+ * ## What it cannot do
+ *
+ * **Throw.** `push` is called from the wrapper's `data` handlers, and an
+ * exception there would take down the run it is observing. Anything it throws
+ * is caught and the result becomes null, permanently.
+ *
+ * **Return an empty list.** No names is null — *not known*.
+ *
+ * `readLine` is a parameter only so a test can hand in one that throws.
+ */
+export function makeFailedTestFilesCapture(readLine: (cleanLine: string) => FailedLine = failedTestFileOnLine): {
+  stream(): { push(chunk: string): void };
+  result(): FailedTestFiles | null;
+} {
+  const seen = new Set<string>();
+  /* Once true, the result is null whatever else is seen. */
+  let gaveUp = false;
+
+  const take = (line: string, state: { open: boolean }): void => {
+    /* The cheap test first: this runs on every line of a 14 MB log. */
+    if (!line.includes("FAIL") && !line.includes("Failed")) return;
+    const clean = stripAnsi(line).replace(/\r$/, "");
+    if (!state.open) {
+      if (FAILURE_HEADING.test(clean.trim())) state.open = true;
+      return;
+    }
+    const read = readLine(clean);
+    if (read.kind === "unreadable") gaveUp = true;
+    else if (read.kind === "file") {
+      seen.add(read.path);
+      if (seen.size > FAILED_FILES_SEEN_MAX) gaveUp = true;
+    }
+  };
+
+  return {
+    stream() {
+      const state = { open: false };
+      let held = "";
+      /* True while the tail of an over-long line is being thrown away. */
+      let overflowing = false;
+      return {
+        push(chunk) {
+          if (gaveUp) return;
+          try {
+            let from = 0;
+            for (;;) {
+              const newline = chunk.indexOf("\n", from);
+              const piece = newline === -1 ? chunk.slice(from) : chunk.slice(from, newline);
+              if (!overflowing) {
+                held += piece.slice(0, FAILED_LINE_HELD_CHARS - held.length);
+                if (held.length >= FAILED_LINE_HELD_CHARS) overflowing = true;
+              }
+              if (newline === -1) return;
+              take(held, state);
+              held = "";
+              overflowing = false;
+              from = newline + 1;
+            }
+          } catch {
+            gaveUp = true;
+          }
+        },
+      };
+    },
+    result() {
+      if (gaveUp) return null;
+      return failedTestFilesFrom(seen);
+    },
+  };
+}
+
+/**
+ * The same, over text already in hand. For the tests, and for anything that
+ * holds a WHOLE log.
+ *
+ * **Not for a fragment.** The backfill holds a head and a tail and does not
+ * call this: a tail can contain the last few `FAIL` lines of a summary whose
+ * heading and first failures scrolled out of it, and the result would be a
+ * confident count of some of them.
+ */
+export function parseFailedTestFiles(text: string): FailedTestFiles | null {
+  const capture = makeFailedTestFilesCapture();
+  /* A final newline, so a last line without one is still read. */
+  capture.stream().push(`${text}\n`);
+  return capture.result();
 }
 
 /* ------------------------------------------------------------------ *
