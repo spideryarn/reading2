@@ -1372,7 +1372,8 @@ export interface SkimStop {
    */
   role: string | null;
   /**
-   * What to **look for** in this passage — an instruction or a question, never
+   * What to **look for** in this passage — since `skim/10`, the scene the quote
+   * assumes first, then an instruction or a question — never
    * what it found — at most `MAX_CUE_CHARS` (src/skim.ts). Context-free
    * on purpose: a reader can reach a stop from anywhere, so it never says how
    * this stop follows another (Sol F18). `null` when the model's was missing,

@@ -79,8 +79,23 @@
  * Ideas, so their age is not a variable; the snapshot names their version.
  * scripts/eval/skim-again-pairs.ts turns the results into the tables and the
  * blind pairs.
+ *
+ * ## Also used for `skim/9` vs `skim/10` (plan 261006e § Stage 2)
+ *
+ * `skim/10` changed what a cue is for, so the unit compared is the cue of one
+ * quote under each arm, and each stop also records its `quoteId` and the
+ * paragraph before its own (`before`), which the blind judge is shown. Three
+ * flags came with it: `--old-only` (a second control run without paying for a
+ * second NEW run), `--context` (the NEW arm with the passage around each
+ * quote, `skimInput({ context: true })`), and `--file=<slug>=<json>` (an
+ * article read from a file written by
+ * scripts/eval/skim-inputs-from-production.ts, where it is not in the local
+ * database). Each results file names the SHA-256 of the module each arm ran.
+ * scripts/eval/skim-cue-pairs.ts turns several results files into the
+ * screens, the route comparison and the blind pairs.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadEnvLocal } from "../../src/env.js";
@@ -100,7 +115,23 @@ const NEW_VERSION = newVersionArg ? newVersionArg.slice("--new-version=".length)
    measuring a change against an earlier run's NEW numbers. */
 const NEW_ONLY = args.includes("--new-only");
 const ALLOW_OUTDATED_IDEAS = args.includes("--allow-outdated-ideas");
-const ARMS = NEW_ONLY ? (["new"] as const) : (["old", "new"] as const);
+/* `--old-only`: the OLD arm alone — a second control run. */
+const OLD_ONLY = args.includes("--old-only");
+if (NEW_ONLY && OLD_ONLY) throw new Error("--new-only and --old-only together leave no arm to run");
+/* `--context`: the NEW arm is given the passage around each quote (plan 261006e, arm C). */
+const CONTEXT = args.includes("--context");
+/* `--file=<slug>=<json>`: that slug is read from a file, not the database. */
+const FILES = new Map(
+  args
+    .filter((a) => a.startsWith("--file="))
+    .map((a) => {
+      const [slug, ...rest] = a.slice("--file=".length).split("=");
+      if (!slug || rest.length === 0) throw new Error(`--file wants <slug>=<json>, got ${a}`);
+      return [slug, rest.join("=")] as const;
+    }),
+);
+const sha = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 16);
+const ARMS = NEW_ONLY ? (["new"] as const) : OLD_ONLY ? (["old"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
 const SLUGS = slugArgs.length > 0 ? slugArgs : ["vb-spya-vu3xen", "entropy-24-00930-spya-pywwkq", "source-spya-furjgs"];
 
@@ -286,7 +317,13 @@ interface RunResult {
     cue: string | null;
     section: string;
     ideasIn: string[];
+    /** The quote this stop is, so the same quote can be paired across arms. */
+    quoteId: string;
+    /** The nearest body paragraph before the stop's own, whole, wherever it sits — for a judge checking a cue's scene against the text. */
+    before: string | null;
   }[];
+  /** Whether the NEW arm was given the passage around each quote (`--context`); always false for OLD. */
+  context: boolean;
   /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
   abstractQuotes: number;
   /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
@@ -298,7 +335,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const { result, report } = await collectSpend(
     async () => {
       if (arm === "new") {
-        const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+        const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas, context: CONTEXT });
         return NEW.generateSkim({ power: "standard", slug, input, profile: null });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
@@ -338,6 +375,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     slug,
     arm,
     run,
+    context: arm === "new" && CONTEXT,
     dropped: skim.dropped,
     walks: ([1, 2, 3] as const).map((depth) => {
       const own = stopBlocks.filter((s) => s.depth === depth).length;
@@ -363,7 +401,11 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     outputTokens: result.outputTokens,
     stops: stopBlocks.map((s) => {
       const at = idx.get(s.blockId) ?? -1;
+      let prev = at - 1;
+      while (prev >= 0 && !(isBody(article.blocks[prev]!) && article.blocks[prev]!.kind !== "heading")) prev--;
       return {
+        quoteId: s.quote.id,
+        before: prev >= 0 ? article.blocks[prev]!.text.replace(/\s+/g, " ") : null,
         depth: s.depth,
         again: s.again,
         quote: s.quote.text.replace(/\s+/g, " ").slice(0, 240),
@@ -380,7 +422,9 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
 async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   mkdirSync("evals/results", { recursive: true });
-  const out = `evals/results/skim-coverage-${stamp}.json`;
+  /* `--tag=<word>`: a suffix on the file name, so runs started in the same second do not share one. */
+  const tagArg = args.find((a) => a.startsWith("--tag="));
+  const out = `evals/results/skim-coverage-${stamp}${tagArg ? `-${tagArg.slice("--tag=".length)}` : ""}.json`;
   const results: RunResult[] = [];
   const failures: { slug: string; arm: Arm; run: number; message: string }[] = [];
   const snapshot: Record<string, unknown> = {};
@@ -388,6 +432,26 @@ async function main(): Promise<void> {
   await runAsOwner(environmentOwnerId(), async () => {
     const inputs: Input[] = [];
     for (const slug of SLUGS) {
+      const file = FILES.get(slug);
+      if (file !== undefined) {
+        /* Blocks, tree, Quotes and Ideas as scripts/eval/skim-inputs-from-production.ts wrote them. */
+        const read = JSON.parse(readFileSync(file, "utf8")) as {
+          blocks: Block[];
+          tree: Article["tree"];
+          quotes: Quotes;
+          ideas: Ideas;
+        };
+        inputs.push({ slug, article: { blocks: read.blocks, tree: read.tree } as Article, quotes: read.quotes, ideas: read.ideas });
+        snapshot[slug] = {
+          fromFile: sha(file),
+          ideasVersion: read.ideas.version,
+          quotesVersion: read.quotes.version,
+          quotes: read.quotes.quotes.length,
+          ideas: read.ideas.ideas.length,
+        };
+        console.log(`${slug}: ${read.ideas.ideas.length} ideas (${read.ideas.version}), ${read.quotes.quotes.length} quotes, from a file`);
+        continue;
+      }
       const article = await pgArticleReader.loadArticle(slug);
       const ideasFound = await pgArticleReader.loadIdeas(slug);
       if (ideasFound.stale || (ideasFound.outdated && !ALLOW_OUTDATED_IDEAS)) {
@@ -439,7 +503,7 @@ async function main(): Promise<void> {
         );
         console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results, failures }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, context: CONTEXT, profile: null, snapshot, results, failures }, null, 2));
     }
   });
 
