@@ -25,10 +25,16 @@
  * preflight in `tests/setup/private-db-global.ts` has already failed the command
  * by then.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Pool } from "pg";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
-import { type MissingKind, pgReady, requiredFailureMessage } from "./helpers/pg-ready.js";
+import {
+  type MissingKind,
+  pgReady,
+  type PgReadyOptions,
+  requiredFailureMessage,
+} from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -42,12 +48,36 @@ loadEnvLocal();
 const DEAD_URL = "postgresql://postgres:postgres@127.0.0.1:1/postgres";
 
 /** Restored per case, because every one of these stubs `DATABASE_URL`. */
-beforeEach(() => {
-  vi.stubEnv("REQUIRE_POSTGRES", "");
-});
-
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("pgReady, with a mocked pool", () => {
+  it("keeps the promised pool when an options alias changes during the probe", async () => {
+    const end = vi.fn().mockResolvedValue(undefined);
+    class MockPool {
+      query = vi.fn().mockResolvedValue({ rows: [] });
+      end = end;
+    }
+    vi.stubEnv("DATABASE_URL", "mocked-pool://no-connection");
+    vi.doMock("pg", () => ({ Pool: MockPool }));
+    try {
+      const options: PgReadyOptions & { keepPool: true } = {
+        suite: "tests/pg-ready.test.ts",
+        keepPool: true,
+      };
+      const mutableAlias: PgReadyOptions = options;
+      const pending = pgReady(options);
+      mutableAlias.keepPool = false;
+
+      const { pool } = await pending;
+      expect(pool).toBeInstanceOf(MockPool);
+      expect(end).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock("pg");
+      vi.resetModules();
+    }
+  });
 });
 
 describe("pgReady, when the database cannot answer", () => {
@@ -161,8 +191,41 @@ describe("pgReady, against the real database", () => {
       keepPool: true,
     });
     expect(pool).toBeDefined();
-    const rows = await pool!.query<{ n: number }>("select 1 as n");
+    const rows = await pool.query<{ n: number }>("select 1 as n");
     expect(rows.rows[0]?.n).toBe(1);
-    await pool!.end();
+    await pool.end();
   });
 });
+
+/**
+ * The return type, checked by the compiler and by nothing at run time.
+ *
+ * `keepPool: true` promises a pool; anything else — left out, `false`, or a
+ * `boolean` nobody can read at compile time — promises only that there might be
+ * one. The three cases are here because the overload is two signatures and the
+ * easy mistake is the second: widening the certain one to `keepPool: boolean`
+ * would compile every caller and quietly hand `undefined` to the ones that
+ * passed `false`. `npm run typecheck` is what runs this; the function is never
+ * called.
+ */
+async function pgReadyReturnTypeCases(flag: boolean): Promise<void> {
+  const suite = "tests/pg-ready.test.ts";
+
+  const kept = await pgReady({ suite, keepPool: true });
+  const certain: Pool = kept.pool;
+
+  const omitted = await pgReady({ suite });
+  // @ts-expect-error — no `keepPool`, so the pool may not be there
+  const fromOmitted: Pool = omitted.pool;
+
+  const unknown = await pgReady({ suite, keepPool: flag });
+  // @ts-expect-error — a `boolean` is not `true`, so the pool may not be there
+  const fromBoolean: Pool = unknown.pool;
+
+  const refused = await pgReady({ suite, keepPool: false });
+  // @ts-expect-error — `false` ends the pool inside the helper
+  const fromFalse: Pool = refused.pool;
+
+  void [certain, fromOmitted, fromBoolean, fromFalse];
+}
+void pgReadyReturnTypeCases;

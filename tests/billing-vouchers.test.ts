@@ -108,7 +108,6 @@ const confirmed = (owner: string): ClaimDepsLookup => async () => ({ kind: "conf
 type ClaimDepsLookup = (ownerId: string) => Promise<AccountConfirmation>;
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   for (const owner of [READER, OTHER]) await seedAuthUser(pool, { id: owner, email: emailOf(owner) });
 });
@@ -119,14 +118,12 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   /* Vouchers before accounts: `claimed_by` references the billing anchor. */
   await pool.query(
     "delete from spideryarn.billing_vouchers where email like 'gift-0000b0c4-%' or claimed_by::text like $1",
@@ -139,7 +136,6 @@ async function sweep(): Promise<void> {
 
 /** `n` settled private ingests, the way a publication would have charged them. */
 async function givenUsed(owner: string, n: number): Promise<void> {
-  if (!pool) return;
   for (let i = 0; i < n; i += 1) {
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
@@ -162,7 +158,6 @@ async function claims(...args: Parameters<typeof claimVouchersFor>): Promise<num
 }
 
 async function makePaid(owner: string, status = "active", priceId = READER_PRICE): Promise<void> {
-  if (!pool) return;
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 25 * 86_400_000);
   await pool.query(
@@ -273,7 +268,6 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
 
 /** Release whatever `limitOf` reserved, so the next reading starts from the same usage. */
 async function sweepReservations(owner: string): Promise<void> {
-  if (!pool) return;
   await pool.query(
     "delete from spideryarn.ingest_events where owner_id = $1 and succeeded_at is null and released_at is null",
     [owner],
@@ -329,7 +323,6 @@ describe("concurrent admissions and revokes", () => {
    * admits against the old limit (F2).
    */
   it("an admission waiting behind a revoke sees the revoke", async () => {
-    if (!pool) return;
     const id = await givenVoucher(READER, 2);
     await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
     await givenUsed(READER, 3);
@@ -365,7 +358,6 @@ describe("concurrent admissions and revokes", () => {
 
   /** And the other half: `updateVoucher` really does wait for the billing lock. */
   it("a revoke waits for an admission that holds the claimant's billing row", async () => {
-    if (!pool) return;
     const id = await givenVoucher(READER, 2);
     await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
 
@@ -512,7 +504,6 @@ describe("the routes", () => {
   });
 
   it("carries a claimed gift on the paid wire while leaving the paid limit unchanged", async () => {
-    if (!pool) return;
     const { rows } = await pool.query<{ stripe_price_id: string; ingests_per_period: number }>(
       `select stripe_price_id, ingests_per_period
          from spideryarn.billing_tiers

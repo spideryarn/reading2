@@ -34,7 +34,6 @@ const { pool } = await pgReady({
   keepPool: true,
   max: 2,
 });
-if (!pool) throw new Error("pgReady kept no pool");
 
 /* Owners minted per run under a stem of this file's own, so a sweep cannot take another suite's rows. */
 const STEM = "0000f5e0-0000-4000-8000-";
@@ -68,7 +67,7 @@ async function file(owner: OwnerId, id: string): Promise<void> {
 }
 
 async function ledger(): Promise<{ owner_id: string; report_id: string; status: string; attempts: number; detail: string | null }[]> {
-  const r = await pool!.query(
+  const r = await pool.query(
     "select owner_id::text, report_id, status, attempts, detail from spideryarn.feedback_shipped_emails where owner_id::text like $1 order by report_id",
     [`${STEM}%`],
   );
@@ -76,7 +75,7 @@ async function ledger(): Promise<{ owner_id: string; report_id: string; status: 
 }
 
 async function sweep(): Promise<void> {
-  await pool!.query("delete from spideryarn.feedback where owner_id::text like $1", [`${STEM}%`]);
+  await pool.query("delete from spideryarn.feedback where owner_id::text like $1", [`${STEM}%`]);
 }
 
 const shippedMap = (ids: string[]) =>
@@ -86,7 +85,7 @@ function deps(results: SendResult[] = []): RunDeps & { sent: Email[]; said: stri
   const sent: Email[] = [];
   const said: string[] = [];
   return {
-    db: pool!,
+    db: pool,
     sent,
     said,
     say: (line) => said.push(line),

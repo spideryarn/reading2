@@ -168,7 +168,6 @@ const jobRows = async () =>
     .where(and(eq(jobs.ownerId, OWNER), eq(jobs.slug, SLUG)));
 
 async function clear(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.articles where owner_id = $1", [OWNER]);
@@ -176,13 +175,11 @@ async function clear(): Promise<void> {
 }
 
 beforeEach(async () => {
-  if (pool) {
-    await seedAuthUser(pool, {
-      id: OWNER,
-      email: `article-delete-${OWNER}@spideryarn.local`,
-      onConflictDoNothing: true,
-    });
-  }
+  await seedAuthUser(pool, {
+    id: OWNER,
+    email: `article-delete-${OWNER}@spideryarn.local`,
+    onConflictDoNothing: true,
+  });
   await clear();
 });
 
@@ -190,7 +187,6 @@ afterEach(clear);
 
 afterAll(async () => {
   await closeDb();
-  if (!pool) return;
   await pool.query("delete from auth.users where id = $1", [OWNER]).catch(() => {});
   await pool.end();
 });
@@ -439,7 +435,6 @@ describe("enqueueing against an article that is being deleted", () => {
    * limit is written down rather than left to be inferred from a green tick.
    */
   it("never lets a successful delete leave a job behind", async () => {
-    if (!pool) return;
 
     for (let pass = 0; pass < 6; pass++) {
       await clear();
@@ -559,7 +554,6 @@ describe("a fresh paste for a URL the shelf is losing", () => {
   }
 
   it("refuses rather than queueing a job that would rebuild what was deleted", async () => {
-    if (!pool) return;
     const articleId = await givenPublishedArticle();
 
     const holder = await pool.connect();
@@ -685,7 +679,6 @@ describe("what a delete can take out from under a request already in flight", ()
    * guard that refused every retry would look exactly like this one.
    */
   it("refuses a retry whose attempt the delete took, and queues nothing", async () => {
-    if (!pool) return;
     const articleId = await givenArticle();
     const failed = await givenJob({ status: "error", url: URL });
 
@@ -750,7 +743,6 @@ describe("what a delete can take out from under a request already in flight", ()
    * the article is absent"* until 2026-10-06 — `lockAdoptedHolder`).
    */
   it("refuses a paste whose queue holder finished and was deleted, and queues nothing", async () => {
-    if (!pool) return;
     const articleId = await givenArticle();
     const holderJob = await givenJob({ status: "queued", url: URL });
 
@@ -834,7 +826,6 @@ describe("what a delete can take out from under a request already in flight", ()
    * revision the holder publishes below is what does.
    */
   it("still lets the paste in when the holder finished by publishing rather than dying", async () => {
-    if (!pool) return;
     const articleId = await givenArticle();
     const holderJob = await givenJob({ status: "queued", url: URL });
 
@@ -922,7 +913,6 @@ describe("what a delete can take out from under a request already in flight", ()
    * the `settled` assertion is what catches it.
    */
   it("still lets the paste in when the holder published inside the guard's own gap", async () => {
-    if (!pool) return;
     const holderJob = await givenJob({ status: "queued", url: URL });
     expect(await articleRows(), "no article yet, which is what makes this reachable").toHaveLength(
       0,

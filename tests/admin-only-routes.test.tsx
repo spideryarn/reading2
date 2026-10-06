@@ -132,13 +132,25 @@ async function show(path: string) {
 
      Bounded, and it gives up **loudly** — the assertion that follows is the one
      that fails, naming the page it did not get. A wait that returned quietly on
-     a timeout would turn every one of these into a test of the spinner. */
-  for (let i = 0; i < 50 && !host.querySelector("h1"); i++) {
+     a timeout would turn every one of these into a test of the spinner.
+
+     **Bounded by the clock, and the thing waited for is the heading's text.**
+     Until 2026-10-06 this was fifty turns of `setTimeout(1)` — about 50 ms, a
+     count standing in for a deadline — and on a loaded box the chunk took
+     longer: 2 of 21 recorded readiness runs failed here with an empty heading,
+     which is the Suspense fallback. Each turn is still its own short `act`,
+     because React holds the lazy page's commit until the `act` it was scheduled
+     in has closed; one long `act` around the whole wait would wait for itself. */
+  const deadline = Date.now() + PAGE_WAIT_MS;
+  while (!heading() && Date.now() < deadline) {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
     });
   }
 }
+
+/** How long a lazy page may take to arrive. Generous: it is only spent on a failure. */
+const PAGE_WAIT_MS = 5_000;
 
 /** The page's own name for itself — the shelf, the design reference, or Admin. */
 const heading = () => host.querySelector("h1")?.textContent ?? "";

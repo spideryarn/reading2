@@ -94,7 +94,9 @@ into the add box and watch the pipeline stages go past by name
 ([ingest-queue.md](ingest-queue.md)) — that is the end-to-end check, and it is the first thing that
 spends money.
 
-Two commands worth running once so you know they pass: `npm test` and `npm run typecheck`.
+Two commands worth running once so you know they pass: `npm test` and `npm run typecheck`. Run
+`npm run build` and `npm run build:fleet` before the first `npm test`: a few tests read the built
+bundles and fail, naming the command, when there is none ([testing.md](testing.md)).
 
 ### If it didn't
 
