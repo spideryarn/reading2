@@ -408,6 +408,7 @@ export function GlossaryPanel({
           is still a fragment rather than `null`, for the reason above: the row
           holds its place while the list is coming, and the corner sits in it
           (mode-band.css floors a head at the corner's height). */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={sorts.length > 0 ? null : <></>}
     >
       {/* **The run row, first thing in the column**, since 2026-10-03 — Greg,

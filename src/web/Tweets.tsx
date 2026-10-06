@@ -351,57 +351,55 @@ export function ThreadPosts({
   const total = thread.tweets.length;
 
   return (
-    <>
-      <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:p-0">
-        {thread.tweets.map((tweet, i) => (
-          <li
-            // Position is the identity: no stored id, no stored number, and two
-            // posts can legitimately carry the same text.
-            // biome-ignore lint/suspicious/noArrayIndexKey: no id, rebuilt whole
-            key={i}
-            className="tw:border-b tw:border-border tw:py-4 tw:last:border-b-0"
-          >
-            {/* `whitespace-pre-line`, because the prompt allows a line break
-                inside a post and a paragraph that eats them changes what it says. */}
-            <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
-              <span className="tw:mr-2 tw:font-mono tw:text-xs tw:text-ink-faint">
-                {i + 1}/{total}
+    <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:p-0">
+      {thread.tweets.map((tweet, i) => (
+        <li
+          // Position is the identity: no stored id, no stored number, and two
+          // posts can legitimately carry the same text.
+          // biome-ignore lint/suspicious/noArrayIndexKey: no id, rebuilt whole
+          key={i}
+          className="tw:border-b tw:border-border tw:py-4 tw:last:border-b-0"
+        >
+          {/* `whitespace-pre-line`, because the prompt allows a line break
+              inside a post and a paragraph that eats them changes what it says. */}
+          <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
+            <span className="tw:mr-2 tw:font-mono tw:text-xs tw:text-ink-faint">
+              {i + 1}/{total}
+            </span>
+            {/* The post is the model's; a span because `tw:font-prose` on the
+                <p> would beat voices.css on the same element. */}
+            <span className="tweets-text">{tweet.text}</span>
+          </p>
+          <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-ink-faint">
+            {tweet.blocks && tweet.blocks.length > 0 && (
+              <span className="tweets-from tw:flex tw:flex-wrap tw:items-center tw:gap-x-1.5">
+                <span>From</span>
+                {tweet.blocks.map((id) => (
+                  <BlockRef key={id} id={id} onJump={onJump} />
+                ))}
               </span>
-              {/* The post is the model's; a span because `tw:font-prose` on the
-                  <p> would beat voices.css on the same element. */}
-              <span className="tweets-text">{tweet.text}</span>
-            </p>
-            <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-ink-faint">
-              {tweet.blocks && tweet.blocks.length > 0 && (
-                <span className="tweets-from tw:flex tw:flex-wrap tw:items-center tw:gap-x-1.5">
-                  <span>From</span>
-                  {tweet.blocks.map((id) => (
-                    <BlockRef key={id} id={id} onJump={onJump} />
-                  ))}
-                </span>
-              )}
-              <span
-                className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-destructive" : ""}`}
-                title={
-                  tweet.chars > thread.limit
-                    ? `Over the ${thread.limit}-character limit by ${tweet.chars - thread.limit}`
-                    : undefined
-                }
-              >
-                {tweet.chars}/{thread.limit}
-              </span>
-              <CopyButton
-                text={() => tweet.text}
-                label="Copy this post"
-                what="post"
-                tip="Copy this post's text"
-                className="tw:ml-auto"
-              />
-            </div>
-          </li>
-        ))}
-      </ol>
-    </>
+            )}
+            <span
+              className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-destructive" : ""}`}
+              title={
+                tweet.chars > thread.limit
+                  ? `Over the ${thread.limit}-character limit by ${tweet.chars - thread.limit}`
+                  : undefined
+              }
+            >
+              {tweet.chars}/{thread.limit}
+            </span>
+            <CopyButton
+              text={() => tweet.text}
+              label="Copy this post"
+              what="post"
+              tip="Copy this post's text"
+              className="tw:ml-auto"
+            />
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 

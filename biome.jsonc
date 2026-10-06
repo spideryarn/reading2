@@ -22,6 +22,17 @@
       "!src/web/tailwind.css",
       "api/**",
       "tests/**",
+      // The test corpus the suite reads as its data root: under data/, whole
+      // captured web pages (`raw.html`) and what the pipeline made of them;
+      // under output/, the rendered articles. Captured inputs and generated
+      // output, the same reasoning as the two exclusions below — 140 HTML a11y
+      // findings about somebody else's markup, in a report people skim. The
+      // folder's own code (build-corpus.ts) is still linted, which is why this
+      // names the two subfolders and not data-root/**. The other fixtures under
+      // tests/fixtures/ (bylines, latexml, figure-wrappers, structures.html)
+      // are trimmed or written by hand as test inputs, and are still linted.
+      "!tests/fixtures/data-root/data",
+      "!tests/fixtures/data-root/output",
       "scripts/**",
       "evals/**",
       // The extraction fixtures are whole saved web pages, and one of them —
@@ -34,7 +45,7 @@
       // (docs/reusable/silent-success.md). Naming a smaller scope does not
       // help: the scanner walks the whole allowlist whatever path you pass it.
       // These are captured inputs, not our code; there is nothing here to lint.
-      "!evals/extraction/fixtures/**",
+      "!evals/extraction/fixtures",
       // Captured model answers, and the same reasoning one line up: not our
       // code, nothing here to lint. `<slug>.raw.json` is *deliberately* the
       // model's reply saved before anything touched it — evals/illustrated/run.ts
@@ -45,7 +56,7 @@
       // 8d8aaadf. Stripping the fences or renaming to .txt would both destroy
       // the one property these files exist for; not linting captured data is
       // the fix.
-      "!evals/results/**",
+      "!evals/results",
       // `tools/**` — the fleet dashboard, the Overseer and their web client,
       // about 15k lines — was in the allowlist hole this comment warns about
       // until 2026-09-08: typechecked by scripts/typecheck.ts, linted by
@@ -112,7 +123,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
 
       "nursery": {
         // Catches `doThing()` where doThing is async and nobody awaits it. The
@@ -162,8 +173,10 @@
         // Triage, not a gate — hence `info`, and hence 25 rather than the
         // default 15. At 15 this reports 41 functions, which is enough to bury
         // the findings that mean something (the same argument that turned
-        // noNonNullAssertion off, below). At 25 it reports the ~16 worth
-        // looking at.
+        // noNonNullAssertion off, below). At 25 it reported about 16 when
+        // this was written, and it has grown a great deal since — print
+        // today's count before relying on any number here:
+        //   npx biome lint --only=complexity/noExcessiveCognitiveComplexity --reporter=summary .
         //
         // Read a high score as "go and look", never as "this is wrong": the
         // metric punishes a long flat `switch` about as hard as genuinely

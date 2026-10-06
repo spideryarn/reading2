@@ -443,6 +443,7 @@ export function TimelinePanel({
           rather than lying over whichever of the band's many first rows
           (loading, empty, stale, the year line) is drawn. Dropping it would
           mean padding each of those clear of the (i) instead. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
