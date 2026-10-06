@@ -196,7 +196,7 @@ describe("resolvePaperSource — a slug the store would refuse", () => {
     `https://arxiv.org/pdf/${"a".repeat(50)}.gt/9901001v2`,
     `https://doi.org/10.48550/arXiv.2608.13566v${"1".repeat(50)}`,
     // One past each bound, well short of the slug limit: the grammar is closed, not only guarded.
-    "https://arxiv.org/abs/2608.13566v1234",
+    `https://arxiv.org/abs/2608.13566v${"1".repeat(10)}`,
     `https://arxiv.org/abs/${"a".repeat(17)}/9901001`,
   ];
 
@@ -214,10 +214,13 @@ describe("resolvePaperSource — a slug the store would refuse", () => {
 
   /** The longest id each bound admits, and real archives beside them. */
   const LONGEST = [
-    `https://arxiv.org/abs/${"a".repeat(16)}.GT/9901001v999`,
-    `https://arxiv.org/pdf/${"a-".repeat(8)}.GT/9901001v999.pdf`,
-    "https://arxiv.org/abs/2608.13566v999",
+    `https://arxiv.org/abs/${"a".repeat(16)}.GT/9901001v999999999`,
+    `https://arxiv.org/pdf/${"a-".repeat(8)}.GT/9901001v999999999.pdf`,
+    "https://arxiv.org/abs/2608.13566v999999999",
     "https://doi.org/10.48550/arXiv.2608.13566v999",
+    /* GPT Sol's F17: a four-digit version is still this paper, not the abstract page. */
+    "https://arxiv.org/abs/2608.13566v1000",
+    "https://arxiv.org/abs/2608.13566v1234",
     "https://arxiv.org/abs/cond-mat/9901001v12",
     "https://arxiv.org/abs/astro-ph/0001001",
     "https://arxiv.org/abs/chao-dyn/9901001",

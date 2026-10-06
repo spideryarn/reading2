@@ -72,10 +72,14 @@ export const PAPER_SLUG_MAX = 60;
  * the dot is two letters (`math.GT`).
  */
 const ARXIV_ID_BOUNDED = "\\d{4}\\.\\d{4,5}|[a-z-]{1,16}(?:\\.[a-z]{2})?\\/\\d{7}";
-/** A version: `v` and one to three digits — up to `v999`. */
-const ARXIV_VERSION = "v\\d{1,3}";
-/* With both bounded, the longest slug the grammar can produce is 37 characters
-   (`arxiv-` + 16 + `.xx` + `/` + 7 digits + `v999`), well inside PAPER_SLUG_MAX.
+/**
+ * A version: `v` and one to nine digits. arXiv has no paper near a thousand
+ * versions, but a bound that refused `v1000` would send a real link back to the
+ * abstract page; nine digits refuses nothing real and still closes the grammar.
+ */
+const ARXIV_VERSION = "v\\d{1,9}";
+/* With both bounded, the longest slug the grammar can produce is 43 characters
+   (`arxiv-` + 16 + `.xx` + `/` + 7 digits + `v` + 9 digits), well inside PAPER_SLUG_MAX.
    `arxivPaper` checks the length anyway, so widening either bound later cannot
    hand out a slug the store refuses. */
 
