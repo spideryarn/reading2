@@ -53,7 +53,7 @@ vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
 vi.mock("../src/web/AddArticle.js", () => ({ AddArticle: () => null }));
 vi.mock("../src/web/FeedbackButton.js", () => ({ FeedbackTrigger: () => null }));
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: null, loading: false }),
+  useSession: () => ({ session: null, user: null, loading: false, known: true }),
 }));
 
 class NoResizeObserver {

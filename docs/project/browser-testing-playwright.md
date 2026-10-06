@@ -97,6 +97,22 @@ Or as a check on its own, which is the quickest way to find out whether this mac
 npx tsx scripts/browser-sign-in.ts --at /read/fowler-phrenology --shot /tmp/x.png
 ```
 
+**As a second reader, who is not the administrator**: `--as second` on the command line, or
+`signedInBrowser({ as: "second" })` / `signIn(page, base, { as: "second" })`. That is
+`dev-reader-b@spideryarn.local`, with the same password and the same two proofs. To change reader
+in **one browser profile**, which is what a check of anything kept in `localStorage` needs, sign
+out between them: `signIn` cannot do it alone, because a signed-in visit to `/login` is sent on to
+the shelf.
+
+```js
+import { signedInBrowser, signIn, signOut } from "./scripts/browser-sign-in.ts";
+
+const { browser, page } = await signedInBrowser({ base });        // the administrator
+// … move about on an article both can open …
+await signOut(page, base);                                         // the Sign out button on /profile
+await signIn(page, base, { as: "second" });                        // same context, same localStorage
+```
+
 **The credential is already on the machine.** `npm run db:seed-owner` writes
 `dev-admin@spideryarn.local` with a password generated per machine into
 `~/.config/spideryarn/local-admin-password`, and `npm run db:admin-password` prints it — no Google,

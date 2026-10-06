@@ -18,8 +18,25 @@
  * key each, forgetting is one `removeItem` and nothing another tab writes can
  * undo it.
  *
- * **Per browser.** A pair left behind on one device is not tidied on another;
- * both rows stay there, which is what happened everywhere before this.
+ * **Per browser, and per reader.** A pair left behind on one device is not
+ * tidied on another; both rows stay there, which is what happened everywhere
+ * before this. And since 2026-10-06 each record says whose it is (`readerId`),
+ * because two readers can use one browser profile and a record holds the
+ * words one of them searched for. Everything here answers for one reader:
+ *
+ * - **Another reader's record is never returned and never removed.** It is
+ *   theirs to tidy when they come back, so signing out clears nothing. Their
+ *   words do stay in storage meanwhile; they are handed to no code running as
+ *   anybody else.
+ * - **The key does not change**, and does not need the reader in it: a row id
+ *   is the server's and belongs to one reader, and one key per pair is the
+ *   property the paragraph above is about.
+ * - **A record with no reader, written before that day, is removed when it is
+ *   read**, not adopted: it holds somebody's words and cannot say whose. The
+ *   price is the one already documented, a pair not tidied after a reload.
+ *
+ * docs/project/auth.md § Browser storage that is a reader's is keyed by that
+ * reader; docs/plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md.
  *
  * **Everything unreadable is read as no pairs**, so storage that throws, or
  * holds something else, leaves the list alone. Nothing here is trusted
@@ -27,11 +44,14 @@
  * before anything is deleted. The one failure not covered: a `removeItem`
  * that throws leaves its record, in a storage that can still be read later.
  */
+import { storageReader } from "../../lib/storage-reader.js";
 
 /** Each pair is stored under this prefix followed by its thorough row's id. */
 export const THOROUGH_PAIR_PREFIX = "spya.search.thoroughPair.";
 
 export interface StoredPair {
+  /** Whose pair this is: `storageReader` of the reader who launched it. */
+  readerId: string;
   slug: string;
   quickId: string;
   /** The thorough row, by the id the server is using. */
@@ -40,7 +60,8 @@ export interface StoredPair {
   words: string;
 }
 
-function isStoredPair(value: unknown): value is StoredPair {
+/** A record as written before 2026-10-06, or since: everything but whose it is. */
+function isPairShaped(value: unknown): value is Omit<StoredPair, "readerId"> & { readerId?: unknown } {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
@@ -51,9 +72,14 @@ function isStoredPair(value: unknown): value is StoredPair {
   );
 }
 
-/** Every readable record, in no particular order. */
-function all(): StoredPair[] {
+/**
+ * Every readable record of this reader's, in no particular order. A legacy
+ * record met on the way is removed (the module comment's last bullet).
+ */
+function all(readerId: string | null): StoredPair[] {
+  const reader = storageReader(readerId);
   const pairs: StoredPair[] = [];
+  const legacy: string[] = [];
   try {
     const store = window.localStorage;
     for (let i = 0; i < store.length; i++) {
@@ -62,9 +88,9 @@ function all(): StoredPair[] {
       try {
         const parsed: unknown = JSON.parse(store.getItem(key) ?? "null");
         // The key is the identity: a record filed under another id is not believed.
-        if (isStoredPair(parsed) && key === THOROUGH_PAIR_PREFIX + parsed.meaningId) {
-          pairs.push(parsed);
-        }
+        if (!isPairShaped(parsed) || key !== THOROUGH_PAIR_PREFIX + parsed.meaningId) continue;
+        if (typeof parsed.readerId !== "string") legacy.push(parsed.meaningId);
+        else if (parsed.readerId === reader) pairs.push({ ...parsed, readerId: parsed.readerId });
       } catch {
         // Not JSON: not a pair.
       }
@@ -72,6 +98,8 @@ function all(): StoredPair[] {
   } catch {
     return [];
   }
+  // After the walk: removing a key while counting through them skips one.
+  for (const meaningId of legacy) drop(meaningId);
   return pairs;
 }
 
@@ -91,15 +119,29 @@ function put(pair: StoredPair): void {
   }
 }
 
-export const storedPairs = {
-  /** The pairs written for this article. */
-  of: (slug: string): StoredPair[] => all().filter((p) => p.slug === slug),
-  add: put,
+/**
+ * Is the record under this id somebody else's? Only a record that says so,
+ * readably: nothing there, something unreadable and a legacy record are all
+ * this reader's to remove.
+ */
+function anothers(meaningId: string, reader: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(THOROUGH_PAIR_PREFIX + meaningId) ?? "null");
+    return isPairShaped(parsed) && typeof parsed.readerId === "string" && parsed.readerId !== reader;
+  } catch {
+    return false;
+  }
+}
+
+export interface StoredPairs {
+  /** This reader's pairs for this article. */
+  of(slug: string): StoredPair[];
+  add(pair: Omit<StoredPair, "readerId">): void;
   /**
    * The pair this thorough row is half of is not to be tidied: settled,
    * thrown away, or chosen by the reader. Does nothing for any other row.
    */
-  forget: drop,
+  forget(meaningId: string): void;
   /**
    * This row, quick or thorough, is about to stop being the answer that was
    * recorded: revised, retried or deleted. Called at the gesture rather than
@@ -113,8 +155,34 @@ export const storedPairs = {
    * undone (the same review, S1). It is rare, and the price is one pair not
    * tidied after a reload.
    */
-  invalidate(id: string): void {
-    drop(id);
-    for (const pair of all()) if (pair.quickId === id) drop(pair.meaningId);
-  },
-};
+  invalidate(id: string): void;
+}
+
+/**
+ * **One reader's pairs**: every verb reads, writes and removes that reader's
+ * records and nobody else's. Made per reader rather than taking the reader as
+ * an argument of each verb, so no caller can leave it off one of them.
+ *
+ * `forget` and `invalidate` check whose a record is before removing it. A row
+ * id is minted at random in the browser (`mintId`), so it is not unique across
+ * readers by construction, only in practice; without the check a collision
+ * would remove another reader's record.
+ */
+export function storedPairsFor(readerId: string | null): StoredPairs {
+  const reader = storageReader(readerId);
+  const forget = (meaningId: string): void => {
+    if (!anothers(meaningId, reader)) drop(meaningId);
+  };
+  return {
+    of: (slug) => all(readerId).filter((p) => p.slug === slug),
+    add: (pair) => {
+      // Never over another reader's record, for the reason above.
+      if (!anothers(pair.meaningId, reader)) put({ ...pair, readerId: reader });
+    },
+    forget,
+    invalidate(id) {
+      forget(id);
+      for (const pair of all(readerId)) if (pair.quickId === id) drop(pair.meaningId);
+    },
+  };
+}

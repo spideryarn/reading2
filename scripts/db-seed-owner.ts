@@ -3,9 +3,10 @@
  *
  *     npm run db:seed-owner
  *
- * **Two rows, not one, since 2026-08-31** — the owner every `owner_id` points
- * at, and the account Greg signs in as. `scripts/seed-accounts.ts` is the list
- * and the reason there are two; this file is only how they get written.
+ * **More than one row since 2026-08-31** — the owner every `owner_id` points
+ * at, the account Greg signs in as, and two since. `scripts/seed-accounts.ts`
+ * § `SEEDED_ACCOUNTS` is the list and the reason for each; this file is only
+ * how they get written.
  *
  * **Why this has to exist at all.** Every table in `spideryarn` carries
  * `owner_id uuid not null references auth.users(id)`, from day one and on
@@ -52,7 +53,8 @@ import {
   planAccountEmail,
   staleIdentities,
   readOrCreateAdminPassword,
-  writeAdminEmail,
+  recordSignedIn,
+  SECOND_READER_EMAIL_LOCAL,
   readPasswordVerdict,
   refuseMismatchedStack,
   refuseNonLocalSeed,
@@ -455,14 +457,16 @@ async function assertCanSignIn(account: SeededAccount): Promise<void> {
   if (sub !== id) {
     throw new Error(
       `signing in as ${email} worked, but the token is for ${sub}, not ${id}.\n` +
-        "  src/admin.ts gates on the id, so that session is not an administrator.",
+        "  Everything that knows this account knows it by that id, the admin gate\n" +
+        "  in src/admin.ts included, so that session is somebody else's.",
     );
   }
   /* Recorded only now, after a real sign-in proved this address is the one this
      machine's database answers to. Writing it earlier would record an intention;
      writing it here records a fact, which is what a checkout on another commit
-     needs — scripts/seed-accounts.ts, `adminEmailPath`. */
-  writeAdminEmail(homedir(), email);
+     needs — scripts/seed-accounts.ts, `adminEmailPath`. **The administrator's
+     address only**: `recordSignedIn` writes nothing for the second reader. */
+  recordSignedIn(homedir(), account);
   console.log(`✓ signed in as ${email}, token sub is ${id}`);
 }
 
@@ -492,6 +496,7 @@ try {
   }
   console.log(`  Sign in as ${ADMIN_EMAIL_LOCAL}. The password is in ${admin.path}`);
   console.log("  and `npm run db:admin-password` prints it again.");
+  console.log(`  ${SECOND_READER_EMAIL_LOCAL} has the same password: a second reader, not an administrator.`);
 } catch (err) {
   console.error(`✗ ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);

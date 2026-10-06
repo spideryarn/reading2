@@ -3,6 +3,7 @@
  *
  *     npx tsx scripts/browser-sign-in.ts                     # prove it works
  *     npx tsx scripts/browser-sign-in.ts --at /?at=spya-k6fpme --shot /tmp/x.png
+ *     npx tsx scripts/browser-sign-in.ts --as second         # the second reader, not an administrator
  *
  * ## Why this exists
  *
@@ -75,7 +76,7 @@ import type { Browser, BrowserContext, Page, Response } from "playwright-core";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { isMain } from "../src/is-main.js";
-import { readAdminCredentials } from "./seed-accounts.js";
+import { readAdminCredentials, SECOND_READER_EMAIL_LOCAL, SECOND_READER_ID_LOCAL } from "./seed-accounts.js";
 import { inLinkedWorktree, PRIMARY_PORT } from "./worktree-port.js";
 
 /** This file's own directory — see `baseUrl`, which must not trust `cwd`. */
@@ -179,7 +180,10 @@ export function baseUrl(from: string = SCRIPT_DIR): string {
  * account holding the right email on the wrong id is a real failure with a silent
  * symptom (docs/postmortems/260828f-admin-id-was-the-local-one.md).
  */
-export function devCredentials(home: string = homedir()): {
+export function devCredentials(
+  home: string = homedir(),
+  as: SeededReader = "admin",
+): {
   email: string;
   password: string;
   id: string;
@@ -188,7 +192,29 @@ export function devCredentials(home: string = homedir()): {
 } {
   const found = readAdminCredentials(home);
   if (!found.ok) throw new Error(found.why);
+  /* The second reader shares the machine's password and has only ever had one
+     address, so there is no recorded one to prefer and nothing else to try. */
+  if (as === "second") {
+    return { email: SECOND_READER_EMAIL_LOCAL, password: found.password, id: SECOND_READER_ID_LOCAL };
+  }
   return { email: found.email, password: found.password, id: ADMIN_USER_ID_LOCAL, alsoTry: found.alsoTry };
+}
+
+/**
+ * **Which of the two seeded accounts that sign in.** `admin` is
+ * `dev-admin@spideryarn.local`, the default everywhere, so no caller from
+ * before 2026-10-06 changes. `second` is `dev-reader-b@spideryarn.local`: an
+ * ordinary reader, there so a check can be made as somebody who is not the
+ * administrator, or as two readers in one browser profile
+ * (scripts/seed-accounts.ts § `SECOND_READER_ID_LOCAL`).
+ */
+export type SeededReader = "admin" | "second";
+
+/** `--as <who>`, or a refusal that names the two words. Absent is the administrator. */
+export function parseSeededReader(value: string | undefined): SeededReader {
+  if (value === undefined || value === "admin") return "admin";
+  if (value === "second") return "second";
+  throw new Error(`--as takes "admin" or "second", not ${JSON.stringify(value)}.`);
 }
 
 /**
@@ -230,9 +256,20 @@ export interface SignedIn {
  * (src/web/SignInPage.tsx). The email form is open on arrival — since the
  * sign-in page of its own (plan 261001m), there is no "or use an email address"
  * button to click first, and waiting on one timed out after 30s.
+ *
+ * **`{ as: "second" }` signs in as the second reader**, with the same two
+ * proofs: the grant's `sub` is that reader's id, and `/api/library` answers
+ * with a shelf. **The page must be signed out when this is called**: a
+ * signed-in visit to `/login` is sent straight on to the shelf (App.tsx
+ * § `LeaveLogin`), so there is no form to fill. To change reader in one
+ * browser profile, call `signOut` first.
  */
-export async function signIn(page: Page, base: string = baseUrl()): Promise<SignedIn> {
-  const { email, password, id, alsoTry } = devCredentials();
+export async function signIn(
+  page: Page,
+  base: string = baseUrl(),
+  options: { as?: SeededReader } = {},
+): Promise<SignedIn> {
+  const { email, password, id, alsoTry } = devCredentials(homedir(), options.as ?? "admin");
   /* Try what this machine recorded, then the constant this checkout was built
      with. The recorded address is a hint, not an authority: it can be stale — a
      seed that renamed the row and could not write the file, or two seeds racing
@@ -389,13 +426,36 @@ async function attemptSignIn(
   if (sub !== id) {
     throw new Error(
       `signed in as ${email}, but the token is for ${sub ?? "an account with no sub"}, not ${id}.\n` +
-        "  src/admin.ts gates on the id, not the address, so that session is not the\n" +
-        "  administrator however right the email looks. Run `npm run db:seed-owner`, which\n" +
-        "  refuses and says which of the two things to do.",
+        "  Everything knows a seeded account by its id, not its address (src/admin.ts gates\n" +
+        "  on it), so that session is not the account asked for however right the email\n" +
+        "  looks. Run `npm run db:seed-owner`, which refuses and says what to do.",
     );
   }
 
   return { email, id, articles, ms: Date.now() - started };
+}
+
+/**
+ * **Sign this page out the way a reader does**: the *Sign out* button on
+ * `/profile`. For a check that changes reader in one browser profile, where
+ * `signIn` alone cannot: see its last paragraph.
+ *
+ * Through the button rather than by clearing the SDK's storage key, for the
+ * header's first reason, and because the button is the path with consequences
+ * worth having in the check: it reloads the page, and it clears what a
+ * deliberate sign-out clears (src/web/AccountSection.tsx). Everything else in
+ * `localStorage` is left, which is the point of such a check.
+ *
+ * Does not return until the page is the signed-out landing page: the app
+ * replaces the address with `/` itself, and the sign-in form there is the
+ * evidence that no session is left.
+ */
+export async function signOut(page: Page, base: string = baseUrl()): Promise<void> {
+  await page.goto(new URL("/profile", base).href, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.waitForURL((url) => url.pathname === "/", { timeout: 30_000 });
+  await page.goto(new URL("/login", base).href, { waitUntil: "domcontentloaded" });
+  await page.locator("#signin-email").waitFor({ state: "visible", timeout: 30_000 });
 }
 
 export interface SignedInBrowser {
@@ -416,6 +476,8 @@ export interface SignedInBrowser {
 export async function signedInBrowser(options: {
   base?: string;
   viewport?: { width: number; height: number };
+  /** Who to sign in as. The administrator unless said. */
+  as?: SeededReader;
 } = {}): Promise<SignedInBrowser> {
   const { chromium } = await import("playwright-core");
   const browser = await chromium.launch({
@@ -430,7 +492,7 @@ export async function signedInBrowser(options: {
       viewport: options.viewport ?? { width: 1280, height: 900 },
     });
     const page = await context.newPage();
-    const who = await signIn(page, options.base ?? baseUrl());
+    const who = await signIn(page, options.base ?? baseUrl(), { as: options.as ?? "admin" });
     return { browser, context, page, who };
   } catch (err) {
     /* A leaked Chrome on a box running many agents is not a small mess, and the
@@ -534,8 +596,9 @@ if (isMain(import.meta.url)) {
      reason alone — every other failure already lands in the same handler. */
   let base = "(not resolved)";
   try {
+    const as = parseSeededReader(flag("as"));
     base = flag("base") ?? baseUrl();
-    session = await signedInBrowser({ base });
+    session = await signedInBrowser({ base, as });
     const { page, who } = session;
     const lines = [
       `ok  signed in as ${who.email} (${who.id}) at ${base} in ${who.ms}ms, ` +

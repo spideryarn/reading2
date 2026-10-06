@@ -155,6 +155,20 @@ Playwright, types it into the real form, and does not return until `GET /api/lib
 [browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in) is where to
 read about it.
 
+**There is a second reader to sign in as, since 2026-10-06**: `dev-reader-b@spideryarn.local`, at
+a fixed id that is not in `ADMIN_USER_IDS`, with the same per-machine password. The same seed
+creates it and proves it signs in. It is for a check that needs somebody who is not the
+administrator, or two readers in one browser profile
+([261006h](../plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md)):
+
+```
+npx tsx scripts/browser-sign-in.ts --as second
+```
+
+It owns no articles, so its shelf is empty and what it can open is whatever is public.
+`npm run db:admin-password` still prints the administrator's address; only the administrator's is
+recorded for it.
+
 ### One shelf, and how to get there
 
 Rows written **outside** a request — the CLI, the pipeline, `db:import` — belong to whoever

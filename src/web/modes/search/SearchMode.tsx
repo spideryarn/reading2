@@ -35,6 +35,7 @@ import {
 } from "../../params.js";
 import { assignSlots } from "../../hit-colours.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
+import { useMadeFor } from "../../lib/made-for.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
 import { SearchPanel } from "../../SearchPanel.js";
@@ -52,7 +53,7 @@ import {
   stepQuickSession,
 } from "../../quick-session.js";
 import { type AutoThoroughWiring, useAutoThorough } from "./auto-thorough.js";
-import { storedPairs } from "./stored-pairs.js";
+import { storedPairsFor } from "./stored-pairs.js";
 
 /** Until `SearchBand` has filled it in, on its first render: nothing owns, nothing runs. */
 const UNWIRED: AutoThoroughWiring = {
@@ -136,9 +137,24 @@ export function SearchBand({
      hook's own lookups. The wiring is filled in further down, once the
      typing session and `?runs=` exist. */
   const wiring = useRef<AutoThoroughWiring>(UNWIRED);
+  /* **Whose remembered pairs these are** (stored-pairs.ts): the reader this
+     band was mounted for, as `useSearch` above has it. That answer is frozen
+     at mount and is right here because the band cannot outlive its reader:
+     it is under `ArticlePage`'s access gate, which answers `loading` and
+     unmounts everything below it the moment the reader changes (access.ts
+     § `useArticleAccess`). `useLastView` cannot use the frozen answer: it
+     lives in `App`, which outlives every reader, and is told the current one. */
+  const readerId = useMadeFor();
+  const storedPairs = useMemo(() => storedPairsFor(readerId), [readerId]);
   /* `loaded` is true for a failed read too, and a failed read's empty list
      would read as "both rows have gone": only a list that arrived is tidied. */
-  const upgrade = useAutoThorough({ slug, runs, loaded: loaded && loadError === null && !loadFromCopy, wiring });
+  const upgrade = useAutoThorough({
+    slug,
+    readerId,
+    runs,
+    loaded: loaded && loadError === null && !loadFromCopy,
+    wiring,
+  });
   renameUpgrade.current = upgrade.renamed;
   const { panel, setActive } = useSearchMode({
     runs: upgrade.visible,
@@ -224,7 +240,7 @@ export function SearchBand({
         storedPairs.forget(id);
         panel.onSolo(id);
       }}
-      // Select all ticks every thorough row, a left-behind one included.
+      // Select all ticks every thorough row, a left-behind one included: this reader's, and only theirs.
       onToggleAll={(on) => {
         if (on) for (const pair of storedPairs.of(slug)) storedPairs.forget(pair.meaningId);
         panel.onToggleAll(on);

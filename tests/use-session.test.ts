@@ -142,6 +142,22 @@ describe("while the SDK is starting up", () => {
     stop();
   });
 
+  /**
+   * Giving up is not an answer. Whoever would treat the answer that arrives
+   * afterwards as a change of reader asks `known`, not `loading`
+   * (tests/last-view-late-session.test.tsx).
+   */
+  it("says the session is not known when the deadline ends the wait, and known once the SDK answers", () => {
+    const { state, stop } = drive();
+    expect(state().known).toBe(false);
+    act(() => vi.advanceTimersByTime(9_000));
+    expect(state().loading).toBe(false);
+    expect(state().known).toBe(false);
+    act(() => announce?.("INITIAL_SESSION", null));
+    expect(state().known).toBe(true);
+    stop();
+  });
+
   /** And it is a deadline, not a delay: a fast answer is not made to wait for it. */
   it("does not hold a fast answer back until the deadline", () => {
     const { state, stop } = drive();

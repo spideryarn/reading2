@@ -186,6 +186,16 @@ article). **Ship C only if it beats B on the dangling-reference cases; otherwise
   19 head to head and 11 to 2 on the truly dangling quotes, but gave the finding away about twice
   as often and misstated context in one cue in ten. A B3 that sets a scene more readily waits for
   his answer, and should be judged on about 40 hand-marked dangling quotes.
+- 2026-10-06: **the open question, answered and measured.** Greg: *"use your judgment. don't
+  change things too much - the Skim questions were mostly good"*, and on a middle wording, *"run
+  spike, use your judgment"*. The middle wording was judged on 36 hand-marked dangling quotes and
+  50 ordinary ones from 23 articles and **did not pass**: not clearly better on the dangling
+  quotes (19 to 11 for the shipped cue from one judge, 14 to 11 for the new one from the other),
+  and more giveaways and misstatements against one control run. **`skim/10` stays**; no code
+  changed. One candidate run, judged by models of the writer's family; the original strict-by-both
+  subset also fails the rule. [261006b § Round three](../investigations/261006b-skim-cue-situates-the-quote-eval.md#round-three-a-middle-wording-on-hand-marked-dangling-quotes).
+  GPT Sol reviewed the measurement, corrected three overclaims in the write-up and said ready:
+  [review](261006e-round3-measurement-review-sol.md).
 - 2026-10-06: **browser check of stage 1** (Sonnet, Playwright, desktop 1440, iPad 820, phone 390,
   phone landscape): all eight items pass. Two caveats in phone landscape only: the card is capped
   near 131px, and a swipe on the band to bring the card into view may dismiss it. Not built for.

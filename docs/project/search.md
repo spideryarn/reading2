@@ -413,7 +413,10 @@ plan's Q-reload:
 The saved rows cannot say which thorough row the app started for which quick row: a reader who asks
 both by hand for the same words leaves the same two rows. So the pair is written down. When a
 thorough search starts by itself, the browser records the two ids and the words in `localStorage`
-([`stored-pairs.ts`](../../src/web/modes/search/stored-pairs.ts)). The record goes when that tab
+([`stored-pairs.ts`](../../src/web/modes/search/stored-pairs.ts)), and, since 2026-10-06, whose
+they are: a tidy run as one reader neither sees nor removes another's record in the same browser
+([auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader)).
+The record goes when that tab
 swaps the pair, drops it, or marks its answer to be thrown away. Leaving, reloading or closing the
 tab removes nothing, so what is still written is the pairs left behind.
 

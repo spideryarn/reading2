@@ -11,7 +11,7 @@ import type { BlockId, Debate, Tree } from "../src/types.js";
 import { VisitorDebateBand } from "../src/web/modes/debate/DebateMode.js";
 import { modeParam } from "../src/web/params.js";
 import { navigate, settleAddress, useRoute } from "../src/web/router.js";
-import { useLastView } from "../src/web/last-view.js";
+import { lastViewKey, useLastView } from "../src/web/last-view.js";
 import { debateWithheldOnSharedLink } from "../src/messages.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -92,7 +92,7 @@ let root: Root;
 
 function Page() {
   const route = useRoute();
-  useLastView(SLUG, "article");
+  useLastView(SLUG, "article", null);
   const [mode] = useQueryState("mode", modeParam);
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "debate") return createElement("p", null, `band: ${mode}`);
@@ -181,7 +181,7 @@ it("Back and Forward lift legacy entries on the same article", async () => {
 
 it.each(["?mode=debate&debate=claims", "?mode=debate&debateby=claim"])(
   "restores Claims from %s", async (remembered) => {
-    window.localStorage.setItem(`spya.lastView.${SLUG}`, remembered);
+    window.localStorage.setItem(lastViewKey(SLUG, null), remembered);
     boot("");
     await until(inClaims);
     expect(params().get("debate")).toBe("claims");

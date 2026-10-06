@@ -325,6 +325,7 @@ const DIAGNOSTIC_ERROR_NAMES: ReadonlySet<string> = new Set([
   "MarkStopped",
   "OpeningReadTimedOut",
   "ReaderFacingError",
+  "MalformedReply",
   "NotThisReader",
 ]);
 
