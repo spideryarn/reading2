@@ -715,8 +715,12 @@ export interface JobStore {
    * over its own deadline" — see the header on why takeover is out. The
    * claimant's own timer is the thing that has to fire first, and it cannot if
    * progress keeps pushing the lease away from it.
+   *
+   * `title`, when given, is written with the steps; left out, the row keeps the
+   * one it has. It is here because a pause and a lapsed-lease requeue answer
+   * from the row, and a title the claimant held only in memory was lost to both.
    */
-  noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job>;
+  noteProgress(id: string, attempt: string, steps: JobStep[], title?: string): Promise<Job>;
 
   /** The job is over. Same fence, and it clears the token and the lease. */
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job>;

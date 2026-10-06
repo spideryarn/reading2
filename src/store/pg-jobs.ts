@@ -1979,12 +1979,17 @@ const rawPgJobStore: JobStore = {
     return outcomes;
   },
 
-  async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
+  async noteProgress(id: string, attempt: string, steps: JobStep[], title?: string): Promise<Job> {
     const db = getDb();
-    /* `steps` and nothing else — not the status, and **not the lease**. See the
-       contract: renewing here would turn the lease into a heartbeat, and the
-       claimant's own deadline has to be the thing that fires first. */
-    const moved = await db.update(jobs).set({ steps }).where(fence(id, attempt)).returning();
+    /* `steps`, and the title when the claimant has one — not the status, and
+       **not the lease**. See the contract: renewing here would turn the lease
+       into a heartbeat, and the claimant's own deadline has to be the thing
+       that fires first. No title given leaves the row's alone. */
+    const moved = await db
+      .update(jobs)
+      .set({ steps, ...(title !== undefined && { title }) })
+      .where(fence(id, attempt))
+      .returning();
     if (!moved[0]) throw new StaleAttemptError(id);
     return toJob(moved[0]);
   },

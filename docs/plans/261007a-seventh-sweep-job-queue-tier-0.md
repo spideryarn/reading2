@@ -213,3 +213,42 @@ tests that: with the lock held, an advance for a job that exists still answers
 review is right that the driver catches the throw and asks again, so the cost was one wasted
 request and no visible effect.
 
+### PQO2: the title reaches the row when it is read, and `metadata` supplies one too
+
+- [x] Red, against real Postgres: two cases.
+- [x] Fix: `src/jobs.ts`, and one optional argument on `noteProgress`.
+- [x] `ingest-queue.md` § What the card says.
+
+**Evidence:** R against Postgres for both cases (the reviews had them C, and the Sol review R on
+an in-memory store).
+**Files:** `src/jobs.ts`, `src/store/jobs.ts`, `src/store/pg-jobs.ts`, `tests/jobs-walk.test.ts`,
+`docs/project/ingest-queue.md`. **No migration**: `jobs.title` already exists.
+
+**Done when** a job that runs `extract` and then hands back mid-step answers with its title, keeps
+it on the row and still has it when it finishes; and a job whose only title-bearing step is
+`metadata` finishes with a title.
+
+**Red.**
+
+```
+× keeps the title across a mid-step hand-back
+    AssertionError: the hand-back answers from the row: expected undefined to be 'extract ran'
+× gives a job whose only title comes from the metadata step a title
+    AssertionError: expected undefined to be 'A paper's title'
+```
+
+**What landed.** `noteProgress` takes an optional title and writes it with the steps; without one
+the row keeps what it has. `walkClaim`'s `note` passes `job.title`. `runStep` lifts the title from
+`metadata` as well as `extract`. Both reviews proposed this.
+
+**Not taken from the Sol review:** reading `product.parts.meta.title` instead of `product.detail`.
+Both steps return `detail: meta.title` literally, `extract` has always been lifted from `detail`,
+and reading `parts` needs a cast through `ArtifactParts`. One rule for both steps.
+
+**Left.** A claimant that dies after `extract` commits and before the next progress write leaves
+no title on the row, and the requeued claim skips `extract`. Closing it means writing the title
+inside the step's commit, which is a change to `session.commit`'s `keep` transition; not built.
+
+**What the investigation got wrong.** The Opus doc's heading says three of the four ways a claim
+is put down lose the title; the Sol review is right that it is two (pause and lapse).
+

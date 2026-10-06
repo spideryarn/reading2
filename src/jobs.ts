@@ -1325,11 +1325,14 @@ async function runStep(
        catch below puts both back — `step.status = "error"` — and the job ends as
        a failure, which is what it always did.
 
-       The title only exists once extraction has run, and the moment it does is
-       the moment the progress card can stop calling the article by its slug. */
+       The title only exists once a step has read it, and the moment one does
+       is the moment the progress card can stop calling the article by its slug.
+       Two steps do, and each returns it as its `detail`: `extract`, and
+       `metadata`, which is the only one of the two a minimal paper's job has.
+       Until 2026-10-07 only `extract` was lifted, so that job never had one. */
     step.status = "done";
     step.finishedAt = new Date().toISOString();
-    if (step.name === "extract") job.title = product.detail;
+    if (step.name === "extract" || step.name === "metadata") job.title = product.detail;
 
     /* **The whole of what used to be four calls, three here and one in the
        caller.** `commit` validates the product against `produces` before it
@@ -2806,7 +2809,12 @@ async function walkClaim(
      tests/jobs-walk.test.ts § the exits of a claim. */
   const note = async (): Promise<Job | undefined> => {
     try {
-      return await store.noteProgress(job.id, attempt, job.steps);
+      /* **The title goes with it.** It is set in memory by the step that read
+         it, and until 2026-10-07 it reached the row only through a release or
+         an ending. A mid-step hand-back and a lapsed lease both answer from
+         the row, and the next claim skips the step that would set it again, so
+         the card went back to the slug for the rest of the job. */
+      return await store.noteProgress(job.id, attempt, job.steps, job.title);
     } catch (err) {
       if (err instanceof StaleAttemptError) throw err;
       /* The class only: a driver error's message can carry the statement's

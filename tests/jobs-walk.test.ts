@@ -139,6 +139,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { NeedsAnotherWindow } from "../src/another-window.js";
 import {
   advanceJobWith,
   cancelJob,
@@ -1406,6 +1407,57 @@ describe("one claim walks the whole job", () => {
       /* The mechanism the 404 rests on: a job that exists is still told to wait. */
       expect(forLive).toMatchObject({ ran: null, busy: true, done: false, job: { id: job.id } });
       expect(await advanceAsOwner(missing, parts), "and the same answer once the lock is free").toBeNull();
+    });
+
+    /* ------------------------------------------------------------ PQO2 -- */
+
+    it("keeps the title across a mid-step hand-back", async () => {
+      let asked = false;
+      const { job, parts } = await fixture("test-walk-title-survives-pause", ["extract", "blocks"], {
+        blocks: () => {
+          if (!asked) {
+            asked = true;
+            throw new NeedsAnotherWindow();
+          }
+        },
+      });
+
+      const first = await advanceAsOwner(job.id, parts);
+
+      expect(first?.done).toBe(false);
+      expect(first?.job.status).toBe("queued");
+      expect(first?.job.title, "the hand-back answers from the row").toBe("extract ran");
+      expect((await rowOf(job.id))?.title).toBe("extract ran");
+
+      const second = await advanceAsOwner(job.id, parts);
+
+      expect(second?.job.status).toBe("done");
+      expect(second?.job.title, "extract is skipped now, so only the row can say").toBe("extract ran");
+    });
+
+    it("gives a job whose only title comes from the metadata step a title", async () => {
+      const slug = "test-walk-title-from-metadata";
+      const { job, parts, made, fresh } = await fixture(slug, ["extract"]);
+      const meta = (made.extract?.parts as { meta?: unknown } | undefined)?.meta;
+      expect(meta, "the fixture has to carry a meta to hand back").toBeTruthy();
+      const only = await queueJob(slug, ["metadata"], new Date(Date.now() + 1000).toISOString());
+      const ran: Ran & { names: StepName[] } = { names: [] };
+      const product = { parts: { meta }, detail: "A paper's title" } as StepProduct;
+      const withMetadata: AdvanceParts = {
+        ...parts,
+        steps: {
+          ...parts.steps,
+          metadata: fakeStep("metadata", ran, product, fresh),
+        } as AdvanceParts["steps"],
+      };
+      /* The older job on the article first, or the line holds the second. */
+      expect((await advanceAsOwner(job.id, parts))?.job.status).toBe("done");
+
+      const advanced = await advanceAsOwner(only.id, withMetadata);
+
+      expect(ran.names).toEqual(["metadata"]);
+      expect(advanced?.job.status).toBe("done");
+      expect(advanced?.job.title).toBe("A paper's title");
     });
   });
 });

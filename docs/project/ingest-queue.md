@@ -1561,6 +1561,14 @@ how long it has been running, and one place decides what state an import is in:
 [`src/job-state.ts`](../../src/job-state.ts), beside [`job-failure.ts`](../../src/job-failure.ts)
 which does the same job for what a failure offers.
 
+**The card's heading is the job's title, and the slug until it has one** (`job.title ?? job.slug`,
+`src/web/AddArticle.tsx`). The title is whatever `extract` or `metadata` read, lifted onto the job by
+`runStep` and written to the row by the next progress write. Until 2026-10-07 only `extract` was
+lifted and the title reached the row only at a release or an ending, so a minimal paper's job
+(`fetch`, `metadata`) never had one, and a job that paused mid-step after `extract` lost it for
+good, because the next claim skips `extract`. One gap is left: a claimant that dies between
+`extract`'s commit and the progress write after it. No column was added; `jobs.title` was there.
+
 `displayJob(job, now)` is **pure, with the clock injected** — a mapper that reads the wall clock is a
 mapper nothing can test — and returns one of eight states: `waiting`, `working`, `slow`, `stopping`,
 `interrupted`, `failed`, `stopped`, `done`. Four things about it are decisions rather than details.
