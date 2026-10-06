@@ -150,7 +150,7 @@ export function answerOpening(text: string): string | undefined {
  * How much of an answer is parsed to find its opening. The parser's cost is
  * the whole string's length, and the summaries route pays it once per thread
  * on every fetch: 18 ms for a 4 KB answer on the box, measured in
- * docs/plans/261006f-code-review-sol.md § F8.
+ * docs/plans/261006f-chat-mark-code-review-sol.md § F8.
  */
 const HEAD_CHARS = 1000;
 

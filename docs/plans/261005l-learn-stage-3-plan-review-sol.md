@@ -1,0 +1,13 @@
+VERDICT: build with changes
+
+1. **P1 — Wrong legacy-link expectation.** `docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md:397` says `?mode=remember&remember=quiz` opens Quiz. It opens Learn at **Recall**: `src/web/params.ts:1306-1310`, `tests/learn-name.test.ts:61-64`. Change the row to expect Recall; separately check `?mode=learn&learn=quiz` opens Quiz. The exact *From Learn › Recall* and fourth-starter wording are correct (`src/web/thread-source.ts:114`, `src/web/ChatPanel.tsx:1841`).
+
+2. **P2 — Use experimental switch ON for both pictures.** The Learn caption explicitly advertises Explore (`src/web/FeaturesPage.tsx:306-312`), and `/features` deliberately pictures other experimental functionality, including Diagram and Referee (`src/web/FeaturesPage.tsx:158-164,334-340`). This page documents available features, not merely default controls. Change `docs/plans/…md:366-373` to four chips, with Explore visible.
+
+3. **P1 — One updated feedback note cannot finish a three-part report.** `docs/plans/…md:409-410` asks for one note, but `scripts/feedback-endings.ts:117-130` requires one note per part; fewer than three remains `awaiting`. Add notes for the identifier-renaming part and Stage 3, each naming `spya-mvmpks` with `parts: 3`, update the existing note’s now-false queued/URL claims (`docs/user-feedback/261005_0748-remember-becomes-learn-and-explore-covers-critiques.md:21-36`), then regenerate endings.
+
+4. **P2 — “Done is” omits the still-unmet full-suite gate.** Stage 1 requires a full run through `scripts/tmux-job.ts` (`docs/plans/…md:107-110`), and the plan records that it was never rerun green after merging (`:327-329`). Replace “npm test on what was touched” at `:407` with the named tests plus a full suite through `scripts/tmux-job.ts`.
+
+5. **P3 — Wrong test filename.** `docs/plans/…md:407` names `tests/features-page-modes.test.ts`; the file is `tests/features-page-modes.test.tsx:1`. Correct the extension.
+
+6. **P3 — Shorter portraits are supported, with two limits.** Per-shot dimensions are intentional (`src/web/shots.ts:5-11`); Gallery imposes no equal height (`src/web/SiteBits.tsx:451-486`), and an existing row already mixes 982px and 1469px portraits (`src/web/shots.ts:111-123`). A shorter `quiz.png` must still exceed 400px and 20KB (`tests/landing-assets.test.ts:144-152`) and have its exact new dimensions recorded (`:155-163`). No layout change is needed, but retain the 1440/390 visual check; captions will intentionally remain ragged.

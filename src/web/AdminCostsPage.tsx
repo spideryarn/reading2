@@ -1036,7 +1036,7 @@ const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; show: 
   {
     id: "timedOut",
     header: "Timed out",
-    hint: "Attempts stopped by a recognised deadline, which can cap one call, a turn or a processing step, and how many the provider had already accepted. This does not establish how long the attempt ran. Not counted as died part-way",
+    hint: "Attempts stopped by a recognised deadline, which can cap one call, a turn, a processing step or a whole pipeline job, and how many the provider had already accepted. This does not establish how long the attempt ran. Not counted as died part-way",
     show: (g) => (g.timedOut === null ? null : stoppedFigure(g.timedOut)),
   },
   {

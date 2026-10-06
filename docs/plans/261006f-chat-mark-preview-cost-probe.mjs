@@ -1,4 +1,4 @@
-/** Run with: node --import tsx docs/plans/261006f-preview-cost-probe.mjs
+/** Run with: node --import tsx docs/plans/261006f-chat-mark-preview-cost-probe.mjs
  * Synthetic timing evidence for the 261006f code review, not a performance gate.
  * Every sample recomputes an opening; the suffix contains many markdown blocks.
  */

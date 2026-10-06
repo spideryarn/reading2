@@ -473,6 +473,15 @@ describe("failures and retries", () => {
       });
     });
 
+    /* What live conversation writes (src/live.ts): a class, and no phase,
+       because the browser does not report how far the response had got. */
+    it("says zero, not not measured, where every stop is an ordinary stop with no phase", () => {
+      const counts = failureCountsOf([stop("abort", null, 2)]);
+      expect(counts).toMatchObject({ ...NO_STOPS, stopsClassified: 2 });
+      expect(counts.stalled).not.toBeNull();
+      expect(counts.timedOut).not.toBeNull();
+    });
+
     it("does not count an error that happens to carry one of the three classes", () => {
       expect(failureCountsOf([row({ ...partWay, failureClass: "stall", calls: 1 })])).toMatchObject({
         stalled: { attempts: 0, partWay: 0 },
@@ -564,8 +573,15 @@ describe("failures and retries", () => {
     it("says what a stall and a timeout are, and what these counts miss", () => {
       const notes = FAILURE_NOTES.join(" ");
       expect(notes).not.toContain("Stalls are not measured");
-      expect(notes).toContain("live conversation");
-      expect(notes).toContain("whole job");
+      /* Plan 261006f: live conversation's stops say they are ordinary stops,
+         and the job's deadline is a deadline. What is still missed is the live
+         response that left no row. */
+      expect(notes).not.toContain("neither does live conversation");
+      expect(notes).toContain("Live conversation's recorded stops are ordinary stops");
+      expect(notes).toContain("unfinished response without a terminal usage report has no response row");
+      expect(notes).toContain("a processing step or a whole pipeline job");
+      expect(notes).not.toContain("is not recognised");
+      expect(FAILURE_DEFINITIONS).toContain("a processing step or a whole pipeline job");
       expect(notes).toContain("if the provider had already sent an error, the row keeps that error");
       expect(FAILURE_DEFINITIONS).toContain("stalled");
       expect(FAILURE_DEFINITIONS).toContain("timed out");

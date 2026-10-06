@@ -513,6 +513,24 @@ describe("the row it builds", () => {
       expect(row.computedCostNanos).toBeGreaterThan(0);
     }
   });
+
+  /* Plan docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md. */
+  it("says a stopped response was an ordinary stop, and says nothing on any other row", () => {
+    for (const status of ["cancelled", "incomplete"] as const) {
+      const row = accept(response({ status }));
+      expect(row.outcome).toBe("aborted");
+      expect([status, row.failureClass]).toEqual([status, "abort"]);
+      /* The browser does not report how far the response had got. */
+      expect(row.failurePhase).toBeNull();
+      expect(row.failureStatus).toBeNull();
+    }
+    for (const status of ["completed", "failed"] as const) {
+      const row = accept(response({ status }));
+      expect([status, row.failureClass, row.failurePhase, row.failureStatus]).toEqual([status, null, null, null]);
+    }
+    const heard = accept(transcription());
+    expect([heard.failureClass, heard.failurePhase, heard.failureStatus]).toEqual([null, null, null]);
+  });
 });
 
 /* ------------------------------------- a split that cannot be priced -- */

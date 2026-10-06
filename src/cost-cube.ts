@@ -498,9 +498,10 @@ export interface FailureCounts {
    * `diedPartWay`, which is an **error**; one row is never both.
    *
    * Null when the rows hold stops and none of them says who stopped it: an
-   * `aborted` row with no class is an older row or the realtime wire's
-   * (src/live.ts), and could be a stall. With no stopped row at all it is a
-   * zero, because nothing was stopped by anyone. Plan 261006d.
+   * `aborted` row with no class is an older row (the realtime wire's among
+   * them, until plan 261006f gave its stops the class `abort`), and could be
+   * a stall. With no stopped row at all it is a zero, because nothing was
+   * stopped by anyone. Plan 261006d.
    */
   stalled: Stopped | null;
   /** Stopped by a deadline of ours: an `aborted` row classed `deadline`. Null as `stalled` is. */
@@ -517,7 +518,11 @@ export interface Stopped {
   partWay: number;
 }
 
-/** The two recognised clock classes; `abort` includes unrecognised clocks such as the job deadline. */
+/**
+ * The two clock classes. The pipeline's whole-job deadline is a `deadline`
+ * (plan 261006f); `abort` is everything else, and would include a clock of
+ * ours that did not say what it was.
+ */
 const OUR_CLOCK = { stall: "stalled", deadline: "timedOut" } as const;
 const isOurClock = (failureClass: string | null): failureClass is keyof typeof OUR_CLOCK =>
   failureClass === "stall" || failureClass === "deadline";
@@ -672,8 +677,9 @@ type DimValue = { key: string; label: string };
 export const FAILURE_NOTES: readonly string[] = [
   "These are counts, not rates. Each row of the ledger is one attempt, not one call: a call that was retried once is two rows.",
   "Retries and give-ups are counted only on attempts our retry loop numbered. Part-way deaths are counted on any failed attempt that recorded where it failed, numbered or not. Where nothing shows a figure was being measured it reads not measured, which is not zero: that covers every call made before this was recorded.",
-  "Stalls and timeouts are counted only on stopped attempts that say who stopped them. Attempts from before this was recorded do not say, and neither does live conversation: where those are the only stops, the figure reads not measured, and where there are both, they are counted beside it as stops not classified.",
-  "A timeout, which the causes table calls a deadline, means a recognised deadline expired while the attempt was active. It can cap one call, a turn or a processing step, so it does not establish how long that attempt ran. The pipeline's limit on a whole job is not recognised: when it stops a call, the attempt is recorded as an ordinary stop, the same as a reader pressing Stop, and is in neither count.",
+  "Stalls and timeouts are counted only on stopped attempts that say who stopped them. Attempts from before this was recorded do not say: where those are the only stops, the figure reads not measured, and where there are both, they are counted beside it as stops not classified.",
+  "A timeout, which the causes table calls a deadline, means a recognised deadline expired while the attempt was active. It can cap one call, a turn, a processing step or a whole pipeline job, so it does not establish how long that attempt ran.",
+  "Live conversation's recorded stops are ordinary stops: the reader talking over the model, or the reply hitting its length cap or a content filter. An unfinished response without a terminal usage report has no response row. Our time limits and a lost connection can close a conversation without that report.",
   "A stopped call is not always recorded as a stop: if the provider had already sent an error, the row keeps that error.",
   "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
 ];
@@ -685,7 +691,7 @@ export const FAILURE_DEFINITIONS =
   "An attempt died part-way when it failed after the provider had accepted it, which can be before any of the answer arrived. " +
   "We do not ask again after that point, though the PDF reader's own loop may. " +
   "An attempt stalled when we stopped it because the provider had sent nothing for too long, and timed out when a recognised deadline expired while it was active. " +
-  "That deadline can cap one call, a turn or a processing step; it does not establish how long that attempt ran. " +
+  "That deadline can cap one call, a turn, a processing step or a whole pipeline job; it does not establish how long that attempt ran. " +
   "Each is shown with how many were part-way, and neither is counted as died part-way.";
 
 /** What a null `FailureCounts` figure is drawn as. */

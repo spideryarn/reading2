@@ -92,7 +92,7 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
 ## Log
 
 - 2026-10-06 — **GPT Sol's plan review: approve with changes**
-  ([261006f-plan-review-sol.md](261006f-plan-review-sol.md)). All five taken:
+  ([261006f-chat-mark-plan-review-sol.md](261006f-chat-mark-plan-review-sol.md)). All five taken:
   - F1 (P1): a line with no words is skipped *inside* a paragraph too, not only between blocks.
     `[spya-k3m9qt]\nThe answer is yes.` is one paragraph, and would have said *No answer yet*.
   - F2: a code block gives its own characters.
@@ -112,7 +112,7 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
   `tests/glossary-and-citations-ask-in-chat.test.tsx`); left alone, since neither asserts on
   markdown.
 - 2026-10-06 — **GPT Sol's code review: approve with changes**
-  ([261006f-code-review-sol.md](261006f-code-review-sol.md)). It fixed F6, F7 and F9 itself, red
+  ([261006f-chat-mark-code-review-sol.md](261006f-chat-mark-code-review-sol.md)). It fixed F6, F7 and F9 itself, red
   first; I read the diff and kept it. Its postmortem for the two classes is
   [261006j](../postmortems/261006j-flattening-destroys-the-context-a-later-filter-needs.md).
   - F6 (P1): block references were stripped *after* the tree was flattened to a string, so a link's
@@ -125,7 +125,7 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
     `answerOpening` parses only the head, the answer up to the first blank line past 1,000
     characters, and reads the whole answer only when the head has no words. The probe is flat
     at about 3 ms from 4 KB to 512 KB afterwards
-    ([261006f-preview-cost-probe.mjs](261006f-preview-cost-probe.mjs)). **The price, pinned by a
+    ([261006f-chat-mark-preview-cost-probe.mjs](261006f-chat-mark-preview-cost-probe.mjs)). **The price, pinned by a
     test**: a reference link in the opening whose definition is past the cut shows as
     `[Label][ref]`. Passed over: caching or storing the line, which needs a column and an
     invalidation rule for one line of text.
@@ -142,7 +142,7 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
   - The collapsed card's line read the same, at 1440 only. **Not checked at 820 and 390**: the
     Collapse control exists only for a chat opened beside a Marginalia note, which a mark never
     opens, and the 820 attempt found no control.
-  - Screenshots: `261006f-shot-*.png`.
+  - Screenshots: `261006f-chat-mark-shot-*.png`.
 - 2026-10-06 — **the full suite** (71 minutes on a busy box): 38,301 passed, 6 tests and 7 files
   failed. **Two were this work's**, fixed: `src/answer-opening.ts` had to be named on the two
   lists that guard what the browser may import (`tests/client-imports.test.ts`) and where a `$1`
