@@ -18,15 +18,18 @@ into one question for Greg.
 
 ## The short version
 
-- **No live defect a reader hits was found** (no Tier 0). The fifth sweep's twenty-two buildable
-  clusters have all landed; what it left is small.
+- **One live defect, found by the plan's reviewer, not by the sweep** (Tier 0, small): the citation
+  chip renderer and `citableText` disagree about nesting depth, so at eleven nested blockquotes one
+  draws a chip the other says is not there. It is fixed first, in S5. The fifth sweep's twenty-two
+  buildable clusters have all landed; what it left is small.
 - **What three days and 856 commits added is mostly residue, not rot:** machinery for the deleted
   filesystem store that outlived it (about 1,600 lines of scripts and test setup), comments that
   still describe that store, the gist columns and a stylesheet that is now 73 lines of `@import`,
   dead lint suppressions, and tests that wait on a clock or carry guards the types could delete.
 - **One extraction is worth doing:** the `revision_blocks` row → `Block` mapper exists five times.
-- **Six clusters, S1–S6, are built in this run.** Ten items are Greg's or the Overseer's, in
-  § For Greg.
+- **Seven clusters, S1–S7, are built in this run** (S7, the deploy's robots.txt check, was moved
+  out of the decision queue by the review). Eight items are Greg's or the Overseer's, in § For Greg.
+- **§ What the review changed is binding on the builders** wherever it and a cluster's text differ.
 
 ## How it was run, and where it was scaled down
 
@@ -273,10 +276,7 @@ question when the clusters have landed.
    `git-resolve-merge-conflicts.md` have said "resolve it yourself" since 2026-09-10. It also lacks
    "merge `origin/dev` on waking". Carried from the fifth sweep's item 7. Rule-doc wording, so it
    needs a before and after. *Recommend:* yes.
-2. **Three tutorials describe removed machinery:** `import-pipeline-and-database.html` (the
-   `SPIDERYARN_STORE` flag), `architecture.html` (`hierarchy`, a stale mode list),
-   `revisions-and-the-schema.html`. *Recommend:* a dated banner at the top of each saying what has
-   changed since, rather than a rewrite or a deletion.
+2. *(Moved to S2 by the review: dated banners on the three stale tutorials.)*
 3. **`--danger` and `--ink-faintest` are used and never defined**, so four rules always take their
    fallback; chat's tool errors draw in the brand orange. Defining a red is a small change a reader
    would see. *Recommend:* define `--danger` from the existing colour scale and delete the
@@ -304,7 +304,8 @@ question when the clusters have landed.
    99 finished runs failed in `test` and nothing says which file; a capped `failedFiles` list would
    make "red for hours or a flake?" answerable. It adds a field to a record shape the dashboard
    reads. *Recommend:* yes; queued for the Overseer rather than built here.
-10. **For the Overseer — the deploy's robots.txt check is the weak one.** `scripts/deploy.ts`
+10. *(Moved to cluster S7 by the review; the text is kept as the cluster's description.)*
+    **The deploy's robots.txt check is the weak one.** `scripts/deploy.ts`
     § `verifyRobots` uses a per-line regex (`hasDisallowAll`); postmortem 261005j and the function's
     own comment say the group-aware `judgeRobotsTxt` in `scripts/check-public-shell.ts` is the real
     check, and "a deploy does not run it". Swapping it deletes `hasDisallowAll` and its six tests.
@@ -349,9 +350,70 @@ for the *name* of the thing removed, in comments and config as well as code, and
 [rename-or-move.md](../reusable/rename-or-move.md) already says that for a rename. The same sweep
 after a removal is what would have caught all of S1 and most of S2.
 
+## What the review changed
+
+[GPT Sol's review](261006j-sixth-codebase-sweep-umbrella-review-sol.md), read-only, verdict **ready
+with these fixes**. Ten findings, all accepted; none overruled. Where this section and a cluster's
+text above differ, this section wins.
+
+- **U1, S1.** `tests/store-migration-registry.test.ts` reads the witness JSON and executes the
+  candidates script, and the registry itself is live (it checks today's lane assignments). So: the
+  witness assertions are retired explicitly and the lane checks kept; the witness files go only once
+  nothing live reads them. **`scripts/backfill-raw-manifests.ts` stays**: `raw.json` still has
+  writers (`src/store/export.ts`, `src/fetch.ts`) and a reader. **`ReaderPlan`'s `off` arm goes**:
+  no request path constructs it (`readBillingSummary`'s branches never do; `BILLING_OFF` exists only
+  in a false comment in `src/billing/summary.ts`, corrected too). The builder still re-runs that
+  grep before deleting.
+- **U2, file sets.** `knip.jsonc` belongs to S1 alone (S2 does not touch it). The six
+  `noUnsafeOptionalChaining` fixes (`tests/blocks-baseline.test.ts`,
+  `tests/collect-pdf-figures.test.ts`, `tests/fleet-composer-envelopes.test.tsx`) belong to S4 alone.
+  The `styles.css §` hits in `tests/` are 18 lines, not three; `tests/doc-links.test.ts`'s is a
+  parser input and is left alone. S2 lands before S4 starts, so the two never hold a test file at
+  once.
+- **U3, S3.** The eight duplicate declarations in `annotations.css` are deliberate fallbacks (a
+  plain `content` for browsers without alt-text syntax, a second for accessible wording). **They are
+  not removed.** They get a `biome-ignore` with that reason, or are left as they are.
+- **U4, S3.** Lint is not a gate (`scripts/check.ts` runs it with `gate: false`), so "promote to
+  error" gated nothing, and `suppressions/unused` is a diagnostic category with no rule setting.
+  **S3 clears and does not gate**: the dead suppressions, the two ESLint comments, the fixture
+  exclusion, the trivially fixable small counts, the two `biome.jsonc` lines, the four unlisted
+  dependencies. A new selective gate is added machinery and is not built.
+- **U5, S4.** `pgReady` gets two public overload signatures (`keepPool: true` → a certain pool; the
+  general options → as now), with compile-time cases for true, omitted and a plain boolean. The
+  compiler does not report every redundant guard, and the 179 grep hits include unrelated pools
+  (`tests/store-transaction-isolation.test.ts`): **only guards on a binding that verifiably came
+  from the helper are removed.** `migration-reconciliations.test.ts` keeps its local-only mutation
+  protection.
+- **U6, S4.** `tests/fetch.test.ts`'s absolute budget is a deliberate defence: its comment says a
+  linear implementation still blocked the server for seconds, so a ratio alone would pass the
+  regression it exists for. **Not changed.**
+- **U7, S5.** The mapper extraction earns its keep, narrower than written: the copies differ in
+  `id` versus `blockId`, in what an empty result becomes, and in whether HTML is sanitised, and
+  those differences stay at the call sites. The shared part is **a public-safe mapper, plus an
+  owner wrapper that adds `note`** — not a boolean argument, because `public-reader.ts` expressly
+  refuses privacy decisions hidden in arguments. The SELECT lists still need separate edits, so the
+  claim is "one mapper to edit", not "one edit".
+- **U8, S5, Tier 0.** Reproduced with React SSR: for `"> ".repeat(11) + "spya-k3m9qt"` the renderer
+  draws a citation chip and `citableText` finds none (depths 10 and 12 agree). `src/citable.ts`
+  counts AST levels; `src/web/Cited.tsx` counts block nesting. **A boundary parity test, red first,
+  and a fix to the traversal, before any constant is shared** — equal constants cannot repair it.
+  Small in practice (eleven nested blockquotes), but it is the "kept in step by a comment" pair
+  having drifted, which is the evidence that matters.
+- **U9, S6.** `--sidebar` itself is live (it feeds `--panel` in `tokens.css`) and stays; so does
+  `.tip-soon-tap`, grouped with a dead selector. The `design-css-overview.md` counts are dated
+  historical measurements with their command beside them, not false claims: **left alone.**
+- **U10.** The robots.txt check is a reproduced defect (`hasDisallowAll` passes a Twitterbot-only
+  restriction beside an unrestricted `User-agent: *`), so it is built now as **S7**; only running a
+  deploy is the Overseer's. Dated banners on the three stale tutorials are factual corrections and
+  join S2.
+
+Waves, after the review: **1** S1 + S2 · **2** S3 + S4 · **3** S5 + S6 · **4** S7.
+
 ## Review status
 
-- This umbrella: to GPT Sol, read-only, before any cluster is built. (Filled in below.)
+- This umbrella, round 1: [GPT Sol](261006j-sixth-codebase-sweep-umbrella-review-sol.md),
+  read-only, **ready with these fixes**; all ten applied above. No second round: the fixes narrow
+  the work and each cluster's code gets its own review.
 
 ## What landed
 
