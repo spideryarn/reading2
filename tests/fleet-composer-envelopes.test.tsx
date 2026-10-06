@@ -322,7 +322,7 @@ describe("the Overseer card", () => {
     expect(envelopes[1]).toBe(envelopes[0]);
     expect(envelopes[1]?.requestId).toBe(envelopes[0]?.requestId);
     expect(envelopes[1]?.json).toBe(envelopes[0]?.json);
-    expect((envelopes[1]?.ticket as { text: string }).text).toBe("hold the queue");
+    expect((envelopes[1]?.ticket as { text: string } | undefined)?.text).toBe("hold the queue");
     // The edit made while it was unconfirmed survives, on screen and in storage.
     expect(box().value).toBe("hold the queue, and tell me when");
     expect(window.sessionStorage.getItem(KEY)).toBe("hold the queue, and tell me when");
@@ -472,7 +472,7 @@ describe.each(["send", "queue"] as const)("the session composer's %s", (path) =>
     await press("Check");
     const [first, second] = s.envelopes();
     expect(second).toBe(first);
-    expect((second?.ticket as { text: string }).text).toBe("pull dev and carry on");
+    expect((second?.ticket as { text: string } | undefined)?.text).toBe("pull dev and carry on");
     expect(box().value).toBe("pull dev and carry on, then push");
     expect(window.sessionStorage.getItem(KEY)).toBe("pull dev and carry on, then push");
   });
@@ -590,7 +590,7 @@ describe("the broadcast", () => {
     await press("Check");
     expect(envelopes).toHaveLength(2);
     expect(envelopes[1]).toBe(envelopes[0]);
-    expect((envelopes[1]?.ticket as { text: string }).text).toBe("ease off for ten minutes");
+    expect((envelopes[1]?.ticket as { text: string } | undefined)?.text).toBe("ease off for ten minutes");
     expect(box().value).toBe("ease off for ten minutes, please");
     expect(window.sessionStorage.getItem(KEY)).toBe("ease off for ten minutes, please");
     expect(text()).toContain("Confirmed");
