@@ -60,7 +60,7 @@ import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun } from "./useAutoRun.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
@@ -501,10 +501,15 @@ export function useQuizRead(slug: string): QuizRead {
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
-     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with
+     every other artefact reader — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the Learn band still reaches the
+     questions in the prose. This read was hoisted two days before its three
+     siblings were given the line (e039d2acd) and was missed until 2026-10-06.
+     useCitations.ts § An always-mounted read is not an always-fresh read. */
+  useStepFinished(slug, "quiz", refresh);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including the band's own mount effect in

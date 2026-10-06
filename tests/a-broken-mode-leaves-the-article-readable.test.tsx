@@ -1873,3 +1873,64 @@ describe("a press that met any broken band is retired", () => {
     expect(jobPosts()).toEqual([]);
   });
 });
+
+/* ------------------------------------------- Debate's two views are two bands --
+
+   Reception and Claims are chosen by `?debate=`, for the owner and for a
+   visitor alike (DebateMode.tsx reads it in both `DebateBand` and
+   `VisitorDebateBand`). Until 2026-10-06 `ModeBoundary`'s reset key named five
+   sub-mode parameters by hand and Debate's, which arrived later (4b502174a),
+   was not among them: both views had one key, so a view that threw left its
+   fallback over the other when the reader went Back or Forward to it. A fresh
+   press could still clear it through activation, which is what hid this; a
+   history step is not a press.
+
+   The parameters and which reader they select a band for are a
+   `Record<ModeWithSubModes, …>` in ModeBoundary.tsx now, so a seventh mode
+   with sub-modes does not compile until it has been decided. */
+describe("a broken Debate view does not follow the reader to the other one", () => {
+  const debateView = () => new URLSearchParams(location.search).get("debate");
+
+  it("owner: Back from a broken Claims to Reception is a fresh band", async () => {
+    debateOn();
+    await open("?mode=debate");
+    expect(text(), "Reception opened working").not.toContain("[mode-render]");
+
+    probe.throwDebate = true;
+    await act(async () => history.pushState(null, "", "?mode=debate&debate=claims"));
+    await settle();
+    containedInsideDebate();
+
+    /* What threw was Claims; Reception would draw. No press is made. */
+    probe.throwDebate = false;
+    const renders = probe.debateRenders;
+    await act(async () => history.back());
+    for (let i = 0; i < 40 && debateView() !== null; i++) {
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 10));
+      });
+    }
+    await settle();
+
+    expect(modeInUrl()).toBe("debate");
+    expect(debateView(), "Back did not leave Claims").toBeNull();
+    expect(text(), "the broken Claims followed the reader to Reception").not.toContain("[mode-render]");
+    expect(probe.debateRenders, "the band was never tried again").toBeGreaterThan(renders);
+    expect(host.querySelector('.mode-band[aria-label="Debate"]'), "no Debate band").not.toBeNull();
+  });
+
+  it("visitor: the other view is a fresh band too", async () => {
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    probe.throwAt = "VisitorBand";
+    await open("?mode=debate&debate=claims");
+    containedInside("debate");
+
+    probe.throwAt = null;
+    await act(async () => history.pushState(null, "", "?mode=debate"));
+    await settle();
+
+    expect(modeInUrl()).toBe("debate");
+    expect(text(), "the broken view followed the visitor").not.toContain("[mode-render]");
+    expect(text()).toContain(PARAGRAPH);
+  });
+});

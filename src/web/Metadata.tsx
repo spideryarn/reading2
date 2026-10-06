@@ -284,6 +284,8 @@ import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
 import { downloadExport } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { ownLabel } from "./lib/own-label.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
@@ -451,8 +453,8 @@ function stageIcon(step: string): ComponentType<{ size?: number }> {
  *
  * Their loading rules, quoted in original-version/design-system.md#loading-states,
  * which are short and right: *"Under 1 second: No
- * loading indicator needed (distracting)"*. This request is a directory walk on
- * localhost, so it almost always beats the timer and the section simply appears
+ * loading indicator needed (distracting)"*. This request is a few database reads,
+ * so on localhost it almost always beats the timer and the section simply appears
  * filled in. A spinner that flashes for 200ms is worse than nothing — the
  * flicker reads as breakage.
  */
@@ -527,11 +529,24 @@ export function Metadata({
   /**
    * Which stages have run, and how many questions have been asked. Not in the
    * article payload and deliberately never will be: that payload is fetched on
-   * every page, and walking the filesystem for it would charge every reader for
-   * a page almost nobody opens.
+   * every page, and the extra database reads behind this would charge every
+   * reader for a page almost nobody opens.
    */
   const [provenance, setProvenance] = useState<ArticleMetadata | null>(null);
+  /**
+   * The failed read's sentence, already in a reader's words
+   * (`describeFetchFailure`), or null when the last read answered.
+   *
+   * **`provenanceFailed` below is the one test of "did it fail"**, and it is
+   * `!== null`, not truthiness. Until 2026-10-06 four consumers asked
+   * `Boolean(provenanceError)` and a fifth `=== null`, which disagree about an
+   * empty message: a failure four of them called "not failed" and the fifth
+   * called "not still asking" (postmortem 261005i's class, failure presence
+   * inferred from message contents).
+   * tests/metadata-failed-read-says-a-readers-sentence.test.tsx.
+   */
   const [provenanceError, setProvenanceError] = useState<string | null>(null);
+  const provenanceFailed = provenanceError !== null;
   /**
    * **Did that answer come off the network, or out of our own cupboard?**
    *
@@ -579,7 +594,10 @@ export function Metadata({
         setProvenanceError(null);
       } catch (e) {
         if (!current()) return;
-        setProvenanceError((e as Error).message);
+        /* Never the caught message itself: a dropped connection's is the
+           browser's ("Load failed" in Safari) and anything else's was not
+           written for a reader. docs/project/copy.md. */
+        setProvenanceError(describeFetchFailure(e as Error));
         setFailedReads((n) => n + 1);
       }
     },
@@ -615,8 +633,8 @@ export function Metadata({
    * The per-article half of the reader profile, as a draft.
    *
    * Seeded from `provenance` rather than fetched separately — that endpoint is
-   * already walking this article's directory, so one more read answers it for
-   * free, which is the same argument its `comments` count already makes.
+   * already reading this article's rows, so one more answers it for almost
+   * nothing, which is the same argument its `comments` count already makes.
    *
    * `saved === null` means "not seeded yet", so an empty box the reader has
    * cleared is tellable from one that has not loaded.
@@ -681,8 +699,8 @@ export function Metadata({
    * Note what this page does NOT fetch: the comments. See Dock.tsx — the
    * Questions button is a link back to the reading view here, so nothing on
    * this page needs them, and a visit should not cost a request for them. The
-   * *count* below comes from the metadata endpoint, which is already looking in
-   * this article's directory.
+   * *count* below comes from the metadata endpoint, which is already reading
+   * this article's rows.
    */
   const [at] = useQueryState("at", atParam);
 
@@ -751,7 +769,13 @@ export function Metadata({
    */
   const saveTags = useCallback(
     async (change: TagChange): Promise<string[]> => {
-      if (tagSaveInFlight.current) throw new Error("Still saving the last tag change — a moment.");
+      /* A `ReaderFacingError`, because it is a sentence for the reader and
+         `TagEditor` draws its failures through `describeFetchFailure`, which
+         gives a plain `Error` the page-fault sentence instead of its own
+         (tests/describe-fetch-failure.test.ts § every file that describes…). */
+      if (tagSaveInFlight.current) {
+        throw new ReaderFacingError("Still saving the last tag change — a moment.");
+      }
       tagSaveInFlight.current = true;
       try {
         const tags = await editArticleTags(slug, change);
@@ -772,7 +796,7 @@ export function Metadata({
     slug,
     provenance?.archivedAt,
     provenance !== null,
-    Boolean(provenanceError),
+    provenanceFailed,
   );
   /* In the app, one controller survives the switch between Reader and
      Metadata. The local controller keeps this page independently mountable in
@@ -1231,7 +1255,7 @@ export function Metadata({
           sharing={asArticleSharing(provenance?.sharing)}
           /* Still out, which is not the same as failed: the card has a
              sentence for each. */
-          checking={provenance === null && provenanceError === null}
+          checking={provenance === null && !provenanceFailed}
         />
 
         {/* ------------------------------------------------ 6. your reading --
@@ -1278,7 +1302,7 @@ export function Metadata({
                   Edit on your profile →
                 </Link>
               </div>
-              <AboutYou profile={provenance?.profile ?? null} failed={Boolean(provenanceError)} />
+              <AboutYou profile={provenance?.profile ?? null} failed={provenanceFailed} />
             </div>
           </div>
 
@@ -1286,7 +1310,7 @@ export function Metadata({
             <Row icon={MessageCircle} label="Comments">
               <Questions
                 count={provenance?.comments ?? null}
-                failed={Boolean(provenanceError)}
+                failed={provenanceFailed}
                 slow={slow}
                 href={readHref(slug, withPanel(carriedSearch(location.search), "questions"), "article")}
               />
@@ -1395,7 +1419,7 @@ export function Metadata({
             title={meta.title?.trim() || slug}
             known={provenance !== null}
             offline={provenanceOffline}
-            failed={Boolean(provenanceError)}
+            failed={provenanceFailed}
             fixture={showingFixture}
             /* Off the same fetch the sharing card reads, so the two cannot
                disagree about whether this article is public. **False where the
@@ -1673,11 +1697,11 @@ function RerunSection({
     <Section
       label="AI processing"
       keywords={`${AI_PROCESSING_KEYWORDS}${reset ? ` ${WHOLE_ARTICLE_KEYWORDS}` : ""}`}
-      collapsible={!error}
+      collapsible={error === null}
       keepMounted
-      aside={error ? null : aside}
+      aside={error !== null ? null : aside}
     >
-      {error && (
+      {error !== null && (
         <p
           className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
         >
@@ -1780,13 +1804,13 @@ function StageRecord({
   return (
     <>
       {/* Which stages have run, and the two that carry a model's name. A stage
-          counts as run only when *all* of its outputs are on disk —
+          counts as run only when *all* of its outputs are stored —
           src/pipeline.ts owns that rule and this page borrows it rather than
           restating it. */}
       <SubHeading>What we did to it</SubHeading>
       {/* Named, not "Loading…", and only after the timer — their loading
           rules on both counts (original-version/design-system.md#loading-states). */}
-      {!error && provenance === null && slow && (
+      {error === null && provenance === null && slow && (
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           Checking which files the pipeline wrote…
         </p>
@@ -2594,7 +2618,8 @@ function SubHeading({ children }: { children: ReactNode }) {
  *
  * On 2026-10-01 *What we did to it* left this section for *AI processing*,
  * beside the re-run rows — Greg, `spya-qgh5ta`: *"amalgamate "What we did to
- * it" and "Re-run AI processing""*. The error and `collapsible={!error}` went
+ * it" and "Re-run AI processing""*. The error and its `collapsible` rule
+ * (`error === null` since 2026-10-06, one test of "failed" for the page) went
  * with the rows (`RerunSection`, `StageRecord`), so this section, which is
  * now only identifiers and a fingerprint, is always collapsible.
  * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 5.
@@ -3277,9 +3302,12 @@ function DeletePermanently({
        * the server what is actually there. So a route that really did delete
        * and merely answered oddly still ends with the reader in their library —
        * by evidence rather than by assumption.
+       *
+       * A `ReaderFacingError` because the catch draws this sentence as it is
+       * when the article turns out to be still there.
        */
       if (answer.destroyed !== slug) {
-        throw new Error("The server did not confirm which article was deleted");
+        throw new ReaderFacingError("The server did not confirm which article was deleted");
       }
       await leave(reader);
       /* No `setBusy(false)`: the article is gone and we are on our way out.

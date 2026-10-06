@@ -330,11 +330,18 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is
-     not what this hook last thought it was. */
+     not what this hook last thought it was.
+
+     **The failure's message, not the failure**: `queue.failed` is a
+     `StepFailure` object, and interpolating it gave `[object Object]` for
+     every failure from 2026-09-03 to 2026-10-06, so a second refused start —
+     which makes no job, and so changes no id — did not re-ask. Two refusals in
+     the same words still do not; this is a trigger, not an event identity.
+     tests/illustrated-reasks-the-sketch-after-a-refusal.test.tsx. */
   const sketch = useSketchReadiness(
     slug,
     status === "none",
-    `${queue.failed ?? ""}\u0000${queue.job?.id ?? ""}`,
+    `${queue.failed?.message ?? ""}\u0000${queue.job?.id ?? ""}`,
   );
 
   /**

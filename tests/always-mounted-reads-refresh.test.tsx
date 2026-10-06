@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **An always-mounted read hears its own step finish** — Citations, Glossary
- * and Quotes, whose reads `OwnedReader` holds in every mode because the prose
- * marks them (and Marginalia shows the citations).
+ * **An always-mounted read hears its own step finish** — Citations, Glossary,
+ * Quotes and Quiz, whose reads `OwnedReader` holds in every mode because the
+ * prose marks them (and Marginalia shows the citations).
  *
  * Until 2026-10-02 every revalidation of these belonged to the band: a run
  * that finished after the reader had left the band reached neither the prose
@@ -10,6 +10,10 @@
  * now listens through `useStepFinished` (src/web/useStepJob.ts), quietly —
  * the same fix as Marginalia's (tests/marginalia-live-refresh.test.tsx, plan
  * 261002d), whose harness this is: the real `jobEngine` on a mocked network.
+ * Quiz had been hoisted two days before that fix and was left out of it, and
+ * out of `READS` below, until 2026-10-06. **`READS` is a hand list**: nothing
+ * derives "the artefact reads `OwnedReader` holds", so a fifth is added here
+ * by whoever hoists it.
  *
  * The main case leaves the band unmounted. The companion cases check the
  * duplicate-refresh cost with it open, and the read's subscription lifecycle.
@@ -43,6 +47,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
+const { useQuizRead } = await import("../src/web/useQuiz.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useStepJob } = await import("../src/web/useStepJob.js");
 
@@ -50,6 +55,7 @@ const READS = [
   ["citations", useCitationsRead],
   ["glossary", useGlossaryRead],
   ["quotes", useQuotesRead],
+  ["quiz", useQuizRead],
 ] as const;
 
 let host: HTMLDivElement;
