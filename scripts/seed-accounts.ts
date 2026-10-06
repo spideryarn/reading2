@@ -168,6 +168,22 @@ export function writeAdminEmail(home: string, email: string): void {
   renameSync(tmp, file);
 }
 
+/**
+ * **An account has just been proved to sign in: record what that proves.**
+ * For the administrator, its address (`writeAdminEmail`, and the reasons above).
+ * For anybody else, nothing.
+ *
+ * The seed used to call `writeAdminEmail` for every account that signs in,
+ * which was the same thing while there was one. Since 2026-10-06 there are two
+ * (`SECOND_READER_ID_LOCAL`), the second is proved last, and its address in
+ * that file would be what `db:admin-password` prints and what the browser
+ * signs in as: a reader `/api/admin/*` refuses. Here rather than in the
+ * script so it can be tested; that file does its work at import time.
+ */
+export function recordSignedIn(home: string, account: Pick<SeededAccount, "id" | "email">): void {
+  if (account.id === ADMIN_USER_ID_LOCAL) writeAdminEmail(home, account.email);
+}
+
 /** Does this look like a whole address, rather than a torn one? */
 export function looksLikeEmail(value: string): boolean {
   const at = value.indexOf("@");
@@ -294,7 +310,28 @@ export interface SeededAccount {
 }
 
 /**
- * The three local accounts, and the reason there are three.
+ * **A second local reader who signs in, and is nobody special.**
+ *
+ * Until 2026-10-06 the local stack had one account anybody could sign in as,
+ * so nothing that depends on *who* is reading could be driven in a browser:
+ * one reader replaced by another in the same profile, or a reader on somebody
+ * else's public article. This is the somebody else
+ * (docs/plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md).
+ *
+ * - **Not in `ADMIN_USER_IDS`**, and it must stay out: a check made as an
+ *   administrator is not a check of what a reader sees.
+ * - **The machine's one password** (`adminPasswordPath`). Still one secret per
+ *   machine and nothing in git; a second file would be a second thing to lose.
+ * - **Defined here, not in `src/`.** Nothing the app runs knows this account;
+ *   it is a fixture of the local stack, as this file is.
+ *
+ * The id is fixed, like every id below, and used nowhere else in the tree.
+ */
+export const SECOND_READER_ID_LOCAL = "00000000-0000-4000-8000-000000000004";
+export const SECOND_READER_EMAIL_LOCAL = "dev-reader-b@spideryarn.local";
+
+/**
+ * The four local accounts, and the reason there are four.
  *
  * They are different people and merging them would be a real change:
  *
@@ -312,6 +349,7 @@ export interface SeededAccount {
  *   by the page it was meant to open — a silent lockout that has already
  *   happened once in production (docs/postmortems/260828f-admin-id-was-the-local-one.md).
  *   Seeding the id `src/admin.ts` already names is what avoids it.
+ * - **The second reader** signs in too, and is an ordinary reader: § above.
  *
  * **Every id here is fixed rather than minted**, so it survives `npm run
  * db:reset`, is the same on a laptop and on the remote box, and can therefore be
@@ -360,6 +398,16 @@ export const SEEDED_ACCOUNTS: readonly SeededAccount[] = [
       "  above can sign in and will be refused the admin page with no explanation.\n" +
       "  Either delete it (check first that it owns no rows) and re-run this, or add its\n" +
       "  id to ADMIN_USER_IDS in src/admin.ts, which is a deliberate, reviewable edit.",
+  },
+  {
+    id: SECOND_READER_ID_LOCAL,
+    email: SECOND_READER_EMAIL_LOCAL,
+    signsIn: true,
+    why: "a second reader to sign in as, who is not an administrator",
+    mismatchAdvice:
+      "This account is a fixture for browser checks and owns nothing anybody needs.\n" +
+      "  Delete the account above (check first that it owns no rows) and re-run this.",
+    renamableFrom: [],
   },
 ];
 

@@ -137,7 +137,6 @@ import {
   ExternalLink,
   Globe,
   LoaderCircle,
-  MessageSquare,
   MessagesSquare,
   type LucideIcon,
   RotateCcw,
@@ -1443,7 +1442,7 @@ function Angles({ chats }: { chats: DebateClaimChats }) {
                   title={angleChatTip(chat.turns)}
                   onClick={() => chats.onOpen(chat.id)}
                 >
-                  <MessageSquare size={12} aria-hidden="true" />
+                  <MessagesSquare size={12} aria-hidden="true" />
                   {/* What the reader typed, so in the reader's face
                       (docs/project/fonts.md). The quotation marks are ours. */}
                   <span className="dbt-angle-quoted">

@@ -243,6 +243,7 @@ function ShutNote({
   line,
   lineVoice,
   children,
+  lineOnly = false,
 }: {
   kind: string;
   stamp: string;
@@ -257,6 +258,13 @@ function ShutNote({
   lineVoice: Voice;
   /** The open half; null when there is nothing more to show than the line. */
   children: ReactNode | null;
+  /** **The line is the whole of it, and may be cut**: a press only lets it
+      wrap. A button with no panel, so there is no empty box to hide and
+      nothing for `aria-controls` or `aria-expanded` to describe. Assistive
+      technology already receives the full, unclipped line; this state is
+      visual only. A lone comment that is only its words (report spya-a0wpv4,
+      plan 261006i). `children` is not read. */
+  lineOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -266,6 +274,21 @@ function ShutNote({
       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
     </span>
   );
+  if (lineOnly) {
+    return (
+      <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
+        <button
+          type="button"
+          className="marg-shut-button"
+          data-marg-tip={tip}
+          onClick={() => setOpen((was) => !was)}
+        >
+          <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+          {label}
+        </button>
+      </div>
+    );
+  }
   if (children === null) {
     return (
       <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
@@ -459,6 +482,14 @@ function CommentNote({
   ]
     .filter(Boolean)
     .join(" · ");
+  /* **A lone comment's words are its line**, and the line un-truncates when
+     it opens (marginalia.css), so the open half must not print them again:
+     report spya-a0wpv4, the comment's half of the class spya-f6dpj5 named for
+     a question. What is left decides the shape. An answer: a panel holding
+     it. Only words: no panel, and the press just lets the line wrap. Neither
+     (a wordless *Ask AI*): nothing to open, so plain text. Plan 261006i. */
+  const lone = only && only.as !== "question" ? only.comment : undefined;
+  const loneShape = lone === undefined || lone.answer ? "panel" : lone.body ? "line" : "text";
   return (
     <ShutNote
       kind="comment"
@@ -466,8 +497,9 @@ function CommentNote({
       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
       line={only ? entryLine(only) : count}
       lineVoice={only ? entryVoice(only) : "ui"}
+      lineOnly={loneShape === "line"}
     >
-      {items.map((e) =>
+      {loneShape === "text" ? null : items.map((e) =>
         e.as === "question" ? (
           <div key={`q:${e.asked.id}`} className="marg-open-item">
             {/* **Only among several**, as a comment's head is: that is how
@@ -498,7 +530,7 @@ function CommentNote({
                 <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
               </p>
             )}
-            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
+            {!only && e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
             {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
           </div>
         ),

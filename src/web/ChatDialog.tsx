@@ -59,7 +59,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, LoaderCircle, MessageSquare, Square, X } from "lucide-react";
+import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
 import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation } from "./ChatPanel.js";
@@ -1126,7 +1126,7 @@ export function ChatDialog({
           onClick={() => setShut(null)}
         >
           <span className="chat-card-head">
-            <MessageSquare size={12} aria-hidden="true" />
+            <MessagesSquare size={12} aria-hidden="true" />
             <span className="chat-dialog-title">{thread.title}</span>
             <ChevronDown size={14} aria-hidden="true" />
           </span>
@@ -1146,7 +1146,7 @@ export function ChatDialog({
       )}
       <header hidden={collapsed}>
         <span className="chat-dialog-label">
-          <MessageSquare size={12} aria-hidden="true" />
+          <MessagesSquare size={12} aria-hidden="true" />
           {target.kind === "draft" ? (
             <>Ask about {shortBlockId(target.anchor.blockId)}</>
           ) : (

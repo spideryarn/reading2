@@ -236,6 +236,11 @@ p.marg-shut {
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
+/* `display: grid` above outranks the browser's own `[hidden]` rule, so a shut
+   panel kept its padding. Said here so that shut means gone. Plan 261006i. */
+.marg-open[hidden] {
+  display: none;
+}
 .marg-open-item {
   display: grid;
   gap: 0.125rem;

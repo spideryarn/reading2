@@ -130,3 +130,34 @@ production change, none after). Things decided on the way:
 - **Not one convention yet.** Tweets, relations, Skim, Sketch and Arc still answer a plain 404 for
   "not made yet". The docs and the header's comment name them. Moving them is the same three edits
   each plus a name in the offline pattern, and the test now fails if one is done without the other.
+- **Browser check** (Sonnet subagent, Playwright, local `dev-admin`, 1440 / 820 / 390, a dev server
+  on this worktree at `a78132470`). On an article with none of the ten made, every view opened by
+  URL: **all ten URLs were seen requested at every width**, each `200`, body `null`,
+  `private, no-store`, each carrying the header. The seven bands showed their ordinary "nobody has …
+  yet" text and button, no alert and no spinner; no button was pressed. Without the header all ten
+  answer 404; an unknown slug is a 404 either way. On an article that has simple, ideas, glossary
+  and quotes made, those show their content. The only 4xx left on these loads were `sketch`, `skim`
+  and `relations`, three of the five reads not moved. **Not seen:** FAQ, timeline and debate with
+  content (the local article has none made); `?summary=thread`, which spends money on arrival; and
+  the screenshots were not looked at, the checks being on the page's text.
+- **After the review: `MalformedReply`** (`832b1d2b4`). `tests/describe-fetch-failure.test.ts` was
+  red on `dev` since 261006g's last fix and this stage made it redder: a file that describes its
+  failures through `describeFetchFailure` may not `throw new Error(`. The nine hooks now throw a
+  typed `MalformedReply` (`src/web/lib/reader-facing.ts`); the reader still gets `PAGE_FAULT` and
+  it is still reported. Red first. **No second family has read that commit**, and the browser
+  check ran before it.
+- **The full suite** (`readiness-run.ts test`, started on the merged tree before `MalformedReply`
+  and running while it was written): 1,740 files passed and 2 failed, 38,905 tests passed and 2
+  failed. Both failures were that commit's. `tests/describe-fetch-failure.test.ts` saw the plain
+  throws it replaced. `tests/feedback-payload.test.ts` named `MalformedReply` as an error name the
+  feedback vocabulary had not heard of; it is now on the list (`DIAGNOSTIC_ERROR_NAMES`,
+  `src/feedback-payload.ts`). Both files pass re-run on their own. **The suite was not run again
+  in full afterwards.**
+
+## At the end — 2026-10-06
+
+On `dev`. **Finished**, with these left open:
+
+- Tweets, relations, Skim, Sketch and Arc still answer 404 for "not made yet"; three of them show
+  as red lines on an ordinary load of some views.
+- `MalformedReply` and the vocabulary line have not been read by a second family.

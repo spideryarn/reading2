@@ -202,7 +202,7 @@ import type {
 const OWNER = { id: "owner-1", email: "owner@example.com" };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: OWNER, loading: false }),
+  useSession: () => ({ session: null, user: OWNER, loading: false, known: true }),
 }));
 
 const authListeners: ((event: string, session: unknown) => void)[] = [];

@@ -29,7 +29,7 @@
  * docs/project/mode.md has the rule.
  */
 import { Fragment, type ReactNode } from "react";
-import { MessageSquare, TriangleAlert, Sprout } from "lucide-react";
+import { MessagesSquare, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   type BlockId,
@@ -346,7 +346,7 @@ function Paragraph({
               aria-label={SIMPLE_ASK_CHAT}
               onClick={() => onAskChat(paragraph.text)}
             >
-              <MessageSquare size={12} aria-hidden="true" />
+              <MessagesSquare size={12} aria-hidden="true" />
             </Button>
           </Tooltip>
         )}

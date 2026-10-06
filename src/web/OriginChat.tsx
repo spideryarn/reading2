@@ -20,7 +20,7 @@
  *
  * Styles: styles/origin-chat.css. A caller's own sheet adds placement only.
  */
-import { MessageSquare, MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 
 import type { CitedWork, GlossaryEntry, ThreadSummary } from "../types.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
@@ -70,8 +70,11 @@ export function originChatTip(label: string, turns: number, answered: boolean): 
  * (docs/project/fonts.md, `voice-ai`). Absent while the newest question is
  * unanswered.
  *
- * Wears the floating chat's icon, because a press opens the conversation
- * beside the mode and not Chat's band (docs/project/icons.md).
+ * Wears Chat's two bubbles, as every chat does wherever it opens
+ * (docs/project/icons.md § A chat is two bubbles). Until 2026-10-06 it wore
+ * one, for a conversation opened beside the mode; Greg read the one bubble
+ * as a comment (spya-vj7wv0, plan 261006i). The count and the answer's
+ * first words are what tell it from *Ask in chat* below.
  *
  * `preventDefault` on the press: in Debate the mark sits in a `<summary>`,
  * and the press must not also fold the claim. It costs nothing elsewhere.
@@ -103,7 +106,7 @@ export function OriginChatMark({
           onOpen(chat.id);
         }}
       >
-        <MessageSquare size={12} aria-hidden="true" />
+        <MessagesSquare size={12} aria-hidden="true" />
         <span className="origin-chat-count">{chat.turns}</span>
         {chat.lastLine ? (
           <span className="origin-chat-line voice-ai">{chat.lastLine}</span>

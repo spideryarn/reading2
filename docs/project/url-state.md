@@ -680,10 +680,12 @@ easy to lose because the section *is* a node — hence the id of its first **blo
 
 Everything above is why that was nearly free. The state was already in one string; the only missing
 piece was something to keep a copy of it and put it back. So: **the query string is copied into
-`localStorage` under the slug as the reader moves, and put back when they open that article at an
-address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
-[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
+`localStorage` under the reader and the slug as the reader moves, and put back when that reader
+opens that article at an address that says nothing.** (Under the reader since 2026-10-06, because
+two readers can share a browser:
+[auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).) [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
+[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `App` above its auth branches
+([`src/web/App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
@@ -753,12 +755,14 @@ it.
 - **It does not override a later choice.** An empty view is stored as `""` rather than the key being
   removed, so going back to Plain at the top and reopening stays Plain. Only *no key* is a first
   open.
-- **"First open" means first open in this browser.** An article read on another device gets the
-  default once here. A bare Metadata visit does not use up the article's first open. The key is
-  written on every open of the reading view, so a visit while signed out, or on a
-  window too narrow for a band, uses the first open up: the default is not held over for a wider
-  window or a later sign-in. An article already in this browser that was last left in Plain at the
-  top had no key before this shipped, so it gets the default once.
+- **"First open" means this reader's first open in this browser.** An article read on another
+  device gets the default once here. A bare Metadata visit does not use up the article's first
+  open. The key is written on every open of the reading view, so a visit on a window too narrow
+  for a band uses the first open up: the default is not held over for a wider window. A visit
+  while signed out used it up too until 2026-10-06; the key is the reader's now, so that visit is
+  recorded for nobody and the reader's first open is still to come. An article already in this
+  browser that was last left in Plain at the top had no key before this shipped, so it gets the
+  default once.
 - **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
   experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
   switch on. The default still waits for the settings store's answer, because that is where

@@ -23,7 +23,7 @@ import type { Article } from "../src/types.js";
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 const authListeners: ((event: string, session: unknown) => void)[] = [];
