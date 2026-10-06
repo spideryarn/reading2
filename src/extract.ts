@@ -31,6 +31,7 @@ import { escapeHtml, plainTitle } from "./html.js";
 import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
+import { prepareLatexml } from "./latexml.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
@@ -752,6 +753,16 @@ function prepareDocument(
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
+  /* **A LaTeXML page's own shapes (arXiv's HTML, ar5iv), put into the shapes
+     the rest of the pipeline already reads**: an aligned equation into one
+     display formula, an SVG plot in an `<object>` into an `<img>`, a code
+     listing into a `<pre>`, a boxed passage out of the SVG that frames it.
+     Before `canonicaliseMaths`, and it has to be: the aligned equation is
+     joined from each cell's TeX annotation, which that pass consumes, and a
+     boxed passage's formulas sit under an `<svg>`, where that pass converts
+     nothing. After the note and callout recognisers, so neither sees a changed
+     input. src/latexml.ts. */
+  prepareLatexml(doc);
   /* **A formula's TeX source, kept as the one form maths is stored in** — before
      the sanitiser deletes the `<annotation>` holding it. After the recognisers
      that read the publisher's own shapes, so none of them sees a changed input
@@ -1280,7 +1291,12 @@ export async function runExtract(opts: {
     slug,
     meta,
     ownIds,
-    extractedHtml: debugPage({ ...article, title }),
+    /* **The byline chosen above, not Readability's**, so the line under the
+       title in the page and `meta.byline` name the same people. They differed
+       whenever the page's declared authors replaced Readability's guess, and
+       on a LaTeXML page the guess was a cited author or the word "and"
+       (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md). */
+    extractedHtml: debugPage({ ...article, title, byline: byline ?? article.byline }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,

@@ -504,6 +504,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* The database is ahead of this code, most likely mid-deploy. CHAT_BEING_UPDATED. */
+  "db-updating": "retry",
   /* Reading something back out of this app's own API, `rd-`. Not a model call,
      not the database as the reader meets it, and not a job — it is the *check*
      that failed, behind a page that is still on screen. Its own prefix for the
@@ -2615,6 +2617,26 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
     "it. It has been recorded. [db-failed]",
 };
 
+/**
+ * The database holds a kind of conversation this copy of the app has no name
+ * for: `UnknownStoredThreadKind` in src/types.ts, which carries this sentence
+ * and a 409.
+ *
+ * In practice that is the few minutes of a deploy that renames a kind, when the
+ * database has already been changed and the new code is not serving yet. The
+ * app refuses to read or change the article's conversations rather than treat
+ * one as an ordinary chat. "Most likely", because the same refusal would fire
+ * for a row that was simply wrong, and this must not be false then. `retry`: a
+ * reload after the deploy is the whole fix.
+ */
+export const CHAT_BEING_UPDATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app is most likely being updated right now, so it could not open this article's " +
+    "conversations, and it has changed nothing. Reloading the page in a minute or two and trying " +
+    "again usually works. [db-updating]",
+};
+
 /* ── Checking whether there is a newer one ────────────────────────────────── */
 
 /**
@@ -4339,9 +4361,12 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  * sharing card lists exactly what will go out before you turn it on"*, and it
  * is the inventory that keeps that true.
  */
-export function sharingConfirmBody(title: string): string {
+export function sharingConfirmBody(title: string | null): string {
+  /* No title: the add page asks while the article is still importing, and an
+     import may not have found one yet (`SHARE_AT_ADD_LABEL`, below). */
+  const named = title === null ? "this article" : `“${title}”`;
   return (
-    `This puts the whole extracted text of “${title}” where anyone can read it without ` +
+    `This puts the whole extracted text of ${named} where anyone can read it without ` +
     "signing in, and lists it publicly — so somebody who was never sent the link can find it."
   );
 }
@@ -4502,6 +4527,95 @@ export function sharingInFlight(to: "private" | "public"): string {
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
+
+/* ------------------------------------------- while an article is importing --
+   The same switch, offered on the add page before the article exists, and the
+   address the import will have. Greg, 2026-10-05 (spya-h7skj5, spya-e9t58e);
+   docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md.
+   Drawn by src/web/AddShare.tsx, `JobCard` (src/web/AddArticle.tsx) and
+   src/web/article/StillBeingAdded.tsx.
+
+   The confirmation is the Metadata card's own, word for word
+   (`SHARING_CONFIRM_TITLE`, `sharingConfirmBody`, `SHARING_RIGHTS_CONFIRM`).
+   What is written here is only what is true of an import and not of an
+   article. */
+
+/**
+ * The tip on a job card's copy-the-link button.
+ *
+ * **It promises the address of this import, not of the article for good**: a
+ * Retry can come back under another slug (`slugForRetry`, src/jobs.ts), and a
+ * failed or cancelled import leaves the address leading nowhere. GPT Sol's
+ * plan review, P2-6.
+ */
+export const IMPORT_LINK_COPY_TIP =
+  "Copy the link this import's article will have. It opens for you once the import has " +
+  "finished, and for anyone else only if you share it. If the import fails, the link leads " +
+  "nowhere.";
+
+/** The copy did not happen. The card has no box holding the link, so this is followed by the address itself. */
+export const IMPORT_LINK_COPY_FAILED = "Your browser would not allow the copy. The link is";
+
+/** The add page's third box. */
+export const SHARE_AT_ADD_LABEL = "Make it public";
+
+/** Under the label, before anything is pressed. Nothing goes out on the tick: it opens the confirmation. */
+export const SHARE_AT_ADD_WHAT =
+  "Anyone can read it without signing in, and it is listed publicly, once the import has " +
+  "finished. Ticking this shows what would be shared and asks you to confirm.";
+
+/**
+ * **The import adopted an article already on the shelf** (`freeSlug`,
+ * src/jobs.ts), which may have a glossary, notes and comments. The add page
+ * offers no switch over those: the Metadata card lists what that article
+ * really carries. GPT Sol's plan review, P2-2.
+ */
+export const SHARE_AT_ADD_ALREADY_AN_ARTICLE =
+  "This article is already on your shelf. Share it from Access & sharing on its Metadata page.";
+
+/** Confirmed, and not sent yet: the import has not made the article's row. */
+export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
+
+/**
+ * The switch is on. **"Once the import has finished"**, because a public
+ * article with nothing published is readable by nobody
+ * (src/store/public-reader.ts § `publicCurrentRevisionQuery`).
+ */
+export const SHARE_AT_ADD_ON =
+  "Public. Other people can read it at this link once the import has finished.";
+
+/** Five minutes of *not yet* while the job sat queued. `settle` sends it again at completion. */
+export const SHARE_AT_ADD_GAVE_UP =
+  "Not shared: the import had not started after five minutes. It will be tried again when the " +
+  "import finishes.";
+
+/**
+ * A write did not come back, and it may have taken effect:
+ * `SHARING_WRITE_UNCERTAIN` says why. That one says *reload the page*, which
+ * on the add page would start the import again.
+ */
+export const SHARE_AT_ADD_UNKNOWN =
+  "That did not come back, so we cannot say whether it took effect. Check Access & sharing on " +
+  "the article's Metadata page.";
+
+/**
+ * **The page was reloaded after this tab asked to make the article public,
+ * and the import has not published.** *Asked*, not *made*: the mark is
+ * written before the request and kept through an answer that never came, so
+ * that it took is not established (GPT Sol's fix check, F18). Nothing on the server can be asked about
+ * visibility until it has, so the box does not claim either state: it is
+ * drawn ticked, with this, and unticking sends the private write. The tab's
+ * own memory is a hint and not an answer (src/web/add-share.ts §
+ * `ShareIo.marks`). GPT Sol's code review, F10.
+ */
+export const SHARE_AT_ADD_RECALLED =
+  "You asked to make this public before this page was reloaded, and we cannot read back " +
+  "whether it is until the import has finished. Untick this to make it private.";
+
+/** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
+export const STILL_BEING_ADDED_HEADING = "Still being added";
+export const STILL_BEING_ADDED =
+  "This article is still being imported. It opens here when the import has finished.";
 
 /* ------------------------------------------------------ the private link --
    The owner's other control on the same card: a link that lets anyone who has

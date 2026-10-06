@@ -329,11 +329,18 @@ describe("the fetch step itself", () => {
   }
 
   it("asks arXiv for the paper when it is given the abstract page's address", async () => {
-    expect(await requestedBy("https://arxiv.org/abs/2608.13566?utm_source=x")).toEqual([PDF_ADDRESS]);
+    /* Both answer 404 here, so the step asks for the HTML and then for the PDF. */
+    expect(await requestedBy("https://arxiv.org/abs/2608.13566?utm_source=x")).toEqual([
+      "https://arxiv.org/html/2608.13566",
+      PDF_ADDRESS,
+    ]);
   });
 
   it("asks for a versioned paper by its version", async () => {
-    expect(await requestedBy("https://arxiv.org/html/2608.13566v2")).toEqual(["https://arxiv.org/pdf/2608.13566v2"]);
+    expect(await requestedBy("https://arxiv.org/pdf/2608.13566v2")).toEqual([
+      "https://arxiv.org/html/2608.13566v2",
+      "https://arxiv.org/pdf/2608.13566v2",
+    ]);
   });
 
   it("asks for any other address exactly as it was given", async () => {
@@ -382,8 +389,8 @@ describe("the fetch step itself", () => {
       ["https://proceedings.neurips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html", "neurips", 1],
       ["https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html", "cvf", 1],
       ["https://jmlr.org/papers/v15/srivastava14a.html", "jmlr", 1],
-      ["https://huggingface.co/papers/1706.03762", "arxiv", 1],
-      ["https://arxiv.org/abs/2608.13566", "arxiv", 1],
+      ["https://huggingface.co/papers/1706.03762", "arxiv", 2],
+      ["https://arxiv.org/abs/2608.13566", "arxiv", 2],
     ];
     for (const [url, source, tried] of cases) {
       it(`${source}: the card says the paper is missing, without a Retry, and the log names the source`, async () => {

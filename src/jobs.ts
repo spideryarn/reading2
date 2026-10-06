@@ -3638,6 +3638,16 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       if (
         holder !== undefined &&
         (holder.status === "queued" || holder.status === "running") &&
+        /* **Not one the reader has pressed Stop on.** It is still `running`
+           until its claimant unwinds, and then it ends `cancelled`: handed
+           back, the new request would end with it, and its slot would have
+           been given back for nothing. `jobs_active_work` leaves `cancelling`
+           rows out for exactly this (src/db/schema.ts § `jobs`), and so does
+           the store's own `sameWork` re-read; this look answers the same
+           question, so it carries the same exclusion. The request goes on to
+           the insert and becomes a job of its own behind the stopping one.
+           GPT Sol's F15, reviewing the built stage 1. */
+        holder.cancelling !== true &&
         sameWork(
           holder,
           names,

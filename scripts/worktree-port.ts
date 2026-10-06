@@ -37,7 +37,10 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+
+import { gitEnv } from "../tools/fleet/readiness-git.js";
 
 /**
  * Every port the Supabase redirect allow-list must name, low to high.
@@ -143,11 +146,20 @@ function lastPort(): number {
   return DEV_PORT_RANGE.first + DEV_PORT_RANGE.count - 1;
 }
 
-/** The shared `.git`, which is the primary's even when called from a worktree. */
+/**
+ * The shared `.git`, which is the primary's even when called from a worktree.
+ *
+ * **Asked of `cwd`, whatever the caller's environment says.** An inherited
+ * `GIT_DIR` — a git hook sets one — outranks the directory git is run in, so
+ * this and `gitDir` below would answer for some other checkout while every
+ * caller believes it asked about `cwd`. `gitEnv` drops those variables
+ * (GPT Sol, plan review of 261005n).
+ */
 export function gitCommonDir(cwd: string = process.cwd()): string {
   const out = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
     cwd,
     encoding: "utf8",
+    env: gitEnv(),
   }).trim();
   if (!out) throw new Error("git rev-parse --git-common-dir printed nothing");
   return out;
@@ -184,9 +196,64 @@ export function gitDir(cwd: string = process.cwd()): string {
   const out = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-dir"], {
     cwd,
     encoding: "utf8",
+    env: gitEnv(),
   }).trim();
   if (!out) throw new Error("git rev-parse --git-dir printed nothing");
   return out;
+}
+
+/**
+ * **Does this directory's `.git` belong to it?** Null when it does, else why not.
+ *
+ * A primary checkout has a `.git` directory. A linked worktree has a pointer
+ * file, and its administration directory points back at that exact file.
+ * Checking the backlink catches a **copied pointer** — what `cp -r` of a
+ * worktree leaves behind: `git rev-parse --show-toplevel` still names the copy,
+ * and the shared git directory is the right repository's, while HEAD, the index
+ * and every half-finished operation are the original's. Anything that goes on
+ * to read those and act on *this* directory needs to ask first.
+ *
+ * Written for the readiness runner (GPT Sol, 2026-09-09) and moved here on
+ * 2026-10-05, when `worktree:check --root` needed the same answer.
+ */
+export function worktreePointerProblem(root: string): string | null {
+  const dotGit = path.join(root, ".git");
+  let dotGitKind: ReturnType<typeof lstatSync>;
+  try {
+    dotGitKind = lstatSync(dotGit);
+  } catch (error) {
+    return `${dotGit} could not be inspected: ${(error as Error).message}`;
+  }
+  if (dotGitKind.isDirectory()) return null;
+  if (!dotGitKind.isFile()) {
+    return `${dotGit} is neither a repository directory nor a linked-worktree pointer`;
+  }
+  let pointerText: string;
+  try {
+    pointerText = readFileSync(dotGit, "utf8").trim();
+  } catch (error) {
+    return `${dotGit} could not be read: ${(error as Error).message}`;
+  }
+  const match = /^gitdir:\s*(.+)$/.exec(pointerText);
+  if (match?.[1] === undefined) {
+    return `${dotGit} is not a linked-worktree gitdir pointer`;
+  }
+  const adminText = path.resolve(root, match[1]);
+  try {
+    const admin = realpathSync(adminText);
+    const backlinkText = readFileSync(path.join(admin, "gitdir"), "utf8").trim();
+    if (backlinkText === "") {
+      return "linked-worktree backlink is empty";
+    }
+    const backlink = realpathSync(path.resolve(admin, backlinkText));
+    const pointer = realpathSync(dotGit);
+    if (backlink !== pointer) {
+      return `linked-worktree backlink resolves to ${backlink}, not ${pointer}`;
+    }
+  } catch (error) {
+    return `linked-worktree pointer or backlink could not be canonicalised: ${(error as Error).message}`;
+  }
+  return null;
 }
 
 /** `"5273–5303"` for a contiguous run, else `"5273, 5290, 5299"`. */

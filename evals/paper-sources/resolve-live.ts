@@ -20,7 +20,8 @@
  * docs/research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md,
  * plus `EXTRA` below: the shapes that measurement did not cover (GPT Sol's G9).
  *
- * Exit code 1 when any row does not end on a PDF with the key check true.
+ * Exit code 1 when any row does not end on the paper (a document one of its
+ * candidates promised) with the key check true.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -127,7 +128,10 @@ async function outcomeFor(key: string, candidates: readonly { url: string; expec
     const same = urlKey(doc.url) === key;
     return {
       tried,
-      ok: doc.kind === "pdf" && same,
+      /* The loop has already held the document to what its candidate promised
+         (arXiv's first candidate is its HTML since part 1 landed), so the kind
+         is not asked again here. */
+      ok: same,
       result: `${doc.kind} ${bytes} bytes; ended on ${doc.url}; urlKey(end) === key: ${same}`,
     };
   } catch (err) {

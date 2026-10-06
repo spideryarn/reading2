@@ -1,0 +1,26 @@
+{
+  "arm": "high-none-bookwholea",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-gdl-45mb-spya-cc9kr8",
+  "version": "simple-prompt/11",
+  "sourceSha256": "edea9e1d8f0e6889d7c80a2d29875c0a9e8b8c7cd4460d87580a96d33395365b",
+  "at": "2026-10-05T23:49:48.872Z",
+  "bodyWords": 47957,
+  "band": "book",
+  "bodyBlocks": 970,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "94e5545c2b197d48",
+  "systemsSha256": "f3dab4d1b7438cff0f6d5a16ddcac1dc4df7e1b9991ba1e2d59e69c879261d5b",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 60221,
+  "costUsd": null,
+  "tokens": {
+    "input": 6258,
+    "output": 4684,
+    "reasoning": null
+  },
+  "ok": false,
+  "error": "the model's \"brief\" answer is not valid JSON: it breaks at position 2050 of 6349 characters"
+}

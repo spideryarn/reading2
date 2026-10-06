@@ -451,15 +451,27 @@ Four things about it that are deliberate:
 - **It resolves in the step, from the job's own address**, so a retry and a refresh fetch the paper
   too.
 
-**arXiv was the first source, and today its one candidate is the PDF.** It recognises `abs`, `pdf`
+**arXiv's candidates are its HTML rendering, then its PDF.** It recognises `abs`, `pdf`
 (with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
 `browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
 arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
-credentials in the address is not arXiv. arXiv's HTML rendering is cheaper and, for most of a
-paper, better, and goes in front once the faults it shows in our extractor are fixed:
+credentials in the address is not arXiv.
+
+> run evals to figure out whether html or pdf is better. Then even if someone gives us a link like
+> this, automatically download the actual paper (either html or pdf as you decide).
+>
+> — Greg, 2026-10-05
+
+The HTML goes first because reading it is free and takes seconds, where a model reading the PDF
+costs about ten cents and two minutes, and because on the five papers compared it was the better
+article once stage 2 knew LaTeXML's shapes
+([content-extraction.md](content-extraction.md#a-latexml-page-arxivs-html), and
 [261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md)
-has the comparison and [the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md)
-the order.
+for the comparison). arXiv has no HTML for a paper its converter could not handle and answers 404,
+which is what sends the step on to the PDF: 4 of 36 recent papers probed. The HTML candidate's
+marker is `ltx_document`, LaTeXML's own class, so an error page served with a 200 is not taken for
+the paper. **A `pdf/` link gets the HTML too**: the choice is about the paper, not about which
+button on arXiv's page the link was copied from.
 
 **Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
 read off the pasted address. A source only discovered after a fetch (a `doi.org` link that
@@ -532,8 +544,10 @@ missing shows up as one source's name repeating. No address is logged. An addres
 recognises fails exactly as it did, with no such line.
 
 **The article's address is the one its text came from.** `doc.url` of the candidate that was used
-is what the store keeps (`final_url`), so an arXiv article's source link opens the PDF, not the
-abstract page. What makes that address and a freshly pasted `abs` link one article is `urlKey`,
+is what the store keeps (`final_url`), so an arXiv article's source link opens arXiv's HTML (or
+its PDF, when that is what was read), not the abstract page. Keeping the abstract page's address
+as well would need a second address column, which is a question for Greg in
+[the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md). What makes that address and a freshly pasted `abs` link one article is `urlKey`,
 which answers with the source's key for every shape
 ([ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)).
 

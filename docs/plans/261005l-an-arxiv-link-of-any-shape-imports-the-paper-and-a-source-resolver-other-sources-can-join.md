@@ -1,7 +1,7 @@
 # An arXiv link of any shape imports the paper, through a source resolver other sources can join
 
-Status as of 2026-10-05: **plan, revised after GPT Sol's two reviews, being built** — evidence: no
-`src/paper-sources.ts` in the tree. The eval it rests on is run and written up in
+Status as of 2026-10-06: **built and pushed to `dev`, both stages; not deployed** — evidence:
+`src/paper-sources.ts`, `src/latexml.ts` and their tests are in the tree. The eval it rests on is run and written up in
 [261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 1 of
@@ -274,7 +274,7 @@ address, not the route.
       eval already ran on this paper.
 - [x] Docs: `fetching.md` (a new section, and loose end 1 closed), `ingest-queue.md`,
       `architecture.md` § Shared code.
-- [ ] GPT Sol code review (write-capable, fixes inside the stage), gates, commit, push to `dev`.
+- [x] GPT Sol code review, gates, commit, push to `dev` (with stage 2; see § Reviews).
 
 **What landed, and what changed from the plan** (2026-10-05):
 
@@ -354,23 +354,72 @@ classes outside `article.ltx_document`, an extra authored sibling, a linked desc
       its text in a `foreignObject`, and its 58 words vanish. Trace where; keep the text and its
       links without loosening the sanitiser. If it cannot be done without touching the sanitiser's
       policy, it is recorded as a known loss and reported to Greg, not built.
-- [ ] **Fixes 1 to 6 gate the switch** (Sol's F13). If fix 4 cannot keep the table safely, or the
+- [x] **Fixes 1 to 6 gate the switch** (Sol's F13). If fix 4 cannot keep the table safely, or the
       cause of fault 6 is ours and cannot be repaired under the rules above, the HTML candidate is
       not added and the format choice goes back to Greg with the evidence. Fix 7 is the one
       exception, and only when repairing it would need the sanitiser's policy changed.
-- [ ] Re-run `evals/arxiv-html-vs-pdf/run.ts --html-only` on the five papers and re-judge all five
+      **Met:** 1 to 5 and 7 are built and tested; 6 is arXiv's, not ours.
+- [x] Re-run `evals/arxiv-html-vs-pdf/run.ts --html-only` on the five papers and re-judge all five
       HTML arms against the PDF arms already bought, same rubric. Record the result in 261005e.
-      The corpus fixtures' extraction is unchanged (`npm test`).
-- [ ] **Then** put the HTML candidate first, in the same commit as that evidence.
-- [ ] One real import of Greg's link, locally, end to end; a Sonnet subagent opens it in a browser
+      **Five of five for the HTML arm, no regression found.**
+- [x] **Then** put the HTML candidate first, in the same commit as that evidence.
+- [x] One real import of Greg's link, locally, end to end; a Sonnet subagent opens it in a browser
       and checks the figures load, the maths draws, the tables have their headers.
-- [ ] Docs: `content-extraction.md`, `maths.md`, `fetching.md`, and `/help` if it describes what
-      pasting a link does.
-- [ ] GPT Sol code review, gates, commit, push.
+      **Done 2026-10-06**, once the local database was current. `npm run ingest -- <the link>
+      --force`: `fetch 600 KB, arXiv HTML`, 283 blocks, 52 sections, 1 image stored. (Without
+      `--force` the address was adopted from the shelf and every step skipped, which is the dedup
+      working: the job stuck by the earlier database fault had since completed.) In the browser,
+      through Playwright on the box: the title and twelve authors in the masthead; the source link
+      `arxiv.org/html/2608.13566`; the boxed passage as prose; Tables 1 and 2 as real tables with
+      their header rows; Figure 1 drawn from our own asset store (2032 px wide); 164 formulas drawn
+      and no raw `\(` in the page; 18 code blocks with their indentation; the reference list, with
+      a citation's hover card and jump working; no script errors in the console.
+      **Seen there and left:** Table 1 is wider than the prose column and its right-hand columns
+      are clipped until it is expanded, as any wide table is; the line under the title now lists
+      all twelve authors before "~84 min read", above the affiliations paragraph; reference
+      entries carry arXiv's "Cited by" text.
+- [x] Docs: `content-extraction.md` (a new section), `fetching.md`. `maths.md` needed nothing: it
+      describes how TeX is drawn, and that did not change. `/help` does not describe what pasting
+      a link does.
+- [x] GPT Sol code review (write-capable): *ship it*, with nine fixes made in place.
+- [x] Gates, push. `npm test` after merging `origin/dev`, 2026-10-06: 37,220 passed, 5 failed in 6
+      files. Five files want a build this worktree has not got (`cold-start-lazy-imports`,
+      `pdf-bundle-trace`, and three fleet route tests, which say so). The sixth was this work:
+      `tests/client-imports.test.ts` keeps a list of the pure modules the browser may share, and
+      `src/paper-sources.ts` was not on it. Added; green. `npm run typecheck` clean.
+
+**What landed, and what changed from the plan** (2026-10-06):
+
+- **Fix 1** handles five measured shapes of `ltx_eqn_align` group (74 groups across the five
+  papers) and leaves five groups alone: four with several numbered rows, one with four formula
+  cells. A cell must draw as a formula by itself and carry no row or column break at its top
+  level; a break inside an environment the cell opens and closes (`cases`) is the author's and is
+  kept. Sol's review first refused every break (F20), which undid five correct groups in the maths
+  paper; the re-run showed it and the rule was narrowed.
+- **Fix 2** accepts the object anywhere beneath the figure, not only as its direct child: real
+  pages nest it in a layout cell.
+- **Fix 3** drops arXiv's own download link at the head of a listing (exactly that control, with
+  its `download` attribute) and leaves a listing whose lines hold maths, because a `<pre>` does
+  not draw maths.
+- **Fix 4 is not the plan's mechanism.** The table was already rescued by an existing rule; what
+  threw it away was `proseRetention` withdrawing the rescue. See content-extraction.md § A LaTeXML
+  page. This changes a check every web page passes through, narrowly: a run is re-read only inside
+  the one prose element that holds the table (Sol's F24 tightened it from the whole document).
+- **Fix 5** is a fallback inside `metaAuthors`, used only when the page declares no author
+  metadata at all (Sol's F25). And the line under the title in stage 2's page now prints the
+  chosen byline, for every web page: two judges saw the old guess still printed there.
+- **Fix 6: not ours.** arXiv's HTML holds an empty `ltx_missing_label`.
+- **Fix 7** lifts the words only when the SVG is nothing but a frame round one `foreignObject`
+  holding no element that fetches or runs (Sol's F28). The sanitiser is untouched.
+- **A LaTeXML page is recognised by where it was fetched from as well as by its markup** (Sol's
+  F27): arXiv's or ar5iv's `/html/`. The plan said "never by the address"; Sol showed that class
+  names alone let any page opt in to every rewrite. An uploaded copy of such a page is therefore
+  not rewritten.
 
 ### Stage: bookkeeping
 
-- [ ] `docs/user-feedback/261005_1912-….md`, `feedback-endings.ts`, `overseer-queue.ts done`.
+- [x] `docs/user-feedback/261005_1912-an-arxiv-link-imports-the-paper-not-the-abstract-page.md`,
+      `feedback-endings.ts`, `overseer-queue.ts done`.
 
 ## What the eval found
 
@@ -432,4 +481,31 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
   | F13 (P1) | HTML could be switched on with fix 4 or 6 unresolved | **Fixed**: fixes 1 to 6 gate the switch; all five papers are re-judged |
 
   Discovery on the plan is closed at two rounds.
-- Code review, GPT Sol: *(pending)*
+- **Code review of stage 1, GPT Sol, round 1** (`…-stage-1-code-review-sol.md`, on `0f63486a2`,
+  read-only because another agent was editing the tree): *do not ship*, three findings, all
+  confirmed against the code and fixed red-first in `4afa8d93f`.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F14 (P0) | An adopted request skipped the check on its holder whenever an article row existed, published or not: two jobs for one address on two slugs, both charged. Older than this work | **Fixed** by Sol's closure: only a published article waives the holder lock. A request whose holder ended over an unpublished article now gets the existing 409 and is not inserted |
+  | F15 (P1) | The hand-back returned a job being cancelled | **Fixed** |
+  | F16 (P1) | The resolver could return a slug longer than `isSlug` allows | **Fixed**: a bounded grammar and an explicit guard |
+
+- **Round 2, the fix check** (`…-stage-1-code-review-2-sol.md`, on `4afa8d93f`): F14 to F16
+  closed; the 409 judged acceptable as it stands; *ship it after fixing F17* (a three-digit
+  version bound refused `v1000`). Fixed in `8dc01b146`: nine digits.
+
+- **Code review of stage 2, GPT Sol** (`…-stage-2-code-review-sol.md`, on `8b66fa4fa`,
+  write-capable): *ship it*. It fixed F20 to F30 in place, each with a test; I read the diff and
+  re-ran the five papers.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F20 (P1) | A cell holding `&` or `\\` changed meaning once wrapped in `aligned` | Sol's fix kept, **then narrowed by me**: it refused breaks nested in the cell's own environments too, and five correct groups went back to fragments |
+  | F21 to F23 (P1) | A linked wrapper id lost; a listing's first link deleted without being arXiv's download control; pretty-printing whitespace becoming code | Sol's fixes kept |
+  | F24 (P1) | `textRoundTables` could hide a real prose loss by joining unrelated fragments | Sol's fix kept |
+  | F25, F26 (P1) | Title-block authors overrode real metadata; separator content silently dropped | Sol's fixes kept |
+  | F27 (P1) | Any page using LaTeXML's class names opted in to every rewrite | Sol's fix kept: the page must also come from arXiv's or ar5iv's `/html/` |
+  | F28 (P2) | Lifting a boxed passage could keep an iframe the sanitiser would have removed with the box | Sol's fix kept |
+  | F29, F30 (P3) | Two counts wrong in 261005e; a stale test title | Sol's fixes kept |
+  | F31 (P2) | The re-run's strongest claims rest on evidence not in the tree | **Said plainly in 261005e** rather than committing the papers' prose |

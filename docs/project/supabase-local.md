@@ -6,6 +6,15 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 `supabase link`, no remote credentials — the CLI mints its own keys and the database is a container.
 Set up 2026-08-25.
 
+**Anything this local database needs, an agent may do without asking** — repair the migration
+ledger, drop a stray column, reset it — because nothing in it is a reader's. Greg, 2026-10-06:
+
+> if it's just a local test database, you have my approval to do anything needed to that in future.
+> It's only production data where we need to be more careful.
+
+Production is the opposite case; [AGENTS.md § Real data belongs to the reader](../../AGENTS.md)
+still governs it. Say what you ran, and read its `Target:` line to be sure it was this one.
+
 The reading app still reads and writes JSON files under `data/`; this is the database the storage
 layer is being built against, and what [`npm run db:migrate`](../../scripts/db-migrate.ts) points
 at while the schema is being worked out. What goes *in* the database is

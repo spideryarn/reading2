@@ -39,7 +39,7 @@ What is built:
 | [`scripts/worktree-setup-bootstrap.mjs`](../../scripts/worktree-setup-bootstrap.mjs) | Where `npm run worktree:setup` actually starts, and **plain Node on purpose**: the script above needs `tsx` and a package, and a new tree on `/var/tmp` has no `node_modules` of its own nor an ancestor's to borrow, so until 2026-10-05 the command that installs dependencies failed with `tsx: not found` for want of them. With no finished install it runs `npm ci` first — **only in a linked worktree, never the primary** — then hands over, and [`worktree-deps.ts`](../../scripts/worktree-deps.ts) lets setup skip its own install when the merge did not move the lockfile. Do not import a package into it. |
 | [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
-| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
+| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree — or from the primary as `npm run worktree:check -- --root <tree>`, which refuses anything but the top of one of this repository's work trees: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
 | [`.claude/hooks/primary-checkout-notice.sh`](../../.claude/hooks/primary-checkout-notice.sh) | `SessionStart` hook: in the primary it prints one line telling the agent to call `EnterWorktree` before editing code; in a worktree it says nothing. A nudge, not a refusal — Greg, 2026-09-02: a SessionStart print, "but not a hard refusal". |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 
@@ -150,16 +150,21 @@ you *whose* worktree it is: a path under the external root has the right shape w
 it belongs to. That is why the dashboard's removal plan now begins with `git worktree list`, and
 why a third location is one edit there and one in the hook (a test holds the two defaults level).
 
-**One limit left in the dashboard's removal.** Its third step is `npm run worktree:check` inside the
-tree, which needs the tree's own dependencies. A tree on `/` that was never set up has none and
-nothing to borrow, so the plan stops there with `tsx: not found` — a refusal, with the tree intact.
-Remove that one with `npm run worktree:remove -- --branch <name>` from the primary, which runs the
-same check from the primary's code. (Measured 2026-10-05; with dependencies installed, the four steps
-removed a real tree under `/var/tmp`.)
+**The dashboard's removal runs the primary's copy of both scripts.** Its third step was
+`npm run worktree:check` inside the tree, which needs the tree's own dependencies; a tree on `/`
+that was never set up has none and nothing to borrow, so the plan stopped there with
+`tsx: not found`. It is now the primary's `tsx` running the primary's
+`scripts/worktree-check.ts --root <tree>`, the shape the fourth step already had
+([the plan](../plans/261005n-worktree-check-takes-a-root-and-the-readiness-runner-follows-the-var-tmp-root.md);
+measured 2026-10-05 on a real tree under `/var/tmp` with no `node_modules`).
 
 **Not followed: the readiness loop's runner.** `scripts/readiness-loop.ts` still makes its own
 worktree under `.claude/worktrees/`, on `/home`. One tree, and nothing is wrong with it but the disk
-it is on.
+it is on. **Changing the constant is not the fix**, and the plan above says why in full: the tree
+that exists has the `readiness-checks` branch checked out, so a second one at a new path cannot be
+added; the loop sets a new tree up with `npx tsx scripts/worktree-setup.ts`, which is the command
+that fails in a tree with no `node_modules` above it; and the loop reuses whatever is at its path
+without asking which branch it is on. Move it deliberately, with the loop stopped.
 
 ### Two things about `EnterWorktree` that have each cost an agent an hour
 
@@ -169,6 +174,12 @@ session's uncommitted work. So a task briefed as unstarted may be most of the wa
 branch may already be several commits along. **Look before you begin**: `git log --oneline
 origin/dev..HEAD` and `git status` in the tree, not `git log origin/dev`, which is where somebody
 checks, sees nothing, and starts again from scratch on top of a half-finished job.
+If there is work there, neither trust it nor throw it away: read it and check its claims
+yourself, by breaking each fix and watching its test go red. On 2026-09-05 that took twenty
+minutes for three inherited stages, and they were sound. And look before you enter, too: "I
+grepped `dev` and it isn't done" does not mean nobody has done it, because uncommitted work in a
+worktree is invisible to `origin/dev` and to the primary. With a dozen agents in their own trees,
+check `git worktree list` for one on the topic before assuming a clean start.
 
 **A subagent spawned before `EnterWorktree` loses its shell.** Bash inside a worktree-isolated
 session refuses any command it cannot statically prove stays inside the tree — a pipeline whose
@@ -348,13 +359,36 @@ landed, not against the file.
 ```bash
 # from a worktree, when a piece of work is done
 git fetch origin dev
-git merge origin/dev           # NOT rebase — see below
+git merge origin/dev           # NOT rebase — see below. Commit your own edits first
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
 
 # and to see just your own branch's changes — for a review, or a scoped diff:
 git diff origin/dev...HEAD     # THREE dots. Two is a trap; see below.
 ```
+
+**Merge `origin/dev` when you wake up as well, not only when the work is done.** A session resuming
+from a cron, a long wait, a compaction or a `--resume` fetches and merges before it does anything
+else.
+
+> when you wake up, pull the latest changes to avoid a big merge conflict at the
+> end
+>
+> — Greg, 2026-09-06
+
+That day a change sat in a worktree for about two hours, and `dev` moved three times during the
+push sequence itself: the merges brought in 64, then 11, then 84 files, each one after the tests
+had run, and each forcing another run. Merged early, the same changes are an ordinary integration,
+and a conflict arrives while there is still time to think about it. Run the affected tests again
+after the merge.
+
+In the shared primary, look first: if `git rev-list --left-right --count HEAD...origin/dev` shows
+nothing local-only, `git merge --ff-only origin/dev` moves the branch without a merge commit and
+without touching what other agents have uncommitted there.
+
+**In your own worktree, commit before every merge.** A merge refused over modified tracked files
+has once left them at `HEAD`. The shared primary is the exception just described: commit your own
+files there, never a peer's unfinished ones, and take the fast-forward — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
 
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.

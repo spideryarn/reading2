@@ -307,7 +307,9 @@ export async function ingestProvenanceOf(
  */
 async function lockArticleFor(tx: Tx, job: Job) {
   return await tx
-    .select({ id: articles.id })
+    /* `currentRevisionId` is for `requireWhatTheAllocationLeanedOn` alone: only
+       a *published* article excuses a queue adoption from its holder. */
+    .select({ id: articles.id, currentRevisionId: articles.currentRevisionId })
     .from(articles)
     .where(ownedSlug(job.slug, job.ownerId))
     .for("update")
@@ -366,16 +368,29 @@ async function lockRetriedAttempt(tx: Tx, job: Job, retryOf: string) {
  * long enough for the holder to publish, finish, and have its article destroyed —
  * and then this insert lands on a slug with nothing under it.
  *
- * **Only asked when the article is absent**, which is the difference between a
- * guard and a refusal of ordinary work: a holder that finished properly leaves
- * the article behind, and adopting a name whose article exists is a shelf
- * adoption in all but provenance.
+ * **Only asked when the article has no published revision**, which is the
+ * difference between a guard and a refusal of ordinary work: a holder that
+ * finished properly leaves a published article behind, and adopting a name
+ * whose article is published is a shelf adoption in all but provenance.
+ *
+ * **Published, not merely present, since 2026-10-06.** It used to be *"when the
+ * article is absent"*, and a bare row — made at the holder's first claim, with
+ * nothing published into it — was taken for the article. But the shelf lookup
+ * (`slugForUrlKey`, src/store/find-article.ts) matches a published revision's
+ * address and cannot see a bare row, so that row keeps no other request away
+ * from the address: the holder ends, a second request sees neither a shelf
+ * article nor an active job and mints and reserves a new slug, and this one
+ * lands on the old slug reserving nothing — two jobs for one address on two
+ * slugs, both charged. A published article *is* found by every later lookup,
+ * which is what makes it safe to lean on. GPT Sol's F14, reviewing the built
+ * stage 1 of plan 261005l; tests/one-article-for-one-address.test.ts § *an
+ * article nobody has published into*.
  *
  * **The lock has to cover the insert**, and does, because it is taken in the
  * insert's own transaction. An unlocked existence check is the same race one
  * statement later — the finding says so in as many words.
  *
- * **A miss is not a refusal on its own**, because `articleExists` was read
+ * **A miss is not a refusal on its own**, because an *absent* article was read
  * without holding anything: `restartRatherThanRefuse` is what a miss goes
  * through, and it asks for one more pass before it will say no.
  *
@@ -469,8 +484,8 @@ const isRestart = (result: EnqueueOutcome | Restart): result is Restart =>
  * lock order** — GPT Sol's F50, docs/plans/260906h-delete-an-article-permanently.md.
  *
  * `lockArticleFor` on an absent article locks *nothing*
- * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so
- * `articleExists === false` is a fact from a moment that has already passed —
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so *"there is
+ * no article"* is a fact from a moment that has already passed —
  * exactly the kind of fact this whole family of guards exists to distrust. The
  * losing sequence is an ordinary second paste:
  *
@@ -488,8 +503,14 @@ const isRestart = (result: EnqueueOutcome | Restart): result is Restart =>
  * transaction holding a job row and then reaching for the article row is the
  * other half of that cycle. Restarting releases the job lock and goes back
  * through the canonical article-first order, where the second pass finds the
- * article, skips this guard entirely, and inserts as the ordinary adoption it
- * always was.
+ * published article, skips this guard entirely, and inserts as the ordinary
+ * adoption it always was.
+ *
+ * **A row that exists and is unpublished is not stale in that way** — it was
+ * found and locked — so since 2026-10-06, when such a row stopped excusing the
+ * holder check (`lockAdoptedHolder`), a miss over one is expected to be told
+ * the same thing on the second pass. It still goes round once: one rule is
+ * simpler than two, and the pass is cheap.
  *
  * **Exactly one restart**, and the `Look` is how it is counted. A second miss
  * means the holder really has gone and left nothing behind, which is what the
@@ -516,30 +537,33 @@ function restartRatherThanRefuse(look: Look): Restart {
  *
  * **After the article lock, never before it.** `pgShelfStore.destroy` takes
  * `articles` and then `jobs`; a transaction taking them the other way round
- * would be the cycle. Called with whether that lock found anything rather than
- * with the row, because that is all either guard wants to know.
+ * would be the cycle. Called with whether that lock found a *published* article
+ * rather than with the row, because that is all the holder guard wants to know
+ * and the attempt guard wants nothing.
  *
  * **Throws for the two answers that are final, and returns for the one that is
  * not.** A missing attempt is a 404 and a second look could only agree with it;
- * a missing *holder* is only final on the second look, because
- * `articleExists` was read before nothing was locked — `restartRatherThanRefuse`
- * is the whole of that argument.
+ * a missing *holder* is only final on the second look, because an absent
+ * article was read with nothing locked — `restartRatherThanRefuse` is the whole
+ * of that argument.
  */
 async function requireWhatTheAllocationLeanedOn(
   db: Tx,
   job: Job,
   ticket: EnqueueTicket,
-  articleExists: boolean,
+  articlePublished: boolean,
   look: Look,
 ): Promise<Restart | undefined> {
   if (ticket.retryOf !== undefined) {
     const [attempt] = await lockRetriedAttempt(db, job, ticket.retryOf);
     if (!attempt) throw noSuchAttempt();
   }
-  /* Only when the article is absent: a holder that finished properly left one
-     behind, and adopting a name whose article exists is a shelf adoption in all
-     but provenance. See `lockAdoptedHolder`. */
-  if (!articleExists && ticket.adoptedFromJob !== undefined) {
+  /* Only when nothing is published there: a holder that finished properly left
+     a published article behind, and adopting a name whose article is published
+     is a shelf adoption in all but provenance. A row with no published revision
+     does not count — no lookup can find it by its address, so it holds the
+     address for nobody. See `lockAdoptedHolder`. */
+  if (!articlePublished && ticket.adoptedFromJob !== undefined) {
     const [holder] = await lockAdoptedHolder(db, job, ticket.adoptedFromJob);
     if (!holder) return restartRatherThanRefuse(look);
   }
@@ -576,7 +600,7 @@ async function enqueueIn(
     db,
     job,
     ticket,
-    article !== undefined,
+    article !== undefined && article.currentRevisionId !== null,
     look,
   );
   if (restart) return restart;

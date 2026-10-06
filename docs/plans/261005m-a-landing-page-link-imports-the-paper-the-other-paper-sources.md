@@ -1,16 +1,14 @@
 # A landing-page link imports the paper: the other paper sources
 
-Status as of 2026-10-06: **stage A built, reviewed and committed, but not on `dev`** — evidence:
-`acl`, `pmlr`, `neurips`, `cvf` and `jmlr` in `src/paper-sources.ts` on the branch
-`worktree-fbayettj-other-paper-sources` (commit `00edb215e` and the review fix after it), and no
-`src/paper-sources.ts` on `origin/dev`. It is held because it is built on part 1's commit
-`0f63486a2`, which is not on `dev` and has open review findings of its own (see § What this waits
-on). The research, this plan and the deferred work's queue entries are on `dev`.
+Status as of 2026-10-06: **stage A is on `dev`; the rest is deferred, each item with a queue
+entry** — evidence: `acl`, `pmlr`, `neurips`, `cvf` and `jmlr` in `SOURCES` in
+`src/paper-sources.ts`, and `HUGGING_FACE_PATH` and `ALPHAXIV_PATH` beside arXiv's own. It was held
+for two hours behind part 1, which reached `dev` at `7a0e19287`; § What this waits on is history.
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 2
-of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv: plan
-`261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md`
-(not a link, because it is not on `dev` yet), queue entry `qi-jqtexyzq`.
+of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv:
+[261005l](261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md),
+queue entry `qi-jqtexyzq`.
 
 ## Goal
 
@@ -256,9 +254,14 @@ Waits on part 1's stage 1 being on `dev`.
       `/help` if it says what pasting a link does.
 - [x] `npm run typecheck`, the touched tests, `npm run lint` on touched files. GPT Sol code review
       (write-capable, fixes inside the stage). Committed.
-- [ ] **Push. Held until part 1's stage 1 is on `dev`**: merge `origin/dev`, settle any conflict in
-      `src/paper-sources.ts` (part 1's F16 fix touches the arXiv object), re-run the gates below,
-      and `git push origin HEAD:dev`. Pushing sooner would land part 1's unfinished commit with it.
+- [x] **Push.** Held until part 1 was on `dev` (`7a0e19287`), then merged. Two conflicts, both
+      kept from both sides: the mirror patterns now use part 1's bounded id grammar
+      (`ARXIV_ID_BOUNDED`, `ARXIV_VERSION`), so a mirror link with an absurd version cannot make an
+      over-long slug; and the slug cut uses part 1's `PAPER_SLUG_MAX` rather than a second copy.
+      One test changed with the merge: arXiv has two candidates now (its HTML, then its PDF), so
+      its missing-paper log says two were tried. The mirrors were checked live again afterwards:
+      a Hugging Face or alphaXiv link now ends on arXiv's HTML, which is free
+      (`261005m-evidence/resolve-live-after-part-1-arxiv.txt`).
 
 **What landed, and what changed from the plan** (2026-10-06):
 
@@ -293,10 +296,11 @@ Waits on part 1's stage 1 being on `dev`.
 
 - [x] The deferred items below each have a queue entry (ids recorded here) **before** the note says
       shipped.
-- [ ] `docs/user-feedback/261005_1912-…-part-2.md` (`reports: spya-ayettj`, `parts: 2`),
-      `npx tsx scripts/feedback-endings.ts`, `overseer-queue.ts done qi-5m89dnxa`.
-- [ ] If part 1 has not landed: stage A goes back on the queue as its own entry, this plan as its
-      brief, and the note's ending is `awaiting`, not `shipped`.
+- [x] `docs/user-feedback/261005_1912-landing-page-links-to-other-paper-sources-import-the-paper-part-2.md`
+      (`reports: spya-ayettj`, `parts: 2`), `npx tsx scripts/feedback-endings.ts`,
+      `overseer-queue.ts done qi-5m89dnxa`.
+- [x] While part 1 had not landed, the landing step was queued as `qi-zzgskxw7`, as insurance. It
+      was not needed and is marked done.
 
 ## Deferred, each with its own queue entry
 

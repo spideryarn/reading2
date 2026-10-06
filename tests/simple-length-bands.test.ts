@@ -6,18 +6,22 @@
  * somewhat reflect the length of the text. Not linearly. But a book will
  * surely need (at least somewhat) longer summaries than a short article."*
  *
- * It is Fuller's length that follows it. Brief is one length for every piece:
- * it was banded in the first build and measured worse (the plan's ledger).
+ * It is Fuller's length that follows it. Brief stays at about 80 words in
+ * every band: the longer book variant missed the shipping rule (Greg,
+ * 2026-10-06; the plan's § Brief by band).
  *
  * What is pinned here is the table and its edges. That a request carries its
  * band's prompt is in tests/simple-summary.test.ts § the request, beside the
  * stubbed model; that the standard band is the prompt as it was is the hash
  * in tests/simple-two-levels.test.ts.
  */
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import {
   BAND_FROM,
+  BRIEF_LENGTH,
   FULLER_LENGTH,
   SIMPLE_BANDS,
   SIMPLE_SYSTEMS,
@@ -124,11 +128,22 @@ describe("what Fuller is asked for in each band", () => {
 });
 
 describe("Brief", () => {
-  it("is asked the same of every piece, whatever its length", () => {
-    expect(new Set(SIMPLE_BANDS.map((band) => SIMPLE_SYSTEMS_BY_BAND[band].brief)).size).toBe(1);
+  const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+  /* Greg, 2026-10-06: "I wanted it to stay short for most articles, but allow
+     it to go slightly larger for really long ones (e.g. books)." */
+  it("is asked the same of every piece, books included: about 80 words, the prompt `/9` sent", () => {
+    const usual = SIMPLE_BANDS.map((band) => SIMPLE_SYSTEMS_BY_BAND[band].brief);
+    expect(new Set(usual).size).toBe(1);
+    /* About 100 and 150 in `simple-prompt/10` and `/11`, for every piece. */
+    expect(flat(usual[0]!)).toContain("About 80 words in all, and never more than 130. Shorter is fine;");
+    expect(sha(usual[0]!)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
+  });
+
+  it("keeps the rejected book increase out of every band", () => {
     for (const band of SIMPLE_BANDS) {
-      /* About 80 and 130 until `simple-prompt/10` (Greg, 2026-10-05: "ever so slightly longer"). */
-      expect(flat(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toContain("About 100 words in all, and never more than 150.");
+      expect(BRIEF_LENGTH[band]).toMatchObject({ words: 80, never: 130 });
+      expect(BRIEF_LENGTH[band].room).toBeUndefined();
+      expect(sha(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
     }
   });
 });

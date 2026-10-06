@@ -650,6 +650,31 @@ default and never remembered, which sends the Metadata switch's own request as s
 is known. The main modes are not held for its answer; what is promised instead is in
 [high-powered-ai.md § Switching it on while the article is added](high-powered-ai.md).
 
+**Since 2026-10-05 it can also make the article public, and an import's card hands out its
+address.** Greg, 2026-10-05, in two reports (`spya-h7skj5`, `spya-e9t58e`):
+
+> While I'm importing a paper, I don't know what the permalink will be, so I have to wait for it to
+> be finished to be able to bookmark or send it to someone.
+
+> While I'm importing an article, make it possible for me to mark it as public/shared as it's
+> importing
+
+Three things, all in the browser, in
+[261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md):
+
+- **The card's link button.** `JobCard` copies `/read/<job.slug>` for an import job
+  (`isImportJob`, [`src/job-state.ts`](../../src/job-state.ts): `fetch` among its steps, because a
+  mode job carries a `url` too). It is the address of *this import*: a failed one leads nowhere,
+  and a Retry that adopts an article already on the shelf comes back under another slug.
+- **The owner's early visit.** `/read/<slug>` before the import has published used to tell its own
+  owner *Not shared*. `OwnerNotShared`
+  ([`src/web/article/StillBeingAdded.tsx`](../../src/web/article/StillBeingAdded.tsx)) asks the job
+  engine for a fresh list, and if a live import job has that slug it draws the job's card and
+  re-reads the article when the job is done. It does not send the reader to the add page, because
+  arriving there posts an import.
+- **A third tick box, *Make it public*.** What it asks and what it sends are in
+  [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+
 ### The three traps in a page whose whole job is one effect
 
 - **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain

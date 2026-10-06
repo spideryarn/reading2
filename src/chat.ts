@@ -65,8 +65,15 @@ const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
  * a `?? "chat"` at every read site, and one of those would eventually be missed,
  * which is a Remember turn answered with chat's prompt and nothing on screen
  * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
- * price of "required" is exactly this function, and its twin in
- * src/store/pg-chat.ts. Two places hold the default instead of twenty.
+ * price of "required" is exactly this function. One place holds the default
+ * instead of twenty.
+ *
+ * It had a twin in src/store/pg-chat.ts until 2026-10-06. That one now refuses
+ * a kind it does not know (`storedThreadKind`, src/types.ts) because its input
+ * is a column that cannot be absent. This one stays lenient because its only
+ * input is a fixture's `chat.json` (see the header), where an absent kind is a
+ * real, old state. It never sees a row from Postgres.
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md stage 0.
  *
  * It reads the field off a value the type says always has it, which is the one
  * honest way to write this: the type describes what the rest of the program may

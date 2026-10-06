@@ -186,6 +186,51 @@ names it in *Who can see your shelf*, *If you send us a bug report*, *Deleting t
 *If something here is yours*; `/help` § Sharing describes both ways. The first two are held to the
 code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.test.ts`.
 
+## While the article is still importing
+
+Since 2026-10-05 the add page has a **Make it public** box
+([`AddShare.tsx`](../../src/web/AddShare.tsx) drawing a `ShareAtAdd`,
+[`src/web/add-share.ts`](../../src/web/add-share.ts)), which Greg asked for (`spya-e9t58e`). The plan
+is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). **The server
+did not change.** `PUT /api/article/:slug/visibility` has always needed only the owner's row, and
+every public read needs a published revision, so a switch pressed early exposes nothing early: the
+article becomes readable by others when the import publishes.
+
+- **The confirmation is this card's own**: the same title, body, inventory, profile note and rights
+  tick-box, and nothing is sent without the tick and the press. The inventory is the one for an
+  article nothing has been built on, so everything a model makes is under *would be shared if
+  built*.
+- **Which is why it first asks whether there is already an article.** An import can adopt one
+  already on the shelf, with a glossary and notes that would go out at once. The box is offered
+  only when the owner's metadata read is a fresh 404. On a 200 it points at this card, and on
+  anything else it offers nothing.
+- **One `ShareAtAdd` per slug, per tab** (`shareAtAddFor`), so two spellings of one add address
+  never give one article two writers. A Retry that comes back under another slug shows that slug's
+  own unticked box.
+- **It sends `private` only when the reader unticks.** The first build also took a share back by
+  itself when the slug changed. GPT Sol's review showed that a take-back nobody is watching can be
+  refused unseen, or land after a newer confirmation and undo it, so it went. What that leaves: a
+  failed import that was shared stays public under its old slug, with nothing published for
+  anyone to read.
+- **A reload cannot read the switch back before publication.** No owner read returns visibility
+  until there is a published revision. So the tab writes a mark in `sessionStorage` before a
+  share request is sent, and a reloaded page that finds the mark shows *we cannot read that back* and offers
+  the untick. The mark never sends a public request. A second tab has no mark and shows an
+  unticked box over an article that is public: accepted for now, and the fix is a server read
+  ([postmortem 261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md)).
+- **Coming back to the add page asks again, and a published article belongs to this card.** The
+  controller outlives the page, so on every return it repeats the metadata read before sending
+  anything. If the article has published since, whatever it remembered gives way to the line
+  pointing here: this card may have changed the switch, and an intent from an earlier visit must
+  not publish over a later unshare. A page that stays open through publication is not asked again.
+- **A 404 while the job is alive means the row is not there yet** and is retried. After five
+  minutes it stops, and tries once more when the import completes.
+- **The add page does not leave by itself while sharing is unsettled**: the confirmation open, or
+  the request waiting, refused or unanswered. It shows *Open the article*.
+
+Not built: a private link from the add page, and anything for a visitor who arrives before the
+import has finished (they see what any unshared address shows).
+
 ## Where the code is
 
 | File | What's in it |

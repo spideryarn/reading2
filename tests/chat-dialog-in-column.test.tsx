@@ -130,6 +130,7 @@ function draw(target: Props["target"], place: Place = {}, strict = false) {
       onOpenFull={() => {}}
       onCreated={() => {}}
       onDropped={() => {}}
+      onRenamed={() => {}}
     />
   );
   act(() => root.render(strict ? <StrictMode>{el}</StrictMode> : el));
@@ -604,6 +605,7 @@ describe("a move between the card, the dock and the corner keeps what the reader
           onOpenFull={() => {}}
           onCreated={() => {}}
           onDropped={() => {}}
+          onRenamed={() => {}}
         />
       </>
     );

@@ -153,7 +153,8 @@ the paper. The PDF arm prints the heading only, by design: Citations reads them 
    word "and" (`2610.01658v1`), and on `2610.01988v1` "L. F. Abbott", who wrote the first entry in
    the reference list, not the paper.
 6. **Some cross-references lose their number.** `2610.01988v1` reads "constructed … in , 28 and
-   29" and "Substituting eqs. 30 and into eq. 33". Cause not yet traced; the plan traces it.
+   29" and "Substituting eqs. 30 and into eq. 33". Traced on 2026-10-06 and **not ours**: arXiv's
+   HTML has an empty `ltx_missing_label` span there, and its equation 27 carries no number either.
 7. **A boxed passage loses its words.** The `tcolorbox` in §3 of `2608.13566` is drawn as SVG with
    its text inside; 58 words of the paper are missing and an empty block stands where they were.
 
@@ -163,6 +164,53 @@ arXiv's "Cited by: §…" back-link text.
 
 **arXiv's:** Figure 1 of `2605.20355v1` is not in arXiv's HTML at all (its figures are numbered
 2, 3, 4). Nothing marks the gap.
+
+## The re-run, after the fixes (2026-10-06)
+
+The plan's second stage fixed faults 1 to 5 and 7 in `src/latexml.ts` and beside it. Fault 6 turned
+out to be arXiv's: its HTML holds an empty `ltx_missing_label` where the number should be. The five
+HTML arms were then re-run (`run.ts --html-only`, free) and each judged again against the PDF arm
+already bought, by a fresh Sonnet subagent with the same rubric plus a regression check against
+the arm as it was before.
+
+| Paper | Judge would read, before | After | What changed |
+|---|---|---|---|
+| `2608.13566` | HTML | **HTML** | the boxed passage is back, all 58 words; 18 listings are 18 code blocks with their indentation (420 blocks became 283); a word-level diff shows one insertion and no deletion |
+| `2605.20355v1` | PDF | **HTML** | equations (1) and (2) are each one aligned formula with its number; nothing else moved. Figure 1 is still missing: arXiv's HTML has not got it |
+| `2610.01658v1` | HTML | **HTML** | all 45 aligned groups match the author's TeX row for row (checked by script against the source annotations); the four introduction tables and seven appendix matrices are real tables; all 65 single-line equations are byte-identical to before |
+| `2610.03261v1` | HTML | **HTML** | 11 equation blocks changed, all to display maths; 107 images, both tables and Algorithm 1 unchanged |
+| `2610.01988v1` | PDF | **HTML** | figures 2 to 6 have their pictures; 16 aligned groups are one formula each; Table II's header row is right where the PDF arm's is scrambled |
+
+**What the tree holds of this, and what it does not** (GPT Sol's F31). The counts are in
+`results.json`, and each fix has a fixture and a test cut from these pages
+(`tests/latexml.test.ts`, `tests/fixtures/latexml/`). The judges' reports, the before-and-after
+pages and their word diffs are not committed: the pages are the papers' prose, and the reports
+were read in the session that ran them. The table above is my record of those reports, with each
+surprising claim checked against the files before it was written down. Re-running the command at
+the top regenerates the pages for anyone who wants to judge again.
+
+After that judging, GPT Sol's code review tightened several rewrites, and one of its changes
+(refusing any cell holding a row or column break) sent five correct groups of `2610.01658v1` back
+to fragments. It was narrowed to breaks at the cell's top level, and the re-run after that gives
+the same counts as the judged run for all five papers.
+
+**Five of five for the HTML arm, and no regression found in any.** The byline is the paper's
+authors on all five. The judges also caught that the line under the title *inside* the article
+still printed the old guess ("L. F. Abbott · ~89 min read"): stage 2's page was built from
+Readability's byline, not the one chosen. Fixed, with a test that fails without it.
+
+**What is still wrong in the HTML arm**, none of it lost content:
+
+- **Five equation groups in `2610.01988v1` still read as fragments**: four where every row has its
+  own number, one with four formula cells. The rule that rebuilds a group refuses those shapes on
+  purpose (it cannot yet keep each row's number and link target). The symbols are all there.
+- Nine formulas in `2610.01658v1` are still native MathML rather than TeX (arXiv wrote text inside
+  them); they draw, in the browser's own style. One diagram there is an SVG with formulas inside.
+- A listing that holds maths (an algorithm) is left as arXiv laid it out, one line per block.
+- The author block under the title is still a long paragraph of names and affiliations.
+
+The same limits as the first run apply: the judges read text and markup, not pictures, so whether
+each SVG plot draws in the reading view was checked in a browser instead (plan 261005l).
 
 ## What the PDF arm gets wrong
 

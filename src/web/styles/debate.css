@@ -275,6 +275,12 @@
    the reader's and take their face from voices.css (`.voice-reader`); the
    quotation marks and the count are ours. */
 .dbt-lens-send { flex: none; white-space: nowrap; }
+/* In a narrow band the button goes under the box, not beside it: side by side
+   on an iPad the box was 117px and its placeholder read "Look at the d…"
+   (seen in the browser, 2026-10-06). The box asks for 12rem before it shares
+   its line. */
+.dbt-lens-row { flex-wrap: wrap; }
+.dbt-lens-row .gloss-ask-input { flex: 1 1 12rem; }
 .dbt-angles { margin-top: 0.35rem; }
 .dbt-angles-head { padding-top: 0.15rem; }
 .dbt-angles-list { margin: 0; padding: 0; list-style: none; }

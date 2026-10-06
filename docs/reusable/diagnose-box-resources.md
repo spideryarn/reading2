@@ -69,6 +69,14 @@ same run counted 162 "chrome" processes that were mostly MCP servers belonging t
 the real figure was 46, and killing on the first number would have broken every agent's browser
 tooling. `pgrep -x` matches the executable name; `-f` is for when you genuinely mean the arguments.
 
+**`ps -eo args | grep -c <flag>` counts its own apparatus.** On 2026-09-08 it answered 3 for a flag
+no process was using: the two `bash -c` wrappers whose argv carried the whole pipeline, and the
+grep itself. Under an agent harness any flag merely *named* in a command becomes a phantom, because
+the tool shell puts the entire command line into argv. Walk `/proc` instead: read each
+`/proc/<pid>/cmdline`, split on NUL, and match argv *elements*; report how many entries were scanned
+and how many were unreadable, so a permission failure cannot read as zero. And print what matched,
+not just the count, before quoting it to anybody.
+
 **`ppid == 1` is not proof of abandonment.** It proves the *launcher* exited. A browser started with
 `--remote-debugging-port` outlives its launcher on purpose and a live session can reconnect to it;
 one started with `--remote-debugging-pipe` cannot, because the pipe died with the parent. Check the
@@ -77,7 +85,10 @@ session with 15 live processes.
 
 **`pkill -f <string>` will match your own shell.** Your command line contains the string you are
 searching for, so the shell running `pkill` kills itself, and the exit code looks like a failure of
-the thing you meant to kill. Kill by PID, or filter out `$$`.
+the thing you meant to kill. Kill by PID, or filter out `$$`. Anything chained after it with `&&` or
+`;` then never runs: on 2026-09-08 a `pkill -f … && <restart>` returned 144 twice, and the second
+time it looked as though the restart had worked, because the old process was gone and the new one
+had never started. Run it alone in its own call and confirm with a separate `pgrep`.
 
 **A kill list is a list of PIDs, not a pattern.** `pkill -f vite` on a shared box takes out every
 other agent's dev server. Resolve the pattern to PIDs, print them with their cwd and age, satisfy
