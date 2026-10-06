@@ -5,11 +5,10 @@
 # so `git worktree remove` took the page down and a reboot took it down with the
 # tmux server. Both are why this is a system unit in the primary checkout.
 #
-# INSTALLED BUT NOT ENABLED, on purpose and only for now. The dashboard is up
-# under scripts/tmux-job.ts and its owner asked to read this file before it is
-# ever switched on -- two supervisors on one port is a fight where the loser's
-# failure looks like a crash. `sudo systemctl enable --now fleet-dashboard` once
-# the tmux job is stopped.
+# Enabled and running since 2026-09-08; this unit is the dashboard's only
+# supervisor (no tmux job any more -- two supervisors on one port is a fight
+# where the loser's failure looks like a crash). Restart it with
+# `npx tsx scripts/fleet-restart.ts restart`, which checks first.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
 # note in overseer.service.
