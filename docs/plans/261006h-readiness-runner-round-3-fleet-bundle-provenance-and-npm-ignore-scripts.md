@@ -113,7 +113,9 @@ table. Then GPT Sol, write-capable, 60 minutes. Docs in the same stage: the flee
 comment in `scripts/readiness-loop.ts`, `docs/project/readiness.md` § Three ways it nearly lied,
 and the status of the parent plan's owed review.
 
-**Status: built 2026-10-06 by an Opus subagent; code review pending.** What landed, beyond the
+**Status: done 2026-10-06.** Built by an Opus subagent (`8649ab8d8`); GPT Sol's code review
+accepted it with two P1 fixes of its own, committed separately after the gates were rerun outside
+its sandbox (144 tests in four files, typecheck on four projects). What landed, beyond the
 plan-review section below:
 
 - `tools/fleet/build-files.ts` (the manifest and `fleetBundleProblem`), written by a `writeBundle`
@@ -184,3 +186,19 @@ The plan is not sent back for a second read — the code review is where each of
   arguments git was given. Invalid-bundle fixtures start from a fully valid bundle and break one
   thing each. **Residual, accepted:** nothing tests that `main()` hands `tick()` the right
   repository short of running `main()`; `advanceRunner` is tested and the call site is one line.
+
+## Stage 1 code-review corrections
+
+The write-capable review is
+[261006h-readiness-runner-round-3-code-review-sol.md](261006h-readiness-runner-round-3-code-review-sol.md).
+It reproduced and fixed two remaining provenance gaps: `fleetBuiltFor` now retains the accepted
+manifest with the sha, so a whole replacement at the same sha is rebuilt; failed post-build tree
+validation clears both preparation claims and aborts the tick. That validation also runs after a
+rebuild at an already-prepared sha. The new cases were red before these fixes.
+
+The P3R-03 rationale above was too broad: npm exports CLI settings as well as settings from npmrc
+files. A controlled `npm --cache /tmp/readiness-cli-only-cache run` exported that CLI-only path;
+the default cache remained `/home/greg/.npm`. The scrub deliberately discards legitimate inherited
+overrides too. It was the implementing agent's choice; this review corrects its rationale without
+changing the policy. No current check consumes those inherited settings directly. Stage 2 still
+requires the clean-tree preparation and live relaunch proof.

@@ -239,7 +239,7 @@ function preparedAt(
   return {
     preparedFor: sha,
     needs: { dependencies: false, migrations: false, ...needs },
-    fleetBuiltFor: sha,
+    fleetBuiltFor: { sha, manifest: "fixture manifest" },
   };
 }
 
@@ -716,7 +716,7 @@ describe("runner preparation follows the checked-out state", () => {
     expect(state).toEqual({
       preparedFor: SHA_A,
       needs: { dependencies: true, migrations: false },
-      fleetBuiltFor: SHA_A,
+      fleetBuiltFor: { sha: SHA_A, manifest: "fixture manifest" },
     });
   });
 
@@ -772,7 +772,7 @@ describe("the fleet client is built by this process, for this commit, and checke
     expect(build.seen[0]?.entry, "index.html was still there when the build started").toBe(false);
     expect(build.seen[0]?.stamp, "build-stamp.json was still there when the build started").toBe(false);
     expect(build.seen[0]?.manifest, "build-files.json was still there when the build started").toBe(false);
-    expect(state.fleetBuiltFor).toBe(SHA_B);
+    expect(state.fleetBuiltFor?.sha).toBe(SHA_B);
   });
 
   it("does not reuse a bundle it found on disk at start, however well stamped", () => {
@@ -785,7 +785,7 @@ describe("the fleet client is built by this process, for this commit, and checke
     ensureFleetClient(runner, SHA_B, state, build.exec);
 
     expect(build.seen).toEqual([NOTHING_THERE]);
-    expect(state.fleetBuiltFor).toBe(SHA_B);
+    expect(state.fleetBuiltFor?.sha).toBe(SHA_B);
   });
 
   it("builds once per commit: a second look at an intact bundle builds nothing", () => {
@@ -797,6 +797,67 @@ describe("the fleet client is built by this process, for this commit, and checke
     ensureFleetClient(runner, SHA_B, state, build.exec);
 
     expect(build.seen).toHaveLength(1);
+  });
+
+  it("does not reuse a different whole bundle substituted at the same commit", () => {
+    const runner = scratchRunner("fleet-replaced");
+    const state = initialPreparationState();
+    const build = fakeFleetBuild(runner, (dist) => writeFleetBundle(dist, cleanBundle(SHA_B)));
+    ensureFleetClient(runner, SHA_B, state, build.exec);
+    const original = readFileSync(path.join(fleetDist(runner), BUILD_FILES_FILE), "utf8");
+
+    // A hand-run build can consume an untracked source and still stamp clean.
+    // Removing that source afterwards leaves another valid bundle at this SHA.
+    writeFleetBundle(fleetDist(runner), cleanBundle(SHA_B), { entry: "<!doctype html><p>different build</p>\n" });
+    expect(fleetBundleProblem(fleetDist(runner), SHA_B)).toBeNull();
+    expect(readFileSync(path.join(fleetDist(runner), BUILD_FILES_FILE), "utf8")).not.toBe(original);
+
+    ensureFleetClient(runner, SHA_B, state, build.exec);
+
+    expect(build.seen).toHaveLength(2);
+    expect(readFileSync(path.join(fleetDist(runner), BUILD_FILES_FILE), "utf8")).toBe(original);
+  });
+
+  it.each([
+    ["dirty", { ...clean(SHA_B), dirty: true }],
+    ["unknown", { kind: "unknown", why: "git status timed out" }],
+    ["at another sha", clean(SHA_A)],
+  ] as const)("rebuilds after the post-build tree was %s, even if it is later clean at the target", (_name, stamp) => {
+    const runner = scratchRunner("fleet-unproven-tree");
+    const state = initialPreparationState();
+    const build = fakeFleetBuild(runner, (dist) => writeFleetBundle(dist, cleanBundle(SHA_B)));
+    const { deps } = preparationFakes({
+      buildFleetClient: (cwd, target, preparation) => ensureFleetClient(cwd, target, preparation, build.exec),
+      stamp: () => stamp,
+    });
+
+    expect(() => prepareRunner(runner, state, SHA_B, deps)).toThrow(/preparation.*not latched/);
+    expect(state.preparedFor).toBeNull();
+    expect(state.fleetBuiltFor).toBeNull();
+    prepareRunner(runner, state, SHA_B, { ...deps, stamp: () => clean(SHA_B) });
+
+    expect(build.seen).toHaveLength(2);
+    expect(state.preparedFor).toBe(SHA_B);
+  });
+
+  it("checks the tree after rebuilding an already prepared commit", () => {
+    const runner = scratchRunner("fleet-rebuild-tree");
+    const state = initialPreparationState();
+    const build = fakeFleetBuild(runner, (dist) => writeFleetBundle(dist, cleanBundle(SHA_B)));
+    const { deps } = preparationFakes({
+      buildFleetClient: (cwd, target, preparation) => ensureFleetClient(cwd, target, preparation, build.exec),
+    });
+    prepareRunner(runner, state, SHA_B, deps);
+    rmSync(path.join(fleetDist(runner), FIXTURE_FONT));
+
+    expect(() => prepareRunner(runner, state, SHA_B, {
+      ...deps, stamp: () => ({ ...clean(SHA_B), dirty: true }),
+    })).toThrow(/preparation.*not latched/);
+    expect(state.preparedFor).toBeNull();
+    expect(state.fleetBuiltFor).toBeNull();
+
+    prepareRunner(runner, state, SHA_B, deps);
+    expect(build.seen).toHaveLength(3);
   });
 
   it("rebuilds a bundle it built itself once a file of it has gone", () => {
@@ -832,7 +893,7 @@ describe("the fleet client is built by this process, for this commit, and checke
     expect(state).toEqual({
       preparedFor: SHA_B,
       needs: { dependencies: false, migrations: false },
-      fleetBuiltFor: SHA_B,
+      fleetBuiltFor: { sha: SHA_B, manifest: readFileSync(path.join(fleetDist(runner), BUILD_FILES_FILE), "utf8") },
     });
   });
 
@@ -898,7 +959,7 @@ describe("the fleet client is built by this process, for this commit, and checke
       (attempt) => (attempt === 2 ? { status: 1, stderr: "vite failed" } : {}),
     );
     ensureFleetClient(runner, SHA_A, state, build.exec);
-    expect(state.fleetBuiltFor).toBe(SHA_A);
+    expect(state.fleetBuiltFor?.sha).toBe(SHA_A);
 
     expect(() => ensureFleetClient(runner, SHA_B, state, build.exec)).toThrow(/vite failed/);
 
@@ -909,11 +970,21 @@ describe("the fleet client is built by this process, for this commit, and checke
 
     ensureFleetClient(runner, SHA_B, state, build.exec);
     expect(build.seen).toEqual([NOTHING_THERE, NOTHING_THERE, NOTHING_THERE]);
-    expect(state.fleetBuiltFor).toBe(SHA_B);
+    expect(state.fleetBuiltFor?.sha).toBe(SHA_B);
   });
 });
 
 describe("runner preparation latches only what it prepared", () => {
+  it("keeps pending needs when this call did not run dependency or migration preparation", () => {
+    const state = preparedAt(SHA_B, { dependencies: true, migrations: true });
+    const { calls, deps } = preparationFakes();
+
+    prepareRunner("/runner", state, SHA_B, deps);
+
+    expect(calls).toEqual([]);
+    expect(state.needs).toEqual({ dependencies: true, migrations: true });
+  });
+
   it("skips classification when preparation is already latched to the target", () => {
     const state = preparedAt(SHA_B);
     const { calls, builds, deps } = preparationFakes();
@@ -941,7 +1012,7 @@ describe("runner preparation latches only what it prepared", () => {
     const state = preparedAt(SHA_A);
     const { deps } = preparationFakes({ stamp: () => stamp });
 
-    prepareRunner("/runner", state, SHA_B, deps);
+    expect(() => prepareRunner("/runner", state, SHA_B, deps)).toThrow(/preparation.*not latched/);
 
     expect(state.preparedFor).toBeNull();
   });

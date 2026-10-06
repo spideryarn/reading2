@@ -95,8 +95,9 @@ to stop guessing (2026-10-06,
 
 - **A list of inputs stood in for the artefact.** The fleet client was rebuilt only when a diff
   touched a hand-kept list of paths, and the list had already missed one. The runner now builds it
-  once per commit itself, never reuses a bundle it found on disk, and checks the result against
-  `build-files.json` — every file the build wrote, with its hash — and the stamp's sha.
+  once per commit itself, remembers that build's manifest, never reuses a bundle it found on disk,
+  and checks the result against `build-files.json` — every file the build wrote, with its hash —
+  and the stamp's sha.
 - **One environment variable pinned at a time.** `--dry-run=false` answered one inherited npm
   setting; `ignore_scripts` and `script_shell` did the same damage. The runner's children now start
   with every `npm_config_*` variable removed. A setting in a user-level npmrc is still not covered,

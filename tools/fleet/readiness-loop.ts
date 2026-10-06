@@ -59,11 +59,11 @@ export type PreparationState = {
       explicit caveat. Null means no preparation has completed in this run. */
   preparedFor: string | null;
   needs: PreparationNeeds;
-  /** The sha **this process** last built the fleet client for and saw pass its
+  /** The sha and manifest **this process** last built and saw pass its
       postcondition. Null until then, so a bundle already on disk when the loop
       starts is never reused however well it is stamped: a stamp found on disk
       says what a build observed, not what it read (tools/fleet/build-files.ts). */
-  fleetBuiltFor: string | null;
+  fleetBuiltFor: { sha: string; manifest: string } | null;
 };
 
 /** `null` means the changed paths could not be classified, not that none changed. */

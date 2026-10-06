@@ -106,23 +106,29 @@ function filesUnder(dir: string, prefix = ""): string[] {
  * null when it is. One sentence, the first thing found wrong.
  *
  * Never throws: a directory that cannot be read is a reason like any other.
+ * `expectedManifest` binds reuse to the manifest this process accepted after
+ * its own build; a different whole bundle at the same sha is not that build.
  */
-export function fleetBundleProblem(distDir: string, targetSha: string): string | null {
+export function fleetBundleProblem(distDir: string, targetSha: string, expectedManifest?: string): string | null {
   try {
-    return bundleProblem(distDir, targetSha);
+    return bundleProblem(distDir, targetSha, expectedManifest);
   } catch (cause) {
     return `${distDir} could not be checked: ${cause instanceof Error ? cause.message : String(cause)}`;
   }
 }
 
-function bundleProblem(distDir: string, targetSha: string): string | null {
+function bundleProblem(distDir: string, targetSha: string, expectedManifest?: string): string | null {
   const manifestPath = path.join(distDir, BUILD_FILES_FILE);
   const manifestStat = lstatSync(manifestPath, { throwIfNoEntry: false });
   if (manifestStat === undefined) {
     return `no ${BUILD_FILES_FILE} in ${distDir}: the build did not finish, or was not made by vite.fleet.config.ts`;
   }
   if (!manifestStat.isFile()) return `${manifestPath} is not a regular file`;
-  const manifest = parseManifest(readFileSync(manifestPath, "utf8"));
+  const manifestText = readFileSync(manifestPath, "utf8");
+  if (expectedManifest !== undefined && manifestText !== expectedManifest) {
+    return `${BUILD_FILES_FILE} does not match the build this process recorded`;
+  }
+  const manifest = parseManifest(manifestText);
   if (manifest === null) return `${manifestPath} is not a build-files manifest`;
 
   const listed = new Set(manifest.files.map((file) => file.path));

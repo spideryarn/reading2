@@ -114,10 +114,10 @@ export function gitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessE
  *
  * Pinning a flag on the command line answers one of those at a time and the
  * list does not end (GPT Sol's R724-02, then P3R-03 one flag later). Removing
- * the whole family does. What is lost is nothing this box needs: npm then reads
- * its npmrc files, which is the configuration the box actually has, and the
- * `npm_config_*` variables `npx` and `npm run` export are echoes of those same
- * files, set again by each npm for its own children.
+ * the whole family does. npm then reads its npmrc files again. Inherited
+ * overrides, including legitimate cache, registry and alternate-userconfig
+ * settings, are deliberately discarded. npm also exports CLI settings in
+ * `npm_config_*`, so these variables are not necessarily echoes of npmrc files.
  *
  * **What this does not claim:** independence from a user-level or global
  * npmrc. `script-shell=/bin/true` in an npmrc hollows the same commands and

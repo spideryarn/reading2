@@ -514,7 +514,8 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * So the question is put to the artefact and to this process's own memory, and
  * a build is skipped only when both answer:
  *
- *  1. **this process built it for this sha** (`fleetBuiltFor`). A bundle found
+ *  1. **this process built these files for this sha** (`fleetBuiltFor`, which
+ *     retains the manifest as well as the sha). A bundle found
  *     on disk is not reused, however well it is stamped: its stamp is what some
  *     build observed about HEAD, not what that build read, and a hand-run build
  *     can consume an untracked file and still stamp itself clean (P3R-01);
@@ -534,12 +535,16 @@ export function ensureFleetClient(
   exec: typeof runCommand = runCommand,
 ): void {
   const dist = path.join(runner, "tools", "fleet", "web", "dist");
-  if (preparation.fleetBuiltFor === target && fleetBundleProblem(dist, target) === null) return;
+  const previous = preparation.fleetBuiltFor;
+  preparation.fleetBuiltFor = null;
+  if (previous?.sha === target && fleetBundleProblem(dist, target, previous.manifest) === null) {
+    preparation.fleetBuiltFor = previous;
+    return;
+  }
 
   /* From here until the postcondition passes, this process has built nothing
      it can vouch for. Said first, so that no way out of this function — a
      removal that throws included — leaves the old claim standing. */
-  preparation.fleetBuiltFor = null;
   removeFleetBundleMarkers(dist);
   const built = exec(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
@@ -557,7 +562,14 @@ export function ensureFleetClient(
   if (problem !== null) {
     throw new Error(`build:fleet exited 0 but the bundle in ${dist} is not a whole build of ${target}: ${problem}`);
   }
-  preparation.fleetBuiltFor = target;
+  const manifest = readFileSync(path.join(dist, BUILD_FILES_FILE), "utf8");
+  // Check the exact manifest being remembered against disk before publishing
+  // build memory. A later whole replacement must rebuild too.
+  const changed = fleetBundleProblem(dist, target, manifest);
+  if (changed !== null) {
+    throw new Error(`the fleet bundle changed while its build was being recorded: ${changed}`);
+  }
+  preparation.fleetBuiltFor = { sha: target, manifest };
 }
 
 /**
@@ -606,19 +618,19 @@ function latchPreparation(
   preparation: PreparationState,
   target: string,
   tree: TreeStamp,
-): boolean {
+): void {
   if (tree.kind === "known" && !tree.dirty && tree.sha === target) {
     /* The sha is evidence only after every preparation step succeeded and
        the files they read are still a clean checkout of that exact sha. */
     preparation.preparedFor = target;
-    return true;
+    return;
   }
   preparation.preparedFor = null;
+  preparation.fleetBuiltFor = null;
   const found = tree.kind === "unknown"
     ? `the tree could not be stamped: ${tree.why}`
     : `the tree was at ${tree.sha}${tree.dirty ? " and dirty" : ""}`;
-  console.error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
-  return false;
+  throw new Error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
 }
 
 export function prepareRunner(
@@ -666,15 +678,14 @@ export function prepareRunner(
 
   deps.buildFleetClient(runner, target, preparation);
 
-  if (shouldPrepare) {
-    if (latchPreparation(preparation, target, deps.stamp(runner))) {
-      /* Keep every classified need pending until the whole attempt latches.
-         Otherwise B can install successfully, fail later, then leave its
-         modules under an A latch; an A..C diff that happens to be empty would
-         wrongly bless C without repairing B's partial derived state. */
-      preparation.needs = { dependencies: false, migrations: false };
-    }
-  }
+  // The fleet bundle can need rebuilding even at an already-prepared sha.
+  // Its config-load stamp cannot vouch for source edits during compilation.
+  latchPreparation(preparation, target, deps.stamp(runner));
+  /* Keep every classified need pending until the whole attempt latches.
+     Otherwise B can install successfully, fail later, then leave its
+     modules under an A latch; an A..C diff that happens to be empty would
+     wrongly bless C without repairing B's partial derived state. */
+  if (shouldPrepare) preparation.needs = { dependencies: false, migrations: false };
 }
 
 function databaseProblem(result: CommandResult): string | null {
