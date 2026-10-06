@@ -1,6 +1,6 @@
 # An article is found by the address it was asked for, and a redirect that ends on a paper source imports the paper
 
-Status as of 2026-10-06: **plan, not built.** Queue entry `qi-fbrh4kck`, deferred from
+Status as of 2026-10-06: **plan reviewed (GPT Sol, one round), being built.** Queue entry `qi-fbrh4kck`, deferred from
 [261005m](261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) § Deferred
 (report `spya-ayettj`, part 2). Greg said yes to the new column on 2026-10-06 (*"qi-fbrh4kck yes"*),
 relayed by the Overseer with one condition: the column must be additive.
@@ -54,16 +54,26 @@ article_revisions (the published one)
 
 - **Where it is written:** `lockOrCreateArticle` in `src/store/pg-revisions.ts` is the only line
   that inserts an `articles` row. It already takes a `birth` argument that is ignored when the row
-  exists. The asked-for address joins it. So a refresh, a retry and a late-stage re-run, which all
-  find the row already there, cannot change it. The caller passes the job row's `url`.
+  exists. The asked-for address joins it. **One exception, for Sol's K1:** a row that exists, has
+  never published a revision and has a null `asked_url` is given the address too. That is the row a
+  failed import left behind before the column existed, being retried. Only an import job reaches an
+  unpublished article with an address (a job with none of its own gets `urlForSlug`, which answers
+  nothing for an unpublished article), so the address is still the pasted one. Once the article has
+  published, or once the column is set, nothing changes it: a refresh and a late-stage re-run both
+  find a published row.
+- **How the address gets there** (Sol's K5): the job's `url` is in hand in `claimSession`
+  (`src/jobs.ts`) and has to be threaded through `openPgStoreSession` and `openOrBeginJobDraft`
+  (`src/store/pg-session.ts`, `src/store/pg-revisions.ts`) to `lockOrCreateArticle`, keeping the
+  article-before-job lock order. The test goes through `claimSession`, not the writer.
 - **Where it is read:** `slugForUrlKey`. An article matches when `urlKey(final_url)` equals the key,
-  as today, **or** `urlKey(asked_url)` does. A match by `final_url` wins over a match by
-  `asked_url` when two different articles match. An article with no published revision still never
-  matches, as today.
-- **Nothing else reads it.** It is not on any reader-facing read, not in `Meta`, not shown. It is
-  the owner's own pasted string and can carry a token in its query, so it stays off every public
-  projection. `docs/project/export.md` decides whether the owner's export carries it; the plan's
-  answer is yes if the export already carries `requestedUrl`, in the same place.
+  as today, **or** when its `final_url` is an address a paper source recognises and
+  `urlKey(asked_url)` equals the key. A match by `final_url` wins over a match by `asked_url` when
+  two different articles match. An article with no published revision still never matches.
+- **Nothing else reads it on purpose.** It is not on any reader-facing read, not in `Meta`, not
+  shown. It is the owner's own pasted string and can carry a token in its query, so it stays off
+  every public projection. The owner's export serialises the whole `articles` row bar a short list
+  (`articleJson`), so it will appear in `article.json` (Sol's K7; `requestedUrl` is in
+  `content/revision.json`). That is right for an owner's own export, and the stage checks it.
 - **The migration** is `alter table articles add column asked_url text`: additive, nullable, no
   default, no backfill, no index (the lookup is not SQL). Made with `npm run db:generate`.
 
@@ -76,12 +86,14 @@ link (and a dead short link then breaks refresh). On `articles` it is written on
 that creates the row, and it skips the revision's column inventories (`RAW_COLUMNS`, the carry
 policy, the read projections). It is also what the fact is: which address made this article.
 
-**What this changes that nobody asked for, named so Greg decides it.** The lookup applies to every
-article, not only papers. Today, pasting a redirecting link twice (a `t.co` link to a blog post)
-imports the post twice, and pays for two sets of AI stages. Afterwards the second paste finds the
-first article. The cost: a link that is *meant* to move (`example.com/latest`) finds the old
-article on a second paste, where today it imports the new one. A page whose content changes without
-a redirect already behaves that way, and Refresh is the answer in both cases.
+**The column is kept for every article; the lookup uses it only for papers** (Sol's K3). The first
+draft matched every article by its asked-for address, so a `t.co` link to a blog post pasted twice
+would find the first article. Sol showed what that breaks: a link that is meant to move
+(`example.com/latest`) would find the old article for ever, and Refresh could not fix it, because
+Refresh reads `final_url` and never goes back to `/latest`. A paper's link does not move. So the
+asked-for address finds an article only when that article's `final_url` is a paper a source
+recognises. An ordinary redirecting link pasted twice still imports twice, as today. Widening it
+is a product call for Greg, and the column is already there if he wants it.
 
 **Not solved, and the same as today:** the reader holds the arXiv paper, then pastes a short link
 to it. The short link's key matches nothing, a second article is minted, and the fetch step finds
@@ -102,7 +114,8 @@ else                        -> fetchFromPaperSource(paper), with doc on hand
 
 - **Only where the fetch ended**, never a hop in the middle, and only when it moved.
 - **The document already fetched may satisfy a candidate** (Sol's G6). The candidates are walked in
-  the usual order. When a candidate's address is the address `doc` ended on, `doc` is used in place
+  the usual order. When a candidate's address is the address `doc` ended on, by `sameTarget`
+  (`src/urls.ts`: the same request, ignoring only a fragment; Sol's K6), `doc` is used in place
   of a second request, and is held to the same promise (kind and marker). So a short link to
   `arxiv.org/pdf/<id>` asks arXiv's HTML first, and if that is absent uses the PDF it already holds.
   A short link to an abstract page fetches the candidates, since a landing page is never one.
@@ -117,7 +130,19 @@ else                        -> fetchFromPaperSource(paper), with doc on hand
 With stage 1, the article's `asked_url` is the short link and its `final_url` is the paper's, so
 the short link, the paper's landing page and the paper's PDF address all find it.
 
+**Stages 1 and 2 reach `dev` in one push** (Sol's K4), so there is no deploy in which a short link
+is remembered but still imports the abstract page.
+
 ### Stage 3: NBER and OSF — decided by the probe
+
+**The probe, 2026-10-06** (`261006i-evidence/probe-nber-osf-redirects.txt`, 28 requests through
+`fetchDocument`): NBER's PDF address answered a PDF for `w30000` and for two papers from this week;
+no held paper was found, so what one answers is unmeasured. NBER's DOI ends on the PDF itself.
+OSF's download ends on `storage.googleapis.com/…/<content hash>` with a signed query that changed
+between two requests ten seconds apart. **So NBER is built and OSF is not**: it is re-queued, and
+what it needs is the paper's `canonicalUrl` as the article's address, not this column alone. (The
+probe's subagent found one SocArXiv id through `api.osf.io`, which OSF's robots file disallows:
+one request, not repeated, and no code here calls it.)
 
 The same queue entry carries two sources that waited on stage 1. Each is one object in `SOURCES`
 if a live probe (free, `docs/plans/261006i-evidence/`) comes back clean:
@@ -138,9 +163,7 @@ if a live probe (free, `docs/plans/261006i-evidence/`) comes back clean:
   id their site uses.
 - **Reuse `requested_url`.** No migration. It is the wrong address for a paper source (G14), and it
   is overwritten by a refresh.
-- **Match on `asked_url` only for articles that came through the redirect look.** Avoids the
-  `/latest` change above. It makes the lookup depend on how an article was fetched, and leaves
-  ordinary redirecting links importing twice.
+- **Match every article by `asked_url`.** The first draft. Withdrawn for K3, above.
 
 ## Stages
 
@@ -151,11 +174,12 @@ a GPT Sol code review (write-capable, fixes inside the stage), one commit.
 
 - [ ] Red: `tests/find-article.test.ts` — an article whose `asked_url` is a short link and whose
       `final_url` is a paper address is found by the short link's key, by the paper's key, and not
-      by an unrelated key; an unpublished article with an `asked_url` is not found; two articles,
-      one matching by `final_url` and one by `asked_url`, answer the `final_url` one.
-- [ ] Red: a store test that the row a URL job creates carries the job's address, and that a
-      second job on the same slug (a refresh, whose address is `final_url`) leaves it unchanged; an
-      upload's row has null.
+      by an unrelated key; **an article whose `final_url` is not a paper is not found by its
+      `asked_url`**; an unpublished article with an `asked_url` is not found; two articles, one
+      matching by `final_url` and one by `asked_url`, answer the `final_url` one.
+- [ ] Red, through `claimSession`: the row a URL job creates carries the job's address; a second
+      job on the same published slug with a different address leaves it unchanged; an upload's row
+      has null; **an existing unpublished row with null gets the retry's address** (K1).
 - [ ] Schema, migration (`npm run db:generate`, `npm run db:chain`), `lockOrCreateArticle`,
       `slugForUrlKey`. Applied locally; `Target:` line read.
 - [ ] Mutations seen red: drop the `asked_url` half of the match; write `asked_url` on every lock
@@ -184,14 +208,33 @@ a GPT Sol code review (write-capable, fixes inside the stage), one commit.
 
 ### Stage 3: NBER, OSF
 
-- [ ] Per the probe. Either built by 261005m's rules for a source, or re-queued with the finding.
+- [ ] NBER, by 261005m's rules for a source: `nber.org` and `www.nber.org`, `/papers/w<N>`,
+      `/papers/w<N>.pdf`, `/system/files/working_papers/w<N>/w<N>.pdf`, and its DOI
+      `10.3386/w<N>` by pattern; one candidate, the `system/files` PDF; the key is what `urlKey`
+      gave the landing page before. Live-checked.
+- [ ] OSF: not built. Re-queue recommended in the debrief.
 
 ## Questions and decisions
 
 - **The column is on `articles`, written once.** § Why on `articles`.
-- **Every article is found by its asked-for address, not only papers.** § What this changes.
-  Flagged for Greg in the debrief.
+- **Only a paper is found by its asked-for address.** Widening it to every redirecting link is
+  flagged for Greg in the debrief.
+- **NBER built, OSF re-queued.** § Stage 3.
 
 ## Reviews
 
-(none yet)
+- **Plan review, GPT Sol, round 1** (`261006i-plan-review-sol.md`, on commit `1f7731bac`): *build it
+  after fixing K1, K2 and K3*. Its audit of the plan's claims about the code found them correct
+  bar K7. Each finding was checked against the code.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | K1 (P0) | A row a failed import left before the column existed keeps a null `asked_url` when it is retried, so the next paste imports and reads the paper again | **Fixed in the plan**: an unpublished row with a null value is given the address. Not in the reviewed snapshot, so the code review checks it first |
+  | K2 (P0, inherited) | A second paste that finds the article still spends an import slot: the route calls `withIngestSlot` for any request with an address, and an all-skipped job charges | **Not fixed here; raised with Greg.** It is true of every repeat paste today and `billing.md` records it as known (*"a re-added URL adopts the shelf's article and charges again … Defensible"*). This plan makes the same paste cheaper, not dearer: one slot, where before it was a slot, a second article and a second read. Changing what a slot is charged for is a billing decision |
+  | K3 (P1) | Matching every article by its asked-for address strands a moving link on its old article, and Refresh cannot recover it | **Accepted**: the lookup uses the column only when the article is a paper |
+  | K4 (P1) | Stage 1 deployed alone would remember short links whose article is still the abstract page | **Accepted**: one push for both stages |
+  | K5 (P2) | The job's address is not an argument at the first creation call | **Fixed in the plan**: the chain is named and the test goes through `claimSession` |
+  | K6 (P2) | "The same address" for the held document should be `sameTarget`, not string equality and not `urlKey` | **Accepted** |
+  | K7 (P3) | The export puts the column in `article.json`, not beside `requestedUrl` | **Fixed** |
+
+  One round on the plan: the fixes are checked in the stage's code review.
