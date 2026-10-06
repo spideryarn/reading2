@@ -48,6 +48,7 @@ import {
   formatNanos,
   spendFields,
 } from "./ai-spend.js";
+import { CallDeadlineReached } from "./call-failure.js";
 import { mintId } from "./ids.js";
 /* The artefact store the **filesystem** session writes through, and nothing
    else uses it: under Postgres a claim's session writes into its own draft and
@@ -315,10 +316,18 @@ export const DEADLINE_MARGIN_MS = 20_000;
  * It keeps `INTERRUPTED`'s wording and `Error`'s `name`, so nothing downstream
  * that reads either sees a change: this is a *narrowing* of what was already
  * thrown, not a new thing to handle.
+ *
+ * **It extends `CallDeadlineReached`** so that a model call this deadline stops
+ * is recorded in `ai_calls` as stopped by a `deadline` and not as an ordinary
+ * stop, which is what a reader's Stop gets: `abortClass` in
+ * src/call-failure.ts tests the reason by `instanceof`. The parent sets a
+ * `name` of its own, so it is set back here to keep the promise above. Plan
+ * docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md.
  */
-class DeadlineReached extends Error {
+class DeadlineReached extends CallDeadlineReached {
   constructor() {
     super(INTERRUPTED.message);
+    this.name = "Error";
   }
 }
 

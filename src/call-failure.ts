@@ -102,9 +102,11 @@ export const PROVIDER_EVENT_TYPES = [
  *
  * - `stall` — our stall clock: the provider sent nothing for too long.
  * - `deadline` — a recognised deadline expired while the call was active.
- *   It can cap one call, a turn or a processing step; it does not by itself
- *   say how long this particular provider request had been running.
- * - `abort` — anything else, a reader's Stop among them. Recorded rather than
+ *   It can cap one call, a turn, a processing step or a whole pipeline job;
+ *   it does not by itself say how long this particular provider request had
+ *   been running.
+ * - `abort` — anything else, a reader's Stop among them, and a stopped
+ *   live-conversation response (src/live.ts). Recorded rather than
  *   left null on purpose: it says the row was written by code that could tell
  *   the three apart, so an `aborted` row with no class is one that could not.
  */
@@ -162,8 +164,9 @@ export class StallReached extends Error {
  * **What a recognised deadline aborts with when it is a `setTimeout` and a
  * controller** rather than an `AbortSignal.timeout`, whose own reason
  * `abortClass` already recognises. Used for Structure's per-call cap and the
- * PDF figure step's budget. The pipeline's whole-job budget (`DeadlineReached`
- * in src/jobs.ts) is not recognised here and is recorded as `abort`.
+ * PDF figure step's budget, and extended by the pipeline's whole-job budget
+ * (`DeadlineReached` in src/jobs.ts), which is how that one is a `deadline`
+ * too without this file knowing about jobs.
  */
 export class CallDeadlineReached extends Error {
   constructor(message = "the call's deadline passed") {
