@@ -10,12 +10,22 @@
  * docs/plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md, stage 2.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyPrune, oldScreenshots } from "../scripts/prune-old-screenshots.js";
+import { applyPrune, isPrimaryCheckout, oldScreenshots } from "../scripts/prune-old-screenshots.js";
+
+const interleave = vi.hoisted(() => ({ afterGit: undefined as undefined | ((args: string[]) => void) }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:child_process")>();
+  return { ...original, execFileSync: (...args: Parameters<typeof original.execFileSync>) => {
+    const result = original.execFileSync(...args);
+    interleave.afterGit?.(args[1] as string[]);
+    return result;
+  } };
+});
 
 const DAY = 24 * 60 * 60;
 /** A fixed "now", so the dates below read as plain arithmetic. 2026-10-07T00:00:00Z. */
@@ -24,6 +34,7 @@ const daysAgo = (n: number) => NOW - n * DAY;
 
 const made: string[] = [];
 afterEach(() => {
+  interleave.afterGit = undefined;
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -61,6 +72,42 @@ function repo() {
 }
 
 describe("oldScreenshots", () => {
+  it("accepts a control character and a newline in tracked filenames", () => {
+    const r = repo();
+    const files = ["docs/plans/control\x01shot.png", "docs/plans/line\nshot.png"];
+    r.commit(files, daysAgo(30));
+    expect(oldScreenshots(r.dir, NOW)).toEqual(files.sort());
+  });
+
+  it("does not let a recent filename inject an old timestamp for another image", () => {
+    const r = repo();
+    r.commit([`docs/plans/a\x01${daysAgo(30)}\x01injected.png`, "docs/plans/victim.png"], daysAgo(1));
+    expect(oldScreenshots(r.dir, NOW)).toEqual([]);
+  });
+
+  it("refuses incomplete history in a shallow clone", () => {
+    const r = repo();
+    r.commit(["docs/plans/old.png"], daysAgo(1));
+    // Committer clocks need not be monotonic; the shallow boundary hides the
+    // recent touch and would otherwise synthesize an old addition at HEAD.
+    r.commit(["unrelated.md"], daysAgo(30));
+    const shallow = mkdtempSync(path.join(tmpdir(), "prune-shallow-test-"));
+    made.push(shallow);
+    execFileSync("git", ["clone", "-q", "--depth=1", `file://${r.dir}`, shallow]);
+    expect(() => oldScreenshots(shallow, NOW)).toThrow(/shallow/);
+    expect(existsSync(path.join(shallow, "docs/plans/old.png"))).toBe(true);
+  });
+
+  it("returns an empty list for an unborn repository with an image only staged", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "prune-unborn-test-"));
+    made.push(dir);
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    mkdirSync(path.join(dir, "docs/plans"), { recursive: true });
+    writeFileSync(path.join(dir, "docs/plans/staged.png"), "peer");
+    execFileSync("git", ["add", "docs/plans/staged.png"], { cwd: dir });
+    expect(oldScreenshots(dir, NOW)).toEqual([]);
+    expect(applyPrune(dir, NOW, () => null)).toEqual({ kind: "nothing-to-do" });
+  });
   it("lists an image committed eight days ago and not one committed six days ago", () => {
     const r = repo();
     r.commit(["docs/plans/260920a-shot-old.png"], daysAgo(8));
@@ -92,6 +139,18 @@ describe("oldScreenshots", () => {
       "docs/research/d.gif",
       "docs/user-feedback/e.jpeg",
     ]);
+  });
+
+  it("includes a recent side-branch touch reverted before a path-unchanged merge", () => {
+    const r = repo();
+    r.commit(["docs/plans/shot.png"], daysAgo(30));
+    r.git(["checkout", "-q", "-b", "side"]);
+    r.commit(["docs/plans/shot.png"], daysAgo(1), "recent edit");
+    r.commit(["docs/plans/shot.png"], daysAgo(20), "png");
+    r.git(["checkout", "-q", "dev"]);
+    r.commit(["unrelated.md"], daysAgo(15));
+    r.git(["merge", "-q", "--no-ff", "-m", "unchanged screenshot merge", "side"], daysAgo(9));
+    expect(oldScreenshots(r.dir, NOW)).toEqual([]);
   });
 
   it("goes by the committer date, not the author date", () => {
@@ -165,8 +224,79 @@ describe("oldScreenshots", () => {
   });
 });
 
+describe("isPrimaryCheckout", () => {
+  it("is true in the checkout that owns .git and false in a linked worktree", () => {
+    // `--apply` refuses in the primary. Between its last check and its commit
+    // there is a window no check can close (GPT Sol, code review 2, finding
+    // 1), and the primary is the tree a dozen agents share. A worktree of
+    // one's own has nobody else in it.
+    const r = repo();
+    expect(isPrimaryCheckout(r.dir)).toBe(true);
+    const linked = `${r.dir}-linked`;
+    made.push(linked);
+    r.git(["worktree", "add", "-q", "-b", "side", linked]);
+    expect(isPrimaryCheckout(linked)).toBe(false);
+  });
+});
+
 describe("applyPrune", () => {
   const noGuard = () => null;
+
+  it("refuses an edit made during the second history scan", () => {
+    const r = repo();
+    r.commit(["docs/plans/old.png"], daysAgo(30));
+    let logs = 0;
+    interleave.afterGit = (args) => {
+      if (args.includes("log") && ++logs === 2) r.write("docs/plans/old.png", "peer edit");
+    };
+    expect(applyPrune(r.dir, NOW, noGuard).kind).toBe("refused");
+    expect(readFileSync(path.join(r.dir, "docs/plans/old.png"), "utf8")).toBe("peer edit");
+  });
+
+  it("refuses a peer's staged edit made during the second scan even if disk matches HEAD", () => {
+    const r = repo();
+    r.commit(["docs/plans/old.png"], daysAgo(30));
+    let logs = 0;
+    interleave.afterGit = (args) => {
+      if (args.includes("log") && ++logs === 2) {
+        r.write("docs/plans/old.png", "peer staged edit");
+        r.git(["add", "docs/plans/old.png"]);
+        r.write("docs/plans/old.png", "png");
+      }
+    };
+    expect(applyPrune(r.dir, NOW, noGuard).kind).toBe("refused");
+    expect(r.git(["show", ":docs/plans/old.png"])).toBe("peer staged edit");
+  });
+
+  it.each(["--assume-unchanged", "--skip-worktree"])("refuses a dirty candidate hidden by %s", (flag) => {
+    const r = repo();
+    r.commit(["docs/plans/old.png"], daysAgo(30));
+    r.git(["update-index", flag, "docs/plans/old.png"]);
+    r.write("docs/plans/old.png", "hidden peer edit");
+    expect(applyPrune(r.dir, NOW, noGuard).kind).toBe("refused");
+    expect(readFileSync(path.join(r.dir, "docs/plans/old.png"), "utf8")).toBe("hidden peer edit");
+  });
+
+  it("refuses clean skip-worktree candidates instead of committing only some deletions", () => {
+    const r = repo();
+    r.commit(["docs/plans/normal.png", "docs/plans/skipped.png"], daysAgo(30));
+    r.git(["update-index", "--skip-worktree", "docs/plans/skipped.png"]);
+    const before = r.git(["rev-parse", "HEAD"]);
+    expect(applyPrune(r.dir, NOW, noGuard).kind).toBe("refused");
+    expect(r.git(["rev-parse", "HEAD"])).toBe(before);
+    expect(existsSync(path.join(r.dir, "docs/plans/normal.png"))).toBe(true);
+    expect(existsSync(path.join(r.dir, "docs/plans/skipped.png"))).toBe(true);
+  });
+
+  it("does not overwrite a peer's replacement when a commit hook fails", () => {
+    const r = repo();
+    r.commit(["docs/plans/old.png"], daysAgo(30));
+    const hook = path.join(r.dir, ".git/hooks/pre-commit");
+    writeFileSync(hook, "#!/bin/sh\nprintf peer > docs/plans/old.png\nexit 1\n");
+    chmodSync(hook, 0o755);
+    expect(applyPrune(r.dir, NOW, noGuard).kind).toBe("refused");
+    expect(readFileSync(path.join(r.dir, "docs/plans/old.png"), "utf8")).toBe("peer");
+  });
 
   it("commits the deletion of exactly the old screenshots, and leaves a peer's staged work staged", () => {
     const r = repo();

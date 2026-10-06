@@ -609,9 +609,11 @@ down to some routine daemon/service"*. Image files under `docs/plans/` (and the 
 last committed more than a week ago may be deleted from the tree in an ordinary commit; they stay in
 git history. A plan that links one is left with a dead image link, which is acceptable.
 **This one is yours to run, weekly or when a disk is tight**, because it is a commit and nothing
-unattended commits in the shared checkout: `npx tsx scripts/prune-old-screenshots.ts` lists them,
-`--apply` deletes and commits exactly those paths, and then `git push origin HEAD:dev`. What counts
-as a week old is in the script's header.
+unattended commits in the shared checkout: `npx tsx scripts/prune-old-screenshots.ts` lists them
+from anywhere. **`--apply` runs only in a worktree of your own** and refuses in the primary, because
+no check can stop a peer editing one of the files in the moment before the commit. So: make a
+worktree from `origin/dev`, run `--apply` there, `git push origin HEAD:dev`, remove the worktree.
+What counts as a week old is in the script's header.
 
 **The rest runs by itself since 2026-10-07.** `box-tidy.timer` runs
 [`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs) every hour; what it deletes and

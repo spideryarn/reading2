@@ -1191,9 +1191,11 @@ routine daemon/service"*. Three things do that now
 The script's header is the list of what it deletes, and it is short on purpose: Codex transcripts
 older than 7 days, `logs/tmux-jobs/*.log` older than 14 days, and the npm download cache when
 `/home` is at 80%. The permission for each is Greg's, quoted in
-[overseer.md § Keeping `/home` from filling](overseer.md#keeping-home-from-filling). It never
-deletes a path a live process has open, and deletes nothing at all if it cannot read `/proc` to
-find out. It **reports and does not remove** worktrees, Docker images, scratchpads and the stale
+[overseer.md § Keeping `/home` from filling](overseer.md#keeping-home-from-filling). It skips any
+file a live process has open or is standing in, as far as `/proc` shows, and deletes nothing at all
+if it cannot read `/proc` to find out. That is a strong guard and not a proof: it does not see a
+memory-mapped file, or one opened a moment after it looked, and the npm cache clean does not
+consult it. It **reports and does not remove** worktrees, Docker images, scratchpads and the stale
 directories in `/tmp`; a session decides those.
 
 ```

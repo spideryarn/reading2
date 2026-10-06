@@ -140,11 +140,32 @@ export function pathsInUse(procDir) {
         try {
           const stat = readFileSync(path.join(dir, "stat"), "utf8");
           const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
-          // A zombie has exited. The kernel has already released its cwd,
-          // descriptors and mappings; the entry waits for a parent to collect
-          // it. The box had 254 on 2026-10-07, some a month old, and treating
-          // one as unreadable meant the tidy never deleted anything.
-          if (fields[0] === "Z") continue;
+          // A zombie task released its own cwd, descriptors and mappings, but
+          // a zombie group leader can still have live sibling threads holding
+          // files. /proc lists group leaders only. Skip it only when status
+          // proves it is the group's sole remaining thread.
+          if (fields[0] === "Z") {
+            const threads = readFileSync(path.join(dir, "status"), "utf8")
+              .split("\n").filter((line) => line.startsWith("Threads:"));
+            if (threads.length === 1 && /^Threads:[ \t]+1[ \t]*$/.test(threads[0])) continue;
+            // Live siblings: a multi-threaded process part way through exiting.
+            // Each has its own cwd and fd links under task/<tid>; read those. A
+            // sibling that is itself a zombie holds nothing. Anything that
+            // cannot be read still stops the run.
+            if (threads.length === 1 && /^Threads:[ \t]+[0-9]+[ \t]*$/.test(threads[0])) {
+              let read = 0;
+              for (const tid of readdirSync(path.join(dir, "task"))) {
+                const task = path.join(dir, "task", tid);
+                const tstat = readFileSync(path.join(task, "stat"), "utf8");
+                if (tstat.slice(tstat.lastIndexOf(")") + 1).trim().split(/\s+/)[0] === "Z") continue;
+                inUse.add(readlinkSync(path.join(task, "cwd")));
+                for (const fd of readdirSync(path.join(task, "fd"))) inUse.add(readlinkSync(path.join(task, "fd", fd)));
+                read += 1;
+              }
+              if (read > 0) continue;
+            }
+            return { ok: false, why: `cannot confirm zombie process ${pid} has no live threads` };
+          }
           // Kernel threads normally have no cwd. Identify them positively via
           // stat field 9 (PF_KTHREAD), and require empty fd and maps readings.
           const flags = Number(fields[6]);
@@ -352,7 +373,14 @@ export function main(argv, env) {
   const tightPercent = env.BOX_TIDY_TIGHT_PERCENT === undefined ? POLICY.tightPercent : Number(env.BOX_TIDY_TIGHT_PERCENT);
   say(`box-tidy ${dryRun ? "(dry run, nothing is deleted) " : ""}start: ${describe("/")}; ${describe(cfg.homeMount)}`);
 
-  const use = pathsInUse(cfg.proc);
+  // Up to three looks. On a box running twenty sessions some process is usually
+  // part way through starting or exiting, and one look that lands on it should
+  // not cost the whole hour. Something that stays unreadable still stops the run.
+  let use = pathsInUse(cfg.proc);
+  for (let attempt = 1; !use.ok && attempt < 3; attempt += 1) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+    use = pathsInUse(cfg.proc);
+  }
   if (!use.ok) {
     say(`NOTHING DELETED: could not establish what live processes have open (${use.why})`);
   } else {

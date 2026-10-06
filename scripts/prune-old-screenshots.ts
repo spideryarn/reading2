@@ -15,8 +15,9 @@
  * A plan that links one is left with a dead image link, which Greg accepted
  * (docs/project/overseer.md § Keeping `/home` from filling).
  *
- * **Run by the Overseer, not by a timer.** Deleting them is a commit, and
- * nothing unattended commits in the shared checkout.
+ * **Run by the Overseer, not by a timer, and `--apply` only in a worktree of
+ * its own.** Deleting them is a commit, and nothing unattended commits in the
+ * shared checkout; `--apply` refuses there (`isPrimaryCheckout`).
  *
  * ## Only the dated folders
  *
@@ -44,9 +45,12 @@
  * a refusal if any candidate differs from `HEAD` in the index or on disk, and
  * the candidate list computed a second time. **An empty list never reaches
  * `git commit`**, because a commit with no pathspec is an index commit.
+ * These checks are snapshots: --apply still requires exclusive use of the
+ * checkout. A concurrent edit between validation and unlink/commit is unsafe.
  */
+import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,17 +81,28 @@ function git(repo: string, args: string[], env: NodeJS.ProcessEnv = {}): string 
  * the maximum is taken.
  */
 export function newestTouch(repo: string): Map<string, number> {
-  // \x01 brackets each commit's timestamp, so the pieces alternate: time, names, time, names.
-  const out = git(repo, ["log", "-m", "--no-renames", "--name-only", "-z", "--format=%x01%ct%x01", "--", ...DATED_FOLDERS]);
+  const head = spawnSync("git", ["rev-parse", "-q", "--verify", "HEAD"], { cwd: repo });
+  if (head.status === 1) return new Map(); // unborn branch: staged files have no touch date
+  if (head.status !== 0 || head.error) throw new Error("cannot resolve HEAD");
+  if (git(repo, ["rev-parse", "--is-shallow-repository"]).trim() !== "false") {
+    throw new Error("cannot establish screenshot ages from a shallow repository; fetch the full history first");
+  }
+  const out = git(repo, ["log", "-m", "--no-renames", "--name-only", "-z", "--format=%ct", "--", ...DATED_FOLDERS]);
   const newest = new Map<string, number>();
-  const pieces = out.split("\x01");
-  for (let i = 1; i + 1 < pieces.length; i += 2) {
-    const when = Number(pieces[i]);
-    if (!Number.isFinite(when)) throw new Error(`git log printed a commit time that is not a number: ${JSON.stringify(pieces[i])}`);
-    for (const raw of (pieces[i + 1] ?? "").split("\0")) {
-      const name = raw.replace(/^\n+/, "");
-      if (name === "") continue;
-      if (when > (newest.get(name) ?? 0)) newest.set(name, when);
+  let when: number | undefined;
+  // NUL cannot occur in a git path. Timestamp records are bare integers;
+  // every pathname here starts with docs/, including names containing SOH/newlines.
+  for (const token of out.split("\0")) {
+    const record = token.replace(/^\n/, ""); // git's separator before the first name
+    if (record === "") continue;
+    if (/^-?\d+$/.test(record)) {
+      when = Number(record);
+      if (!Number.isSafeInteger(when)) throw new Error("invalid git commit time");
+    } else {
+      if (when === undefined || !DATED_FOLDERS.some((folder) => record.startsWith(`${folder}/`))) {
+        throw new Error(`unexpected git log record: ${JSON.stringify(record)}`);
+      }
+      if (when > (newest.get(record) ?? -Infinity)) newest.set(record, when);
     }
   }
   return newest;
@@ -129,9 +144,25 @@ export type ApplyResult =
  * against a temporary repository, which has no such script, can still exercise
  * everything else here.
  */
+/**
+ * Whether `repo` is the checkout that owns `.git`, as opposed to a linked
+ * worktree: the test AGENTS.md gives (`--git-dir` equals `--git-common-dir`).
+ *
+ * `--apply` refuses there. The checks below cannot close the window between
+ * the last of them and the commit: a peer who edits or recreates a candidate
+ * in that moment has the edit lost, or committed under this script's message.
+ * In the primary, a dozen agents share the files. In a worktree of the
+ * caller's own, nobody else is in the tree.
+ */
+export function isPrimaryCheckout(repo: string): boolean {
+  const resolve = (flag: string) => path.resolve(repo, git(repo, ["rev-parse", flag]).trim());
+  return resolve("--git-dir") === resolve("--git-common-dir");
+}
+
 export function applyPrune(repo: string, nowSeconds: number, guard: () => string | null): ApplyResult {
   const files = oldScreenshots(repo, nowSeconds);
   if (files.length === 0) return { kind: "nothing-to-do" };
+  const head = git(repo, ["rev-parse", "--verify", "HEAD"]).trim();
 
   if (spawnSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: repo }).status === 0) {
     return { kind: "refused", why: "a merge is in progress in this checkout; finish it first" };
@@ -163,24 +194,81 @@ export function applyPrune(repo: string, nowSeconds: number, guard: () => string
       return { kind: "refused", why: "the list of old screenshots changed while this was running; run it again" };
     }
 
-    for (const file of files) unlinkSync(path.join(repo, file));
-
-    const message = path.join(scratch, "message");
-    writeFileSync(
-      message,
-      `Docs: delete ${files.length} screenshot(s) nothing has touched for ${MAX_AGE_DAYS} days\n\n` +
-        "scripts/prune-old-screenshots.ts --apply. Greg, 2026-10-06: \"old screenshots (>1w) can be\n" +
-        "deleted - you have permission going forwards\". They stay in history; a plan that links\n" +
-        "one now has a dead image link, which he accepted (docs/project/overseer.md).\n",
-    );
+    // Status can hide assume-unchanged/skip-worktree paths. Compare actual bytes
+    // with the pinned HEAD, and retain those bytes for exclusive-create recovery.
+    const format = git(repo, ["rev-parse", "--show-object-format"]).trim();
+    const tree = new Map(git(repo, ["ls-tree", "-r", "-z", head, "--", ...DATED_FOLDERS])
+      .split("\0").filter(Boolean).map((entry) => {
+        const tab = entry.indexOf("\t");
+        return [entry.slice(tab + 1), entry.slice(0, tab)];
+      }));
+    const saved = files.map((file) => {
+      const full = path.join(repo, file);
+      if (realpathSync(full) !== path.join(realpathSync(repo), file) || !lstatSync(full).isFile()) {
+        throw new Error(`candidate is not a regular file at its tracked path: ${file}`);
+      }
+      const body = readFileSync(full);
+      const hash = createHash(format).update(`blob ${body.length}\0`).update(body).digest("hex");
+      return { file, full, body, hash, stat: lstatSync(full) };
+    });
+    if (saved.some(({ file, hash }) => tree.get(file)?.split(" ")[2] !== hash)) {
+      return { kind: "refused", why: "a screenshot's on-disk bytes differ from HEAD" };
+    }
+    const skipped = git(repo, ["ls-files", "-v", "-z", "--", ...DATED_FOLDERS])
+      .split("\0").some((entry) => /^[Ss] /.test(entry) && wanted.has(entry.slice(2)));
+    if (skipped) return { kind: "refused", why: "a screenshot has skip-worktree set; git would omit its deletion" };
+    const index = new Map(git(repo, ["ls-files", "--stage", "-z", "--", ...DATED_FOLDERS])
+      .split("\0").filter(Boolean).map((entry) => {
+        const tab = entry.indexOf("\t");
+        const [mode, hash, stage] = entry.slice(0, tab).split(" ");
+        return [entry.slice(tab + 1), stage === "0" ? `${mode} blob ${hash}` : "unmerged"];
+      }));
+    if (files.some((file) => index.get(file) !== tree.get(file))) {
+      return { kind: "refused", why: "a screenshot's staged version differs from HEAD" };
+    }
+    const unchangedHead = () => git(repo, ["rev-parse", "HEAD"]).trim() === head &&
+      spawnSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: repo }).status === 1;
+    const deleted: typeof saved = [];
     try {
+      for (const item of saved) {
+        const current = lstatSync(item.full);
+        if (!unchangedHead() || current.dev !== item.stat.dev || current.ino !== item.stat.ino ||
+            current.ctimeMs !== item.stat.ctimeMs || current.mtimeMs !== item.stat.mtimeMs ||
+            !readFileSync(item.full).equals(item.body)) {
+          throw new Error(`checkout changed before deleting ${item.file}`);
+        }
+        unlinkSync(item.full);
+        deleted.push(item);
+      }
+      if (!unchangedHead()) throw new Error("HEAD or merge state changed before committing");
+      for (const item of deleted) {
+        try { lstatSync(item.full); } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw err;
+        }
+        throw new Error(`a screenshot was recreated before committing: ${item.file}`);
+      }
+
+      const message = path.join(scratch, "message");
+      writeFileSync(message, `Docs: delete ${files.length} screenshot(s) nothing has touched for ${MAX_AGE_DAYS} days\n\n` +
+        "scripts/prune-old-screenshots.ts --apply. Deleted images remain in git history.\n");
       git(repo, ["commit", "-q", "-F", message, ...pathspec], literal);
     } catch (err) {
-      // Put back exactly what was deleted a moment ago. Each was checked identical to HEAD above,
-      // so this overwrites nothing: without it a failed hook would leave hundreds of deletions lying
-      // in a shared working tree for the next `git commit -a` to pick up.
-      git(repo, ["restore", "--source=HEAD", "--worktree", ...pathspec], literal);
-      return { kind: "refused", why: `git commit failed, and the files were put back: ${(err as Error).message.split("\n")[0]}` };
+      const unrestored: string[] = [];
+      for (const item of deleted) {
+        try {
+          // Never replace a peer's new file, and never read a moving HEAD.
+          if (realpathSync(path.dirname(item.full)) !== path.join(realpathSync(repo), path.dirname(item.file))) {
+            throw new Error("candidate's parent changed");
+          }
+          writeFileSync(item.full, item.body, { flag: "wx", mode: item.stat.mode & 0o777 });
+        } catch {
+          unrestored.push(item.file);
+        }
+      }
+      return { kind: "refused", why: `prune failed; restored ${deleted.length - unrestored.length} deletion(s) without overwriting existing files` +
+        (unrestored.length ? `; left for inspection: ${unrestored.join(", ")}` : "") +
+        `: ${(err as Error).message.split("\n")[0]}` };
     }
     return { kind: "committed", files: files.length, commit: git(repo, ["rev-parse", "--short", "HEAD"]).trim() };
   } finally {
@@ -217,13 +305,21 @@ function main(): number {
     return 0;
   }
 
+  if (isPrimaryCheckout(repo)) {
+    console.error(
+      "REFUSED, nothing was changed: --apply does not run in the shared primary checkout, where another agent's edit\n" +
+        "could land between its last check and its commit. Run it in a worktree of your own, then push:\n" +
+        "  git worktree add -b prune-screenshots /var/tmp/spideryarn-worktrees/prune-screenshots origin/dev",
+    );
+    return 1;
+  }
   const result = applyPrune(repo, now, () => stagedRevertGuard(repo));
   switch (result.kind) {
     case "nothing-to-do":
       console.log("no screenshots old enough to delete; nothing was committed");
       return 0;
     case "refused":
-      console.error(`REFUSED, nothing was changed: ${result.why}`);
+      console.error(`REFUSED: ${result.why}`);
       return 1;
     case "committed":
       console.log(`deleted ${result.files} screenshot(s) in ${result.commit}. Not pushed: git push origin HEAD:dev`);

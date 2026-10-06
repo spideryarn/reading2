@@ -415,20 +415,82 @@ main([], process.env);
 });
 
 
-it("is not stopped by a zombie, which holds nothing open", () => {
+it("is not stopped by a sole-thread zombie, which holds nothing open", () => {
   // The box had 254 of them on 2026-10-07, some 33 days old, and with any one
   // present the scan read "cannot read process" and the tidy deleted nothing,
-  // every hour. A zombie has exited: the kernel has already released its cwd,
-  // descriptors and mappings, and only the process-table entry is left for a
-  // parent that never collected it. State `Z` in /proc/<pid>/stat says so.
+  // every hour. A sole-thread zombie has released its cwd, descriptors and
+  // mappings, and only its entry awaits collection. State Z alone does not
+  // rule out live sibling threads; status must also show Threads: 1.
   const b = box();
   const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
   const dir = path.join(b.proc, "1325187");
   mkdirSync(path.join(dir, "fd"), { recursive: true });
   writeFileSync(path.join(dir, "stat"), "1325187 (node) Z 4192885 0 0 0 -1 4228100\n");
+  writeFileSync(path.join(dir, "status"), "Name:\tnode\nState:\tZ (zombie)\nThreads:\t1\n");
   const { out } = run(b);
   expect(out).not.toContain("NOTHING DELETED");
   expect(existsSync(old)).toBe(false);
+});
+
+it.each([
+  ["a live sibling thread", "Threads:\t2\n"],
+  ["missing thread evidence", undefined],
+  ["malformed thread evidence", "Threads:\tunknown\n"],
+  ["contradictory thread evidence", "Threads:\t1\nThreads:\t2\n"],
+])("is stopped by a zombie leader with %s", (_reason, status) => {
+  // pthread_exit() can leave the leader in state Z while another thread still
+  // has descriptors open. A /proc directory listing includes only the leader.
+  const b = box();
+  const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+  const dir = path.join(b.proc, "778");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "778 (node) Z 1 0 0 0 -1 4228100\n");
+  if (status !== undefined) writeFileSync(path.join(dir, "status"), status);
+  const { out } = run(b);
+  expect(out).toContain("NOTHING DELETED");
+  expect(existsSync(old)).toBe(true);
+});
+
+it("reads what a zombie leader's live threads have open, rather than giving up", () => {
+  // Seen on the box minutes after the rule above landed: a multi-threaded
+  // process part way through exiting, leader already a zombie, and the tidy
+  // deleting nothing for it. On a box running twenty sessions some process is
+  // always in that state. The sibling threads are readable under task/, so
+  // read them: what they hold is kept, and everything else is still tidied.
+  const b = box();
+  const held = aged(path.join(b.home, ".codex", "sessions", "rollout-held.jsonl"), 30);
+  const free = aged(path.join(b.home, ".codex", "sessions", "rollout-free.jsonl"), 30);
+  const dir = path.join(b.proc, "779");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "779 (node) Z 1 0 0 0 -1 4228100\n");
+  writeFileSync(path.join(dir, "status"), "Name:\tnode\nState:\tZ (zombie)\nThreads:\t2\n");
+  mkdirSync(path.join(dir, "task", "779"), { recursive: true });
+  writeFileSync(path.join(dir, "task", "779", "stat"), "779 (node) Z 1 0 0 0 -1 4228100\n");
+  mkdirSync(path.join(dir, "task", "780", "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "task", "780", "stat"), "780 (node) S 1 0 0 0 -1 4228100\n");
+  symlinkSync("/", path.join(dir, "task", "780", "cwd"));
+  symlinkSync(held, path.join(dir, "task", "780", "fd", "3"));
+
+  const { out } = run(b);
+
+  expect(out).not.toContain("NOTHING DELETED");
+  expect(existsSync(held)).toBe(true);
+  expect(existsSync(free)).toBe(false);
+});
+
+it("is stopped by a zombie leader whose live thread cannot be read", () => {
+  const b = box();
+  const old = aged(path.join(b.home, ".codex", "sessions", "rollout-old.jsonl"), 30);
+  const dir = path.join(b.proc, "781");
+  mkdirSync(path.join(dir, "fd"), { recursive: true });
+  writeFileSync(path.join(dir, "stat"), "781 (node) Z 1 0 0 0 -1 4228100\n");
+  writeFileSync(path.join(dir, "status"), "Threads:\t2\n");
+  // A live sibling with no cwd link and no fd directory: nothing to read it by.
+  mkdirSync(path.join(dir, "task", "782"), { recursive: true });
+  writeFileSync(path.join(dir, "task", "782", "stat"), "782 (node) S 1 0 0 0 -1 4228100\n");
+  const { out } = run(b);
+  expect(out).toContain("NOTHING DELETED");
+  expect(existsSync(old)).toBe(true);
 });
 
 it("is still stopped by a live process it cannot read, even one whose name says zombie", () => {

@@ -23,7 +23,15 @@ export OVERSEER_SCRATCH=/path/to/the/overseer/working/directory
 | `feedback-sweep-loop.sh` | One feedback sweep every three hours, as a `run-claude` job; the prompt is `prompt-feedback-sweep.md` beside it. |
 | `dashboard-refresh-loop.sh` | Hourly: merge `origin/dev` into the primary and restart the fleet dashboard only if its inputs changed (`dashboard-refresh.sh`). |
 
-Start a loop with `npx tsx scripts/tmux-job.ts`, so it has a log and a session name. None of the
+Start a loop with `npx tsx scripts/tmux-job.ts`, so it has a log and a session name. **An `export`
+in your shell does not reach a tmux job**, which gets the tmux server's environment, so put the
+variable in the command:
+
+```
+npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=/path/to/dir bash scripts/overseer-tools/feedback-sweep-loop.sh
+```
+
+None of the
 loops survives a reboot; the list of what to restart afterwards is in
 [infra/hetzner/README.md](../../infra/hetzner/README.md).
 

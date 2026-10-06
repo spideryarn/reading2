@@ -453,12 +453,14 @@ value is written here or anywhere in the repo; each line names where one lives.
 
 **Before you replace the server**, while the old one still runs:
 
-1. **Decide whether the local database matters, and dump it if it does.** It is in Docker named
-   volumes under `/var/lib/docker`, on the disk that is about to be destroyed (17.6 GB, measured
-   2026-10-07). `npm run setup` afterwards restores the schema and the seeded accounts, and none of
-   the locally ingested articles. `npm run db:export -- --out ~/local-db-<date>` writes them under
-   `/home`; [database.md](../../docs/project/database.md) says what that export covers and what it
-   does not.
+1. **Accept that the local database will be lost, because nothing here can bring it back.** It is
+   in Docker named volumes under `/var/lib/docker`, on the disk that is about to be destroyed (17.6
+   GB, measured 2026-10-07). `npm run setup` afterwards restores the schema and the seeded accounts,
+   and none of the locally ingested articles. **There is no backup-and-restore for it as of
+   2026-10-07**: `npm run db:export` writes the article rows out but not the image bytes in local
+   Storage, and nothing imports an export back in
+   ([database.md](../../docs/project/database.md)). If the local shelf matters, that tool has to be
+   built first; whether it matters is an open question for Greg.
 2. **Note the two GitHub token files exist**: `/etc/github-tokens/gregdetre.token` and
    `spideryarn.token`. They are on `/`. Either copy them to `~` for the duration (and delete the
    copies afterwards) or be ready to mint new ones in step 5.
@@ -483,7 +485,8 @@ value is written here or anywhere in the repo; each line names where one lives.
    `curl -s http://127.0.0.1:8787/api/state | head -c 200`.
 8. **The Overseer daemon, exactly one of two ways.** `provision.sh` enables `overseer.service`, so
    after the first reboot systemd starts it. That copy has no `OPENROUTER_API_KEY` and runs with
-   attention off, saying nothing about it. Until the unit is given the key (a decision for Greg,
+   attention off; it says so once, in a startup warning that goes to the journal, where nobody is
+   looking. Until the unit is given the key (a decision for Greg,
    open as of 2026-10-07), run the daemon in tmux instead: `sudo systemctl disable --now overseer`,
    then the command in the header of
    [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh).
@@ -492,11 +495,15 @@ value is written here or anywhere in the repo; each line names where one lives.
    (`sudo systemctl start overseer-watchdog.timer` if not: provisioning enables it for the next
    boot and does not start it).
 9. **The Overseer session and its loops.** Start the session and claim the role
-   ([overseer.md](../../docs/project/overseer.md)), give it a working directory outside `/tmp`
-   (`export OVERSEER_SCRATCH=…`), and start the loops from
+   ([overseer.md](../../docs/project/overseer.md)), give it a working directory outside `/tmp`,
+   and start the loops from
    [`scripts/overseer-tools/`](../../scripts/overseer-tools/README.md) with `scripts/tmux-job.ts`:
    `feedback-sweep-loop.sh`, `dashboard-refresh-loop.sh`, and `npx tsx scripts/readiness-loop.ts`
-   ([readiness.md](../../docs/project/readiness.md)).
+   ([readiness.md](../../docs/project/readiness.md)). **`OVERSEER_SCRATCH` has to be inside the
+   job's command**, because a tmux job gets the tmux server's environment and not your shell's:
+   `npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=<dir> bash scripts/overseer-tools/feedback-sweep-loop.sh`.
+   Check each loop's log under `logs/tmux-jobs/` a minute later; a loop that could not find its
+   directory has already exited.
 10. **Only if somebody needs to watch the browser**: `start-vnc`
     ([Watching the browser](#watching-the-browser)). Nothing starts it at boot.
 

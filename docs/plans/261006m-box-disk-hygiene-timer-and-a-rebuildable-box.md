@@ -222,9 +222,41 @@ deletion*. What was done about that:
 - **Not taken:** a separate privileged helper for reading `/proc` (finding 15). The user already
   has passwordless sudo on this box.
 
+## Sol's code review of stages 2 and 3
+
+[Prompt](261006m-box-disk-hygiene-code-review-2-prompt.md),
+[answer](261006m-box-disk-hygiene-code-review-2-sol.md). Verdict: *changes required*, for two
+things it reported and could not fix. Both are now dealt with.
+
+- **Its fixes to the prune script, all kept** (2 to 6): recovery after a failed commit recreates
+  only the missing files from saved bytes instead of `git restore`; the candidates' bytes and index
+  entries are compared, so an edit hidden by `skip-worktree` or `assume-unchanged` is seen; the
+  history is parsed NUL-delimited, so a file name cannot forge a timestamp; a shallow clone is
+  refused.
+- **Finding 1, the window between the last check and the commit, cannot be closed by a check.**
+  So `--apply` now refuses in the primary checkout and runs only in a worktree of the caller's
+  own, where nobody else is editing. `overseer.md` says so.
+- **Finding 7, zombies again.** Sol showed a zombie leader can have live threads holding files, and
+  required `Threads: 1`. On the box that stopped the tidy within minutes: some multi-threaded
+  process is always part way through exiting. Its live threads are readable under `task/`, so the
+  script now reads them, and takes up to three looks at `/proc` before giving up. Three dry runs
+  in a row on the box got through.
+- **Finding 8: `db:export` is not a backup.** It leaves out the image bytes in local Storage and
+  nothing imports it. The rebuild sequence now says the local database is lost on a rebuild and
+  that no tool brings it back, instead of naming a command that looks like one.
+- **Findings 9, 11, 12**: `OVERSEER_SCRATCH` goes inside the tmux job's command; the box doc no
+  longer says the tidy "never" deletes an open file; the keyless daemon warns once in the journal
+  rather than saying nothing.
+- **Finding 10, not changed:** counting merges (`-m`) can make an untouched file look new. Sol
+  measured its alternative and both select the same 113 files today.
+
 ## Log
 
 - 2026-10-06: surveyed, measured, plan written, reviewed by Sol.
 - 2026-10-07: plan revised. Stage 1 built: `box-tidy.mjs`, its units, `homeDisk` in the health
   verdict and the dashboard tile. Dry run on the box with the unit's capabilities: 138 transcripts,
   142 job logs (one kept because a loop still has it open), 556,756 temp directories.
+- 2026-10-07: both code reviews done and answered. `box-tidy.timer` and `overseer-watchdog.timer`
+  installed and started on the box with the commands `provision.sh` runs. First real tidy run:
+  138 transcripts and 142 job logs deleted, 0.54 GB, one open log kept, exit 0. First watchdog run:
+  `overseer healthy`. Stages 2 and 3 built.
