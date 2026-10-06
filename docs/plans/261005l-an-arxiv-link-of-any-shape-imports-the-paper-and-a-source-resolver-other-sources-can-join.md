@@ -1,7 +1,7 @@
 # An arXiv link of any shape imports the paper, through a source resolver other sources can join
 
-Status as of 2026-10-05: **plan, revised after GPT Sol's two reviews, being built** — evidence: no
-`src/paper-sources.ts` in the tree. The eval it rests on is run and written up in
+Status as of 2026-10-06: **built and pushed to `dev`, both stages; not deployed** — evidence:
+`src/paper-sources.ts`, `src/latexml.ts` and their tests are in the tree. The eval it rests on is run and written up in
 [261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 1 of
@@ -274,7 +274,7 @@ address, not the route.
       eval already ran on this paper.
 - [x] Docs: `fetching.md` (a new section, and loose end 1 closed), `ingest-queue.md`,
       `architecture.md` § Shared code.
-- [ ] GPT Sol code review (write-capable, fixes inside the stage), gates, commit, push to `dev`.
+- [x] GPT Sol code review, gates, commit, push to `dev` (with stage 2; see § Reviews).
 
 **What landed, and what changed from the plan** (2026-10-05):
 
@@ -363,13 +363,30 @@ classes outside `article.ltx_document`, an extra authored sibling, a linked desc
       HTML arms against the PDF arms already bought, same rubric. Record the result in 261005e.
       **Five of five for the HTML arm, no regression found.**
 - [x] **Then** put the HTML candidate first, in the same commit as that evidence.
-- [ ] One real import of Greg's link, locally, end to end; a Sonnet subagent opens it in a browser
+- [x] One real import of Greg's link, locally, end to end; a Sonnet subagent opens it in a browser
       and checks the figures load, the maths draws, the tables have their headers.
+      **Done 2026-10-06**, once the local database was current. `npm run ingest -- <the link>
+      --force`: `fetch 600 KB, arXiv HTML`, 283 blocks, 52 sections, 1 image stored. (Without
+      `--force` the address was adopted from the shelf and every step skipped, which is the dedup
+      working: the job stuck by the earlier database fault had since completed.) In the browser,
+      through Playwright on the box: the title and twelve authors in the masthead; the source link
+      `arxiv.org/html/2608.13566`; the boxed passage as prose; Tables 1 and 2 as real tables with
+      their header rows; Figure 1 drawn from our own asset store (2032 px wide); 164 formulas drawn
+      and no raw `\(` in the page; 18 code blocks with their indentation; the reference list, with
+      a citation's hover card and jump working; no script errors in the console.
+      **Seen there and left:** Table 1 is wider than the prose column and its right-hand columns
+      are clipped until it is expanded, as any wide table is; the line under the title now lists
+      all twelve authors before "~84 min read", above the affiliations paragraph; reference
+      entries carry arXiv's "Cited by" text.
 - [x] Docs: `content-extraction.md` (a new section), `fetching.md`. `maths.md` needed nothing: it
       describes how TeX is drawn, and that did not change. `/help` does not describe what pasting
       a link does.
 - [x] GPT Sol code review (write-capable): *ship it*, with nine fixes made in place.
-- [ ] Gates, push.
+- [x] Gates, push. `npm test` after merging `origin/dev`, 2026-10-06: 37,220 passed, 5 failed in 6
+      files. Five files want a build this worktree has not got (`cold-start-lazy-imports`,
+      `pdf-bundle-trace`, and three fleet route tests, which say so). The sixth was this work:
+      `tests/client-imports.test.ts` keeps a list of the pure modules the browser may share, and
+      `src/paper-sources.ts` was not on it. Added; green. `npm run typecheck` clean.
 
 **What landed, and what changed from the plan** (2026-10-06):
 
@@ -401,7 +418,8 @@ classes outside `article.ltx_document`, an extra authored sibling, a linked desc
 
 ### Stage: bookkeeping
 
-- [ ] `docs/user-feedback/261005_1912-….md`, `feedback-endings.ts`, `overseer-queue.ts done`.
+- [x] `docs/user-feedback/261005_1912-an-arxiv-link-imports-the-paper-not-the-abstract-page.md`,
+      `feedback-endings.ts`, `overseer-queue.ts done`.
 
 ## What the eval found
 
