@@ -72,10 +72,11 @@ v2, the scrapbook, is built on top of that:
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
-  - the glossary terms it uses, as chips that open to a one-line sense and an icon into Glossary
-    (a text link until 2026-09-29, below). They are found in the prose the reader sees, by the
-    glossary's own matcher, over every term. A term an earlier stop on this pass also uses says
-    *"also at stop k"*;
+  - the glossary terms it uses, as chips that open the glossary's own card, the one the prose shows
+    for the same term (since 2026-10-06, below). They are found in the prose the reader sees, by the
+    glossary's own matcher, over every term. Until 2026-10-06 a chip opened one line of the term's
+    sense in place with an icon into Glossary (a text link until 2026-09-29, below), and a term an
+    earlier stop on this pass also used said which stop;
   - the ideas it bears on — links into Ideas until 2026-09-29, chips that open in place since;
   - where it sits in the study, as links into Timeline when that experimental control is available,
     and as text when it is hidden.
@@ -86,6 +87,34 @@ v2, the scrapbook, is built on top of that:
   (`useIdeasRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
   it is generated for it: what ties the pieces together is seeing them side by side, not a new
   summary of them.
+
+  **A term chip opens the glossary's card, and names no other stop**, since 2026-10-06
+  (report `spya-se0e4v`,
+  [plan 261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md)):
+
+  > In Skim mode, the Glossary clues don't have to say "also at stop X". And they should provide/reuse the usual "go to glossary" etc in rich tooltips
+  >
+  > — Greg, 2026-10-06
+
+  What changed:
+
+  - The chip is the term's name and nothing else. `alsoAt` and the route it was counted along are
+    gone from [`stop-card.ts`](../../src/web/stop-card.ts).
+  - The chip opens `TermCard`, exported from
+    [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), inside the shared `Tooltip` with
+    `interactive` ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)).
+    It is `TermChip` in `SkimPanel.tsx`. The line of sense that used to open in place is gone for
+    terms, so a term is drawn one way. Ideas chips still open in place.
+  - Hover or focus opens it for a mouse or a keyboard. A tap opens it for a finger and it stays
+    until a tap elsewhere. A mouse click does not pin it. A tapped card is the panel's one open
+    snippet, so opening an idea closes it and so does stepping to another stop.
+  - The owner's card has *Dig deeper*, *Hide* and *Open glossary*. A visitor's has *Open glossary*
+    alone. A reader whose Glossary control is hidden gets neither *Open glossary* nor *Dig deeper*,
+    because a dig's answer is drawn in Glossary.
+  - The card scrolls inside half the window's height, so the buttons under a long entry can be
+    reached on a short screen (`.skim-term-card` in
+    [`skim.css`](../../src/web/styles/skim.css)).
+  - After *Hide* the chip is gone, so keyboard focus moves to the stop's row.
 
 Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 [plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):

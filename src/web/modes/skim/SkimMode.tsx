@@ -56,6 +56,7 @@ import { type WhereRow, whereForBlock } from "../../where.js";
 import { useSkim } from "../../useSkim.js";
 import { SkimPanel, type SkimPass, type SkimRow } from "../../SkimPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
+import type { TermActions } from "../../ProseHoverCard.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
 import { useTimelineRead } from "../../useTimeline.js";
@@ -263,6 +264,8 @@ export function SkimBand({
   );
   const view = useSkimMode({
     sources,
+    /* The read is the owner's two verbs on a term, as it is for the prose card. */
+    termActions: glossary,
     onOpen,
     canOpen,
     stops: owner.skim?.stops ?? NO_STOPS,
@@ -338,7 +341,8 @@ export function VisitorSkimBand({
     [glossary, ideas, timeline],
   );
   const { away, ...rest } = walk;
-  const view = useSkimMode({ ...rest, sources, stops: route.stops, quotes });
+  /* `termActions: null`: a visitor may read a term's card and change nothing. */
+  const view = useSkimMode({ ...rest, sources, termActions: null, stops: route.stops, quotes });
   return <SkimPanel access={{ kind: "visitor", route }} view={view} away={away} />;
 }
 
@@ -353,6 +357,11 @@ export interface SkimView {
   position: number;
   /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
   card: StopCard | null;
+  /**
+   * *Dig deeper* and *Hide* on a term chip's card, or `null` for a visitor
+   * (SkimPanel.tsx § `TermChip`, plan 261006e).
+   */
+  termActions: TermActions | null;
   onDepth(depth: SkimDepth): void;
   onRow(quoteId: string): void;
   onStep(dir: -1 | 1): void;
@@ -364,6 +373,7 @@ export interface SkimView {
 
 function useSkimMode({
   sources,
+  termActions,
   onOpen,
   canOpen,
   stops,
@@ -381,6 +391,7 @@ function useSkimMode({
   arrival,
 }: {
   sources: CardSources;
+  termActions: TermActions | null;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
   stops: SkimStop[];
@@ -729,12 +740,10 @@ function useSkimMode({
   );
 
   /* **The stop card**, gathered for the current stop only, from what the
-     other modes have already written. "Also at stop k" counts along this
-     pass, so the route goes in as its stops' blocks. */
-  const routeBlocks = useMemo(() => route.map((s) => blockOf(s.quoteId)), [route, blockOf]);
+     other modes have already written. */
   const card = useMemo(
-    () => (stopBlock === null ? null : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources })),
-    [stopBlock, blocks, routeBlocks, sources],
+    () => (stopBlock === null ? null : gatherStopCard({ blockId: stopBlock, blocks, sources })),
+    [stopBlock, blocks, sources],
   );
 
   return {
@@ -743,6 +752,7 @@ function useSkimMode({
     rows,
     position: current ? route.indexOf(current) + 1 : 0,
     card,
+    termActions,
     onDepth: changeDepth,
     onRow,
     onStep,

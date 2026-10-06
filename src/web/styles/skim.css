@@ -382,7 +382,25 @@
 }
 .skim-chip:hover,
 .skim-chip.on { border-color: var(--highlight); }
-.skim-also { color: var(--ink-faint); font-size: 0.75rem; }
+/* **A term chip's card** — the glossary's own (`TermCard`, styled by
+   prose-hover-card.css), inside the shared tooltip (SkimPanel.tsx § TermChip).
+   Only its height is ours. An entry with a web answer is long, and the row of
+   buttons is the last thing in it, so the card scrolls rather than running off
+   a short window (GPT Sol, plan review of 261006e, F3).
+
+   Half the window, because the card sits above or below its chip and `flip`
+   picks the roomier side, which is never less than half of what the chip
+   leaves. The 4rem is the rest of that side: half the chip, the tooltip's
+   offset and edge padding (10px each) and the panel's own padding. The floor
+   keeps a line of text and the buttons in a window too short for any of this.
+
+   On this wrapper and not on `.tooltip`: the panel's arrow hangs outside its
+   box, and `overflow` there would clip it. */
+.skim-term-card {
+  max-height: max(6rem, calc(50dvh - 4rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .skim-sense {
   margin-top: 0.35rem;
   padding-left: 0.5rem;

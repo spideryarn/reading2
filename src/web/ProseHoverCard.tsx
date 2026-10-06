@@ -2158,7 +2158,15 @@ export interface TermActions {
   hiding: ReadonlySet<string>;
 }
 
-function TermCard({
+/**
+ * **A glossary entry as a card**: what it means here, in general, what the web
+ * said, and one row of *Dig deeper · Hide · Open glossary*.
+ *
+ * Exported since 2026-10-06 for Skim's term chips (SkimPanel.tsx § `TermChip`,
+ * plan 261006e), which draw it inside the shared `Tooltip` rather than this
+ * file's own card. It mounts none of the prose hover machinery.
+ */
+export function TermCard({
   entry,
   onOpen,
   actions,
@@ -2166,11 +2174,20 @@ function TermCard({
   onOpenTerm,
 }: {
   entry: GlossaryEntry;
-  onOpen(): void;
+  /**
+   * The way out to the full entry. **Absent, no *Open glossary* is drawn**: a
+   * Skim reader whose Glossary control is hidden has nowhere to be sent. The
+   * prose always passes it.
+   */
+  onOpen?: (() => void) | undefined;
   /** `null` for a visitor: no Dig deeper, no Hide. */
   actions: TermActions | null;
   onClose(): void;
-  onOpenTerm(id: string): void;
+  /**
+   * Where *Dig deeper* lands. **Absent, no *Dig deeper* is drawn**, for the
+   * same reader: the answer streams into the Glossary band and nowhere else.
+   */
+  onOpenTerm?: ((id: string) => void) | undefined;
 }) {
   const prose = entryProse(entry);
   /* Why the Hide pressed here did not go through. The card's own line, because
@@ -2196,7 +2213,7 @@ function TermCard({
    * streaming inside the card — is passed over in its § 3.
    */
   const dig = () => {
-    if (!actions) return;
+    if (!actions || !onOpenTerm) return;
     void actions.look(entry.id);
     onClose();
     onOpenTerm(entry.id);
@@ -2267,6 +2284,9 @@ function TermCard({
           owner's two verbs were a second row under this one (plan 261002c § 3).
           The row wraps rather than overflowing: an entry with a link and a
           *Dig deeper again* is wider than the card. */}
+      {/* No foot at all with nothing to put in it: a visitor in Skim with no
+          Glossary to open, on a term with no link. */}
+      {(entry.url || actions || onOpen) && (
       <p className="prose-card-foot prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
@@ -2288,6 +2308,7 @@ function TermCard({
             finger as it does. */}
         {actions && (
           <>
+            {onOpenTerm && (
             <button
               type="button"
               className="prose-card-act"
@@ -2298,6 +2319,7 @@ function TermCard({
               {digging ? <LoaderCircle size={10} className="cmt-spinner" /> : <Globe size={10} />}
               {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
             </button>
+            )}
             <button
               type="button"
               className="prose-card-act"
@@ -2317,12 +2339,15 @@ function TermCard({
             dead end: the mark itself stays inert to a click, because pressing
             prose has always meant selecting it. It said "in the glossary" until
             2026-10-03; Greg asked for a label that says what pressing it does. */}
+        {onOpen && (
         <button type="button" className="prose-card-open" onClick={onOpen}>
           <BookA size={10} />
           Open glossary
         </button>
+        )}
         </span>
       </p>
+      )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>
   );
