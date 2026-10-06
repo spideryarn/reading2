@@ -120,3 +120,20 @@ Nothing else differs. No rule was reordered.
 - `npx biome lint` on the eight files: 15 findings (8 `noDuplicateProperties` in
   `annotations.css`, 7 `noDescendingSpecificity`), all in rules this cluster did not touch.
 - `npx vitest run tests/doc-links.test.ts`: passes with this file added.
+
+## Review
+
+GPT Sol reviewed commit `b1bcdb4c7`
+([prompt](261006j-sixth-sweep-s6-code-review-prompt.md),
+[answer](261006j-sixth-sweep-s6-code-review-sol.md)). Verdict: **ship**, no findings, no changes.
+
+- It found no emitter for any of the seven classes, computed names included (3,379 code files
+  parsed), and no reader for any of the six tokens.
+- Its own PostCSS comparison of the eight stylesheets against the parent commit shows exactly six
+  whole rules, four shortened selector lists and ten token declarations removed, with order and
+  specificity of everything else unchanged.
+- **No browser was run.** That no pixel moved is reasoned from the built-stylesheet diff above and
+  from that comparison.
+- Editing the root `styles/tokens.css` was accepted.
+- **Left for the next sweep:** `--depth-0`, confirmed unread, together with the two comments that
+  use "§ --depth-0" as a section name (`SearchPanel.tsx`, `search.css`).
