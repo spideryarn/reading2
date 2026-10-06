@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."articles" ADD COLUMN "asked_url" text;

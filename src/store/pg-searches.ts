@@ -2,7 +2,8 @@
  * "Find every passage that…" — the Postgres half. src/searches.ts is the other.
  *
  * The decision about *which* run a request produces is not here. It is
- * `withRun` in src/searches.ts, which both stores call, because it holds the
+ * `withRun` in src/searches.ts, which this store calls (as the deleted
+ * filesystem store did), because it holds the
  * three-condition retry rule this repo carries a postmortem for
  * (docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md) and a rule
  * with two implementations is a rule with two behaviours. What is here is
@@ -12,8 +13,8 @@
  * ## The attempt fence
  *
  * A *run* is the reader's question. An *attempt* is one call to the model. The
- * filesystem store has only the first, and sweeps stale runs by asking an
- * in-process `Set` which ones it started — right for one server on one disk,
+ * filesystem store (gone 2026-09-05) had only the first, and swept stale runs by
+ * asking an in-process `Set` which ones it started — right for one server on one disk,
  * and wrong the moment two processes share a database:
  *
  * 1. Process A takes the POST and starts a run.
@@ -24,18 +25,17 @@
  *    and nothing else — writes the old answer over the retry.
  *
  * Nothing in that sequence is exotic; on Vercel it is the ordinary shape. So
- * every attempt gets an id and a start time, the sweep may only bury an attempt
- * old enough that no process could still be on it, and a finish must name the
+ * every attempt gets an id and a start time, the sweep waits for the grace
+ * window unless this process is still writing it, and a finish must name the
  * attempt it is reporting for. GPT Sol's review called this the single change
  * that most reduces risk in this step.
  *
  * ## The article lock is the mutex
  *
- * src/searches.ts serialises every write in the process through one promise
- * chain. Here it is `select … from articles … for update`, which is stronger
- * (it holds across processes) and observably the same (every concurrent pair
- * that both succeed today both succeed here). Article-wide rather than
- * per-run because minting scans every id in the article.
+ * The deleted filesystem writer serialised writes through a process-local
+ * promise chain. Here it is `select … from articles … for update`, which holds
+ * across processes. Article-wide rather than per-run because minting scans
+ * every id in the article.
  *
  * **No model call happens inside these transactions.** The lock is held for the
  * two or three statements it takes to write rows the caller already has.
@@ -494,7 +494,7 @@ const rawPgSearchStore: SearchStore = {
        clock says, or a four-minute search gets killed by the same server that
        started it. The age check is for every other process: an attempt younger
        than the grace window might still be in flight somewhere else, and
-       burying it is what the filesystem store does wrong.
+       burying it is what the filesystem store did wrong.
 
        A `pending` row with no attempt at all is sweepable outright. That is an
        imported run, or one from before this column existed — either way the

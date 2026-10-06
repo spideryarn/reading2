@@ -377,8 +377,10 @@ export async function writeRaw(
  * store the bytes, and this puts *those* bytes — from the same
  * `storedDocumentBytes` — under the name the manifest gives them.
  *
- * All of this dies at stage 4 with the filesystem store, which is the right
- * time for it to die. docs/plans/260831b-finish-the-database-move.md § Stage 4.
+ * All of this was meant to die at stage 4 with the filesystem store
+ * (docs/plans/260831b-finish-the-database-move.md § Stage 4) and did not: the
+ * command line that called it went on 2026-09-05 (see the foot of this file),
+ * and its only caller today is tests/stage2c-raw-bytes.test.ts.
  */
 export async function writeRawFiles(
   dir: string,

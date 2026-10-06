@@ -635,6 +635,65 @@ const SOURCE_CASES: Record<string, SourceCase> = {
       "https://user:pw@jmlr.org/papers/v15/srivastava14a.html",
     ],
   },
+  /* docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+     § Stage 3. The key is pinned as a literal: it is what `urlKey` answered for
+     `https://www.nber.org/papers/w30000` on the commit before this source
+     existed (`8f45d1ff7`), where `www.` was dropped by `urlKey` itself. */
+  nber: {
+    shapes: [
+      "https://www.nber.org/papers/w30000",
+      "https://nber.org/papers/w30000",
+      "http://www.nber.org/papers/w30000",
+      "https://www.nber.org/papers/w30000/",
+      "https://www.nber.org/papers/w30000.pdf",
+      "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf",
+      "https://nber.org/system/files/working_papers/w30000/w30000.pdf",
+      "https://www.nber.org/papers/W30000",
+      "https://www.nber.org/system/files/working_papers/W30000/w30000.pdf",
+      "https://doi.org/10.3386/w30000",
+      "https://dx.doi.org/10.3386/W30000",
+      "https://www.nber.org/papers/w30000?utm_source=x#fromrss",
+    ],
+    resolved: {
+      source: "nber",
+      id: "w30000",
+      canonicalUrl: "https://www.nber.org/papers/w30000",
+      key: "nber.org/papers/w30000",
+      slug: "nber-w30000",
+      candidates: ["https://www.nber.org/system/files/working_papers/w30000/w30000.pdf"],
+    },
+    hosts: ["www.nber.org"],
+    nearMisses: [
+      "https://www.nber.org/",
+      "https://www.nber.org/papers",
+      "https://www.nber.org/papers/",
+      "https://www.nber.org/papers/w",
+      "https://www.nber.org/papers/30000",
+      "https://www.nber.org/papers/wabc",
+      "https://www.nber.org/papers/w30000a",
+      "https://www.nber.org/papers/w3000000",
+      "https://www.nber.org/papers/t0123",
+      "https://www.nber.org/papers/w30000/revisions",
+      "https://www.nber.org/papers/w30000.pdf/x",
+      "https://www.nber.org/papers/w30000.html",
+      "https://www.nber.org/x/papers/w30000",
+      "https://www.nber.org/system/files/working_papers/w30000/w30001.pdf",
+      "https://www.nber.org/system/files/working_papers/w30000/w3000.pdf",
+      "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf/x",
+      "https://www.nber.org/system/files/working_papers/w30000.pdf",
+      "https://www.nber.org/system/files/chapters/w30000/w30000.pdf",
+      "https://data.nber.org/papers/w30000",
+      "https://www.nber.org.evil.example/papers/w30000",
+      "https://notnber.org/papers/w30000",
+      "https://www.nber.org:444/papers/w30000",
+      "https://user:pw@www.nber.org/papers/w30000",
+      "https://doi.org/10.3386/wabc",
+      "https://doi.org/10.3386/t0123",
+      "https://doi.org/10.3386/w30000/x",
+      "https://doi.org/10.3387/w30000",
+      "https://www.nber.org/10.3386/w30000",
+    ],
+  },
 };
 
 const resolvedOrThrow = (url: string) => {
@@ -643,7 +702,7 @@ const resolvedOrThrow = (url: string) => {
   return got;
 };
 
-describe("resolvePaperSource — the five other sources", () => {
+describe("resolvePaperSource — the sources after arXiv", () => {
   for (const [name, wanted] of Object.entries(SOURCE_CASES)) {
     describe(name, () => {
       const whole = {
@@ -672,7 +731,8 @@ describe("resolvePaperSource — the five other sources", () => {
         const got = resolvedOrThrow(wanted.shapes[0] as string);
         expect(isSlug(got.slug)).toBe(true);
         const landing = new URL(got.canonicalUrl);
-        expect(got.key).toBe(`${landing.hostname}${landing.pathname.replace(/\/$/, "")}`);
+        /* Without `www.`, as `urlKey` always dropped it: NBER is known by its `www.` address. */
+        expect(got.key).toBe(`${landing.hostname.replace(/^www\./, "")}${landing.pathname.replace(/\/$/, "")}`);
         expect(got.candidates.length).toBeGreaterThan(0);
         for (const candidate of got.candidates) {
           expect(candidate.expect).toBe("pdf");

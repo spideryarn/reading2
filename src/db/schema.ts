@@ -358,6 +358,34 @@ export const articles = spideryarn.table("articles", {
    * sets it back.
    */
   processing: text("processing").notNull().default("full"),
+
+  /**
+   * **The address the reader pasted to make this article**, when that was an
+   * address at all. Null for an upload, and for every article made before
+   * 2026-10-06.
+   *
+   * It is a different fact from the revision's two addresses. `final_url` is
+   * where the bytes came from, and `requested_url` is what the fetch step asked
+   * for, which for a paper is an address we derived. A short link or a DOI that
+   * ends on a paper has the paper's address in both, so without this the link
+   * the reader actually holds would find nothing on a second paste, and they
+   * would import and pay for the same paper again.
+   *
+   * **Written once**, by the one line that creates the row
+   * (`lockOrCreateArticle`, src/store/pg-revisions.ts), which also fills a null
+   * on a row that has never published. Nothing changes it after that. It is on
+   * `articles` rather than on the revision because a revision is rewritten by
+   * every fetch, and a refresh's address is the article's `final_url`.
+   *
+   * **Read by one thing on purpose**: `slugForUrlKey`
+   * (src/store/find-article.ts), and only for an article that is a paper. It is
+   * the owner's own pasted string and can carry a token in its query, so it
+   * stays off every public and shared read. The owner's export keeps it
+   * (`article.json`). No index: the lookup compares `urlKey`s in JavaScript.
+   *
+   * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+   */
+  askedUrl: text("asked_url"),
 }, (t) => [
   /** The two states, and a third would be a row every guard reads as full. */
   check("articles_processing", sql`${t.processing} in ('minimal','full')`),
@@ -2190,8 +2218,8 @@ export const comments = spideryarn.table(
      * see docs/plans/260828a-comments-and-bookmarks.md § There is deliberately no
      * foreign key. The short version: the link is advisory, a deleted thread
      * leaves a comment that is still the reader's mark, and a constraint
-     * Postgres can keep and the filesystem store cannot is exactly what
-     * tests/store-parity.test.ts exists to catch.
+     * Postgres can keep and the filesystem store (gone 2026-09-05) could not
+     * was exactly what tests/store-parity.test.ts existed to catch.
      */
     threadId: text("thread_id"),
     status: text("status").notNull(),
@@ -2659,14 +2687,14 @@ export const jobs = spideryarn.table(
 
     /**
      * **How many times this job has been given back to the queue after its
-     * claimant stopped answering.** The budget's counter, and nothing else reads
-     * it.
+     * claimant stopped answering or cooperatively paused at its deadline.**
+     * The budget's counter; it also crosses the wire as `Job.requeues`.
      *
      * `settleExpired` (src/store/pg-jobs.ts) used to end every lapsed claim
      * `error`, so a deploy landing during an ingest — or a step that overran its
      * lease — cost the reader their job and sent them to the Retry button. It
-     * now puts the job back to `queued` on **this same row** instead, which is
-     * what the filesystem store's `sweepStopped` has always done on restart, and
+     * now requeues an uncancelled job with budget left on **this same row**,
+     * which is what the filesystem store's `sweepStopped` had done on restart, and
      * what keeps the slug, the article and therefore the article's checkpoints —
      * and, since 2026-09-04, the **draft** as well, without which the block ids
      * those checkpoints are keyed on move and reaching them is not the same as
@@ -5545,9 +5573,9 @@ export const checkpoints = spideryarn.table(
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
-     * filesystem adapter turns this string into a **file name**. A key the
-     * database would take and the filesystem would not is a divergence that
-     * shows up as one store working and the other quietly not — and no dot is
+     * filesystem adapter (deleted 2026-09-01) turned this string into a **file
+     * name**. A key the database would take and the filesystem would not was a
+     * divergence that showed up as one store working and the other quietly not — and no dot is
      * allowed at all, so `..` is impossible by construction rather than by a
      * second check. Lower case only: macOS filesystems are case-insensitive, so
      * two keys differing only in case would be one file and two rows.

@@ -39,7 +39,7 @@
  * the box is pinned by its bottom edge so it grows upward, and the whole box
  * scrolls so the header then leaves out of the top. So: three parts, only the
  * middle one scrolls, and a stable height once there is a transcript. The
- * matching rules are in styles.css § the floating panels.
+ * matching rules are in dialogs.css § the floating chat panel.
  *
  * ## Three places, one panel
  *

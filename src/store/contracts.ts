@@ -779,23 +779,16 @@ export interface ShelfStore {
  * model call and a confidence score. This one is a text index: free, instant,
  * and with nothing to be uncertain about.
  *
- * **The two adapters do not agree, and a parity test over this would be wrong
- * to demand that they do.** This said they agreed on the *set* of block ids for
- * a single-word query. That was false, and a cross-family review caught it:
- * Postgres matches English lexemes, so `writes` finds "writing" and "write-nots"
- * and `the` finds nothing at all (a stop word); the filesystem adapter matches
- * substrings, so it finds `the` inside "theory" and misses every inflection.
- * They disagree on single words, which was exactly the case the old claim
- * called safe.
+ * **There is one adapter now, Postgres.** It matches English lexemes, so
+ * `writes` finds "writing" and "write-nots" and `the` finds nothing at all (a
+ * stop word). Until 2026-09-05 a filesystem adapter stood beside it and matched
+ * substrings instead — `the` inside "theory", and no inflections — so the two
+ * disagreed on single words, which a cross-family review caught after this
+ * comment had called that case safe.
+ * See docs/plans/260826k-library-shelf-actions-and-search.md.
  *
- * What they DO share is written down and is what a test may hold them to: an
- * exact word that appears verbatim, is not a stop word, and has no inflections
- * in the corpus is found by both, in the same blocks. Ranking is never
- * comparable. See docs/plans/260826k-library-shelf-actions-and-search.md.
- *
- * **`excludeSlug` is the one thing they must agree about exactly**, because it
- * is not a matching rule — it is a promise that a named article is absent. Both
- * adapters keep it the same way: inside the query, before the cap. See
+ * **`excludeSlug` is not a matching rule** — it is a promise that a named
+ * article is absent, and it is kept inside the query, before the cap. See
  * `LibrarySearchOptions`.
  */
 export interface LibrarySearch {
@@ -1747,8 +1740,7 @@ export interface ReaderStore {
    * **Experimental features: when they were switched on, or `null` for off.**
    *
    * An ISO 8601 string rather than a `Date`, because that is what crosses the
-   * wire and what the filesystem store holds; a `Date` here would mean one
-   * adapter parsing what the other stringifies for no reader's benefit.
+   * wire (and what the filesystem store held, until 2026-09-05).
    * docs/project/experimental-features.md.
    */
   readExperimental(): Promise<string | null>;
@@ -1786,11 +1778,10 @@ export interface ReaderStore {
  *
  * **The one contract in this file that is not about the reader asking**, and
  * the only one whose implementation runs a query with no owner filter on it.
- * It is a contract rather than a bare function so that the filesystem store can
- * refuse it in the same shape everything else is selected in — see
- * src/store/index.ts, where `files` gets an adapter whose only method throws.
- * There are no users on a filesystem: `data/` is one directory per slug and
- * nothing in it records that a person exists.
+ * It is a contract rather than a bare function for a historical reason: until
+ * 2026-09-05 the filesystem store refused it in the same shape everything else
+ * was selected in, through an adapter whose only method threw. Today
+ * src/store/index.ts wires the one Postgres implementation with `guarded(...)`.
  *
  * Read-only, and it should stay that way. Nothing here bans, deletes or spends;
  * an admin *page* that can only look is a much smaller thing to get wrong than
@@ -2569,12 +2560,11 @@ export function feedbackHourlyCap(ownerId: string): number | null {
  * **A bug report, filed by a reader who is looking at the thing that went
  * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
  *
- * **Postgres only.** Not `guarded(...)` like the reads: there is a Postgres
- * implementation and a filesystem *refusal*, the same asymmetry `AdminStore`
- * and `VisibilityStore` have. A files adapter would be twenty lines written
- * against a module that docs/plans/260831b-finish-the-database-move.md deletes
- * this week, plus a parity obligation to keep two implementations agreeing until
- * one of them goes.
+ * **Postgres only**, and `guarded(...)` in src/store/index.ts like every other
+ * seam. Until 2026-09-05 a filesystem *refusal* stood beside the Postgres
+ * implementation, the same asymmetry `AdminStore` and `VisibilityStore` had; a
+ * files adapter was never written, and the store it would have sat on is gone
+ * (docs/plans/260831b-finish-the-database-move.md).
  *
  * The refusal has to reach the reader as a sentence saying the report was not
  * saved — a button that can only fail is worse than no button, because pressing

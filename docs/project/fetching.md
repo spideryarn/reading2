@@ -474,26 +474,30 @@ the paper. **A `pdf/` link gets the HTML too**: the choice is about the paper, n
 button on arXiv's page the link was copied from.
 
 **Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
-read off the pasted address. A source only discovered after a fetch (a `doi.org` link that
-redirects to a publisher) does not fit and is not built.
+read off the pasted address. A link that names its paper only once it has been followed (a short
+link, a `doi.org` link that redirects to a publisher) is not a source and needs no object:
+[§ A link that leads to a paper](#a-link-that-leads-to-a-paper).
 
 ### The sources
 
-Since 2026-10-06 there are six, and two sites that are shapes of the first. Every one was chosen
+Since 2026-10-06 there are seven, and two sites that are shapes of the first. Every one was chosen
 because its landing page imported as a stub of a few hundred words under the paper's title
 ([261005e](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
 has the measurement and the ranking, and
 [the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
-which sources were left out and why).
+which sources were left out and why). NBER came a few hours after the other five, in
+[261006i § Stage 3](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-3-nber-and-osf-decided-by-the-probe),
+which also says why OSF is still not one.
 
 | Source | What it recognises | What it fetches, in order |
 |---|---|---|
-| `arxiv` | arXiv's own addresses, above. Also the pages *about* an arXiv paper: `huggingface.co/papers/<id>`, and `alphaxiv.org/abs/<id>` and `/overview/<id>` with or without `www.` | `arxiv.org/pdf/<id>` |
+| `arxiv` | arXiv's own addresses, above. Also the pages *about* an arXiv paper: `huggingface.co/papers/<id>`, and `alphaxiv.org/abs/<id>` and `/overview/<id>` with or without `www.` | `arxiv.org/html/<id>`, then `arxiv.org/pdf/<id>` |
 | `acl` | `aclanthology.org/<id>`, with a trailing slash or `.pdf`; `doi.org/10.18653/v1/<id>` | `aclanthology.org/<id>.pdf` |
 | `pmlr` | `proceedings.mlr.press/v<N>/<name>.html`, `/v<N>/<name>.pdf`, `/v<N>/<name>/<name>.pdf` | `/v<N>/<name>/<name>.pdf`, then `/v<N>/<name>.pdf` |
 | `neurips` | `proceedings.neurips.cc` and `papers.nips.cc`: `/paper/<year>/hash/<hash>-Abstract[-<track>].html` and `/file/<hash>-Paper[-<track>].pdf`, with or without `/paper_files` in front | `proceedings.neurips.cc/paper_files/paper/<year>/file/<hash>-Paper[-<track>].pdf` |
 | `cvf` | `openaccess.thecvf.com/<collection>/html/<name>.html` and `/<collection>/papers/<name>.pdf`, the collection written `content_cvpr_2016` or `content/ICCV2021` | `/<collection>/papers/<name>.pdf` |
 | `jmlr` | `jmlr.org/papers/v<N>/<name>.html` and `/papers/volume<N>/<name>/<name>.pdf`, with or without `www.` | `jmlr.org/papers/volume<N>/<name>/<name>.pdf` |
+| `nber` | `nber.org/papers/w<N>`, with a trailing slash or `.pdf`, and `/system/files/working_papers/w<N>/w<N>.pdf`, with or without `www.`; `doi.org/10.3386/w<N>` | `www.nber.org/system/files/working_papers/w<N>/w<N>.pdf` |
 
 **A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
 exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
@@ -510,15 +514,20 @@ The rules every source follows, each held by `tests/paper-sources.test.ts` for e
   backslash or a doubled slash.
 - **The landing page, the PDF's own address and every candidate resolve to one paper.** The
   article's address afterwards is the PDF's, and "do we already have this?" asks that address. A
-  source whose PDF ended somewhere its own pattern does not know would be imported, and paid for,
-  on every paste. `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last run is
-  [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt).
+  source whose PDF ended somewhere its own pattern does not know would not be found by the
+  paper's other addresses. The original pasted address can still find it through `asked_url`
+  when the published revision's `requested_url` identifies the paper source.
+  `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last whole
+  run is [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt), and
+  NBER's is [`261006i-evidence/resolve-live.txt`](../plans/261006i-evidence/resolve-live.txt).
 - **Every candidate is the paper, as a PDF. The landing page is never one.** A stub stored under
   the paper's key could not be replaced by pasting the PDF.
 - **The key holds the whole id and the slug is cut to 60 characters.** A CVF file name runs to 90.
-  The key is what `urlKey` gave the landing page before the source existed.
+  The key is what `urlKey` gave the landing page before the source existed, so it has no `www.`
+  (`nber.org/papers/w30000`) even where the site's own address does.
 - **A name keeps the case it was pasted in**, because these servers are case-sensitive. ACL's ids
-  are the exception: a DOI is case-insensitive, so `n19-1423` is spelled `N19-1423`.
+  are the exception: a DOI is case-insensitive, so `n19-1423` is spelled `N19-1423`. NBER's
+  numbers are the other, for the same reason: `W30000` is spelled `w30000`.
 - **NeurIPS's ending is read off the link, never guessed.** The file is `-Paper.pdf` in some years
   and `-Paper-Conference.pdf` or `-Paper-Datasets_and_Benchmarks.pdf` in others, and the abstract
   page's own name carries the same ending.
@@ -526,6 +535,44 @@ The rules every source follows, each held by `tests/paper-sources.test.ts` for e
 **What that costs.** Each of these serves the paper as a PDF only, and a PDF is read by a model:
 about ten US cents and one to three minutes, where the landing page took seconds and nothing. That
 is the price of the paper rather than its announcement, and the same as pasting the PDF's address.
+
+### A link that leads to a paper
+
+A short link (`bit.ly`, `t.co`) or a DOI no source knows by its pattern names no paper until it
+has been followed. Until 2026-10-06 such a link imported whatever page it ended on, which for an
+arXiv paper was the abstract page. Now `fetchByAddress` in
+[`src/pipeline.ts`](../../src/pipeline.ts) looks once more, after the fetch:
+
+```
+ paper = resolvePaperSource(url)
+ if a paper                → its candidates, as above
+ doc = fetchDocument(url)                                  ← as it always was
+ if doc.url is where we asked (ignoring a fragment)        → keep doc
+ paper = resolvePaperSource(doc.url)
+ if none                   → keep doc, one request, as it always was
+ else                      → that paper's candidates, as above, with doc in hand
+```
+
+- **Only the address the fetch ended on is asked about**, never a hop on the way, and only when
+  it is not the address that was asked for.
+- **The document already fetched is not fetched twice.** When a candidate's address is the one
+  the document ended on, the document stands in for that request, and is held to the candidate's
+  promise like any other answer. "The same address" is `sameTarget` (`src/urls.ts`): one request,
+  differing at most by a fragment. So a short link to `arxiv.org/pdf/<id>` asks for arXiv's HTML
+  first and, when there is none, uses the PDF it holds. A link to a landing page fetches the
+  candidates, since a landing page is never one.
+- **Nothing new is trusted.** The redirect only says which paper, by the same patterns a pasted
+  address goes through. What is fetched are the registry's own fixed addresses.
+  [security-map.md](security-map.md).
+- **From there on it is that source's fetch**: its name on the job card (`312 KB, ACL Anthology
+  PDF`), and its failure and `warn` line, below.
+
+The article's address afterwards is the paper's, not the short link's, so the shelf finds it by
+the link through `articles.asked_url`:
+[ingest-queue.md](ingest-queue.md). The reasoning, and what the review changed, is
+[the plan](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-2-the-redirect-look);
+four real redirecting links are in
+[`261006i-evidence/resolve-live.txt`](../plans/261006i-evidence/resolve-live.txt).
 
 ### A paper that is not where the rule says
 

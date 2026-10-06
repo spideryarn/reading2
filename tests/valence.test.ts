@@ -148,7 +148,7 @@ describe("every token the emitter names is a property the stylesheet defines", (
    * silently in a different place.**
    *
    * `valenceRgbToken` names a `--*-rgb` triple, which the prose mark
-   * interpolates as `rgb(var(--h0))` (styles.css § stacked hues). Hand that a
+   * interpolates as `rgb(var(--h0))` (annotations.css § stacked hues). Hand that a
    * property nobody defines — or the plain `--div-rg-0`, whose value is itself
    * an `rgb(…)` expression — and the declaration is invalid at computed-value
    * time, so the stripe paints nothing while every other mark on the page still

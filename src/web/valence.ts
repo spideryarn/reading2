@@ -74,7 +74,7 @@ export function valenceToken(scale: DivergingScale, valence: number): string {
  * Two functions rather than one with a flag, because the two callers want two
  * different things and neither can use the other's. A panel swatch sets
  * `background` and wants a *colour*; a mark in the prose is painted by a
- * stylesheet rule that writes `rgb(var(--h0))` (styles.css § stacked hues), so
+ * stylesheet rule that writes `rgb(var(--h0))` (annotations.css § stacked hues), so
  * what it needs is the **three numbers** to interpolate — hand it
  * `var(--div-rg-0)`, whose value is itself an `rgb(…)` expression, and the
  * declaration is invalid at computed-value time and the stripe simply does not

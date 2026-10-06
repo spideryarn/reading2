@@ -623,7 +623,7 @@ const rawPgLibrarySearch: LibrarySearch = {
 
        So `qualia OR "hard problem"` becomes `'qualia' | ( 'hard' <-> 'problem' )`
        — a real disjunction with a real phrase in it. The filesystem adapter
-       cannot do any of that and does not pretend to; src/library-search.ts
+       could not do any of that and did not pretend to; src/library-search.ts
        § parseQuery says so out loud. */
     const tsquery = sql`websearch_to_tsquery(${CONFIG}, ${trimmed})`;
 
@@ -636,7 +636,7 @@ const rawPgLibrarySearch: LibrarySearch = {
     /* Normalisation flag **1** — divide the rank by `1 + log(document length)`
        — not the default 0, which is no normalisation at all. Without it a long
        paragraph outranks a short one simply by containing more words, and the
-       filesystem adapter explicitly damps for length, so the two would have
+       filesystem adapter explicitly damped for length, so the two would have
        disagreed about which hit is best for a reason nobody had chosen.
        https://www.postgresql.org/docs/17/textsearch-controls.html */
     const rank = sql<number>`ts_rank_cd(${revisionBlocks.fts}, ${tsquery}, 1)`;

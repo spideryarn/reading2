@@ -8,7 +8,7 @@
  * ## Why this exists
  *
  * `SPIDERYARN_OWNER_ID` decides who owns rows written **outside** a request —
- * the CLI, the pipeline, `db:import` (src/owner.ts). Unset, that is the seeded
+ * the CLI and the pipeline (src/owner.ts). Unset, that is the seeded
  * row-owner `dev@spideryarn.local`, which nobody signs in as, so the library you
  * see after signing in is empty however much has been ingested. `.env.example`
  * and docs/project/supabase-local.md have recommended setting it to the
@@ -72,9 +72,9 @@
  *   `revision_blocks`, `block_identities`, `revision_step_runs`, `chat_messages`,
  *   `queue_state`. Each reaches its owner through a row that has one, so moving
  *   the parent moves them (src/owner.ts § the header).
- * - **The filesystem store under `data/`** is not touched and cannot be: it has
- *   no owner at all. Anything still on it is out of scope, which is fine — new
- *   work goes to Postgres (docs/project/database.md).
+ * - **Anything under `data/`** is not touched and cannot be: the filesystem
+ *   store that wrote it had no owner at all, and it went on 2026-09-05
+ *   (docs/project/database.md).
  *
  * ## The dry run is the real write, rolled back
  *

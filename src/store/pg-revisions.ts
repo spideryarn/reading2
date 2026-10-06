@@ -760,6 +760,43 @@ export async function lockArticlesInSlugOrder<
 }
 
 /**
+ * **Tell an existing article the address it was asked for, if nobody has and
+ * it has published nothing.** Otherwise hand the row back untouched.
+ *
+ * `articles.asked_url` is written when the row is born, and this is the one
+ * exception. A failed import from before the column existed (2026-10-06) left
+ * a row with no published revision and a null here. Retry keeps that slug and
+ * copies the failed job's address, so the row is *found*, not created, and
+ * without this the paper would publish with a null and the next paste of the
+ * same short link would import and charge for it again. GPT Sol's K1 on
+ * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md.
+ *
+ * **Both conditions are needed, and each stops a different wrong write.**
+ *
+ * - *Never published* (`current_revision_id` is null). A job with no address
+ *   of its own, a refresh or a late step, is given the article's `final_url`
+ *   by `enqueue` (src/jobs.ts), and that answers nothing for an unpublished
+ *   article. So the only job that reaches an unpublished row with an address
+ *   is an import carrying what the reader pasted. On a published row the
+ *   address in hand is usually the paper's own, which nobody pasted.
+ * - *Still null*. The first address told is the one kept.
+ *
+ * The caller holds the row's `FOR UPDATE` lock, so the row read and the row
+ * written are the same one.
+ */
+async function rememberAskedUrl(
+  tx: Tx,
+  article: typeof articles.$inferSelect,
+  askedUrl: string | null,
+): Promise<typeof articles.$inferSelect> {
+  if (askedUrl === null || article.askedUrl !== null || article.currentRevisionId !== null) {
+    return article;
+  }
+  await tx.update(articles).set({ askedUrl }).where(eq(articles.id, article.id));
+  return { ...article, askedUrl };
+}
+
+/**
  * The article row for this slug, **locked** — created first if it is not there.
  *
  * `lockArticle` can only lock a row that exists, and "there is no row yet" is
@@ -791,11 +828,19 @@ export async function lockOrCreateArticle(
    * row that already exists: nothing here ever changes a live article's
    * `processing`; only the publication that lands a tree does
    * (src/store/pg-session.ts).
+   *
+   * **`askedUrl` is the address the reader pasted**, kept in
+   * `articles.asked_url` so a short link that ended on a paper finds that
+   * paper again (src/db/schema.ts § `askedUrl`). It has no default, so every
+   * caller says which it is: a job's own address, or `null` for an upload and
+   * for a caller that is not creating an article on a reader's behalf. It is
+   * the one part of `birth` an existing row may still take, and only in the
+   * case `rememberAskedUrl` below describes.
    */
-  birth: { readonly processing?: "minimal" } = {},
+  birth: { readonly processing?: "minimal"; readonly askedUrl: string | null },
 ): Promise<typeof articles.$inferSelect> {
   const found = await lockArticle(tx, slug);
-  if (found) return found;
+  if (found) return await rememberAskedUrl(tx, found, birth.askedUrl);
 
   /* **The one name an article may not be born with**, and it is checked here
      rather than in `isSlug` because this is the only line in the repo that
@@ -830,6 +875,7 @@ export async function lockOrCreateArticle(
       slug,
       shortId: shortIdInSlug(slug) ?? mintId(),
       ...(birth.processing ? { processing: birth.processing } : {}),
+      askedUrl: birth.askedUrl,
     })
     /* Another transaction may have inserted this slug between our lock
        attempt and here — the lock cannot protect a row that does not exist
@@ -837,8 +883,10 @@ export async function lockOrCreateArticle(
        would rewrite somebody's shelf state to defaults. */
     .onConflictDoNothing({ target: articles.slug })
     .returning();
-  const article = inserted[0] ?? (await lockArticle(tx, slug));
-  if (article) return article;
+  if (inserted[0]) return inserted[0];
+  /* Somebody else's insert won. Theirs is an existing row like any other. */
+  const raced = await lockArticle(tx, slug);
+  if (raced) return await rememberAskedUrl(tx, raced, birth.askedUrl);
 
   /* **Two readings of "we could not get this row", and they want different
      words.**
@@ -1102,7 +1150,10 @@ async function beginDraftIn(
 ): Promise<BeginRevisionResult> {
   const { slug } = opts;
   {
-    const article = await lockOrCreateArticle(tx, slug);
+    /* No asked-for address: a job's claim has already locked or created this
+       row and told it (`openOrBeginJobDraft`), and `beginRevision` on its own
+       is a caller with no reader's pasted address in hand. */
+    const article = await lockOrCreateArticle(tx, slug, { askedUrl: null });
 
     const revisionId = randomUUID();
     const basedOn = article.currentRevisionId;
@@ -1251,6 +1302,13 @@ export async function openOrBeginJobDraft(opts: {
   readonly sweep?: DraftSweepOptions;
   /** What the article is born as if this claim creates it — `lockOrCreateArticle`'s `birth`. */
   readonly processing?: "minimal";
+  /**
+   * The job's own address, for `articles.asked_url` — `lockOrCreateArticle`'s
+   * `birth`. Absent for an upload, which has none. It is an argument and is not
+   * read off the job row below because the article is locked, and may be
+   * created, *before* the job is: article lock before job lock, everywhere.
+   */
+  readonly askedUrl?: string;
 }): Promise<OpenDraftResult> {
   const { slug, job } = opts;
   requireSlug(slug);
@@ -1280,7 +1338,10 @@ export async function openOrBeginJobDraft(opts: {
      * is precisely the orphaned-draft bug this function exists to prevent. A row
      * that does not exist cannot be locked, so the row has to exist.
      */
-    const article = await lockOrCreateArticle(tx, slug, opts.processing ? { processing: opts.processing } : {});
+    const article = await lockOrCreateArticle(tx, slug, {
+      ...(opts.processing ? { processing: opts.processing } : {}),
+      askedUrl: opts.askedUrl ?? null,
+    });
 
     /**
      * **Locked, not merely selected.**
@@ -1623,9 +1684,10 @@ export async function beginStepRun(
 /**
  * This step has ended, and only the attempt that started it may say so.
  *
- * One fenced `UPDATE`, which is what the filesystem adapter's own comment has
- * been asking for since it was written. Two conditions carry the whole
- * protocol, and they refuse different things:
+ * First the owning job and draft are fenced by `requireLiveJobOwnsDraft`.
+ * Then one conditional `UPDATE` finishes the step, which is what the
+ * filesystem adapter's comment had asked for. Its two row conditions refuse
+ * different things:
  *
  * - **`attempt_id`** — somebody else's claim. A lapsed claimant whose lease was
  *   swept still holds a token and would otherwise finish a step the new

@@ -1689,13 +1689,13 @@ async function main(): Promise<void> {
  * that is about the import graph rather than about tidiness.**
  *
  * It needs `buildTree`, which is in `src/structure.ts`, which imports the app —
- * and through it `src/cli-ledger.ts` and the ledger's filesystem adapter. This
- * file already imports the world and is never loaded by a test; `harness.ts` is
- * imported by `tests/deepen-eval.test.ts`, and keeping the reach out of it is
- * what lets that suite touch no store at all rather than needing an entry in
- * `tests/store-migration-registry.ts` excusing one.
- * docs/project/database.md; `scripts/store-migration-candidates.ts` is what says
- * whether this is still true.
+ * and through it `src/cli-ledger.ts` and, until 2026-09-05, the ledger's
+ * filesystem adapter. This file already imports the world and is never loaded
+ * by a test; `harness.ts` is imported by `tests/deepen-eval.test.ts`, and
+ * keeping the reach out of it was what let that suite touch no store at all
+ * rather than needing an entry in `tests/store-migration-registry.ts` excusing
+ * one. The import walk that said whether this was still true went on
+ * 2026-10-06; docs/project/database.md.
  *
  * The assertions it is held to are `assertSeamProof`, which stays in
  * `harness.ts` and is unit-tested there — this half is the driving.

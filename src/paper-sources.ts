@@ -6,15 +6,19 @@
  * browser can import it too.
  *
  * **Adding a source is adding one object to `SOURCES`**, as long as the paper
- * and the addresses to try can be read off the pasted address. A source that is
- * only known after a fetch (a DOI that redirects to a publisher) does not fit
- * here.
+ * and the addresses to try can be read off the pasted address. A link that
+ * names its paper only once it has been followed (a short link, a DOI that
+ * redirects to a publisher) still does not fit here, and needs nothing here:
+ * the fetch step puts the address such a link ended on to this same registry
+ * (`fetchByAddress` in src/pipeline.ts, the redirect look).
  *
  * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
  * § `src/paper-sources.ts`: the registry. The sources after arXiv, and the
  * rules they all follow, are
  * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
- * § The rules every source here follows.
+ * § The rules every source here follows. NBER joined by the same rules:
+ * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md
+ * § Stage 3.
  */
 
 export interface PaperCandidate {
@@ -210,8 +214,8 @@ const arxiv: PaperSource = {
    - The key is what `urlKey` gave the landing page before the source existed,
      and holds the whole id. The slug is cut to fit `isSlug`.
    - A name keeps the case the address spelled it in, in the key and in the
-     candidate, because these servers are case-sensitive. ACL's ids are the one
-     exception, and say why.
+     candidate, because these servers are case-sensitive. ACL's ids and NBER's
+     numbers are the exceptions, and say why.
 
    These sites have no versions in their addresses, so `versionedId` and
    `workId` are the same id.
@@ -242,7 +246,8 @@ function paperAt(source: string, id: string, slugFrom: string, landing: string, 
     versionedId: id,
     workId: id,
     canonicalUrl: landing,
-    key: `${address.hostname}${address.pathname.replace(/\/$/, "")}`,
+    /* As `urlKey` (src/ingest.ts) spells an ordinary address: no `www.`, no trailing slash. */
+    key: `${address.hostname.replace(/^www\./, "")}${address.pathname.replace(/\/$/, "")}`,
     slug: slugOf(source, slugFrom),
     candidates: pdfs.map((url) => ({ url, expect: "pdf" })),
   };
@@ -364,12 +369,44 @@ const jmlr: PaperSource = {
   },
 };
 
+const NBER_HOSTS: ReadonlySet<string> = new Set(["nber.org", "www.nber.org"]);
+/**
+ * An NBER working paper's number: `w` and one to six digits (the newest was
+ * `w35846` on 2026-10-06). Matched case-insensitively and spelled lower-case,
+ * which is how NBER's addresses and its DOIs write it. The digits are kept as
+ * written, leading zeros and all.
+ */
+const NBER_ID = "w\\d{1,6}";
+/**
+ * `/papers/<id>`, with a trailing slash or `.pdf`, and
+ * `/system/files/working_papers/<id>/<id>.pdf`, the number the same both times;
+ * nothing before or after. The last is where the other two's PDF is served
+ * from (docs/plans/261006i-evidence/probe-nber-osf-redirects.txt).
+ */
+const NBER_PATH = new RegExp(`^/(?:papers/(${NBER_ID})(?:/|\\.pdf)?|system/files/working_papers/(${NBER_ID})/\\2\\.pdf)$`, "i");
+/** NBER's own DOI prefix, whose suffix is the working paper's number. */
+const NBER_DOI_PATH = new RegExp(`^/10\\.3386/(${NBER_ID})$`, "i");
+
+const nber: PaperSource = {
+  name: "nber",
+  resolve(url) {
+    const m = isAt(url, NBER_HOSTS) ? NBER_PATH.exec(url.pathname) : null;
+    const matched = m?.[1] ?? m?.[2] ?? (isAt(url, DOI_HOSTS) ? NBER_DOI_PATH.exec(url.pathname)?.[1] : undefined);
+    if (matched === undefined) return null;
+    const id = matched.toLowerCase();
+    /* Known by its `www.` address, which is where the bare host redirects. */
+    return paperAt("nber", id, id, `https://www.nber.org/papers/${id}`, [
+      `https://www.nber.org/system/files/working_papers/${id}/${id}.pdf`,
+    ]);
+  },
+};
+
 /**
  * In order, though no address is recognised by two: each source names its own
- * hosts, and the one host two of them share (`doi.org`) is told apart by the
+ * hosts, and the one host three of them share (`doi.org`) is told apart by the
  * DOI's prefix.
  */
-const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr];
+const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr, nber];
 
 function parsed(url: string): URL | null {
   try {

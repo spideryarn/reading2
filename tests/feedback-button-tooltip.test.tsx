@@ -12,7 +12,7 @@
  *
  * **The `aria-label` is the other half and is the half that would rot quietly.**
  * Below the narrow breakpoint the word "Feedback" is `display: none`
- * (styles.css § feedback), which takes it out of the accessibility tree as well
+ * (feedback.css § feedback), which takes it out of the accessibility tree as well
  * as off the screen. Until this change the `title` was supplying the name; with
  * it gone, the `aria-label` is the only thing standing between a phone reader
  * and an unlabelled icon — and nothing on a wide screen, where the visible word

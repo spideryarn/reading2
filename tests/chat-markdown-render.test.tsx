@@ -202,7 +202,7 @@ describe("the marks inside a block", () => {
 describe("the links a model wrote", () => {
   it("prints the real host beside the model's label", () => {
     // The label is the model's to choose and the host is the one part of a
-    // link an untrusted page cannot dress up. docs/plans/chat-web-links.md.
+    // link an untrusted page cannot dress up. docs/plans/260827ao-chat-web-links.md.
     paint("[the paper](https://not-anthropic.example/x)");
     expect(host.querySelector(".cited-link-host")?.textContent).toBe("not-anthropic.example");
   });

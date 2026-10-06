@@ -1,5 +1,5 @@
 /**
- * The ingest queue: one article at a time, and a record of how it went.
+ * The ingest queue, and a record of how each job went.
  *
  * > There should be some kind of queue that processes things … and ideally a
  * > progress indicator.
@@ -8,8 +8,9 @@
  *
  * Two things live here — running a list of steps, and deciding *which* step and
  * *whether*. Where the job records live is no longer this file's business: they
- * are behind `JobStore` (src/store/jobs.ts), which has a filesystem adapter
- * writing the same `data/_jobs/<id>.json` as before and a Postgres one. The
+ * are behind `JobStore` (src/store/jobs.ts), which is Postgres
+ * (src/store/pg-jobs.ts); the filesystem adapter that wrote
+ * `data/_jobs/<id>.json` went on 2026-09-05. The
  * *pipeline* is src/pipeline.ts; this file knows how to run a list of steps and
  * nothing about what any of them do.
  *
@@ -22,8 +23,9 @@
  * to src/store/jobs-fs.ts unchanged; what replaced them here is a **claim**.
  *
  * The claim is the whole design and it is three lines of SQL: an attempt token,
- * a lease, and every write fenced on `id = $id and attempt_id = $attempt and
- * status = 'running'`. One claim covers a whole **job** — `walkClaim` runs
+ * a lease, and claimant writes fenced on `id = $id and attempt_id = $attempt
+ * and status = 'running' and lease_expires_at > clock_timestamp()`.
+ * One claim covers a whole **job** — `walkClaim` runs
  * every step on it, because on a serverless host the next request lands on a
  * different instance — and is then put down, because a claim held past its
  * claimant leaves the job `running` with a token nobody holds and the next
@@ -32,10 +34,11 @@
  * from inside one, and the finish. (This said *"one claim covers one step"*,
  * which was the shape until 2026-08-30.)
  *
- * **An expired lease is not a takeover.** The job is failed and Retry is the
- * reader's to press. Guessing that an owner is dead is how two runners end up
- * writing one article, and it only becomes safe when the artefact writes are
- * transactional — docs/plans/260827j-transactional-stage-runner.md, which is not built.
+ * **An expired lease revokes the claimant's writes.** Transactional artefact
+ * commits enforce that fence (src/store/pg-session.ts). The sweep can requeue
+ * an uncancelled job within `REQUEUE_BUDGET`; after that it ends the job and
+ * Retry is the reader's to press. The original design failed every expired
+ * claim until the transactional runner and bounded resumptions were built.
  *
  * See docs/project/ingest-queue.md for the design and the library choice, and
  * docs/plans/260827h-durable-queue-and-uploads.md for the review that took the first
@@ -345,7 +348,7 @@ class DeadlineReached extends CallDeadlineReached {
  * `settleExpired` used to end every lapsed claim outright, so a deploy landing
  * mid-ingest cost the reader their job and left them a Retry button. It now puts
  * the job back to `queued` on the same row, which is what the filesystem store's
- * `sweepStopped` has always done at restart, and which keeps the slug, the
+ * `sweepStopped` had always done at restart, and which keeps the slug, the
  * article, the article's checkpoints **and the draft** — the last of those since
  * 2026-09-04, because without it the next window re-mints every block id and the
  * checkpoints, though still there, name an identity that has moved. The contract
@@ -404,15 +407,12 @@ class DeadlineReached extends CallDeadlineReached {
  * Retry makes a *new* job with a fresh two — so the reader is the outer loop.
  * That is the same shape Stop has: the machine gives up before the person does.
  *
- * **The filesystem store counts this in memory, which is weaker parity and is
- * accepted.** `src/store/jobs-fs.ts` keeps the counter in a `Map` that a restart
- * empties, so a job that has spent its budget gets a fresh one after a
- * dev-server restart. The argument in that file is that a restart there *is*
- * `sweepStopped`, which requeues everything running with no budget at all — but
- * it does mean the cap is not durable locally, and locally is where paid
- * development happens. Not built on: there is no articles table under that store
- * to hang a durable count on, and Postgres is what ships
- * (docs/project/database.md). GPT Sol, reviewing the built stage 3, finding 2.
+ * **The filesystem store counted this in memory, which was weaker parity and
+ * was accepted** until that store went on 2026-09-05: `src/store/jobs-fs.ts`
+ * kept the counter in a `Map` that a restart emptied, so the cap was not
+ * durable locally. Postgres reads it off `jobs.requeues`, and Postgres is the
+ * only store (docs/project/database.md). GPT Sol, reviewing the built stage 3,
+ * finding 2.
  *
  * The ending when it is used up is `INTERRUPTED`, which is what a lapsed claim
  * has always written and is honest here: *"This stopped part-way through … the
@@ -420,8 +420,7 @@ class DeadlineReached extends CallDeadlineReached {
  * Since 2026-09-03 that last clause is true rather than aspirational — a retry
  * lands on the same article, so it really does pick up (`slugForRetry`). A
  * sentence that also said *how many times we tried* would be better and needs a
- * new `ReaderFacingFailure`; it is not written here because src/messages.ts is
- * being edited elsewhere.
+ * new `ReaderFacingFailure`; the current sentence does not include that count.
  */
 export const REQUEUE_BUDGET = 2;
 
@@ -1284,8 +1283,8 @@ async function runStep(
         jobId: job.id,
         stepName: step.name,
       },
-      /* An arrow rather than `costStore.record`, because the filesystem adapter's
-         methods call each other through `this`. */
+      /* An arrow rather than `costStore.record`, so the method keeps its `this`
+         (the filesystem adapter's methods called each other through it). */
       sink: (row) => costStore.record(row),
       /* `onDone` rather than the resolved value, because it fires on the failure
          path too: a step that threw had usually already paid for the call that
@@ -2232,6 +2231,12 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
        exists (`refuseOnAMinimalArticle` below); that job does not match this
        predicate and cannot create an article. Plan 261001m § The thin article. */
     ...(isMinimalJob(job.steps.map((s) => s.name)) ? { processing: "minimal" as const } : {}),
+    /* **The address the article is remembered by** (`articles.asked_url`), so a
+       short link that ended on a paper finds the paper on a second paste. Kept
+       only by the claim that creates the row, or that finds one with nothing
+       published and no address yet; a refresh's `url` is the article's own
+       `final_url` and is ignored there. An upload has none. Plan 261006i. */
+    ...(job.url !== undefined ? { askedUrl: job.url } : {}),
   });
 }
 

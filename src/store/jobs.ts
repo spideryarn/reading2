@@ -240,14 +240,15 @@ export interface EnqueueTicket {
    *
    * On the **ticket** rather than on `Job`, deliberately. `Job` is serialised to
    * the browser by `publicJob` (src/jobs.ts), and a ledger id is not the
-   * reader's business — putting it there would mean stripping it at that seam
-   * and carrying a Postgres-only, billing-only field through the filesystem
-   * adapter and the parity suite for nothing.
+   * reader's business — putting it there would mean stripping it at that seam.
+   * When this was designed it would also have widened the filesystem adapter
+   * and the parity suite for nothing.
    *
    * The Postgres adapter writes it into the job's own INSERT — that atomicity is
    * the whole provenance argument, src/db/schema.ts § `ingest_events`. The
-   * filesystem adapter keeps the ticket and never reads this: quota is a
-   * Postgres feature (docs/project/billing.md), and there is no second ledger.
+   * filesystem adapter, until 2026-09-05, kept the ticket and never read this:
+   * quota is a Postgres feature (docs/project/billing.md), and there is no
+   * second ledger.
    */
   ingestEventId?: string;
   /**
@@ -502,13 +503,13 @@ export interface JobEnding {
 /**
  * A fresh attempt token.
  *
- * **A uuid, not a `spya-` id**, and it lives here so that the one caller and
- * the two adapters cannot disagree about that. `jobs.attempt_id` is a `uuid`
+ * **A uuid, not a `spya-` id**, and it lives here so callers and the store
+ * cannot disagree about that. `jobs.attempt_id` is a `uuid`
  * column (src/db/schema.ts), so a `mintId()` token is rejected by Postgres with
- * `22P02` on the *claim* — the first statement of every advance.
+ * `22P02` on the *claim*.
  *
  * Which is exactly what `advanceJob` passed until 2026-08-27, and the reason
- * nothing caught it is worth more than the fix. The filesystem adapter takes any
+ * nothing caught it is worth more than the fix. The filesystem adapter took any
  * string, so the whole job suite was green. The parity suite exercised both
  * adapters, but it minted its own tokens with `crypto.randomUUID()` — so the
  * store was tested, the caller was tested, and *the value that travels between
@@ -723,8 +724,9 @@ export interface JobStore {
   /**
    * Settle every job whose lease has run out, and say **which, and how**.
    *
-   * **Not a takeover.** Retry is the reader's to press — which costs a click and
-   * removes the whole class of two-claimants-one-article. See the header.
+   * **No new claimant takes over a live lease.** An expired claim may be
+   * requeued within the budget below; the job fence rejects the old claimant's
+   * writes. Once that budget is spent, Retry is the reader's to press.
    *
    * **It does not always fail, which is why it is no longer called
    * `failExpired`.** A row carrying `cancelling` is a reader who pressed Stop
@@ -733,19 +735,19 @@ export interface JobStore {
    * as `cancelled` instead, which makes three mechanisms agree rather than
    * adding a fourth: `releaseStepIn` already settles a live claimant's release
    * on a `cancelling` job as cancelled, and the filesystem adapter's
-   * `sweepStopped` does the same on restart.
+   * `sweepStopped` did the same on restart, until 2026-09-05.
    *
    * **The outcomes, not a count.** A sweep is the only account there is of a
    * claimant that stopped answering — the process that was inside the job is
    * gone and logged nothing on its way out — and `failed 1 job(s)` cannot be
-   * joined to anything, nor is it true of every row it counted. Both stores
-   * already have both fields in hand: the `UPDATE` returns them, and the
-   * filesystem adapter is looping over them. GPT Sol, 2026-08-30,
+   * joined to anything, nor is it true of every row it counted. The store
+   * already has both fields in hand: the `UPDATE` returns them (and the
+   * filesystem adapter, until 2026-09-05, was looping over them). GPT Sol, 2026-08-30,
    * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points,
    * and 2026-09-01 on the rename.
    *
-   * **`now` is for tests only.** With nothing passed, both adapters compare the
-   * lease against their own store's clock — SQL `now()` on Postgres — because a
+   * **`now` is for tests only.** With nothing passed, Postgres compares the
+   * lease against `clock_timestamp()` through `leaseIsOver`, because a
    * lease written by one instance and read by another is only a deadline if
    * both are reading the same clock.
    *
@@ -759,7 +761,7 @@ export interface JobStore {
    * would be one reader's page load ending another reader's import.
    *
    * **A parameter rather than a second method.** One method is one contract,
-   * so tests/store-jobs-parity.test.ts goes on holding both adapters to it —
+   * so tests/store-jobs-parity.test.ts holds the store to it —
    * GPT Sol's answer 7 on the built stage 2, which also asked by name for the
    * case proving that listing as one owner cannot settle another's. Omitted,
    * the sweep is table-wide, which is what the advance path still wants: it is
@@ -771,11 +773,11 @@ export interface JobStore {
    * `queued` on its own row instead of ending**, and comes back in the answer
    * with `status: "queued"`.
    *
-   * That is what the filesystem adapter's `sweepStopped` has always done at
+   * That is what the filesystem adapter's `sweepStopped` had always done at
    * restart — running steps back to `pending`, the job back to `queued`, the row
-   * otherwise untouched — so a dev-server restart is a pause rather than an
+   * otherwise untouched — so a dev-server restart was a pause rather than an
    * abandoned ingest. Postgres had no equivalent and ended the job, which on the
-   * store we ship means a deploy landing mid-ingest costs the reader their job.
+   * store we ship meant a deploy landing mid-ingest cost the reader their job.
    * **The same row is the whole point**: the slug does not move, so the article
    * does not move, so the article's checkpoints (checkpoints.ts) are still
    * reachable. A new job could not have that.

@@ -1,5 +1,6 @@
 /**
- * **Where an upload attempt is written down**, as a contract with two adapters.
+ * **Where an upload attempt is written down**, as a contract implemented by
+ * Postgres; the filesystem adapter went on 2026-09-05.
  *
  * The state machine itself is not here and never was: `canTransition`,
  * `grantExpired` and `sweepable` live in [`src/source.ts`](../source.ts) and
@@ -7,22 +8,22 @@
  * a change of adapter rather than a change of rules, and it was done that way
  * on purpose before either adapter existed.
  *
- * ## The one method whose implementations are genuinely different
+ * ## Why claiming needs an atomic write
  *
  * `claim`. Finalising has to be **exactly once** — two tabs, or one impatient
  * double-click, otherwise both pass the same checks and both queue a job that
  * spends model money. Read-then-write has a gap in it that is however long the
  * awaits take.
  *
- * On the filesystem that needs a create-only marker beside the record —
+ * On the filesystem that needed a create-only marker beside the record —
  * `open(…, "wx")`, atomic at the kernel, which is a definite answer rather than
  * a probable one. In Postgres it is one conditional `UPDATE` and `rowCount`
- * decides. The database makes the filesystem adapter's cleverest piece of
+ * decides. The database made the filesystem adapter's cleverest piece of
  * machinery disappear, which is worth noticing rather than glossing: it is the
  * clearest single argument for the move.
  *
- * Everything else is the same shape on both sides, which is what
- * `tests/store-uploads-parity.test.ts` is for.
+ * `tests/store-uploads-parity.test.ts` retains the contract assertions from
+ * the former two-adapter suite, including the claim race and returned shape.
  *
  * See docs/plans/260827h-durable-queue-and-uploads.md.
  */

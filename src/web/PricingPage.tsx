@@ -132,7 +132,7 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
-       properties are declared on `.site` (styles.css § the site), so without it
+       properties are declared on `.site` (site.css § the site), so without it
        every `site-panel` on this page draws a transparent border over no fill
        and the ghost buttons lose their outline — a page that looks unstyled
        rather than broken, which is the version nobody reports. */
@@ -764,14 +764,14 @@ function useBuyIntent(billing: UseBilling): void {
  *   the sentence being long.
  *
  * The other three keep the headline alone: `free` and a renewing `paid` are
- * explained by the cards six inches above, and `exempt` and `off` are
+ * explained by the cards six inches above, and `exempt` is
  * self-contained. Two explanations of one rule read as a page that is not sure.
  *
  * **And the headline is printed as it stands, with no sentence built around
  * it.** The obvious framing — *"You are on {headline}"* — works for the two
- * states anybody thinks of and is broken English in the other four: *"You are
+ * states anybody thinks of and is broken English in other cases: *"You are
  * on We could not confirm your plan just now"*, *"You are on Your plan has
- * ended"*. `describePlan` returns six headlines in three grammatical shapes, so
+ * ended"*. `describePlan` returns headlines in three grammatical shapes, so
  * the only safe thing to add around one is nothing. `/profile` prints it bare
  * for the same reason.
  *
