@@ -378,7 +378,16 @@ slot rather than spending it, since only `done` charges
   page *is*, and it is answered only by markup the check's own software wrote for its own script:
   a registry in [`src/challenge-page.ts`](../../src/challenge-page.ts), with one entry, Anubis.
   hal.science's check explains itself in 1,034 characters of prose, twice the floor, and was
-  published as an article titled *"Making sure you're not a bot!"*. **It wins over the other two**:
+  published as an article titled *"Making sure you're not a bot!"*. **The entry reads two shapes of
+  that page**, since the same day: the challenge written into the page (the element
+  `anubis_challenge`), and an older version's, which fetches its challenge afterwards and so
+  carries only its version element and the module script that solves the check. bugs.winehq.org
+  serves the older one, and it was missed until it was captured
+  ([postmortem](../postmortems/261006j-a-recogniser-fitted-to-one-sample-of-a-versioned-page.md)).
+  Cloudflare's, reCAPTCHA's and the *"enable JavaScript"* pages have no entry because none was seen
+  clearing the floor
+  ([the measurement](../investigations/261006c-which-bot-check-walls-clear-the-floor-through-our-fetcher.md)).
+  **It wins over the other two**:
   a bot check that is also short, or that Readability declines, is reported as a bot check, because
   that is the sentence with a move in it. The reader gets `documentIsABotCheck`, `[jb-bot-check]`:
   open the page in your own browser, save it, upload the file.

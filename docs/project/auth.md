@@ -97,21 +97,64 @@ step agreeing with every other one.
 Another tab can sign in as somebody else while this one is open, and the token is looked up when a
 request is sent, not when it was asked for. So a write that waits (a debounce, a retry, a flush as
 the page leaves, a call still waiting for its token) could go out as the next reader. Since
-2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md)):
+2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md),
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md)):
 
-- **A caller can name its reader**: `apiFetch(input, init, madeFor)`, and the same third argument
-  on `apiFetchOwned` and `leavingFetch`. If the token about to be used is known to be another
-  reader's, nothing is sent and the caller gets `NotThisReader`, which has no HTTP status. It
-  refuses only when both readers are known and differ. Leave `madeFor` out and nothing is checked.
+- **The tab holds one session, in [`lib/session.ts`](../../src/web/lib/session.ts)**, which makes
+  the only identity subscription to the SDK. `useSession` draws the screen from it and `apiFetch`
+  binds requests to it, so the two cannot hold different readers. They could when each subscribed
+  for itself: the SDK sends every new subscriber a first answer of its own, read from storage as
+  it arrives.
+- **Every `apiFetch` is bound to the reader the tab held when the call was made.** That reader is
+  read synchronously, before the token lookup, from that held session. If the token
+  that comes back is known to be another reader's, nothing is sent and the caller gets
+  `NotThisReader`, which has no HTTP status; the refusal is written to the log buffer as
+  `not-sent`. It refuses only when both readers are known and differ, so a call made while nobody
+  is signed in is unfenced.
+- **A caller can name its reader instead**: `apiFetch(input, init, madeFor)`, and the same third
+  argument on `apiFetchOwned` and `leavingFetch`. The name is believed over the tab.
 - **The retry after a 401 is never sent as a different reader**, for every caller. A refresh that
   comes back as somebody else is a change of account, and the first 401 is the answer.
+- **A refusal moves the tab on.** When a token lookup answers as a different known reader from the
+  one held, the held session is replaced by that one and every subscriber is told, as an SDK event
+  would. The request that noticed is still refused; the screen redraws for the reader the token
+  belongs to, so their requests go. A lookup never signs the tab out. A session revision, captured
+  before the lookup, prevents an answer overtaken by any adopted session from replacing it,
+  including a sign-out and sign-in of the same reader. `INITIAL_SESSION` only fills an unheard
+  tab; its asynchronous storage read cannot replace a newer event.
 
-**Anything that sends after its page may have gone should pass `madeFor`**, and anything that holds
-a reader's words should be keyed on the reader. The add page, the job and upload engines and the
-main-modes setting do. **Most callers do not**: a plain `apiFetch` begun under one reader whose
-token lookup straddles the change is still sent as the next. What closing that for everybody would
-take, and the other places this class has turned up, are in
+**What the binding cannot see is a request made late.** A timer, a retry loop, a flush as the page
+unmounts, a module-level service: each *makes* its call after the reader's gesture, possibly after
+the reader has changed, and the tab's reader at that moment is the new one. Those pass `madeFor`,
+with the reader taken when the work was begun: `heldReader()` from `lib/session.ts`, read
+synchronously, for a sender that is not a component (`appendSpoken` in `chat/effects.ts`, whose
+retries follow a gap). `leavingFetch` is always one of these, because it is
+called as the page goes. And anything that holds a reader's words is keyed on the reader, not on
+the address or the slug. The other places this class has turned up are in
 [the postmortem](../postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md).
+
+**The commonest late request is an effect cleanup**, because a change of reader is itself what
+unmounts the page: the held session changes first, so the cleanup runs with the next reader's
+token already in place. Two small modules carry the rule for everything under the
+signed-in `App`:
+
+- **[`lib/made-for.ts`](../../src/web/lib/made-for.ts) § `useMadeFor`** answers with the reader a
+  component was *mounted* for, read once and never again. A component or hook that writes late
+  passes it as `madeFor`. `null` for a visitor, which is unfenced.
+- **[`lib/reader-change.ts`](../../src/web/lib/reader-change.ts) § `forgetOnReaderChange`** is for
+  a module-level store keyed by slug (unsent chat words, search words, what the link cards know).
+  The store registers a function that empties it; `lib/session.ts` runs them when a known reader
+  is replaced by anybody else, sign-out included, before it tells any subscriber, so they are
+  empty before React draws the next page.
+
+The Feedback dialog is the one thing above every page: `FeedbackHost` takes the reader and gives
+its draft up when the reader changes. A page that holds a reader's words and is not under
+the article's gate is keyed on the reader in `App.tsx`: the shelf, the add page and `/profile`.
+
+The dictation boxes use `useReaderTranscriber` from `dictation-upload.ts`, which captures their
+mounted reader before recording; audio conversion and retries retain that reader. Both live
+engines retain `apiWiringFor(madeFor)` from `live/wiring.ts`, so device detection, offer creation,
+provider tool callbacks and meter retirement cannot send as a later reader.
 
 ## The signed-out page is the landing page
 

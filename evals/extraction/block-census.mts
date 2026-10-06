@@ -122,8 +122,9 @@ export async function censusOf(
        with no article contributes no blocks either way; which refusal it was is
        the row's business and not the count's.
 
-       **All three, since 2026-10-06**: `ChallengePage` fires on `hal-anubis`,
-       which is in `all` too, and the same crash was one fixture away again. */
+       **All three, since 2026-10-06**: `ChallengePage` fires on `hal-anubis`
+       and `winehq-anubis`, which are in `all` too, and the same crash was one
+       fixture away again. */
     if (
       err instanceof ReadabilityRefused ||
       err instanceof TooLittleTextToRead ||

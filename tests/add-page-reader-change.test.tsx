@@ -189,6 +189,7 @@ const purposeReads = (): Sent[] => sent.filter((r) => r.url === `/api/reader?slu
 
 const { App } = await import("../src/web/App.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
+const { resetSessionForTests } = await import("../src/web/lib/session.js");
 const { resetAddPurposeForTests } = await import("../src/web/AddPage.js");
 const { ADD_PURPOSE_IDLE_MS } = await import("../src/web/add-purpose.js");
 const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
@@ -292,7 +293,9 @@ afterEach(async () => {
   await settle();
   host.remove();
   jobEngine.reset();
-  listeners.clear();
+  /* Not `listeners.clear()`: the one listener is lib/session.ts's, registered
+     at import for the life of the page. What it holds is put back instead. */
+  resetSessionForTests();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });

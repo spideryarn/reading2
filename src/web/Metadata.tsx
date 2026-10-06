@@ -264,6 +264,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
 import { isWebUrl } from "../urls.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
@@ -630,21 +631,26 @@ export function Metadata({
    * add page's box cannot, and never sends an empty one (src/web/purpose.ts).
    * `savePurpose` also forgets the link cards' summaries, which were written
    * from the sentence being replaced.
+   *
+   * Both writes name the reader the page was mounted for (lib/made-for.ts):
+   * the unmount save is made after a change of reader has already happened.
+   * Plan 261006f § Stage 2.
    */
+  const madeFor = useMadeFor();
   const purpose = useAutosavedText({
     save: async (text) => {
       /* The server's answer, not what was typed: it trims and settles line
          endings, and the box must show the string that was actually stored.
          Read from `purpose` rather than from `entry`: the shelf card
          deliberately does not carry it (src/routes.ts § patchShelf). */
-      const stored = (await savePurpose(slug, text === "" ? null : text)) ?? "";
+      const stored = (await savePurpose(slug, text === "" ? null : text, madeFor)) ?? "";
       /* The glossary row's verdict (`glossaryRun`) is judged against this
          sentence, so one read before the save may be wrong after it — plan
          261001i § 3, GPT Sol's plan review. */
       void refresh();
       return stored;
     },
-    leave: (text) => leavePurpose(slug, text),
+    leave: (text) => leavePurpose(slug, text, madeFor),
   });
   const seedPurpose = purpose.seed;
   /**

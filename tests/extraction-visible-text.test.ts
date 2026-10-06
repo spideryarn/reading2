@@ -348,8 +348,10 @@ describe("over the committed fixtures", () => {
      * characters of visible text. It is the one non-article that is not almost
      * empty, which is why it needed a recogniser rather than the floor
      * (src/challenge-page.ts) — and it is still well under an article's 2,000.
+     * **And a fourth the same day**: `winehq-anubis`, an older version of the
+     * same check, with 1,254 characters of visible text.
      */
-    const NOT_ARTICLES = new Set(["medium-about", "pmc-article", "hal-anubis"]);
+    const NOT_ARTICLES = new Set(["medium-about", "pmc-article", "hal-anubis", "winehq-anubis"]);
     for (const { name, text } of texts) {
       /* Substantial, because "" satisfies every `mustNotContain` there is —
          which is the failure this whole check exists to make impossible. */

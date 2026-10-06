@@ -126,7 +126,7 @@ import { WrittenForYou } from "./WrittenForYou.js";
 import { ReadError } from "./ReadError.js";
 import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
 import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
@@ -691,12 +691,13 @@ export function QuizPanel({
    * as typing, and the whole point is to get what the reader remembers out
    * rather than what they can be bothered to type.
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: typed,
     onChange: setTyped,
     box,
     context: { kind: "article", slug: owner.slug },
-    transcribe: sendForTranscription,
+    transcribe,
     /* One box per question: an answer offered back under a different question
        would be the wrong answer. */
     keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),

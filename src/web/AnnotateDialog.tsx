@@ -163,7 +163,7 @@ import { DEFAULT_HIGHLIGHT } from "./fresh-highlight.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
@@ -423,12 +423,13 @@ export function AnnotateDialog({
      `CommentDialog` gives: this only ever exists over an article, and the
      address is what says which one. */
   const route = parseRoute(location.pathname);
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: body,
     onChange: changeBody,
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
-    transcribe: sendForTranscription,
+    transcribe,
     /* One box per passage, as the draft itself is. */
     keep: keepDictation(`annotate:${anchor.blockId}:${anchor.start}`),
     /* A double press on Stop also saves: Save is what ⌘+Enter does here, and

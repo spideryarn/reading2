@@ -23,6 +23,7 @@
 import type { ChatMessage, ChatThread, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
+import { heldReader } from "../lib/session.js";
 import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
 import { describeFetchFailure } from "../lib/describe-failure.js";
@@ -261,12 +262,25 @@ export type SpokenOutcome =
  * decide. A 409, a 500, a dead network and a body that will not parse all come
  * back as one `SpokenOutcome`, so the question of whether this answer is still
  * wanted is asked once, at the gate, rather than a second time in a `catch`.
+ *
+ * **Every attempt is for the reader the exchange was spoken by** (`madeFor`).
+ * A retry is made after a gap, and another tab can sign in as somebody else
+ * inside it; a first exchange creates its thread, so the id in the path
+ * protects nothing, and the retry stored one reader's transcript on the next
+ * one's article of the same slug. The reader is read as this is called,
+ * before anything is awaited, unless the caller hands one in: the band's
+ * controller does (useChat.ts), because the hang-up that writes the last
+ * exchange can run as the view unmounts, when the tab is already the next
+ * reader's. A refusal ends the loop as a plain failure, never `uncertain`:
+ * that would send the caller to read the next reader's conversations.
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2.
  */
 export async function appendSpoken(
   slug: string,
   threadId: string,
   body: Record<string, unknown>,
   gapMs = SPOKEN_GAP_MS,
+  madeFor: string | null = heldReader(),
 ): Promise<SpokenOutcome> {
   let last = "";
   // A later definite refusal cannot establish what an earlier lost response
@@ -298,6 +312,7 @@ export async function appendSpoken(
           body: JSON.stringify(body),
           signal: late.signal,
         },
+        madeFor,
       );
       /* **Returned rather than retried.** A conflict is an answer, and asking
          again would get the same one — with the added cost that the caller's
@@ -333,6 +348,12 @@ export async function appendSpoken(
          varies by engine, and reading a reader-facing sentence off it would be
          reading whichever one this browser happens to use. `runTurn` above
          does the same. */
+      /* The tab is another reader's now: nothing was sent, and no later
+         attempt can be. By name, as `statusOf` reads a status: a suite that
+         replaces lib/api.js has no class to compare with. */
+      if ((e as Error | null)?.name === "NotThisReader") {
+        return { ok: false, conflict: false, error: (e as Error).message };
+      }
       uncertain = true;
       last = late.signal.aborted
         ? "The server did not answer in time."

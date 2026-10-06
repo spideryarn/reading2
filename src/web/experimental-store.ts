@@ -34,9 +34,10 @@
  * the switch (stage 2) that is account A's experimental modes drawn for account
  * B — one frame, and no test one layer up can see it.
  *
- * So the store subscribes to `supabase.auth.onAuthStateChange` itself. Its
- * callback runs in the **same synchronous notification loop** as `useSession`'s
- * (the SDK invokes every subscriber's callback in one pass), and it updates
+ * So the store listens for the session itself. Its callback runs in the
+ * **same synchronous notification loop** as `useSession`'s (both subscribe to
+ * lib/session.ts since 2026-10-06, which tells every subscriber in one pass;
+ * before that each subscribed to the SDK), and it updates
  * module state synchronously — so by the time React flushes the re-render that
  * `useSession`'s `setState` scheduled, the snapshot is already B's. There is no
  * stale frame because there is no effect in between.
@@ -103,7 +104,7 @@
  *    over an "on" another device set an hour ago.
  */
 import { apiFetch, readJson } from "./lib/api.js";
-import { supabase } from "./lib/supabase.js";
+import { onSession } from "./lib/session.js";
 
 /**
  * The one field of `/api/reader` this file is about, **checked rather than
@@ -357,7 +358,9 @@ let watching = false;
 function watchSession(): void {
   if (watching) return;
   watching = true;
-  supabase.auth.onAuthStateChange((_event, session) => {
+  /* Through lib/session.ts, as `useSession` is, so this store and the screen
+     cannot be told different readers. Told at once if something was heard. */
+  onSession((session) => {
     sessionIs(session?.user?.id ?? null);
   });
 }

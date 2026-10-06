@@ -71,6 +71,8 @@ vi.mock("../src/web/lib/supabase.js", () => ({
         return { data: {}, error: null };
       },
       signInWithOAuth: async () => ({ data: {}, error: null }),
+      /* lib/session.ts subscribes when it is first imported. */
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   },
   googleSignInAvailable: false,

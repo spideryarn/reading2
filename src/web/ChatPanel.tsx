@@ -106,7 +106,7 @@ import { LiveTail } from "./live/LiveTail.js";
 import { liveSize } from "./live/tail.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
@@ -2742,6 +2742,7 @@ export function Composer({
    * the words, not about where they sit;
    * docs/plans/260907c-dictation-onto-an-openai-transcriber.md.)
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value,
     onChange: (next) => {
@@ -2750,7 +2751,7 @@ export function Composer({
     },
     box,
     context: { kind: "article", slug },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`chat:${slug}`),
     /* A double press on Stop also sends (dictation.md § A double press). */
     onDone: () => void submit(),

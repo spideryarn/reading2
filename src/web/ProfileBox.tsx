@@ -48,7 +48,7 @@ import { Check, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { Tooltip } from "./Tooltip.js";
 import { warnBeforeUnload } from "./unload-guard.js";
 import type { SaveState } from "./useAutosavedText.js";
@@ -186,13 +186,14 @@ export function ProfileBox({
      with the reader's own existing profile text. Their field's jargon, in their
      own spelling, is the best guess available at what they are about to say
      more of. src/transcribe.ts. */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value,
     onChange,
     onCommit,
     box,
     context: { kind: "profile" },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`profile:${id}`),
   });
   const dictation = dictate.dictation;

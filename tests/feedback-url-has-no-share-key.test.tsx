@@ -13,7 +13,7 @@
  * was handed, because that prop is the whole of what a report says about the
  * address: the dialog sends `where.url` as it is (FeedbackDialog.tsx).
  */
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,7 +48,7 @@ afterEach(() => {
 
 function reportedFrom(address: string): { url: string; slug: string | null } {
   history.replaceState(null, "", address);
-  act(() => root.render(createElement(FeedbackHost, null, null)));
+  act(() => root.render(<FeedbackHost readerId="reader-a">{null}</FeedbackHost>));
   const where = handed.at(-1);
   if (!where) throw new Error("the host never drew its dialog");
   return where;

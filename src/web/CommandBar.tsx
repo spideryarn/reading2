@@ -167,7 +167,7 @@ import { type TagsControl, tagRunners } from "./command-runners.js";
 import { Button } from "./components/ui/button.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
-import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
+import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
 import { setAppearance, useAppearance } from "./appearance.js";
 import { appearanceRows } from "./appearance-commands.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
@@ -1981,12 +1981,13 @@ export function CommandBar({
    */
   /** `enter`, as of the latest render: it is made below the hook that calls it. */
   const enterNow = useRef<() => void>(() => {});
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField<DictationContext>({
     value: draft,
     onChange: changeDraft,
     box: inputRef,
     context: article === undefined ? { kind: "profile" } : { kind: "article", slug: article.slug },
-    transcribe: sendForTranscription,
+    transcribe,
     ...(open ? { keep: keepDictation("commands") } : {}),
     /* **A double press on Stop presses Enter when the words arrive** — Greg,
        2026-10-05: *"yes for the command bar"* (plan 261005a; dictation.md § A

@@ -12,7 +12,11 @@
  * from this.
  *
  * **In memory, and only that.** It does not survive a reload or a closed tab,
- * and it is not sent anywhere. Sign-out replaces the page, which empties it.
+ * and it is not sent anywhere. Sign-out replaces the page, which empties it;
+ * **and so does any other change of reader**, since 2026-10-06: another tab
+ * signing in as somebody else changes this tab's session without replacing
+ * the page, and the next reader found these words in their box on the same
+ * slug. `forgetOnReaderChange`, at the bottom of this file.
  *
  * ## The four things it holds (and, since 2026-10-05, a pending origin: see `ChatDrafts.origin`)
  *
@@ -40,6 +44,7 @@
  * from the words or from a missing row, and once revoked it stays revoked.
  */
 import type { SingleThreadKind, ThreadOrigin } from "../types.js";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 
 export interface ChatDrafts {
   /**
@@ -187,10 +192,16 @@ export function anyChatDraftHeld(): boolean {
 }
 
 /**
- * Empty every article's drafts. **For tests**, which share this module between
- * cases the way a reader's tab shares it between visits to a mode — the very
- * thing it is for, and the thing a test has to undo.
+ * Empty every article's drafts. **For a change of reader**, below, and for
+ * tests, which share this module between cases the way a reader's tab shares
+ * it between visits to a mode — the very thing it is for, and the thing a
+ * test has to undo.
  */
 export function forgetChatDrafts(): void {
   drafts.clear();
 }
+
+/* These are one reader's words. The band that holds a store has unmounted by
+   the time the next reader's is drawn, so nothing is left typing into an old
+   one. docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+forgetOnReaderChange(forgetChatDrafts);
