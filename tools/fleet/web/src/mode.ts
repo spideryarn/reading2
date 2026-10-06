@@ -14,8 +14,8 @@
  * losing it to a reload is the same small betrayal as losing the mode; and the
  * selected session in the hash means a link to one row is a link somebody can
  * send. Written as `?key=value` inside the fragment rather than as a real query
- * string so it still costs the server nothing — no route table, no history API,
- * and a static `dist/` that can be served from any prefix.
+ * string so it still costs the server nothing — no route table, and a static
+ * `dist/` that can be served from any prefix.
  *
  * **Back undoes the last deliberate act, not the last write.** The page writes
  * the fragment itself with `history.pushState` or `history.replaceState`, and
@@ -92,9 +92,9 @@ export function parseHash(hash: string): HashState {
  * A hash, from a mode and its parameters.
  *
  * Keys are sorted so the same state always spells the same string: an
- * unsorted version writes a different hash on every render whose object
- * happened to be built in another order, and a hash that changes is a
- * `hashchange`, which is a re-render, which writes the hash again.
+ * unsorted version spells the same parameters differently depending on the
+ * order the object was built in. Owned writes use the History API and fire no
+ * events; sorted keys give bookmarks and comparisons a consistent spelling.
  *
  * An empty value drops the key rather than writing `key=`, so "back to the
  * default" leaves no trace in the URL.

@@ -61,9 +61,11 @@ function tick(): Promise<void> {
 }
 
 /** Pin every element's width — tests/fleet-web.test.tsx § `pinWidth`. */
+let pinnedWidth = 0;
 function pinWidth(px: number): void {
+  pinnedWidth = px;
   const original = Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth");
-  Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => px });
+  Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => pinnedWidth });
   undoWidth = () => {
     if (original) Object.defineProperty(Element.prototype, "clientWidth", original);
   };
@@ -94,9 +96,9 @@ function sessionRow(id: string, name: string): FleetRow {
   };
 }
 
-function stateWith(rows: FleetRow[]): FleetState {
+function stateWith(rows: FleetRow[], extra: Record<string, unknown> = {}): FleetState {
   const read = parseFleetState(
-    { schema: 1, rows, collectedAt: "2026-09-09T00:59:30.000Z", tmuxServerPid: 132280, servedAt: "2026-09-09T01:00:00.000Z" },
+    { schema: 1, rows, collectedAt: "2026-09-09T00:59:30.000Z", tmuxServerPid: 132280, servedAt: "2026-09-09T01:00:00.000Z", ...extra },
     Date.parse("2026-09-09T01:00:00.000Z"),
   );
   if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
@@ -121,7 +123,7 @@ const EMPTY_FEED: FeedView = {
 const feedApi: FeedApi = { recent: () => Promise.resolve(EMPTY_FEED) };
 
 /** The page at `hash`, holding two sessions called alpha and beta. */
-async function mountApp(hash: string): Promise<void> {
+async function mountApp(hash: string, extra: Record<string, unknown> = {}): Promise<(rows: FleetRow[]) => void> {
   window.location.hash = hash;
   await tick();
   let sink: TransportSink | null = null;
@@ -132,7 +134,12 @@ async function mountApp(hash: string): Promise<void> {
   await act(async () => {
     root.render(<App transport={transport} feedApi={feedApi} actionsPollMs={3_600_000} />);
   });
-  await act(async () => sink?.onState(stateWith([sessionRow("$a", "alpha"), sessionRow("$b", "beta")])));
+  const publish = (rows: FleetRow[]): void => {
+    if (sink === null) throw new Error("no active transport");
+    sink.onState(stateWith(rows, extra));
+  };
+  await act(async () => publish([sessionRow("$a", "alpha"), sessionRow("$b", "beta")]));
+  return publish;
 }
 
 /** Throws rather than returning `undefined`, so a missing control cannot pass as a no-op click. */
@@ -142,7 +149,7 @@ function button(what: string, find: (b: HTMLButtonElement) => boolean): HTMLButt
   return found;
 }
 const rowButton = (name: string): HTMLButtonElement =>
-  button(`row for ${name}`, (b) => b.classList.contains("session-open") && b.textContent === name);
+  button(`row for ${name}`, (b) => b.classList.contains("session-open") && b.dataset["session"] !== undefined && b.textContent === name);
 const backButton = (): HTMLButtonElement => button("← All sessions", (b) => b.textContent === "← All sessions");
 const dockButton = (label: string): HTMLButtonElement =>
   button(`dock button ${label}`, (b) => b.getAttribute("aria-label") === label);
@@ -344,6 +351,24 @@ describe("Back undoes the last deliberate act", () => {
     expect(detail()?.textContent ?? "").toContain("$b");
   });
 
+  it("owned writes deliver neither navigation event", async () => {
+    pinWidth(1280);
+    await mountApp("#sessions");
+    const received = vi.fn();
+    window.addEventListener("hashchange", received);
+    window.addEventListener("popstate", received);
+    try {
+      await click(rowButton("alpha"));
+      await click(rowButton("beta"));
+      await click(dockButton("Box health"));
+      await act(async () => { await tick(); await tick(); });
+      expect(received).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("hashchange", received);
+      window.removeEventListener("popstate", received);
+    }
+  });
+
   it("a refused push keeps the session open too", async () => {
     pinWidth(1280);
     await mountApp("#sessions");
@@ -417,6 +442,28 @@ describe("useHashState", () => {
     expect(hook.current.mode).toBe("sessions");
   });
 
+  it.each(["hashchange", "popstate"])("%s alone supersedes refused local state, including for mounted controls", async (event) => {
+    pinWidth(1280);
+    await mountApp("#sessions");
+    const refusal = vi.spyOn(window.history, "pushState").mockImplementation(() => {
+      throw new DOMException("refused", "SecurityError");
+    });
+    await click(rowButton("alpha"));
+    expect(refusal).toHaveBeenCalledTimes(1);
+    expect(detail()?.textContent ?? "").toContain("$a");
+    refusal.mockRestore();
+    await act(async () => {
+      window.history.replaceState(null, "", "#sessions?sel=%24b&order=name");
+      window.dispatchEvent(new Event(event));
+    });
+    expect(detail()?.textContent ?? "").toContain("$b");
+    expect(detail()?.textContent ?? "").not.toContain("$a");
+    await click(dockButton("Box health"));
+    expect(here()).toEqual({ mode: "health", params: { sel: "$b", order: "name" } });
+    await traverse(-1);
+    expect(detail()?.textContent ?? "").toContain("$b");
+  });
+
   it("adopts an address edited by hand", async () => {
     window.location.hash = "#sessions";
     await tick();
@@ -456,6 +503,30 @@ describe("the list's scroll position at one pane", () => {
     expect(document.activeElement, "focus goes back to the row it left").toBe(rowButton("beta"));
   });
 
+  it("also saves the list position when an Attention card opens the detail", async () => {
+    pinWidth(390);
+    await mountApp("#sessions", {
+      attention: {
+        kind: "published", coordinatorWrittenAt: "2026-09-09T00:59:30.000Z",
+        list: {
+          kind: "list", sessionsScanned: 2, sessionsUnreadable: 0, scannedAt: "2026-09-09T00:59:30.000Z",
+          items: [{
+            id: "attention-a", sessionId: "$a", sessionName: "alpha", paneId: null,
+            waitingSince: "2026-09-09T00:59:00.000Z", kind: "technical",
+            evidence: { kind: "prose", excerpt: "Choose the implementation", why: "a decision is waiting" },
+            answerability: { kind: "phone" }, duplicates: [],
+          }],
+        },
+      },
+    });
+    const page = scrolledTo(1200);
+    await click(button("Attention card", (b) => b.classList.contains("session-open") && !b.dataset["session"]));
+    expect(detail()?.textContent ?? "").toContain("$a");
+    await click(backButton());
+    expect(page.scrollTo).toHaveBeenCalledWith(0, 1200);
+    expect(document.activeElement).toBe(rowButton("alpha"));
+  });
+
   it("comes back on the browser's Back as well", async () => {
     pinWidth(390);
     await mountApp("#sessions");
@@ -475,6 +546,106 @@ describe("the list's scroll position at one pane", () => {
     await click(backButton());
     expect(detail()).toBeNull();
     expect(page.scrollTo).not.toHaveBeenCalled();
+  });
+
+  async function resizeTo(px: number): Promise<void> {
+    pinnedWidth = px;
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+  }
+
+  it("discards the return position when resizing exposes the list, even if narrowed again", async () => {
+    pinWidth(390);
+    await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    await resizeTo(1280);
+    expect(rowButton("beta")).toBeDefined();
+    await resizeTo(390);
+    await click(backButton());
+    expect(page.scrollTo).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(rowButton("alpha"));
+  });
+
+  it("skips obsolete pixels after resizing within one pane, but still returns focus", async () => {
+    pinWidth(390);
+    await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    await resizeTo(500);
+    await click(backButton());
+    expect(page.scrollTo).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(rowButton("alpha"));
+  });
+
+  it("does not use the first session's return position after an incoming link selects another", async () => {
+    pinWidth(390);
+    await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    await act(async () => {
+      window.history.replaceState(null, "", "#sessions?sel=%24b");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(detail()?.textContent ?? "").toContain("$b");
+    await click(backButton());
+    expect(page.scrollTo).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(rowButton("alpha"));
+  });
+
+  it("discards a return position when an incoming link changes the selected tmux world", async () => {
+    pinWidth(390);
+    await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    await act(async () => {
+      window.history.replaceState(null, "", "#sessions?sel=%24a&selpid=99");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(host.textContent).toContain("That link is for a different tmux server.");
+    await click(button("wrong world's Back", (b) => b.textContent === "Show every session"));
+    expect(page.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not restore an offset for a row that disappeared", async () => {
+    pinWidth(390);
+    const publish = await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    await act(async () => publish([sessionRow("$b", "beta")]));
+    await click(backButton());
+    expect(page.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not restore an offset from a different list ordering", async () => {
+    pinWidth(390);
+    await mountApp("#sessions");
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    const order = host.querySelector<HTMLSelectElement>('select[aria-label="Order the session list"]');
+    if (order === null) throw new Error("no ordering control");
+    await setInput(order, "name");
+    await click(backButton());
+    expect(here().params["order"]).toBe("name");
+    expect(page.scrollTo).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(rowButton("alpha"));
+  });
+
+  it("keeps the return position through a temporary unknown tmux world", async () => {
+    pinWidth(390);
+    const extra: Record<string, unknown> = {};
+    const publish = await mountApp("#sessions", extra);
+    const page = scrolledTo(800);
+    await click(rowButton("alpha"));
+    extra["tmuxServerPid"] = null;
+    await act(async () => publish([sessionRow("$a", "alpha"), sessionRow("$b", "beta")]));
+    extra["tmuxServerPid"] = 132280;
+    await act(async () => publish([sessionRow("$a", "alpha"), sessionRow("$b", "beta")]));
+    await click(backButton());
+    expect(page.scrollTo).toHaveBeenCalledWith(0, 800);
+    expect(document.activeElement).toBe(rowButton("alpha"));
   });
 
   it("is not touched at two panes, where the list never left", async () => {

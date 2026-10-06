@@ -29,7 +29,7 @@ import { QueuePanel } from "./QueuePanel";
 import { QuestionsPanel } from "./QuestionsPanel";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { RecoveryPanel } from "./RecoveryPanel";
-import { SessionsPanel } from "./SessionsPanel";
+import { SessionsPanel, type SessionsPanelHandle } from "./SessionsPanel";
 import { AccountUsageSections } from "./AccountUsageSections";
 import { UsageCard } from "./UsagePanel";
 import { UsageHistory, useUsageHistoryView } from "./UsageHistory";
@@ -162,6 +162,7 @@ export function App({
      the exact moment it matters. */
   const now = useNow();
   const { mode, params, chooseMode, setParam, setParams, go } = useHashState();
+  const sessionsPanel = useRef<SessionsPanelHandle>(null);
   /* **The dock's Refresh means "the page", not "the feed".** Its tooltip
      presents it as the page's refresh control, and until 2026-09-09 it called
      `feed.refresh()` only — so on a panel with its own route, pressing it did
@@ -333,7 +334,7 @@ export function App({
               /* Same as the list below: a card tapped here names a row from the
                  snapshot on screen, so any `selpid` left by an earlier arrival
                  from the feed is cleared rather than left to contradict it. */
-              onSelect={(id) => setParams({ sel: id, selpid: null })}
+              onSelect={(id) => sessionsPanel.current?.openFromList(id)}
             />
             {/* **`collected` is not `rows.length > 0`, and that is the point.**
                 An empty list is only a claim about the box once a collection has
@@ -341,6 +342,7 @@ export function App({
                 `collectedAt: null`, and drawing "No sessions." over it would
                 tell Greg the box is idle while thirty-six agents run on it. */}
             <SessionsPanel
+              ref={sessionsPanel}
               rows={rows}
               now={now}
               collected={feed.state?.collectedAt != null}

@@ -46,7 +46,7 @@
  * the three bands dealt into as many columns as the window affords. That is not
  * a third layout, it is the second one with the detail absent.
  */
-import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useCallback, useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
@@ -451,7 +451,10 @@ function ListControls({
   );
 }
 
+export type SessionsPanelHandle = { openFromList: (id: string) => void };
+
 export function SessionsPanel({
+  ref: selectionRef,
   rows,
   now,
   collected,
@@ -472,6 +475,8 @@ export function SessionsPanel({
   newSession,
   onRefresh,
 }: {
+  /** Share the measured list-open path with the Attention cards above it. */
+  ref?: Ref<SessionsPanelHandle>;
   rows: readonly FleetRow[];
   now: number;
   /**
@@ -690,8 +695,7 @@ export function SessionsPanel({
    * would otherwise land at whatever offset the detail was read to. The offset
    * is taken when a row is opened *from the list* and put back when the
    * selection clears — by "← All sessions" or by the browser's Back, which is
-   * the same transition seen from here. It runs after any restoration the
-   * browser attempts itself, toward the same position.
+   * the same transition seen from here. It runs once the list is mounted again.
    *
    * **Here and not in the hash hook**, because only this component knows the
    * measured layout and when the list is on the page again. A layout effect, so
@@ -704,26 +708,41 @@ export function SessionsPanel({
    * Focus goes back to the row as well, without scrolling: the button that
    * closed the detail has just been unmounted, which leaves focus on nothing.
    */
-  const listScroll = useRef<{ y: number; id: string } | null>(null);
+  // A pixel offset belongs to this width, ordering and membership.
+  const listKey = JSON.stringify([width, order, sorted.map((row) => row.id)]);
+  const listScroll = useRef<{ y: number; id: string; listKey: string; world: number | null } | null>(null);
   const openFromList = useCallback(
     (id: string) => {
-      if (panes === 1 && selectedId === null) listScroll.current = { y: window.scrollY, id };
+      if (panes === 1 && selectedId === null) {
+        listScroll.current = { y: window.scrollY, id, listKey, world: tmuxServerPid };
+      }
       onSelect(id);
     },
-    [panes, selectedId, onSelect],
+    [panes, selectedId, onSelect, listKey, tmuxServerPid],
   );
+  useImperativeHandle(selectionRef, () => ({ openFromList }), [openFromList]);
   useLayoutEffect(() => {
     const saved = listScroll.current;
-    if (selectedId !== null || saved === null) return;
-    listScroll.current = null;
-    /* Two panes by now: the list never left the screen, so it has no position
-       to be returned to and a jump would be the surprise. */
-    if (panes !== 1) return;
-    window.scrollTo(0, saved.y);
-    for (const opener of document.querySelectorAll<HTMLElement>("button.session-open")) {
-      if (opener.dataset["session"] === saved.id) opener.focus({ preventScroll: true });
+    if (saved === null) return;
+    // Discard during the excursion, not only at its end: the list may have
+    // reappeared at two panes and been hidden again, or a link changed target.
+    if (
+      panes !== 1 ||
+      (saved.world !== null && tmuxServerPid !== null && saved.world !== tmuxServerPid) ||
+      (selectedId !== null && (selectedId !== saved.id || selectedPid !== null))
+    ) {
+      listScroll.current = null;
+      return;
     }
-  }, [selectedId, panes]);
+    if (selectedId !== null) return;
+    listScroll.current = null;
+    const opener = Array.from(document.querySelectorAll<HTMLElement>("button.session-open"))
+      .find((button) => button.dataset["session"] === saved.id);
+    if (opener === undefined) return;
+    // An ordering or membership change invalidates pixels, not a surviving row's focus.
+    opener.focus({ preventScroll: true });
+    if (saved.listKey === listKey) window.scrollTo(0, saved.y);
+  }, [selectedId, selectedPid, panes, listKey, tmuxServerPid]);
 
   const detail =
     selectedId === null ? null : wrongWorld ? (
