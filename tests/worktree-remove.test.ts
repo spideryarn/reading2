@@ -413,6 +413,28 @@ describe("removeWorktree", () => {
     expect(existsSync(path.join(primary, "README.md"))).toBe(true);
   });
 
+  /**
+   * The command acts on the tree it is standing in. With `GIT_DIR` and
+   * `GIT_WORK_TREE` inherited — a git hook sets them — git answered "which tree
+   * is this?" with the tree the variables named, so the dashboard's gates could
+   * pass for one tree and this remove another (GPT Sol, code review of 261005n).
+   * Driven through the real CLI, because the scrub is at its entry.
+   */
+  it("removes the tree it stands in, whatever GIT_DIR it inherited", () => {
+    const here = landedWorktree("worktree-here");
+    const other = landedWorktree("worktree-other");
+    const cli = path.resolve(import.meta.dirname, "..", "scripts", "worktree-remove.ts");
+    const tsx = path.resolve(import.meta.dirname, "..", "node_modules", ".bin", "tsx");
+    const r = spawnSync(tsx, [cli, "--dry-run"], {
+      cwd: here,
+      encoding: "utf8",
+      env: { ...process.env, GIT_DIR: git(["rev-parse", "--absolute-git-dir"], other), GIT_WORK_TREE: other },
+    });
+    const text = `${r.stdout}${r.stderr}`;
+    expect(text).toContain(`would remove ${here}`);
+    expect(text).not.toContain(other);
+  });
+
   it("a --dry-run removes nothing and says what it would do", () => {
     const wt = landedWorktree("worktree-dry");
     const out = removeWorktree(primary, "worktree-dry", { dryRun: true });

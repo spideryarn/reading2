@@ -435,8 +435,12 @@ describe("planRemoveWorktree", () => {
     if (!out.ok) return;
     expect(out.plan.steps).toHaveLength(4);
     const [, , check, remove] = out.plan.steps;
-    expect(check?.argv).toEqual(["npm", "run", "worktree:check"]);
-    expect(check?.cwd).toBe(TREE);
+    /* The PRIMARY's copy, told which tree — not `npm run worktree:check` standing
+       in the tree, which needs the tree's own `tsx` and so stopped the plan with
+       `tsx: not found` at every tree under the external root that was never set
+       up (qi-k2jjejb2). The same shape as the remover below, for its reasons. */
+    expect(check?.argv).toEqual([`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", TREE]);
+    expect(check?.cwd).toBe(PRIMARY);
     // The step that makes this safe: a non-zero exit stops the plan, and
     // worktree:check exits non-zero for "blocked" AND for "could not look".
     // Since 2026-09-08 that includes a server still listening from inside the
@@ -476,10 +480,10 @@ describe("planRemoveWorktree", () => {
     expect(out.plan.steps.map((s) => s.argv)).toEqual([
       ["git", "worktree", "list", "--porcelain", "-z"],
       ["git", "-C", tree, "rev-parse", "--abbrev-ref", "HEAD"],
-      ["npm", "run", "worktree:check"],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", tree],
       [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
     ]);
-    expect(out.plan.steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, tree, tree]);
+    expect(out.plan.steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, tree]);
     expect(out.plan.steps[0]?.pass).toEqual({ kind: "stdout-has-record", record: `worktree ${tree}` });
   });
 
@@ -490,7 +494,8 @@ describe("planRemoveWorktree", () => {
       if (!out.ok) return;
       expect(out.plan.steps[0]?.pass).toEqual({ kind: "stdout-has-record", record: `worktree ${tree}` });
       expect(out.plan.steps[1]?.argv[2]).toBe(tree);
-      expect(out.plan.steps[2]?.cwd).toBe(tree);
+      expect(out.plan.steps[2]?.argv.slice(2)).toEqual(["--root", tree]);
+      expect(out.plan.steps[3]?.cwd).toBe(tree);
     }
   });
 
