@@ -20,7 +20,10 @@ const refreshSession = vi.fn();
  * Captured rather than ignored, so the tests below can *be* the SDK and fire
  * a sign-in or a sign-out — which is the only way to reach that cache.
  */
-let announce: (event: string, session: { access_token: string } | null) => void = () => {};
+let announce: (
+  event: string,
+  session: { access_token: string; user?: { id: string } } | null,
+) => void = () => {};
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -37,7 +40,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { apiFetch, leavingFetch } = await import("../src/web/lib/api.js");
+const { apiFetch, leavingFetch, NotThisReader, statusOf } = await import("../src/web/lib/api.js");
 const { writeCount } = await import("../src/web/lib/writes.js");
 
 /** The last `fetch` we were handed, so a test can look at what went out. */
@@ -346,5 +349,172 @@ describe("leavingFetch", () => {
     const calls = stubFetch(ok());
     leavingFetch("https://evil.test/collect", { method: "POST", body: "{}" });
     expect(calls.length).toBe(0);
+  });
+});
+
+/**
+ * **A request made for one reader is never sent as another** —
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md
+ * § 2. The reader is the third argument: who the request was made for. The
+ * check is where the token goes on, on the first send and on the retry.
+ */
+describe("a request made for one reader", () => {
+  const as = (id: string, token = `TOKEN-${id}`) => ({ access_token: token, user: { id } });
+  const answering = (id: string) => ({ data: { session: as(id) } });
+
+  beforeEach(() => {
+    /* Nobody in the cache, so a case that wants somebody there says who. */
+    announce("SIGNED_OUT", null);
+  });
+
+  it("is sent when the credential is that reader's", async () => {
+    getSession.mockResolvedValue(answering("A"));
+    const calls = stubFetch(ok());
+    const res = await apiFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A");
+    expect(res.status).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A");
+  });
+
+  it("is not sent when the credential is another reader's, and rejects with no status", async () => {
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+    const err = await apiFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A").then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(calls).toHaveLength(0);
+    expect(err).toBeInstanceOf(NotThisReader);
+    expect(statusOf(err)).toBeNull();
+  });
+
+  it("is not sent when the token lookup was unanswered across the change of reader", async () => {
+    let answer: (value: unknown) => void = () => {};
+    getSession.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const calls = stubFetch(ok());
+    const sent = apiFetch("/api/jobs", { method: "POST", body: "{}" }, "A").then(
+      () => null,
+      (e: unknown) => e,
+    );
+    answer(answering("B"));
+    expect(await sent).toBeInstanceOf(NotThisReader);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is not retried after a 401 whose refresh comes back as another reader", async () => {
+    getSession.mockResolvedValue(answering("A"));
+    refreshSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(unauthorised(), ok());
+    const res = await apiFetch("/api/jobs", { method: "POST", body: "{}" }, "A");
+    /* The first 401 is the answer. */
+    expect(res.status).toBe(401);
+    expect(calls).toHaveLength(1);
+  });
+
+  /** And the same for every caller in the app, which names no reader. */
+  it("is not retried as another reader by plain apiFetch either", async () => {
+    getSession.mockResolvedValue(answering("A"));
+    refreshSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(unauthorised(), ok());
+    const res = await apiFetch("/api/jobs", { method: "POST", body: "{}" });
+    expect(res.status).toBe(401);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("is still retried when the refresh comes back as the same reader", async () => {
+    getSession.mockResolvedValue(answering("A"));
+    refreshSession.mockResolvedValue({ data: { session: as("A", "TOKEN-A2") } });
+    const calls = stubFetch(unauthorised(), ok());
+    const res = await apiFetch("/api/jobs", { method: "POST", body: "{}" }, "A");
+    expect(res.status).toBe(200);
+    expect(new Headers(calls[1]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A2");
+  });
+
+  /**
+   * **The refusal must never fire for the reader's own request.** The two
+   * ways a credential's owner can be something other than a fresh answer from
+   * the SDK, each by name.
+   */
+  it("is sent for the same reader when the credential is the cache fallback", async () => {
+    vi.useFakeTimers();
+    try {
+      announce("SIGNED_IN", as("A"));
+      /* The SDK never answers: the deadline hands over the cached pair. */
+      getSession.mockReturnValue(new Promise(() => {}));
+      const calls = stubFetch(ok());
+      const sent = apiFetch("/api/reader?slug=a-paper", {}, "A");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect((await sent).status).toBe(200);
+      expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is sent when nobody can say whose the credential is", async () => {
+    /* A session with no user on it: the owner is unknown, which is not
+       "another reader". */
+    getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
+    const calls = stubFetch(ok());
+    await apiFetch("/api/library", {}, "A");
+    expect(calls).toHaveLength(1);
+  });
+
+  /**
+   * **Whose a token is has to come with the token.** The cache drawer falls
+   * back to the reader the tab last saw when a session names nobody, which is
+   * right for a drawer and would be wrong here: it is a second lookup, and it
+   * can be a reader behind. tests/public-network-trace.test.tsx stopped
+   * polling its job list when this was got wrong.
+   */
+  it("is sent when the session names nobody, whoever the tab last saw", async () => {
+    announce("SIGNED_IN", as("B"));
+    getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
+    const calls = stubFetch(ok());
+    await apiFetch("/api/jobs", {}, "A");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("is sent on the way out when the cached session named nobody", () => {
+    announce("SIGNED_IN", as("B"));
+    announce("TOKEN_REFRESHED", { access_token: "TOKEN-1" });
+    const calls = stubFetch(ok());
+    void leavingFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("goes without a token, for the server to refuse, once the reader has signed out", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    const calls = stubFetch(unauthorised());
+    const res = await apiFetch("/api/library", {}, "A");
+    expect(res.status).toBe(401);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBeNull();
+  });
+
+  describe("on the way out (leavingFetch)", () => {
+    it("is sent while that reader is the one the tab last saw", () => {
+      announce("SIGNED_IN", as("A"));
+      const calls = stubFetch(ok());
+      void leavingFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A");
+      expect(calls).toHaveLength(1);
+      expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-A");
+    });
+
+    it("is not sent once the tab has seen another reader, and still resolves", async () => {
+      announce("SIGNED_IN", as("A"));
+      announce("SIGNED_IN", as("B"));
+      const calls = stubFetch(ok());
+      await expect(
+        leavingFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A"),
+      ).resolves.toBeUndefined();
+      expect(calls).toHaveLength(0);
+    });
+
+    it("is not sent once the reader has signed out", () => {
+      announce("SIGNED_IN", as("A"));
+      announce("SIGNED_OUT", null);
+      const calls = stubFetch(ok());
+      void leavingFetch("/api/library/a-paper", { method: "PATCH", body: "{}" }, "A");
+      expect(calls).toHaveLength(0);
+    });
   });
 });

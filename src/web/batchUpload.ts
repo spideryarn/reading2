@@ -43,8 +43,8 @@
  */
 import { uploadProblem } from "../uploads.js";
 import type { Job } from "../types.js";
-import { jobEngine, send, type TerminalOutcome } from "./jobEngine.js";
-import { apiFetch, detailsOf, statusOf } from "./lib/api.js";
+import { jobEngine, type TerminalOutcome } from "./jobEngine.js";
+import { apiFetch, detailsOf, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { warnBeforeUnload } from "./unload-guard.js";
 import { type Grant, type UploadProgress, putFile, requestGrant, sha256Hex } from "./upload.js";
@@ -152,6 +152,8 @@ export interface BatchUploadDeps {
 export interface BatchUpload {
   /** Bind to a reader. Idempotent for the same key; a different one tears down first. */
   start(readerId: string): void;
+  /** The reader it is bound to right now, or `null`. For the live requests below. */
+  reader(): string | null;
   /** Sign-out: fence everything, abort every transfer, and forget the batch. */
   stop(): void;
   subscribe(onChange: () => void): () => void;
@@ -568,6 +570,8 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
       notify();
     },
 
+    reader: () => readerId,
+
     stop() {
       clear();
       readerId = null;
@@ -685,24 +689,53 @@ const COULD_NOT_READ = "This file could not be read. Trying again sometimes work
 const COULD_NOT_READ_FILE =
   "This browser could not read that file off your disk. Choosing it again usually works.";
 
-const post = <T>(url: string, body: unknown) =>
-  send<T>(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+/**
+ * As the reader the batch is bound to, or not at all. Not `send` from
+ * jobEngine.ts, which names the *job* engine's reader: the three are bound
+ * and unbound together (`useJobSession`), one after another, and a request
+ * should name the engine that made it.
+ */
+const post = async <T>(url: string, body: unknown): Promise<T> =>
+  readJson<T>(
+    await apiFetch(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      batchUpload.reader(),
+    ),
+  );
 
-/** The live one. */
+/**
+ * The live one.
+ *
+ * **Every request names the reader the batch is bound to**, read when the
+ * call is made, as uploadEngine.ts § the live one says and for its reason
+ * (docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2).
+ */
 export const batchUpload: BatchUpload = createBatchUpload({
   /* Arrows rather than the functions themselves, so this module can be
      imported where upload.ts is mocked without the mock naming all three. */
   hash: (file) => sha256Hex(file),
-  requestGrant: (file, signal, claim) => requestGrant(file, signal, claim),
+  requestGrant: (file, signal, claim) => requestGrant(file, signal, claim, batchUpload.reader()),
   putFile: (grant, file, options) => putFile(grant, file, options),
   queue: (uploadId) => post<Job | AlreadyAnArticle>("/api/jobs", { uploadId, level: "minimal" }),
-  retryJob: (jobId) => send<Job>(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" }),
+  retryJob: async (jobId) =>
+    readJson<Job>(
+      await apiFetch(
+        `/api/jobs/${encodeURIComponent(jobId)}/retry`,
+        { method: "POST" },
+        batchUpload.reader(),
+      ),
+    ),
   cancelUpload: async (uploadId) => {
-    await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+    await apiFetch(
+      `/api/uploads/${encodeURIComponent(uploadId)}`,
+      { method: "DELETE" },
+      batchUpload.reader(),
+    );
   },
   jobs: {
     epoch: () => jobEngine.epoch(),

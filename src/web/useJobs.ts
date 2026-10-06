@@ -233,7 +233,7 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
        an import can start from a link's hover card without visiting it. The
        signal binds the request to this reader (auto-modes-setting.ts). */
     const handOver = new AbortController();
-    void handOverAutoModesChoice(handOver.signal);
+    void handOverAutoModesChoice(handOver.signal, readerId);
     return () => {
       handOver.abort();
       jobEngine.stop();

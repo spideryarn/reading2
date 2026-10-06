@@ -191,13 +191,27 @@ function openArticle(completion: Completion, highPower: HighPowerIntent): void {
   navigate(readHref(completion.slug), { replace: true });
 }
 
-/** The Metadata switch's own request — src/web/HighPowerSwitch.tsx. */
-const putHighPower: PutHighPower = (slug, on) =>
-  apiFetch(`/api/article/${encodeURIComponent(slug)}/high-power`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ on }),
-  }).then((r) => readJson<{ highPowerSince: string | null }>(r));
+/**
+ * The Metadata switch's own request — src/web/HighPowerSwitch.tsx — **made
+ * for one reader**. The intent it is given to outlives the page and retries
+ * each second, so without the reader a tick reader A made would be sent with
+ * whoever's token is current by then: a spend reader B never chose. Sent as
+ * anybody else it is not sent (`NotThisReader` in lib/api.ts), and a rejection
+ * with no status stops the intent's retries.
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2.
+ */
+const putHighPowerFor =
+  (readerId: string | null): PutHighPower =>
+  (slug, on) =>
+    apiFetch(
+      `/api/article/${encodeURIComponent(slug)}/high-power`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on }),
+      },
+      readerId,
+    ).then((r) => readJson<{ highPowerSince: string | null }>(r));
 
 /**
  * *Make it public*'s two requests, and what the tab remembers
@@ -247,6 +261,12 @@ interface SharingIo {
  * `apiFetch` never keeps a copy of this route (lib/api.ts § `NEVER_KEPT`), so
  * there is no offline copy to mistake for an answer. The key is in what
  * these return and nowhere else.
+ *
+ * **And every request here is sent as this reader or not at all** (plan
+ * 261006e § 2, GPT Sol's F2). Retiring a controller stops its answer being
+ * drawn; it cannot stop a *Make it public* that is still waiting for its
+ * token, which would otherwise publish the next reader's article of the same
+ * slug on this reader's confirmation.
  */
 function sharingIo(readerId: string | null): SharingIo {
   /* `null` only where there is no session to name, which is a test. */
@@ -257,7 +277,7 @@ function sharingIo(readerId: string | null): SharingIo {
     const out = probing.get(slug);
     if (out) return out;
     const asked = (async (): Promise<Probe> => {
-      const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
+      const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`, {}, readerId);
       if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
       if (res.status === 404) return "none";
       return res.status === 200 ? "article" : "unknown";
@@ -297,30 +317,38 @@ function sharingIo(readerId: string | null): SharingIo {
       },
       probe,
       put: (slug, to) =>
-        apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            to === "public" ? { visibility: to, rightsConfirmed: true } : { visibility: to },
-          ),
-        }).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
+        apiFetch(
+          `/api/article/${encodeURIComponent(slug)}/visibility`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              to === "public" ? { visibility: to, rightsConfirmed: true } : { visibility: to },
+            ),
+          },
+          readerId,
+        ).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
     },
     link: {
       probe,
       async read(slug) {
-        const res = await apiFetch(linkPath(slug));
+        const res = await apiFetch(linkPath(slug), {}, readerId);
         if (res.status === 404) return "none";
         return asShareLinkState(await readJson<unknown>(res));
       },
       create: (slug) =>
-        apiFetch(linkPath(slug), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          /* Exactly this. The server refuses any other body. */
-          body: JSON.stringify({ rightsConfirmed: true }),
-        }).then(async (r) => asShareLinkState(await readJson<unknown>(r))),
+        apiFetch(
+          linkPath(slug),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            /* Exactly this. The server refuses any other body. */
+            body: JSON.stringify({ rightsConfirmed: true }),
+          },
+          readerId,
+        ).then(async (r) => asShareLinkState(await readJson<unknown>(r))),
       remove: (slug) =>
-        apiFetch(linkPath(slug), { method: "DELETE" }).then(async (r) =>
+        apiFetch(linkPath(slug), { method: "DELETE" }, readerId).then(async (r) =>
           asShareLinkState(await readJson<unknown>(r)),
         ),
     },
@@ -342,10 +370,20 @@ function sharingIoFor(readerId: string | null): SharingIo {
  * The purpose session's three requests (src/web/add-purpose.ts). `save` and
  * `leave` are the ones Metadata's box, the first-open prompt and the profile
  * panel use: an empty box clears, and the answer is what the server stored.
+ *
+ * **For one reader**, the one the session was made for. A retired session
+ * still sends its last words, by design, and by then the page may be gone and
+ * somebody else signed in: each of the three is sent as this reader or not at
+ * all (plan 261006e § 2). A refused send rejects, and the session's `flush`
+ * swallows a failure.
  */
-const purposeIo: AddPurposeIo = {
+const purposeIoFor = (readerId: string | null): AddPurposeIo => ({
   async read(slug, signal) {
-    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`, { signal });
+    const res = await apiFetch(
+      `/api/reader?slug=${encodeURIComponent(slug)}`,
+      { signal },
+      readerId,
+    );
     /* `apiFetch` answers a GET it could not send from the offline cache, as a
        200 with this header on it. A copy from last week does not say the
        article exists now, so the session does not seed from one (Sol's F5). */
@@ -353,27 +391,36 @@ const purposeIo: AddPurposeIo = {
     const body = await readJson<{ purpose?: string | null; purposeFailed?: unknown }>(res);
     return { fresh, purpose: body.purpose ?? null, purposeFailed: body.purposeFailed };
   },
-  save: async (slug, text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
-  leave: leavePurpose,
-};
+  save: async (slug, text) =>
+    (await savePurpose(slug, text === "" ? null : text, readerId)) ?? "",
+  leave: (slug, text) => leavePurpose(slug, text, readerId),
+});
 
 /**
- * **Sessions still finishing their last write, by article.** A retired session
- * sends its latest words after any write in flight, and a new session for the
- * same article must not read or write until that has settled (Sol's F9:
- * `/add/https://example.com/paper` and the same with a trailing slash are two
- * addresses and one slug). At module level so it also holds between a page
- * that unmounted and the next one mounted on the same article.
+ * **Sessions still finishing their last write, by reader and article.** A
+ * retired session sends its latest words after any write in flight, and a new
+ * session for the same article must not read or write until that has settled
+ * (Sol's F9: `/add/https://example.com/paper` and the same with a trailing
+ * slash are two addresses and one slug). At module level so it also holds
+ * between a page that unmounted and the next one mounted on the same article.
+ *
+ * **The reader is in the key** (plan 261006e, GPT Sol's F4). Two readers can
+ * each have an article under one slug, and they are two articles: reader B's
+ * session has nothing to wait for in reader A's unanswered save, and keyed by
+ * slug alone it waited for as long as that save took.
  */
 const retiringPurposes = new Map<string, Promise<void>>();
+const retiringKey = (reader: string | null, slug: string): string => JSON.stringify([reader, slug]);
 
-function retirePurpose(session: AddPurposeSession): void {
-  const done = session.retire();
-  const slug = session.slug;
-  if (slug === null || retiringPurposes.get(slug) === done) return;
-  retiringPurposes.set(slug, done);
+function retirePurpose(held: PurposeHeld): void {
+  const done = held.session.retire();
+  const slug = held.session.slug;
+  if (slug === null) return;
+  const key = retiringKey(held.reader, slug);
+  if (retiringPurposes.get(key) === done) return;
+  retiringPurposes.set(key, done);
   void done.then(() => {
-    if (retiringPurposes.get(slug) === done) retiringPurposes.delete(slug);
+    if (retiringPurposes.get(key) === done) retiringPurposes.delete(key);
   });
 }
 
@@ -385,6 +432,8 @@ export function resetAddPurposeForTests(): void {
 /** The page's current purpose session, and the `/add/` address it belongs to. */
 interface PurposeHeld {
   source: string;
+  /** Who the session's requests are made for, and whose barrier it waits behind. */
+  reader: string | null;
   session: AddPurposeSession;
   /** Release the read barrier only after this session's render commits. */
   activate(): void;
@@ -405,24 +454,36 @@ interface PurposeHeld {
  *  - **a retired session under the same address** is StrictMode's
  *    unmount-and-mount-again, or a page restored: succeeded like any other.
  */
-function purposeFor(held: PurposeHeld | null, source: string, slug: string | null): PurposeHeld {
-  if (held === null) return prospectivePurpose(source, slug, "");
+function purposeFor(
+  held: PurposeHeld | null,
+  source: string,
+  slug: string | null,
+  reader: string | null,
+): PurposeHeld {
+  if (held === null) return prospectivePurpose(source, slug, "", reader);
   const same = held.source === source;
   const target = slug ?? (same ? held.session.slug : null);
   if (same && target === held.session.slug && !held.session.isRetired) return held;
   const text = same ? held.session.carried() : "";
-  return prospectivePurpose(source, target, text);
+  return prospectivePurpose(source, target, text, reader);
 }
 
 /** Creating a candidate during render must neither retire nor start a session. */
-function prospectivePurpose(source: string, slug: string | null, text: string): PurposeHeld {
+function prospectivePurpose(
+  source: string,
+  slug: string | null,
+  text: string,
+  reader: string | null,
+): PurposeHeld {
   let release: () => void = () => {};
   const after = new Promise<void>((resolve) => { release = resolve; });
   return {
     source,
-    session: new AddPurposeSession(slug, purposeIo, { after, text }),
+    reader,
+    session: new AddPurposeSession(slug, purposeIoFor(reader), { after, text }),
     activate() {
-      const previous = slug === null ? undefined : retiringPurposes.get(slug);
+      const previous =
+        slug === null ? undefined : retiringPurposes.get(retiringKey(reader, slug));
       if (previous) void previous.then(release);
       else release();
     },
@@ -491,6 +552,14 @@ export function AddPage({
    * held job, and the two sharing controllers, one of which holds a private
    * link's key (GPT Sol's stage 2 plan review, F1). Each is tagged or keyed
    * with this, so nothing of reader A's is drawn for reader B.
+   *
+   * **And every request the page makes is made for this reader**: the purpose
+   * session's, High-powered AI's, the sharing controls' and the upload poll's
+   * are sent as them or not at all (`NotThisReader` in lib/api.ts), because
+   * several of those are sent after the page has gone. Since plan 261006e
+   * `App` also gives the page a `key` of this id and stops the visit when it
+   * changes (add-visit.ts), so a mounted page no longer sees it change; the
+   * tags stay, as the page's own account of whose each thing is.
    *
    * `null` only where there is no session to name, which is a test.
    */
@@ -629,7 +698,10 @@ export function AddPage({
   const highPowerRef = useRef<{ source: string; intent: HighPowerIntent } | null>(null);
   if (highPowerRef.current?.source !== wanted) {
     highPowerRef.current?.intent.dispose();
-    highPowerRef.current = { source: wanted, intent: new HighPowerIntent(putHighPower) };
+    highPowerRef.current = {
+      source: wanted,
+      intent: new HighPowerIntent(putHighPowerFor(readerId)),
+    };
   }
   const highPower = highPowerRef.current.intent;
 
@@ -823,9 +895,13 @@ export function AddPage({
     let live = true;
     const timer = setInterval(() => {
       void (async () => {
-        const seen = await readJson<{ arrived?: boolean; status?: string }>(
-          await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`),
-        ).catch(() => null);
+        /* As the reader who is waiting, or not at all (plan 261006e § 2).
+           One chain, so a request that was refused or never left is caught
+           with a body that could not be read: `readJson(await …).catch` let
+           the first of those out as an unhandled rejection. */
+        const seen = await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, {}, readerId)
+          .then((r) => readJson<{ arrived?: boolean; status?: string }>(r))
+          .catch(() => null);
         if (!live || !seen) return;
         /* Nothing to act on yet, and the timer stays armed. */
         const done = seen.status === "expired" || seen.arrived === true;
@@ -857,7 +933,7 @@ export function AddPage({
       live = false;
       clearInterval(timer);
     };
-  }, [stillArriving, uploadId]);
+  }, [stillArriving, uploadId, readerId]);
 
   /* State updates run after render, so an old `started` can still be present in
      the first render for a new address. The source tag makes it inert during
@@ -1025,11 +1101,16 @@ export function AddPage({
    * candidate's read barrier. A suspended render may leave the old box in use.
    */
   const purposeRef = useRef<PurposeHeld | null>(null);
-  const purposeHeld = purposeFor(purposeRef.current, wanted, job?.slug ?? completion?.slug ?? null);
+  const purposeHeld = purposeFor(
+    purposeRef.current,
+    wanted,
+    job?.slug ?? completion?.slug ?? null,
+    readerId,
+  );
   const purpose = purposeHeld.session;
   useLayoutEffect(() => {
     if (purposeRef.current === purposeHeld) return;
-    if (purposeRef.current) retirePurpose(purposeRef.current.session);
+    if (purposeRef.current) retirePurpose(purposeRef.current);
     purposeRef.current = purposeHeld;
     purposeHeld.activate();
   }, [purposeHeld]);
@@ -1074,7 +1155,7 @@ export function AddPage({
     return () => {
       document.removeEventListener("visibilitychange", hidden);
       window.removeEventListener("pagehide", leaving);
-      if (purposeRef.current) retirePurpose(purposeRef.current.session);
+      if (purposeRef.current) retirePurpose(purposeRef.current);
     };
   }, []);
 

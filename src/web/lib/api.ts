@@ -427,8 +427,72 @@ export async function readJson<T>(res: Response): Promise<T> {
  * the hour simply keeps arriving. Worth stating because it is the first
  * question anyone asks about this design.
  */
-export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  return (await apiFetchOwned(input, init)).response;
+export async function apiFetch(
+  input: string,
+  init: RequestInit = {},
+  /**
+   * **The reader this request was made for**, when it must not go out as
+   * anybody else — see `NotThisReader` below. `null`, which is every caller
+   * that names nobody, is unfenced.
+   */
+  madeFor: string | null = null,
+): Promise<Response> {
+  return (await apiFetchOwned(input, init, madeFor)).response;
+}
+
+/**
+ * **A request made for one reader was about to be sent as another, and was
+ * not sent.** docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2.
+ *
+ * Some requests are owed by a reader rather than by a page: the add page's
+ * purpose session sends its last words after the page has gone, its
+ * High-powered intent retries each second, and a job engine's POST can sit
+ * waiting for its token. If the reader changes meanwhile (another tab signs in
+ * as somebody else), the token that arrives is the new reader's, and reader
+ * A's sentence is written onto reader B's article of the same slug. Resetting
+ * the screen does not stop that; only a check where the token goes on does.
+ *
+ * So a caller that knows who a request is for passes them as `apiFetch`'s
+ * third argument, and gets this instead of a response when the credential is
+ * somebody else's.
+ *
+ * **No HTTP status**, so `statusOf` answers `null`: nothing was asked, and a
+ * caller that retries on a 404 or pauses on a 401 does neither.
+ *
+ * **It never fires for the reader's own request**, and `tokenOwner` on
+ * `Credential` is why: the comparison is with the reader named by the very
+ * session object the token came out of, and with nothing else. No token is
+ * nobody's: the request is sent, and the server refuses it in its own words. A
+ * token from a session that names nobody is not known to be another reader's,
+ * so it is sent too. **Not `owner`**, the cache drawer, which falls back to
+ * the reader this tab last saw: that is a second lookup, and it can be a
+ * reader behind the token beside it.
+ *
+ * **A third argument and not a second function**, because of the tests: over a
+ * hundred suites replace `apiFetch` in this module and leave the rest real, and
+ * a sibling export would go round every one of them to the network (§ *A call
+ * whose test intercepts `apiFetch`*, further down).
+ */
+export class NotThisReader extends Error {
+  constructor() {
+    super("This was for another account, so it was not sent.");
+    this.name = "NotThisReader";
+  }
+}
+
+/** Whether a token is known to belong to somebody other than `madeFor`. */
+function notTheirs(tokenOwner: string | null, madeFor: string | null): boolean {
+  return madeFor !== null && tokenOwner !== null && tokenOwner !== madeFor;
+}
+
+/**
+ * Whose token a session carries: the reader it names, when it has a token and
+ * names one. `null` is *nobody can say*, never *nobody*.
+ */
+function tokenOwnerOf(
+  session: { access_token?: string; user?: { id?: string } | null } | null | undefined,
+): string | null {
+  return session?.access_token ? (session.user?.id ?? null) : null;
 }
 
 /**
@@ -446,10 +510,14 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
  * **And every write is counted here, sent and finished** (writes.ts), which is
  * what tells a held read it may have gone stale.
  */
-export async function apiFetchOwned(input: string, init: RequestInit = {}): Promise<Owned> {
+export async function apiFetchOwned(
+  input: string,
+  init: RequestInit = {},
+  madeFor: string | null = null,
+): Promise<Owned> {
   noteRequest(input, init.method);
   try {
-    return await sendOwned(input, init);
+    return await sendOwned(input, init, madeFor);
   } finally {
     noteRequest(input, init.method);
   }
@@ -461,7 +529,11 @@ export interface Owned {
   owner: string | null;
 }
 
-async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
+async function sendOwned(
+  input: string,
+  init: RequestInit,
+  madeFor: string | null,
+): Promise<Owned> {
   if (!input.startsWith("/api/")) {
     throw new Error(`apiFetch is for our own API only, and this is not: ${input}`);
   }
@@ -502,7 +574,10 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
    * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md,
    * 2026-09-03.
    */
-  const { token, owner } = await accessToken();
+  const { token, owner, tokenOwner } = await accessToken();
+  /* Here and not before the lookup: a lookup that was waiting while the
+     reader changed answers with the new reader's token (`NotThisReader`). */
+  if (notTheirs(tokenOwner, madeFor)) throw new NotThisReader();
   /**
    * **The queue place, taken before the request goes out.**
    *
@@ -538,6 +613,7 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
   /* The refresh answers with a whole session, so the retry's drawer comes from
      that one rather than from the session the first attempt used. */
   let refreshedOwner = owner;
+  let refreshedTokenOwner: string | null = null;
   try {
     /* Offline this cannot succeed, and the SDK will spend around twenty-five
        seconds finding that out — see `accessToken` below. A 401 we already have
@@ -546,10 +622,20 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
     refreshedOwner = data?.session?.user?.id ?? owner;
+    refreshedTokenOwner = tokenOwnerOf(data?.session);
   } catch {
     return { response: first, owner };
   }
   if (!refreshed) return { response: first, owner };
+  /* **The retry is the same request, so it goes out as the same reader or not
+     at all**, for every caller. A refresh that comes back as somebody else is
+     a change of account that landed between the two attempts, and sending
+     reader A's write again with reader B's token is the thing `NotThisReader`
+     exists to stop. The first 401 is the answer. An owner nobody knows is not
+     a different one. Plan 261006e § 2. */
+  if (notTheirs(refreshedTokenOwner, tokenOwner) || notTheirs(refreshedTokenOwner, madeFor)) {
+    return { response: first, owner };
+  }
   /* **A fresh ticket, not the one above.** The retry is a newly issued request:
      it may belong to a refreshed owner, and it has to see any mutation that
      happened between the two attempts. Reusing the first ticket would let the
@@ -1122,6 +1208,7 @@ async function accessToken(): Promise<Credential> {
          disagree. `lastKnownUser()` behind it is for a session shape with no
          user on it, which the SDK does not produce and a test stub does. */
       owner: r.data.session?.user?.id ?? lastKnownUser(),
+      tokenOwner: tokenOwnerOf(r.data.session),
     })),
     after(SESSION_DEADLINE_MS).then(fromCache),
   ]);
@@ -1138,6 +1225,14 @@ interface Credential {
   token: string | undefined;
   /** An id, never a token: it selects a drawer and authorises nothing. */
   owner: string | null;
+  /**
+   * **Whose the token is, said by the session it came out of**, or `null`
+   * when that session named nobody or there is no token. Usually `owner`, and
+   * kept apart from it because `owner` has a fallback (the reader this tab
+   * last saw) that suits choosing a drawer and would make `NotThisReader`
+   * refuse a reader's own request.
+   */
+  tokenOwner: string | null;
 }
 
 /**
@@ -1148,7 +1243,7 @@ interface Credential {
  * bottom of this file.
  */
 function fromCache(): Credential {
-  return { token: cachedToken, owner: lastKnownUser() };
+  return { token: cachedToken, owner: lastKnownUser(), tokenOwner: cachedTokenOwner };
 }
 
 /**
@@ -1191,8 +1286,21 @@ const after = (ms: number) => new Promise<void>((go) => setTimeout(go, ms));
  * write has landed: src/web/useProfile.ts § `leaveProfile`. Most callers
  * ignore it.
  */
-export function leavingFetch(input: string, init: RequestInit = {}): Promise<void> {
+export function leavingFetch(
+  input: string,
+  init: RequestInit = {},
+  /**
+   * **The reader this write is for**, as `apiFetch`'s third argument. The
+   * token below is the one this tab last saw, so nothing is sent when that is
+   * known to be somebody else's, or when there is none: a write for a reader
+   * has no use for no token. `null` is unfenced.
+   */
+  madeFor: string | null = null,
+): Promise<void> {
   if (!input.startsWith("/api/")) return Promise.resolve();
+  if (madeFor !== null && (cachedToken === undefined || notTheirs(cachedTokenOwner, madeFor))) {
+    return Promise.resolve();
+  }
 
   /* **Browsers cap the total body of all in-flight `keepalive` requests at
      about 64KiB, and reject over it.** None of the current callers — reader
@@ -1269,8 +1377,11 @@ const KEEPALIVE_LIMIT = 60 * 1024;
  * await anything.
  */
 let cachedToken: string | undefined;
+/** Whose `cachedToken` is, written with it: `tokenOwner` on `Credential`. */
+let cachedTokenOwner: string | null = null;
 supabase.auth.onAuthStateChange((_event, session) => {
   cachedToken = session?.access_token;
+  cachedTokenOwner = tokenOwnerOf(session);
 
   /* **Whose cache to read, kept beside the token and for the same reason.** A
      request needs to know which reader's copies to look in before it knows
