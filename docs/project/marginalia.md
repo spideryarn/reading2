@@ -108,6 +108,25 @@ it already took all the room right of the prose, up to 576px, so at 1440px it is
 mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
 [`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
 
+**From a 1600px window the prose moves left, for the chat card.**
+
+> re wider margin for chat card: B give it more room on wide windows
+>
+> — Greg, 2026-10-06
+
+B was offered as a small shift left from about 1600px, keeping the prose's width, so the margin
+and the card get about 100px more. With the column on and no band, the prose moves up to 100px
+further left from 1600px, whether or not a card is open. It moves only as far as the card can use, and the card
+stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 362 → 462), 54px at
+1920 (522 → 576), and none from 2028px, where the prose is centred again. Larger type can leave
+less space on the left; the shift keeps at least half of it clear of the rail. The notes' cap
+stays at 384px; at larger roots the notes can also grow into the new room, up to that cap.
+Below 1600px everything stays as it was, including the masthead, so the prose jumps as a window
+is dragged across that width. Beside a band nothing moves: the prose is not centred there and
+the band has the page left of it. On wide windows the masthead's title follows the prose
+(`marginalia.css` § the room); its older offset on narrower windows is outside this change.
+`shiftForCard` and `margTitleReserve` in [`layout.ts`](../../src/web/layout.ts).
+
 **A lone question's line says its words once.** Opened, it shows only *Open the conversation*; the
 line itself un-truncates. Among several entries each keeps its own head, which is how they are told
 apart (report `spya-f6dpj5`).
