@@ -31,9 +31,14 @@ asks for it, and the three clients ask and read `null` as "none yet".
 - **Client.** The three hooks send the header and treat a `null` body as their existing "none"
   branch. They keep the `404` branch too, so a new client against an old server (the minutes of a
   deploy) still works.
-- **Offline cache.** All three prefixes are in `CACHEABLE` (`src/web/lib/api.ts`). A cached `null`
-  is a correct "none yet as of last time", and the quiz special case there already reads
-  `quiz?.attempts` null-safely; a test pins that a `null` body is cached and replayed as "none".
+- **Offline cache: a `null` from these three is not saved.** The offline cache keys on reader and
+  URL only (`src/web/lib/offline-store.ts`) and replays whatever it holds as a 200 whatever the
+  request's headers, so a `null` saved by a new tab would be replayed to an old tab offline and put
+  back the very error the header exists to prevent (Sol F1). A 404 was never saved either, so this
+  keeps today's offline behaviour exactly. A test pins that the `null` is not written.
+- **`Cache-Control: private, no-store`** on these three responses, the legacy 404 for a missing
+  artefact included, so no HTTP cache holds a response that depends on a header it was not told
+  about (Sol F4).
 
 ### Why an opt-in header, and the simpler option passed over
 
@@ -62,14 +67,16 @@ Quiz's (i) card says "12 questions" while the band, under the *Only what I've re
 count is the whole batch; the band's "of N" is the questions left in after the filter, and when the
 filter hides some, the band says so in words (for instance "Question 1 of 5 from what you've
 read · 12 in all" — builder picks the wording after reading `QuizPanel.tsx`, which already computes
-`hiddenCount`; if the panel already says how many are hidden nearby, reuse that line rather than
-adding a second). Plain words, no new state.
+`hiddenCount`). The panel's existing hidden-count sentence is drawn only while the list is open
+(`{listing && …}`) and "Question N of M" shows with it closed, so the explanation has to show
+whenever `hiddenCount > 0`: move the existing sentence beside the count rather than adding a second
+(Sol F3). Plain words, no new state.
 
 ### Done looks like
 
 - A failing test first for each of: the three routes answering `200 null` with the header for a
   made-less article; still 404 without the header; still 404 for an unknown slug with the header;
-  each hook reading `null` as none; the cached-`null` replay; the quiz wording.
+  each hook reading `null` as none; the `null` not being written to the offline cache; the quiz wording.
 - `npm test` on the touched files, `npm run typecheck`, lint on touched files.
 - Browser: an owner's article with none of the three artefacts loads with no 4xx in the network
   log or console, at desktop, iPad and phone widths; Quiz and Citations bands still offer their
@@ -88,7 +95,10 @@ is more to the right.
 edge while there is content hidden to the right, and on the left while there is content hidden to
 the left. The fade is not part of the scrolled content, so it sits on a non-scrolling wrapper
 around the `overflow-x-auto` box; whether there is hidden content is measured
-(`scrollWidth - clientWidth - scrollLeft`), on scroll and on resize. It is decoration: `aria-hidden`,
+(`scrollWidth - clientWidth - scrollLeft`) on mount, on scroll, when the box changes size **and
+when the table inside it changes size** — the pivot's columns change with *then by* while the box
+stays the same width, so both the box and the inner table are observed (Sol F2). The fades paint
+above the sticky label cells, which are `z-10`. It is decoration: `aria-hidden`,
 `pointer-events: none`, and colours from the existing tokens so it works in both themes. Every
 scroll box on the page uses it.
 
@@ -99,8 +109,9 @@ also passed over: it needs the same measurement to know when to hide, and takes 
 every table.
 
 **`DataTable` is shared with the shelf and the users table.** If its scroll box is inside
-`DataTable`, the cue reaches `Ranking` either by an opt-in prop or by wrapping from outside,
-whichever is smaller — but the shelf, which readers see, does not change in this stage.
+`DataTable` (it is: `src/web/lib/DataTable.tsx`), the cue reaches `Ranking` by an opt-in prop that
+uses that real scroll box — a wrapper outside it would measure the wrong element (Sol) — and the
+shelf, which readers see, does not change in this stage.
 
 ### Done looks like
 
@@ -114,3 +125,10 @@ whichever is smaller — but the shelf, which readers see, does not change in th
 ## Reviews
 
 GPT Sol on this plan before building (read-only), and on each stage's code after (write-capable).
+
+**Plan review, 2026-10-06** — [the answer](261006g-none-yet-plan-review-sol.md), of commit
+`82e72480f`. Verdict: build it after the P1. All four findings accepted and folded in above: F1
+(P1, a cached `null` reaches tabs that never opted in — the plan's first version asked for the
+`null` to be cached and replayed, which was wrong), F2 (remeasure when the table's content changes),
+F3 (the hidden-count sentence is conditional on the open list), F4 (`no-store`). It confirmed the
+old-tab argument for the header and found no other caller of the three GETs.
