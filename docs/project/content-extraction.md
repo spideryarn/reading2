@@ -120,9 +120,8 @@ The differences that matter to a reader:
   the pages before an upload is promoted to its canonical name or a fetched document is stored, so
   the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
   stays as the backstop for anything ingested before that, or re-extracted after the cap moves
-  again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
-  at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
-  `runPdfExtract` counts anything. Neither can reach a reader's job.
+  again; `npm run eval:pdf-read` keeps the original before `runPdfExtract` counts anything.
+  The stage CLIs now drive the queue through `scripts/stage.ts`, and an ingest runs stage 1's guard.
 - **Maths comes out as TeX, and the checks read it as what it prints.** Since 2026-09-24
   (`PROMPT_VERSION` `pdf-v4`) the prompt asks for inline maths between `\(…\)` and displayed
   equations between `\[…\]`, never `$`, which the reading view draws as maths ([maths.md](maths.md)).
@@ -472,8 +471,8 @@ place was checked against the code on 2026-10-07.
 - Nothing to add for the reader's sentence or the pipeline: `documentIsABotCheck` in
   [`src/messages.ts`](../../src/messages.ts) and the `ChallengePage` branch in
   [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider.
-- Count lines in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md) (the
-  manifest and fixture counts) are prose and need updating by hand.
+- Current inventory counts in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  are prose and need updating by hand; keep dated measurement counts as recorded.
 
 **Both rules are prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
 stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is

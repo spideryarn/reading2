@@ -1340,8 +1340,8 @@ Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
   should follow.
 
 An article with no stored title still lists: the title falls back to the first `<h1>`
-([`src/library-scalars.ts`](../../src/library-scalars.ts)), and the date is the `fetched_at` column
-with no fallback. A missing byline or source just is not shown.
+([`src/library-scalars.ts`](../../src/library-scalars.ts)), and the date is `fetched_at` with the article's `created_at`
+as its fallback (`ADDED_AT` and `listArticles` in `src/store/pg.ts`). A missing byline or source just is not shown.
 `npm run extract -- <slug> --force` re-runs the stage.
 
 ## When this becomes Postgres

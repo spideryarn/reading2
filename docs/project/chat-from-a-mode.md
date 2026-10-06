@@ -30,7 +30,7 @@ And the press is the Send: *"When I click "ask in Chat" anywhere, automatically 
 | Mode | The button is on | Component | Owning section |
 |---|---|---|---|
 | Debate | each claim's heading (icon only) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `ClaimsList` | [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) |
-| Debate | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `DebateClaimChats` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
+| Debate | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
 | Glossary | the open entry, beside Dig deeper | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Citations | the open row, beside Dig deeper | the same | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
 
@@ -54,7 +54,7 @@ In the order you would do them:
 1. **The shape.** [`src/types.ts`](../../src/types.ts) § `ThreadOrigin`: add an arm. An item with a
    durable id copies `GlossaryOrigin` (`itemId` and a name snapshot cut by `originName`). An item
    without one is named by its block and words, like `ClaimOrigin`. **Loud** from here on: steps
-   3, 5, 6 and 7 stop compiling.
+   3, 5 and 7 stop compiling; step 6 follows once step 2 is done.
 2. **`ORIGIN_MODES`**, same file. **Silent at compile time**: `satisfies` checks what is listed, not
    what is missing. Miss it and the first press gets a 400 from the route.
 3. **`sameOrigin`**, same file: how the item finds its chat again. **Loud** (`never`).
@@ -92,7 +92,7 @@ In the order you would do them:
     mark never appears. In the panel, `AskInChatButton`, `threadForOrigin`
     ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, passed through
     the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
-11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `it.each` over
+11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
     `glossary` and `citations`: `sameOrigin`, and **the columns round trip that covers step 5**);
     `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);
     `tests/thread-source.test.ts`; `tests/glossary-and-citations-ask-in-chat.test.tsx` (the press,

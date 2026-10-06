@@ -15,7 +15,7 @@ ledger, drop a stray column, reset it — because nothing in it is a reader's. G
 Production is the opposite case; [AGENTS.md § Real data belongs to the reader](../../AGENTS.md)
 still governs it. Say what you ran, and read its `Target:` line to be sure it was this one.
 
-The reading app reads and writes this database and nothing else — the filesystem store is gone
+The reading app's relational store is this database — the filesystem store is gone
 (2026-09-05) — and [`npm run db:migrate`](../../scripts/db-migrate.ts) points at it by default. What
 goes *in* the database is [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md);
 where the data lives today is [database.md](database.md).

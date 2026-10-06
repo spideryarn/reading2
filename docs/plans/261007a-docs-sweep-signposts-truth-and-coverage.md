@@ -115,6 +115,307 @@ The six held-back runs are on disk, unread, until S6.
 A table at the bottom keeps each old anchor on one line pointing at the owner, because about forty
 links in plans and in `original-version/` land on `#q1` … `#q10`.
 
+## S3 — is `docs/project/` true, and can a long doc be entered?
+
+Two rounds, because the first did not do the job it was sent for.
+
+**Round one**: nineteen Sonnet subagents, one per group of about 4,500 lines, each given four jobs
+(truth, a section map, signposts, a report). **Eight of the nineteen did the maps and the signposts
+and skipped the truth read**, and said so: *"I did not read all 4,400 lines"*. A brief that asks for
+four things gets the three that are easy to finish. **Round two** was fourteen agents with one job
+and half the lines each, told to read every line and to report the last line number they read. All
+fourteen read to the end.
+
+What landed, across both:
+
+- **A section map (`## In this doc`) on 66 docs**, every one over 400 lines bar
+  `hetzner-remote-server-box.md`, which another session was editing. Each bullet says what a reader
+  comes looking for, not what the heading says. `feedback-reports.md`'s opens with "handed one
+  report? read these, in this order".
+- **About 230 statements corrected**, each checked against the code by the agent that changed it.
+  Four kinds made up most of them:
+  - **the filesystem store, in the present tense** — `supabase-local.md` said the app *"still reads
+    and writes JSON files under data/"*; `security.md` said the job queue *"is still on disk and
+    carries no owner"*; `setup-dev.md` said *"nothing in the app talks to [the local database] yet"*;
+  - **"not built yet" for what is built** — `structure-step.md` four times, `deployment.md`,
+    `ingest-queue.md`'s transactional stage runner, `dictation.md`'s *"the app has never played a
+    sound; no WebRTC"*;
+  - **the gist columns and Hierarchy mode as live** — `web-client.md` eleven times, `diagram.md`
+    saying a visitor is pinned to Force in one section and to the Sketch in another;
+  - **counts** — four webhook events (five), three tsconfig projects (four), fourteen modes
+    (seventeen), "six places in three files" to add a dashboard tab (five), lint in 20 ms (20 s).
+- **The gaps S1 found are closed**: `fetching.md` links the bot-check registry and
+  `content-extraction.md` lists the places a new provider touches; `ai-gateway.md` says which timing
+  columns the ledger has and links the table; `quotes.md` says the three places a quote can appear
+  twice; `readiness.md` says a run's duration is recorded and drawn and names its client parser and
+  tests; `database.md` opens with a migration in five lines; `phone-and-touch.md` says how to
+  reproduce at a phone's width; `timeline.md`, `ideas.md` and `quotes.md` say which modes have "Ask
+  in chat" and where the pattern is.
+- **The entry points**, under [engineering-manager.md § Along the way](../reusable/engineering-manager.md#along-the-way)'s
+  *"a fix that only makes the doc match the code"*: `architecture.md`'s pipeline diagram said
+  `hierarchy` and its fingerprint table listed a step that is gone; `design-css-overview.md`'s one
+  breakpoint was *760px* and is 731, with 760 nowhere in the code; `security-map.md` described a 501
+  from `requirePostgres()`, which went with the filesystem store. Six rule docs gained a section map
+  and no other change.
+
+**Not done, on purpose**: no doc was split, and no heading was renamed even where the heading is now
+false (`deployment.md` § *What does not work in production yet* is all history), because a heading's
+anchor is linked from elsewhere and a rename wants its own link sweep. Both lists are in § For the
+next sweep.
+
+## S4 — coverage
+
+A scan of `src/`, `tools/`, `scripts/`, `infra/` and `evals/` for files no doc names found 496 of
+1,603. Most are evals and one-off scripts, which `evals/README.md` and the plans own. Two real gaps:
+
+- **`tools/fleet/` and `tools/overseer/`**: 256 files, about half named nowhere, and ten docs about
+  them hanging off one entry point with nothing saying which to open.
+  **[fleet-and-overseer-overview.md](../project/fleet-and-overseer-overview.md)** is the hub: a
+  table from the task to the doc, the code by area with its way in, and the areas no doc owns
+  (admission, holds and receipts, the Deploys tab, the launch protocol, most of the page's panels).
+- **A chat started from a mode**: the measurement's T3 found nothing lists the places a new origin
+  mode has to be told to. **[chat-from-a-mode.md](../project/chat-from-a-mode.md)** does, each
+  marked loud or silent. One is silent in the way that matters: `originFromColumns` in
+  `src/thread-origin.ts` falls through to "no origin" for any mode it does not name.
+
+## S6 — the re-measurement, on the three tasks nobody had read
+
+Six runs after the fixes, set against the six before. The before-reports were opened only once the
+fixes were committed.
+
+| | Before (two runs) | After (two runs) |
+|---|---|---|
+| T6, rename Debate | reached `rename-or-move.md` and `mode.md`; one run: *"mode.md is 620 lines; the relevant bit was found only by heading names"* | same route; one run: *"the 'In this doc' map found Retiring a mode at once. No complaint."* |
+| T7, OSF landing page | reached `fetching.md`; one run: *"760 lines, and the OSF-relevant part is spread across three places"* | same route; one run: *"782 lines but its 'In this doc' list and headings made the right part easy to find"* |
+| T8, shorten FAQ answers | both found from `faq.md` that the task's premise is false: FAQ writes no answers | the same, in six and seven tool calls |
+
+**What that supports, and what it does not.** The complaint that a doc was too long to enter came
+up in three of the six before-runs and one of the six after, and two after-runs credited the map by
+name without being asked about it. That is the general fix working on tasks it was not written for.
+It is six runs against six, on three tasks, by one model; the tool-call counts moved (15 and 14 down
+to 8 and 8 on the slower run of T6 and T7) by about as much as two runs of one task differ, so I
+claim nothing from them.
+
+**What did not move, and should not have:** each task's own gap. Nothing lists the places a mode's
+name is stored in the database, so all four T6 runs found the column, the two CHECK constraints and
+the job names by grepping the schema. `fetching.md` says OSF "is still not" a paper source and links
+the reason instead of stating it, so all four T7 runs could not tell whether the reason still holds.
+Those were unread until now. Both are closed in the last commit of this job, after the measurement
+and not counted in it.
+
+T8 was a bad task, and a useful one: I wrote it believing FAQ mode writes answers. All four runs
+found from `faq.md` that it does not, and said they would stop and ask.
+
+One finding belongs to AGENTS.md: the rename rule sits under **Delegating**, and a T6 run found
+`rename-or-move.md` by listing the directory. It is item 4b below.
+
+## For Greg — the batch
+
+Nothing in this section is done. Each item is a change to wording that is a rule, so it waits for a
+yes. The numbers are for answering with ("1 and 3, not 2").
+
+### 1. `version-control.md` — a merge conflict no longer goes to Greg
+
+**Background.** Since 2026-09-10 AGENTS.md says an agent resolves a merge conflict itself, asking
+GPT Sol or Opus when unsure, and comes to Greg only for a real product trade-off. The sixth sweep
+carried a note that `version-control.md` still said otherwise. Read end to end, it says so in one
+sentence, in the list of reasons to merge rather than rebase.
+
+Before (`docs/project/version-control.md`, reason 2 under § Always merge, never rebase):
+
+> 2. **A replayed conflict is one round trip per commit.** Rebase replays each of your commits over
+>    the new base, so a single conflict can surface as many times as you have commits — and under
+>    git-resolve-merge-conflicts.md's *"Make a proposal. Don't make changes yet"* rule, that is a
+>    round trip with Greg each time. One merge, one proposal.
+
+After:
+
+> 2. **A replayed conflict is one resolution per commit.** Rebase replays each of your commits over
+>    the new base, so a single conflict can surface as many times as you have commits — and each time
+>    git-resolve-merge-conflicts.md has you write a proposal and have it checked before you edit.
+>    One merge, one proposal.
+
+And in its See also, *"read both sides' history, propose before editing, and don't reach for the
+commands that discard a side"* becomes *"read both sides' history, write the proposal down, resolve
+it yourself (Sol or Opus if unsure; Greg only for a real product trade-off), and don't reach for the
+commands that discard a side"*.
+
+*Recommend:* yes. It makes the doc agree with a rule already approved.
+
+### 2. "Merge `origin/dev` when you wake" is in one doc, and not the one agents load
+
+**Background.** The rule, with Greg's words of 2026-09-06, is in `worktrees.md` § The workflow and
+nowhere else. `version-control.md` does not mention it and AGENTS.md does not either.
+
+Proposed, in `version-control.md` after *"Most landings never conflict…"*:
+
+> **Merge `origin/dev` when you wake up, too** — after a resume, a compaction or a long wait, before
+> anything else, not only when the work is done: worktrees.md § The workflow.
+
+And, optionally, eight words in AGENTS.md § Work in a worktree: *"…and merge `origin/dev` whenever
+you wake."*
+
+*Recommend:* the pointer in `version-control.md`, yes. The AGENTS.md words only if you see sessions
+skipping it; that file is paid for on every turn.
+
+### 3. `code-quality-overview.md` — the table of gates is missing two, and miscounts one
+
+**Background.** This table is what tells an agent which commands are gates. `scripts/check.ts` now
+runs two it does not list, and there are four tsconfig projects, not three.
+
+| Row | Before | After |
+|---|---|---|
+| `npm run typecheck` | all three tsconfig projects, plus guards that the checking happened | every tsconfig project (four today: the node side, the client, the fleet client, the tests), plus guards that the checking happened |
+| `npm run build` | …**Both passes**: the client, then the API function | the same, plus: `npm run build:fleet` is a gate of its own inside `check`, because three fleet test files read its output |
+| *(new row)* `npm run check:conflicts` | — | that no file carries a conflict marker — **gate** — static-analysis.md § Conflict markers |
+| `npm run check` | all of the above bar the last, gates first | all the rows above it except `check:staged-revert`, gates first |
+
+*Recommend:* yes to all four.
+
+### 4. AGENTS.md — four things it should point at and does not
+
+**Background.** Greg, 2026-10-06: *"…and that the important ones are linked to from @AGENTS.md"*.
+Three one-line signposts are already in (the fleet hub, `chat-from-a-mode.md`, and the corrected
+lines for `shelf-terms.md` and `fleet-dashboard-modes.md`); a signpost needs no approval. These four
+change or add a sentence that tells an agent what to do, so they do.
+
+- **4a. A reader's report.** Both runs of the "a reader reported…" task guessed the file name.
+  Proposed, under § Before you call it finished: *"**Handed a reader's report from the Feedback
+  button?** feedback-reports.md is the whole run: reading the report, the three ways it ends, and
+  the note."*
+- **4b. Renaming.** The rename rule is under § Delegating, because it says to send a subagent. An
+  agent planning a rename looks under § Writing code. Proposed: move the bullet there unchanged, and
+  add to its end *"…and a name a reader sees is renamed all the way down, stored values included:
+  rename-or-move.md § A rename on screen is a rename all the way down."*
+- **4c. The fleet and the Overseer.** Proposed, as a fourth doc in the "worth reading before you
+  touch the area" sentence: *"…and **fleet-and-overseer-overview.md** before anything under
+  `tools/fleet/` or `tools/overseer/` — ten docs and 256 files, and it says which to open."*
+- **4d. One line that may now be false.** AGENTS.md describes `ai-gateway.md` as *"every paid call
+  goes through OpenRouter, bar one declared exception"*. The code declares five things outside the
+  gateway. GPT Sol was asked what "one" was meant to count; § S5 has its answer.
+
+*Recommend:* 4a and 4b yes; 4c yes if the Overseer agrees the hub reads true; 4d once checked.
+
+### 5. `vision.md` — "Where this goes after granularity zoom" lists built things as future
+
+**Background.** The list marks three items **Built** and leaves the rest as intentions. Two of the
+rest exist: *Notes and highlights* (Comments, since August) and *Recall* (Learn and Quiz). The
+heading also names granularity zoom, whose columns went on 2026-09-29. This is the intent doc, so I
+have not touched it.
+
+Proposed: mark those two **Built** with a link each (`comments.md`; `learn-mode.md` and `quiz.md`),
+in the same form as the three above them, and leave the heading and every other line alone.
+
+*Recommend:* yes. It is the smallest change that stops the doc under-reporting what exists.
+
+### 6. The push checkpoint — the cheapest mechanism
+
+**Background.** The policy now says: check the docs before you push, for the areas your change
+touched. Nothing prompts it. This sweep is the evidence for what happens without a prompt: about 230
+statements had gone false, most of them a removal that was never followed into the docs.
+
+Three options.
+
+```
+A. Nothing more            B. A hint at push                  C. A gate
+   the policy line only       the existing Bash hook sees        npm run check fails if a
+                              `git push` and prints:             changed file is named by a
+                              "these docs name files you         doc that did not change
+                              changed and were not touched:
+                              structure-step.md (structure.ts)
+                              mode.md (modes.ts)"
+   costs nothing              ~60 lines, never blocks            blocks; most hits are false
+   prompts nothing            prompts at the right moment        (a doc names a file whose
+                                                                 change it does not care about)
+```
+
+**B in use:** an agent that edits `src/structure.ts` and pushes sees two doc names it had not
+opened, reads the two sections, and either fixes a sentence or moves on. It costs one grep of
+`docs/project/` per push. **What B gives up:** it cannot tell a relevant change from an irrelevant
+one, so some of its lines will be noise, and a hint that is usually noise gets ignored. The honest
+test is to run it for a week and count how often its list led to an edit.
+
+*Recommend:* B, built as a hint and reviewed after a week; not C. I have not built it.
+
+### Three questions that are not wording
+
+1. **Is `invoice.finalization_failed` switched on at the live Stripe endpoint?** The endpoint was
+   set up on 2026-09-03; the code began handling that event on 2026-09-04. If the event was never
+   added in the Stripe dashboard, an invoice that cannot be collected is never noticed. Nothing in
+   the repo can tell, and `npm run stripe:check` does not look. Only the dashboard can answer.
+2. **Does Google sign-in work in production today?** `auth.md` has a heading *"The button on the
+   live site does not work yet"* from 2026-08-27, and says the consent screen is in Testing, which
+   would admit only listed users. Your words of 2026-09-29, *"We're currently emphasising Gmail"*,
+   suggest it works. If it does, that section is history and I will mark it so.
+3. **May the over-long docs be split?** Twenty-odd reference docs are mostly dated narration around
+   a small live core. The policy says the story belongs in a plan. Splitting moves anchors that
+   other docs link to, and deciding what is history is a judgment on each, so I mapped them and did
+   not split them. A yes means a second job: one doc at a time, the live part kept, the history
+   moved to `docs/plans/` or `docs/investigations/` with links repointed. § For the next sweep has
+   the list and a proposed cut for each.
+
+## For the next sweep
+
+**Docs worth splitting**, with the cut each reader proposed:
+
+| Doc | Lines | The cut |
+|---|---:|---|
+| `ingest-queue.md` | 2,580 | mostly dated history; keep the queue's contract and routes |
+| `search.md` | 1,820 | the third search and the embedding eval to `library.md` |
+| `billing.md` | 1,760 | the quota section (about 540 lines) to `billing-quota.md`; "The first live sale" is narration |
+| `glossary.md` | 1,710 | the mode / term look-up and Dig deeper / history |
+| `diagram.md` | 1,690 | "The graph Force is drawn from" (360) and the step bar (200) out; August review stories to a line each |
+| `overseer-direction.md` | 1,670 | attention (285 lines), the backlog (275) and usage limits (115) each to a doc |
+| `structure-step.md` | 1,650 | "Two passes" (370 lines of eval history) to an investigation |
+| `testing.md` | 1,600 | five docs in one; its per-file table lists about 40 of 1,764 test files |
+| `comments.md`, `chat-tools.md` | 1,530, 1,210 | by topic |
+| `performance.md` | 1,500 | about 300 lines of recipes; twelve dated write-ups to `docs/investigations/` |
+| `library.md` | 1,400 | shelf actions; cached paint, preload and offline |
+| `database.md` | 1,450 | the migration ledger, fork and repair material to `migrations.md` |
+| `deployment.md` | 1,330 | site visibility and health each to a doc; 150 lines of a wall that is gone |
+| `security.md` | 1,320 | three history sections to a postmortem |
+| `worktrees.md` | 1,240 | how to operate / how it came to be |
+| `referee-mode.md` | 1,170 | Candidates (150 lines of wire measurements); website copy notes to `website-text.md` |
+| `content-extraction.md` | 1,140 | Readability / refusals and the bot-check registry / metadata |
+| `web-client.md` | 1,050 | five topics; appearance and client data each to a doc |
+| `touch.md`, `keyboard.md`, `url-state.md` | 940, 840, 890 | each is half the removed gist columns in the present tense |
+| `granularity-zoom.md`, `column-context.md` | 920, 445 | 500 lines and 440 lines of history around a small live core |
+| `reading-view-overview.md` § the command bar | 250 | says it has no doc of its own; has outgrown that |
+
+**Headings that are now false** and were left, because a heading's anchor is linked from elsewhere:
+`deployment.md` § *What does not work in production yet* and § *Still to do before this is a real
+deployment*; `sentry-error-monitoring.md` § *The two gaps, both open*; `auth.md` § *The button on the
+live site does not work yet*; `ai-gateway.md` § *The three calls allowed round the outside…* (five
+now) and § *One gateway, five wires* (six); `live-conversation.md` § *Which model, and why not
+GPT-Live yet*; `setup-dev.md` § *Signing in needs four more* (five).
+
+**Code areas no doc owns**, from the hub's survey of `tools/fleet/`: admission; holds, receipts and
+request keys; new, rename and describe session; the Deploys tab, diagnostics and revision; the
+launch protocol; the Sessions, Box health, Overseer, Queued ideas, Deploys and Questions panels.
+And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
+
+**Code findings**, reported and not fixed, because this job is docs:
+
+- `originFromColumns` in `src/thread-origin.ts` is not exhaustive: a new origin mode reads as "no
+  origin" and nothing fails. `ORIGIN_MODES`' `satisfies` does not catch an omission either.
+- `--danger` and `--ink-faintest` are used in four rules and defined nowhere, so each always takes
+  its fallback (the sixth sweep's item 3, confirmed).
+- `tests/public-client-fetch.test.ts` cites `requirePostgres` and the filesystem store's 501 in a
+  comment; `src/ingest.ts` near line 424 has the same era's comment on `isSlug`.
+- `mode.md`'s list of what a new mode turns red predates `MODE_CATALOG`, `MODE_ICON` and
+  `MODE_TARGET`. It wants re-measuring by adding a mode on a scratch branch.
+
+**On the method**, for whoever runs the next one:
+
+- **One job per brief.** Asked for truth, a map, signposts and a report, eight of nineteen agents
+  skipped the truth read. Asked only to read every line and say the last line number read, fourteen
+  of fourteen did.
+- **A subagent may be refused a findings file outside the repo** in this harness, though the first
+  sixteen were not; plan for the report to come back as the reply.
+- **The anchor rule is the test's, not GitHub's**: a run of spaces becomes one hyphen. Fifteen map
+  links broke on it.
+
 ## Log
 
 - 2026-10-07 — S1 measured, S2 landed.
+- 2026-10-07 — S3 round one and round two, S4, and S6 landed; S5 (GPT Sol) running.

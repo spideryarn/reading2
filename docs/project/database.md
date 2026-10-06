@@ -1474,8 +1474,8 @@ adapter uses `getDb()` and takes no `tx`.
   the same link ran at 119 KB/s and the whole import took under two minutes. The tell is
   `pg_stat_activity` showing the statement `active` on `Client:ClientRead` — the server waiting for
   you. Measure the upload before blaming the database.
-- **Vercel does not have these values yet** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
-  `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
+- **Vercel's recorded configuration** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
+  `PGSSLROOTCERT` — is in [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
   on this list, then became its opposite — set there and wanting taking off. Greg removed it from
   Preview and Production on 2026-09-06 and stage I of
   [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) deleted

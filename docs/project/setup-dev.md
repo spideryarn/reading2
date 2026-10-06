@@ -370,8 +370,8 @@ used to be *vendor A's address and vendor B's address* — one for the Anthropic
 `api.anthropic.com`, one for OpenRouter. Now everything is OpenRouter, every task sends
 `anthropic/claude-sonnet-5`, and `CAPABLE_MODEL` is on no request at all. It stayed because the
 second job it was doing is the one that never moved: it is the **name stamped into stored
-artefacts**, and `glossary.ts`, `tweets.ts` and the other stages each compare a stored artefact's
-`generator` against it (`sameGenerator` in `src/models.ts`) to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
+artefacts**, and the pipeline compares recorded step stamps with the expected model through
+`sameStamp` in `src/store/artifacts.ts` (using `sameGenerator` in `src/models.ts`) to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
 marked the whole corpus stale in one edit and regenerated it at full price — a large bill, for a
 migration whose whole purpose was to see the bill. So the rule that arrived with `/profile` is the
 rule that saved it: **a provider prefix is an address, not a name.**
@@ -551,7 +551,7 @@ test that reads `MODEL_ENV_VAR` and this table and compares them.
 ## The database, locally
 
 There is a full Supabase stack in Docker for this repo — Postgres, auth, Studio — and **it is the
-app's only store**: everything the dev server, the CLI stages and the tests read and write is in it.
+app's only relational store**; tests also read committed and materialised filesystem fixtures.
 
 ```bash
 npm run db:start       # needs Docker running: `open -a OrbStack`

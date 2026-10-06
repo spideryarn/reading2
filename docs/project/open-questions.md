@@ -67,8 +67,8 @@ plan for it would have to settle:
   ([`src/collect-assets.ts`](../../src/collect-assets.ts)).
 
 **The fetching this option was charged with has since been built for another reason.** Stage 4.5
-downloads and hosts every image ([article-images.md](article-images.md)), so the bytes are already in
-hand at ingest and the first two "against"s in the table are paid. What is left of the cost is the
+attempts to download and host supported images within its caps ([article-images.md](article-images.md)), so successfully stored images' bytes are already in
+hand at ingest and the first two "against"s in the table are paid for those images. What is left of the cost is the
 decode, the map and the client-side join.
 
 ---

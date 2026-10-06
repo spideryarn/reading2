@@ -964,11 +964,11 @@ this; the bill was still using the weaker question.
 
 ### How a stream ends, and who decides what that means <a id="stream-end"></a>
 
-**One classification, shared by every streaming caller, and the callers still decide.**
+**One classification, shared by chat/completions streaming callers, and the callers still decide.**
 [`classifyEnd`](../../src/ai-call.ts) turns a finished `openRouterStream` run into a
 `StreamOutcome` — `finished`, `truncated`, `filtered`, `wants-tools`, `provider-failed`,
 `abandoned`, `timed-out`, `went-quiet`, `unterminated`, or `unknown-finish-reason` with the reason
-and the terminator beside it. Every streaming caller switches on it with a `never` default, so a
+and the terminator beside it. Callers that decide from it switch on it with a `never` default, so a
 new way for a stream to end is a compile error at every site rather than a branch somebody forgot.
 
 **Why it reports rather than decides.** The callers genuinely disagree, on evidence, about what

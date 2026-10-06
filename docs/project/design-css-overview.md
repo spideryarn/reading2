@@ -91,8 +91,8 @@ lighter on the light one.
 
 ### Both of those are checked, because both had already happened
 
-[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads every stylesheet the client loads —
-`tailwind.css`, the two token files, and the hand-written sheets resolved from the `@import` graph by
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads every repository stylesheet the client loads —
+`tailwind.css`, the two token files, `styles/colourscales.css`, and the hand-written sheets resolved from the `@import` graph by
 `readerSheets()` in [`tests/helpers/stylesheets.ts`](../../tests/helpers/stylesheets.ts) — and asserts
 two things. Neither was a hypothetical; `§ outline mode` had six instances of the second and three
 of the first, and the panel was half unreadable on screen for four days before Greg's screenshot.

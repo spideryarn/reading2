@@ -123,7 +123,7 @@ round, and every round made things worse.
 1. **One-shot structuring of a long unstructured article was not good enough.** That is the finding
    underneath the whole saga, and it is direct evidence about our
    Q1, [now closed](../granularity-zoom.md#where-the-tree-comes-from). They ended on iterate-with-a-cap and a human deciding when to
-   stop. Our stage 4 currently does a single pass ([`src/structure.ts`](../../../src/structure.ts)) — if the
+   stop. Our stage 4 normally asks for the whole tree in one call, with slices when it will not fit ([`src/structure.ts`](../../../src/structure.ts) § `generateStructure`) — if the
    trees come back with arbitrary-feeling boundaries, this is the known next move rather than a
    surprise.
 2. **The ~200-words-between-headings figure is a usable target, once verified.** Our tree aims at a
@@ -151,7 +151,7 @@ Our tree is a *separate artefact* over an immutable block list — `tree.json` b
 ([architecture.md § Pipeline](../architecture.md#pipeline)) — and headings we invent are node
 `title`s, not elements inserted into the prose
 ([structure-step.md](../structure-step.md#headings-verbatim-unless-genuinely-uninformative)).
-Regenerating is `npm run structure`, which rewrites one file wholesale. The entire class of bug they hit
+Regenerating is `npm run structure -- <slug> --force`, which writes replacement artefacts to a draft revision and publishes them together. The entire class of bug they hit
 cannot occur here, and it cost us nothing to avoid — it fell out of the pipeline being stages over
 artefacts.
 

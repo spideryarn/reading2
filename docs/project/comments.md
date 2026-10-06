@@ -1047,7 +1047,7 @@ ahead of time. Everything else about the stage discipline holds — the call is 
 function ([`src/explain.ts`](../../src/explain.ts)), the routes are a thin wrapper
 ([`src/routes.ts`](../../src/routes.ts)), and the artefact is a row in Postgres.
 
-Like every paid call here it goes through **OpenRouter** ([ai-gateway.md](ai-gateway.md)). The model
+Like the other article-analysis calls it goes through **OpenRouter** ([ai-gateway.md](ai-gateway.md)). The model
 is whichever one `src/models.ts` puts the `explain` task on for the article's power (`modelFor`),
 and `SPIDERYARN_EXPLAIN_MODEL` overrides it.
 

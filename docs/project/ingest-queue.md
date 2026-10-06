@@ -1154,7 +1154,7 @@ answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metad
 what saying it would still take, and for why `structure` — the workaround the 2026-09-05 postmortem
 names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
 free `labels` successor that restores them (built 2026-09-07, [above](#one-job-in-the-app-was-asked-for-by-nobody)) is the
-slowest and dearest pass, so one press would buy two metered calls.
+slowest and dearest pass, so one press would buy two metered steps.
 
 **One click, since 2026-09-30.** From 2026-09-07 every press, and every Retry, opened an inline
 confirm first; Greg asked for it to go:
@@ -2022,10 +2022,10 @@ disabled at "Stopping…" for ever, with neither the claimant nor the sweep able
 makes it recoverable by machinery that already exists. It also matches the filesystem adapter, where
 no entry in `attempts` has always meant lapsed.
 
-**Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
+**Taking a job away from a claimant with a live lease is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
 fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md),
-which has since been built (`pgStoreSession`), though nothing uses it to take a job away. What makes an expired lease mean something in the meantime is that the claimant sets **its own
+which has since been built (`pgStoreSession`); `settleExpired` in `src/store/pg-jobs.ts` now settles or requeues expired claims and clears their attempt tokens. What makes an expired lease mean something is that the claimant sets **its own
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
 

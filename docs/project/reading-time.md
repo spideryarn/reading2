@@ -7,7 +7,7 @@ line down its edge, and a faint hairline beside each passage says the same thing
 citation, a search hit, a rotation — can find the place they had got to by eye. The plan, and every
 number's reasoning, is
 [260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md). The
-server half is [`src/reading-time.ts`](../../src/reading-time.ts) and the `POST
+server half is [`src/store/pg-reading-time.ts`](../../src/store/pg-reading-time.ts) and the `POST
 /api/reading-time/:slug` route in [`src/routes.ts`](../../src/routes.ts) (tests:
 [`reading-time-route.test.ts`](../../tests/reading-time-route.test.ts),
 [`reading-time.test.ts`](../../tests/reading-time.test.ts),

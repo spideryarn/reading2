@@ -72,7 +72,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was five: the big `ids` group (tweets, ideas, timeline, quiz, faq, simple), glossary with quotes, and arc, crossrefs and sketch each alone — sketch since it moved to `low` effort that day, [measured](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
+| **pipeline** | a group needs matching effort, renderer **and output format** — `sharesArticleCache` in [`src/pipeline.ts`](../../src/pipeline.ts) reads [`STAGE_EFFORT`](../../src/models.ts), `ARTICLE_RENDERER` and `ARTICLE_OUTPUT_FORMAT`. No two distinct stages share today: their structured-output schemas differ (`tests/article-cache-group.test.ts`). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
@@ -149,7 +149,7 @@ Only Sketch moved, from `high` to `low`, which took it out of the `ids` group: i
 price over a cache share that production almost never collects ([below](#what-production-actually-does)).
 
 The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `CAPABLE_MODEL`, because both
-are part of the cache key, and **that table is half the cache grouping** — `sharesArticleCache` in
+are part of the cache key, and **that table is one of three cache-grouping dimensions** — `sharesArticleCache` in
 [`src/pipeline.ts`](../../src/pipeline.ts) reads it rather than keeping a second list that could
 drift back out of agreement with it.
 
@@ -186,7 +186,7 @@ write in a doc and a different thing to decide about.
 **So the breakpoint is conditional.** A stage marks the article only when **another step of the same
 job** is in its cache group — `cacheArticleForStep` in [`src/pipeline.ts`](../../src/pipeline.ts),
 set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
-An ordinary ingest therefore marks nothing, a job that asks for glossary and quotes together marks **both**,
+An ordinary ingest therefore marks nothing; a job that asks for glossary and quotes together also marks **neither**, because their output schemas differ,
 and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no second
 call.
 

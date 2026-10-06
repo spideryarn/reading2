@@ -867,8 +867,8 @@ Worth saying plainly, because the UI implies otherwise. The chat composer's butt
 and flips to **"Listening…"** — but that is this feature: audio in, text out, nothing spoken back.
 The two-way kind is a separate button, **Live**, in [live-conversation.md](live-conversation.md); its
 accounting is [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the
-OpenAI Realtime API cannot go through OpenRouter, so it is the one paid call in the product that
-does not.
+OpenAI Realtime and GPT-Live APIs cannot go through OpenRouter, so Live is the paid feature in the
+product that calls OpenAI directly.
 
 ## See also
 

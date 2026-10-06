@@ -484,7 +484,7 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
 - **The React reading view, as a browser draws it.** Component tests exist now — hundreds of files
   under `// @vitest-environment jsdom`, and `renderToStaticMarkup` (§ *Rendering a component, without
   a testing library*) — but `@testing-library/react` was never added, and nothing in the suite
-  computes a style. The paragraphs below are the 2026-08-25 measurement of that gap, when there were
+  covers the whole rendered view; a few Chrome tests do compute styles and layout, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts). The paragraphs below are the 2026-08-25 measurement of that gap, when there were
   no DOM tests at all.
 
   **The gap is bigger than "no DOM tests" sounds, and 2026-08-25 measured it.** Adopting Tailwind

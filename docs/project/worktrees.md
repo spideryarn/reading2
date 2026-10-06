@@ -800,9 +800,8 @@ agent's migration cannot land in the middle of another's suite.
 something each worktree holds alone, and you delete it once you trust that. The thing that varies is
 one `DATABASE_URL` either way.
 
-Two more pieces belong with it (neither exists yet: there is no `test:db` script), and the plan is
-emphatic that policy alone is too quiet here: a `test:db` that **fails when the database is absent** (about a dozen Postgres suites currently skip
-themselves silently, so a misconfigured worktree reports green while testing nothing), and an
+Two more pieces belong with it (there is no `test:db` script; the migration-prefix guard is built in `scripts/db-generate.ts`), and the plan is
+emphatic that policy alone is too quiet here: a `test:db` that **fails when the database is absent** (the suite now refuses a missing database through its preflight and `pgReady`, rather than skipping silently), and an
 automated refusal on duplicate migration numbers — a lease stops two migrations running at once and
 does nothing about two branches independently minting `0044_`.
 

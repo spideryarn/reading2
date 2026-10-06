@@ -1000,7 +1000,7 @@ So the stage now does three things instead of dying, in rising order of risk:
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
   `generateLabels`, so every caller gets it — it used to be enforced only by `generateStructure`,
-  while `npm run labels` (retired 2026-09-05) went round it,
+  while the old standalone `npm run labels` implementation (replaced by the queue CLI) went round it,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the

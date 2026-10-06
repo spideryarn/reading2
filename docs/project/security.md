@@ -9,7 +9,7 @@ Up: [security-map.md](security-map.md)
 - [§ Four ways to break this silently](#four-ways-to-break-this-silently) — config changes that leave articles rendering but unclean
 - [§ Why the string path, not `IN_PLACE`](#why-the-string-path-not-in_place) — why DOMPurify is fed a string
 - [§ Stage 2's debug page](#stage-2s-debug-page) — the unsanitised debug file and the holes found with it (history)
-- [§ An artefact that was cleaned by nothing](#the-stamp) — the sanitiser-version stamp, and why old artefacts get re-cleaned
+- [§ An artefact that was cleaned by nothing](#the-stamp) — the filesystem-era stamp; current Postgres readers re-clean every read
 - [§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) — path traversal, slug rules, what a capture may become
 - [§ A PDF](#pdfs) — the same untrusted content in a second format, and the parser's limits
 - [§ What the model returns](#a-third-untrusted-party-what-the-model-returns) — model output that becomes an `href`, `src` or `id`
@@ -379,6 +379,8 @@ interpolated into markup is markup, however it was obtained.
 
 ## An artefact that was cleaned by nothing looks exactly like one that was cleaned <a id="the-stamp"></a>
 
+**Current Postgres path:** both readers call `sanitizeStoredBlocks(blocks, undefined)`, so every read is re-sanitised in memory; there is no stored sanitiser-version column or stale-stamp warning ([`pg.ts`](../../src/store/pg.ts) § `blocksFor`, [`public-reader.ts`](../../src/store/public-reader.ts) § `loadArticle`). The stamp fast path and file writes described below are filesystem-era history; stage 3's returned artefact and the export still carry the stamp, but the Postgres readers do not read it.
+
 **Fixed 2026-08-26.** `blocks.json` files written before DOMPurify landed are dirty on disk and were
 trusted as-is on read. This document carried that as a known gap with a remedy attached — *"Re-run
 stage 3 to clean them"* — and the remedy was correct. **The flaw was that nothing ever asked for it.**
@@ -482,7 +484,7 @@ decoration unless something keeps it complete.
 Two consequences for how this is built:
 
 - **`sanitizeStoredBlocks` takes blocks and a stamp, not a file.** In Postgres the blocks are rows and
-  the stamp is a column, so a parameter shaped like `blocks.json` would fit one caller and have to be
+  the stamp argument is currently `undefined`, so a parameter shaped like `blocks.json` would fit one caller and have to be
   faked by the other. The stamp argument is *required* even though `undefined` is legal, because
   forgetting an optional argument and deciding you have no stamp are the same keystrokes otherwise,
   and only one of them is a decision.
@@ -490,7 +492,7 @@ Two consequences for how this is built:
   stamp.** A reader that passes `undefined` re-sanitises every time: correct, and slow. That is the
   right order to land the two halves in — safety needs no migration, only the fast path does.
 
-Where the stamp lives once blocks are rows: on **`article_revisions`**, one column, not on
+The proposed home for a stored stamp, which has not been built: on **`article_revisions`**, one column, not on
 `revision_blocks`. A revision is exactly one `blocks.json` and one cleaning pass, so per-block would
 be storing the same number several hundred times and inviting a revision whose blocks disagree about
 when they were cleaned.
@@ -1105,9 +1107,7 @@ here because they are properties of this system rather than of that feature.
 [`src/auth.ts`](../../src/auth.ts) admits whoever Supabase vouches for — and that is Greg's explicit decision, made twice
 and in writing ([260826w-auth-supabase.md § Who gets in](../plans/260826w-auth-supabase.md#who-gets-in)). A security
 doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
-`OPENROUTER_API_KEY` at two model calls per article — every paid call in the app is on that one key
-since 2026-08-27 ([ai-gateway.md](ai-gateway.md)); **the control that is actually missing is a
-spend limit**, and an allowlist of one never limited what Greg could spend either.
+`OPENROUTER_API_KEY` for pipeline and on-demand calls (Live uses OpenAI separately); ingest allowances already apply ([billing.md](billing.md)), while a general per-reader dollar cap is deliberately absent under Greg's global-cap decision ([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 
 **And until 2026-08-27 it did not say whose data is whose.** `currentOwnerId()` was process-wide and
 the reads did not filter by owner, so every admitted person saw the same shelf, profile and chats.
@@ -1130,8 +1130,7 @@ should learn about it. The reasoning, and the four ways this fails silently, are
 static guard so that the next `eq(articles.slug, …)` written anywhere under `src/store/` fails a test
 rather than leaking a library.
 
-**What that does *not* close**: anybody with a Google account can still sign in and spend the model
-budget, which is the risk Greg accepted twice and which a spend limit is the real control for. The
+**What that does *not* close**: a signed-in reader can still spend on repeatable paid operations outside the ingest allowance; the global OpenRouter cap bounds that bill, with no general per-reader dollar cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)). The
 ingest queue was given an owner the same week (it is the `jobs` table now, filtered by
 `owner_id`; [auth.md](auth.md#whose-data-is-it)). And there is still no RLS — the filtering is in
 the queries, not in the database, so a query written without the predicate is the whole exposure.
@@ -1213,7 +1212,7 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
 - **A PDF is parsed in-process, unsandboxed.** pdf.js over a stranger's bytes, in the server, with
   no worker isolation, no memory cap and no time limit beyond the job's. The mitigation today is
   that we ask it only for text and coordinates. The plan says to bound pages, objects, time and
-  memory ([260826c-pdf-ingestion.md § Limits](../plans/260826c-pdf-ingestion.md)); only the page cap is built.
+  memory ([260826c-pdf-ingestion.md § Limits](../plans/260826c-pdf-ingestion.md)); page caps and cooperative cancellation are built (`refuseAnOverlongPdf` passes the step's signal to `countPdfPages`), but there is no independent parser deadline or memory isolation, and an abort cannot interrupt a synchronous pdf.js parse step.
 
   ~~**And the page cap does not bound the parse.**~~ **Closed, 2026-08-26.** It did not: the check
   was `pass.pages.length > MAX_PAGES` in `readPdf`, which runs only after `pass0` has opened the

@@ -351,7 +351,7 @@ The full statement of the problem and Greg's answer in his own words are in
   no. A gate that opens when it is confused is not a gate. The one refinement: "Supabase unreachable"
   answers **503**, not 401, because telling a good session it is bad sends the reader round a refresh
   loop that cannot succeed.
-- **403 and the beta message**, never 200 and an empty shelf.
+- **401 for missing or invalid credentials, 503 when verification is unavailable**, never 200 and an empty shelf; there is no beta allowlist or 403 path in `requireUser`.
 
 ### The bit this page used to get wrong
 
@@ -561,7 +561,7 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet)
   just below, which is the current state and the two things that fix it. The `VITE_*` half of this
   bullet is done: both variables are on the Vercel project, Production only, and the site renders.
-- **A spend limit**, which is the control that is actually missing and always was.
+- **No general per-reader dollar spend limit**, deliberately: [ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not) records the global OpenRouter cap and Greg's decision; [billing.md](billing.md) covers the ingest allowance already enforced.
 - ~~**Email in production** needs SMTP~~ — **done 2026-09-29**: sign-up confirmations go through
   Resend ([§ Email](#email)). `mailer_autoconfirm` is still false there, so a sign-up sends a
   confirmation.

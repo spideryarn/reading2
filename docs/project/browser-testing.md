@@ -19,8 +19,7 @@ Up: [code-quality-overview.md](code-quality-overview.md)
 - [§ A browser subagent stalls silently](#a-browser-subagent-stalls-silently-unless-the-parent-does-the-handshake-first) — do the handshake in the parent
 - [§ Driving it from an agent, through the extension](#driving-it-from-an-agent-through-the-extension) — resize, synthetic wheel vs real, focus rings, short animations, driving rAF by hand
 
-Nothing in the test suite can see how the reading view is *drawn* — its component tests run under
-jsdom, which has no layout, no cascade and no animation frame — see
+Most component tests run under jsdom, which has no layout or browser rendering; a few Chrome tests now check drawn behaviour, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts), but they do not cover the whole reading view — see
 [testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). So
 **looking at it in a browser is the test harness for stage 6**, and that makes it worth
 writing down what to look at and where the eye lies to you.

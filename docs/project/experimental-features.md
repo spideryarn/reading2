@@ -478,7 +478,8 @@ Diagram buys nothing, and a shared visitor is pinned to the free picture whateve
 - [mode.md](mode.md) — the checklist for adding a mode, including which side of this switch it is on
   (`experimental` in [`src/mode-catalog.ts`](../../src/mode-catalog.ts)).
 - [`tests/dock-experimental-switch.test.tsx`](../../tests/dock-experimental-switch.test.tsx),
-  [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — the six
-  appearances of the bar button, and the zero requests an anonymous reader makes.
+  [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — the
+  appearances of the bar button, and the anonymous reading path's application requests staying
+  under `/api/public/`, with no POST.
 - [docs/plans/experimental-features-toggle.md](../plans/experimental-features-toggle.md) — the
   decisions taken when it was built, including the ones that went the other way.

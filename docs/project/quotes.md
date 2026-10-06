@@ -28,7 +28,7 @@ and they are different things:
    [§ Find more appends](#find-more-appends-only-a-stale-or-outdated-list-is-replaced). Overlap is
    by span in one block, so the *same sentence in two blocks* is two quotes.
 2. **Your highlights are separate rows, and nothing de-duplicates them against the model's quotes**
-   (`isReaderRow`, `bandRows` in [`src/web/quote-band-rows.ts`](../../src/web/quote-band-rows.ts)):
+   (`isReaderRow`, `quoteBandRows` in [`src/web/quote-band-rows.ts`](../../src/web/quote-band-rows.ts)):
    highlight words the AI also chose and you see both, one marked *yours* —
    [§ Your highlights are rows too](#your-highlights-are-rows-too).
 3. **A replaced list** (stale, or outdated by an older prompt) is rewritten, not appended to; a

@@ -153,7 +153,7 @@ cites is then the best account of it.
 ### Where the tests are
 
 All in `tests/`, flat, named for the module: `fleet-*.test.ts` and `fleet-*.test.tsx` (150 files on
-2026-10-07), `overseer-*.test.ts` (74), plus `readiness-*.test.ts` and `codex-usage.test.ts`. Ways
+2026-10-07), `overseer-*.test.ts` (72), plus `readiness-*.test.ts` and `codex-usage.test.ts`. Ways
 in: [`fleet-collect.test.ts`](../../tests/fleet-collect.test.ts),
 [`fleet-server-process.test.ts`](../../tests/fleet-server-process.test.ts),
 [`fleet-web.test.tsx`](../../tests/fleet-web.test.tsx),
