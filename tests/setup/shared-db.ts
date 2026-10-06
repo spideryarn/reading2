@@ -51,8 +51,8 @@
  * ## Why an unreachable database is not a failure here
  *
  * The first control is about *identity*, not reachability. `pgReady` already
- * decides what an unreachable stack means — a skip, or a failure under
- * `REQUIRE_POSTGRES=1` — and it says so per suite with the command that fixes
+ * decides what an unreachable stack means — a failure, since 2026-09-05 — and
+ * it says so per suite with the command that fixes
  * it. Throwing here would replace that with a stack trace from a setup file.
  * The second control reads two strings and needs no connection at all, so it
  * applies either way.

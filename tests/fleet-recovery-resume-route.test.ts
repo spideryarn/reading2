@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { RECOVERY_RESUME_DIR } from "../tools/overseer/recovery-resume-request.js";
 import { RECOVERY_RESUME_PATH, makeRecoveryResumeRoute, type RecoveryResumeRouteDeps } from "../tools/fleet/routes-recovery-resume.js";
+import { runtimeImportsOf } from "./helpers/import-graph.js";
 
 const NOW = new Date("2026-09-10T15:00:00.000Z");
 const HOST = "127.0.0.1:8799";
@@ -338,9 +339,17 @@ describe("its one path, POST only", () => {
 
 describe("it never launches, and never reads tmux or the launch store", () => {
   it("imports only the leaf, the feed reader, the store root and the request checks", () => {
-    const source = readFileSync(fileURLToPath(new URL("../tools/fleet/routes-recovery-resume.ts", import.meta.url)), "utf8");
-    const specifiers = [...source.matchAll(/^import[^;]*?from\s+"([^"]+)";/gms)].map((m) => m[1]).sort();
-    expect(specifiers).toEqual(["../overseer/recovery-resume-request.js", "./attention.js", "./recovery-feed.js", "./routes-new.js", "./wire.js", "node:http"].sort());
+    const file = fileURLToPath(new URL("../tools/fleet/routes-recovery-resume.ts", import.meta.url));
+    const source = readFileSync(file, "utf8");
+    /* The shared reader (tests/helpers/import-graph.ts), not a pattern of this
+       file's own. Until 2026-10-06 this was `/^import[^;]*?from\s+"([^"]+)";/`,
+       which wanted double quotes and a semicolon: `import { x } from 'y'` was
+       not on the list it compared, so a fifth import written that way passed.
+       What comes back is what the route loads at run time — the four the title
+       names. Its two `import type` lines (`node:http`, `./wire.js`) erase, and
+       are not here because they cannot launch anything. */
+    const specifiers = runtimeImportsOf(file).sort();
+    expect(specifiers).toEqual(["../overseer/recovery-resume-request.js", "./attention.js", "./recovery-feed.js", "./routes-new.js"].sort());
     // The code, not the prose: the header says in words what it never does.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/\bimport\s*\(/);

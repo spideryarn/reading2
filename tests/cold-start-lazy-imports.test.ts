@@ -69,19 +69,18 @@ function staticImportsOf(source: string): string[] {
 }
 
 describe("what the API bundle loads at module scope", () => {
-  const built = existsSync(BUNDLE);
-
-  it("has a build to inspect", () => {
-    /* Separate and never skipped, for the reason tests/pdf-bundle-trace.test.ts
-       gives: a silent skip is how a guard stops being a guard. */
+  it("keeps jsdom, pdf-lib and Stripe out of the cold start", () => {
+    /* A failure, not a skip, for the reason tests/pdf-bundle-trace.test.ts
+       gives: a silent skip is how a guard stops being a guard. Until 2026-10-06
+       this was a second test beside an `it.skipIf(!built)`; `npm run
+       worktree:setup` builds now, so there is no checkout where skipping is the
+       honest answer. */
     expect(
-      built,
-      "api-dist/vercel.js is missing — run `npm run build`. Without it the " +
-        "assertion below is skipped and checks nothing.",
+      existsSync(BUNDLE),
+      "api-dist/vercel.js is missing — run `npm run build`. Without it there is " +
+        "no bundle to read and this checks nothing.",
     ).toBe(true);
-  });
 
-  it.skipIf(!built)("keeps jsdom, pdf-lib and Stripe out of the cold start", () => {
     const specifiers = staticImportsOf(readFileSync(BUNDLE, "utf8"));
 
     /* The parser found *something*, or every assertion below is vacuously true —

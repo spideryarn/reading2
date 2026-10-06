@@ -37,11 +37,11 @@ const { pool } = await pgReady({
 });
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 async function inRollback(body: (c: PoolClient) => Promise<void>): Promise<void> {
-  const client = await pool!.connect();
+  const client = await pool.connect();
   try {
     await client.query("begin");
     await body(client);
@@ -357,7 +357,7 @@ describe("the owner key", () => {
     /* drizzle/0043, by hand, for the reason drizzle/0040 sets out: a future
        generated migration that drops and recreates this table takes the
        constraint with it and says nothing. This is the alarm. */
-    const { rows } = await pool!.query(
+    const { rows } = await pool.query(
       `select conname from pg_constraint where conname = 'referee_criteria_owner_fk'`,
     );
     expect(rows.map((r) => r.conname)).toEqual(["referee_criteria_owner_fk"]);

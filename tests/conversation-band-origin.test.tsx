@@ -102,6 +102,7 @@ const refused = (): Response =>
 
 let host: HTMLDivElement;
 let root: Root;
+let handoffThreads: { handoff: ChatHandoff; id: string }[] = [];
 
 enableHistorySync();
 
@@ -111,6 +112,7 @@ beforeEach(() => {
   posts.length = 0;
   stored = [];
   panel = undefined;
+  handoffThreads = [];
   onPost = (body) => answered(String(body.threadId), body.origin);
   host = document.createElement("div");
   document.body.append(host);
@@ -137,6 +139,9 @@ function band(handoff: ChatHandoff | null) {
         onScreen: () => [],
         handoff,
         onHandoffTaken: () => {},
+        onHandoffThread: (taken: ChatHandoff, id: string) => {
+          handoffThreads.push({ handoff: taken, id });
+        },
       }),
     ),
   );
@@ -176,8 +181,54 @@ async function send(question: string): Promise<void> {
 }
 
 describe("a conversation handed over with an origin", () => {
+  it("reports both the guessed and corrected id for a saved-comment handoff", async () => {
+    onPost = () => answered("spya-rgn444");
+    const handoff = {
+      slug: SLUG,
+      question: SEED,
+      send: true,
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      sourceCommentId: "spya-cmt777",
+    };
+    await mount(handoff);
+
+    expect(posts).toHaveLength(1);
+    const guessed = String(posts[0]?.body.threadId);
+    expect(handoffThreads.filter((row) => row.handoff === handoff).map((row) => row.id)).toEqual([
+      guessed,
+      "spya-rgn444",
+    ]);
+    expect(open()).toBe("spya-rgn444");
+  });
+
+  it("still reports the corrected saved-comment id after the band unmounts", async () => {
+    let release: (() => void) | undefined;
+    onPost = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(answered("spya-rgn444"));
+      });
+    const handoff = {
+      slug: SLUG,
+      question: SEED,
+      send: true,
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      sourceCommentId: "spya-cmt777",
+    };
+    history.replaceState(null, "", "/a-piece?mode=chat");
+    await act(async () => root.render(band(handoff)));
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    const guessed = String(posts[0]?.body.threadId);
+    expect(handoffThreads.map((row) => row.id)).toEqual([guessed]);
+
+    await leave();
+    await act(async () => release?.());
+    await settleChat();
+
+    expect(handoffThreads.map((row) => row.id)).toEqual([guessed, "spya-rgn444"]);
+  });
+
   it("keeps the origin beside the conversation, sends nothing, then sends exactly it with the first question", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     expect(drafts().thread(fresh)).toBe(SEED);
     expect(drafts().origin(fresh)).toEqual(CLAIM);
@@ -191,7 +242,7 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("stops sending the origin once the server has the thread", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     await send(SEED);
     await send("and who disagrees?");
     expect(posts).toHaveLength(2);
@@ -201,7 +252,7 @@ describe("a conversation handed over with an origin", () => {
 
   it("uses the server's replacement id and stored origin, and forgets the pending entry", async () => {
     onPost = (body) => answered("spya-rgn444", body.origin);
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const guessed = open();
     await send(SEED);
     await vi.waitFor(() => expect(open()).toBe("spya-rgn444"));
@@ -216,7 +267,7 @@ describe("a conversation handed over with an origin", () => {
   it("shows the list where the conversation came from at once, before any reload", async () => {
     /* The `begin` frame carries the stored origin; a pending draft does not
        stand in for the server's acknowledgement. */
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     const handed = () => prop<ChatThread[]>("threads").find((t) => t.id === fresh);
     expect(handed()?.origin, "not before the server has it").toBeUndefined();
@@ -233,9 +284,9 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("does not share an origin between two handed-over conversations, or with an ordinary one", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const first = open();
-    await show({ slug: SLUG, question: "Check another", origin: OTHER });
+    await show({ slug: SLUG, question: "Check another", send: false, origin: OTHER });
     const second = open();
     expect(second).not.toBe(first);
     expect(drafts().origin(first)).toEqual(CLAIM);
@@ -263,7 +314,7 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("keeps the origin across a look at another mode, under the conversation begun in its place", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const first = open();
     await leave();
     /* Back in Chat: the unsent conversation went with the band, so the arrival
@@ -285,7 +336,7 @@ describe("a conversation handed over with an origin", () => {
     await mount(null);
     const displaced = open();
     drafts().setThread(displaced, "My unfinished question");
-    await show({ slug: SLUG, question: "Ask about replication", origin: LENS });
+    await show({ slug: SLUG, question: "Ask about replication", send: false, origin: LENS });
     expect(open()).not.toBe(displaced);
     expect(drafts().thread(displaced), "kept while the band is still mounted").toBe("My unfinished question");
     expect(prop<ChatThread[]>("threads").some((t) => t.id === displaced)).toBe(true);
@@ -300,7 +351,7 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("forgets the origin with a deleted conversation", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     await act(async () => prop<(id: string) => void>("onDelete")(fresh));
     await settleChat();
@@ -308,7 +359,7 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("keeps a claim's origin on returning to Chat after the reader cleared the seed", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     drafts().setThread(fresh, "");
     await leave();
@@ -319,7 +370,7 @@ describe("a conversation handed over with an origin", () => {
   });
 
   it("does not overlay a refused origin on an existing plain thread after returning to Chat", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     // Another creator won this id, so the server refuses our origin.
     stored = [{ id: fresh, kind: "chat", title: "Plain chat", createdAt: "2026-10-05T10:00:00Z",
@@ -334,7 +385,7 @@ describe("a conversation handed over with an origin", () => {
 
   it("keeps the origin after a first Send that failed, and sends it again", async () => {
     onPost = refused;
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     await send(SEED);
     expect(posts).toHaveLength(1);
@@ -350,7 +401,7 @@ describe("a conversation handed over with an origin", () => {
 
   it("keeps the pending origin and id after a failed first Send followed by leaving Chat", async () => {
     onPost = refused;
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();
     await send(SEED);
     await leave();
@@ -366,7 +417,7 @@ describe("a conversation handed over with an origin", () => {
   it("forgets a pending guess when the server corrects its id after leaving Chat", async () => {
     let release!: (response: Response) => void;
     onPost = () => new Promise((resolve) => { release = resolve; });
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const guessed = open();
     await send(SEED);
     await leave();
@@ -381,7 +432,7 @@ describe("a conversation handed over with an origin", () => {
 
   it("keeps an explicit choice of another chat while a submitted origin draft is missing", async () => {
     onPost = refused;
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     await send(SEED);
     await leave();
     stored = [{ id: "spya-rgn555", kind: "chat", title: "Another chat",
@@ -401,7 +452,7 @@ describe("Live on a handed-over conversation", () => {
   });
 
   it.each([CLAIM, LENS])("is not offered, and its start is refused, until the first typed Send has landed (%j)", async (origin) => {
-    await mount({ slug: SLUG, question: SEED, origin });
+    await mount({ slug: SLUG, question: SEED, send: false, origin });
     const fresh = open();
     expect(panel?.live, "no Live control while the origin is pending").toBeUndefined();
     let started: string | undefined = "unset";
@@ -420,7 +471,7 @@ describe("Live on a handed-over conversation", () => {
 
   it("stays withheld after a first Send that failed", async () => {
     onPost = refused;
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     await send(SEED);
     expect(panel?.live).toBeUndefined();
   });

@@ -11,6 +11,11 @@ npm test           # once
 npm run test:watch # while working
 ```
 
+**`npm test` needs a build first, and does not make one**: three files read `dist/` or
+`api-dist/` and fail, naming the command, when it is missing — `npm run build`, then
+`npm run build:fleet` for the fleet tests. `npm run worktree:setup` and `npm run check` both build;
+a bare `npm test` in a fresh clone does not. (Until 2026-10-06 one of the three skipped instead.)
+
 Run [`npm run typecheck`](typechecking.md) alongside it before committing. The two catch different
 things and neither is a substitute for the other — vitest never looks at the types, and `tsc` never
 runs the code.

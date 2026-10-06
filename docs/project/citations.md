@@ -758,7 +758,8 @@ picked, `citation-influence` when a page of the search is about the work, and
 
 Since 2026-10-06 every owner row has **Ask in chat** beside Dig deeper, which is unchanged. It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
-the article gives them) and a question after it; nothing is sent until Send. Once a chat exists,
+the article gives them) and a question after it, and sends that as the first question: the press
+is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
 a line under the row's controls shows how many questions were asked and how the latest answer
 begins, and pressing it opens that conversation beside Citations. Chat's list marks the
 conversation with Citations' icon. A visitor has neither the button nor the line.

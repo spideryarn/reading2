@@ -375,8 +375,8 @@ describe("no suite gates itself on `reachable`, the alias 103 of them shared", (
    *
    * The name used to be *"no suite decides for itself whether the database is
    * required"*, and that was wider than these three regexes, which all key on the
-   * identifier `reachable`. Two files still write `x ? describe : describe.skip`
-   * against something database-shaped, and both survive on purpose:
+   * identifier `reachable`. One file still writes `x ? describe : describe.skip`
+   * against something database-shaped, and it survives on purpose:
    *
    * - **`tests/db-test-create.test.ts`** gates on the opt-in
    *   `SPIDERYARN_TEST_DB_FACTORY=1`, because those cases create and drop real
@@ -385,14 +385,13 @@ describe("no suite gates itself on `reachable`, the alias 103 of them shared", (
    *   two reasons applied — so it is not the failure this file exists about. Its
    *   `probe` does also fold in reachability, so an opted-in machine with no
    *   container skips quietly; that residual is the factory's, not the store's.
-   * - **`tests/migration-reconciliations.test.ts`** gates on
-   *   `isLocalDatabaseUrl`, because the block asserts things about *the schema
-   *   this laptop actually has*. Pointed at production it would be asking the
-   *   wrong database, and its first case asserts the connection happened, so
-   *   "0 tests, all green" cannot read as "every probe verified". (The sixth
-   *   sweep's cluster S4, 2026-10-06, replaces that `describe.skip` with a
-   *   throw at module scope when there is no local database. Once it has
-   *   landed this bullet is history and the first file is the only one.)
+   *
+   * There was a second until 2026-10-06:
+   * `tests/migration-reconciliations.test.ts` gated its live half on
+   * `isLocalDatabaseUrl` with a `describe.skip`, because its cases run DDL and
+   * must never be pointed at a database that is not the local one. It still
+   * never is, and it no longer skips: it throws at module scope when
+   * `DATABASE_URL` is unset, not local, or unreachable.
    *
    * **Widening the regex to the structural form was measured and rejected**: a
    * bare `\?\s*describe\s*:\s*describe\.skip` also catches the platform gates in

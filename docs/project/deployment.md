@@ -651,6 +651,14 @@ Run it with `--public-slug <slug>` for a real shared article; the checker refuse
 fixture. Optional `--private-slug` and `--private-title` also check a known private article and
 its title. It checks admin and API paths and every generated HTML file for the exclusion header.
 
+**One of its checks runs in every deploy, since 2026-10-06**: `npm run deploy` judges the
+`/robots.txt` it was served with that script's `judgeRobotsTxt`, group by group, through
+`judgeServedRobots` in `scripts/deploy-checks.ts`. Before that the deploy looked only for a
+`Disallow: /` line anywhere in the file, which a file restricting one named bot beside an
+unrestricted `User-agent: *` satisfied. So a change to `robots.txt` that the judge does not expect
+fails the deploy's verification: change `PREVIEW_ALLOWS` or its neighbours in the same commit. The
+rest of the script, the `X-Robots-Tag` header included, is still run by hand.
+
 **A limit**: the body of every page is drawn by React, and what a page fetches from `/api/` (the
 changelog's entries, the shared articles on the homepage) is behind `Disallow`. A crawler that runs
 JavaScript sees the page without those parts; one that does not sees the head.

@@ -60,7 +60,7 @@ import {
   ChevronDown,
   ChevronUp,
   LoaderCircle,
-  Network,
+  type Network,
   PenLine,
   Route,
   Waypoints,

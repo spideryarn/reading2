@@ -167,14 +167,12 @@ const { pool } = await pgReady({
   keepPool: true,
 });
 
-if (pool) {
-  const probe = await pool.query<{ column_name: string }>(
-    `select column_name from information_schema.columns
-     where table_schema = 'spideryarn' and table_name = 'article_revisions'`,
-  );
-  liveColumns = probe.rows.map((r) => r.column_name);
-  await pool.end();
-}
+const probe = await pool.query<{ column_name: string }>(
+  `select column_name from information_schema.columns
+   where table_schema = 'spideryarn' and table_name = 'article_revisions'`,
+);
+liveColumns = probe.rows.map((r) => r.column_name);
+await pool.end();
 
 describe("the policy against the live table", () => {
   it("knows about every column Postgres actually has", () => {

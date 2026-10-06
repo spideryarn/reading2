@@ -38,8 +38,9 @@
  * old one swept — are the only thing that distinguishes it from a store that
  * sweeps everything the moment a second tab loads the page.
  *
- * **Skips when there is no database**, loudly; `REQUIRE_POSTGRES=1` turns the
- * skip into a failure. docs/project/testing.md § When a skip is not acceptable.
+ * **Fails when there is no database**, rather than skipping
+ * (tests/helpers/pg-ready.ts, since 2026-09-05).
+ * docs/project/testing.md § When a skip is not acceptable.
  */
 
 import { eq, sql } from "drizzle-orm";

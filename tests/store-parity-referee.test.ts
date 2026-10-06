@@ -67,8 +67,8 @@
  * ## Skips loudly when there is no database
  *
  * A check that skips when the database is away, in a suite written *because*
- * nobody exercised the database, is the joke writing itself. `pgReady` says so
- * on stderr, and `REQUIRE_POSTGRES=1` turns the skip into a failure —
+ * nobody exercised the database, is the joke writing itself. It did skip, until
+ * 2026-09-05; `pgReady` throws now, so this file fails with no database —
  * docs/project/testing.md § When a skip is not acceptable.
  */
 

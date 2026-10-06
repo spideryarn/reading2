@@ -349,6 +349,63 @@ function Diagnostics({ d }: { d: DiagnosticsView }): ReactNode {
   );
 }
 
+/**
+ * **It polls, and the first version did not.**
+ *
+ * The panel fetched on mount and on Refresh only, and `refreshMs` was parsed and never
+ * used — so a page left open on a phone, which is what this dashboard is for,
+ * would say *dev is green* indefinitely while dev moved and a check failed
+ * underneath it. GPT Sol, Stage 2 review.
+ *
+ * The interval comes from the server rather than a constant here, because the
+ * server is the thing that knows how often it recollects; polling faster than
+ * that fetches the same snapshot repeatedly, and slower shows a stale one for
+ * no reason. It is clamped because a bad number from a future build must not
+ * turn this into a busy loop.
+ *
+ * **Two effects, because the fetch and the timer restart for different
+ * reasons.** One effect did both until 2026-10-06, and left the interval out
+ * of its dependencies: it ran before the first answer, set the 120-second
+ * fallback, and never ran again, so the server's number went unused until
+ * Refresh was pressed. (GPT Sol, with a fake-timer test. The note that
+ * justified it feared a timer leak, and there was none to fear: the cleanup
+ * clears the timer, and a number re-runs an effect only when its value
+ * changes.) Putting the interval into that one effect would have fetched
+ * again each time the number changed. Apart, a new number restarts the timer
+ * and fetches nothing. tests/fleet-readiness-poll.test.tsx.
+ */
+function useReadinessView(api: ReadinessApi, refreshNonce: number): ReadinessView | null {
+  const [view, setView] = useState<ReadinessView | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
+  useEffect(() => {
+    let live = true;
+    void api.fetch().then((next) => {
+      if (live) setView(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [api, refreshNonce]);
+
+  const everyMs = Math.min(10 * 60_000, Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refresh restarts the timer and invalidates pending polls from before Refresh.
+  useEffect(() => {
+    let live = true;
+    const timer = setInterval(() => {
+      void api.fetch().then((next) => {
+        if (live) setView(next);
+      });
+    }, everyMs);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [api, everyMs, refreshNonce]);
+
+  return view;
+}
+
 export function ReadinessPanel({
   api = httpReadinessApi,
   nowMs,
@@ -362,46 +419,7 @@ export function ReadinessPanel({
   /** Bumped by the Dock's Refresh button. */
   refreshNonce?: number;
 }): ReactNode {
-  const [view, setView] = useState<ReadinessView | null>(null);
-
-  /**
-   * **It polls, and the first version did not.**
-   *
-   * This ran on mount and on Refresh only, and `refreshMs` was parsed and never
-   * used — so a page left open on a phone, which is what this dashboard is for,
-   * would say *dev is green* indefinitely while dev moved and a check failed
-   * underneath it. GPT Sol, Stage 2 review.
-   *
-   * The interval comes from the server rather than a constant here, because the
-   * server is the thing that knows how often it recollects; polling faster than
-   * that fetches the same snapshot repeatedly, and slower shows a stale one for
-   * no reason. It is clamped because a bad number from a future build must not
-   * turn this into a busy loop.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
-  useEffect(() => {
-    let live = true;
-    const load = (): void => {
-      void api.fetch().then((next) => {
-        if (live) setView(next);
-      });
-    };
-    load();
-    const everyMs = Math.min(
-      10 * 60_000,
-      Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000),
-    );
-    const timer = setInterval(load, everyMs);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-    /* `view?.refreshMs` deliberately NOT in the deps: it would tear down and
-       rebuild the interval on every successful poll, which is a slow leak of
-       timers and a drifting cadence. The first answer's interval is good enough
-       for the life of the mount. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, refreshNonce]);
+  const view = useReadinessView(api, refreshNonce);
 
   const formatTime = (ms: number): string =>
     new Date(shiftMsToBrowserClock(ms, skew)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

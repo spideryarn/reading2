@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * **Ask in chat carries the glossary's question across, and spends nothing.**
+ * **Ask in chat carries the glossary's question across and asks it: one
+ * press, one request.**
  *
  * The glossary's *Look up a term* box refuses a word the article does not
  * contain (`[gl-ask-absent]`, `[gl-ask-part-word]`) and offers **Ask in chat**,
@@ -10,15 +11,24 @@
  * choosing between opening the question in the conversation already on screen
  * and a new one: *"fresh"*.
  *
+ * From then until 2026-10-06 the question waited in the new conversation's
+ * box for the reader to press Send. Greg, 2026-10-06, in report spya-x896vu:
+ * *"When I click "ask in Chat" anywhere, automatically submit the input
+ * (rather than just prefilling the input box and waiting for me to hit
+ * send)"*. So the press is the Send now
+ * (docs/plans/261006j-ask-in-chat-sends-the-question.md).
+ *
  * So the claims, each against the whole app — `App` under `StrictMode` and the
  * real nuqs adapter, as `main.tsx` mounts it — because the handoff crosses
  * three components (the glossary panel, `Reader`, the conversation band) and a
  * test of any one of them can pass over a seam that drops the question:
  *
- * 1. the question arrives in a **fresh** conversation's composer, naming the
- *    term **as it was submitted** (trimmed), editable and focused;
- * 2. **zero** chat requests before Send, **exactly one** after — and it goes to
+ * 1. the question is sent to a **fresh** conversation, naming the term **as
+ *    it was submitted** (trimmed); the composer is left empty and is not
+ *    given the caret, because there is nothing to type;
+ * 2. **exactly one** chat request, made by the press alone, and it goes to
  *    the new conversation, not to the one `?thread=` named on arrival;
+ *    leaving Chat and coming back makes no second one;
  * 3. a long term and one with quotation marks in it are carried as data;
  * 4. the floating chat draft the reader already had is still there when they
  *    come back out of chat mode;
@@ -360,17 +370,10 @@ async function askInChat(): Promise<void> {
   await until(() => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id);
 }
 
-async function send(): Promise<void> {
-  const form = composer()?.form;
-  expect(form, "the composer is a form").toBeTruthy();
-  await act(async () => {
-    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-  });
-  await settle();
-}
+const questionsSent = () => chatPosts().map((r) => (r.body as { question: string }).question);
 
 describe("Ask in chat, from the glossary's refusal", () => {
-  it("opens a fresh conversation holding the question, sends nothing, and sends once on Send", async () => {
+  it("opens a fresh conversation and sends the question to it once, leaving the box empty", async () => {
     who.set(OWNER);
     /* `?thread=` names a conversation the reader already has, so "fresh" is
        falsifiable: a handoff that wrote into the open conversation would put
@@ -394,20 +397,20 @@ describe("Ask in chat, from the glossary's refusal", () => {
 
     const question = askAboutTerm("Bayesian prior");
     expect(question).toContain('"Bayesian prior"');
-    expect(composer()?.value, "the question is in the box").toBe(question);
-    expect(composer()?.readOnly, "and the box is editable").toBe(false);
-    expect(document.activeElement, "and has the caret").toBe(composer());
-    expect(composer()?.selectionStart, "at the end, so typing follows the question").toBe(
-      question.length,
+    expect(composer()?.value, "the question is not left in the box").toBe("");
+    expect(document.activeElement, "and the box is not given the caret: there is nothing to type").not.toBe(
+      composer(),
+    );
+    expect(host.querySelector(".mode-band")?.textContent, "the question is in the conversation").toContain(
+      "Bayesian prior",
     );
     expect(host.textContent, "the old conversation is not what is open").not.toContain(
       "An earlier question",
     );
-    expect(chatApiPosts(), "nothing is sent until the reader presses Send").toHaveLength(0);
 
-    await send();
-
-    expect(chatPosts(), "exactly one request, on Send").toHaveLength(1);
+    /* Zero would be the question waiting for a second press, as it did until
+       2026-10-06; two would be a double send (the app is under StrictMode). */
+    expect(chatPosts(), "exactly one request, from the press alone").toHaveLength(1);
     expect(chatApiPosts(), "and no other chat or Live request accompanied it").toHaveLength(1);
     const body = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown };
     expect(body.question).toBe(question);
@@ -416,23 +419,34 @@ describe("Ask in chat, from the glossary's refusal", () => {
     expect(body.origin, "the absent term has no entry to store as an origin").toBeUndefined();
   });
 
-  it("carries what the reader edited, not the handed-over text", async () => {
+  /* Until 2026-10-06 this test held that Send carried what the reader had
+     edited in the box rather than the handed-over text. There is no box to
+     edit now: the press sends the question as it stands. What is left to hold
+     about the same journey is that the question goes once and only once,
+     whatever the reader does next. */
+  it("does not send the question again, or put it back in the box, when Chat is left and reopened", async () => {
     who.set(OWNER);
     await open("?mode=glossary");
     await lookUp("axiom");
     await askInChat();
+    expect(questionsSent(), "the press sent it as handed over").toEqual([askAboutTerm("axiom")]);
 
-    const box = composer() as HTMLTextAreaElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      setter?.call(box, "Is an axiom the same as an assumption?");
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await send();
+    const mode = (label: string) =>
+      [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
+        (b) => b.getAttribute("aria-label") === label,
+      );
+    expect(mode(MODE_LABEL.glossary), "the dock offers Glossary").toBeDefined();
+    await act(async () => mode(MODE_LABEL.glossary)?.click());
+    await until(() => param("mode") === "glossary");
+    expect(mode(MODE_LABEL.chat), "the dock offers Chat").toBeDefined();
+    await act(async () => mode(MODE_LABEL.chat)?.click());
+    await until(() => param("mode") === "chat");
 
-    expect(chatPosts().map((r) => (r.body as { question: string }).question)).toEqual([
-      "Is an axiom the same as an assumption?",
-    ]);
+    expect(questionsSent(), "still the one request").toEqual([askAboutTerm("axiom")]);
+    expect(chatApiPosts()).toHaveLength(1);
+    for (const box of host.querySelectorAll<HTMLTextAreaElement>(".mode-band textarea.chat-input")) {
+      expect(box.value, "and no box holds the question").toBe("");
+    }
   });
 
   it("offers the door on a part-word refusal too, and carries a long term with quotes in it as data", async () => {
@@ -446,9 +460,10 @@ describe("Ask in chat, from the glossary's refusal", () => {
     await lookUp(term);
     await askInChat();
 
-    expect(composer()?.value).toBe(askAboutTerm(term));
-    expect(composer()?.value).toContain(term);
-    expect(chatApiPosts()).toHaveLength(0);
+    expect(questionsSent(), "sent once, by the press").toEqual([askAboutTerm(term)]);
+    expect(questionsSent()[0]).toContain(term);
+    expect(chatApiPosts()).toHaveLength(1);
+    expect(composer()?.value).toBe("");
   });
 
   it("leaves the floating chat draft the reader already had where it was", async () => {
@@ -470,7 +485,10 @@ describe("Ask in chat, from the glossary's refusal", () => {
 
     await lookUp("axiom");
     await askInChat();
-    expect(composer()?.value).toBe(askAboutTerm("axiom"));
+    expect(questionsSent(), "the glossary's question went to its own conversation").toEqual([
+      askAboutTerm("axiom"),
+    ]);
+    expect((chatPosts()[0]?.body as { anchor?: unknown }).anchor, "not to the paragraph's draft").toBeUndefined();
 
     /* Back out to the glossary: the floating draft is there again, about the
        same paragraph, and carries none of the glossary's question. */
@@ -481,7 +499,7 @@ describe("Ask in chat, from the glossary's refusal", () => {
     await until(() => param("mode") === "glossary");
     expect(floating()?.textContent ?? "", "the floating draft came back").toContain(PARAGRAPH);
     expect(floating()?.textContent ?? "").not.toContain("axiom");
-    expect(chatApiPosts()).toHaveLength(0);
+    expect(chatApiPosts(), "and the draft itself sent nothing: the one request is the glossary's").toHaveLength(1);
   });
 
   it("gives a visitor no box, and so no paid door", async () => {

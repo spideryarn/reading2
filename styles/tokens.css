@@ -109,9 +109,6 @@
 
        Held as three numbers because the spine strip is drawn at partial alpha. */
     --quote-rgb: 204 151 243;
-    /* The alias every triplet here needs — see `--hit-wash` above for the
-       invalid-declaration trap that makes it worth writing out. */
-    --quote-color: rgb(var(--quote-rgb));
     /* **The fill in the prose has a colour of its own on the dark page**, since
        2026-10-05. `--quote-rgb` above is a pale lavender, right for a 2px strip
        on the spine's panel and grey-purple as a faint wash over near-black.
@@ -230,9 +227,6 @@
     /* ---- sidebar / left rail ----------------------------------------- */
     /* Slightly *lighter* than --background, not darker: on a dark page a panel lifts forward. */
     --sidebar: oklch(0.19 0 0);
-    --sidebar-foreground: oklch(0.97 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-border: oklch(0.27 0 0);
 
     /* ---- shape ------------------------------------------------------- */
     --radius: 0.625rem;
@@ -243,7 +237,6 @@
        Greg asked to be "a bit bigger" (2026-09-28). 44px, the usual touch-target minimum.
        docs/project/controls.md § The numbers. */
     --control-h-lg: 2.75rem;
-    --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */
     /* GEIST IS THE BASE FACE AND THE CHROME. It is self-hosted from
@@ -418,9 +411,6 @@
     --border: oklch(0.885 0 0);
     --input: oklch(0.85 0 0);
     --sidebar: oklch(0.96 0 0);
-    --sidebar-foreground: oklch(0.2 0 0);
-    --sidebar-accent: oklch(0.92 0 0);
-    --sidebar-border: oklch(0.885 0 0);
     /* The focus ring, darkened with the orange-as-a-line token: the raw orange is
        ~2.6:1 on this page, under the 3:1 a focus indicator needs (WCAG 1.4.11).
        Every hand-written focus outline and native `accent-color` reads

@@ -166,9 +166,10 @@ and three buttons:
 
 - **Save** stores the comment. It is the only submit button, so ⌘/Ctrl+Enter is the free Save and
   plain Enter is a newline.
-- **Ask AI** stores it and then opens the chat composer on those words, pre-filled, for the reader
-  to send ([§ Asking the model](#asking-the-model-and-the-link-back)). Pressing it spends nothing;
-  the model is called when the reader sends.
+- **Ask AI** stores it and then opens a chat on those words and sends what was written as its
+  first question ([§ Asking the model](#asking-the-model-and-the-link-back)); with nothing written
+  it asks *Explain this passage.* Until 2026-10-06 it pre-filled the composer and waited for Send
+  ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D6).
 - **Discard** throws the draft away.
 
 Two questions decide what an exit stores (`hasSomething` and `hasIntent` in `AnnotateDialog.tsx`):
@@ -401,8 +402,8 @@ was what let the one remaining writer reach the anchor and the reader's words.
 ### Asking the model, and the link back
 
 Pressing **Ask AI** (a tick-box, *Also ask the AI about it*, until 2026-10-03) saves the comment
-*first* — free, and saved — and then opens the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built, pre-filled with
-whatever was written. If the chat call fails, the reader still has their words.
+*first* — free, and saved — and then opens the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built and sends
+whatever was written as its first question. If the chat call fails, the reader still has their words.
 
 The link between the two is written **on the server**, from inside the chat stream, because that is
 the only place a real thread id exists: the browser mints an optimistic one and only hears about an
@@ -932,15 +933,17 @@ itself failing — has overwritten it by then, and the client's is the only one 
 **A follow-up box that opens a chat** — *"if the user enters text into it, it should automatically
 open up as a new chat (rather than making the [dialog] itself too complex)"*. Which is what keeps a
 comment at one question and one answer: the dialog does not grow a transcript, the reader is moved to
-the thing that already is one. The mechanics, and the three silent ways a handoff goes wrong, are in
-[`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts).
+the thing that already is one. The box's button is **Ask in chat**, and since 2026-10-06 pressing it
+sends the question there rather than pre-filling it for a second press
+([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D4). `Reader.tsx` owns the handoff;
+`ChatDialog.tsx` and `ConversationModes.tsx` own its two sending paths.
 
 > [!WARNING]
 > **The question does not go in the URL.** [`useChat.ts`](../../src/web/useChat.ts) already argues
 > this for its own POST — the question is arbitrary length and it is the reader's private text,
 > which would then be in browser history, in any shared link, and in every access log on the way. It
-> travels in a module-level cell and is lost on reload, which is the right trade: the cost is
-> retyping one sentence.
+> travels in the reading view's component state and is lost on reload, which is the right trade:
+> the cost is retyping one sentence.
 
 ## Anchoring <a id="anchoring"></a>
 

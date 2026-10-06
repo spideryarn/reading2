@@ -85,7 +85,6 @@ describe("the sign-up mail", () => {
 });
 
 beforeAll(async () => {
-  if (!pool) return;
   await seedAuthUser(pool, { id: NEWCOMER, email: "arrivals-new@example.invalid" });
   await seedAuthUser(pool, { id: OLD_HAND, email: "arrivals-old@example.invalid" });
 });
@@ -93,18 +92,17 @@ beforeAll(async () => {
 beforeEach(async () => {
   routedArrivals.calls.length = 0;
   forgetKnownArrivals();
-  await pool?.query("delete from spideryarn.reader_arrivals where owner_id = any($1)", [
+  await pool.query("delete from spideryarn.reader_arrivals where owner_id = any($1)", [
     [NEWCOMER, OLD_HAND],
   ]);
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await pool.query("delete from auth.users where id = any($1)", [[NEWCOMER, OLD_HAND]]).catch(() => {});
   await pool.end();
 });
 
-describe.skipIf(!pool)("noteArrival", () => {
+describe("noteArrival", () => {
   it("announces an account's first request, and only that one", async () => {
     const announced: string[] = [];
     const announce = announcer(announced);
@@ -220,7 +218,7 @@ describe.skipIf(!pool)("noteArrival", () => {
       release: async (ownerId) => {
         markReleaseStarted();
         await releaseAllowed;
-        await pool!.query("delete from spideryarn.reader_arrivals where owner_id = $1", [ownerId]);
+        await pool.query("delete from spideryarn.reader_arrivals where owner_id = $1", [ownerId]);
       },
     });
     await releaseStarted;
@@ -257,7 +255,7 @@ describe.skipIf(!pool)("noteArrival", () => {
   });
 });
 
-describe.skipIf(!pool)("the migration's backfill", () => {
+describe("the migration's backfill", () => {
   /**
    * Private test databases seed their accounts after migrating, so running the
    * migration does not exercise this statement. Run it here, against an
@@ -273,20 +271,20 @@ describe.skipIf(!pool)("the migration's backfill", () => {
     expect(backfill).toMatch(/^INSERT INTO[\s\S]*FROM "auth"."users"[\s\S]*DO NOTHING;\s*$/);
     /* Hosted auth rows are allowed to lack this timestamp. The ledger's column
        is not, so the migration must supply one rather than fail the deploy. */
-    await pool!.query("update auth.users set created_at = null where id = $1", [OLD_HAND]);
-    await pool!.query(backfill);
+    await pool.query("update auth.users set created_at = null where id = $1", [OLD_HAND]);
+    await pool.query(backfill);
 
     const announced: string[] = [];
     await noteArrival(OLD_HAND, "arrivals-old@example.invalid", { announce: announcer(announced) });
     expect(announced).toEqual([]);
-    const { rows } = await pool!.query(
+    const { rows } = await pool.query(
       "select first_seen_at from spideryarn.reader_arrivals where owner_id = $1",
       [OLD_HAND],
     );
     expect(rows[0]?.first_seen_at).toBeInstanceOf(Date);
 
     /* Twice is harmless: it is how a re-run would behave. */
-    await pool!.query(backfill);
+    await pool.query(backfill);
   });
 });
 
@@ -323,13 +321,13 @@ const signedIn: Verifier = async () => ({
 const refused: Verifier = async () => ({ ok: false, kind: "bad-token" });
 
 async function arrived(): Promise<boolean> {
-  const { rows } = await pool!.query("select 1 from spideryarn.reader_arrivals where owner_id = $1", [
+  const { rows } = await pool.query("select 1 from spideryarn.reader_arrivals where owner_id = $1", [
     NEWCOMER,
   ]);
   return rows.length === 1;
 }
 
-describe.skipIf(!pool)("the route handler notes an arrival", () => {
+describe("the route handler notes an arrival", () => {
   /**
    * **The composition root, not the function.** Every case above injects its
    * own seams; this one goes through the real `handleApi`, so deleting the call
@@ -346,7 +344,7 @@ describe.skipIf(!pool)("the route handler notes an arrival", () => {
   });
 
   it("ends the response before a slow arrival insert, then keeps the invocation alive", async () => {
-    const blocker = await pool!.connect();
+    const blocker = await pool.connect();
     let transactionOpen = false;
     try {
       await blocker.query("begin");

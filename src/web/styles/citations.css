@@ -152,12 +152,6 @@
    than as the last row's — the browser check read the capped sentence as the
    last visible row's own, at both widths. */
 .cite-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
-.cite-note {
-  margin: 0 0 0.3rem;
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.35;
-}
 
 /* ---- after *Look it up* ----------------------------------------------------
    Under an assessed row (CitationsPanel.tsx § LookupReading): the verdict, each

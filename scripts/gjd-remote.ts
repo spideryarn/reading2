@@ -2439,7 +2439,7 @@ function cmdResumeAll(opts: { includeAttached: boolean; transport?: "ssh" | unde
     );
   }
   const me = selfSessionUuid(process.env);
-  if (!me) return die("ITERM_SESSION_ID is unset or malformed"); // openTabsRefusal already checked; this is for the types.
+  if (!me) die("ITERM_SESSION_ID is unset or malformed"); // openTabsRefusal already checked; this is for the types.
 
   const plan = planTabs(adoptTitles(sessions()), { includeAttached: opts.includeAttached });
   for (const s of plan.skipped) console.log(dim(`skipped ${escapeName(s.name)} — ${s.why}`));
@@ -6084,7 +6084,7 @@ async function main(): Promise<void> {
       //
       // Until 2026-09-01 the arguments were dropped on the floor: `gjd-remote
       // ssh 'free -g'` opened a login shell, printed the MOTD and exited 0.
-      let invocation;
+      let invocation: ReturnType<typeof sshInvocation>;
       try {
         invocation = sshInvocation({ host: HOST(), sshOpts: SSH_OPTS_INTERACTIVE, words: rest });
       } catch (err) {

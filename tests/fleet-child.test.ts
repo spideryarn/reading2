@@ -89,6 +89,19 @@ async function passTimeoutAndGrace(timeoutMs = 20, graceMs = 10): Promise<void> 
   await vi.runAllTimersAsync();
 }
 
+/**
+ * The owner's `kill` dependency, handed in as a `vi.fn` by every case that
+ * counts group signals.
+ *
+ * **Not a spy on `process.kill`**, which these cases used until 2026-10-06 and
+ * which failed twice in the readiness log. The real children at the top of this
+ * file each leave a SIGKILL sweep on a real timer, one grace after exit, and
+ * nothing clears it; a global spy installed by a later case heard that call as
+ * its own ("expected kill to not be called at all, but 1 times"). An injected
+ * function belongs to one owner, so it hears one owner.
+ */
+type Kill = (pid: number, signal: NodeJS.Signals) => void;
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -272,7 +285,11 @@ describe("owned fleet probe children", () => {
     const first = child(41_101);
     const replacement = child(41_102);
     const fake = spawner([first, replacement]);
-    const owner = probeOwner({ spawn: fake.spawn });
+    /* Its own `readProcStat`, because the default reads the real `/proc` for a
+       made-up pid: on a box where 41101 happens to be a live group leader that
+       was a proof of ownership, and this test then signalled somebody else's
+       process group for real. */
+    const owner = probeOwner({ spawn: fake.spawn, readProcStat: (pid) => procStat(pid, { pgrp: 99 }) });
 
     const firstRun = owner.run(spec({ timeoutMs: 2_000 }));
     first.emit("exit", 0, null);
@@ -293,8 +310,9 @@ describe("owned fleet probe children", () => {
     const replacement = child(reusedPid);
     const fake = spawner([first, replacement]);
     let currentStartTime = "6001";
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => procStat(pid, { startTime: currentStartTime }),
     });
@@ -342,8 +360,9 @@ describe("owned fleet probe children", () => {
     const leader = child(41_301);
     const fake = spawner([leader]);
     let reads = 0;
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => {
         reads += 1;
@@ -367,8 +386,9 @@ describe("owned fleet probe children", () => {
     vi.useFakeTimers();
     const fakeChild = child(41_401);
     const fake = spawner([fakeChild]);
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => procStat(pid, { startTime: "8001" }),
     });
@@ -389,8 +409,9 @@ describe("owned fleet probe children", () => {
     const original = child(41_501);
     const fake = spawner([original]);
     let reads = 0;
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => {
         reads += 1;
@@ -416,8 +437,9 @@ describe("owned fleet probe children", () => {
     const forbiddenReplacement = child(41_602);
     const fake = spawner([inaccessible, forbiddenReplacement]);
     let reads = 0;
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => {
         reads += 1;
@@ -517,8 +539,9 @@ describe("owned fleet probe children", () => {
     const owned = child(41_901);
     const fake = spawner([owned]);
     const before = new Set(process.listeners("SIGTERM"));
-    const selfKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const selfKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: selfKill,
       spawn: fake.spawn,
       readProcStat: (pid) => procStat(pid, { pgrp: 99 }),
     });
@@ -540,12 +563,13 @@ describe("owned fleet probe children", () => {
     const fakeChild = child(1_234);
     const fake = spawner([fakeChild]);
     const sent: Array<{ signal: string | number | undefined; atMs: number }> = [];
-    const kill = vi.spyOn(process, "kill").mockImplementation((_pid, signal) => {
+    const kill = vi.fn<Kill>((_pid, signal) => {
       sent.push({ signal, atMs: Date.now() });
       if (signal === "SIGKILL") fakeChild.emit("exit", null, "SIGKILL");
       return true;
     });
     const owner = probeOwner({
+      kill: kill,
       spawn: fake.spawn,
       now: Date.now,
       readProcStat: () => procStat(1_234, { comm: "my ) proc", startTime: "10001" }),
@@ -571,8 +595,9 @@ describe("owned fleet probe children", () => {
     vi.useFakeTimers();
     const fakeChild = child(2_345);
     const fake = spawner([fakeChild]);
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: (pid) => procStat(pid, { pgrp: 99 }),
     });
@@ -593,8 +618,9 @@ describe("owned fleet probe children", () => {
     vi.useFakeTimers();
     const fakeChild = child(3_456);
     const fake = spawner([fakeChild]);
-    const groupKill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const groupKill = vi.fn<Kill>(() => true);
     const owner = probeOwner({
+      kill: groupKill,
       spawn: fake.spawn,
       readProcStat: () => {
         throw new Error("permission denied");

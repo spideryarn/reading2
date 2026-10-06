@@ -709,7 +709,10 @@ function SketchBody({
    * the scene is simply *there*; a reader who has asked for less motion gets
    * the same. That is the point: the navigation already happened in `goTo`.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the navigation counter is the trigger; the anchor it should run is read from a ref, on purpose, so that a reload of the artefact cannot replay the last zoom
+  /* The navigation counter is the trigger; the anchor it should run is read
+     from a ref, on purpose, so that a reload of the artefact cannot replay the
+     last zoom. (The effect reads `nav` itself, so the hook-deps rule has nothing
+     to say here and needs no suppression.) */
   useLayoutEffect(() => {
     if (nav === 0) return;
     const g = stage.current;
@@ -949,7 +952,6 @@ function SketchBody({
              not implemented is the same mistake `DiagramPanel` made with its
              tree role, and it is worse here because the roving tabstop makes it
              look deliberate. ⟨Sol⟩, 2026-08-30. */
-          // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call DiagramPanel's kind switcher makes
           <div className="sk-scenes" role="radiogroup" aria-label="Which part of the picture">
             <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             {sketch.scenes.map((sc, i) => {
@@ -972,7 +974,7 @@ function SketchBody({
                     />
                   }
                 >
-                  {/* biome-ignore lint/a11y/useSemanticElements: see above */}
+                  {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call DiagramPanel's kind switcher makes */}
                   <button
                     type="button"
                     role="radio"
@@ -1084,7 +1086,6 @@ function SketchBody({
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 
       <div className="sk-scroll" ref={scroll}>
-        {/* biome-ignore lint/a11y/useSemanticElements: SVG has no listbox element; the roles are written out for the same reason scatter.ts's are — the DOM is flat and nothing in the markup says this is the third of twelve */}
         <svg
           ref={svg}
           className={`sk-svg${full ? "" : " enlarges"}`}
@@ -1096,6 +1097,7 @@ function SketchBody({
              point of a `viewBox`. */
           width="100%"
           preserveAspectRatio="xMidYMin meet"
+          // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no listbox element; the roles are written out for the same reason scatter.ts's are — the DOM is flat and nothing in the markup says this is the third of twelve
           role="listbox"
           /* **The listbox owns one tab stop and moves a roving marker over its
              options**, so the *selection* has to be announced by name — without
@@ -1148,12 +1150,12 @@ function SketchBody({
               **Everything that is drawn hangs off one group, so the zoom has a
               single thing to move.** */}
           <g ref={attachStage} className="sk-stage">
-          {/* biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes and an index cannot come to mean a different thing. Minting ids would be inventing identity to satisfy a rule about preserving it. */}
           {painted.behind.map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes. An index can come to stand for a different primitive, and that is safe here because `Shape` is stateless and renders entirely from its props, so there is nothing for a reused position to carry over. Minting ids would be inventing identity to satisfy a rule about preserving it.
             <Shape key={`b${i}`} p={p} />
           ))}
-          {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
           {painted.links.map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: see above
             <Shape key={`l${i}`} p={p} />
           ))}
 
@@ -1169,7 +1171,10 @@ function SketchBody({
               meaning on every pixel between the boxes. */}
           {painted.regions.map((r, i) =>
             r.region.opens && r.hit ? (
-              /* biome-ignore lint/a11y/useKeyWithClickEvents: reached by Tab and activated by Enter as a real `button` role with its own tabIndex — unlike the nodes, which share the picture's single tab stop because there are thirty of them */
+              /* Reached by Tab and activated by Enter as a real `button` role with
+                 its own tabIndex — unlike the nodes, which share the picture's
+                 single tab stop because there are thirty of them. */
+              // biome-ignore lint/a11y/useSemanticElements: SVG has no `<button>`; a `<g>` with the role, a tab stop and both handlers is the only way to put one inside a picture
               <g
                 key={`${r.region.label}-${r.region.x}-${r.region.y}`}
                 className="sk-region-open"
@@ -1223,8 +1228,14 @@ function SketchBody({
           )}
 
           {painted.nodes.map((n, i) => (
-            /* biome-ignore lint/a11y/useKeyWithClickEvents: the whole picture is one tab stop with its own key handler above — a handler per node is the tab-stop-per-node mistake DiagramPanel already made once */
-            /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no element that carries `option` natively, and the roles are written out for the reason scatter.ts's are — the DOM is flat, so nothing in the markup says this is the third of twelve */
+            /* **No key handler on a node, on purpose**: the whole picture is one tab
+               stop with its own key handler above — a handler per node is the
+               tab-stop-per-node mistake DiagramPanel already made once. And the
+               `option` role is written out because SVG has no element that
+               carries it natively, for the reason scatter.ts's are — the DOM is
+               flat, so nothing in the markup says this is the third of twelve.
+               (These two notes were `biome-ignore` comments until 2026-10-06;
+               neither rule fires on a `<g>`, so they suppressed nothing.) */
             <g
               key={n.node.id}
               id={`${uid}-${n.node.id}`}
@@ -1241,8 +1252,8 @@ function SketchBody({
               onMouseEnter={() => setHover(n.node.id)}
               onMouseLeave={() => setHover(null)}
             >
-              {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
               {n.prims.map((p, j) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above
                 <Shape key={`p${j}`} p={p} />
               ))}
               {/* An invisible hit rectangle over the whole box, so a `bare` node
@@ -1251,8 +1262,8 @@ function SketchBody({
               <rect className="sk-hit" x={n.hit.x} y={n.hit.y} width={n.hit.w} height={n.hit.h} />
             </g>
           ))}
-          {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
           {painted.front.map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above
             <Shape key={`f${i}`} p={p} />
           ))}
 
@@ -1293,24 +1304,24 @@ function SketchBody({
                 viewBox={`0 0 ${CANVAS_W} ${peeked.art.height}`}
                 preserveAspectRatio="xMidYMid meet"
               >
-                {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
                 {peeked.art.behind.map((p, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above
                   <Shape key={`kb${i}`} p={p} />
                 ))}
-                {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
                 {peeked.art.links.map((p, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: see above
                   <Shape key={`kl${i}`} p={p} />
                 ))}
                 {peeked.art.nodes.map((n) => (
                   <g key={n.node.id} className="sk-node">
-                    {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
                     {n.prims.map((p, j) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: see above
                       <Shape key={`kp${j}`} p={p} />
                     ))}
                   </g>
                 ))}
-                {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
                 {peeked.art.front.map((p, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: see above
                   <Shape key={`kf${i}`} p={p} />
                 ))}
                 {/* **And the labels of any region inside that opens something.**
@@ -1323,8 +1334,8 @@ function SketchBody({
                 {peeked.art.regions.map((r) =>
                   r.region.opens ? (
                     <g key={`kr-${r.region.x}-${r.region.y}`}>
-                      {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
                       {r.label.map((p, i) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: see above
                         <Shape key={`krl${i}`} p={p} />
                       ))}
                     </g>

@@ -578,7 +578,11 @@ export function StructurePanel({
    * nothing of its border — the trap `OutlinePanel` documents, where measuring
    * the padded box grants a candidate room it does not have.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads the rows only through the DOM it just rendered, and a new set of rows is exactly when the measured heights stop describing what is on screen. Same shape as OutlinePanel's `candidates` and useColumnContext's `layoutKey`.
+  /* Re-runs on a new set of rows, which is exactly when the measured heights
+     stop describing what is on screen. (This was a hook-deps `biome-ignore`
+     calling the two row lists a trigger the effect never reads; it does read
+     them now, in `capacityFrom` below, so the dependency list is simply true
+     and the suppression suppressed nothing. Removed 2026-10-06.) */
   useLayoutEffect(() => {
     const measure = () => {
       const grid = gridRef.current;

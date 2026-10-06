@@ -62,11 +62,10 @@ const OWNER = "0b111a99-0000-4000-8000-0000a2c51d01" as OwnerId;
 const made: string[] = [];
 
 async function clearReservations(): Promise<void> {
-  await pool?.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
 }
 
 beforeAll(async () => {
-  if (!pool) throw new Error("pgReady kept no pool");
   await seedAuthUser(pool, {
     id: OWNER,
     email: `a-paper-queued-before-the-resolver-${OWNER}@spideryarn.local`,
@@ -92,7 +91,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await closeDb();
-  await pool?.end();
+  await pool.end();
 });
 
 /** A new-style arXiv id nobody else in this database is using. */
@@ -162,7 +161,7 @@ async function jobsCarrying(reservation: string): Promise<string[]> {
 
 /** Whether a reservation is still held, has been given back, or was charged. */
 async function stateOf(reservation: string): Promise<"held" | "released" | "charged" | "missing"> {
-  const found = await pool?.query(
+  const found = await pool.query(
     "select released_at, succeeded_at from spideryarn.ingest_events where id = $1 and owner_id = $2",
     [reservation, OWNER],
   );

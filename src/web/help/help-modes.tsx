@@ -240,8 +240,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
-            in <HelpRef to="mode-chat">Chat</HelpRef> with the term quoted and a question ready, and
-            sends nothing until you press <strong>Send</strong>. Use it when you want to go back and
+            in <HelpRef to="mode-chat">Chat</HelpRef> and asks a question about the term straight
+            away, with the term quoted. Use it when you want to go back and
             forth about a term; <strong>Dig deeper</strong> gives one researched answer and keeps it
             on the entry. Once you have asked, a line under the buttons shows how the chat’s latest
             answer begins; press it to open that conversation again beside the Glossary. The
@@ -733,8 +733,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>
           To look into one claim yourself, press the chat icon on its heading. It opens a new
-          conversation in <HelpRef to="mode-chat">Chat</HelpRef> with the claim quoted and a question
-          ready, and sends nothing until you press <strong>Send</strong>. Once you have asked, a line
+          conversation in <HelpRef to="mode-chat">Chat</HelpRef> and sends a question with the claim
+          quoted. Once you have asked, a line
           under the claim shows how the chat’s latest answer begins; press it to open that
           conversation again beside Debate. If a later search words the claim differently the line
           goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever
@@ -744,8 +744,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           To look at the debate from an angle of your own, such as how the piece relates to another
           paper, type it in the box at the top and press <strong>Ask in chat</strong>. It does not
           change the search results shown here: it opens a new conversation in{" "}
-          <HelpRef to="mode-chat">Chat</HelpRef> with a question that asks for a web search from that
-          angle, and sends nothing until you press <strong>Send</strong>. You can do this before
+          <HelpRef to="mode-chat">Chat</HelpRef> and sends a question that asks for a web search from
+          that angle. You can do this before
           searching at all. <strong>Your angles</strong>, under the box, lists the conversations you
           started this way once you send their first question; press one to open it again beside
           Debate. Only whoever added the article has this.
@@ -849,8 +849,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
-            in <HelpRef to="mode-chat">Chat</HelpRef> with the work named and a question ready, and
-            sends nothing until you press <strong>Send</strong>. Use it to go back and forth about a
+            in <HelpRef to="mode-chat">Chat</HelpRef> and asks a question about the work straight
+            away, with the work named. Use it to go back and forth about a
             work; <strong>Dig deeper</strong> gives one researched reading and keeps it on the row.
             Once you have asked, a line under the row shows how the chat’s latest answer begins; press
             it to open that conversation again beside Citations. The conversation is also in Chat’s
