@@ -704,7 +704,7 @@ export interface StepContext {
   /**
    * Which lease window of its job this step is running in, and whether the
    * queue would grant one more (src/another-window.ts § `LeaseWindow`). Absent
-   * from a command line or a test, which reads as no further window. The
+   * from direct calls without a queue, which reads as no further window. The
    * structure step's slices are the only reader: out of time with a window
    * left, they hand the job back and do not settle for the headings tree.
    */

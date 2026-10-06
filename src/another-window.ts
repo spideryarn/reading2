@@ -19,8 +19,8 @@
 /**
  * Which lease window of its job a step is running in, and whether the queue
  * would grant one more. Built by `runStep` (src/jobs.ts) from `Job.requeues`
- * against `REQUEUE_BUDGET`; absent wherever there is no queue (a command line,
- * a test), which reads as "no further window".
+ * against `REQUEUE_BUDGET`; absent from direct calls without a queue, which
+ * reads as "no further window". The stage CLI uses the queue too (scripts/stage.ts).
  */
 export interface LeaseWindow {
   /** 1 for the window the job was first claimed under. */

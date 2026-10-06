@@ -1205,13 +1205,17 @@ tree, and is an ordinary finished tree.
   The step is told which window it is in (`StepContext.window`), and its log line carries it.
   "Out of time" is also a required call running past its own cap, so a hand-back can come early
   in a window and still spends one of the three; and nothing requires progress, so a window in
-  which no answer was bought spends one too.
-- **On a failure it cannot get past, or out of time with no window left (or no queue: the command
-  line), it stops starting calls, waits for the ones in flight, and falls back** to the tree
+  which no answer was bought spends one too. A call that always exceeds its cap can be bought
+  in all three windows before falling back, with no improvement in the result.
+- **On a failure it cannot get past, or out of time with no window left (or a direct call without
+  a queue), it stops starting calls, waits for the ones in flight, and falls back** to the tree
   below. A slice that failed in both passes, a slice refused or cut short that could not be read
   in halves, a root call refused, cut short or failed twice, or a joined tree that will not
   build: none of these hands back, because a second window would fail the same way. What was
   spent is still counted. A reader's Stop is a cancellation, not a fallback and not a hand-back.
+
+The stage command line uses the same queue and receives the same windows
+([`scripts/stage.ts`](../../scripts/stage.ts)); the no-queue behavior is for direct calls.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
 seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is

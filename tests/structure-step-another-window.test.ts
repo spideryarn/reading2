@@ -169,7 +169,7 @@ describe("slices out of time, with no further window", () => {
     expectBoundedTree(BLOCKS, out.parts.tree);
   });
 
-  it("the command line, with no deadline at all, is unchanged: a call past its own cap gives the headings tree", async () => {
+  it("a direct call with no deadline or window gives the headings tree after a call passes its cap", async () => {
     vi.useFakeTimers({ now: T0 });
     respond = (call) => (isMiddle(call) ? hang(call) : answers(call));
     const going = run();
@@ -177,7 +177,7 @@ describe("slices out of time, with no further window", () => {
     expect((await going).source).toEqual(OUT_OF_TIME);
   });
 
-  it("the command line, with no deadline at all, still finishes in slices", async () => {
+  it("a direct call with no deadline or window still finishes in slices", async () => {
     expect((await run()).source).toMatchObject({ by: "slices", slices: 3 });
   });
 });

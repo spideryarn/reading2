@@ -2565,7 +2565,8 @@ export async function generateStructure(opts: {
    * Which lease window of the job this is, and whether the queue would grant
    * one more (src/another-window.ts). Only the slices path reads it: out of
    * time with a window left, it throws `NeedsAnotherWindow` and returns no
-   * tree. Absent (a command line, a test) it never throws that.
+   * tree. Absent from direct calls without a queue, it never throws that.
+   * The stage CLI uses the queue and receives a window (scripts/stage.ts).
    */
   window?: LeaseWindow;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
