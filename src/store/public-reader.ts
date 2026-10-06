@@ -73,7 +73,7 @@ import { relocateEntries } from "../glossary-occurrences.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
-import type { PublicArticle, PublicBlock } from "../public-types.js";
+import type { PublicArticle } from "../public-types.js";
 import { isSearchKind, type HighlightColour } from "../types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
@@ -81,6 +81,7 @@ import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
 import { isStale as crossrefsIsStale } from "../crossrefs-fingerprint.js";
 import { isSlug } from "../ingest.js";
 import { StillBeingAdded } from "../still-being-added.js";
+import { publicBlockOf } from "./block-rows.js";
 import { blobStore } from "./blobs.js";
 import { leaseIsLive } from "./job-fence.js";
 import { canonicalKey } from "../source.js";
@@ -922,29 +923,7 @@ export const pgPublicReader: PublicArticleReader = {
          and absent reads as stale, which cleans — the safe direction.
          docs/project/security.md § There are two stores. */
       const blocks = sanitizeStoredBlocks(
-        rows.map(
-          (row): PublicBlock => ({
-            id: row.blockId,
-            tag: row.tag,
-            /* No cast on `kind`, `role` or `treatment`: the columns carry the
-               unions (`$type` in src/db/schema.ts § revisionBlocks), on the
-               strength of the CHECK each one has. */
-            kind: row.kind,
-            /* Conditional spreads, because `exactOptionalPropertyTypes` is on:
-               Postgres hands back `null` where the shape simply has no key. */
-            ...(row.level === null ? {} : { level: row.level }),
-            text: row.text,
-            words: row.words,
-            html: row.html,
-            gistable: row.gistable,
-            ...(row.role === null ? {} : { role: row.role }),
-            ...(row.treatment === null ? {} : { treatment: row.treatment }),
-            ...(row.noteId === null ? {} : { noteId: row.noteId }),
-            ...(row.contextId === null || row.contextType === null
-              ? {}
-              : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-          }),
-        ),
+        rows.map((row) => publicBlockOf(row.blockId, row)),
         undefined,
       ).blocks;
 

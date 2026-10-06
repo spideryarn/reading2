@@ -68,6 +68,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
+import { blockOf } from "./block-rows.js";
 import { siteFor } from "./artifact-storage.js";
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
@@ -452,23 +453,7 @@ async function readBlocks(
 
   if (rows.length === 0) return null;
   return {
-    blocks: rows.map((row) => ({
-      id: row.id,
-      tag: row.tag,
-      kind: row.kind,
-      ...(row.level === null ? {} : { level: row.level }),
-      text: row.text,
-      words: row.words,
-      html: row.html,
-      gistable: row.gistable,
-      ...(row.note === null ? {} : { note: row.note }),
-      ...(row.role === null ? {} : { role: row.role }),
-      ...(row.treatment === null ? {} : { treatment: row.treatment }),
-      ...(row.noteId === null ? {} : { noteId: row.noteId }),
-      ...(row.contextId === null || row.contextType === null
-        ? {}
-        : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-    })),
+    blocks: rows.map((row) => blockOf(row.id, row)),
   };
 }
 

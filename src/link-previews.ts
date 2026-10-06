@@ -719,7 +719,7 @@ async function fetchAndStore(
     /* A PDF is a real and stable answer, and it is not one this can read: the
        page's own metadata is in the file rather than in a `<head>`. Long
        expiry, and the card is left as it was. */
-    if (doc.kind === "pdf" || doc.text === null) {
+    if (doc.kind === "pdf") {
       return await store(target, doc.url, {
         entry: { kind: "permanent", why: `not-html:${doc.kind}` },
         expiresAt: new Date(started + PREVIEW_LIFETIMES.permanent),
