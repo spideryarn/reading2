@@ -113,6 +113,10 @@ will read is not doing its job, however true it is.
 - **A doc whose wording is a rule changes differently** — one approved set of changes at a time, with
   the before and after shown: [edit-important-docs.md](edit-important-docs.md). Signposting is not a
   rule, so adding a line for a new doc, or tweaking a pointer, needs no approval.
+- **Edit a doc with the Edit tool.** If it must be a script, write `assert old and s.count(old) == 1`
+  before every replace, and never pass `-q` to `git commit`: a replace whose target came out empty
+  succeeds everywhere and silently grew one plan to 22 MB
+  ([the postmortem](../postmortems/261005r-a-slice-between-two-markers-can-be-empty-and-replace-with-an-empty-needle-succeeds-everywhere.md)).
 
 ## Checking that the signposts work
 

@@ -125,6 +125,16 @@ was named in
 On both wires, a stream that dies after the answer began still fails. Retrying it means paying
 for the call twice, so it goes to Greg as a question with numbers, and nothing here builds it.
 
+**[Q-pay-twice-for-a-broken-answer], Greg, 2026-10-06:**
+
+> A or maybe B would be better. if we go with B, let's add logging/monitoring so we'll be able to
+> notice how often retries happen (and hopefully diagnose them)
+
+So the order is: count first, then decide. Every call that dies part-way through its answer, and
+every transport retry, is recorded so its frequency and cause can be read; B (one retry for
+pipeline steps) is built only if that count says part-way deaths fail imports more than rarely.
+Queued as its own item.
+
 ## Tests (red first)
 
 A new `tests/ai-call-transport-retry.test.ts`, against a stubbed `fetch`, for each of the five

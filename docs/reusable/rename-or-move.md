@@ -48,6 +48,17 @@ do not match the same pattern, and neither matches `SCREAMING_SNAKE`. Search for
 on its own and read the noise, rather than searching for the exact string and getting a clean, short,
 wrong answer.
 
+## A rename on screen is a rename all the way down
+
+When something is renamed in the UI, rename it everywhere in the same piece of work: identifiers,
+files, URL words, CSS classes, tests, docs, and stored values in the database (an ordinary migration
+that rewrites the value). A grep should find one name, not two.
+
+> when we rename something in the UI, we should always do a deeper rename … Don't worry about
+> breaking links (e.g. to ?mode=remember) - or add an alias if it's minimal hassle.
+>
+> — Greg, 2026-10-06
+
 ## A deletion is a rename to nothing, and needs the same sweep
 
 Deleting a file removes the thing; it does not remove the sentences that explain the codebase by

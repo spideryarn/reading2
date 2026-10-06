@@ -1,7 +1,9 @@
 /**
- * **Is it safe to delete this worktree?** Run it inside the worktree:
+ * **Is it safe to delete this worktree?** Run it inside the worktree, or from
+ * the primary with the tree named — see `checkTarget` for what `--root` refuses:
  *
  *     npm run worktree:check
+ *     npm run worktree:check -- --root <the worktree's top directory>
  *
  * Answers one question and refuses to guess at it: *if this directory were
  * deleted right now, would anything be lost?* Nothing here writes, moves or
@@ -91,20 +93,22 @@
  * **No removal, and no `--all`.** Removal is `scripts/worktree-sweep.ts`, which
  * is guarded and per-branch, and reading across every tree is its job too —
  * including whether some other process is in a tree, which would be wrong here:
- * this command answers for the tree you are standing in, and you are standing
- * in it.
+ * this command usually answers for the tree you are standing in, and you are
+ * standing in it. (`--root` does not change that: the dashboard's removal asks
+ * it of `worktree:remove` in its next step.)
  */
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { type Dirent, existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { type Dirent, existsSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { isMain } from "../src/is-main.js";
 import { CORPUS_HALVES, CORPUS_ROOT } from "./corpus-materialise.js";
 import { TRUNK_BRANCH } from "./deploy-checks.js";
-import { gitCommonDir, inLinkedWorktree } from "./worktree-port.js";
+import { gitEnv } from "../tools/fleet/readiness-git.js";
+import { gitCommonDir, gitDir, inLinkedWorktree, worktreePointerProblem } from "./worktree-port.js";
 
 /* ---------------------------------------------------------------- facts -- */
 
@@ -585,12 +589,20 @@ interface Ran {
  *
  * On the env rather than on the args, so a command added below cannot
  * reintroduce the write by forgetting the flag.
+ *
+ * **And every one of them is about `cwd`.** The environment is `gitEnv()`, which
+ * sets that variable and also drops `GIT_DIR`, `GIT_WORK_TREE` and their
+ * relatives. A git hook runs with those set and git obeys them over the
+ * directory it is run in, so until 2026-10-05 a check started from one took its
+ * branch, index and landed-or-not from whichever checkout the variable named,
+ * and its files from `cwd` — a clean bill for the wrong tree (GPT Sol, plan
+ * review of 261005n). `gitCommonDir` and `gitDir` in worktree-port.ts do the same.
  */
 function run(cwd: string, args: string[], timeout?: number): Ran {
   const r = spawnSync("git", args, {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    env: gitEnv(),
     ...(timeout === undefined ? {} : { timeout }),
   });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
@@ -1022,26 +1034,137 @@ export function report(facts: CheckFacts): Report {
 
 /* ----------------------------------------------------------------- cli -- */
 
-function main(argv: string[]): void {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const say = (s = "") => console.log(s);
+/** Which tree the command answers for, or why it will not answer at all. */
+export type CheckTarget = { kind: "root"; root: string } | { kind: "refused"; why: string };
 
-  /* Silently ignoring an argument is how `worktree:check -- ../other-tree`
-     comes to look like it checked the other tree. It did not: `root` is this
-     file's own directory, so the answer is always about the checkout this copy
-     of the script lives in. Reading across trees is `npm run worktree:sweep`,
-     which imports `gather` rather than shelling out here for that reason. */
-  if (argv.length > 0) {
-    say(`\nworktree:check takes no arguments, and got: ${argv.join(" ")}`);
-    say("It answers for the worktree it is run from. For every tree at once: npm run worktree:sweep\n");
-    process.exit(2);
+const USAGE = "usage: npm run worktree:check [-- --root <the absolute path of a worktree's top directory>]";
+
+/**
+ * Turn the arguments into the tree to judge.
+ *
+ * With none it is `ownRoot`, the checkout this copy of the script lives in —
+ * what `npm run worktree:check` inside a worktree has always meant.
+ *
+ * `--root <dir>` asks **this** copy about **that** tree. It exists for the
+ * fleet dashboard's removal (tools/fleet/actions.ts § planRemoveWorktree), which
+ * used to run the tree's own copy with the tree's own `tsx`: a tree under the
+ * external root that was never set up has neither, so the plan stopped at
+ * `tsx: not found` and the page could not remove it (qi-k2jjejb2, 2026-10-05).
+ * Nothing in the judgement had to change — `gather` was already root-relative,
+ * and `worktree:sweep` and `worktree:remove` already call it from the primary.
+ *
+ * **Everything that is not exactly a worktree's top directory, of this
+ * repository, is refused**, because each is a way to print SAFE about something
+ * other than what was asked:
+ *
+ * - *a directory inside the tree.* `git status` there still answers for the
+ *   whole tree in root-relative paths, but `corpusStrays` joins `data/` onto the
+ *   root it was handed, finds nothing, and reports "matches the fixture" over a
+ *   pipeline run. This is the one that would have been silent.
+ * - *another repository's tree.* It would be judged by this repository's ignore
+ *   verdicts and against this repository's idea of the trunk.
+ * - *a copy of a worktree*, whose `.git` pointer is still the original's — what
+ *   `cp -r` leaves. Git calls the copy the top of a work tree of this
+ *   repository and then reads the original's HEAD and index.
+ *   `worktreePointerProblem` is the check, shared with the readiness runner.
+ * - *anything else on the command line.* Silently ignoring an argument is how
+ *   `worktree:check -- ../other-tree` came to look like it had checked the other
+ *   tree, which is why this took no arguments at all until it took one.
+ *
+ * The root handed back is the **real** path: `listenersUnder` compares it with
+ * `/proc/<pid>/cwd`, which the kernel reports resolved.
+ */
+export function checkTarget(argv: string[], ownRoot: string): CheckTarget {
+  const refused = (why: string): CheckTarget => ({ kind: "refused", why });
+
+  let given = ownRoot;
+  if (argv.length !== 0) {
+    const [flag, argument] = argv;
+    if (flag !== "--root" || argument === undefined || argument === "" || argv.length !== 2) {
+      return refused(`did not understand: ${argv.join(" ")}\n${USAGE}`);
+    }
+    given = argument;
+  }
+  // Default invocation selects a path too; it needs the same ownership checks.
+  if (!path.isAbsolute(given)) return refused(`--root must be an absolute path, and got: ${given}`);
+
+  let real: string;
+  try {
+    real = realpathSync(given);
+    if (!statSync(real).isDirectory()) return refused(`${given} is not a directory`);
+  } catch (err) {
+    return refused(`${given} could not be read: ${(err as Error).message}`);
   }
 
-  say(`\nworktree:check  ${root}`);
-  say();
-  const { lines, safe } = report(gather(root));
-  for (const line of lines) say(line);
-  if (!safe) process.exit(1);
+  const top = run(real, ["rev-parse", "--path-format=absolute", "--show-toplevel"]);
+  if (!top.ok) return refused(`${real} is not inside a git work tree: ${top.out}`);
+  let realTop: string;
+  try {
+    realTop = realpathSync(top.out);
+  } catch (err) {
+    return refused(`git named ${top.out} as the top of the work tree, and it could not be read: ${(err as Error).message}`);
+  }
+  if (realTop !== real) {
+    return refused(`${real} is inside the work tree at ${realTop}, not its top. Name the top: --root ${realTop}`);
+  }
+
+  const pointer = worktreePointerProblem(real);
+  if (pointer !== null) return refused(`${real} is not a work tree of its own: ${pointer}`);
+
+  let theirs: string;
+  let ours: string;
+  try {
+    theirs = realpathSync(gitCommonDir(real));
+    ours = realpathSync(gitCommonDir(ownRoot));
+  } catch (err) {
+    return refused(`could not tell which repository ${real} belongs to: ${(err as Error).message}`);
+  }
+  if (theirs !== ours) {
+    return refused(`${real} is a tree of a different repository (${theirs}) from this script's (${ours})`);
+  }
+
+  try {
+    const admin = realpathSync(gitDir(real));
+    // A .git directory can contain a copied linked-worktree admin directory.
+    // Its commondir still matches, but it is not a registration of this tree.
+    if (admin !== theirs && path.dirname(admin) !== realpathSync(path.join(theirs, "worktrees"))) {
+      return refused(`${real} has linked-worktree metadata outside this repository's registrations: ${admin}`);
+    }
+  } catch (err) {
+    return refused(`could not verify the worktree registration for ${real}: ${(err as Error).message}`);
+  }
+
+  return { kind: "root", root: real };
+}
+
+/**
+ * The whole command, short of printing and exiting: what it says and the code
+ * it exits with. **0** safe, **1** blocked, **2** could not look — and a caller
+ * treats everything but 0 as "do not remove", which is the check's own rule.
+ */
+export function runCheck(argv: string[], ownRoot: string): { lines: string[]; code: 0 | 1 | 2 } {
+  const target = checkTarget(argv, ownRoot);
+  if (target.kind === "refused") {
+    return {
+      lines: [
+        "",
+        "worktree:check could not look, so nothing here says the tree may go:",
+        ...target.why.split("\n").map((l) => `  ${l}`),
+        "For every tree at once: npm run worktree:sweep",
+        "",
+      ],
+      code: 2,
+    };
+  }
+  const { lines, safe } = report(gather(target.root));
+  return { lines: ["", `worktree:check  ${target.root}`, "", ...lines], code: safe ? 0 : 1 };
+}
+
+function main(argv: string[]): void {
+  const ownRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const { lines, code } = runCheck(argv, ownRoot);
+  for (const line of lines) console.log(line);
+  if (code !== 0) process.exit(code);
 }
 
 if (isMain(import.meta.url)) main(process.argv.slice(2));
