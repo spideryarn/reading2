@@ -402,6 +402,10 @@ Greg, in two feedback reports:
   more searches are on, the lanes' 1.5px floor reaches into the strip's 2px and paints over it —
   accepted, since the strip is still there above and below. Reading-time runs sit under it.
 - **A card on a quote in the prose**, in `ProseHoverCard` beside the term, citation and link halves:
+  **what a quote is**, in one paragraph with *More in Help →*, first — since 2026-10-06, because the
+  fills are in every mode and this card is where a reader who has never opened Quotes meets one
+  (Greg, `spya-tpmde9`: *"Add a tooltip for Quotes, so readers know what they are"*;
+  [261006j](../plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md)); then
   both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
   composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
   page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
