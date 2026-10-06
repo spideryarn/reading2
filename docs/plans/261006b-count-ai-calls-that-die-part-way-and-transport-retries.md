@@ -180,4 +180,14 @@ through the gap.
   response arrived, so it is `200` on a `mid_answer` row. And mis-recordings 2 and 3 move rows
   from `ok` to `error`, which the existing failed-call count on `/admin/costs` will show as a rise
   that is not a change in behaviour.
-- [ ] Stage 2
+- [x] Stage 2 (code, tests and docs written; not yet reviewed, browser-checked or committed).
+  `spendCube` groups by the three failure columns and counts `counted`, `retries` and a third
+  measure, `gaveUp`, because "the last go failed" needs `attempt` and that is not a dimension. The
+  folds (`failureCountsOf`, `failureCountsBy`, `failureCauses` in `src/cost-cube.ts`) feed a
+  **Failures and retries** section under the explorer on `/admin/costs` and the same figures in
+  `npm run cost:analyse` (terminal, JSON, HTML). `spendDetail` carries the four columns too, so
+  the analysis's two-reads check covers the three counts.
+  Two choices not in the text above. "Per job" is per **mode or task** (`taskOf`), the page's one
+  rule for naming work. And *died part-way* is shown whenever a row recorded it, counted or not,
+  since the PDF reader's rows carry a phase and no attempt number; only retries and give-ups need
+  a counted attempt.

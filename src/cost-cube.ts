@@ -64,11 +64,32 @@ export interface CostCubeGroup extends MoneyPockets {
   isByok: boolean | null;
   /** `ok`, `error` or `aborted`. */
   outcome: string;
+  /**
+   * `before_answer` or `mid_answer` on a failed row; null on an `ok` row, a
+   * stopped one, and every row from before the column. The three failure
+   * columns are src/call-failure.ts's.
+   */
+  failurePhase: string | null;
+  /** A label from a closed list; never text from an error. */
+  failureClass: string | null;
+  /** The HTTP status, when a response arrived. */
+  failureStatus: number | null;
+  /** **Rows, and a row is one attempt**: a call retried once is two. */
   calls: number;
   /** Not disjoint from `settledCalls` — see `SpendGroup.unpricedCalls`. */
   unpricedCalls: number;
   computedCalls: number;
   settledCalls: number;
+  /**
+   * Attempts a retry loop of ours numbered (`attempt is not null`). The rest
+   * can say nothing about retries: older rows, realtime, and the PDF reader's
+   * and the embeddings' own loops.
+   */
+  counted: number;
+  /** `attempt > 1`: a go that started because the one before it failed. */
+  retries: number;
+  /** The last go allowed, and it failed before its answer began. */
+  gaveUp: number;
 }
 
 export interface CostCubeRow extends CostCubeGroup {
@@ -202,6 +223,9 @@ export const DIMENSIONS = [
   "wire",
   "account",
   "day",
+  "failurePhase",
+  "failureClass",
+  "failureStatus",
 ] as const;
 
 export type Dimension = (typeof DIMENSIONS)[number];
@@ -277,10 +301,24 @@ export function dimensionValue(
       return same(row.providerAccount);
     case "day":
       return same(row.day);
+    case "failurePhase": {
+      const value = optional(row.failurePhase);
+      return { key: value.key, label: FAILURE_PHASE_LABEL[value.label] ?? value.label };
+    }
+    case "failureClass":
+      return optional(row.failureClass);
+    case "failureStatus":
+      return optional(row.failureStatus === null ? null : String(row.failureStatus));
     default:
       return unreachable(dim);
   }
 }
+
+/** The two phases in words. A value the list does not know is shown as stored. */
+const FAILURE_PHASE_LABEL: Readonly<Record<string, string>> = {
+  before_answer: "before the answer began",
+  mid_answer: "part-way through the answer",
+};
 
 /* ------------------------------------------------- filter, group, pivot -- */
 
@@ -425,6 +463,184 @@ export function pivotRows(
     cells,
     total: totalsOf(rows),
   };
+}
+
+/* --------------------------------------------------- failures and retries -- */
+
+/**
+ * **Counts, never rates** — GPT Sol's F5 on plan 261006b. A ledger row is an
+ * attempt, not a call, and only some attempts were numbered, so there is no
+ * honest denominator for a percentage. `counted` is shown beside the counts as
+ * context.
+ *
+ * **Null is "not measured", which is not zero.** With no counted attempt
+ * nothing could have recorded a retry, so a zero there would claim a quiet day
+ * that nobody watched.
+ */
+export interface FailureCounts {
+  /** Every ledger row. */
+  attempts: number;
+  /** Of those, the ones a retry loop of ours numbered. */
+  counted: number;
+  /** Goes after the first. Null when nothing was counted. */
+  retries: number | null;
+  /** Calls whose last allowed go failed before its answer began. Null when nothing was counted. */
+  gaveUp: number | null;
+  /**
+   * Failed after the answer began, which is never retried. A row can record
+   * this without being counted, so it is null only when nothing was counted
+   * *and* none was recorded.
+   */
+  diedPartWay: number | null;
+}
+
+export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
+  let attempts = 0;
+  let counted = 0;
+  let retries = 0;
+  let gaveUp = 0;
+  let diedPartWay = 0;
+  for (const row of rows) {
+    attempts += row.calls;
+    counted += row.counted;
+    retries += row.retries;
+    gaveUp += row.gaveUp;
+    if (row.outcome === "error" && row.failurePhase === "mid_answer") diedPartWay += row.calls;
+  }
+  const measured = counted > 0;
+  return {
+    attempts,
+    counted,
+    retries: measured ? retries : null,
+    gaveUp: measured ? gaveUp : null,
+    diedPartWay: measured || diedPartWay > 0 ? diedPartWay : null,
+  };
+}
+
+export interface FailureGroup extends FailureCounts {
+  key: string;
+  label: string;
+}
+
+const trouble = (c: FailureCounts): number => (c.retries ?? 0) + (c.gaveUp ?? 0) + (c.diedPartWay ?? 0);
+const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+
+/**
+ * `FailureCounts` per value of one dimension: the most retries, give-ups and
+ * part-way deaths first, then the most counted attempts.
+ */
+export function failureCountsBy(
+  rows: readonly CostCubeRow[],
+  dim: Dimension,
+  owners?: OwnerEmails,
+): FailureGroup[] {
+  const groups = new Map<string, { label: string; rows: CostCubeRow[] }>();
+  for (const row of rows) {
+    const { key, label } = dimensionValue(row, dim, owners);
+    const group = groups.get(key);
+    if (group) group.rows.push(row);
+    else groups.set(key, { label, rows: [row] });
+  }
+  return [...groups]
+    .map(([key, group]) => ({ key, label: group.label, ...failureCountsOf(group.rows) }))
+    .sort((a, b) => trouble(b) - trouble(a) || b.counted - a.counted || byKey(a, b));
+}
+
+/** One cause: where the attempt failed, why, and on what. Every field but `attempts` is a label. */
+export interface FailureCause {
+  key: string;
+  phase: string;
+  failureClass: string;
+  /** The HTTP status; `(not recorded)` when no response arrived. */
+  status: string;
+  upstream: string;
+  model: string;
+  /** Mode or task: `taskOf`. */
+  task: string;
+  attempts: number;
+}
+
+const CAUSE_DIMENSIONS = [
+  "failurePhase",
+  "failureClass",
+  "failureStatus",
+  "upstream",
+  "model",
+  "task",
+] as const satisfies readonly Dimension[];
+
+/**
+ * Why attempts failed: every row that recorded a phase, grouped by phase,
+ * class, status, upstream, model and task, the commonest first. A stopped row
+ * and a row from before the columns record no phase and are not here.
+ */
+export function failureCauses(rows: readonly CostCubeRow[]): FailureCause[] {
+  const causes = new Map<string, FailureCause>();
+  for (const row of rows) {
+    if (row.failurePhase === null) continue;
+    const [phase, failureClass, status, upstream, model, task] = CAUSE_DIMENSIONS.map((dim) =>
+      dimensionValue(row, dim),
+    ) as [DimValue, DimValue, DimValue, DimValue, DimValue, DimValue];
+    const key = JSON.stringify([phase.key, failureClass.key, status.key, upstream.key, model.key, task.key]);
+    const cause = causes.get(key);
+    if (cause) {
+      cause.attempts += row.calls;
+    } else {
+      causes.set(key, {
+        key,
+        phase: phase.label,
+        failureClass: failureClass.label,
+        status: status.label,
+        upstream: upstream.label,
+        model: model.label,
+        task: task.label,
+        attempts: row.calls,
+      });
+    }
+  }
+  return [...causes.values()].sort((a, b) => b.attempts - a.attempts || byKey(a, b));
+}
+
+type DimValue = { key: string; label: string };
+
+/**
+ * What the section says about itself, on the page and in the report: the
+ * limits of the counts, in plain words. docs/project/admin-costs.md § Failures
+ * and retries.
+ */
+export const FAILURE_NOTES: readonly string[] = [
+  "These are counts, not rates. Each row of the ledger is one attempt, not one call: a call that was retried once is two rows.",
+  "Only attempts numbered by our retry loop are counted. Where none was, the figure is shown as not measured, which is not zero: that covers every call made before this was recorded.",
+  "Stalls are not measured. When our own clock stops a provider that has gone silent, the row is recorded as stopped, the same as a reader pressing Stop.",
+  "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
+];
+
+/** The three counts, defined once for both readers. */
+export const FAILURE_DEFINITIONS =
+  "A retry is a go after the first, started because the one before failed before its answer began. " +
+  "A call gave up when its last go failed that way too. " +
+  "An attempt died part-way when it failed after its answer had begun, which is never asked again.";
+
+/** What a null `FailureCounts` figure is drawn as. */
+export const NOT_MEASURED = "not measured";
+
+const things = (n: number, one: string, many = `${one}s`): string =>
+  `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+
+/** The totals as a sentence or two. Counts beside the counted attempts; never a share. */
+export function failureSummary(total: FailureCounts): string {
+  const died =
+    total.diedPartWay === null ? "" : ` ${things(total.diedPartWay, "attempt")} died part-way.`;
+  if (total.retries === null || total.gaveUp === null) {
+    const none = `one of the ${things(total.attempts, "attempt")} was numbered by our retry loop`;
+    return total.diedPartWay === null
+      ? `Not measured: n${none}.`
+      : `N${none}, so retries and give-ups are not measured.${died}`;
+  }
+  return (
+    `Of ${things(total.attempts, "attempt")}, ${total.counted.toLocaleString("en-US")} ${total.counted === 1 ? "was" : "were"} numbered by our retry loop: ` +
+    `${things(total.retries, "retry", "retries")} and ${things(total.gaveUp, "call")} that gave up after the last go.${died}`
+  );
 }
 
 /* ------------------------------------------------------------ the window -- */

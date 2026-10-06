@@ -60,7 +60,13 @@ import {
   analyseCosts,
   detailIsUnpriced,
 } from "../src/cost-analysis.js";
-import type { CostCubeGroup } from "../src/cost-cube.js";
+import {
+  type CostCubeGroup,
+  type FailureCounts,
+  type FailureGroup,
+  NOT_MEASURED,
+  failureSummary,
+} from "../src/cost-cube.js";
 import { partitionByScope } from "../src/cost-report.js";
 import { drizzleOver } from "../src/db/client.js";
 import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
@@ -498,6 +504,62 @@ function ranking(
   ];
 }
 
+const nothingMeasured = (g: FailureCounts): boolean =>
+  g.retries === null && g.gaveUp === null && g.diedPartWay === null;
+
+/** `counted 17  retries 3  gave up 1  died part-way 2`, or the words for a null. */
+function failureFigures(g: FailureCounts): string {
+  if (nothingMeasured(g)) return NOT_MEASURED;
+  const figure = (value: number | null): string => (value === null ? NOT_MEASURED : whole(value));
+  return `counted ${whole(g.counted)}  retries ${figure(g.retries)}  gave up ${figure(g.gaveUp)}  died part-way ${figure(g.diedPartWay)}`;
+}
+
+/**
+ * Failures and retries: the same folds `/admin/costs` draws
+ * (src/cost-cube.ts § failures and retries). Counts; a day with none of the
+ * three is counted in one line rather than listed as a row of zeros.
+ */
+function failureLines(f: CostAnalysis["failures"]): string[] {
+  const lines = ["", "Failures and retries (counts, not rates)", `  ${failureSummary(f.total)}`];
+  const labelled = (groups: readonly FailureGroup[]): string[] => {
+    const width = Math.min(48, Math.max(8, ...groups.map((g) => g.label.length)));
+    return groups.map((g) => `    ${g.label.slice(0, width).padEnd(width)}  ${failureFigures(g)}`);
+  };
+  if (f.total.counted > 0 || f.causes.length > 0) {
+    const eventful = f.byDay.filter((d) => (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) > 0);
+    const unmeasured = f.byDay.filter(nothingMeasured).length;
+    const quiet = f.byDay.length - eventful.length - unmeasured;
+    if (eventful.length > 0) lines.push("  By UTC day:", ...labelled(eventful));
+    lines.push(
+      `  ${whole(quiet)} other ${quiet === 1 ? "day" : "days"} had counted attempts and none of these; ` +
+        `${whole(unmeasured)} ${unmeasured === 1 ? "day was" : "days were"} not measured.`,
+    );
+    /* Forty lines of "not measured" would bury the three that say something. */
+    const measured = f.byTask.filter((t) => !nothingMeasured(t));
+    const tasks = measured.slice(0, 10);
+    const others = f.byTask.length - measured.length;
+    lines.push(
+      `  By mode or task${measured.length > tasks.length ? ` (top ${tasks.length} of ${measured.length})` : ""}:`,
+      ...labelled(tasks),
+    );
+    if (others > 0) {
+      lines.push(`  ${whole(others)} other ${others === 1 ? "mode or task was" : "modes or tasks were"} not measured.`);
+    }
+    const causes = f.causes.slice(0, 10);
+    if (causes.length > 0) {
+      lines.push(
+        `  Causes${f.causes.length > causes.length ? ` (top ${causes.length} of ${f.causes.length})` : ""}:`,
+        ...causes.map(
+          (c) =>
+            `    ${whole(c.attempts)} × ${[c.phase, c.failureClass, c.status, c.upstream, c.model, c.task].join(" · ")}`,
+        ),
+      );
+    }
+  }
+  lines.push(...f.notes.map((note) => `  · ${note}`));
+  return lines;
+}
+
 function leadLines(lead: Lead): string[] {
   const amount = lead.amountNanos > 0 ? money(lead.amountNanos) : "no amount claimed";
   return [
@@ -537,6 +599,7 @@ export function summaryLines(a: CostAnalysis): string[] {
     );
   }
   lines.push(
+    ...failureLines(a.failures),
     ...ranking("Users", a.users),
     ...ranking(
       `Articles (median article ${money(a.articles.medianNanos)}, ${whole(a.articles.count)} with any call)`,

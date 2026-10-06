@@ -394,6 +394,63 @@ describe("the terminal summary", () => {
     expect(text).toMatch(/enough-calls.*per call: median \$0\.02, p95 \$0\.77, max \$0\.88/);
   });
 
+  it("prints failures and retries as counts, with what was not measured said in words", () => {
+    const group = (label: string, counted: number, retries: number | null, gaveUp: number | null, died: number | null) => ({
+      key: label,
+      label,
+      attempts: counted + 2,
+      counted,
+      retries,
+      gaveUp,
+      diedPartWay: died,
+    });
+    const text = summaryLines({
+      ...analysis,
+      failures: {
+        total: { attempts: 27, counted: 21, retries: 4, gaveUp: 1, diedPartWay: 2 },
+        byDay: [
+          group("2031-03-09", 0, null, null, null),
+          group("2031-03-10", 17, 3, 1, 2),
+          group("2031-03-11", 4, 0, 0, 0),
+        ],
+        byTask: [group("structure", 15, 3, 1, 0), group("chat", 2, 0, 0, 2), group("old-task", 0, null, null, null)],
+        causes: [
+          {
+            key: "a",
+            phase: "before the answer began",
+            failureClass: "refused",
+            status: "503",
+            upstream: "Vendor",
+            model: "vendor/one",
+            task: "structure",
+            attempts: 3,
+          },
+        ],
+        notes: ["Stalls are not measured. And so on."],
+      },
+    }).join("\n");
+    expect(text).toContain("\nFailures and retries (counts, not rates)");
+    expect(text).toContain(
+      "Of 27 attempts, 21 were numbered by our retry loop: 4 retries and 1 call that gave up after the last go. 2 attempts died part-way.",
+    );
+    expect(text).toMatch(/2031-03-10\s+counted 17\s+retries 3\s+gave up 1\s+died part-way 2/);
+    /* A quiet day and an unmeasured one are told apart, and neither is a row of zeros. */
+    expect(text).not.toMatch(/2031-03-11\s+counted/);
+    expect(text).toContain("1 other day had counted attempts and none of these; 1 day was not measured.");
+    expect(text).toMatch(/structure\s+counted 15\s+retries 3\s+gave up 1\s+died part-way 0/);
+    expect(text).not.toContain("old-task");
+    expect(text).toContain("1 other mode or task was not measured.");
+    expect(text).toContain("3 × before the answer began · refused · 503 · Vendor · vendor/one · structure");
+    expect(text).toContain("· Stalls are not measured. And so on.");
+    expect(text).not.toMatch(/Failures and retries[\s\S]*%[\s\S]*\nUsers/);
+  });
+
+  it("says failures were not measured for a ledger with nothing counted", () => {
+    const text = summaryLines(analysis).join("\n");
+    expect(text).toContain("Not measured: none of the 0 attempts was numbered by our retry loop.");
+    expect(text).toContain("Stalls are not measured.");
+  });
+
   it("says so when there is nothing", () => {
     expect(summaryLines(analysis).join("\n")).toContain("Leads: none");
   });

@@ -791,6 +791,37 @@ again. **A 429 is never retried here**: a rate limit is a queue, and the callers
 `error` then `ok`, and `aiCalls` on a step's log line reads 2. *One record, one network attempt*
 still holds. The wait between attempts is not a call and writes no row.
 
+**Each row says which go it was, and a failed one says where and why** (since 2026-10-06,
+[261006b](../plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md)). Four
+nullable columns: `attempt`, `failure_phase`, `failure_class` and `failure_status`. What each
+means, and when it is null, is on the column in [`src/db/schema.ts`](../../src/db/schema.ts);
+the closed list of causes is [`src/call-failure.ts`](../../src/call-failure.ts). Three things
+the names do not say:
+
+- **A retry is a row with `attempt > 1`, and nothing else records one.** The failed row carries no
+  "was retried" flag, because it is written before the wait, and a Stop during the wait means no
+  attempt follows.
+- **`failure_phase` is drawn at each seam's own acceptance line**, not at "what the retry covers".
+  The two differ in one case: a whole-call seam that gets 503 headers and then cannot read the body
+  is `before_answer`, and is not asked again.
+- **`failure_class` is mapped, never sanitised.** No text from an error is stored, so the column
+  can sit in a table that holds no prose.
+
+**What the columns cannot say.** `attempt` is null on a call made with `retryTransport: false`
+(below), so the PDF reader's and the embeddings' own retries are not counted. And a stall is not
+told apart from a Stop: when our own clock stops a provider that has gone silent, the row is
+`aborted` with no failure fields, because the stall reason is made in many runners and has the
+same shape as a reader's Stop. The counts are on `/admin/costs` and in `npm run cost:analyse`:
+[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries). Each retry, and each
+call that dies part-way, also writes one `warn` line: `ai transport retry` and
+`ai call died part-way`.
+
+**Three failures were recorded as something else until 2026-10-06**, and are now `error` rows
+with `failure_phase = mid_answer`: an in-band error chunk on the OpenRouter stream (it was
+`aborted`), a `2xx` whose JSON will not parse (it was `ok`), and a `2xx` that carries an error
+envelope where the answer should be (it was `ok`). No caller's return value or own retry changed.
+The failed-call figures step up at that date for this reason alone.
+
 What differs between the wires is where "before the provider has answered" ends.
 
 **The Messages wire** (`streamMessage`, since 2026-10-03). The line is `message_start`. Before it,
@@ -851,7 +882,8 @@ function, nothing retried, and the job failed
 The audit of the other wires, and the retry on them, is
 [261005j](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md).
 A call that dies part-way through its answer still fails on both wires; retrying that means paying
-for it twice, and it is not built.
+for it twice, and it is not built. How often it happens is counted, so that the decision can be
+made on numbers: [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
 
 ### Aborted is a cause, not a coincidence
 

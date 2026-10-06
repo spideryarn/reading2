@@ -16,6 +16,10 @@ import {
   articleKeyString,
   dimensionValue,
   estimatedCashNanos,
+  failureCauses,
+  failureCountsBy,
+  failureCountsOf,
+  failureSummary,
   filterRows,
   groupRows,
   modelOf,
@@ -51,6 +55,9 @@ function row(over: Partial<CostCubeRow>): CostCubeRow {
     costSource: "provider",
     isByok: false,
     outcome: "ok",
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     category: "default-step work",
     calls: 1,
     creditsNanos: 0,
@@ -59,6 +66,9 @@ function row(over: Partial<CostCubeRow>): CostCubeRow {
     unpricedCalls: 0,
     computedCalls: 0,
     settledCalls: 1,
+    counted: 0,
+    retries: 0,
+    gaveUp: 0,
     ...over,
   };
 }
@@ -308,6 +318,164 @@ describe("pivotRows", () => {
   it("leaves a cell out where nothing was spent", () => {
     expect(pivot.cells.get(ANN)?.get("glossary")).toBeUndefined();
     expect(pivot.cells.get(ANN)?.get("chat")?.recordedNanos).toBe(100);
+  });
+});
+
+describe("failures and retries", () => {
+  const before = { outcome: "error", failurePhase: "before_answer" } as const;
+  const partWay = { outcome: "error", failurePhase: "mid_answer" } as const;
+
+  /* One counted day and one that nothing counted. */
+  const LEDGER: CostCubeRow[] = [
+    /* Ten answered attempts, three of them a second or third go. */
+    row({ calls: 10, counted: 10, retries: 3 }),
+    /* Four that failed before the answer: a 503, two of them the last go. */
+    row({
+      ...before,
+      failureClass: "refused",
+      failureStatus: 503,
+      calls: 4,
+      counted: 4,
+      retries: 2,
+      gaveUp: 2,
+    }),
+    /* A dropped connection, same task, another upstream. */
+    row({ ...before, failureClass: "network:ECONNRESET", upstream: "Other", calls: 1, counted: 1 }),
+    /* Two that died after the answer began. */
+    row({
+      ...partWay,
+      failureClass: "unfinished",
+      failureStatus: 200,
+      job: "chat",
+      stepName: null,
+      calls: 2,
+      counted: 2,
+    }),
+    /* A stop: an attempt, and no failure. */
+    row({ outcome: "aborted", calls: 1, counted: 1 }),
+    /* The day before any of this was recorded. */
+    row({ day: "2033-04-30", calls: 7 }),
+    row({ day: "2033-04-30", outcome: "error", calls: 2 }),
+  ];
+
+  it("adds the counted attempts, the retries, the calls that gave up and the ones that died part-way", () => {
+    expect(failureCountsOf(LEDGER)).toEqual({
+      attempts: 27,
+      counted: 18,
+      retries: 5,
+      gaveUp: 2,
+      diedPartWay: 2,
+    });
+  });
+
+  it("says not measured, never zero, where no attempt was counted", () => {
+    const old = LEDGER.filter((r) => r.day === "2033-04-30");
+    expect(failureCountsOf(old)).toEqual({
+      attempts: 9,
+      counted: 0,
+      retries: null,
+      gaveUp: null,
+      diedPartWay: null,
+    });
+    expect(failureCountsOf([])).toMatchObject({ attempts: 0, counted: 0, retries: null });
+  });
+
+  it("says zero where attempts were counted and none of them was one", () => {
+    expect(failureCountsOf([row({ calls: 3, counted: 3 })])).toEqual({
+      attempts: 3,
+      counted: 3,
+      retries: 0,
+      gaveUp: 0,
+      diedPartWay: 0,
+    });
+  });
+
+  it("shows a part-way death that a loop of somebody else's recorded, beside retries it could not count", () => {
+    /* The PDF reader's row: a phase and a class, and no attempt number. */
+    expect(failureCountsOf([row({ ...partWay, failureClass: "in_band", calls: 1 })])).toEqual({
+      attempts: 1,
+      counted: 0,
+      retries: null,
+      gaveUp: null,
+      diedPartWay: 1,
+    });
+  });
+
+  it("does not call a stopped row a death, whatever phase it carries", () => {
+    const stopped = row({ outcome: "aborted", failurePhase: "mid_answer", calls: 1, counted: 1 });
+    expect(failureCountsOf([stopped]).diedPartWay).toBe(0);
+  });
+
+  it("says the totals in one sentence each way, and never as a share", () => {
+    expect(failureSummary(failureCountsOf(LEDGER))).toBe(
+      "Of 27 attempts, 18 were numbered by our retry loop: 5 retries and 2 calls that gave up after the last go. 2 attempts died part-way.",
+    );
+    expect(failureSummary({ attempts: 1, counted: 1, retries: 1, gaveUp: 1, diedPartWay: 1 })).toBe(
+      "Of 1 attempt, 1 was numbered by our retry loop: 1 retry and 1 call that gave up after the last go. 1 attempt died part-way.",
+    );
+    expect(failureSummary({ attempts: 9, counted: 0, retries: null, gaveUp: null, diedPartWay: null })).toBe(
+      "Not measured: none of the 9 attempts was numbered by our retry loop.",
+    );
+    expect(failureSummary({ attempts: 4, counted: 0, retries: null, gaveUp: null, diedPartWay: 1 })).toBe(
+      "None of the 4 attempts was numbered by our retry loop, so retries and give-ups are not measured. 1 attempt died part-way.",
+    );
+    expect(failureSummary(failureCountsOf(LEDGER))).not.toContain("%");
+  });
+
+  it("groups by day and by mode or task, the most trouble first", () => {
+    const days = failureCountsBy(LEDGER, "day");
+    expect(days.map((d) => [d.key, d.counted, d.retries, d.gaveUp, d.diedPartWay])).toEqual([
+      ["2033-05-01", 18, 5, 2, 2],
+      ["2033-04-30", 0, null, null, null],
+    ]);
+    const tasks = failureCountsBy(
+      LEDGER.filter((r) => r.day === "2033-05-01"),
+      "task",
+    );
+    expect(tasks.map((t) => [t.label, t.counted, t.retries, t.gaveUp, t.diedPartWay])).toEqual([
+      ["structure", 16, 5, 2, 0],
+      ["chat", 2, 0, 0, 2],
+    ]);
+    /* Every group together is the whole. */
+    const whole = failureCountsOf(LEDGER);
+    expect(days.reduce((n, d) => n + d.attempts, 0)).toBe(whole.attempts);
+    expect(days.reduce((n, d) => n + d.counted, 0)).toBe(whole.counted);
+  });
+
+  it("lists the causes of the failed attempts, the commonest first, and nothing that did not fail", () => {
+    const causes = failureCauses(LEDGER);
+    expect(
+      causes.map((c) => [c.phase, c.failureClass, c.status, c.upstream, c.model, c.task, c.attempts]),
+    ).toEqual([
+      ["before the answer began", "refused", "503", "Vendor", "vendor/asked", "structure", 4],
+      ["part-way through the answer", "unfinished", "200", "Vendor", "vendor/asked", "chat", 2],
+      ["before the answer began", "network:ECONNRESET", "(not recorded)", "Other", "vendor/asked", "structure", 1],
+    ]);
+    expect(new Set(causes.map((c) => c.key)).size).toBe(causes.length);
+  });
+
+  it("adds two cube rows with one cause together, and keeps two causes apart", () => {
+    const causes = failureCauses([
+      row({ ...before, failureClass: "refused", failureStatus: 503, calls: 1 }),
+      row({ ...before, failureClass: "refused", failureStatus: 503, day: "2033-05-02", ownerId: BEN, calls: 2 }),
+      row({ ...before, failureClass: "refused", failureStatus: 529, calls: 1 }),
+    ]);
+    expect(causes.map((c) => [c.status, c.attempts])).toEqual([
+      ["503", 3],
+      ["529", 1],
+    ]);
+  });
+
+  it("reads the three failure columns as dimensions, so a filter can hold one", () => {
+    const failed = row({ ...before, failureClass: "refused", failureStatus: 503 });
+    expect(dimensionValue(failed, "failurePhase")).toEqual({
+      key: "value:before_answer",
+      label: "before the answer began",
+    });
+    expect(dimensionValue(failed, "failureClass")).toEqual({ key: "value:refused", label: "refused" });
+    expect(dimensionValue(failed, "failureStatus")).toEqual({ key: "value:503", label: "503" });
+    expect(dimensionValue(row({}), "failureStatus")).toEqual({ key: "missing", label: "(not recorded)" });
+    expect(filterRows(LEDGER, { failurePhase: ["value:mid_answer"] })).toHaveLength(1);
   });
 });
 

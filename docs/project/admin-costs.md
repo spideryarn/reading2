@@ -29,14 +29,15 @@ The plan, the options passed over and GPT Sol's reviews are in
 
 `spendCube` ([`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)) groups the
 ledger once by day, owner, article, scope, job, step, wire, models, upstream, account, cost source
-and outcome. Every table, pivot and chart is a fold of those rows, done by the pure functions in
+and outcome, and on a failed attempt by where it failed, its cause and its HTTP status. Every
+table, pivot and chart is a fold of those rows, done by the pure functions in
 [`src/cost-cube.ts`](../../src/cost-cube.ts), which the browser and the script share. **A figure on
 the page and the same figure in a report cannot come from two definitions.** A new breakdown is a
 new `Dimension` there, not a new query.
 
 The analysis also reads **detail rows** (`spendDetail`, one per call), because a grouped sum cannot
 find one expensive call or count the jobs behind a step. It checks the two reads agree to the
-nano-dollar and refuses to report if they do not.
+nano-dollar, and on the three attempt counts below, and refuses to report if they do not.
 
 ## The rules the figures keep
 
@@ -60,6 +61,48 @@ Each of these was a way the first design was wrong
 - **The ledger cannot say "re-run".** It records that a step was bought in several jobs for one
   article, not who asked or why ([`src/cost-categories.ts`](../../src/cost-categories.ts) says why).
   The lead is worded that way.
+- **Failures and retries are counts, never rates, and "not measured" is never drawn as zero.**
+  The reasons are in the next section.
+
+## Failures and retries
+
+A call that fails before its answer began is asked again, up to three goes. One that fails after
+its answer began is not, because asking again means paying twice
+([ai-gateway.md § A transport blip is retried](ai-gateway.md#transport-retry)). Whether to start
+retrying those is Greg's decision, and this section exists to give him the numbers first
+([261006b](../plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md)).
+
+The page has it under the explorer, and `npm run cost:analyse` prints the same figures in the
+terminal, the JSON and the HTML report. Per UTC day and per mode or task:
+
+| Figure | What it counts |
+|---|---|
+| Counted attempts | rows a retry loop of ours numbered. Context for the other three, not a denominator |
+| Retries | goes after the first |
+| Gave up after the last go | calls whose last go also failed before its answer began |
+| Died part-way | attempts that failed after the answer had begun |
+
+Under them, the causes: where the attempt failed, the cause, the HTTP status, the upstream, the
+model, and the mode or task. All of it follows the period, the evals switch and every filter.
+
+Two rules, both from GPT Sol's review of the plan
+([F4 and F5](../plans/261006b-count-ai-calls-plan-review-sol.md)):
+
+- **Counts, not rates.** A ledger row is one attempt, not one call, and only some attempts were
+  numbered, so no honest denominator exists. The counted attempts are shown beside the counts and
+  no percentage is drawn.
+- **Not measured is not zero.** A day or a task with no counted attempt shows the words *not
+  measured*. That is every call from before 2026-10-06. A zero there would report a quiet day
+  that nobody was watching.
+
+What it does not count is said on the page itself, from `FAILURE_NOTES` in
+[`src/cost-cube.ts`](../../src/cost-cube.ts): stalls, and the PDF reader's and the embeddings' own
+retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is missing. The folds
+are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file.
+
+**The existing "Failed or stopped calls" figure steps up on 2026-10-06** without anything having
+got worse: three kinds of failure used to be recorded as `ok` or `aborted`
+([ai-gateway.md](ai-gateway.md#transport-retry)).
 
 ## What the administrator sees of other people's articles
 
