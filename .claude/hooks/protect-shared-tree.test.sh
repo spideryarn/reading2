@@ -113,6 +113,17 @@ npm test'
   check "$ctrl" "the word alone"        'grep -rn stash docs/project/version-control.md'
   check "$ctrl" "word containing it"    'npx tsx scripts/mustache-parser.ts'
   check "$ctrl" "no git nearby"         'ls output/'
+
+  echo "--- kill by name: REFUSED (exit 2) ---"
+  check 2 "the 2026-10-06 one"          'pkill -f "node_modules/.bin/vite" -u greg'
+  check 2 "killall"                     'killall node'
+  check 2 "after a separator"           'npm test; pkill -f vitest'
+  check 2 "&&-joined"                   'ls && pkill vite'
+  check 2 "sudo"                        'sudo pkill -f vite'
+  echo "--- kill by name: controls ---"
+  check "$ctrl" "kill by pid"           'kill 12345'
+  check "$ctrl" "grep mentions pkill"   'grep -rn pkill docs/'
+  check "$ctrl" "word inside another"   'ls pkillers/'
 }
 
 echo "=========== normal path (python3 present) ==========="

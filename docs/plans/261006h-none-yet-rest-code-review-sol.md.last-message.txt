@@ -1,0 +1,16 @@
+No P0 or P1 found. The [full review and request-by-request trace](/var/tmp/spideryarn-worktrees/qi-4t3hmw7c-none-yet-rest/docs/plans/261006h-none-yet-rest-code-review-sol.md) are saved.
+
+**F1 — P2, reproduced and fixed:** the inventory test could silently skip an unrecognised wrapped route or permit an extra offline-pattern name. Evidence: candidate `tests/api-fetch-offline.test.ts:454–465`. These tests went red before the fix:
+
+- “refuses a wrapped GET whose pattern the inventory cannot recognise”
+- “refuses an offline-pattern name with no wrapped route”
+
+The guard now accounts for actual calls per entry and checks the complete offline expression. A third red-first fixture prevents comments from compensating for missed calls.
+
+I also added delayed-JSON, flag-reset, saved-copy and profile-failure coverage. Removing the second `current()` checks originally passed all 125 hook tests; the expanded suite caught it with 14 failures.
+
+The mode-test mock repair is sound. Its parent version produced **24 failures**, all involving the incidental citations fault.
+
+Final validation: **444 tests passed**, typecheck passed via `node --import tsx`, targeted lint passed. Postgres evidence remains your supplied run. Production files are unchanged; no Git state-changing commands were run.
+
+VERDICT: land it with my fixes

@@ -568,6 +568,13 @@ const SHARED_WITH_READER = [
   "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
+  /* Arrived 2026-10-06 by the second predicted route: `DataTable.tsx`, already
+     here, gained an import of it for its `sidewaysCue` prop (plan 261006g
+     § Stage 2). Only `/admin/costs` turns the shade on, but since plan 261006h
+     the shelf's table runs it too: it is what makes the table's scroll box a
+     tab stop while it overflows. Small, most of it comment, importing nothing
+     but React. */
+  "src/web/lib/SidewaysScrollBox.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages
      (`useAdminUsers`, `useAdminFeedback`) started using `describeFetchFailure`,
      which the reader's shelf and comments already download — and `sse.ts`

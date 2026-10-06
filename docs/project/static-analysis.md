@@ -32,7 +32,10 @@ expensive command is a trap that documentation sets, not one a careless reader w
 So: `npm run typecheck`, `npm run knip`, `npm run cycles` and the rest are what you reach for while
 working. `npm run check` is the pre-commit gate, and you should expect to wait — run it under
 [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
-*system* memory pressure here. `--fast` skips the build but **not** the suite.
+*system* memory pressure here. `--fast` skips the build but **not** the suite. Start it early rather
+than waiting on it in series: commit on the fast gates — `npm run typecheck`, the suites you
+touched, and `npx vitest run tests/doc-links.test.ts` after any doc edit — and read `check`'s
+verdict when it lands.
 
 Started beside an `npm test` it is two full suites. On 2026-09-05 both ran in tmux at once: each
 took over half an hour, available memory fell to 6 GB of 30, and six waiters were OOM-killed in one
@@ -188,7 +191,10 @@ tests, the production build, cycles, and the others marked **gate** in the table
 CSS. Before it was here, that class of failure was only ever discovered by a deploy. **It runs above
 the test gate**, because `tests/pdf-bundle-trace.test.ts` inspects the built API bundle and fails
 loudly when it is missing — with the order the other way round, `npm run check` was red on every
-clean checkout, which is this section's own rule breaking on this section's own command.
+clean checkout, which is this section's own rule breaking on this section's own command. The same
+thing recurred for the fleet dashboard's client, which three fleet test files need and `build` does
+not make; since 2026-10-06 `check` runs `build:fleet` as a gate between `build` and `test`, from the
+deploy gate's own list (`GATE_TOOLING_BUILDS`), and `tests/check-steps.test.ts` holds the order.
 
 A check earns promotion from advisory to gate on the day its findings reach zero, and not before.
 **`committed` is the first one to have earned it**: it landed advisory because `HEAD` had five

@@ -42,10 +42,15 @@ export type HealthReadings = Pick<HealthReport, "load" | "memory" | "swap" | "di
 
 export type TickHistory = Pick<StoreRead, "readings" | "unreadable">;
 
+/**
+ * The preparation a diff can decide. The fleet client is deliberately not
+ * here: its bundle compiles the commit's own sha in, so every commit is an
+ * input to it and no list of paths can say when it is stale. It is asked
+ * directly instead — `PreparationState.fleetBuiltFor`.
+ */
 export type PreparationNeeds = {
   dependencies: boolean;
   migrations: boolean;
-  fleetClient: boolean;
 };
 
 export type PreparationState = {
@@ -54,20 +59,41 @@ export type PreparationState = {
       explicit caveat. Null means no preparation has completed in this run. */
   preparedFor: string | null;
   needs: PreparationNeeds;
+  /** The sha and manifest **this process** last built and saw pass its
+      postcondition. Null until then, so a bundle already on disk when the loop
+      starts is never reused however well it is stamped: a stamp found on disk
+      says what a build observed, not what it read (tools/fleet/build-files.ts). */
+  fleetBuiltFor: { sha: string; manifest: string } | null;
 };
 
 /** `null` means the changed paths could not be classified, not that none changed. */
 export type ChangeClassification = readonly string[] | null;
 
-/* `package.json` includes npm scripts as well as dependencies, so this spends
-   an extra `npm ci` on script-only edits. That minute is preferable to parsing
-   selected manifest fields and risking a check against stale dependencies. */
-const DEPENDENCY_INPUTS = new Set([
+/**
+ * The files whose change means `npm ci` again.
+ *
+ * `package.json` includes npm scripts as well as dependencies, so this spends
+ * an extra `npm ci` on script-only edits. That minute is preferable to parsing
+ * selected manifest fields and risking a check against stale dependencies.
+ */
+export const DEPENDENCY_INPUTS: readonly string[] = [
   ".npmrc",
   "npm-shrinkwrap.json",
   "package.json",
   "package-lock.json",
-]);
+];
+
+/** The directory whose change means migrating again. */
+export const MIGRATIONS_DIR = "drizzle";
+
+/**
+ * What `git diff` is asked about when the runner moves from one sha to the
+ * next. **Built from the two constants the classifier below reads**, so that a
+ * path cannot be classified and never asked for: a name in the classifier that
+ * the diff was not limited to would simply never appear, and the classifier
+ * would report "unchanged" for good.
+ */
+export const PREPARATION_PATHSPEC: readonly string[] = [...DEPENDENCY_INPUTS, MIGRATIONS_DIR];
 
 /**
  * Preparation is state convergence, not an edge triggered by one merge.
@@ -77,7 +103,8 @@ const DEPENDENCY_INPUTS = new Set([
 export function initialPreparationState(): PreparationState {
   return {
     preparedFor: null,
-    needs: { dependencies: true, migrations: true, fleetClient: true },
+    needs: { dependencies: true, migrations: true },
+    fleetBuiltFor: null,
   };
 }
 
@@ -102,18 +129,11 @@ export function preparationAfterChanges(
   changedPaths: ChangeClassification,
 ): PreparationNeeds {
   if (changedPaths === null) {
-    return { dependencies: true, migrations: true, fleetClient: true };
+    return { dependencies: true, migrations: true };
   }
-  const dependencyInputChanged = changedPaths.some((name) => DEPENDENCY_INPUTS.has(name));
   return {
-    dependencies: current.dependencies || dependencyInputChanged,
-    migrations: current.migrations || changedPaths.some((name) => name.startsWith("drizzle/")),
-    fleetClient:
-      current.fleetClient ||
-      dependencyInputChanged ||
-      changedPaths.includes("vite.fleet.config.ts") ||
-      changedPaths.some((name) => name.startsWith("tools/fleet/")) ||
-      changedPaths.some((name) => name.startsWith("src/web/")),
+    dependencies: current.dependencies || changedPaths.some((name) => DEPENDENCY_INPUTS.includes(name)),
+    migrations: current.migrations || changedPaths.some((name) => name.startsWith(`${MIGRATIONS_DIR}/`)),
   };
 }
 

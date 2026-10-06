@@ -20,8 +20,10 @@
  * The Supabase client and the cache are both mocked. What is under test is the
  * order of operations in `apiFetch`, not IndexedDB and not the SDK.
  */
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LibraryResponse } from "../src/types.js";
+import { NONE_YET_AS_NULL_HEADER, type LibraryResponse } from "../src/types.js";
+import { parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
@@ -73,7 +75,79 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
 
 let signedInAs: string | null = "user-1";
 
-const { apiFetch } = await import("../src/web/lib/api.js");
+const { apiFetch, NONE_YET_AS_NULL } = await import("../src/web/lib/api.js");
+
+/** The ten reads that may answer `200 null` — `NONE_YET_AS_NULL` in lib/api.ts. */
+const NONE_YET_READS = [
+  "quiz",
+  "crossrefs",
+  "citations",
+  "simple",
+  "ideas",
+  "faq",
+  "timeline",
+  "debate",
+  "glossary",
+  "quotes",
+] as const;
+
+function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NULL): void {
+  /* Use actual call locations: comments must not stand in for a wrapper, and
+     every call must be accounted for in the route where it appears. */
+  const ast = parseSource(source);
+  expect(ast.errors).toHaveLength(0);
+  const helperCalls: number[] = [];
+  walkAst(ast, (node) => {
+    if (node.type !== "CallExpression") return;
+    const callee = node.callee as { type?: string; name?: string };
+    if (callee.type === "Identifier" && callee.name === "orNullWhenNotMadeYet") {
+      helperCalls.push(node.start as number);
+    }
+  });
+  const BY_SLUG = String.raw`\/\^\\\/api\\\/([a-z-]+)\\\/\(\[\\w\.%-\]\+\)\$\/`;
+  /* `GLOSSARY_PATTERN` and its like: a route may name its pattern. */
+  const named = new Map<string, string>();
+  for (const [, constant, name] of source.matchAll(new RegExp(String.raw`const (\w+) = ${BY_SLUG};`, "g"))) {
+    named.set(constant!, name!);
+  }
+  const wrapped: string[] = [];
+  const plain: string[] = [];
+  const entries = [...source.matchAll(/kind: "pattern",/g)];
+  for (const [index, match] of entries.entries()) {
+    const start = match.index + match[0].length;
+    const end = entries[index + 1]?.index ?? source.length;
+    const entry = source.slice(start, end);
+    const calls = helperCalls.filter((at) => at >= start && at < end);
+    if (!/^\s*method: "GET",/.test(entry)) {
+      expect(calls, "a helper-using entry must resolve to a GET route").toHaveLength(0);
+      continue;
+    }
+    const literal = new RegExp(String.raw`^\s*method: "GET",\s*pattern: ${BY_SLUG},`).exec(entry)?.[1];
+    const constant = /^\s*method: "GET",\s*pattern: (\w+),/.exec(entry)?.[1];
+    const name = literal ?? (constant ? named.get(constant) : undefined);
+    if (!name) {
+      expect(calls, "a helper-using GET must have a recognised pattern").toHaveLength(0);
+      continue;
+    }
+    expect(calls.length).toBeLessThanOrEqual(1);
+    (calls.length ? wrapped : plain).push(name);
+  }
+  expect(wrapped, "every helper call must belong to a recognised GET route").toHaveLength(helperCalls.length);
+  expect(wrapped.sort()).toEqual([...NONE_YET_READS].sort());
+
+  /* Membership probes alone never see an extra alternative. Check the whole
+     expression too, while permitting the names in any order. */
+  const names = /\(\?:([a-z|-]+)\)/.exec(offlinePattern.source)?.[1]?.split("|") ?? [];
+  expect([...names].sort()).toEqual(wrapped);
+  expect(offlinePattern.source).toBe(
+    new RegExp(String.raw`^\/api\/(?:${names.join("|")})\/[^/?]+$`).source,
+  );
+  expect(offlinePattern.flags).toBe("");
+  /* The scan saw the routes that were not moved, so "no others" means it. */
+  expect(plain).toEqual(expect.arrayContaining(["tweets", "relations", "skim", "sketch", "arc"]));
+  for (const name of wrapped) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(true);
+  for (const name of plain) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(false);
+}
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -366,6 +440,95 @@ describe("what gets written", () => {
     await apiFetch("/api/glossary/x");
     await settle();
     expect(writeCache).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **A `200 null` is "not made yet", and is not kept either** — the answer
+   * the three always-mounted reads ask for in place of that 404 (plan 261006g).
+   *
+   * The copy is filed under reader and URL and replayed as a 200 whatever the
+   * request's headers, so a `null` kept by this tab would be handed, offline,
+   * to a tab opened before the deploy — which reads `loaded.quiz` off it and
+   * shows an error. Not keeping it is also exactly what the 404 did: a copy
+   * of a real artefact saved earlier is left alone, not replaced and not
+   * thrown away.
+   */
+  for (const url of NONE_YET_READS.map((name) => `/api/${name}/x`)) {
+    it(`does not save a null from ${url}, nor disturb the copy it has`, async () => {
+      vi.stubGlobal("fetch", () =>
+        Promise.resolve(
+          new Response("null", { status: 200, headers: { "content-type": "application/json" } }),
+        ),
+      );
+      const res = await apiFetch(url);
+      expect(await res.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+    });
+
+    it(`replays the earlier real copy of ${url} to an old tab after an opted-in null`, async () => {
+      const body = { artefact: "earlier real copy" };
+      readCache.mockResolvedValue({ body, savedAt: 123 });
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response("null", {
+        status: 200, headers: { "content-type": "application/json" },
+      })));
+      const none = await apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } });
+      expect(await none.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      const copy = await apiFetch(url);
+      expect(copy.headers.get("x-spideryarn-offline")).toBe("copy");
+      expect(await copy.json()).toEqual(body);
+    });
+
+    it(`${url} still fails offline when no copy was saved`, async () => {
+      vi.stubGlobal("fetch", () => Promise.reject(new TypeError("offline")));
+      await expect(apiFetch(url, { headers: { [NONE_YET_AS_NULL_HEADER]: "1" } })).rejects.toThrow("offline");
+    });
+  }
+
+  /**
+   * **The routes that may answer `200 null` and the URLs whose `null` is not
+   * kept are one list, written in two files.** A route moved over without its
+   * name here would have its `null` saved and replayed offline to an old tab;
+   * a name here without its route would only be dead. Read off the source of
+   * src/routes.ts, since which handlers call the helper is not something a
+   * request can ask.
+   */
+  it("matches exactly the GET routes that go through orNullWhenNotMadeYet", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    assertNoneYetInventory(source);
+  });
+
+  it("refuses a wrapped GET whose pattern the inventory cannot recognise", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const fixture = source.replace('const AUTH_ROUTES: readonly AuthRoute[] = [', String.raw`const AUTH_ROUTES: readonly AuthRoute[] = [
+      { kind: "pattern", method: "GET", pattern: /^\/api\/extra\/([\w-]+)$/,
+        handler: async () => { await orNullWhenNotMadeYet({ req, res }, load); } },`);
+    expect(fixture).not.toBe(source);
+    expect(() => assertNoneYetInventory(fixture)).toThrow();
+  });
+
+  it("does not let a commented wrapper compensate for an unrecognised real call", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const fixture = source
+      .replace("const found = await orNullWhenNotMadeYet(", "/* await orNullWhenNotMadeYet( */ const found = await unwrappedRead(")
+      .replace('const AUTH_ROUTES: readonly AuthRoute[] = [', String.raw`const AUTH_ROUTES: readonly AuthRoute[] = [
+        { kind: "pattern", method: "GET", pattern: /^\/api\/extra\/([\w-]+)$/,
+          handler: async () => { await orNullWhenNotMadeYet({ req, res }, load); } },`);
+    expect(fixture).not.toBe(source);
+    expect(() => assertNoneYetInventory(fixture)).toThrow();
+  });
+
+  it("refuses an offline-pattern name with no wrapped route", () => {
+    const source = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+    const extra = new RegExp(NONE_YET_AS_NULL.source.replace("(?:", "(?:extra|"));
+    expect(extra.test("/api/extra/x")).toBe(true);
+    expect(() => assertNoneYetInventory(source, extra)).toThrow();
   });
 
   it("does not save a response that is not JSON", async () => {

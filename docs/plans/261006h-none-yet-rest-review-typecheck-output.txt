@@ -1,0 +1,5 @@
+✓ src/web/tsconfig.json  (561 files)
+✓ tests/tsconfig.json  (3135 files)
+✓ tools/fleet/web/tsconfig.json  (104 files)
+✓ tsconfig.json  (992 files)
+✓ all 3325 source files are covered by some project

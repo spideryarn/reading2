@@ -89,6 +89,17 @@ describe("an exception nobody wrote for a reader", () => {
     expect(said).toBe(PAGE_FAULT.message);
   });
 
+  it("says PAGE_FAULT for a reply of the wrong shape, and reports it", async () => {
+    /* `MalformedReply` is the typed way for a hook to refuse a reply it cannot
+       use: the reader gets the page's own sentence, never the diagnostic. */
+    const { MalformedReply, ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+    const broken = new MalformedReply("the quiz reply has no questions");
+    expect(broken).not.toBeInstanceOf(ReaderFacingError);
+    expect(broken.name).toBe("MalformedReply");
+    expect(describeFetchFailure(broken)).toBe(PAGE_FAULT.message);
+    expect(captured).toEqual([{ err: broken, options: { neverAuthored: true } }]);
+  });
+
   it("is reported with its message withheld, whatever code it happens to end in", () => {
     /* A foreign message ending in a registered code would pass `sanitise`'s
        `authored` test on its suffix alone — GPT Sol, plan review F1. */
@@ -415,9 +426,11 @@ describe("every file that describes its failures through it", () => {
    * `PAGE_FAULT`**, and nothing else would notice: the hooks' own tests mostly
    * assert that *an* error appeared (GPT Sol, code review F6). So a file whose
    * `catch` hands errors to `describeFetchFailure` may not `throw new Error(`
-   * at all — a sentence for the reader is a `ReaderFacingError`, and a
-   * diagnostic belongs somewhere that is not on this path. The list is found,
-   * not written, so a new caller is covered the day it arrives.
+   * at all — a sentence for the reader is a `ReaderFacingError`, a reply of
+   * the wrong shape is a `MalformedReply` (which says by its class that the
+   * reader gets `PAGE_FAULT`), and any other diagnostic belongs somewhere that
+   * is not on this path. The list is found, not written, so a new caller is
+   * covered the day it arrives.
    */
   it("throws no plain Error for it to swallow", () => {
     const web = path.resolve(import.meta.dirname, "..", "src", "web");

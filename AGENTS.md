@@ -250,6 +250,14 @@ it gives up; then what would make you pick one over the other. A bare "A, B or C
 label each is the shape he cannot answer, and it will come back to you to be rewritten. How many to
 ask at once, which ones, and in what order: [ask-me-questions.md](docs/reusable/ask-me-questions.md).
 
+**When the right thing to do is obvious and unambiguous, do it; don't ask.** Fix a bug you are
+confident about, correct a stale or wrong comment or doc, make a change with no real trade-off —
+added complexity counts as a trade-off — and say in your report what you did. Ask Greg only when
+there is a genuine choice: a product trade-off, added complexity, anything destructive to production
+data, or the wording of a rule doc. Greg, 2026-10-04 and 2026-10-06: *"if you see bugs, fix them
+without asking me"*, *"always correct stale/incorrect comments"*, *"I don't want you to ask me when
+there's an obviously/unambiguously right thing to do"*.
+
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
 Anything that changes it — an insert, an update, a delete, any script pointed at the remote —
@@ -289,7 +297,9 @@ nothing else has a copy of.
   red for reasons that are not yours, the database is not how you left it. Absorb it, do your best,
   and carry on — don't try to fence yourself off. If you are in the primary, accept that other
   agents may be editing there too, and that committing some of their changes along with yours is not
-  the end of the world.
+  the end of the world. A push may go ahead over a full-suite red in files that are not yours, once
+  you have shown your files are disjoint from the failing ones and your own tests pass
+  ([worktrees.md § The workflow](docs/project/worktrees.md#the-workflow)).
 - **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
   production and is written only by `npm run deploy`, **which only the Overseer runs** (Greg,
   2026-09-29): ask it rather than deploying yourself —
@@ -447,7 +457,8 @@ nothing else has a copy of.
   `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`
   are on for exactly this —
   [typechecking.md § The flags, and why](docs/project/typechecking.md#the-flags-and-why). Run
-  `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
+  `npm run typecheck` as you go, not only at the end; commit on the fast gates (typecheck, the
+  suites you touched, doc-links) and read `npm run check`'s verdict when it lands
   ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash, and copy an existing step's choice of hash input

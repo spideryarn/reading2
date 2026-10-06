@@ -98,6 +98,8 @@ will read is not doing its job, however true it is.
 
 ## Keeping it true
 
+- **Correct a stale or wrong comment wherever you find it**, without asking — the general rule is
+  AGENTS.md § When the right thing to do is obvious and unambiguous, do it.
 - **Fix a doc you find out of date, even one your change did not touch** — the standing permission
   and how to land it are in [engineering-manager.md § Along the way](engineering-manager.md#along-the-way).
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part

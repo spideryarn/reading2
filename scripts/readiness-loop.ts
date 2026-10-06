@@ -46,6 +46,7 @@ import {
   readFileSync,
   realpathSync,
   readdirSync,
+  rmSync,
   unlinkSync,
 } from "node:fs";
 import path from "node:path";
@@ -64,15 +65,18 @@ import {
 import {
   decideTick,
   initialPreparationState,
+  PREPARATION_PATHSPEC,
   preparationTarget,
   preparationAfterChanges,
   TICK_INTERVAL_MS,
   type PreparationState,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
+import { BUILD_ENTRY_FILE, BUILD_FILES_FILE, fleetBundleProblem } from "../tools/fleet/build-files.js";
+import { BUILD_STAMP_FILE } from "../tools/fleet/build-stamp.js";
 import {
   GIT_TIMEOUT_MS,
-  gitEnv,
+  runnerChildEnv,
   primaryCheckout,
   snapshotDev,
   stampTree,
@@ -214,9 +218,14 @@ function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
  *
  * Naming it is the point. A scrub spelled out at each call site is a scrub
  * somebody adds a fourth call site without.
+ *
+ * The scrub is `runnerChildEnv`, so it takes npm's inherited configuration
+ * with it as well as git's: a `npm_config_script_shell` reaching this child
+ * would turn every `npm run` inside the check into a command that exits 0
+ * having run nothing.
  */
 export function readinessCheckEnv(runner: string): NodeJS.ProcessEnv {
-  return gitEnv(runnerLocalDatabaseEnv(runner));
+  return runnerChildEnv(runnerLocalDatabaseEnv(runner));
 }
 
 export function runCommand(
@@ -231,7 +240,7 @@ export function runCommand(
     encoding: "utf8",
     timeout,
     maxBuffer: 32 * 1024 * 1024,
-    env: gitEnv(sourceEnv),
+    env: runnerChildEnv(sourceEnv),
     stdio: ["ignore", "pipe", "pipe"],
   });
   return {
@@ -462,13 +471,13 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
 }
 
 /**
- * **`npm run check` has an undeclared prerequisite, and without this the runner
- * would record a permanent false red.**
+ * **Build the fleet client for the runner's bare test check, and abort
+ * preparation if that build fails.**
  *
  * `tests/fleet-decisions-route.test.ts` imports `tools/fleet/server.ts`, and
  * that module refuses at startup unless `tools/fleet/web/dist/index.html`
  * exists. `check`'s build step is `build:client && build:api` — `build:fleet` is
- * in neither. So the test fails in any checkout where nobody happened to run
+ * in neither. So the test failed in any checkout where nobody happened to run
  * that by hand, which a machine-made worktree never does. Measured on
  * 2026-09-09: it failed in this runner's first recorded check and passed
  * immediately after `npm run build:fleet`.
@@ -482,42 +491,111 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
  * `api-dist` — *"npm run check was red on a clean checkout for everybody who had
  * not happened to run the API build by hand"* — recurring for the fleet client.
  * **The real repair is a step in `check.ts`**, so that every checkout gets it
- * rather than only this one; that file is not this work's to change, and the
- * finding is written up for whoever owns it. This is the local mitigation, and
- * it is deliberately not silent about being one.
+ * rather than only this one, and since 2026-10-06 it has one: `check` runs
+ * every `GATE_TOOLING_BUILDS` script above its test gate
+ * (docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md). This
+ * stays for the two things that step does not do: scripts/readiness-run.ts's
+ * `test` check runs a bare `npm test`, which builds nothing, and a build that
+ * fails here aborts the tick instead of being recorded as a red check. When
+ * preparation needs a fleet rebuild and then runs `check`, the client is built
+ * twice. Creating the runner also runs setup's builds first.
  *
  * The output is gitignored (`dist/`, unanchored), so it does not dirty the tree
  * the record is about — verified, not assumed. A failed build aborts this tick
  * and remains pending for the next one; running the known-broken prerequisite
  * into the suite would manufacture the permanent false red this exists to
  * prevent.
+ *
+ * ## When it builds: once per commit, by this process, and never on trust
+ *
+ * Until 2026-10-06 a rebuild was decided by whether the diff between two shas
+ * touched a hand-kept list of paths, and the build was believed if
+ * `index.html` existed afterwards. Both could say yes with nothing behind it
+ * (GPT Sol's R724-01 and R724-03): the list had already missed a real input,
+ * `src/dictation-limits.ts`, and an empty file exists. And no list could have
+ * been complete, because the build compiles the commit's own sha into the
+ * bundle — every commit is an input.
+ *
+ * So the question is put to the artefact and to this process's own memory, and
+ * a build is skipped only when both answer:
+ *
+ *  1. **this process built these files for this sha** (`fleetBuiltFor`, which
+ *     retains the manifest as well as the sha). A bundle found
+ *     on disk is not reused, however well it is stamped: its stamp is what some
+ *     build observed about HEAD, not what that build read, and a hand-run build
+ *     can consume an untracked file and still stamp itself clean (P3R-01);
+ *  2. **it is still whole** — `fleetBundleProblem` re-hashes every file the
+ *     build said it wrote, and reads the stamp.
+ *
+ * Otherwise the manifest, the stamp and the entry are removed first, so that
+ * nothing an earlier build left can stand in for this one; and after an exit 0
+ * the same check is the postcondition. `fleetBuiltFor` is set only once that
+ * has passed. The cost is one build per new dev sha, about four seconds beside
+ * a 26-minute check.
  */
 export function ensureFleetClient(
   runner: string,
-  rebuild: boolean,
+  target: string,
+  preparation: Pick<PreparationState, "fleetBuiltFor">,
   exec: typeof runCommand = runCommand,
 ): void {
-  const entry = path.join(runner, "tools", "fleet", "web", "dist", "index.html");
-  if (!rebuild && existsSync(entry)) return;
-  /* An old entry cannot prove this build wrote anything, and an entry emitted
-     before a failed build must not make the next tick trust that failure. */
-  if (existsSync(entry)) unlinkSync(entry);
+  const dist = path.join(runner, "tools", "fleet", "web", "dist");
+  const previous = preparation.fleetBuiltFor;
+  preparation.fleetBuiltFor = null;
+  if (previous?.sha === target && fleetBundleProblem(dist, target, previous.manifest) === null) {
+    preparation.fleetBuiltFor = previous;
+    return;
+  }
+
+  /* From here until the postcondition passes, this process has built nothing
+     it can vouch for. Said first, so that no way out of this function — a
+     removal that throws included — leaves the old claim standing. */
+  removeFleetBundleMarkers(dist);
   const built = exec(runner, "npm", ["run", "build:fleet"]);
   if (!commandSucceeded(built)) {
     let cleanup = "";
     try {
-      if (existsSync(entry)) unlinkSync(entry);
+      /* A failed build can still have written every file. Nothing it left may
+         be what the next tick, or the suite, finds. */
+      removeFleetBundleMarkers(dist);
     } catch (error) {
-      cleanup = `; its incomplete entry could not be removed: ${(error as Error).message}`;
+      cleanup = `; what it left behind could not be removed: ${(error as Error).message}`;
     }
     throw new Error(`building the fleet client prerequisite failed: ${usefulOutput(built)}${cleanup}`);
   }
-  if (!existsSync(entry)) throw new Error(`build:fleet exited 0 but did not create ${entry}`);
+  const problem = fleetBundleProblem(dist, target);
+  if (problem !== null) {
+    throw new Error(`build:fleet exited 0 but the bundle in ${dist} is not a whole build of ${target}: ${problem}`);
+  }
+  const manifest = readFileSync(path.join(dist, BUILD_FILES_FILE), "utf8");
+  // Check the exact manifest being remembered against disk before publishing
+  // build memory. A later whole replacement must rebuild too.
+  const changed = fleetBundleProblem(dist, target, manifest);
+  if (changed !== null) {
+    throw new Error(`the fleet bundle changed while its build was being recorded: ${changed}`);
+  }
+  preparation.fleetBuiltFor = { sha: target, manifest };
+}
+
+/**
+ * Removes the three files that let a bundle be believed: the manifest that says
+ * the build finished, the stamp that says which commit, and the entry the
+ * server looks for. The manifest goes first, so that a removal interrupted half
+ * way leaves a bundle that is refused rather than one that is merely older.
+ *
+ * `rmSync` without `recursive`, deliberately: a directory at one of these paths
+ * is not something a build made, and it throws rather than being quietly
+ * deleted.
+ */
+function removeFleetBundleMarkers(dist: string): void {
+  for (const name of [BUILD_FILES_FILE, BUILD_STAMP_FILE, BUILD_ENTRY_FILE]) {
+    rmSync(path.join(dist, name), { force: true });
+  }
 }
 
 export type PreparationDeps = {
   exec: (cwd: string, command: string, args: readonly string[], sourceEnv?: NodeJS.ProcessEnv) => CommandResult;
-  buildFleetClient: (runner: string, rebuild: boolean) => void;
+  buildFleetClient: (runner: string, target: string, preparation: Pick<PreparationState, "fleetBuiltFor">) => void;
   databaseEnv: (runner: string) => NodeJS.ProcessEnv;
   /** A sha only names the prepared files when the clean tree is still there. */
   stamp: (cwd: string) => TreeStamp;
@@ -530,11 +608,7 @@ function preparationChanges(
   exec: PreparationDeps["exec"],
 ): readonly string[] | null {
   if (preparedFor === null) return null;
-  const diff = exec(runner, "git", [
-    "diff", "--name-only", preparedFor, target, "--",
-    ".npmrc", "npm-shrinkwrap.json", "package.json", "package-lock.json", "drizzle",
-    "tools/fleet", "src/web", "vite.fleet.config.ts",
-  ]);
+  const diff = exec(runner, "git", ["diff", "--name-only", preparedFor, target, "--", ...PREPARATION_PATHSPEC]);
   if (commandSucceeded(diff)) {
     return diff.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
   }
@@ -549,19 +623,19 @@ function latchPreparation(
   preparation: PreparationState,
   target: string,
   tree: TreeStamp,
-): boolean {
+): void {
   if (tree.kind === "known" && !tree.dirty && tree.sha === target) {
     /* The sha is evidence only after every preparation step succeeded and
        the files they read are still a clean checkout of that exact sha. */
     preparation.preparedFor = target;
-    return true;
+    return;
   }
   preparation.preparedFor = null;
+  preparation.fleetBuiltFor = null;
   const found = tree.kind === "unknown"
     ? `the tree could not be stamped: ${tree.why}`
     : `the tree was at ${tree.sha}${tree.dirty ? " and dirty" : ""}`;
-  console.error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
-  return false;
+  throw new Error(`readiness-loop: preparation for ${target} was not latched because ${found}; everything will be prepared next time`);
 }
 
 export function prepareRunner(
@@ -584,7 +658,13 @@ export function prepareRunner(
     const changed = preparationChanges(runner, preparation.preparedFor, target, deps.exec);
     preparation.needs = preparationAfterChanges(preparation.needs, changed);
     if (preparation.needs.dependencies) {
-      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline", "--dry-run=false"]);
+      /* The two flags are for a setting that arrives in an npmrc, which the
+         scrubbed environment does not cover: a flag on the command line beats
+         both. Either setting makes `npm ci` exit 0 having installed nothing, or
+         having skipped every lifecycle script. They do not make the install
+         independent of an npmrc in general — `script-shell` in one would
+         still hollow it, and has no flag here. */
+      const installed = deps.exec(runner, "npm", ["ci", "--prefer-offline", "--dry-run=false", "--ignore-scripts=false"]);
       if (!commandSucceeded(installed)) {
         throw new Error(`installing dependencies for the runner checkout failed: ${usefulOutput(installed)}`);
       }
@@ -601,19 +681,16 @@ export function prepareRunner(
     }
   }
 
-  deps.buildFleetClient(runner, preparation.needs.fleetClient);
+  deps.buildFleetClient(runner, target, preparation);
 
-  if (shouldPrepare) {
-    if (latchPreparation(preparation, target, deps.stamp(runner))) {
-      /* Keep every classified need pending until the whole attempt latches.
-         Otherwise B can install successfully, fail later, then leave its
-         modules under an A latch; an A..C diff that happens to be empty would
-         wrongly bless C without repairing B's partial derived state. */
-      preparation.needs = { dependencies: false, migrations: false, fleetClient: false };
-    }
-  } else {
-    preparation.needs.fleetClient = false;
-  }
+  // The fleet bundle can need rebuilding even at an already-prepared sha.
+  // Its config-load stamp cannot vouch for source edits during compilation.
+  latchPreparation(preparation, target, deps.stamp(runner));
+  /* Keep every classified need pending until the whole attempt latches.
+     Otherwise B can install successfully, fail later, then leave its
+     modules under an A latch; an A..C diff that happens to be empty would
+     wrongly bless C without repairing B's partial derived state. */
+  if (shouldPrepare) preparation.needs = { dependencies: false, migrations: false };
 }
 
 function databaseProblem(result: CommandResult): string | null {
@@ -710,6 +787,35 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   );
 }
 
+/**
+ * **Bring the runner up to `origin/dev`, or say why not.** The opening of every
+ * tick: the guard, then the fetch, then the fast-forward, in that order and
+ * each only if the one before it passed.
+ *
+ * Its own function so that the order can be tested by running it. It used to
+ * be the first lines of `tick`, which spawns too much to drive from a test, so
+ * the only check on it read this file's source for the position of three
+ * strings — and that cannot see `expectedRepository` being dropped from the
+ * guard's arguments, which leaves a worktree of some other repository free to
+ * be fetched and fast-forwarded (GPT Sol's R724-04, 2026-09-09). A test now
+ * hands this a worktree of a foreign repository and counts the fetches.
+ *
+ * Returns the reason the runner was not advanced, or null when it was.
+ */
+export function advanceRunner(
+  runner: string,
+  expectedRepository: string,
+  exec: typeof runCommand = runCommand,
+): string | null {
+  const problem = runnerWorktreeProblem(runner, exec, expectedRepository);
+  if (problem !== null) return problem;
+  const fetch = exec(runner, "git", ["fetch", "origin", "dev"]);
+  if (!commandSucceeded(fetch)) return `git fetch origin dev failed: ${usefulOutput(fetch)}`;
+  const merge = exec(runner, "git", ["merge", "--ff-only", "origin/dev"]);
+  if (!commandSucceeded(merge)) return `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
+  return null;
+}
+
 async function tick(
   runner: string,
   expectedRepository: string,
@@ -720,17 +826,7 @@ async function tick(
   assertLock();
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
-  let fastForwardProblem = runnerWorktreeProblem(runner, runCommand, expectedRepository);
-
-  if (fastForwardProblem === null) {
-    const fetch = runCommand(runner, "git", ["fetch", "origin", "dev"]);
-    if (!commandSucceeded(fetch)) {
-      fastForwardProblem = `git fetch origin dev failed: ${usefulOutput(fetch)}`;
-    } else {
-      const merge = runCommand(runner, "git", ["merge", "--ff-only", "origin/dev"]);
-      if (!commandSucceeded(merge)) fastForwardProblem = `git merge --ff-only origin/dev failed: ${usefulOutput(merge)}`;
-    }
-  }
+  const fastForwardProblem = advanceRunner(runner, expectedRepository);
 
   const dev = snapshotDev(runner, nowIso);
   const afterMerge = stampTree(runner);

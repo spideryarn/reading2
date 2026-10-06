@@ -155,6 +155,8 @@ export function fleetState(
     servedAt: new Date(now).toISOString(),
     rows,
     tmuxServerPid: snapshot?.tmuxServerPid ?? null,
+    // No snapshot, no verdict: `cannot-check` would be one, and nothing was checked.
+    selfCheck: snapshot?.selfCheck ?? { kind: "not-collected" },
     // NOT `snapshot?.collectedAt ?? new Date().toISOString()`, however tempting
     // it looks to a caller that wants a string. A timestamp invented here says
     // "we looked just now and found nothing", which is a lie with a clock on it.

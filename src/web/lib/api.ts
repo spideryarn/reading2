@@ -950,6 +950,16 @@ function saving(
     void copy
       .json()
       .then(async (body) => {
+        /* **"Not made yet" is not kept** — the `200 null` ten artefact
+           reads ask for (`NONE_YET_AS_NULL_HEADER`, src/types.ts).
+           A copy is filed under reader and URL and replayed as a 200 whatever
+           the request's headers, so a kept `null` would reach, offline, a tab
+           opened before the deploy, which never asked for one and reads
+           `loaded.quiz` or `loaded.ideas.…` off it. Returning here is what the 404 it replaces did
+           (`res.status !== 200`, above): nothing written, and an earlier copy
+           of a real artefact neither replaced nor thrown away. GPT Sol's F1 on
+           plan 261006g. */
+        if (body === null && NONE_YET_AS_NULL.test(input)) return;
         /* "Could not read" must not replace a complete copy of this batch.
            Leave the existing record untouched: copying its answers into this
            newer ticket could overwrite a full read that commits meanwhile.
@@ -976,6 +986,18 @@ function saving(
   }
   return res;
 }
+
+/**
+ * The ten reads that may answer `200 null` for "not made yet" — see the note
+ * where it is used, above.
+ *
+ * **The same ten as the routes that call `orNullWhenNotMadeYet`** in
+ * src/routes.ts, and nothing derives one list from the other: moving a read
+ * over is a name here as well as the helper there. Exported for the test that
+ * fails when they differ (tests/api-fetch-offline.test.ts).
+ */
+export const NONE_YET_AS_NULL =
+  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|glossary|quotes)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {

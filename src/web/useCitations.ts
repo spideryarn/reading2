@@ -11,7 +11,7 @@
  * (docs/project/ingest-queue.md). The ordering of reads is
  * src/web/useOrderedRead.ts's, the job is src/web/useStepJob.ts's, and pressing
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
- * file is only the parse, the 404 branch and the verbs.
+ * file is only the parse, the "none yet" branch and the verbs.
  *
  * The third verb is **`investigate`** (plan 260930a): one streamed, billed
  * press about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
@@ -54,13 +54,14 @@ import type {
   Job,
   PaperPassage,
 } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
-import { ReaderFacingError } from "./lib/reader-facing.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
@@ -311,9 +312,18 @@ export function useCitationsRead(slug: string): CitationsRead {
   const load = useCallback(
     async (current: () => boolean) => {
       try {
-        const res = await apiFetch(`/api/citations/${encodeURIComponent(slug)}`);
+        /* The header asks for "no list yet" as `200 null` rather than a 404,
+           which a browser prints in red on every ordinary page load
+           (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404 is still read the
+           same way, for a server that has not heard of the header — the
+           minutes of a deploy. */
+        const res = await apiFetch(`/api/citations/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<CitationsResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case, not a fault: nobody has asked for this
              article's citations yet, and the panel's button is for that. */
           setCitations(null);
@@ -323,8 +333,13 @@ export function useCitationsRead(slug: string): CitationsRead {
           setStatus("none");
           return;
         }
-        const loaded = await readJson<CitationsResponse>(res);
-        if (!current()) return;
+        /* Only an explicit null means none yet. Validate before publishing so
+           a broken revalidation leaves the list already on screen intact. */
+        if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
+          /* A `MalformedReply`, so the reader gets `PAGE_FAULT`, as for every
+             other malformed artefact (tests/read-error-matrix.test.tsx). */
+          throw new MalformedReply("the citations reply has no list");
+        }
         setCitations(loaded.citations);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);

@@ -9,6 +9,7 @@ import { parseObservation, type JsonValue } from "../tools/overseer/observation.
 const snapshot: FleetSnapshot = {
   rows: [],
   tmuxServerPid: 4812,
+  selfCheck: { kind: "cannot-check", why: "a fixture" },
   collectedAt: "2026-09-10T10:30:00.000Z",
   tookMs: 1200,
 };

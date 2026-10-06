@@ -469,6 +469,49 @@ describe("over time", () => {
   });
 });
 
+/* Plan 261006h: the chart scrolls sideways in its own box on a narrow window,
+   and the arrow keys scroll whatever has focus. jsdom lays nothing out, so the
+   two widths are stand-ins. */
+describe("reaching the chart from the keyboard", () => {
+  const widths = (content: number) => {
+    vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
+      return this.matches("[data-cost-chart]") ? content : 0;
+    });
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+      return this.matches("[data-cost-chart]") ? 360 : 0;
+    });
+  };
+  const reach = () => {
+    const box = host.querySelector("[data-cost-chart]");
+    if (!box) throw new Error("no chart");
+    return { tabindex: box.getAttribute("tabindex"), role: box.getAttribute("role"), name: box.getAttribute("aria-label") };
+  };
+
+  it("makes the chart's box a named tab stop when the chart is wider than it", async () => {
+    widths(720);
+    try {
+      await show("?by=day");
+      expect(reach()).toEqual({
+        tabindex: "0",
+        role: "region",
+        name: "Recorded amount per UTC day, stacked by category",
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("does not when the chart fits", async () => {
+    widths(360);
+    try {
+      await show("?by=day");
+      expect(reach()).toEqual({ tabindex: null, role: null, name: null });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 describe("URL state", () => {
   it("writes ranking sort and direction into the address", async () => {
     await show();
@@ -572,6 +615,23 @@ describe("URL state", () => {
   });
 });
 
+/** A day with a retry and a refusal, so the failures section draws all three of its tables. */
+const FAILING: CostCubeRow[] = [
+  row({ day: "2033-05-02", calls: 12, counted: 12, retries: 1 }),
+  row({
+    day: "2033-05-02",
+    ownerId: BEN,
+    outcome: "error",
+    failurePhase: "before_answer",
+    failureClass: "refused",
+    failureStatus: 503,
+    calls: 3,
+    counted: 3,
+    retries: 2,
+    gaveUp: 1,
+  }),
+];
+
 /* jsdom lays nothing out, so these hold the structure a narrow window needs:
    the order of the columns, and the classes that pin and cap them. What it
    looks like at 390px is a browser's to say. */
@@ -632,6 +692,33 @@ describe("what a narrow window needs", () => {
     expect(label?.className).toMatch(/tw:max-w-/);
     expect(cells[0]?.className).not.toContain("tw:min-w-56");
     expect(first?.querySelector("[data-drill]")?.getAttribute("title")).toContain(ADMIN_EMAIL_LOCAL);
+  });
+
+  /* Every table here scrolls inside its own box, and at 390px most of each
+     starts off screen. The box that says so is one component
+     (src/web/lib/SidewaysScrollBox.tsx, measured in
+     tests/sideways-scroll-box.test.tsx); what is held here is that no table on
+     this page scrolls sideways in a box of its own that says nothing. */
+  it("puts every table that scrolls sideways in the box that says there is more", async () => {
+    const CUED = "[data-sideways-scroll] > [data-scroll-box]";
+    const boxes = () => [...host.querySelectorAll(".tw\\:overflow-x-auto")];
+    const cued = (table: Element | null, what: string) =>
+      expect(table?.parentElement?.matches(CUED), what).toBe(true);
+
+    /* The ranking, and under it the two counts tables and the causes. */
+    await show("", FAILING);
+    cued(host.querySelector("[data-ranking] table"), "the ranking");
+    for (const name of ["day", "task", "causes"]) {
+      cued(host.querySelector(`table[data-failures-table="${name}"]`), `failures by ${name}`);
+    }
+    expect(boxes()).toHaveLength(4);
+    for (const box of boxes()) expect(box.matches(CUED)).toBe(true);
+
+    /* The pivot takes the ranking's place. */
+    await show("?by=user&then=task", FAILING);
+    cued(host.querySelector("table[data-pivot]"), "the pivot");
+    expect(boxes()).toHaveLength(4);
+    for (const box of boxes()) expect(box.matches(CUED)).toBe(true);
   });
 
   it("still sorts from a header, and says so in the address", async () => {

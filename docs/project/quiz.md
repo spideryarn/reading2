@@ -441,7 +441,10 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
   [`src/web/read-filter.ts`](../../src/web/read-filter.ts).
 - **The path is not rebuilt.** `at` is still an index into the artefact's array; the filter only
   changes which indices can be landed on. "Question *n* of *N*" and *Show all* count what can be
-  landed on, and the list says how many more are about passages not yet read.
+  landed on. When the filter leaves some out, a line under the count says so and gives the whole
+  batch — "There are 12 in all: the other 7 are about passages you have not read yet." — with the
+  list open or closed, and the (i) card's count reads "12 questions in all", so the two figures
+  meet ([261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md)).
 - **A Next that skips a step is not an arrival by Next**, so the premise is shown: it is the bridge
   over the step skipped. `showPremise` did not change.
 - **Nothing is drawn under a question the panel has not moved to.** While the step at `at` is

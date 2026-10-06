@@ -150,6 +150,7 @@ import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
    straight from the store, so this file adds no data model of its own. */
 import { articleBundle } from "./store/export-bundle.js";
 import { ArticleNotFound } from "./store/article-rows.js";
+import { ArtefactNotMadeYet } from "./store/artefact-not-made-yet.js";
 /* The mechanics of every binary answer below — status, `nosniff`, a byte
    length and the body — and none of their policies. GET only: this file never
    imports the HEAD writer, because this dispatcher answers no HEAD. */
@@ -470,7 +471,7 @@ import {
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
    src/types.ts § LEARN_STANCES. */
-import { LEARN_STANCES } from "./types.js";
+import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
@@ -558,6 +559,50 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(body));
+}
+
+/**
+ * **Read an artefact, and answer "not made yet" as `200 null` to a client that
+ * asked for that.** Returns what `load` returned, or `null` once it has
+ * answered — the handler's cue to stop.
+ *
+ * For ten artefact reads — quiz, crossrefs, citations, and since plan 261006h
+ * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
+ * their ordinary answer, and as a 404 it was a red line in the console for
+ * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
+ * src/types.ts says why it is opt-in, and names the reads not moved.
+ *
+ * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
+ *   different 404, and stays one whatever the header says; so does every other
+ *   failure. What counts as "not made" is the loader's call, not this
+ *   function's: three of them put a document they cannot use in the same
+ *   throw as no document (`loadFaq`, `loadSimpleSummary`, `loadDebate`).
+ * - **Only `load`.** Give it the store read and nothing else — whatever the
+ *   handler does next (quiz's kept answers, citations' matching) is outside
+ *   this `catch`, so a failure there is never mistaken for "none yet".
+ * - **`private, no-store` on every answer**, the 404 included: the body
+ *   depends on a request header, and this is simpler than a `Vary` that every
+ *   cache in front of us would have to honour. It is set before `load`, and
+ *   the API's one `catch` leaves it on the error it writes.
+ *
+ * The browser's offline cache is a separate matter and does not read this
+ * header: `apiFetch` declines to keep the `null` (src/web/lib/api.ts §
+ * `NONE_YET_AS_NULL`). **A route that starts calling this needs its name
+ * there too**; tests/api-fetch-offline.test.ts fails when the two differ.
+ */
+async function orNullWhenNotMadeYet<T extends object>(
+  { req, res }: { req: IncomingMessage; res: ServerResponse },
+  load: () => Promise<T>,
+): Promise<T | null> {
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    return await load();
+  } catch (err) {
+    if (!(err instanceof ArtefactNotMadeYet)) throw err;
+    if (req.headers[NONE_YET_AS_NULL_HEADER] === undefined) throw err;
+    send(res, 200, null);
+    return null;
+  }
 }
 
 /**
@@ -9481,13 +9526,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: GLOSSARY_PATTERN,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No glossary yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as quiz has it. */
         const at = slugPart(captures, 1);
-        send(
-          res,
-          200,
-          await withProfileChanged<GlossaryResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<GlossaryResponse>(
             at,
             () => loadGlossary(at),
             (found) => found.glossary,
@@ -9495,6 +9540,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
             (found, nowHash) => ({ panelRun: panelRunKind(found, nowHash) }),
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -9589,10 +9636,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/ideas\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No ideas yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`. */
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas),
+        );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -9605,13 +9658,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/quotes\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No quotes yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`. */
         const at = slugPart(captures, 1);
-        send(
-          res,
-          200,
-          await withProfileChanged<QuotesResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<QuotesResponse>(
             at,
             () => loadQuotes(at),
             (found) => found.quotes,
@@ -9622,6 +9675,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
             true,
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -9635,13 +9690,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/timeline\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, unlike its five neighbours, and that is
          the decision rather than an omission: this artefact was never written
          for a profile, so there is no third staleness fact to add.
          `TimelineResponse` in src/types.ts has two fields where the others have
-         three. docs/plans/260831i-timeline-mode.md § Freshness. */
-      send(res, 200, await loadTimeline(slugPart(captures, 1)));
+         three. docs/plans/260831i-timeline-mode.md § Freshness.
+
+         No timeline yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. One with no events in it is a timeline. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadTimeline(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9659,20 +9721,26 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **`withProfileChanged` since 2026-10-02**, for the badge and its
          Regenerate (plan 261002f). It labels; nothing re-runs on it — the
          profile is not in this stage's stamp (src/quiz.ts § The profile).
 
          `withOldClientBands` is the bridge for tabs still running the band
          ladder; it stays until there is an enforceable client-version boundary
-         — src/quiz.ts says why. */
+         — src/quiz.ts says why.
+
+         `orNullWhenNotMadeYet` around the read and only the read: no
+         questions yet is `200 null` to a client that asks (plan 261006g). */
       const at = slugPart(captures, 1);
-      const found = await withProfileChanged<Omit<QuizResponse, "attempts">>(
-        at,
-        () => loadQuiz(at),
-        (quiz) => quiz.quiz,
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<Omit<QuizResponse, "attempts">>(
+          at,
+          () => loadQuiz(at),
+          (quiz) => quiz.quiz,
+        ),
       );
+      if (!found) return;
       /* **The reader's kept answers to this batch**, since 2026-10-05 (plan
          261005b) — on this read rather than a second endpoint, so the panel
          gets questions and answers in one commit.
@@ -9701,10 +9769,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**: this artefact is not written for a
-         profile. `FaqResponse` in src/types.ts has two fields. */
-      send(res, 200, await loadFaq(slugPart(captures, 1)));
+         profile. `FaqResponse` in src/types.ts has two fields.
+
+         No FAQ yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadFaq` calls none: a
+         document without its `questions` as well as no document, and not an
+         empty list. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadFaq(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9735,9 +9810,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/crossrefs\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      /* No `withProfileChanged`: not written for a profile. */
-      send(res, 200, await loadCrossrefs(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      /* No `withProfileChanged`: not written for a profile. No links yet is
+         `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadCrossrefs(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9751,16 +9831,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/simple\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* `withProfileChanged` since 2026-10-01: the paragraphs are written for
          the owner's profile and goal (plan 261001b). `stale` and `outdated`
-         apart, as `/api/faq/` has them. */
+         apart, as `/api/faq/` has them.
+
+         None yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadSimpleSummary` calls none,
+         a `simple/1` row included. */
       const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        await withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
       );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9803,7 +9887,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/debate\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
          is reading does not change what the web said, so there is no third
          staleness fact and offering one would be a banner about a thing that
@@ -9812,8 +9896,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          **And nothing here about how old the search is.** `searchedAt` travels
          on the artefact and the panel prints it; it is provenance rather than
          staleness, and a year-old shared link must not have its artefact
-         declared invalid by the clock. */
-      send(res, 200, await loadDebate(slugPart(captures, 1)));
+         declared invalid by the clock.
+
+         No debate yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadDebate` calls none: a
+         document that fails `isDebateDocument` as well as no document, and
+         not a search that found nothing. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadDebate(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9863,12 +9956,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/citations\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
          not written for a profile, so there is no third staleness fact.
-         `CitationsResponse` in src/types.ts has two fields. */
+         `CitationsResponse` in src/types.ts has two fields.
+
+         No list yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`, around the read alone and not the matching
+         below. */
       const slug = slugPart(captures, 1);
-      const found = await loadCitations(slug);
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadCitations(slug));
+      if (!found) return;
       /* **Which works are already articles here** — the reader's own or a
          public one, never another reader's private article (the `where` in
          src/store/pg-cited-in-spideryarn.ts). Here and not in `loadCitations`,

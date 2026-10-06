@@ -557,6 +557,9 @@ export type FleetState = Omit<
   /* Declined: the build's declared capabilities are for the Overseer's resume
      pass (plan 260910f, Sol's G3); nothing on this page is gated on them. */
   | "capabilities"
+  /* Declined: the collector's this-box verdict is published for whoever reads
+     `/api/state`; this page draws nothing from it yet (plan 261006h). */
+  | "selfCheck"
   /* Declined: READ AT THE BOUNDARY AND NOT CARRIED. `schema` decides whether to
      believe the payload at all (`parseFleetState` refuses anything else), and
      `servedAt` is consumed into `clockSkew` below — carrying either would be a

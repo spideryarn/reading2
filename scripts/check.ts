@@ -4,6 +4,7 @@
  *   npm run check
  *   npm run check -- --fast     # skip the client build (the slow one)
  *   npm run check -- --offline  # no database needed, and NOT the real gate
+ *   npm run check -- --list     # print the step names in order; run nothing
  *
  * The point of this file is the **gate/advisory split**, which is the only
  * interesting decision in it.
@@ -45,6 +46,8 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { GATE_TOOLING_BUILDS } from "./deploy-checks.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FAST = process.argv.includes("--fast");
@@ -101,6 +104,16 @@ const STEPS: Step[] = [
     gate: true,
     argv: ["run", "--silent", "build"],
   },
+  /**
+   * What the suite reads that `build` does not make — today the fleet
+   * dashboard's client, which three fleet test files start a server against.
+   * Without these the test gate below was red in any checkout where nobody had
+   * run `build:fleet` by hand (queue entry qi-nwqfadjz, 2026-09-09): the
+   * `api-dist` failure written up on `build`, one build along. The list is the
+   * deploy gate's, so the two cannot drift, and tests/check-steps.test.ts holds
+   * the order. `--fast` keeps them: about 3 s, and the test gate reads them.
+   */
+  ...GATE_TOOLING_BUILDS.map((b): Step => ({ name: b.script, gate: true, argv: ["run", "--silent", b.script] })),
   {
     // Needs a database, whatever the flags say — see the header. Below `build`,
     // for the reason written on it.
@@ -262,6 +275,14 @@ const STEPS: Step[] = [
     count: countMatches(/Clone found/g),
   },
 ];
+
+/* `--list`: the steps this run would take, one name a line, and nothing run.
+   It exists so the order above can be tested without running the suite from
+   inside the suite — tests/check-steps.test.ts. */
+if (process.argv.includes("--list")) {
+  for (const step of STEPS) console.log(step.name);
+  process.exit(0);
+}
 
 const results: { step: Step; code: number; findings?: number }[] = [];
 

@@ -29,11 +29,13 @@
  * See docs/plans/260826ac-ideas-mode.md and src/ideas.ts.
  */
 import { useCallback, useEffect, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -162,7 +164,7 @@ export function useIdeasRead(slug: string): IdeasRead {
   const { begin, landed } = fresh;
 
   /**
-   * The read itself — the parse, the 404 branch and the error copy, which are
+   * The read itself — the parse, the "none yet" branch and the error copy, which are
    * this mode's own. `current()` after every `await`, before any state is
    * set: false means this reply is about an article, or an artefact, the hook
    * has since moved on from. See src/web/useOrderedRead.ts.
@@ -170,9 +172,17 @@ export function useIdeasRead(slug: string): IdeasRead {
   const load = useCallback(async (current: () => boolean) => {
     const started = begin();
     try {
-      const res = await apiFetch(`/api/ideas/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/ideas/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<IdeasResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
         setIdeas(null);
@@ -185,10 +195,13 @@ export function useIdeasRead(slug: string): IdeasRead {
         setStatus("none");
         return;
       }
-      const loaded = await readJson<IdeasResponse>(res);
-      if (!current()) return;
-      /* Read the fields that can throw before publishing any of this reply.
-         A malformed revalidation must leave the loaded artefact intact. */
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+         stays. */
+      if (typeof loaded?.ideas !== "object" || loaded.ideas === null) {
+        throw new MalformedReply("the ideas reply has no ideas");
+      }
       const profiled = loaded.ideas.profileHash != null;
       setIdeas(loaded.ideas);
       setStale(loaded.stale);
