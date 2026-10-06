@@ -2,7 +2,7 @@
 /**
  * **`/profile` forgets the last reader, and what it owed them is not sent as
  * the next.** docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2;
- * GPT Sol's review, F3 (docs/plans/261006f-plan-review-sol.md).
+ * GPT Sol's review, F3 (docs/plans/261006f-reader-bound-plan-review-sol.md).
  *
  * The profile page is not under the article's gate, so nothing unmounted it
  * when another tab signed in as somebody else: reader A's *About you*, loaded

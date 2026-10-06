@@ -18,7 +18,7 @@
  * broadcast arrives a component that mounts and subscribes is told B while
  * a subscriber from page load still holds A. The screen was drawn for B and
  * B's own request, bound to A, was refused. GPT Sol reproduced it against
- * the installed SDK (docs/plans/261006f-plan-review-sol.md, F1). With one
+ * the installed SDK (docs/plans/261006f-reader-bound-plan-review-sol.md, F1). With one
  * subscription there is one answer, and a late subscriber is told what is
  * held here and not what storage says.
  *

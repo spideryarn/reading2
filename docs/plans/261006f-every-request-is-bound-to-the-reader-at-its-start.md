@@ -50,7 +50,7 @@ import, before any component, so its listener ran first. That was wrong. The SDK
 subscriber its own `INITIAL_SESSION`, read from storage at that moment, so a `useSession` that
 mounted after another tab had written B's session was told B while `api.ts` still held A, and B's
 own request was refused. GPT Sol reproduced it against the installed SDK
-([review](261006f-plan-review-sol.md), F1).
+([review](261006f-reader-bound-plan-review-sol.md), F1).
 
 **A refusal moves the tab on.** When a token lookup answers as a different known reader from the
 one held, `session.ts` adopts that session and tells its subscribers. The request that noticed is
@@ -188,7 +188,7 @@ fences are needed either way, so the reload adds nothing they do not.
   so it stayed mounted across the change with A's *About you* in the box, and its idle save would
   have written that as B. The write is refused, and after the review the page is keyed on the
   reader, so the words go too.
-- 2026-10-06, after GPT Sol's review refused (six findings, [the review](261006f-plan-review-sol.md)):
+- 2026-10-06, after GPT Sol's review refused (six findings, [the review](261006f-reader-bound-plan-review-sol.md)):
   - **F1, one session.** `src/web/lib/session.ts` is now the only identity subscription.
     `api.ts`, `useSession` and the experimental-features store read it; `url-session-kind.ts`
     keeps its own, because it needs the event's name and gives no reader to a screen.
@@ -216,7 +216,7 @@ fences are needed either way, so the reload adds nothing they do not.
     `session.ts` at import) and `eager-client-graph.test.ts` (two new modules every reader
     downloads, each a decision recorded there). `resetSessionForTests` exists for the first two.
 - **GPT Sol's code review: approve with fixes**
-  ([261006f-code-review-sol.md](261006f-code-review-sol.md), C1 to C7). It fixed C1 to C6 itself:
+  ([261006f-reader-bound-code-review-sol.md](261006f-reader-bound-code-review-sol.md), C1 to C7). It fixed C1 to C6 itself:
   the bullet above, and two in `session.ts` (a late `INITIAL_SESSION` only fills a tab that has
   heard nothing; a lookup's answer is adopted only if no session was adopted while it was out,
   counted by a revision). C7, the search words and reading position in browser storage with no

@@ -173,6 +173,13 @@ control:
 
 A refusal from the server, such as a paper not read through yet, is shown in the server's words
 and leaves the card as it was. A write that did not come back draws no link and no state.
+
+**Still asking, and having failed to find out, are two sentences.** While the Metadata page's read
+is out the public switch says *Checking who can read this…* (`SHARING_CHECKING`); *We could not
+check…* (`SHARING_UNKNOWN`) is drawn only once a read has failed. A failed first read is asked
+again four times over about fifty seconds (`READ_AGAIN_AFTER_MS` in `Metadata.tsx`), so the card
+mends itself without a reload —
+[261006e](../plans/261006e-access-and-sharing-says-checking-while-it-asks-and-asks-again-after-a-failed-read.md).
 `tests/private-link-card.test.tsx` and `tests/access-sharing.test.tsx`.
 
 **The owner's marks carry only a boolean.** `Article.privateLinkOn` and

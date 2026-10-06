@@ -61,6 +61,7 @@ v1, for the article's owner only, and behind the experimental switch until later
 v2, the scrapbook, is built on top of that:
 
 - **A cue instead of a role.** The same call now gives each stop one **cue**: at most 140
+  (200 since `skim/10`, 2026-10-06, below)
   characters, an instruction or a question naming what to *look for* in the passage, never what it
   found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
   never mentions another stop, because a reader can arrive at a stop from anywhere. The current row
@@ -72,10 +73,11 @@ v2, the scrapbook, is built on top of that:
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
-  - the glossary terms it uses, as chips that open to a one-line sense and an icon into Glossary
-    (a text link until 2026-09-29, below). They are found in the prose the reader sees, by the
-    glossary's own matcher, over every term. A term an earlier stop on this pass also uses says
-    *"also at stop k"*;
+  - the glossary terms it uses, as chips that open the glossary's own card, the one the prose shows
+    for the same term (since 2026-10-06, below). They are found in the prose the reader sees, by the
+    glossary's own matcher, over every term. Until 2026-10-06 a chip opened one line of the term's
+    sense in place with an icon into Glossary (a text link until 2026-09-29, below), and a term an
+    earlier stop on this pass also used said which stop;
   - the ideas it bears on — links into Ideas until 2026-09-29, chips that open in place since;
   - where it sits in the study, as links into Timeline when that experimental control is available,
     and as text when it is hidden.
@@ -86,6 +88,36 @@ v2, the scrapbook, is built on top of that:
   (`useIdeasRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
   it is generated for it: what ties the pieces together is seeing them side by side, not a new
   summary of them.
+
+  **A term chip opens the glossary's card, and names no other stop**, since 2026-10-06
+  (report `spya-se0e4v`,
+  [plan 261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md)):
+
+  > In Skim mode, the Glossary clues don't have to say "also at stop X". And they should provide/reuse the usual "go to glossary" etc in rich tooltips
+  >
+  > — Greg, 2026-10-06
+
+  What changed:
+
+  - The chip is the term's name and nothing else. `alsoAt` and the route it was counted along are
+    gone from [`stop-card.ts`](../../src/web/stop-card.ts).
+  - The chip opens `TermCard`, exported from
+    [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), inside the shared `Tooltip` with
+    `interactive` ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)).
+    It is `TermChip` in `SkimPanel.tsx`. The line of sense that used to open in place is gone for
+    terms, so a term is drawn one way. Ideas chips still open in place.
+  - Hover or focus opens it for a mouse or a keyboard. A tap opens it for a finger and it stays
+    until a tap elsewhere. A mouse click does not pin it. A tapped card is the panel's one open
+    snippet, so opening an idea closes it and so does stepping to another stop.
+  - The owner's card has *Dig deeper*, *Hide* and *Open glossary*. A visitor's has *Open glossary*
+    alone. A reader whose Glossary control is hidden gets neither *Open glossary* nor *Dig deeper*,
+    because a dig's answer is drawn in Glossary.
+  - The card scrolls inside half the window's height, so the buttons under a long entry can be
+    reached on a short screen (`.skim-term-card` in
+    [`skim.css`](../../src/web/styles/skim.css)).
+  - After *Hide* the chip is gone, so keyboard focus moves to the stop's row if it still belongs
+    to the control that started the hide or was lost when that control disappeared. A slow hide
+    preserves focus if the reader has moved on.
 
 Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 [plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
@@ -302,6 +334,49 @@ spya-bjbcxp): *"Remove the FAQ snippets (they don't add much)"*. The question ab
 row, and the passages it opened, were removed, and Skim no longer reads the FAQ at all. The
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
+
+**A cue sets the scene when its quote needs one (`skim/10`, 2026-10-06)** — Greg, report
+spya-jghnva, plan [261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md):
+
+> In Skim mode, when generating a question, use it as a way to contextualise the quote. [...] The
+> question we generate with Skim mode is an opportunity to situate the quote, eg it could tell us
+> what's being asked of the evidence and/or what are the two interpretations?
+>
+> — Greg, 2026-10-06
+
+His example was *"Which interpretation does their evidence favour?"* before a quote that says *"the
+latter interpretation"*: the reader is told to look for something without being told what the
+choice is. So when a quote leans on words it does not explain ("the latter", "this approach",
+"these results"), its cue first names the question or the options, as a question and never as a
+statement of what the passage says, and then points: *"Which of the two possibilities does the
+evidence favor: real transfer or benchmark-specific gains?"* Most quotes stand on their own, and
+their cue is still one instruction or question and nothing else. A cue is one or two whole
+sentences, at most 200 characters (it was 140), adds no detail that is not in the quotes, the Ideas
+or the outline, never states the finding, and never refers to another stop.
+
+Two wordings were measured blind on five articles
+([261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md)). The first set a scene on
+every cue. Readers were judged better prepared by it in 72 pairs of 88, but it gave the finding away
+twice as often as the old cue and misstated the context in one cue in ten. The one kept was
+preferred to the old cue in 50 pairs of 88 against 19. On the dangling subset it was ahead 15 to 8,
+with 5 ties, not clearly outside the control's 11 to 10. Its judge marked 18 giveaways against the
+old cue's 19, and 3 misstatements against 1: these observations do not establish no regression.
+There was one run of the revised wording and one same-family judge per comparison.
+
+**Not shown: that `skim/10` situates a quote that leans on something outside itself.** On the 13
+quotes hand-marked as truly dangling it was preferred to the old cue 7 to 5, no different from two
+runs of the old prompt (6 to 4). It shipped on the overall preference (50 to 19) and on the reported
+example, with the plan's dangling-case gate **not met**: GPT Sol's code review said so (F1), and an
+Opus arbiter agreed with the finding and still said land, because nothing got worse, no stored
+route changes, and it is one prompt section to revert. The first wording situates far better (11 to
+2 on those 13) and gives more away; which of the two Greg wants is an open question put to him.
+
+**What it cannot do** is name a referent
+that only the surrounding paragraph holds, because
+the prompt is still given no prose. Handing it each quote's paragraph was measured too, did not
+clearly do better on the quotes it was meant for, cost about a third more per route, and was removed
+(its code is at commit `c943494a9`). An older route is outdated, not stale, so it keeps its cues
+until it is planned again from Metadata.
 
 **On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
 report spya-kudr63, plan
@@ -565,7 +640,7 @@ Only if that fails would a second set be worth it.
 
 **Background.** Each stop gets one short generated line, shown on the current stop and, in small
 italics, under the **Next stop ›** door, so the door says where it leads. v1 wrote a *role* (what
-the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters, saying
+the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters (200 since 2026-10-06), saying
 what to look for in the passage ("Look for how rich-club membership changes the comparison"). Like
 the role, it never says what the passage found.
 

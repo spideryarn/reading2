@@ -1,54 +1,62 @@
-# Review: plan 261006f, and the stage 1 code already built from it
+# Review: a plan to record the pipeline's job deadline as `deadline`, and to class live conversation's stops, in `ai_calls`
 
-You are a read-only reviewer with a **security focus**. Change no file.
+Repo: this worktree, branch `worktree-job-deadline-class`, base `9a47c3679`. TypeScript + ESM.
+Read-only review: change no file.
 
 ## The candidate
 
-- The plan: `docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md` (both stages).
-- Stage 1 is built and committed: commit `6ef640e0f`. `git show 6ef640e0f` is the whole diff. Paths:
-  `src/web/lib/api.ts`, `src/web/log-buffer.ts`, `tests/api-fetch.test.ts`, `docs/project/auth.md`,
-  `docs/project/security-map.md`, `docs/project/web-client.md`,
-  `docs/postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md`, and the plan.
-  Start there; it does not limit scope.
-- Stage 2 is **not built**. Review its plan only.
+Live, pre-commit. Untracked files:
 
-Background: `docs/postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md` and
-`docs/project/auth.md` § *A request made for one reader is never sent as another*.
+- `docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md`
+- `docs/plans/261006f-plan-review-prompt.md` (this prompt)
 
-## What to do
+It builds on committed work: `docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md`
+(read § Left for later and the stage 1 notes), `src/call-failure.ts` (`abortClass`,
+`CallDeadlineReached`), `src/jobs.ts` (`DeadlineReached`, the claim's controller near the
+`controller.abort(new DeadlineReached())` line, `cancelJob`), `src/live.ts` (`REALTIME_OUTCOME`,
+`ledgerRow` and the `failureClass: null` block), `src/cost-cube.ts` (`failureCountsOf`,
+`failureCauses`, `FAILURE_NOTES`), and the browser side of live conversation under
+`src/web/live/`. Those are where to start, not a limit on scope.
 
-1. Attack stage 1 independently first. The threat: two accounts in one browser; another tab signs
-   in as reader B while this tab is reader A's. A request made for A must never be sent with B's
-   token. Also the opposite failure: a reader's own ordinary request must never be refused.
-   Read the installed Supabase SDK (`node_modules/@supabase/auth-js`) where the argument rests on
-   its behaviour: the order subscribers are notified in, what `getSession()` reads, how a
-   cross-tab sign-in reaches this tab, and whether any event leaves `cachedTokenOwner` naming a
-   reader other than the one the screen was drawn for.
-2. Run `npx vitest run tests/api-fetch.test.ts` yourself (it needs nothing outside the tree).
-3. Review the stage 2 plan: is the list of leaks right, is each proposed fix sufficient, is
-   anything a reader's words or money missing, and is "empty the module stores from the auth
-   listener" sound.
-4. Check the doc edits against the code.
+## What you can run
 
-## Severity, and what a refusal takes
+The tree is read-only; /tmp is writable. You can run one test file
+(`npx vitest run tests/<one>.test.ts`) or a small Node snippet. No network, no Postgres.
 
-| | |
-|---|---|
-| **P0** | data loss, exploitable security, incorrect charging, or the service broadly unusable |
-| **P1** | user-visible wrong behaviour, or an authoritative contract violated |
-| **P2** | design or maintainability risk with no wrong behaviour today |
-| **P3** | non-behavioural prose or comment defect |
+## Attack it
 
-Give every finding an ID (F1, F2, …), a severity, and say whether it is **established** (direct
-evidence: a failing run, an exact reachable path) or **reasoned**. Refuse only on an established
-P0 or P1. End with one verdict line: `VERDICT: approve`, `approve with fixes` or `refuse`.
+Is each statement in the plan accurate against the code? In particular:
 
-## My own suspicions (already mine, worth less; spend most of the run elsewhere)
+- Which paths from `StepContext.signal` in `src/jobs.ts` to a gateway (`src/ai-call.ts`,
+  `src/messages-stream.ts`) lose the abort reason, so that the job deadline would still be
+  recorded as `abort` after the change? Name each file and line. Name any that are fine.
+- Does making `DeadlineReached` a subclass of `CallDeadlineReached` change anything that reads the
+  reason's `name`, `message` or class (logs, `errorFields`, the copy a reader sees, tests)?
+- Is "no clock of ours ever stops a live response" true for both live engines (the realtime one
+  and GPT-Live)? Find every place the browser or the server cancels, closes or abandons a live
+  response, and say what status the resulting ledger row carries, if there is a row at all.
+- Does a row with `failure_class = 'abort'` and a null `failure_phase` break or mislead any reader
+  of those columns (the folds, the causes table, the cost analysis, the two-reads check, any SQL,
+  any type that assumes class and phase are null together)?
+- Can the changed *not measured* rule now show a wrong zero?
+- Is anything simpler and as good, or is either half not worth doing?
 
-- The sentence I would least like to be wrong about: *"`api.ts` subscribes before any component, so
-  `cachedTokenOwner` is never behind the screen that made the call"*. If it can be behind, stage 1
-  refuses a reader's own requests, on every page. The plan's § *The retreat* is the fallback.
-- A call made while the tab holds nobody is unfenced. Is there a path where that carries reader
-  A's words (for example a sign-out event followed by a sign-in as B, with A's page still up)?
-- `TOKEN_REFRESHED` or a session object with no `user` sets `cachedTokenOwner` to null, which
-  unbinds later calls.
+Severity: **P0** data loss, security, incorrect charging, service broadly unusable. **P1**
+user-visible wrong behaviour or an authoritative contract violated. **P2** design or
+maintainability risk, no wrong behaviour today. **P3** prose defect. Refuse (*change first*) only
+on an established P0 or P1: direct evidence, no unresolved inference. Say for each finding whether
+it is established or reasoned, and give (a) what shows it and (b) the smallest change that closes
+it.
+
+Number findings **F29 upward** (F1 to F28 are taken by the 261006b and 261006d chain). End with a
+verdict line: `VERDICT: build it` or `VERDICT: change first`.
+
+## My own suspicions, worth less than yours
+
+- `incomplete` (the output cap, a content filter) is nobody's Stop. Calling it `abort` leans on
+  "anything else"; it may deserve saying on the page.
+- The pipeline's `fatal.abort()` relays in `src/labels.ts`, `src/pdf-read.ts` and
+  `src/structure-deepen.ts` may compose the job signal in a way that drops the reason.
+- A class with no phase may be a shape some type forbids.
+
+Do not change any file.

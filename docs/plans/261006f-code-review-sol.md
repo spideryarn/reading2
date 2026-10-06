@@ -1,23 +1,31 @@
-Fixed six findings; no commits.
+No established P0/P1 in this stage. The classification changes are sound; I fixed five test/prose findings without committing.
 
-| ID | Severity / evidence | Finding | Status |
-|---|---|---|---|
-| C1 | **P1, established** | Installed SDK 2.112.4 can emit late `INITIAL_SESSION null` after discarding A’s refresh, erasing B’s newer session. Reproduced with synchronous storage. | Fixed: initial events only fill an unheard tab. |
-| C2 | **P2, reasoned** | Reader-ID equality misses A → signed out → A, allowing stale lookup adoption. Reproduced using the SDK’s supported asynchronous storage; production reachability remains unestablished. | Fixed with session revisions. |
-| C3 | **P1, established** | Queued comment edits, placements, colours and late deletions sent with B’s token. | Fixed with mounted-reader bindings. |
-| C4 | **P0, established** | Audio conversion, retries and late first-upload callbacks could send A’s audio as B. | Fixed across all eight dictation callers; recordings retain their original reader. |
-| C5 | **P1, established** | Queued search/criteria settings, delayed search revisions and late deletions sent as B. | Fixed. |
-| C6 | **P0, established** | Delayed live startup could create a paid session as B; late tools and meter callbacks also used B’s token. | Fixed with reader-bound wiring in both live engines. |
-| C7 | **P2, established** | Unscoped browser storage retains search words and reading-position state. Unmatched search pairs do not display their words. | Reported; deliberately excluded from this work. |
+- **F33 — P3, established; fixed.** [ai-spend.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/src/ai-spend.ts:553) still excluded Realtime from aborted rows carrying failure fields. The gateway doc also stated the phase/status contract without qualification. Smallest fix: document Realtime’s `abort` class with null phase/status and scope the gateway contract. New prose test observed red, then green.
 
-Every behavioral fix has a regression observed failing against the preceding implementation, plus controls confirming ordinary requests still succeed.
+- **F34 — P3, established; fixed.** [FAILURE_NOTES](/var/tmp/spideryarn-worktrees/job-deadline-class/src/cost-cube.ts:682) described an entire closed conversation as usually leaving no row. Earlier responses can already have rows, and shutdown allows terminal events during grace. Smallest fix: describe the unfinished response without a terminal usage report. Updated the note, comments and docs; new test observed red, then green.
 
-**F1–F6 checked:** F1 needed the additional C1/C2 repairs. F2’s spoken retries, F3’s keyed profile page, F4’s sign-out clearing, F5’s shelf refill fence and F6’s historical closure wording are implemented.
+- **F35 — P2, established; fixed, timing risk reduced.** The deadline test could pass when the job signal was already aborted before the request started. An offline gateway probe reproduced its exact ledger and reason assertions in that state. Smallest fix: require an unaborted signal before dispatch. Added that assertion and increased setup allowance from 1.5 to 10 seconds. The fixture probe failed before the fix and passed afterwards. A sufficiently slow database can still exceed the finite allowance; the revised database test needs rerunning.
 
-Remaining implicit late senders include chat recovery reads, mode polling, link-preview retries and chained link summaries. Their server ownership checks precede access or spending; I established no further cross-account write or charge. Existing meter ownership checks protect accounting, but did not protect session creation.
+- **F36 — P2, established; fixed.** An exception before `callsOf()`, or the Stop test’s earlier status assertion failing, bypassed ledger cleanup. Suite teardown removed jobs/articles but not `ai_calls`; `job_id` has no cascading foreign key. Smallest fix: sweep ledger rows belonging to the suite’s fixture slugs during teardown. An offline probe executing the actual teardown failed before the fix and passed afterwards, preserving a peer fixture.
 
-Updated auth, dictation, plan and postmortem documentation. The security-map and web-client signposts remain accurate.
+- **F37 — P3, established; fixed.** [ai-gateway.md](/var/tmp/spideryarn-worktrees/job-deadline-class/docs/project/ai-gateway.md:824) said every earlier job-deadline row carried `abort`; rows predating classification can have null class. Qualified the historical statement. New test observed red, then green.
 
-Validation: **277 tests passed across 14 suites**, including every requested suite. Typechecking passed all four projects, covering **3,307 source files**. Scoped lint and whitespace checks passed. The npm typecheck wrapper hit an IPC restriction; the equivalent direct runner passed. I stopped the broader unit run after unrelated sandbox failures involving subprocesses and process/socket checks. Browser checks remain outstanding.
+Without the job deadline firing, the hanging call would not settle; an ordinary Stop would fail the deadline assertions. I found no incorrect downstream treatment in the timeout counts, causes table, clock logging or eval budget. Realtime `abort` rows with null phase are handled correctly. Successful-path timers are cleared.
 
-VERDICT: approve with fixes
+Validation: **231 tests passed across seven database-free files**, typechecking passed via `node --import tsx scripts/typecheck.ts`, and touched-file Biome lint passed. The database suite was unavailable here. F30 remains outside scope.
+
+Changed repository files, all uncommitted:
+
+- [docs/project/admin-costs.md](/var/tmp/spideryarn-worktrees/job-deadline-class/docs/project/admin-costs.md)
+- [docs/project/ai-gateway.md](/var/tmp/spideryarn-worktrees/job-deadline-class/docs/project/ai-gateway.md)
+- [src/ai-spend.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/src/ai-spend.ts)
+- [src/cost-cube.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/src/cost-cube.ts)
+- [src/live.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/src/live.ts)
+- [tests/admin-costs-page.test.tsx](/var/tmp/spideryarn-worktrees/job-deadline-class/tests/admin-costs-page.test.tsx)
+- [tests/claim-session-postgres.test.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/tests/claim-session-postgres.test.ts)
+- [tests/cost-cube.test.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/tests/cost-cube.test.ts)
+- [tests/cost-failure-docs.test.ts](/var/tmp/spideryarn-worktrees/job-deadline-class/tests/cost-failure-docs.test.ts)
+
+Created offline probes: [start guard](/tmp/job-deadline-start-review-test.mjs), [cleanup](/tmp/job-deadline-cleanup-review-test.mjs).
+
+VERDICT: land it

@@ -3,7 +3,7 @@
  * **The screen and the request fence read one identity, so a reader's own
  * request is never refused.**
  * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 1;
- * found by GPT Sol's review (docs/plans/261006f-plan-review-sol.md, F1).
+ * found by GPT Sol's review (docs/plans/261006f-reader-bound-plan-review-sol.md, F1).
  *
  * The SDK here behaves as the installed `@supabase/auth-js` does in the one
  * way that matters: **each new `onAuthStateChange` subscriber is sent its own

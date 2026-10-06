@@ -19,6 +19,9 @@
  * prefix. It refuses without Quotes (src/pipeline.ts § the `skim` step);
  * the client asks for Quotes and Ideas first, in the same job. Without Ideas
  * (a forced run on an article that has none) it plans on the quotes alone.
+ * Handing the prompt each quote's own paragraph as well, for writing its cue,
+ * was built and measured at `skim/10` and taken out again (commit c943494a9
+ * has it; docs/investigations/261006b-skim-cue-situates-the-quote-eval.md).
  *
  * **Which Idea a quote carries is computed here, never by the model** (Sol
  * F60): block ids encode no position, so the model could not tell. A quote
@@ -128,20 +131,45 @@ export type {
  * hash is unchanged**: only this version stales a stored route, which goes on
  * walking each pass as its own stops until it is planned again.
  * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md.
+ *
+ * `skim/10`, 2026-10-06: a cue sets the scene when its quote leans on
+ * something it does not say, and only then points at what to look for.
+ * Greg's report spya-jghnva: *"Which interpretation does their evidence
+ * favour?"* before a quote that says *"the latter interpretation"* tells the
+ * reader to look for something without saying what the choice is. Section 3
+ * of the prompt was rewritten and `MAX_CUE_CHARS` went from 140 to 200. Still
+ * never the finding, still no reference to another stop. **The input hash is
+ * unchanged**; the version alone makes a stored route outdated, which is not
+ * announced, so it keeps its old cues until it is planned again.
+ *
+ * The wording is the second of two measured the same day. The first had every
+ * cue set a scene, and on a quote that needed none the scene was the quote
+ * restated, which gave the finding away; so this one says most quotes get the
+ * pointer alone, the scene is a question or a naming of the options, and no
+ * detail may be added. A third arm that also handed the prompt each quote's
+ * paragraph was measured and removed (its code is commit c943494a9).
+ * docs/plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md;
+ * measured in docs/investigations/261006b-skim-cue-situates-the-quote-eval.md.
  */
-export const PROMPT_VERSION = "skim/9";
+export const PROMPT_VERSION = "skim/10";
 
 /**
- * **A cue is one line, not a paragraph about the passage**: an instruction or
- * a question naming what to look for there, never what it found. Over this it
- * becomes `null` and the stop is kept (Sol F25). 140 is the plan's number —
- * room for *"Look for how rich-club membership changes the comparison."*, too
- * little to carry the finding as well.
+ * **A cue is a sentence or two, not a paragraph about the passage**: an
+ * instruction or a question naming what to look for there, with the scene the
+ * quote assumes in front when it assumes one, never what it found. Over this it becomes `null` and the stop is kept
+ * (Sol F25), which is worse than a long cue, so the cap is set where a cue
+ * that names two options and then points still fits.
+ *
+ * 200 since `skim/10` (plan 261006e). It was 140, room for *"Look for how
+ * rich-club membership changes the comparison."* and too little for *"Is the
+ * model reasoning, or recalling its training data? See which reading their
+ * results favour."* with anything longer than those two options. The row and
+ * the door both wrap, so nothing draws it on one line.
  *
  * It replaced the role (`trajectory/4` and before, 80 characters), which old
  * routes still carry and the band still draws when there is no cue.
  */
-export const MAX_CUE_CHARS = 140;
+export const MAX_CUE_CHARS = 200;
 
 /** How much of each quote the prompt carries. Quotes are rarely longer. */
 export const MAX_QUOTE_PROMPT_CHARS = 1200;
@@ -1002,17 +1030,70 @@ WHAT YOU DECIDE
    same way: a pass that skips a whole section with quotes in it should have a
    reason.
 
-3. A CUE for each stop: one line, at most ${MAX_CUE_CHARS} characters, that
-   tells the reader what to LOOK FOR in this passage — an instruction or a
-   question — and NEVER what it found or says.
-   GOOD: "Look for how rich-club membership changes the comparison.",
+3. A CUE for each stop: one or two complete sentences, at most ${MAX_CUE_CHARS} characters
+   in all, that get the reader ready for this passage.
+
+   MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS. When the
+   quote itself says what it is about, the cue is one instruction or one
+   question naming what to look for, and nothing else. This is the common
+   case, and a short cue is a good cue.
+   GOOD: "Notice what they say earlier work could not do.",
    "Which measure do they choose, and what do they give up for it?",
-   "Notice what they say earlier work could not do.",
-   "Does the effect hold outside the lab? Note the number."
-   BAD: "Synergy is concentrated in the rich club.", "Shows the effect is
-   robust.", "Sleep improves memory by 20%.", "The author is wrong about X."
+   "Note how many of the patients improved, and how many got worse."
+   Do not put a sentence in front that says the quote's point first in your
+   own words. That hands the reader the passage before they have read it.
+
+   SOME QUOTES LEAN ON WORDS THEY DO NOT EXPLAIN, AND THEIR CUE SETS THE
+   SCENE FIRST. A quote is cut out of its paragraph, so it may say "the
+   latter", "this approach", "these results", "their method", "such
+   models" or "it" about something the paragraph had already named. Then
+   the reader needs to know what is at stake before a pointer makes sense:
+   the question being settled, the two things being compared, or what the
+   quote's "this" or "the latter" stands for. SET THE SCENE as a question,
+   or as a bare naming of the options, and THEN POINT at what to look for.
+   GOOD: "Is the model reasoning, or recalling its training data? See which
+   reading their results favour.",
+   "Two measures are on offer, one simple and one exact. Which do they
+   choose, and what do they give up for it?",
+   "Does the effect hold outside the lab as well as in it? Note the number."
+   BAD, it leans on the quote's own unexplained words: "Which interpretation
+   does their evidence favour?" (which interpretations?), "Look for why this
+   approach fails." (which approach?)
+
+   The scene names the question and the options. It is never a statement
+   of what the passage says, shows or argues.
+
+   NEVER say what the passage found, concluded or chose. Leave the answer
+   in the passage.
+   BAD, it gives the finding away: "Their results show the model is
+   recalling, not reasoning.", "Small trials can make a weak drug look
+   strong. See what they warn doctors about." (the first sentence is the
+   finding), "Synergy is concentrated in the rich club.", "Shows the effect
+   is robust.", "Sleep improves memory by 20%.", "The author is wrong
+   about X."
    Pointing at a number or a result is fine ("note the number"); stating it
    is not. No findings, no verdicts: the reader gets those from the passage.
+
+   ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you
+   were given: the quote, the key ideas and the outline. Do not add a
+   place, a date, a method, a size or a motive to make the scene vivid
+   ("in mice", "last year", "by hand"), and do not sharpen what the quote
+   says ("never" for "rarely", "all" for "most"). If you cannot tell from
+   what you were given what "the latter" or "this approach" means, do not
+   guess and do not invent a scene: write a plain cue that says what to
+   look for ("Look for which of the two readings they settle on, and
+   why."). A wrong scene is worse than none.
+
+   WRITE WHOLE SENTENCES. One or two, each complete, each ending in one
+   full stop or one question mark. Never a fragment ("Which one the
+   evidence favours."), never ".?".
+
+   Setting the scene is not explaining a term. The PLAIN WORDS section
+   below says not to explain a term inside a question: for a cue, that means
+   do not stop to define the article's vocabulary. It does not stop you
+   naming the two options or saying what "this" stands for. Where the two
+   seem to disagree, for a cue this section wins.
+
    Each cue stands on its own. Never refer to another stop ("next", "as
    before", "the previous stop", "now"), because a reader can arrive at any
    stop from anywhere.

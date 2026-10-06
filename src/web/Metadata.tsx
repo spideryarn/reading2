@@ -462,6 +462,18 @@ function stageIcon(step: string): ComponentType<{ size?: number }> {
 // so the docstring above and the effect below still read as they did.
 const LOADING_AFTER_MS = SLOW_AFTER_MS;
 
+/**
+ * **How long after each failed first read this page asks again**, and then it
+ * stops: four more tries over about fifty seconds.
+ *
+ * One failed read used to be final — `reload` ran when the slug changed and at
+ * no other time — so a single 404 in the seconds an import was still writing,
+ * or one dropped connection, left *"We could not check who can read this"* up
+ * until the reader reloaded (qi-kynm6gzc, 2026-10-06). Bounded, because a slug
+ * that is really gone would otherwise be polled for the life of the tab.
+ */
+const READ_AGAIN_AFTER_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
+
 export function Metadata({
   slug,
   article,
@@ -534,6 +546,8 @@ export function Metadata({
    */
   const [provenanceOffline, setProvenanceOffline] = useState(false);
   const [slow, setSlow] = useState(false);
+  /** Reads that have failed since this article was opened — `READ_AGAIN_AFTER_MS`. */
+  const [failedReads, setFailedReads] = useState(0);
   /**
    * **On `useOrderedRead`, because a dozen rows below can now ask for this again.**
    *
@@ -566,6 +580,7 @@ export function Metadata({
       } catch (e) {
         if (!current()) return;
         setProvenanceError((e as Error).message);
+        setFailedReads((n) => n + 1);
       }
     },
     [slug],
@@ -579,10 +594,22 @@ export function Metadata({
     setProvenanceError(null);
     setProvenanceOffline(false);
     setSlow(false);
+    setFailedReads(0);
     const timer = setTimeout(() => setSlow(true), LOADING_AFTER_MS);
     void reload();
     return () => clearTimeout(timer);
   }, [reload]);
+  /* **A failed first read asks again** — `READ_AGAIN_AFTER_MS`. Only while there
+     is nothing on the page: a failed *refresh* keeps the rows it had and the
+     sentence beside them, and the next press asks again anyway. Keyed on the
+     count, so each wait starts when the read before it failed. */
+  useEffect(() => {
+    if (provenance !== null || failedReads === 0) return;
+    const wait = READ_AGAIN_AFTER_MS[failedReads - 1];
+    if (wait === undefined) return;
+    const timer = setTimeout(() => void reload(), wait);
+    return () => clearTimeout(timer);
+  }, [provenance, failedReads, reload]);
 
   /**
    * The per-article half of the reader profile, as a draft.
@@ -1202,6 +1229,9 @@ export function Metadata({
              day it was written; this door was not. AccessSharing.tsx §
              asArticleSharing. */
           sharing={asArticleSharing(provenance?.sharing)}
+          /* Still out, which is not the same as failed: the card has a
+             sentence for each. */
+          checking={provenance === null && provenanceError === null}
         />
 
         {/* ------------------------------------------------ 6. your reading --
@@ -1421,6 +1451,7 @@ function SharingSection({
   title,
   offer,
   sharing,
+  checking,
   onVisibility,
   onPrivateLink,
 }: {
@@ -1438,9 +1469,11 @@ function SharingSection({
    * in flight, and for ever on a store with no column to read.
    */
   sharing: ArticleSharing | undefined;
+  /** That fetch is still in flight: it has neither landed nor failed. */
+  checking: boolean;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} sharing={sharing} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+  return <SharingCard slug={slug} title={title} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1457,12 +1490,14 @@ function SharingCard({
   slug,
   title,
   sharing,
+  checking,
   onVisibility,
   onPrivateLink,
 }: {
   slug: string;
   title: string;
   sharing: ArticleSharing | undefined;
+  checking: boolean;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
 }) {
@@ -1505,6 +1540,7 @@ function SharingCard({
           slug={slug}
           title={title}
           sharing={sharing}
+          checking={checking}
           isPublic={visibility === null ? null : visibility === "public"}
           onLink={reportLink}
         />
@@ -1519,6 +1555,7 @@ function SharingCard({
             slug={slug}
             title={title}
             sharing={sharing}
+            checking={checking}
             onVisibility={report}
             privateLinkOn={linkOn}
           />

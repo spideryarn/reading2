@@ -33,6 +33,10 @@ measured with scripted readers and a blind judge:
 - [261005e](../investigations/261005e-explore-prompt-widened-to-critiques-of-the-piece.md) —
   Explore's prompt widened to critiques of the piece: before and after with a scripted critic, a
   blind read inside its control's spread, and the false "no source" claims that took two revisions.
+- [261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md) — Skim's cue asked to
+  set the scene its quote assumes, with and without the quote's paragraph: a large gain on the
+  question asked, and the two regressions (giving the finding away, misstating the context) that a
+  second and third judge question caught.
 
 ## Naming
 

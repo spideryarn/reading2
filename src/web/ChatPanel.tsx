@@ -1842,7 +1842,7 @@ export const EXPLORE_STARTERS: readonly string[] = [
 ];
 
 /**
- * **Explore's empty state says what it is for and offers three ways in.**
+ * **Explore's empty state says what it is for and offers four ways in.**
  *
  * Buttons, where Recall's invitation above refuses them — and the difference
  * is what the button would say. A Recall starter would be the reader's account

@@ -2,7 +2,7 @@
 /**
  * **A spoken exchange is not retried as the next reader.**
  * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2;
- * GPT Sol's review, F2 (docs/plans/261006f-plan-review-sol.md).
+ * GPT Sol's review, F2 (docs/plans/261006f-reader-bound-plan-review-sol.md).
  *
  * `appendSpoken` tries three times with a gap between. A first spoken
  * exchange *creates* its thread, so the conversation's id protects nothing:
