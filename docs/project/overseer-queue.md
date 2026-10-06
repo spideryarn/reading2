@@ -145,9 +145,6 @@ Greg promotes one by saying so, and then it moves up into a plan.
 - **`tests/fleet-health-wiring.test.ts` mount guard passes with the mount commented out** — the needle
   survives inside the `//`. Assert against comment-stripped lines, as `fleet-deploys-route` now does.
   It stands behind a feature that shipped dead once. 2026-09-09.
-- **`.dock-modes { flex: 3 0 auto }` under `@media (pointer: coarse)` hard-codes the mode count** as a
-  share weight, wrong since the fourth tab landed; no type or test can see it and the symptom is
-  proportion, not breakage. Found by GPT Sol reviewing `fleet-dashboard-modes.md`. 2026-09-09.
 - **A merge commit carrying code of its own is invisible to the changelog.** Every range in
   `scripts/changelog/` is `--no-merges`, and so is the deploy's `changelog` gate, on the belief that
   every merge here is a plain `Merge … origin/dev`; a conflict resolution that adds code is in no
