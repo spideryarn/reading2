@@ -50,6 +50,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type QuotesStatus = "loading" | "none" | "ready" | "error";
@@ -238,11 +239,11 @@ export function useQuotesRead(slug: string): QuotesRead {
         return;
       }
       /* Only an explicit `null` means none yet, and a reply without its
-         artefact is published nowhere: a plain `Error`, so the reader gets
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
          `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
          stays. */
       if (typeof loaded?.quotes !== "object" || loaded.quotes === null) {
-        throw new Error("the quotes reply has no quotes");
+        throw new MalformedReply("the quotes reply has no quotes");
       }
       const profiled = loaded.quotes.profileHash != null;
       setQuotes(loaded.quotes);

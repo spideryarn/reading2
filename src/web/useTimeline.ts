@@ -43,6 +43,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type TimelineStatus = "loading" | "none" | "ready" | "error";
@@ -161,11 +162,11 @@ export function useTimelineRead(slug: string): TimelineRead {
         return;
       }
       /* Only an explicit `null` means none yet, and a reply without its
-         artefact is published nowhere: a plain `Error`, so the reader gets
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
          `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
          stays. */
       if (typeof loaded?.timeline !== "object" || loaded.timeline === null) {
-        throw new Error("the timeline reply has no timeline");
+        throw new MalformedReply("the timeline reply has no timeline");
       }
       setTimeline(loaded.timeline);
       setStale(loaded.stale);

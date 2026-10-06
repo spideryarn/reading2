@@ -30,6 +30,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -181,11 +182,11 @@ export function useSimple(slug: string): UseSimple {
           return;
         }
         /* Only an explicit `null` means none yet, and a reply without its
-           artefact is published nowhere: a plain `Error`, so the reader gets
+           artefact is published nowhere: a `MalformedReply`, so the reader gets
            `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
            stays. */
         if (typeof loaded?.simpleSummary !== "object" || loaded.simpleSummary === null) {
-          throw new Error("the plain-words reply has no summary");
+          throw new MalformedReply("the plain-words reply has no summary");
         }
         setSimple(loaded.simpleSummary);
         setStale(loaded.stale);

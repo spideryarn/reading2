@@ -48,7 +48,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
-import { ReaderFacingError } from "./lib/reader-facing.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -381,11 +381,11 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           return;
         }
         /* Only an explicit `null` means none yet, and a reply without its
-           artefact is published nowhere: a plain `Error`, so the reader gets
+           artefact is published nowhere: a `MalformedReply`, so the reader gets
            `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
            stays. */
         if (typeof loaded?.glossary !== "object" || loaded.glossary === null) {
-          throw new Error("the glossary reply has no glossary");
+          throw new MalformedReply("the glossary reply has no glossary");
         }
         const profiled = loaded.glossary.profileHash != null;
         setGlossary(loaded.glossary);

@@ -44,6 +44,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type DebateStatus = "loading" | "none" | "ready" | "error";
@@ -152,11 +153,11 @@ export function useDebateRead(slug: string): DebateRead {
         return;
       }
       /* Only an explicit `null` means none yet, and a reply without its
-         artefact is published nowhere: a plain `Error`, so the reader gets
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
          `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
          stays. */
       if (typeof loaded?.debate !== "object" || loaded.debate === null) {
-        throw new Error("the debate reply has no debate");
+        throw new MalformedReply("the debate reply has no debate");
       }
       setDebate(loaded.debate);
       setStale(loaded.stale);

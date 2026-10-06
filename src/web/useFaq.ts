@@ -27,6 +27,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type FaqStatus = "loading" | "none" | "ready" | "error";
@@ -128,11 +129,11 @@ export function useFaqRead(slug: string): FaqRead {
           return;
         }
         /* Only an explicit `null` means none yet, and a reply without its
-           artefact is published nowhere: a plain `Error`, so the reader gets
+           artefact is published nowhere: a `MalformedReply`, so the reader gets
            `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
            stays. */
         if (typeof loaded?.faq !== "object" || loaded.faq === null) {
-          throw new Error("the FAQ reply has no FAQ");
+          throw new MalformedReply("the FAQ reply has no FAQ");
         }
         setFaq(loaded.faq);
         setStale(loaded.stale);

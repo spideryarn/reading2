@@ -35,6 +35,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -195,11 +196,11 @@ export function useIdeasRead(slug: string): IdeasRead {
         return;
       }
       /* Only an explicit `null` means none yet, and a reply without its
-         artefact is published nowhere: a plain `Error`, so the reader gets
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
          `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
          stays. */
       if (typeof loaded?.ideas !== "object" || loaded.ideas === null) {
-        throw new Error("the ideas reply has no ideas");
+        throw new MalformedReply("the ideas reply has no ideas");
       }
       const profiled = loaded.ideas.profileHash != null;
       setIdeas(loaded.ideas);
