@@ -80,6 +80,12 @@ will read is not doing its job, however true it is.
 
 ## Keep it navigable
 
+- **Many small docs, not a few big ones.** One topic per doc, each dense with signposts — up, across
+  and down to the code — and with the human's intent, mostly in their own words. When an area has
+  more than a handful, give it an **overview doc as a hub**, and link the important hubs and the
+  must-read-first docs from the top-level signpost file the agents load (here, `AGENTS.md`). Greg,
+  2026-10-06: *"lots of little docs, each with lots of signposting to other docs and code etc, and
+  human intent (mostly quotes/paraphrases from me)"*.
 - **Every evergreen doc is reachable from exactly one deliberate parent**, and that parent links to
   it. If nothing wants to own it, that is a signal about the doc. Dated collections — plans,
   research, postmortems — are owned at directory level instead, and are not indexed item by item;
@@ -102,6 +108,10 @@ will read is not doing its job, however true it is.
   AGENTS.md § When the right thing to do is obvious and unambiguous, do it.
 - **Fix a doc you find out of date, even one your change did not touch** — the standing permission
   and how to land it are in [engineering-manager.md § Along the way](engineering-manager.md#along-the-way).
+- **Check the docs at the two checkpoints**: before you push, for the areas your change touched; and
+  at each release, for everything in it — whoever cuts the release reads its changes against the docs
+  that own them. A doc is cheapest to keep true at the moment its subject changes. Greg, 2026-10-06:
+  *"ideally we update them periodically (e.g. when pushing, or deploying)"*.
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part
   of the change, not a follow-up. **Removing a feature most of all**: grep the docs for its names and
   fix every hit in the same change. A removal done as "a line here and there" leaves the reference

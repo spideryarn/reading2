@@ -27,8 +27,11 @@ into one question for Greg.
   still describe that store, the gist columns and a stylesheet that is now 73 lines of `@import`,
   dead lint suppressions, and tests that wait on a clock or carry guards the types could delete.
 - **One extraction is worth doing:** the `revision_blocks` row → `Block` mapper exists five times.
-- **Seven clusters, S1–S7, are built in this run** (S7, the deploy's robots.txt check, was moved
-  out of the decision queue by the review). Eight items are Greg's or the Overseer's, in § For Greg.
+- **Eight clusters, S1–S8, were built in this run and all eight are on `dev`** (§ What landed).
+  S7, the deploy's robots.txt check, was moved out of the decision queue by the plan review; S8, a
+  polling bug in the fleet dashboard's readiness panel, was found by a code review on the way.
+  Eight items are Greg's or the Overseer's, in § For Greg, and nine small things the run turned up
+  and did not build are in § After the clusters.
 - **§ What the review changed is binding on the builders** wherever it and a cluster's text differ.
 
 ## How it was run, and where it was scaled down
@@ -414,7 +417,181 @@ Waves, after the review: **1** S1 + S2 · **2** S3 + S4 · **3** S5 + S6 · **4*
 - This umbrella, round 1: [GPT Sol](261006j-sixth-codebase-sweep-umbrella-review-sol.md),
   read-only, **ready with these fixes**; all ten applied above. No second round: the fixes narrow
   the work and each cluster's code gets its own review.
+- Each cluster's code: reviewed by GPT Sol, write-capable inside the cluster; the prompts and
+  answers are beside each cluster's plan (`261006j-sixth-sweep-s<N>-code-review-*.md`). S2 and S4
+  took two rounds. One finding was overruled (S5's C1, above); every other was fixed or is listed
+  in § After the clusters.
+- **The whole, together:** `npm run typecheck` clean (3,335 files) and a full `npm test` on the
+  merge of `origin/dev` at `630b6c269`, which holds all eight clusters: **1,753 test files passed,
+  1 skipped; 39,238 tests passed, 46 skipped** (4,362 s on a loaded box). `npm run check` was not
+  run by this session; the readiness loop runs it against `dev`.
+- Not done: a browser. Nothing here was meant to change a pixel, and S6's evidence is a diff of the
+  built stylesheet, not a look at it.
 
 ## What landed
 
-(Filled in as each cluster lands.)
+- **S2, false comments — landed 2026-10-06**, `6a2cdd4b4` on `dev`
+  ([its plan](261006j-sixth-sweep-s2-false-comments.md)). 82 `styles.css §` pointers rewritten, 71
+  filesystem-store passages, 24 gist-column / Hierarchy passages, 15 dead paths, three tutorial
+  banners. Proved comment-only twice, by the builder (comment-stripped compile, 102 files, 0
+  different) and by GPT Sol (AST comparison). **What it taught:** rewriting a comment is a claim
+  like any other. Sol's first review sampled 50 rewritten blocks and found 6 false; its second
+  checked all 172 behaviour blocks and found 64 false or overstated, many of them older claims
+  beside the rewritten line; and the builder's check of Sol's fixes found 4 of about 100 wrong in
+  turn. Three passes, each correcting the last. A comment sweep wants a second family reading
+  every block against the code, not a sample.
+  Left, as possible dead code the comments were covering for, confirmed by Sol and **not built**:
+  `FeedbackDialog.tsx`'s 501 branch and `FEEDBACK_NOT_AVAILABLE` (nothing sends a 501);
+  `writeRawFiles` in `src/fetch.ts` (one caller, a test); `schema === undefined` in
+  `src/vercel-health.ts` (cannot be true by type). Also left: 145 `styles.css` mentions without
+  `§`, 211 filesystem-store lines in `tests/`, a reader-visible tooltip in `Metadata.tsx` that says
+  "the leftmost gist column" (a string, so Greg's), and `GIST_MIN`, named for a deleted thing.
+
+- **S1, what the filesystem store left behind — landed 2026-10-06**, `5204d9156` on `dev`
+  ([its plan](261006j-sixth-sweep-s1-filesystem-store-leftovers.md)). 28 files, +238 −2,719: the
+  witness instrument (six files, 2,245 lines — the audit said about 1,170),
+  `scripts/migrate-fs-toc-to-hierarchy.ts`, and `ReaderPlan`'s `off` arm with its three `case`
+  branches (the last server constructor went on 2026-09-05; the comparison is by `git log -S`).
+  Four witness-reading cases of `tests/store-migration-registry.test.ts` retired; the four lane-map
+  cases kept, and GPT Sol mutated each to see it fail. Sol's review also fixed
+  `tests/one-store-only.test.ts`, whose scanner swallowed read errors, so a missing required root
+  file passed. Full suite on the branch: 1,749 files passed, 1 skipped (4,467 s on a loaded box).
+  Left: `STORE_MIGRATION` itself (about 2,150 lines) is now a closed record read by two cases —
+  deleting it and renaming the file after the lane map that is live in it is the next step, not
+  taken here; and `src/web/useBilling.ts` § `checkedSummary` accepts a plan kind it does not know,
+  after which the copy functions return undefined and the page throws (no server sends one today).
+
+- **S4, test defences — landed 2026-10-06**, `f280b5e98` on `dev`
+  ([its plan](261006j-sixth-sweep-s4-test-defences.md)). `pgReady` has two overloads and 183 guards
+  are gone from 25 suites, with the four `describe.skipIf(!pool)` that could never skip;
+  `admin-only-routes` waits on its heading; `tests/fleet-child.test.ts`'s recorded failure was
+  reproduced and **the audit's hypothesis was wrong** — a real child's uncleared SIGKILL timer was
+  heard by a later test's global spy, fixed by a one-parameter `kill` seam in
+  `tools/fleet/child.ts`; one case there read the real `/proc` for a made-up pid and could have
+  signalled a real process group; `no-secrets-in-bundle` fails without a build instead of skipping;
+  `migration-reconciliations` throws without a local database, where it used to report "9 passed |
+  21 skipped" against a remote URL; `REQUIRE_POSTGRES` comments fixed in 15 files (no code reads
+  it). **The review found the cluster's best item:** converting `sanitize-client` to
+  `runtimeImportsOf` weakened it, because that shared helper was itself a regex with nine blind
+  spots (an import after a comment, `import (` with a space, import text inside a string or a
+  comment, an unparseable file). It now parses, with nineteen cases behind it; over 1,144 files the
+  new reader dropped ten edges, every one a false positive. Left: `overseer-launch-protocol` and
+  `stop-details` keep their regexes (the helper cannot express what they check; a dynamic
+  `import("./launch-protocol.js")` still passes the first), and `require(...)` is invisible to the
+  helper, as before. A bare `npm test` on a fresh clone now needs `npm run build` first;
+  `testing.md` and `setup-dev.md` say so.
+
+- **S3, lint hygiene — landed 2026-10-06**, `6798bc989` on `dev`
+  ([its plan](261006j-sixth-sweep-s3-lint-hygiene.md)). Whole-tree lint 174 errors / 166 warnings /
+  5,326 infos → 89 / 138 / 5,239, nothing gated. `suppressions/unused` 17 → 0, and **the audit's
+  "delete them" was wrong for eleven of SketchView's fifteen**: they sat beside a live error, in a
+  position or under a rule name biome ignores, so they were moved or renamed, not deleted. The two
+  ESLint comments are gone; `tests/fixtures/data-root/{data,output}` is excluded (captured pages,
+  generated artefacts and hand-written reader-state JSON; no executable source); five small rules
+  cleared; `annotations.css`'s eight fallbacks carry a suppression and lose nothing; four packages
+  declared in `devDependencies` (four lockfile lines). GPT Sol: ship, no changes; identical
+  per-rule findings under the old and new `biome.jsonc`. **Its review confirmed a defect that
+  predates the cluster**, built as **S8**: `tools/fleet/web/src/ReadinessPanel.tsx`'s polling
+  effect installs the 120-second default while its first response is still pending and never
+  re-runs, so the interval the server sends is unused until Refresh is pressed.
+
+- **S6, dead CSS — landed 2026-10-06**, `844816cce` on `dev`
+  ([its plan](261006j-sixth-sweep-s6-dead-css.md)). All seven classes and six tokens
+  (`--depth-3`, `--quote-color`, `--header-height`, `--sidebar-foreground`, `--sidebar-accent`,
+  `--sidebar-border`) confirmed dead and removed: 8 stylesheets, −62 lines, the built stylesheet
+  1,074 bytes smaller and different only by the removals. GPT Sol: ship, no findings (no emitter by
+  bare or computed name over 3,379 parsed files; a PostCSS comparison found exactly six rules, four
+  shortened selector lists and ten declarations gone). No browser was run; pixel preservation is
+  reasoned from those two comparisons. Left: `--depth-0` is unread too, and two comments use
+  "§ --depth-0" as a section name.
+
+- **S7, the deploy's robots.txt check, and S8, the readiness panel's poll — landed 2026-10-06**,
+  `5c4288fa3` on `dev`
+  ([their plan](261006j-sixth-sweep-s7-s8-robots-check-and-readiness-poll.md)). **S7:**
+  `verifyRobots` judges the served file with the group-aware `judgeRobotsTxt`, through a pure seam
+  `judgeServedRobots` in `scripts/deploy-checks.ts`; `hasDisallowAll` and its three tests are gone.
+  Red first on the Twitterbot-only file; a new test feeds the real `public/robots.txt` through the
+  judge. GPT Sol's review found that the same file with Windows line endings produced 22 errors;
+  the fix is in the judge itself, so the standalone checker has it too. **For the Overseer:** a
+  `robots.txt` change the judge does not expect now fails the deploy's verification step, which
+  runs after the deploy has shipped; change `judgeRobotsTxt` and `public/robots.txt` together.
+  **S8:** the panel follows the server's `refreshMs` (two effects in a small `useReadinessView`
+  hook; the one-line fix fails six of seven tests, with 51 requests where two answers alternate —
+  the builder and Sol each showed it). Invisible by default, since the server's default equals the
+  client's fallback; it shows only when `FLEET_READINESS_REFRESH_MS` is set. Sol's review caught
+  that the split let an older poll overwrite a refreshed answer, and fixed it. Left, older than
+  this work: a Refresh fetch slower than a whole interval can overwrite a later poll; and
+  `UsageHistory.tsx` makes one extra fetch when its first answer names an interval other than 60 s.
+  Nothing was deployed and the dashboard was not restarted.
+
+- **S5, citation depth, the block-row mapper, three null-checks — landed 2026-10-06**,
+  `f6e6fc624` on `dev`
+  ([its plan](261006j-sixth-sweep-s5-citation-depth-block-mapper-null-checks.md)).
+  **The Tier 0 item:** `citableText` now counts block nesting as the renderer does, with a work
+  list in place of recursion, and one `MAX_BLOCK_DEPTH` is exported from `src/citable.ts` and
+  imported by `Cited.tsx`. Wider than the review reported: the server also gave up at six nested
+  lists where the renderer draws to twelve. **No reader saw anything wrong**: `citableText` feeds
+  only the chat log's citation counts and two evals, so the cost was an undercount. Eighteen
+  boundary shapes, eight red before the fix; GPT Sol then fuzzed 12,008 cases at depths 0–14 and
+  found no disagreement on literal ids. **Sol's review fixed a crash a reader could hit:** while a
+  chat answer streamed, ten thousand nested quote markers overflowed the stack in `Cited.tsx`
+  before the depth cap applied. **The mapper:** `src/store/block-rows.ts` holds `publicBlockOf`
+  (its row type has no `note`) and `blockOf` (its row type requires one); no flag. The five files
+  lost 94 lines and gained 11; Sol's 128-combination probe matched the old mappings byte for byte,
+  key order included, and a mapper that spreads its input turns the unit test red with the leaked
+  note showing. The three null-checks are gone, each confirmed by a compiler probe. Two sentences
+  added to `database.md` and `links.md`.
+  **One finding overruled:** Sol's verdict was "do not ship" because, at block depth zero, 21
+  nested emphasis markers around an id now count a citation they did not before. Overruled: the
+  requirement that broke was this plan's own over-strict wording in the review prompt ("unchanged
+  at depths 0–3 for any shape"); the goal is parity with the renderer, which draws that chip, and
+  Sol itself says the change improves parity.
+  Left, both older than this work and neither reader-visible in ordinary use: the server matches
+  raw markdown source while the renderer matches decoded text, so an escape or a character
+  reference inside an id or a link (`spya\-k3m9qt`, `spya-&#107;3m9qt`) makes the counts disagree
+  in both directions (from `3f6b7d68a`); and about six thousand nested `*` still overflow the
+  renderer's inline walk. Three more null-checks of the same shape sit in `evals/`.
+
+## After the clusters: what the run adds to the list
+
+Found while building or reviewing, **not built**, each small. They are the next sweep's first
+nominations, and the Overseer may pick any of them up sooner.
+
+- `src/web/useBilling.ts` § `checkedSummary` accepts a plan kind it does not know; the copy
+  functions then return undefined and the page throws. No server sends one today (S1's review).
+- Possibly dead code the false comments were covering for, each confirmed by Sol: the 501 branch
+  in `FeedbackDialog.tsx` with `FEEDBACK_NOT_AVAILABLE`; `writeRawFiles` in `src/fetch.ts`;
+  `schema === undefined` in `src/vercel-health.ts` (S2's review).
+- `tests/store-migration-registry.ts` § `STORE_MIGRATION`, about 2,150 lines, is a closed record of
+  a finished migration; the live part of that file is the lane map (S1).
+- `tests/overseer-launch-protocol.test.ts` passes a dynamic `import("./launch-protocol.js")`, and
+  the import-graph helper does not see `require(...)` (S4).
+- The citation counter and the renderer disagree on escaped or encoded ids, and the renderer's
+  inline walk has no depth cap (S5's review, above).
+- `--depth-0` has no reader (S6).
+- In the fleet dashboard, a Refresh fetch slower than a whole interval can overwrite a later poll,
+  and `UsageHistory.tsx` makes one extra fetch on a non-default interval (S8).
+- 63 tests read a `.css` file as text, and several would pass a declaration that is overridden
+  later or sits on a selector nothing carries (the defences nominator; a judgement per test).
+- GitHub reports 11 dependency vulnerabilities on the default branch (2 high, 5 moderate, 4 low),
+  printed on every push. Not looked at in this sweep.
+
+## What this run says about the method
+
+- **The reviewer found the best items, not the sweep.** The citation-depth defect, the stack
+  overflow, the import-graph helper's nine blind spots, the swallowed read error in
+  `one-store-only`, the CRLF failure in the robots judge, the stale-answer race in the readiness
+  panel: all six came from GPT Sol reading a plan or a diff, none from a nominator. A sweep whose
+  nominators are one family should expect that, and should spend its second family where it reads
+  code, not where it greps.
+- **Cheap GPT nominators returned nothing.** Two Luna runs, both a light pass and a null. Next
+  time the breadth pass uses Sol for its GPT nominators, or skips them and spends the budget on
+  review.
+- **An audit's proposed fix was wrong about as often as its finding was right.** "Delete the 15
+  dead suppressions" (eleven were live and misplaced), "the fake child's timer" (it was a real
+  child's), "assert the ratio" (the absolute budget was the point), "remove the duplicate
+  declarations" (deliberate fallbacks), "about 1,170 lines" (2,245). Each was caught because the
+  builders were told that every claim in the plan was a claim, and asked to report the false ones.
+- **A full suite costs about 75 minutes on this box under load.** One was run on S1's branch
+  (green) and one over all eight clusters together on `dev` at the end; in between, each cluster
+  ran the files it touched and their subjects.
