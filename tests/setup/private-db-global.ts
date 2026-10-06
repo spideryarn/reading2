@@ -179,8 +179,8 @@
  * `pgReady`, which asks whether *this* database is migrated far enough for *this*
  * suite and throws if it is not — neither of them skips any more.
  *
- * **The `REQUIRE_POSTGRES=1` flag is gone from the decision** and stays in
- * `scripts/check.ts`'s environment harmlessly; nothing reads it.
+ * **The `REQUIRE_POSTGRES=1` flag is gone from the decision**, and since then
+ * from `scripts/check.ts`'s environment too; nothing sets it and nothing reads it.
  *
  * **The old note here said `npm test` with Docker off "skips the Postgres suites
  * and says so", and that was not true when it was written.** Measured 2026-09-04
