@@ -1117,8 +1117,11 @@ diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/system
 not.** `overseer.service` is installed but **disabled**, and the unit sets no `OPENROUTER_API_KEY`,
 so a daemon it started would run with attention off. The live daemon is a tmux session
 (`overseer-daemon<N>-<HHMM>`) started from a launch script that reads the key out of `.env.local`
-and execs `npx tsx scripts/overseer.ts run` in the primary checkout. That script lives in the
-Overseer's scratchpad under `/tmp`, so **a reboot loses both the daemon and the script.** Only one
+and execs `npx tsx scripts/overseer.ts run` in the primary checkout. That script is
+[`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh) since
+2026-10-07 (it lived in the Overseer's scratchpad under `/tmp` before, which a reboot empties), so
+**a reboot still loses the daemon, and no longer the script.** It also has nothing to restart it: it
+stopped on 2026-10-05 with `ENOSPC` when `/home` filled, and stayed down 46 hours. Only one
 daemon can run: a second start, from systemd or anywhere else, prints *"An Overseer is already
 running … Refusing to start a second one"*, and under `Restart=always` the unit retries every five
 seconds until stopped. That happened on 2026-10-04, when `sudo systemctl restart overseer` was run
@@ -1169,6 +1172,55 @@ there is no address, and [after a login you write it yourself](#after-tailscale-
 The unit names no tailnet address itself, because that is a per-machine fact and a checked-in copy
 of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
 form.
+
+## Keeping the disks from filling
+
+There are two disks and both fill. `/home` is the 49 GB volume: worktrees, transcripts and caches.
+It reached 100% on 2026-10-05, peers' commits failed, and the Overseer daemon died of `ENOSPC` and
+stayed down 46 hours. `/` is 301 GB and sat at 83–89% that week, and what fills it is `/tmp`: test
+runs leave about fifty thousand `mkdtemp` directories a day and remove none, so `/tmp` was 150 GB
+and 806,000 entries on 2026-10-07. systemd ages `/tmp` out after 30 days and **empties it at every
+boot** (`/usr/lib/tmpfiles.d/tmp.conf`), so nothing kept there is kept, an agent's scratchpad
+included.
+
+Greg, 2026-10-06: *"Perhaps add this and other measures to keep the hard disk fullness down to some
+routine daemon/service"*. Three things do that now
+([the plan](../plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md)):
+
+**`box-tidy.timer`, hourly**, runs [`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs).
+The script's header is the list of what it deletes, and it is short on purpose: Codex transcripts
+older than 7 days, `logs/tmux-jobs/*.log` older than 14 days, and the npm download cache when
+`/home` is at 80%. The permission for each is Greg's, quoted in
+[overseer.md § Keeping `/home` from filling](overseer.md#keeping-home-from-filling). It never
+deletes a path a live process has open, and deletes nothing at all if it cannot read `/proc` to
+find out. It **reports and does not remove** worktrees, Docker images, scratchpads and the stale
+directories in `/tmp`; a session decides those.
+
+```
+systemctl list-timers box-tidy.timer        # when it last ran and when it runs next
+journalctl -u box-tidy -n 30 --no-pager     # what it did, and both disks before and after
+sudo systemctl start box-tidy.service       # run it now
+node /usr/local/lib/spideryarn/box-tidy.mjs --dry-run   # what it would do; by hand it cannot read
+                                            # root's processes, so it says NOTHING DELETED
+```
+
+It is installed **outside the checkout**, at `/usr/local/lib/spideryarn/box-tidy.mjs`, and runs on
+`/usr/bin/node` with no dependencies, unlike the box's other units. A full disk is when the
+checkout is mid-merge or has no `node_modules`, and the tidy has to run then. So **editing the file
+in the repo does not change the box**, exactly as for a unit file
+([The box's own services](#the-boxs-own-services)): re-provision, or install it by hand:
+
+```
+sudo install -o root -g root -m 0644 infra/hetzner/box-tidy.mjs /usr/local/lib/spideryarn/box-tidy.mjs
+```
+
+**The Box health verdict reads `/home` as well as `/`** since 2026-10-07
+([`tools/fleet/health.ts`](../../tools/fleet/health.ts)): strained at 90%, critical at 97%, on the
+dashboard's Box health strip, in `overseer.ts tick`, and at the launch gate, which holds new
+sessions at critical. That is the alert. There is no separate one.
+
+**Old screenshots** are deleted from git by a script the Overseer runs, not by the timer, because it
+is a commit: [`scripts/prune-old-screenshots.ts`](../../scripts/prune-old-screenshots.ts).
 
 ## Traps
 

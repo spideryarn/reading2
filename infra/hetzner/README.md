@@ -439,6 +439,81 @@ npx tsx scripts/gjd-remote.ts provision
 npx tsx scripts/gjd-remote.ts doctor
 ```
 
+That is the machine. **It is not yet the box you had**, and the rest is below.
+
+### The whole sequence, with the steps no script can do
+
+"Rebuild" here means **a new server on the same `/home` volume**. Everything under `/home` comes
+back by itself: the checkouts, `.env.local`, `.env.prod`, the Claude, Codex, Vercel and Stripe
+logins, `~/.overseer`, the transcripts. Everything on `/` is gone, and `provision.sh` puts back the
+part it knows about. What follows is the part it does not, found by comparing the live box with
+this folder on 2026-10-06
+([the plan](../../docs/plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md)). No secret's
+value is written here or anywhere in the repo; each line names where one lives.
+
+**Before you replace the server**, while the old one still runs:
+
+1. **Decide whether the local database matters, and dump it if it does.** It is in Docker named
+   volumes under `/var/lib/docker`, on the disk that is about to be destroyed (17.6 GB, measured
+   2026-10-07). `npm run setup` afterwards restores the schema and the seeded accounts, and none of
+   the locally ingested articles. `npm run db:export -- --out ~/local-db-<date>` writes them under
+   `/home`; [database.md](../../docs/project/database.md) says what that export covers and what it
+   does not.
+2. **Note the two GitHub token files exist**: `/etc/github-tokens/gregdetre.token` and
+   `spideryarn.token`. They are on `/`. Either copy them to `~` for the duration (and delete the
+   copies afterwards) or be ready to mint new ones in step 5.
+3. **Tell the Overseer.** Every tmux session dies with the server, and `/tmp` with it, which is
+   where each session's scratchpad is.
+
+**Then** `apply -replace`, `forget-key`, `provision`, `doctor`, as above. **Then, in this order:**
+
+4. **Tailscale** (Greg, a browser): `sudo tailscale up --hostname=spideryarn-box --operator=greg`,
+   then the two lines in
+   [hetzner-remote-server-box.md § After `tailscale up`](../../docs/project/hetzner-remote-server-box.md#after-tailscale-up-give-the-fleet-dashboard-the-address)
+   that give the dashboard its address. The old server is still listed in the tailnet's admin
+   console as a second `spideryarn-box`; remove it there.
+5. **GitHub tokens** (Greg): put the two files back in `/etc/github-tokens/`, mode 0600, owned by
+   `greg`. Minting them is [The ceremony](#the-ceremony-greg-once-on-githubcom). Until this is done
+   no agent can push. Check: `git -C ~/code/spideryarn2 fetch origin`.
+6. **The app**: in `~/code/spideryarn2`, `npm ci && npm run setup`. Docker's images and the local
+   database are being made from nothing, so this is the slow step.
+7. **The fleet dashboard**: `npm run build:fleet`, then `sudo systemctl enable --now fleet-dashboard`.
+   `provision.sh` installs the unit and leaves it disabled, on purpose, because it cannot know
+   whether the page is already up some other way. On a fresh server it is not. Check:
+   `curl -s http://127.0.0.1:8787/api/state | head -c 200`.
+8. **The Overseer daemon, exactly one of two ways.** `provision.sh` enables `overseer.service`, so
+   after the first reboot systemd starts it. That copy has no `OPENROUTER_API_KEY` and runs with
+   attention off, saying nothing about it. Until the unit is given the key (a decision for Greg,
+   open as of 2026-10-07), run the daemon in tmux instead: `sudo systemctl disable --now overseer`,
+   then the command in the header of
+   [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh).
+   Check: `npx tsx scripts/overseer.ts diagnose` names one live daemon, and
+   `systemctl is-active overseer-watchdog.timer` says `active`
+   (`sudo systemctl start overseer-watchdog.timer` if not: provisioning enables it for the next
+   boot and does not start it).
+9. **The Overseer session and its loops.** Start the session and claim the role
+   ([overseer.md](../../docs/project/overseer.md)), give it a working directory outside `/tmp`
+   (`export OVERSEER_SCRATCH=…`), and start the loops from
+   [`scripts/overseer-tools/`](../../scripts/overseer-tools/README.md) with `scripts/tmux-job.ts`:
+   `feedback-sweep-loop.sh`, `dashboard-refresh-loop.sh`, and `npx tsx scripts/readiness-loop.ts`
+   ([readiness.md](../../docs/project/readiness.md)).
+10. **Only if somebody needs to watch the browser**: `start-vnc`
+    ([Watching the browser](#watching-the-browser)). Nothing starts it at boot.
+
+**How to tell it worked**: `gjd-remote doctor` is green; `systemctl list-timers` shows
+`box-tidy.timer` and `overseer-watchdog.timer`; the dashboard opens from Greg's phone; a session
+started with `gjd-remote new-claude` can push to `dev`.
+
+**A new volume as well** loses what `/home` was carrying, and each of these is then a step for a
+person, none of them scripted: `claude` `/login` and `claude mcp login` for Sentry and Vercel
+([MCP servers](#mcp-servers)); `codex login --device-auth`
+([Codex](#codex-for-cross-family-review)); `gjd-remote push-env` from the laptop for `.env.local`;
+**`.env.prod`, copied from Greg's laptop by hand**, and `vercel login`, both of which only the
+Overseer's deploys need ([overseer.md § Deploying](../../docs/project/overseer.md#deploying)); the
+Stripe CLI, a binary in `~/.local/bin` with its login in `~/.config/stripe`, which nothing
+installs; `~/gjd-remote/sessions.mjs`, which is not in this repo; and all of `~/.overseer`, the
+fleet's recorded history.
+
 The volume has two locks: `prevent_destroy` (Terraform refuses to replace or destroy it) and
 `delete_protection` (Hetzner refuses, so it also covers the console and the API). Retiring the data
 means removing both deliberately, in their own commit. Note that `prevent_destroy` makes a
@@ -705,8 +780,11 @@ that cannot help. [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts)
 ### Why Supabase needs no credential, and what that buys
 
 It is the **local** stack's own MCP on a loopback address, not Supabase's hosted one, so it cannot
-reach production. That is what lets `push-env`'s allowlist leave `SUPABASE_ACCESS_TOKEN` — the
-management token that can delete the production project — behind entirely.
+reach production. That is what let `push-env`'s allowlist leave `SUPABASE_ACCESS_TOKEN` — the
+management token that can delete the production project — behind entirely, **until 2026-10-01, when
+Greg put it on the allowlist**. It is on the box now, and every use of it needs a fresh yes from
+him: [hetzner-remote-server-box.md](../../docs/project/hetzner-remote-server-box.md), under
+`gjd-remote-env.ts`.
 
 **And that claim is now enforced rather than merely true.** The allowlist matches key *names*, and a
 name says nothing about where it points: `DATABASE_URL` is spelled the same for the throwaway
