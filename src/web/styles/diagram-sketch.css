@@ -417,9 +417,7 @@ a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: 
    **The same grey as every other failure in this band**, not a red. Both of the
    diagram panel's failures — `.diag-wait`'s and the Force strip's — say what
    went wrong in `--ink-faint` and let the words carry it, and a red here would
-   be the one message in the band shouting. It would also have to name
-   `--destructive`, which this stylesheet references six times and defines
-   nowhere: bare, the declaration is simply dropped. */
+   be the one message in the band shouting. */
 .sk-failed {
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;

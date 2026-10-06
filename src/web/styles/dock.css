@@ -468,7 +468,7 @@
    `DockExperimentalSwitch`, whose comment repeats this argument because it is
    the thing a reader of that file will want to argue with. */
 .dock-btn.soon {
-  color: var(--ink-faintest, var(--ink-faint));
+  color: var(--ink-faint);
   opacity: 0.5;
   cursor: default;
 }
@@ -558,15 +558,16 @@
    nearly its own background. The chip is one glyph, so nothing about its width
    is load-bearing beyond the `min-width` above.
 
-   **`var(--destructive, …)` with a fallback spelled out** — a habit from when
-   `--destructive` was defined nowhere in this app. It is defined now, in
-   styles/tokens.css with a light value beside it, so the fallback never
-   applies; search.css and mode-band.css carry the same literal. Were the token
-   ever removed, a bare `var()` would be invalid at computed-value time and
-   simply dropped — a chip with no fill, with nothing reporting an error —
-   which is what `tests/css-tokens.test.ts` exists to catch. */
+   **A bare `var(--destructive)`.** It carried a literal fallback until
+   2026-10-07, a habit from when `--destructive` was defined nowhere in this
+   app. It is defined in styles/tokens.css with a light value beside it, so the
+   fallback never applied; search.css and mode-band.css carried the same
+   literal. Were the token ever removed, a bare `var()` is invalid at
+   computed-value time and simply dropped — a chip with no fill, with nothing
+   reporting an error — which is what `tests/css-tokens.test.ts` exists to
+   catch, and a fallback would have hidden it from that test. */
 .dock-count.failed {
-  background: var(--destructive, oklch(0.65 0.2 25));
+  background: var(--destructive);
   color: var(--page);
   font-weight: 700;
 }
@@ -854,7 +855,7 @@
   color: var(--ink-faint);
 }
 .dock-question-state.pending { color: var(--highlight-text); font-style: italic; }
-.dock-question-state.error { color: var(--danger, var(--highlight)); }
+.dock-question-state.error { color: var(--danger); }
 /* The reader's own words, rather than the model's. Brighter, because in a list
    that mixes the two the one you wrote is the one you are scanning for. */
 .dock-question-state.own { color: var(--ink-soft); }

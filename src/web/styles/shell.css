@@ -194,7 +194,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.loading, .error {
+/* The whole-page states: `div.loading` (LogoLoader's still fallback) and
+   `pre.error` (ArticlePage's refusal). The error arm names its element because
+   `error` is also a state class on small rows (`li.chat-tool.error`,
+   `span.dock-question-state.error`), and a bare `.error` gave each of those
+   3rem of padding, the mono face and `pre-wrap`. */
+.loading, pre.error {
   padding: 3rem;
   color: var(--ink-soft);
   font-family: var(--font-mono);

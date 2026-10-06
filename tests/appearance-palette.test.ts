@@ -66,6 +66,12 @@ const PAIRS: [string, string, number][] = [
   /* A focus indicator is non-text: 3:1 (WCAG 1.4.11). */
   ["--ring", "--background", 3],
   ["--highlight-text", "--background", 3],
+  /* Error text, on each of the three surfaces a status row sits on: the page,
+     the band, and the raised chat dialog. `--destructive` is a fill and is not
+     held to this; on Dark's raised surface it reads 4.37:1. */
+  ["--danger", "--page", 4.5],
+  ["--danger", "--panel", 4.5],
+  ["--danger", "--surface-raised", 4.5],
 ];
 
 describe.each([
