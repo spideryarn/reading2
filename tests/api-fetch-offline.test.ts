@@ -368,6 +368,32 @@ describe("what gets written", () => {
     expect(writeCache).not.toHaveBeenCalled();
   });
 
+  /**
+   * **A `200 null` is "not made yet", and is not kept either** — the answer
+   * the three always-mounted reads ask for in place of that 404 (plan 261006g).
+   *
+   * The copy is filed under reader and URL and replayed as a 200 whatever the
+   * request's headers, so a `null` kept by this tab would be handed, offline,
+   * to a tab opened before the deploy — which reads `loaded.quiz` off it and
+   * shows an error. Not keeping it is also exactly what the 404 did: a copy
+   * of a real artefact saved earlier is left alone, not replaced and not
+   * thrown away.
+   */
+  for (const url of ["/api/quiz/x", "/api/crossrefs/x", "/api/citations/x"]) {
+    it(`does not save a null from ${url}, nor disturb the copy it has`, async () => {
+      vi.stubGlobal("fetch", () =>
+        Promise.resolve(
+          new Response("null", { status: 200, headers: { "content-type": "application/json" } }),
+        ),
+      );
+      const res = await apiFetch(url);
+      expect(await res.json()).toBeNull();
+      await settle();
+      expect(writeCache).not.toHaveBeenCalled();
+      expect(invalidateCache).not.toHaveBeenCalled();
+    });
+  }
+
   it("does not save a response that is not JSON", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(new Response("<html>", { status: 200, headers: { "content-type": "text/html" } })),

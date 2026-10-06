@@ -190,7 +190,9 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
   return (
     <>
       {what}
-      <p>{questionCount(n)}.</p>
+      {/* "in all": the whole batch, where the band's "Question n of N" counts
+          only what *Only what I've read* leaves in (plan 261006g). */}
+      <p>{questionCount(n)} in all.</p>
       {left > 0 && (
         <p>
           {left === 1
@@ -1241,6 +1243,20 @@ export function QuizPanel({
                       is typing now. */}
                   {answered.has(question.id) && !superseded && " — answered"}
                 </p>
+                {/* **What "of N" leaves out, said wherever "of N" is.** This
+                    sentence was under the list, which is closed until asked
+                    for — so the band said "Question 1 of 5" and the (i) card
+                    "12 questions", both true and neither explained. Moved, not
+                    repeated (GPT Sol's F3 on plan 261006g), and it names the
+                    whole batch so the two figures meet. */}
+                {hiddenCount > 0 && (
+                  <p className="gloss-hint">
+                    There are {questions.length} in all:{" "}
+                    {hiddenCount === 1
+                      ? "the other one is about a passage you have not read yet."
+                      : `the other ${hiddenCount} are about passages you have not read yet.`}
+                  </p>
+                )}
                 {/* **The premise, as a lead-in rather than part of the
                     question**: its own element, quieter, above the stem. The
                     question reads as a whole without it — the prompt insists —
@@ -1415,22 +1431,15 @@ export function QuizPanel({
                   onJump={onJump}
                 />
 
+                {/* How many the filter leaves out is said beside the count
+                    above, list open or closed. */}
                 {listing && (
-                  <>
-                    <QuestionList
-                      questions={questions.filter((_, i) => included[i])}
-                      currentId={question.id}
-                      answered={answered}
-                      onPick={pick}
-                    />
-                    {hiddenCount > 0 && (
-                      <p className="gloss-hint">
-                        {hiddenCount === 1
-                          ? "One more is about a passage you have not read yet."
-                          : `${hiddenCount} more are about passages you have not read yet.`}
-                      </p>
-                    )}
-                  </>
+                  <QuestionList
+                    questions={questions.filter((_, i) => included[i])}
+                    currentId={question.id}
+                    answered={answered}
+                    onPick={pick}
+                  />
                 )}
 
                 {lookAgain.length > 0 && (
