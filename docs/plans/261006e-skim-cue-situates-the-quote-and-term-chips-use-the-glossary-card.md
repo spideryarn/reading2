@@ -164,3 +164,10 @@ article). **Ship C only if it beats B on the dangling-reference cases; otherwise
   person has read the pairs, and the regex that marks "dangling" quotes is wide. A judge asked only
   which cue prepares better prefers B's fuller scene to B2's 64 to 19: that is a product trade-off
   (fuller scene, more giveaways) and is put to Greg in the debrief.
+- 2026-10-06: **stage 2 review correction to the ship decision above.** The counts recompute, but
+  "both inside what two runs of the old prompt differ by" is too strong: B2's misstatement excess
+  over A1 is 2 (3 against 1), while the control difference is 1 (3 against 2). A raw count within
+  the control's 2–3 is not evidence of no regression. The accepted F1 gate also requires improvement
+  on the dangling cases; 15 to 8 with 5 ties does not clearly show it. B2 remains implemented as the
+  candidate; shipping requires further target-case evidence or an explicit decision to change that
+  gate. The investigation and reference doc now state those limits.

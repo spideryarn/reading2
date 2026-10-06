@@ -19,6 +19,8 @@
  *
  * `--a1` and `--b` are usually one file. An arm's file is refused if it is not
  * the arm it is named as (C must say `context: true`, B and B2 must not).
+ * Each arm must have exactly one run per article; repeated article slugs are
+ * refused rather than selecting one run silently.
  *
  * It writes, beside `--out`:
  *
@@ -38,7 +40,8 @@
  *
  * Run again once `…-judgment-sN.json` exists (`{ judgments: [{ pair, a,
  * giveaway, invent }] }`) and it joins each to its key and prints who was
- * picked, over all pairs and over the dangling ones.
+ * picked, over all pairs and over the dangling ones. Each pair must have
+ * exactly one judgment, with an allowed answer to all three questions.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { blindCoin } from "../../evals/plain-words/run.js";
@@ -87,7 +90,10 @@ function load(name: ArmName, file: string): Run[] {
   const arm = name === "A1" || name === "A2" ? "old" : "new";
   const runs = data.results.filter((r) => r.arm === arm);
   if (runs.length === 0) throw new Error(`${name}: ${file} has no ${arm} arm`);
+  const seen = new Set<string>();
   for (const r of runs) {
+    if (seen.has(r.slug)) throw new Error(`${name}: ${file} has multiple runs for ${r.slug}; pass one run per article`);
+    seen.add(r.slug);
     if (name === "C" && !r.context) throw new Error(`C: ${file} was not run with --context`);
     if ((name === "B" || name === "B2") && r.context) throw new Error(`${name}: ${file} was run with --context`);
     if (arm === "old" && r.version !== "skim/9") throw new Error(`${name}: ${r.slug} is ${r.version}, not skim/9`);
@@ -338,7 +344,24 @@ for (const set of SETS) {
   const { judgments } = JSON.parse(readFileSync(path, "utf8")) as {
     judgments: { pair: number; a: Pick3; giveaway: Pick4; invent: Pick4 }[];
   };
-  if (judgments.length !== key.length) console.warn(`${set.name}: ${judgments.length} judgments for ${key.length} pairs`);
+  // A row count cannot prove completeness: a repeated pair can replace an
+  // omitted one. Refuse the entire set before any malformed answer is tallied.
+  if (!Array.isArray(judgments)) throw new Error(`${set.name}: judgments must be an array`);
+  const pairIds = new Set(key.map((k) => k.pair));
+  const judged = new Set<number>();
+  for (const j of judgments) {
+    if (!j || typeof j !== "object") throw new Error(`${set.name}: judgment must be an object`);
+    if (!pairIds.has(j.pair)) throw new Error(`${set.name}: no key for pair ${j.pair}`);
+    if (judged.has(j.pair)) throw new Error(`${set.name}: duplicate judgment for pair ${j.pair}`);
+    judged.add(j.pair);
+    if (!["A", "B", "tie"].includes(j.a)) throw new Error(`${set.name}: pair ${j.pair}: invalid a`);
+    for (const field of ["giveaway", "invent"] as const) {
+      if (!["A", "B", "both", "neither"].includes(j[field])) throw new Error(`${set.name}: pair ${j.pair}: invalid ${field}`);
+    }
+  }
+  for (const k of key) {
+    if (!judged.has(k.pair)) throw new Error(`${set.name}: missing judgment for pair ${k.pair}`);
+  }
   for (const subset of ["all", "dangling", "not dangling"] as const) {
     const rows = judgments.flatMap((j) => {
       const k = key.find((x) => x.pair === j.pair);

@@ -358,8 +358,12 @@ Two wordings were measured blind on five articles
 ([261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md)). The first set a scene on
 every cue. Readers were judged better prepared by it in 72 pairs of 88, but it gave the finding away
 twice as often as the old cue and misstated the context in one cue in ten. The one kept was
-preferred to the old cue in 50 pairs of 88 against 19, with neither fault above the old prompt's own
-level. **What it cannot do** is name a referent that only the surrounding paragraph holds, because
+preferred to the old cue in 50 pairs of 88 against 19. On the dangling subset it was ahead 15 to 8,
+with 5 ties, not clearly outside the control's 11 to 10. Its judge marked 18 giveaways against the
+old cue's 19, and 3 misstatements against 1: these observations do not establish no regression.
+There was one run of the revised wording and one same-family judge per comparison. It remains a
+candidate pending the plan's target-case shipping gate. **What it cannot do** is name a referent
+that only the surrounding paragraph holds, because
 the prompt is still given no prose. Handing it each quote's paragraph was measured too, did not
 clearly do better on the quotes it was meant for, cost about a third more per route, and was removed
 (its code is at commit `c943494a9`). An older route is outdated, not stale, so it keeps its cues

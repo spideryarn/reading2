@@ -7,16 +7,17 @@ Up: [investigations.md](../project/investigations.md). The mode is [skim.md](../
 **Both rounds in one paragraph.** Round one made every cue set a scene (arm B), and tried the same
 with each quote's paragraph in the prompt (arm C). Both prepared a reader far better than the old
 cue and both paid for it: more findings given away (B) and more misstated context (B and C).
-Round two (arm **B2**, the wording that ships) sets a scene only where the quote leans on something
+Round two (arm **B2**, the selected wording) sets a scene only where the quote leans on something
 unsaid, as a question or a naming of the options, and otherwise only points. Against the old cue a
 blind judge preferred B2 in 50 pairs of 88 (old: 19, 19 ties), where two runs of the old prompt
-split 31 to 35; it gives the finding away no more often (18 against 19) and misstates about as
-rarely (3 against 1, control 3 against 2). On the 28 dangling quotes it is ahead 15 to 8, which is
-better than the control's 11 to 10 but not by much. B2 gives up most of B's extra preparation (B
-beat it head to head, 64 to 19) to get rid of B's faults. Arm C was removed from the code. The
-route did not move in any arm. Spend: $0.86 in round one and $0.22 in round two.
-[Round two](#round-two-b2-a-scene-only-where-the-quote-needs-one) is below; everything before it is
-round one, left as written.
+split 31 to 35. That judge marked 18 giveaways against 19 and 3 misstatements against 1 (control
+3 against 2); this does not establish no regression. On the 28 dangling quotes it is ahead 15 to 8,
+not clearly outside the control's 11 to 10. B2 gives up most of B's extra preparation (B
+beat it head to head, 64 to 19) to reduce B's flagged faults. Arm C was removed from the code. The
+aggregate route comparisons were similar to the control, with larger order differences on one
+article (below). Spend: $0.86 in round one and $0.22 in round two.
+[Round two](#round-two-b2-a-scene-only-where-the-quote-needs-one) is below; the preceding sections
+record round one. Stage 2 review corrections qualify the route and shipping conclusions.
 
 **Round one in one paragraph.** `skim/10` asks each cue to set the scene its quote assumes and then point at
 what to look for. A blind judge found the new cue prepares a reader better in 72 pairs of 88
@@ -27,7 +28,8 @@ against the new wording alone. **But both new arms pay for it.** The wording alo
 passage's finding about twice as often as the old cue (33 pairs against 17, same judge), and both
 new arms say something the text does not support in about one cue in ten, against about one in
 forty before. With the paragraph, the giving-away is back at the old prompt's level; the
-misstatements are not. The route itself did not move. Total spend $0.86.
+misstatements are not. Aggregate route comparisons were similar to the control; this does not
+establish route invariance. Total spend $0.86.
 
 ## What was asked
 
@@ -159,8 +161,9 @@ articles of five (the fifth differs between the two control runs too). Of the sh
 | same `again` | 83% | 82% | 81% | 78% | 83% | 80% |
 | same relative order | 88% | 84% | 94% | 88% | 96% | 92% |
 
-Every treatment figure sits beside the control's. **The cue change did not move the route**, with
-or without the passages. Per article it is in `evals/results/skim-cue-2026-10-06-screens.md`.
+The aggregate figures are similar to the control; they do not establish that the cue change leaves
+the route unchanged, with or without passages. Per-article differences are in
+`evals/results/skim-cue-2026-10-06-screens.md`.
 
 ## Examples
 
@@ -301,7 +304,7 @@ section wins" paragraph kept):
 
 The examples in the prompt are invented or from another field, not taken from the five articles.
 B2 is `src/skim.ts` at SHA-256 `3987d5b6e7ca598d`, with arm C already removed, so the file
-measured is the file that ships.
+measured is the file in the candidate.
 
 ```
 npx tsx scripts/eval/skim-coverage-eval.ts --runs=1 --new-only --new-version=skim/10 --tag=b2 $S
@@ -335,9 +338,12 @@ The 28 dangling quotes:
 - **Better prepared, dangling: ahead, not clearly.** 15 to 8 with 5 ties, against the control's 11
   to 10 with 7. Half of the 28 "dangling" quotes explain their own "this" (the rule is a regex),
   and on those B2 writes what the old prompt wrote, often word for word.
-- **Giving away: fixed.** 18 against A1's 19 from the same judge, and half of B's (15 against 30).
-- **Misstating: back inside the control.** 3 against 1, where the two control runs were 3 and 2;
-  4 against B's 10.
+- **Giving away: fewer observed flags.** 18 against A1's 19 from the same judge, and half of B's
+  (15 against 30). One run and one judge per comparison do not establish no regression.
+- **Misstating: fewer than B, more than A1 in their comparison.** 3 against 1; 4 against B's 10.
+  B2's absolute count of 3 is within the control's 2–3, but its paired excess of 2 is larger than
+  the control's difference of 1. Calling that "inside what two runs differ by" confuses the two
+  comparisons. Neither establishes a regression or its absence.
 - **The price is plain in B v B2**: a judge asked only "which prepares better" picks B's fuller
   scene 64 to 19. B2 is the old cue's restraint with a scene where one is needed, not B with the
   faults sanded off.
@@ -362,7 +368,10 @@ model thinks more.
 | same `again` | 83% | 84% | 83% | 82% |
 | same relative order | 88% | 83% | 94% | 95% |
 
-Beside the control throughout. **B2 did not move the route.**
+The aggregate figures are similar to the control. This does not establish that B2 leaves each
+article's route unchanged: on `source-spya-furjgs`, A1 v B2 has 62% relative-order agreement,
+against 86% for A1 v A2 (A2 v B2: 71%). These are single runs; the larger difference is observed,
+but whether it reflects the cue wording rather than sampling is not established.
 
 ### Examples
 
@@ -432,10 +441,13 @@ to the run; the script's own total is the one to trust.
 
 ### Recommendation, round two
 
-**Ship B2.** It clearly beats the old cue overall, it is inside the control on giving the finding
-away and on misstating, and it fixes Greg's own example. The one part of the bar it does not
-clearly clear is the dangling subset (15 to 8, 5 ties). The next thing worth trying, if readers
-still meet cues like example 7, is the paragraph again under B2's rules; not now.
+The original recommendation was **ship B2**: it beats the old cue overall and fixes Greg's own
+example. **Stage 2 review correction, 2026-10-06:** the accepted plan requires improvement on the
+dangling-reference cases with no regression on grounding or giveaways. The target subset (15 to
+8, 5 ties) does not clearly clear that bar, and the fault counts above do not establish no
+regression. B2 is therefore a candidate, not a result that met the agreed shipping gate. Shipping
+on the overall gain would be an explicit change to that gate; otherwise it needs further target-case
+measurement. The paragraph under B2's rules remains unmeasured.
 
 ## Files
 
