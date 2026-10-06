@@ -1,0 +1,1 @@
+{"source":"chemrxiv","label":"Droplet motion","role":"landing","expect":null,"requestedUrl":"https://doi.org/10.26434/chemrxiv.15009878/v1","outcome":"fetch-failed","elapsedMs":140,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

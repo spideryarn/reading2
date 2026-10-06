@@ -1,0 +1,1 @@
+{"source":"huggingface-papers","label":"Attention","role":"fulltext","expect":"pdf","requestedUrl":"https://arxiv.org/pdf/1706.03762","outcome":"ok","finalUrl":"https://arxiv.org/pdf/1706.03762","chainHosts":["arxiv.org"],"status":200,"kind":"pdf","bytes":2215244,"elapsedMs":83,"pdfPages":15}

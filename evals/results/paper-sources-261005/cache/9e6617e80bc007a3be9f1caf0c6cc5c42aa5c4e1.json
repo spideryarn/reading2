@@ -1,0 +1,1 @@
+{"source":"medrxiv","label":"Potassium channel","role":"fulltext","expect":"html","requestedUrl":"https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7.full","outcome":"fetch-failed","elapsedMs":74,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

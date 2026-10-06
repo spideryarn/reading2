@@ -361,6 +361,25 @@ git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origi
 git diff origin/dev...HEAD     # THREE dots. Two is a trap; see below.
 ```
 
+**Merge `origin/dev` when you wake up as well, not only when the work is done.** A session resuming
+from a cron, a long wait, a compaction or a `--resume` fetches and merges before it does anything
+else.
+
+> when you wake up, pull the latest changes to avoid a big merge conflict at the
+> end
+>
+> — Greg, 2026-09-06
+
+That day a change sat in a worktree for about two hours, and `dev` moved three times during the
+push sequence itself: the merges brought in 64, then 11, then 84 files, each one after the tests
+had run, and each forcing another run. Merged early, the same changes are an ordinary integration,
+and a conflict arrives while there is still time to think about it. Run the affected tests again
+after the merge.
+
+In the shared primary, look first: if `git rev-list --left-right --count HEAD...origin/dev` shows
+nothing local-only, `git merge --ff-only origin/dev` moves the branch without a merge commit and
+without touching what other agents have uncommitted there.
+
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.
 That is not a display problem: the workflow hands GPT Sol "the scoped diff" as review evidence, so a

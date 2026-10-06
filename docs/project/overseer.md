@@ -129,6 +129,19 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   *Decisions made* mode renders (until that lands, the same fields as one line in the decision log).
   A decision he has not seen is still a decision he can reverse, so the record is the whole of the
   permission.
+- **Bugs, and improvements that cost nothing, you authorise yourself — when you are confident and
+  there is no trade-off.** Greg, 2026-10-04: *"if you see bugs, fix them without asking me."* and
+  *"if there are clear no-tradeoffs-improvements that won't add much complexity, you should always do
+  them"*; and on 2026-10-06, confirming them: *"yes, as long as you're confident and there aren't
+  tradeoffs"* and *"yes (though complexity counts as a tradeoff)"*. So a plain bug fix, or an
+  improvement with no trade-off and little added complexity, does not wait as *needs Greg*: dispatch
+  it, and say in the queue entry that it rests on this rule. What still goes to him as a tagged
+  question is a real product trade-off, added complexity, a destructive write to production, and the
+  wording of a rule doc.
+- **A question waiting on him blocks only itself.** Greg, 2026-10-06: *"I'm probably only going to
+  check in every day or so, so if something is blocking you, just work around it sensibly in the
+  meantime."* So ask, and meanwhile carry on with everything that does not depend on the answer, or
+  take the sensible default and say so; never let one open question hold the fleet or a deploy.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
@@ -403,17 +416,15 @@ Every half hour or so, in this order — the first two need no model, the last o
 2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
    hour into building with no commit on its branch is told to commit now; the only copy of an
    evening's work was on one disk on 2026-09-09.
-   **The seven-day window is the one that freezes the fleet for days**, and it is rationed the same
-   way: at ~4 points a day it lasts the week; the night of 2026-09-08/09 spent 18 points in eight
-   hours with ten to twelve sessions. When it is short, Greg's standing answer (2026-09-09) is
-   *"slow things down a bit, and/or delegate more to GPT via codex-cli-as-subagent.md to
-   implement"* — fewer Claude sessions, each managing and reviewing while Codex writes the code
-   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. **That
-   shifts the spend; it does not escape the rationing.** Every stage ends in a Sol review and nothing
-   ships without one, so the ChatGPT window running out stops the fleet exactly as the Claude one
-   does, and the same thresholds and the same pause apply to whichever of the two is nearer its
-   limit — slowing Claude sessions down to hand more to Codex is only an answer while Codex has
-   room. Watch both budgets, and ration against the tighter one.
+   **Claude's seven-day window is not rationed, since 2026-10-01.** Greg, after the Overseer said it
+   would slow new session starts at 92% of the week: *"Keep going until you hit 100% of your weekly
+   usage limits, and then I'll find a way to reset them."* So do not hold the queue or slow releases
+   because Claude's weekly figure is high; when sessions do stop at 100%, tell him plainly, and a
+   line to him at about 95% is fine. The Overseer broke this on 2026-10-03: at 97% it held the queue
+   for about three hours, reasoning that at 100% every session stops, itself included. That is the
+   trade he had already chosen. (It replaced his 2026-09-09 answer, *"slow things down a bit, and/or
+   delegate more to GPT"*.) **A GPT limit is different and still stops work**: every stage ends in a
+   Sol review and nothing ships without one (*Usage limits*, above).
 3. **Then pull from the queue**, if the box, the window and the file sets allow — prioritised by a
    combination of ease and value, unless Greg said otherwise
    ([engineering-manager.md § How far to run](../reusable/engineering-manager.md#how-far-to-run)). Every brief quotes
@@ -567,6 +578,26 @@ Where you see them: the box has no GitHub API credential
 to `dev` or `main` prints — `GitHub found N vulnerabilities … (x high, y moderate)`. Read it after each
 deploy's push; `npm audit --audit-level=high` in the primary is the second opinion.
 
+### Keeping `/home` from filling
+
+`/home` on the box is the small disk, and when it is full it is peers' commits and worktree
+creation that fail ([hetzner-remote-server-box.md § Traps](hetzner-remote-server-box.md#traps)).
+Greg gave two standing permissions on 2026-10-05, the day it reached 100%.
+
+**Worktrees and temp files.** *"You are allowed to remove worktrees where it's safe to do so (e.g.
+we've already pushed their contents, or we have explicitly agreed that we are throwing them away)
+And you are allowed to remove temp files where safe to do so"*. Safe for a worktree is still what
+`npm run worktree:check` says inside it, and the removal is still `npm run worktree:remove`. What
+this adds to the close-out under *Dispatching agents* is the tree you and Greg agreed to throw away,
+and temp files; `npm cache clean --force` is one of those.
+
+**Old Codex transcripts.** *"Ok, you have permission any time to delete Codex transcripts more than
+a week old"*. That is the `rollout-*.jsonl` files under `~/.codex/sessions/` last modified more than
+seven days ago, and the directories that leaves empty:
+`find ~/.codex/sessions -type f -name 'rollout-*.jsonl' -mtime +7 -delete`. They were 6.8 GB that
+day, half of it older than a week. A review's conclusions are in the repo's `*-sol.md` files.
+Claude's transcripts under `~/.claude/projects/` are **not** covered.
+
 ### Dispatching agents
 
 **The queue is the entry point for every new idea, Greg's included.** Greg, 2026-09-09: *"preferring
@@ -593,6 +624,15 @@ the work delegated, a GPT Sol review at the end of each stage — and its own wo
 server and one box. Beyond three the suites go red for reasons that are nobody's bug, and you will
 spend the evening investigating the box.
 
+**Every new session counts against what the box can carry, whoever asked for it.** Work started for
+an answer Greg has just given is not exempt. On 2026-10-05 about fifteen sessions were started in
+two hours, one per answer. With about twenty running, up to eight `tsc` runs at once (1–3 GB each),
+dev servers and browser agents, load reached about 170 and swap 31 of 32 GB; Greg's ssh crawled and
+peers' gates were killed. The 30 GB box fits about six to eight active sessions. So when Greg
+answers several questions at once, record the decisions straight away, put the work at the front of
+the queue, and release it as sessions finish. Check load, memory and swap before **any**
+`gjd-remote new-claude`, not only before a release from the queue.
+
 **Use waves to keep two agents off the same ground.** `--wait 5h --no-attach` creates the session now
 and starts it later, so the whole queue goes out in one pass. Two jobs touching the same mode, the
 same prompt or the same file belong in different waves.
@@ -615,6 +655,13 @@ finished successfully and safe to remove, it's fine to do so immediately"* — t
 `npm run worktree:remove` any more, only a refusal while its session is alive, something runs in it,
 or liveness cannot be checked
 ([worktrees.md § Removing one](worktrees.md#removing-one)).
+
+**Killing finished sessions to free memory is yours too.** Greg, 2026-09-29, after running the
+Overseer's `tmux kill-session` list himself: *"You're allowed to run that command and similar
+yourself in future to free up memory."* That day swap was full, vitest's memory guard had blocked
+four sessions' tests for hours, and killing 17 finished sessions took available RAM from 7 to 12 GB
+and swap from 31 to 21 GB. Gate 3 still picks which: only a session that has debriefed, with no
+worktree holding uncommitted or unpushed work. A session's old Playwright Chrome goes with it.
 
 ## Things that will catch you
 

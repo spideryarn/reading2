@@ -59,7 +59,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) is deliberately off it. `SUPABASE_ACCESS_TOKEN` (can delete the production
   Supabase project) was too, until Greg put it on, 2026-10-01: *"I know there is risk, but I think
-  it'll be fine."* Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+  it'll be fine."* **Its being on the box is not permission to use it.** It went on for one run of
+  `scripts/supabase-auth-config.ts templates`, and Greg, the same day: *"You have my permission
+  this time to run the command … But going forwards, you still need to ask my permission for any
+  action that involves SUPABASE_ACCESS_TOKEN."* So every action that uses it, by any session, needs
+  a fresh yes from him for that action. Do not pass an earlier yes to a peer as though it were
+  standing, and never print the value.
+  Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
 - [`scripts/gjd-remote-upload.ts`](../../scripts/gjd-remote-upload.ts) — putting a file on the box:
   where `upload` sends it, the local paths whose basename would escape that folder, and
   `remoteWriteScript`, the one `sh` recipe behind **every** `writeRemote` — prompts and job scripts
@@ -1197,6 +1203,10 @@ form.
   `/var/tmp/spideryarn-worktrees/` since then —
   [worktrees.md § Where a worktree's bytes live](worktrees.md#where-a-worktrees-bytes-live). Anything
   else large and disposable belongs on `/` too.
+- **Do not retry a command the classifier has just refused.** Whether it runs is not the agent's
+  call. Try a read of real reader data at most once from an unattended session. If it is refused,
+  write the one-command read-only script for Greg to run, do not plan an eval around a real shelf,
+  and say plainly in the report that the data was not looked at.
 - **`gh` is installed and not logged in.** `gh auth status` answers *"You are not logged into any
   GitHub hosts"* and `GH_TOKEN` is unset (2026-09-02, unchanged 2026-10-05). `git` push and fetch to
   `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository

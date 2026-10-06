@@ -111,7 +111,8 @@ plan review stays read-only (`--sandbox review`) — there is nothing to fix but
 
 ## Delegate
 
-The orchestrator should do **little of the implementation**. Always the latest version of each
+The orchestrator should do **little of the implementation**. Delegate to ordinary subagents, not a
+multi-agent workflow, unless Greg asks for a workflow (2026-10-06). Always the latest version of each
 family — never pin a version number here:
 
 - **Opus** — the main work, and anything advanced on the Claude side, arbitration included.

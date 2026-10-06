@@ -1,0 +1,1 @@
+{"source":"aclanthology","label":"ACL 2023 long 1","role":"fulltext","expect":"pdf","requestedUrl":"https://aclanthology.org/2023.acl-long.1.pdf","outcome":"ok","finalUrl":"https://aclanthology.org/2023.acl-long.1.pdf","chainHosts":["aclanthology.org"],"status":200,"kind":"pdf","bytes":4602729,"elapsedMs":1046,"pdfPages":21}

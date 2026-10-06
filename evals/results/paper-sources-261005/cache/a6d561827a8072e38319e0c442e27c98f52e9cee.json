@@ -1,0 +1,1 @@
+{"source":"elife","label":"Opsins","role":"landing","expect":null,"requestedUrl":"https://elifesciences.org/articles/105451","outcome":"fetch-failed","elapsedMs":165,"failure":{"code":"http-error","status":406,"message":"Couldn't fetch that page (HTTP 406)."}}
