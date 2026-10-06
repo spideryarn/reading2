@@ -1,6 +1,6 @@
 /**
  * **One failed call no longer costs a long document its whole table of
- * contents.** Three behaviours of `runSlices` (src/structure-slices.ts), and
+ * contents.** The behaviours of `runSlices` (src/structure-slices.ts), and
  * the rules they must not loosen:
  *
  * - a failed refill keeps the section it was meant to divide;
@@ -534,6 +534,139 @@ describe("a failed root call is asked for once more in the same run", () => {
     });
   }
 
+  it("a refused root cannot be rescued by an answer another run checkpoints meanwhile", async () => {
+    const store = checkpoints();
+    const read = store.read;
+    let rootKey!: string;
+    store.read = async <T>(...args: Parameters<typeof store.read>) => {
+      const rows = await read<T>(...args);
+      if (store.calls.reads === 3) rootKey = args[2][0]!;
+      return rows;
+    };
+    respond = (call) => {
+      if (!call.root) return good(call);
+      /* A concurrent run buys a valid answer to the identical root request.
+         This run's refusal remains terminal even if a second read could hit. */
+      store.entries.set(`structure-whole-document/${rootKey}`, JSON.stringify({ fingerprint: rootKey, answer: ROOT_ANSWER }));
+      return messageOf(ROOT_ANSWER, "refusal");
+    };
+    const out = await run({ checkpoints: store });
+    expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(store.calls.reads).toBe(3);
+  });
+
+  it("a reader's Stop after the slices prevents the first root ask", async () => {
+    const stop = new AbortController();
+    await expect(run({ signal: stop.signal, onProgress: (detail) => {
+      if (detail.startsWith("2 of")) stop.abort();
+    } })).rejects.toThrow();
+    expect(roots()).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("admission can deny the first root ask after the slices resume, with no calls bought", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    const store = checkpoints();
+    await run({ checkpoints: store });
+    const rootEntry = [...store.entries].find(([, json]) => JSON.parse(json).answer === ROOT_ANSWER);
+    expect(rootEntry).toBeDefined();
+    store.entries.delete(rootEntry![0]);
+    calls = [];
+    const out = await run({ checkpoints: store, deadline: Date.now() + ROOT_CALL_CAP_MS - 1 });
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false,
+      spend: { calls: 0, resumed: 2, usage: { input_tokens: 0, output_tokens: 0 } } });
+    expect(calls).toHaveLength(0);
+    expect(store.calls.reads).toBe(6);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  for (const stop of ["refusal", "max_tokens"]) {
+    it(`a second root ask ending with ${stop} is terminal and counted`, async () => {
+      respond = (call) => {
+        if (!call.root) return good(call);
+        if (roots().length === 1) throw new Error("the first root transport failed");
+        return messageOf(ROOT_ANSWER, stop);
+      };
+      const out = await run();
+      expect(out).toMatchObject({ ok: false, failure: "root-call-failed", rootAskedTwice: true, reasked: 0, secondPass: 0 });
+      expect(roots()).toHaveLength(2);
+      expect(out.spend.calls).toBe(4);
+      expect(out.spend.usage).toEqual({ input_tokens: 3 * USAGE.input_tokens, output_tokens: 3 * USAGE.output_tokens });
+    });
+  }
+
+  it("a second root ask reaching its cap is out of time, with rootAskedTwice true", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    respond = (call) => {
+      if (!call.root) return good(call);
+      if (roots().length === 1) throw new Error("the first root transport failed");
+      return hang(call);
+    };
+    const going = run();
+    await vi.advanceTimersByTimeAsync(ROOT_CALL_CAP_MS);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: true, secondPass: 0 });
+    expect(roots()).toHaveLength(2);
+    expect(out.spend.calls).toBe(4);
+    expect(out.spend.usage).toEqual({ input_tokens: 2 * USAGE.input_tokens, output_tokens: 2 * USAGE.output_tokens });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a reader's Stop during the second root ask throws and waits for its transport", async () => {
+    const stop = new AbortController();
+    let secondStarted!: () => void;
+    const started = new Promise<void>((resolve) => { secondStarted = resolve; });
+    let settled = false;
+    respond = async (call) => {
+      if (!call.root) return good(call);
+      if (roots().length === 1) throw new Error("the first root transport failed");
+      secondStarted();
+      try { return await hang(call); }
+      finally { settled = true; }
+    };
+    const going = run({ signal: stop.signal });
+    await started;
+    stop.abort();
+    await expect(going).rejects.toThrow();
+    expect(settled).toBe(true);
+    expect(roots()).toHaveLength(2);
+    expect(calls).toHaveLength(4);
+  });
+
+  it("a valid first root answer arriving late is saved under the same key and never re-asked", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    const store = checkpoints();
+    const read = store.read;
+    const keys: string[] = [];
+    store.read = async <T>(...args: Parameters<typeof store.read>) => {
+      keys.push(args[2][0]!);
+      return read<T>(...args);
+    };
+    respond = async (call) => {
+      /* Deliberately model a provider that settles after being aborted. */
+      if (call.root) await new Promise((resolve) => setTimeout(resolve, ROOT_CALL_CAP_MS + 1));
+      return good(call);
+    };
+    let returned = false;
+    const going = run({ checkpoints: store }).then((out) => { returned = true; return out; });
+    await vi.advanceTimersByTimeAsync(ROOT_CALL_CAP_MS);
+    expect(returned).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+    expect(roots()).toHaveLength(1);
+    expect(out.spend.usage).toEqual({ input_tokens: 3 * USAGE.input_tokens, output_tokens: 3 * USAGE.output_tokens });
+    expect(store.entries.size).toBe(3);
+    const firstKeys = [...keys];
+    calls = [];
+    keys.length = 0;
+    expect(await run({ checkpoints: store })).toMatchObject({ ok: true, rootAskedTwice: false, spend: { calls: 0, resumed: 3, usage: { input_tokens: 0, output_tokens: 0 } } });
+    expect(keys).toEqual(firstKeys);
+    expect(calls).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("a root call that runs past its cap is out of time, and is not asked for again", async () => {
     vi.useFakeTimers({ now: 1_800_000_000_000 });
     respond = (call) => (call.root ? hang(call) : good(call));
@@ -545,6 +678,29 @@ describe("a failed root call is asked for once more in the same run", () => {
     expect(roots()[0]!.signal.aborted).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  for (const elapsed of [ROOT_CALL_CAP_MS, ROOT_CALL_CAP_MS + 1]) {
+    it(`a root transport failure at ${elapsed} ms cannot retry before the cap's timer is dispatched`, async () => {
+      vi.useFakeTimers({ now: 1_800_000_000_000 });
+      respond = (call) => {
+        if (call.root && roots().length === 1) {
+          /* The clock can reach the cap while the event loop has not dispatched
+             its timer. A rejection must check the clock just as an answer does. */
+          vi.setSystemTime(Date.now() + elapsed);
+          throw new Error("the root transport failed at its cap");
+        }
+        return good(call);
+      };
+      const store = checkpoints();
+      const out = await run({ checkpoints: store });
+      expect(out).toMatchObject({ ok: false, failure: "out-of-time", rootAskedTwice: false });
+      expect(roots()).toHaveLength(1);
+      expect(store.calls.reads).toBe(3);
+      expect(out.spend.calls).toBe(3);
+      expect(out.spend.usage).toEqual({ input_tokens: 2 * USAGE.input_tokens, output_tokens: 2 * USAGE.output_tokens });
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  }
 
   it("is skipped, not started and killed, when its cap would not fit before the deadline", async () => {
     vi.useFakeTimers({ now: 1_800_000_000_000 });

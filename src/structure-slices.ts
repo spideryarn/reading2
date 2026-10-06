@@ -615,6 +615,10 @@ export async function runSlices(opts: {
         call = streamMessage("structure", q.params, { power, signal: own.signal });
         message = await call.finalMessage();
       } catch (err) {
+        /* A transport rejection can win the event-loop race with its cap's
+           timer. Check the clock too, before finally removes the active cap
+           and clears that timer; otherwise a second chance can outlive it. */
+        timedOut ||= Date.now() >= expiresAt;
         callError ??= err;
         plog.warn({ slug, key, err: anthropicCallFailed(err), timedOut }, "a slice call did not come back");
         return not(q, timedOut ? "out-of-time" : "failed");
@@ -813,15 +817,17 @@ export async function runSlices(opts: {
          nothing (`not`), while a refusal or a passed cap latches as it would
          for a required call and `ask` then starts nothing. */
       need: last ? "required" : "second-chance",
-      ...(last ? { onAsked: () => void (rootAskedTwice = true) } : {}),
+      ...(last ? { onAsked: () => { rootAskedTwice = true; } } : {}),
       failure: "root-call-failed",
       text: (message) => finishedText(message, "table of contents root", ROOT_MAX_TOKENS, ROOT_ANSWER_TOKENS),
       accept: (answer) => acceptRoot(answer, deps.question),
     });
   let root = await askRoot(false);
   /* Only `failed`: the call did not come back, or its answer and the re-ask of
-     it did not pass. The slices and refills are in hand and are not asked
-     again. With no time left the second ask is not started and the run is out
+     it did not pass. `ask` accepts a checkpoint before checking its admission
+     latches, so the guard also stops a good late answer saved by the first ask
+     from rescuing this run after its cap. The slices and refills are in hand
+     and are not asked again. With no time left the second ask is not started and the run is out
      of time; after a reader's Stop it is not started and `done` throws. */
   if (!root.ok && root.why === "failed") {
     root = await askRoot(true);

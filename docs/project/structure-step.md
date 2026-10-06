@@ -771,8 +771,8 @@ call. `planBatches` packs whole sibling sets until adding the next one would pas
 keeps them whole while the packed batches can be asked. Batching on a token window instead would
 break exactly that and nothing else, which is why it would be hard to notice.
 
-**The one exception is a section in a batch no single answer could label** (over 1,741 blocks
-in the packed batch: `labelCallBudget` throws `TooLongForOnePass` for the re-draw a truncated
+**The one exception is a section in a batch whose re-draw would not fit one answer** (over
+1,741 blocks in the packed batch: `labelCallBudget` throws `TooLongForOnePass` for the re-draw a truncated
 batch gets, which has twice the reasoning room, `LABEL_RETRY_HEADROOM`. The first call alone
 would fit up to 2,032, and a batch whose only retry could not be sent lost the labels to one
 truncation). `planBatches` asks about it
@@ -782,8 +782,8 @@ uses for its sections). Each window is a sibling set of its own with the section
 and gist; the tree is not touched. The rule is on the finished plan, not on the section, because
 the floor and the tail merge below join sets: pack as always, and if any batch could not be
 asked, cut every section over 60 in that batch and pack again. So no plan holds a batch too long
-to ask, and a tree that planned fine plans exactly as it did, which its checkpoint keys depend
-on. What it gives up: that section's labels are written without the far windows in view. A
+to ask, and a tree whose batches already fit both calls plans exactly as it did, which its checkpoint
+keys depend on. What it gives up: that section's labels are written without the far windows in view. A
 section between 61 and 1,741 blocks stays whole unless the floor or tail merge puts it in an
 unaskable batch (`oversizedSets` counts those left whole, and nothing more); cutting the rest too
 would move the batches of trees that label fine today.
@@ -1195,8 +1195,9 @@ tree, and is an ordinary finished tree.
   returned.
 - **On a failure it cannot get past, it stops starting calls, waits for the ones in flight, and
   falls back** to the tree below. A slice that failed in both passes, a slice refused or cut short
-  that could not be read in halves, a root call that failed twice, a joined tree that will not build, or
-  time running out, which stops both passes at once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
+  that could not be read in halves, a root call refused, cut short or failed twice, a joined tree
+  that will not build, or time running out, which stops both passes at once. What was spent is still
+  counted. A reader's Stop is a cancellation, not a fallback.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
 seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is
