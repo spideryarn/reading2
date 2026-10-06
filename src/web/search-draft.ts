@@ -37,6 +37,7 @@
  *   inside the tap when the panel is already mounted.
  */
 import { useSyncExternalStore } from "react";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 import type { TypingControls } from "./SearchPanel.js";
 
 /**
@@ -155,6 +156,12 @@ export function createSearchDraft(): SearchDraft {
  * strings; nothing here is worth evicting.
  */
 const drafts = new Map<string, SearchDraft>();
+
+/* One reader's words, so they go when the tab's reader changes: chat-draft.ts
+   has the same line and the reason. The bar and the panel that hold a draft
+   unmount with the reading view, and the next ones ask for a new one.
+   docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+forgetOnReaderChange(() => drafts.clear());
 
 /** This article's draft, made on first use. */
 export function searchDraftFor(slug: string): SearchDraft {

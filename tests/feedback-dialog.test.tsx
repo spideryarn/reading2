@@ -2263,7 +2263,7 @@ describe("where a report says it was filed", () => {
     document.body.append(host);
     root = createRoot(host);
     act(() => {
-      root.render(createElement(FeedbackHost, null, createElement(Open)));
+      root.render(<FeedbackHost readerId="reader-a"><Open /></FeedbackHost>);
     });
     /* An in-app navigation that re-renders nothing here: the router is mocked
        to one constant route, which is the worst case for a stale address. */
@@ -2300,7 +2300,7 @@ describe("a prefill", () => {
     document.body.append(host);
     root = createRoot(host);
     act(() => {
-      root.render(createElement(FeedbackHost, null, createElement(ReportThis)));
+      root.render(<FeedbackHost readerId="reader-a"><ReportThis /></FeedbackHost>);
     });
     const trigger = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Report this",
@@ -2492,5 +2492,75 @@ describe("saying it holds a draft, to anything about to reload the page", () => 
     expect(reloadVeto()).toBeNull();
     /* `afterEach` unmounts again; give it something to unmount. */
     root = createRoot(host);
+  });
+});
+
+/**
+ * **A half-written report does not stay in the box for the next reader.**
+ * The host is above every signed-in page and is not remounted when another
+ * tab signs in as somebody else, so the dialog, open or closed, kept reader
+ * A's words, and Send would have filed them as reader B. Seen red on
+ * 2026-10-06 against a host that did not know who it was holding a draft for.
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2.
+ */
+describe("a half-written report, when the tab's reader changes", () => {
+  const REPORT = { id: "req-9", kind: "problem" as const, body: "A's import failed.\n\nJob: spya-jobaaa" };
+  let pages = 0;
+  function Page() {
+    const openFeedback = useFeedbackOpen();
+    useState(() => (pages += 1));
+    return createElement(
+      "div",
+      null,
+      createElement("button", { type: "button", onClick: () => openFeedback?.() }, "Open feedback"),
+      createElement("button", { type: "button", onClick: () => openFeedback?.(REPORT) }, "Report this"),
+    );
+  }
+  const draw = (readerId: string) =>
+    act(() => {
+      root.render(<FeedbackHost readerId={readerId}><Page /></FeedbackHost>);
+    });
+  const press = (name: string) => {
+    const trigger = [...host.querySelectorAll("button")].find((b) => b.textContent === name);
+    act(() => trigger?.click());
+  };
+  beforeEach(() => {
+    pages = 0;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  it("closes the box and empties it, without remounting the page under it", () => {
+    draw("reader-a");
+    press("Open feedback");
+    type("A's private complaint, half writ");
+    expect(reloadVeto()).toBe("feedback-draft");
+
+    draw("reader-b");
+    expect(host.querySelector("dialog")?.open ?? false).toBe(false);
+    expect(reloadVeto(), "the next reader is not asked about a draft that was never theirs").toBeNull();
+    press("Open feedback");
+    expect(firstBox().value).toBe("");
+    expect(pages, "the page under the host was kept").toBe(1);
+  });
+
+  it("forgets a prefill that was asked for by the last reader", () => {
+    draw("reader-a");
+    press("Report this");
+    expect(firstBox().value).toBe(REPORT.body);
+
+    draw("reader-b");
+    press("Open feedback");
+    expect(firstBox().value).toBe("");
+  });
+
+  it("keeps the draft while the reader is the same one", () => {
+    draw("reader-a");
+    press("Open feedback");
+    type("Still mine.");
+    draw("reader-a");
+    expect(host.querySelector("dialog")?.open).toBe(true);
+    expect(firstBox().value).toBe("Still mine.");
   });
 });

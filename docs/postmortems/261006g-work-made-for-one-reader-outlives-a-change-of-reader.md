@@ -104,9 +104,20 @@ problem, and three in a row on the add page did not.
 
 ## What is still open
 
-**Closed on 2026-10-06 by
-[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md)**: both items
-below. The text is kept as it was written.
+**Both items below were taken up on 2026-10-06 by
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md).** The text is
+kept as it was written. What that plan landed, and what it did not:
+
+- **The first item is built**: every `apiFetch` is bound to the reader the tab held as it was
+  made. Its first version could refuse a reader's own request, because the screen and the fence
+  each asked the SDK who was signed in and could be told different readers; both now read one
+  held session (`src/web/lib/session.ts`).
+- **The reading view was looked at, and its leaks are fenced**: the writes it owes as it unmounts,
+  the module-level stores, the Feedback dialog, and two things found outside it, `/profile` and
+  the retry of a spoken exchange.
+- **Still open**: none of it has been checked in a browser; the live meter's flush on stop is
+  unfenced on the client (the server checks whose session it is); and `spya.lastView.<slug>` in
+  browser storage carries no reader.
 
 **A plain `apiFetch` that names nobody, begun under A, whose token lookup straddles the change, is
 still sent as B.** That is every page not listed in 2 above: over a hundred call sites in

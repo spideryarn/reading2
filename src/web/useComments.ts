@@ -23,6 +23,7 @@ import {
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk, leavingFetch, readJson, statusOf } from "./lib/api.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -270,9 +271,13 @@ function optimisticComment(input: NewCommentInput): ClientComment {
 }
 
 /** Send a create after its hook has gone, with no React state left to update. */
-async function createAfterLeaving(url: string, input: NewCommentInput): Promise<Comment | null> {
+async function createAfterLeaving(
+  url: string,
+  input: NewCommentInput,
+  madeFor: string | null,
+): Promise<Comment | null> {
   try {
-    const r = await fetchOk(url, createRequest(input));
+    const r = await fetchOk(url, createRequest(input), madeFor);
     return (await readJson<{ comment: Comment }>(r)).comment;
   } catch {
     return null;
@@ -315,6 +320,13 @@ export function useComments(slug: string): CommentsApi {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* **Whose comments these are** (lib/made-for.ts), for the two creates a
+     draft can reach late: `AnnotateDialog` stores an unsaved draft from its
+     unmount cleanup and from `pagehide`, and a change of reader is what
+     unmounts it. Unnamed, the draft was stored on the next reader's article
+     of the same slug. `null` for a visitor, who makes none.
+     docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+  const madeFor = useMadeFor();
 
   /**
    * Ids the reader has deleted while their answer was still in the air.
@@ -746,7 +758,7 @@ export function useComments(slug: string): CommentsApi {
              between a new article's render and its effect, before there was a
              read to wait behind). Send the words; touch no state — the list on
              screen, if there is one, is another article's. */
-          return createAfterLeaving(url, input);
+          return createAfterLeaving(url, input, madeFor);
         }
         const optimistic = optimisticComment(input);
         /* What was under this id before, if anything, so a failure can put it
@@ -765,7 +777,7 @@ export function useComments(slug: string): CommentsApi {
           setError(null);
         }
         try {
-          const r = await fetchOk(url, createRequest(input));
+          const r = await fetchOk(url, createRequest(input), madeFor);
           const { comment } = await readJson<{ comment: Comment }>(r);
           if (tombstones.has(id)) {
             /* DELETE was deliberately held behind this POST. Now the row is
@@ -791,7 +803,7 @@ export function useComments(slug: string): CommentsApi {
             const status = statusOf(e);
             if (status === null || status >= 500) {
               try {
-                const retry = await fetchOk(url, createRequest(input));
+                const retry = await fetchOk(url, createRequest(input), madeFor);
                 const { comment } = await readJson<{ comment: Comment }>(retry);
                 await forget(comment.id, isCurrent());
               } catch (retryError) {
@@ -833,7 +845,7 @@ export function useComments(slug: string): CommentsApi {
       );
       return task;
     },
-    [slug, put, forget],
+    [slug, put, forget, madeFor],
   );
 
   /**
@@ -847,9 +859,9 @@ export function useComments(slug: string): CommentsApi {
   const createOnLeave = useCallback(
     (input: NewCommentInput): void => {
       // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
-      void leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input));
+      void leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input), madeFor);
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**

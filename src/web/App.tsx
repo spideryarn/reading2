@@ -17,6 +17,7 @@ import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
+import { SignedInReader } from "./lib/made-for.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { AddStopped } from "./AddStopped.js";
@@ -379,12 +380,17 @@ export function App() {
      counts — including, since the bug above, the two addresses that reach the
      shelf sideways. */
   return (
-    <FeedbackHost>
-      {/* What tells a page's `HomeLink` that the corner logo is beside it, so
-          it draws no second way home — BackLink.tsx § `SignedInShell`. */}
-      <SignedInShell.Provider value={true}>
-        <SignedIn route={route} user={user} addVisit={addVisit} />
-      </SignedInShell.Provider>
+    <FeedbackHost readerId={user.id}>
+      {/* Who every page below was drawn for, so a write one of them makes late
+          (an unmount, an idle save, `pagehide`) can name its reader:
+          lib/made-for.ts, plan 261006f § Stage 2. */}
+      <SignedInReader.Provider value={user.id}>
+        {/* What tells a page's `HomeLink` that the corner logo is beside it, so
+            it draws no second way home — BackLink.tsx § `SignedInShell`. */}
+        <SignedInShell.Provider value={true}>
+          <SignedIn route={route} user={user} addVisit={addVisit} />
+        </SignedInShell.Provider>
+      </SignedInReader.Provider>
       {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );
@@ -650,7 +656,15 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <ProfilePage />
+        {/* **`key`, for the reason the shelf carries one.** The page holds one
+            reader's *About you*, loaded and perhaps half edited, and nothing
+            else unmounts it when another tab signs in as somebody else: it
+            stayed in the box for the next reader, and its next save was to
+            `/api/reader`, which is whoever the token says. Removing the
+            instance removes the words; the unmount save names the reader it
+            was mounted for (lib/made-for.ts), so it is not sent as the next.
+            GPT Sol's review of plan 261006f, F3. */}
+        <ProfilePage key={user.id} />
       </>
     );
   /* The administrator's pages. Whether this reader may see them was settled at

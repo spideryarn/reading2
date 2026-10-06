@@ -639,6 +639,69 @@ describe("a request that names no reader", () => {
     expect(calls).toHaveLength(1);
   });
 
+  /**
+   * **A refusal must not become a stuck page.** The lookup answered as B
+   * while the tab still held A: storage has moved on and the SDK's event has
+   * not arrived. The request that noticed is still refused, since it was made
+   * for A; but the tab is told, so the screen redraws for B and B's own
+   * requests go. lib/session.ts § `sessionObserved`; plan 261006f § Stage 1.
+   */
+  it("tells the tab when a lookup answers as another reader, so the next request is theirs", async () => {
+    const { onSession, heldReader } = await import("../src/web/lib/session.js");
+    announce("SIGNED_IN", as("A"));
+    const told: (string | null)[] = [];
+    const stop = onSession((session) => told.push(session?.user?.id ?? null));
+    told.length = 0;
+    getSession.mockResolvedValue(answering("B"));
+    const calls = stubFetch(ok());
+
+    expect(await outcome(apiFetch("/api/library"))).toBeInstanceOf(NotThisReader);
+    expect(calls).toHaveLength(0);
+    expect(told).toEqual(["B"]);
+    expect(heldReader()).toBe("B");
+
+    expect(await outcome(apiFetch("/api/library"))).toBe(200);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-B");
+    expect(told, "and an equal session is not news").toEqual(["B"]);
+    stop();
+  });
+
+  it("does not sign the tab out, or in, on a lookup's word", async () => {
+    const { onSession, heldReader } = await import("../src/web/lib/session.js");
+    const told: unknown[] = [];
+    /* Nobody held: a lookup that names B is not adopted. */
+    getSession.mockResolvedValue(answering("B"));
+    stubFetch(ok());
+    const stop = onSession((session) => told.push(session));
+    told.length = 0;
+    await outcome(apiFetch("/api/library"));
+    expect(heldReader()).toBeNull();
+    /* A held: a lookup with no session, or one that names nobody, changes nothing. */
+    announce("SIGNED_IN", as("A"));
+    told.length = 0;
+    getSession.mockResolvedValue({ data: { session: null } });
+    await outcome(apiFetch("/api/library"));
+    getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
+    await outcome(apiFetch("/api/library"));
+    expect(heldReader()).toBe("A");
+    expect(told).toEqual([]);
+    stop();
+  });
+
+  it("does not adopt a lookup's answer that an event has already overtaken", async () => {
+    const { heldReader } = await import("../src/web/lib/session.js");
+    announce("SIGNED_IN", as("A"));
+    let answer: (value: unknown) => void = () => {};
+    getSession.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    stubFetch(ok());
+    const pending = outcome(apiFetch("/api/library", {}, "C"));
+    /* The SDK says C while the lookup, which read storage a moment earlier, is still out. */
+    announce("SIGNED_IN", as("C"));
+    answer(answering("B"));
+    await pending;
+    expect(heldReader()).toBe("C");
+  });
+
   it("records the refusal, with no query string, where a bug report can see it", async () => {
     const { readLogBuffer } = await import("../src/web/log-buffer.js");
     announce("SIGNED_IN", as("A"));

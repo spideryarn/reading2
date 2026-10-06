@@ -90,6 +90,7 @@ import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.
 import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
 import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
+import { heldReader, heldToken, onSession, sessionObserved, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
 import type { QuizResponse } from "../../types.js";
@@ -491,16 +492,6 @@ function notTheirs(tokenOwner: string | null, madeFor: string | null): boolean {
 }
 
 /**
- * Whose token a session carries: the reader it names, when it has a token and
- * names one. `null` is *nobody can say*, never *nobody*.
- */
-function tokenOwnerOf(
-  session: { access_token?: string; user?: { id?: string } | null } | null | undefined,
-): string | null {
-  return session?.access_token ? (session.user?.id ?? null) : null;
-}
-
-/**
  * `apiFetch`, and **whose session actually answered** — the owner of the
  * credential the returned response was sent with, the retry's when there was
  * one.
@@ -525,9 +516,10 @@ export async function apiFetchOwned(
    * request for whoever this tab holds right now, so that reader is read here,
    * synchronously, before anything is awaited: the token lookup below can wait
    * across a change of account, and what it answers with is then the next
-   * reader's. `cachedTokenOwner` is what the SDK last told this tab, written
-   * by the listener at the bottom of this file, which is registered before any
-   * component's and so is never behind the screen that made the call.
+   * reader's. `heldReader()` is what the SDK last told this tab, and it is
+   * the same answer the screen was drawn from: `useSession` and this file
+   * both read lib/session.ts, which makes the one subscription. So the
+   * reader bound here is the reader whose screen made the call.
    *
    * **Nobody is not a reader.** Before the SDK has said anything, or signed
    * out, this is `null` and the request is unfenced, as it always was: a
@@ -538,7 +530,7 @@ export async function apiFetchOwned(
    * the ones whose request is made long after the reader's gesture.
    * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md.
    */
-  const boundTo = madeFor ?? cachedTokenOwner;
+  const boundTo = madeFor ?? heldReader();
   noteRequest(input, init.method);
   try {
     return await sendOwned(input, init, boundTo);
@@ -758,8 +750,13 @@ async function ticketFor(
  * that dies mid-read and `readJson` does not, so a 500 on a cut connection keeps
  * its status message instead of surfacing as a `TypeError` about the network.
  */
-export async function fetchOk(input: string, init: RequestInit = {}): Promise<Response> {
-  const res = await apiFetch(input, init);
+export async function fetchOk(
+  input: string,
+  init: RequestInit = {},
+  /** As `apiFetch`'s: the reader a request made late is for. */
+  madeFor: string | null = null,
+): Promise<Response> {
+  const res = await apiFetch(input, init, madeFor);
   if (!res.ok) throw await failure(res);
   return res;
 }
@@ -1241,8 +1238,20 @@ async function accessToken(): Promise<Credential> {
      expired, in which case the server says 401 and the existing refresh-and-
      retry below handles it. Being refused quickly is recoverable. Hanging is
      not. */
+  /* What this tab held as the lookup went out: see `sessionObserved` below. */
+  const before = heldReader();
   return await Promise.race([
-    supabase.auth.getSession().then((r) => ({
+    supabase.auth.getSession().then((r) => {
+      /* **The lookup knows something the tab does not.** It answered as a
+         different reader from the one held: storage has moved on and the
+         SDK's event has not arrived. Tell the store, so the screen redraws
+         for the reader this token belongs to. The request that noticed is
+         still refused by its caller's check, since it was made for the
+         earlier reader. Not if an event arrived while this was out: then the
+         tab has newer news than this answer. lib/session.ts § `sessionObserved`. */
+      if (r.data.session && heldReader() === before) sessionObserved(r.data.session);
+      return r;
+    }).then((r) => ({
       token: r.data.session?.access_token,
       /* **Out of the same session object as the token**, so the two cannot
          disagree. `lastKnownUser()` behind it is for a session shape with no
@@ -1276,14 +1285,14 @@ interface Credential {
 }
 
 /**
- * The pair the auth listener last saw.
+ * The pair this tab last heard.
  *
- * Safe as a pair because that listener writes `cachedToken` and calls
- * `rememberUser` in the same callback, so these two never disagree — see the
- * bottom of this file.
+ * Safe as a pair because the token is replaced in lib/session.ts before its
+ * subscribers are told, and the subscriber at the bottom of this file calls
+ * `rememberUser` in that same pass, so these two never disagree.
  */
 function fromCache(): Credential {
-  return { token: cachedToken, owner: lastKnownUser(), tokenOwner: cachedTokenOwner };
+  return { token: heldToken(), owner: lastKnownUser(), tokenOwner: heldReader() };
 }
 
 /**
@@ -1338,7 +1347,7 @@ export function leavingFetch(
   madeFor: string | null = null,
 ): Promise<void> {
   if (!input.startsWith("/api/")) return Promise.resolve();
-  if (madeFor !== null && (cachedToken === undefined || notTheirs(cachedTokenOwner, madeFor))) {
+  if (madeFor !== null && (heldToken() === undefined || notTheirs(heldReader(), madeFor))) {
     return Promise.resolve();
   }
 
@@ -1374,7 +1383,7 @@ export function leavingFetch(
   }
 
   const headers = new Headers(init.headers);
-  const token = cachedToken;
+  const token = heldToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   /* `keepalive` lets the request outlive the page. Deliberately unawaited: there
      is no one left to tell — but the buffer is not a person, and if the page
@@ -1409,20 +1418,15 @@ export function leavingFetch(
 const KEEPALIVE_LIMIT = 60 * 1024;
 
 /**
- * The last token we saw, kept for `leavingFetch`.
+ * **What this file does when the tab's session changes.**
  *
- * Updated from the SDK's own auth events rather than polled, so it is exactly
- * as fresh as the SDK is. This is the one place in the client that holds a
- * token in a variable, and it exists solely because `pagehide` has no time to
- * await anything.
+ * The token `leavingFetch` uses, and whose it is, are no longer kept here:
+ * they are lib/session.ts § `heldToken` and `heldReader`, the one place in
+ * the client that holds a session in a variable, so that the request fence
+ * and the screen cannot hold different readers. Registered at import, so it
+ * hears the first event.
  */
-let cachedToken: string | undefined;
-/** Whose `cachedToken` is, written with it: `tokenOwner` on `Credential`. */
-let cachedTokenOwner: string | null = null;
-supabase.auth.onAuthStateChange((_event, session) => {
-  cachedToken = session?.access_token;
-  cachedTokenOwner = tokenOwnerOf(session);
-
+onSession((session) => {
   /* **Whose cache to read, kept beside the token and for the same reason.** A
      request needs to know which reader's copies to look in before it knows
      whether the network works, and asking the SDK would be the very wait this

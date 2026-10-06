@@ -585,6 +585,14 @@ const SHARED_WITH_READER = [
      A leaf of two dozen lines the reader already downloads through `api.ts`;
      docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md. */
   "src/web/lib/reader-facing.ts",
+  /* Arrived 2026-10-06 the same way, with `lib/session.ts` below: `lib/api.ts`,
+     already here, imports the tab's one held session, which tells this module
+     when the reader changes. A leaf with no imports. Plan 261006f. */
+  "src/web/lib/reader-change.ts",
+  /* The one subscription to the SDK for identity, which `lib/api.ts` binds
+     requests to and `useSession` draws from. It must be eager for the reason
+     `api.ts` is: every request needs it. About a hundred lines. Plan 261006f. */
+  "src/web/lib/session.ts",
   /* With `describe-failure.ts`, above. */
   "src/web/lib/sse.ts",
   "src/web/lib/supabase.ts",

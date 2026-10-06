@@ -64,6 +64,7 @@ import {
   settledAnswer,
   stopAnswer,
 } from "./chat/effects.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { asOpId, isNamed, isSettled, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
@@ -439,8 +440,20 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
    * missed `error` for as long as chat has existed.
    */
   const held = useRef<ChatController | null>(null);
+  /* A spoken exchange is written for the reader the band was mounted for,
+     on every attempt: the last one can be written as the view unmounts, when
+     the tab is already the next reader's (effects.ts § `appendSpoken`). */
+  const madeFor = useMadeFor();
   if (!held.current || held.current.slug !== slug) {
-    held.current = new ChatController(slug, chatEffects, onSettled);
+    held.current = new ChatController(
+      slug,
+      {
+        ...chatEffects,
+        appendSpoken: (forSlug, threadId, body) =>
+          appendSpoken(forSlug, threadId, body, undefined, madeFor ?? undefined),
+      },
+      onSettled,
+    );
   }
   const controller = held.current;
   const { state, threads, recovering } = useSyncExternalStore(

@@ -106,6 +106,13 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   Every call is bound to the reader the tab held as it was made; a request *made* late (a timer, a
   retry, a flush on the way out) passes the reader it was begun for as the third argument —
   [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another).
+- **`src/web/lib/session.ts` § `onSession`, `heldReader`** — who the tab is signed in as: the one
+  subscription to the SDK for identity. Subscribe here, never to `supabase.auth.onAuthStateChange`.
+- **`src/web/lib/made-for.ts` § `useMadeFor`** — that reader, for a component: the one it was
+  mounted for, read once. Pass it to any write made from a cleanup, an idle timer or `pagehide`.
+- **`src/web/lib/reader-change.ts` § `forgetOnReaderChange`** — for a module-level store that
+  holds one reader's words or data: register a function that empties it, at module scope, and it
+  is emptied before anything is drawn for the next reader.
 - **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
   then exactly one `done` or `error`.
   The lower-level `readEvents` is what most older hooks loop over by hand —

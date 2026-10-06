@@ -28,7 +28,9 @@ import { profileSaved } from "./profile-saved.js";
  * page has gone. Sent as anybody else, the write is not sent and this rejects
  * (`NotThisReader` in lib/api.ts;
  * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2).
- * The other callers name nobody.
+ * The boxes in the reading view name the reader they were mounted for
+ * (lib/made-for.ts), since their saves are made after an unmount or an idle
+ * timer; Skim's line, pressed and sent at once, names nobody.
  */
 export async function savePurpose(
   slug: string,

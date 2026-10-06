@@ -61,6 +61,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
 import {
   expectedSeconds,
@@ -94,13 +95,14 @@ const ACTIVITY_EVENTS = ["scroll", "wheel", "keydown", "pointerdown", "pointermo
  */
 const writesInFlight = new Map<string, Set<Promise<void>>>();
 
-function sendReadingTime(path: string, init: RequestInit): void {
+function sendReadingTime(path: string, init: RequestInit, madeFor: string | null): void {
   let writes = writesInFlight.get(path);
   if (!writes) {
     writes = new Set();
     writesInFlight.set(path, writes);
   }
-  const request = apiFetch(path, init).then(
+  /* Both arms swallow, a refusal for another reader (`NotThisReader`) included. */
+  const request = apiFetch(path, init, madeFor).then(
     () => undefined,
     () => undefined,
   );
@@ -228,6 +230,12 @@ export function useReadingTime(
      after the switch went off, however long a card stays open. */
   const lookup = useRef<ReadingTimeFor | null>(null);
   const timeFor = useCallback<ReadingTimeFor>((id) => lookup.current?.(id) ?? null, []);
+  /* The reader these seconds are for (lib/made-for.ts). Both flushes that
+     matter are made late: the cleanup's runs as the view unmounts, which a
+     change of reader causes, and `pagehide`'s uses whatever token the tab
+     holds. Unnamed, one reader's seconds were counted for the next.
+     docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+  const madeFor = useMadeFor();
 
   useEffect(() => {
     setLevels(NO_LEVELS);
@@ -329,13 +337,13 @@ export function useReadingTime(
       };
       if (leaving) {
         // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
-        void leavingFetch(path, init);
+        void leavingFetch(path, init, madeFor);
         return;
       }
       /* Dropped on failure, never re-queued — see the file header. `apiFetch`
          records the failure in the client log buffer, which is what a bug
          report carries. */
-      sendReadingTime(path, init);
+      sendReadingTime(path, init, madeFor);
     };
 
     const active = () => {
@@ -406,7 +414,7 @@ export function useReadingTime(
          ordinary request. */
       flush(false);
     };
-  }, [slug, enabled]);
+  }, [slug, enabled, madeFor]);
 
   const status: ReadingTimeStatus = !enabled ? "off" : opened.slug === slug ? opened.status : "loading";
   return {
