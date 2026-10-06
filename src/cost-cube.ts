@@ -474,8 +474,8 @@ export function pivotRows(
  * context.
  *
  * **Null is "not measured", which is not zero.** With no counted attempt
- * nothing could have recorded a retry, so a zero there would claim a quiet day
- * that nobody watched.
+ * nothing could have recorded a retry or give-up. Phase coverage is separate:
+ * an unnumbered attempt can record where it failed.
  */
 export interface FailureCounts {
   /** Every ledger row. */
@@ -487,9 +487,9 @@ export interface FailureCounts {
   /** Calls whose last allowed go failed before its answer began. Null when nothing was counted. */
   gaveUp: number | null;
   /**
-   * Failed after the answer began, which is never retried. A row can record
-   * this without being counted, so it is null only when nothing was counted
-   * *and* none was recorded.
+   * Failed after the seam accepted the response. Phase measurement does not
+   * need an attempt number: null only when no numbered attempt or error with
+   * a recorded phase demonstrates coverage.
    */
   diedPartWay: number | null;
 }
@@ -500,11 +500,13 @@ export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
   let retries = 0;
   let gaveUp = 0;
   let diedPartWay = 0;
+  let phaseMeasured = false;
   for (const row of rows) {
     attempts += row.calls;
     counted += row.counted;
     retries += row.retries;
     gaveUp += row.gaveUp;
+    if (row.outcome === "error" && row.failurePhase !== null) phaseMeasured = true;
     if (row.outcome === "error" && row.failurePhase === "mid_answer") diedPartWay += row.calls;
   }
   const measured = counted > 0;
@@ -513,7 +515,7 @@ export function failureCountsOf(rows: readonly CostCubeGroup[]): FailureCounts {
     counted,
     retries: measured ? retries : null,
     gaveUp: measured ? gaveUp : null,
-    diedPartWay: measured || diedPartWay > 0 ? diedPartWay : null,
+    diedPartWay: measured || phaseMeasured ? diedPartWay : null,
   };
 }
 
@@ -610,16 +612,17 @@ type DimValue = { key: string; label: string };
  */
 export const FAILURE_NOTES: readonly string[] = [
   "These are counts, not rates. Each row of the ledger is one attempt, not one call: a call that was retried once is two rows.",
-  "Only attempts numbered by our retry loop are counted. Where none was, the figure is shown as not measured, which is not zero: that covers every call made before this was recorded.",
-  "Stalls are not measured. When our own clock stops a provider that has gone silent, the row is recorded as stopped, the same as a reader pressing Stop.",
+  "Retries and give-ups are counted only on attempts our retry loop numbered. Part-way deaths are counted on any failed attempt that recorded where it failed, numbered or not. Where nothing shows a figure was being measured it reads not measured, which is not zero: that covers every call made before this was recorded.",
+  "Stalls are not measured. When our own clock stops a provider that has gone silent, the row is recorded as stopped, the same as a reader pressing Stop. One exception: if the provider had already sent an error, the row keeps that error.",
   "The PDF reader and the embeddings retry in loops of their own, and those retries are not counted here.",
 ];
 
 /** The three counts, defined once for both readers. */
 export const FAILURE_DEFINITIONS =
-  "A retry is a go after the first, started because the one before failed before its answer began. " +
-  "A call gave up when its last go failed that way too. " +
-  "An attempt died part-way when it failed after its answer had begun, which is never asked again.";
+  "A retry is a second or third go at a call, started because the go before it failed before the provider accepted it. " +
+  "A call gave up when its third and last go failed that way too; a call refused outright on an earlier go is in the causes table. " +
+  "An attempt died part-way when it failed after the provider had accepted it, which can be before any of the answer arrived. " +
+  "We do not ask again after that point, though the PDF reader's own loop may.";
 
 /** What a null `FailureCounts` figure is drawn as. */
 export const NOT_MEASURED = "not measured";

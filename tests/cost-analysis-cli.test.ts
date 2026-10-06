@@ -451,6 +451,17 @@ describe("the terminal summary", () => {
     expect(text).toContain("Stalls are not measured.");
   });
 
+  it("lists a day with measured zero deaths without claiming its attempts were numbered", () => {
+    const zero = { key: "2031-03-10", label: "2031-03-10", attempts: 1, counted: 0, retries: null, gaveUp: null, diedPartWay: 0 };
+    const text = summaryLines({ ...analysis, failures: {
+      total: zero, byDay: [zero], byTask: [{ ...zero, key: "pdf", label: "pdf" }],
+      causes: [{ key: "a", phase: "before the answer began", failureClass: "refused", status: "503", upstream: "Vendor", model: "vendor/one", task: "pdf", attempts: 1 }],
+      notes: [],
+    } }).join("\n");
+    expect(text).toMatch(/2031-03-10\s+counted 0\s+retries not measured\s+gave up not measured\s+died part-way 0/);
+    expect(text).toContain("0 other days had counted attempts");
+  });
+
   it("says so when there is nothing", () => {
     expect(summaryLines(analysis).join("\n")).toContain("Leads: none");
   });

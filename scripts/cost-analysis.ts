@@ -526,10 +526,11 @@ function failureLines(f: CostAnalysis["failures"]): string[] {
     return groups.map((g) => `    ${g.label.slice(0, width).padEnd(width)}  ${failureFigures(g)}`);
   };
   if (f.total.counted > 0 || f.causes.length > 0) {
-    const eventful = f.byDay.filter((d) => (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) > 0);
+    const hasEvents = (d: FailureCounts) => (d.retries ?? 0) + (d.gaveUp ?? 0) + (d.diedPartWay ?? 0) > 0;
     const unmeasured = f.byDay.filter(nothingMeasured).length;
-    const quiet = f.byDay.length - eventful.length - unmeasured;
-    if (eventful.length > 0) lines.push("  By UTC day:", ...labelled(eventful));
+    const quiet = f.byDay.filter((d) => d.counted > 0 && !hasEvents(d)).length;
+    const shownDays = f.byDay.filter((d) => hasEvents(d) || (d.counted === 0 && d.diedPartWay === 0));
+    if (shownDays.length > 0) lines.push("  By UTC day:", ...labelled(shownDays));
     lines.push(
       `  ${whole(quiet)} other ${quiet === 1 ? "day" : "days"} had counted attempts and none of these; ` +
         `${whole(unmeasured)} ${unmeasured === 1 ? "day was" : "days were"} not measured.`,

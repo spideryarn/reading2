@@ -1013,16 +1013,19 @@ const COUNT_COLUMNS: readonly { id: string; header: string; hint: string; pick: 
   {
     id: "gaveUp",
     header: "Gave up after the last go",
-    hint: "Calls whose last go also failed before its answer began",
+    hint: "Calls whose third and last go failed before the provider accepted it. A call refused outright on an earlier go is in the causes table",
     pick: (g) => g.gaveUp,
   },
   {
     id: "diedPartWay",
     header: "Died part-way",
-    hint: "Attempts that failed after the answer had begun, which is never asked again",
+    hint: "Attempts that failed after the provider accepted the call, which can be before any of the answer arrived",
     pick: (g) => g.diedPartWay,
   },
 ];
+
+/** The three figures that can be unmeasured; the counted attempts beside them never are. */
+const MEASURED_COLUMNS = COUNT_COLUMNS.slice(1);
 
 const CAUSE_COLUMNS = ["Failed", "Cause", "Status", "Upstream", "Model", DIMENSION_LABEL.task, "Attempts"] as const;
 
@@ -1032,9 +1035,29 @@ const SCROLL_BOX = "tw:relative tw:mb-4 tw:overflow-x-auto tw:rounded-lg tw:bord
  * Counts per value of one dimension. A plain table in its own scrolling box,
  * as the pivot is, with the label pinned. A null figure is drawn as words,
  * never as a zero: src/cost-cube.ts § `FailureCounts`.
+ *
+ * `fold` names the rows in the plural, and with it a row none of whose three
+ * figures was measured is left out and counted in one line underneath. The
+ * task table passes it, because most tasks have nothing to say for weeks after
+ * the counting began (41 rows of 42, on the day it was built). The day table
+ * does not: a calendar with rows missing reads as days with no calls.
  */
-function FailureCountsTable({ name, label, groups }: { name: string; label: string; groups: FailureGroup[] }) {
+function FailureCountsTable({
+  name,
+  label,
+  groups: all,
+  fold,
+}: {
+  name: string;
+  label: string;
+  groups: FailureGroup[];
+  fold?: string;
+}) {
+  const measured = (group: FailureGroup) => MEASURED_COLUMNS.some((col) => col.pick(group) !== null);
+  const groups = fold ? all.filter(measured) : all;
+  const folded = all.length - groups.length;
   return (
+    <>
     <div className={SCROLL_BOX}>
       <table data-failures-table={name} className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">Retries, calls that gave up and attempts that died part-way, by {label}</caption>
@@ -1073,6 +1096,12 @@ function FailureCountsTable({ name, label, groups }: { name: string; label: stri
         </tbody>
       </table>
     </div>
+    {fold && folded > 0 && (
+      <p data-failures-unmeasured={name} className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>
+        {folded.toLocaleString("en-US")} other {fold}: {NOT_MEASURED}.
+      </p>
+    )}
+    </>
   );
 }
 
@@ -1108,7 +1137,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
         <>
           <p className={`tw:m-0 tw:mb-3 ${SMALL_LABEL}`}>{FAILURE_DEFINITIONS}</p>
           <FailureCountsTable name="day" label={DIMENSION_LABEL.day} groups={byDay} />
-          <FailureCountsTable name="task" label={DIMENSION_LABEL.task} groups={byTask} />
+          <FailureCountsTable name="task" label={DIMENSION_LABEL.task} groups={byTask} fold="modes or tasks" />
           {causes.length === 0 ? (
             <p className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>No failed attempt in this view recorded a cause.</p>
           ) : (

@@ -810,8 +810,10 @@ the names do not say:
 **What the columns cannot say.** `attempt` is null on a call made with `retryTransport: false`
 (below), so the PDF reader's and the embeddings' own retries are not counted. And a stall is not
 told apart from a Stop: when our own clock stops a provider that has gone silent, the row is
-`aborted` with no failure fields, because the stall reason is made in many runners and has the
-same shape as a reader's Stop. The counts are on `/admin/costs` and in `npm run cost:analyse`:
+`aborted` with no failure fields when no provider error was already observed, because the stall
+reason is made in many runners and has the same shape as a reader's Stop. On an OpenRouter stream,
+an in-band provider error already observed remains an error even if a later body read aborts (the F9 fix).
+The counts are on `/admin/costs` and in `npm run cost:analyse`:
 [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries). Each retry, and each
 call that dies part-way, also writes one `warn` line: `ai transport retry` and
 `ai call died part-way`.
@@ -820,7 +822,7 @@ call that dies part-way, also writes one `warn` line: `ai transport retry` and
 with `failure_phase = mid_answer`: an in-band error chunk on the OpenRouter stream (it was
 `aborted`), a `2xx` whose JSON will not parse (it was `ok`), and a `2xx` that carries an error
 envelope where the answer should be (it was `ok`). No caller's return value or own retry changed.
-The failed-call figures step up at that date for this reason alone.
+The effect on the figures is in [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
 
 What differs between the wires is where "before the provider has answered" ends.
 
@@ -881,9 +883,10 @@ function, nothing retried, and the job failed
 ([261003m](../plans/261003m-a-transport-blip-fails-an-import-one-countable-retry-on-the-messages-wire.md)).
 The audit of the other wires, and the retry on them, is
 [261005j](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md).
-A call that dies part-way through its answer still fails on both wires; retrying that means paying
-for it twice, and it is not built. How often it happens is counted, so that the decision can be
-made on numbers: [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
+A call that fails after acceptance still fails on both wires. The gateway does not retry it;
+the caller-owned loops above may, notably the PDF reader after a broken `200` body. The recorded
+counts, including unnumbered part-way failures, are in
+[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
 
 ### Aborted is a cause, not a coincidence
 

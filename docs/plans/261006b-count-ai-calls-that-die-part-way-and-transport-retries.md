@@ -180,7 +180,7 @@ through the gap.
   response arrived, so it is `200` on a `mid_answer` row. And mis-recordings 2 and 3 move rows
   from `ok` to `error`, which the existing failed-call count on `/admin/costs` will show as a rise
   that is not a change in behaviour.
-- [x] Stage 2 (code, tests and docs written; not yet reviewed, browser-checked or committed).
+- [x] Stage 2 (`3950ac5a5`).
   `spendCube` groups by the three failure columns and counts `counted`, `retries` and a third
   measure, `gaveUp`, because "the last go failed" needs `attempt` and that is not a dimension. The
   folds (`failureCountsOf`, `failureCountsBy`, `failureCauses` in `src/cost-cube.ts`) feed a
@@ -191,3 +191,38 @@ through the gap.
   rule for naming work. And *died part-way* is shown whenever a row recorded it, counted or not,
   since the PDF reader's rows carry a phase and no attempt number; only retries and give-ups need
   a counted attempt.
+
+## The reviews, and what each ended as
+
+IDs run across the whole chain. F1–F8 are the plan review, taken into the design above.
+
+| | | what happened |
+|---|---|---|
+| F9 | P1 | an in-band error chunk already seen lost its label when a later read threw. Fixed by the reviewer, red first; [its postmortem](../postmortems/261006b-observed-in-band-failure-lost-after-later-stream-throw.md) |
+| F10 | P1 | `evals/dig-deeper/budget.ts` settled an accepted 2xx that would not parse at $0, because the row is now `error` and matched its refusal rule. Reported by the reviewer, fixed by me, red first; the stage 2 review mutated the fix and confirmed it |
+| F11 | P1 | a failure with a phase and no attempt number showed its measured zero deaths as *not measured*. Fixed by the reviewer; [its postmortem](../postmortems/261006c-one-measure-borrows-another-measures-coverage.md) |
+| F12 | P1 | the shared sentences said every count needed a numbered attempt and that a part-way death is never retried (the PDF reader's own loop may). Fixed by the reviewer |
+| F13 | P3 | a doc said the failed-or-stopped total would rise from `aborted` becoming `error`; both already counted. Fixed by the reviewer |
+| F14 | P3 | `ai-gateway.md` line 77 still describes the retired JSONL ledger as a current store. Older than this work and **left**: reported, not fixed |
+
+Reviews: [plan](261006b-count-ai-calls-plan-review-sol.md),
+[stage 1](261006b-stage-1-code-review-sol.md), [stage 2](261006b-stage-2-code-review-sol.md).
+
+## After the reviews: two changes of mine, not reviewed by GPT Sol
+
+- **The reviewer's F12 sentences were accurate and hard to read** ("after the seam accepted the
+  response: message_start on Messages, a 2xx with a body…"). On the page and in the report they
+  now say the same things in plain words; the seam-by-seam boundary stays in `ai-gateway.md`.
+- **The task table folds the rows nothing was measured for into one line.** A browser check at
+  1440, 820 and 390 wide passed, and found 41 of 42 task rows saying only "not measured"
+  ([1440](261006b-shot-1440.png), [820](261006b-shot-820.png), [390](261006b-shot-390.png), taken
+  before the fold). The day table keeps every row. Red first.
+
+## Left for later
+
+- **Stalls.** The commonest part-way death in practice may be our own stall clock, and it is not
+  counted. Typing the stall reason means touching eight runners. A deadline is always an
+  `AbortSignal.timeout`, so *deadline* alone could be told apart at the gateway cheaply.
+- **The PDF reader's and the embeddings' own retry loops** are not numbered.
+- **B**, after a week of data.
+

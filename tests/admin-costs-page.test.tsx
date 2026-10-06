@@ -702,6 +702,32 @@ describe("failures and retries", () => {
   ];
   const section = () => host.querySelector("[data-failures]");
 
+  it("shows zero deaths for an unnumbered PDF failure with a recorded phase", async () => {
+    await show("", [row({ job: "pdf", stepName: null, wire: "chat", ...refused })]);
+    expect(failureTable("day")).toEqual([["2033-05-01", "0", "not measured", "not measured", "0"]]);
+    expect(failureTable("task")).toEqual([["pdf", "0", "not measured", "not measured", "0"]]);
+    expect(section()?.textContent).toContain("0 attempts died part-way.");
+  });
+
+  /* Seen red, 2026-10-06: a browser check found 41 of 42 task rows saying only
+     "not measured". Rows with nothing measured fold into one line; a day keeps
+     its row, because a calendar with gaps reads as a calendar with no calls. */
+  it("folds the tasks nothing was measured for into one line, and keeps every day", async () => {
+    await show("", [
+      ...ATTEMPTS,
+      row({ day: "2033-05-01", job: "quiz", stepName: null, calls: 2 }),
+      row({ day: "2033-05-01", job: "skim", stepName: null, calls: 1 }),
+    ]);
+    const tasks = failureTable("task");
+    expect(tasks.every((cells) => cells.slice(2).some((cell) => cell !== "not measured"))).toBe(true);
+    expect(tasks.map((cells) => cells[0])).not.toContain("quiz");
+    expect(section()?.querySelector('[data-failures-unmeasured="task"]')?.textContent).toMatch(
+      /^\d+ other modes or tasks: not measured\.$/,
+    );
+    expect(failureTable("day")[0]).toEqual(["2033-05-01", "0", "not measured", "not measured", "not measured"]);
+    expect(section()?.querySelector('[data-failures-unmeasured="day"]')).toBeNull();
+  });
+
   it("counts retries, give-ups and part-way deaths per day, beside the attempts that were counted", async () => {
     await show("", ATTEMPTS);
     expect(section()?.querySelector("h2")?.textContent).toBe("Failures and retries");

@@ -11,6 +11,8 @@ import {
   type CostCubeRow,
   type CubeTotals,
   DIMENSIONS,
+  FAILURE_DEFINITIONS,
+  FAILURE_NOTES,
   amountPerPricedCall,
   articleKeyOf,
   articleKeyString,
@@ -399,6 +401,25 @@ describe("failures and retries", () => {
       gaveUp: null,
       diedPartWay: 1,
     });
+  });
+
+  it("shows a measured zero for deaths when an unnumbered failure recorded its phase", () => {
+    expect(failureCountsOf([row({ ...before, failureClass: "refused", failureStatus: 503 })])).toEqual({
+      attempts: 1,
+      counted: 0,
+      retries: null,
+      gaveUp: null,
+      diedPartWay: 0,
+    });
+  });
+
+  it("defines acceptance separately from answer content and caller-owned retry loops", () => {
+    expect(FAILURE_DEFINITIONS).toContain("third and last go");
+    expect(FAILURE_DEFINITIONS).toContain("before any of the answer arrived");
+    expect(FAILURE_DEFINITIONS).toContain("the PDF reader's own loop may");
+    expect(FAILURE_DEFINITIONS).not.toContain("never asked again");
+    expect(FAILURE_NOTES.join(" ")).toContain("Retries and give-ups are counted only on attempts our retry loop numbered");
+    expect(FAILURE_NOTES.join(" ")).toContain("numbered or not");
   });
 
   it("does not call a stopped row a death, whatever phase it carries", () => {

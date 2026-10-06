@@ -66,10 +66,10 @@ Each of these was a way the first design was wrong
 
 ## Failures and retries
 
-A call that fails before its answer began is asked again, up to three goes. One that fails after
-its answer began is not, because asking again means paying twice
-([ai-gateway.md § A transport blip is retried](ai-gateway.md#transport-retry)). Whether to start
-retrying those is Greg's decision, and this section exists to give him the numbers first
+The gateway retries some failures before acceptance, up to three goes, and none after acceptance.
+The PDF reader and other caller-owned loops have their own policies
+([ai-gateway.md § A transport blip is retried](ai-gateway.md#transport-retry)). This section makes
+the recorded failures visible before changing that policy
 ([261006b](../plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md)).
 
 The page has it under the explorer, and `npm run cost:analyse` prints the same figures in the
@@ -79,8 +79,8 @@ terminal, the JSON and the HTML report. Per UTC day and per mode or task:
 |---|---|
 | Counted attempts | rows a retry loop of ours numbered. Context for the other three, not a denominator |
 | Retries | goes after the first |
-| Gave up after the last go | calls whose last go also failed before its answer began |
-| Died part-way | attempts that failed after the answer had begun |
+| Gave up after the last go | calls whose third and final allowed attempt failed before acceptance; earlier refusals appear in the causes table |
+| Died part-way | attempts that failed after the seam accepted the response, which can precede any answer content; see the shared definition below |
 
 Under them, the causes: where the attempt failed, the cause, the HTTP status, the upstream, the
 model, and the mode or task. All of it follows the period, the evals switch and every filter.
@@ -91,18 +91,21 @@ Two rules, both from GPT Sol's review of the plan
 - **Counts, not rates.** A ledger row is one attempt, not one call, and only some attempts were
   numbered, so no honest denominator exists. The counted attempts are shown beside the counts and
   no percentage is drawn.
-- **Not measured is not zero.** A day or a task with no counted attempt shows the words *not
-  measured*. That is every call from before 2026-10-06. A zero there would report a quiet day
-  that nobody was watching.
+- **Not measured is not zero.** With no numbered attempt, retries and give-ups are *not measured*.
+  Part-way deaths use separate evidence: a numbered attempt or an error with a recorded phase.
+  An unnumbered failure before acceptance therefore shows zero deaths, while older rows alone
+  cannot supply a measured figure. These are observed counts, with incomplete coverage.
 
 What it does not count is said on the page itself, from `FAILURE_NOTES` in
 [`src/cost-cube.ts`](../../src/cost-cube.ts): stalls, and the PDF reader's and the embeddings' own
 retry loops. [ai-gateway.md](ai-gateway.md#transport-retry) says why each is missing. The folds
-are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file.
+are `failureCountsOf`, `failureCountsBy` and `failureCauses` in the same file; `FAILURE_DEFINITIONS`
+states each seam's acceptance boundary and the distinction from answer content.
 
-**The existing "Failed or stopped calls" figure steps up on 2026-10-06** without anything having
-got worse: three kinds of failure used to be recorded as `ok` or `aborted`
-([ai-gateway.md](ai-gateway.md#transport-retry)).
+**The existing "Failed or stopped calls" figure can rise after the recording fix**, because
+malformed and error-envelope bodies previously recorded as `ok` now count as failures.
+Moving an in-band error from `aborted` to `error` leaves that total unchanged, while adding it
+to the part-way count ([ai-gateway.md](ai-gateway.md#transport-retry)).
 
 ## What the administrator sees of other people's articles
 

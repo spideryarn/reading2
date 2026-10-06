@@ -513,6 +513,18 @@ describe("the report: its figures are the analysis's", () => {
 });
 
 describe("the report: failures and retries", () => {
+  it("shows zero deaths beside unmeasured retries on an unnumbered phase-recorded failure", () => {
+    const detail = [call({ attempt: null, outcome: "error", failurePhase: "before_answer", failureClass: "refused", failureStatus: 503 })];
+    const report = parse(renderCostReport(analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null })), {
+      commentary: null, chart: null, commit: null,
+    }));
+    for (const table of ["failures-days", "failures-tasks"]) {
+      const cells = [...report.querySelectorAll(`[data-section="${table}"] tbody tr td`)].map((td) => td.textContent);
+      expect(cells.slice(1)).toEqual(["0", "not measured", "not measured", "0"]);
+    }
+    expect(report.querySelector("[data-failures-summary]")?.textContent).toContain("0 attempts died part-way.");
+  });
+
   const doc = parse(REPORT);
   const cells = (name: string) =>
     [...doc.querySelectorAll(`table[data-section="${name}"] tbody tr`)].map((tr) =>
