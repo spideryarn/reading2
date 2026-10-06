@@ -792,7 +792,7 @@ export function SessionsPanel({
 
   /** The whole list in one column — what the left pane and a phone both get. */
   const oneColumnList: ReactNode = banded ? (
-    <>{bands.map(band)}</>
+    bands.map(band)
   ) : (
     <div className="tw:pt-2">{sorted.map(card)}</div>
   );

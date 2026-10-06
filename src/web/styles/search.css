@@ -589,17 +589,6 @@
    worth of height means the panel does not grow when it does — see
    `SavedLoading`, and useSlow.ts for why the words wait at all. */
 .srch-waiting { min-height: 1.2em; }
-.srch-retry {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.srch-retry:hover { border-color: var(--hit); }
 
 /* ---- the results ---- */
 

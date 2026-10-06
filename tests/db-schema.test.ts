@@ -51,7 +51,7 @@ const { pool } = await pgReady({
 });
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 /**
@@ -62,7 +62,7 @@ afterAll(async () => {
  * fail for a different and much more confusing reason.
  */
 async function inRollback(body: (c: PoolClient) => Promise<void>): Promise<void> {
-  const client = await pool!.connect();
+  const client = await pool.connect();
   try {
     await client.query("begin");
     await body(client);
@@ -388,7 +388,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * is the part a later edit would drop without anything looking wrong.
    */
   it("the ledger's article_id is indexed, so deleting an article does not scan it", async () => {
-    const { rows } = await pool!.query<{ indexdef: string }>(
+    const { rows } = await pool.query<{ indexdef: string }>(
       `select indexdef from pg_indexes
         where schemaname = 'spideryarn'
           and tablename = 'ingest_events'

@@ -125,7 +125,6 @@ const TIERS: readonly TierRow[] = [
  * entitled to 33.
  */
 async function givenUpgradedMidPeriod(): Promise<void> {
-  if (!pool) return;
   const start = new Date(Date.now() - 5 * 24 * 3600 * 1000);
   const end = new Date(Date.now() + 25 * 24 * 3600 * 1000);
   await pool.query(
@@ -177,7 +176,6 @@ const BOUNDARY_PAID: Entitlement = {
 
 /** A subscribed row on that tier, with no stored delta. */
 async function givenPaidPeriod(): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
@@ -197,7 +195,6 @@ async function givenPaidPeriod(): Promise<void> {
 }
 
 async function seedOwner(): Promise<void> {
-  if (!pool) return;
   await seedAuthUser(pool, {
     id: OWNER,
     email: `half-units-${OWNER}@spideryarn.local`,
@@ -213,7 +210,6 @@ async function seedOwner(): Promise<void> {
  * whose ingest never published would point at anyway.
  */
 async function givenArticle(name: string, visibility: "private" | "public"): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ id: string }>(
     `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
      values ($1, $2, $3, case when $3 = 'public' then now() end)
@@ -225,7 +221,6 @@ async function givenArticle(name: string, visibility: "private" | "public"): Pro
 
 /** A charged ledger row pointing at `articleId` — what a settlement leaves behind. */
 async function givenCharged(articleId: string | null, succeededAt?: Date): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ id: string }>(
     `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at, article_id)
      values ($1, coalesce($3::timestamptz, now()), coalesce($3::timestamptz, now()), $2) returning id`,
@@ -239,7 +234,6 @@ async function setVisibility(slug: string, to: "private" | "public"): Promise<vo
 }
 
 async function clear(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.article_visibility_changes where actor_owner_id = $1", [
     OWNER,
@@ -256,7 +250,6 @@ beforeEach(async () => {
 afterEach(clear);
 
 afterAll(async () => {
-  if (!pool) return;
   await pool.query("delete from auth.users where id = $1", [OWNER]).catch(() => {});
   await pool.end();
 });
@@ -343,7 +336,6 @@ describe("what an ingest costs", () => {
  */
 describe("deleting an article freezes what it cost, rather than repricing it", () => {
   it("keeps a deleted public article's rows at half price", async () => {
-    if (!pool) return;
     const article = await givenArticle("deleted-while-public", "public");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
@@ -358,7 +350,6 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
   });
 
   it("keeps a deleted private article's rows at full price", async () => {
-    if (!pool) return;
     const article = await givenArticle("deleted-while-private", "private");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
@@ -374,7 +365,6 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
   });
 
   it("freezes the price at deletion, not at charge: shared after charging, then deleted", async () => {
-    if (!pool) return;
     const article = await givenArticle("shared-then-deleted", "private");
     await givenCharged(article);
     expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
@@ -389,7 +379,6 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
   });
 
   it("freezes the price at deletion, not at charge: unshared after charging, then deleted", async () => {
-    if (!pool) return;
     const article = await givenArticle("unshared-then-deleted", "public");
     await givenCharged(article);
     expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
@@ -404,7 +393,6 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
   });
 
   it("does not stamp anything while the article is still there", async () => {
-    if (!pool) return;
     const article = await givenArticle("still-here", "public");
     await givenCharged(article);
     await setVisibility("half-units-still-here", "private");
@@ -644,7 +632,6 @@ describe("the offer counts articles rather than ledger rows", () => {
    * which. GPT Sol, 2026-09-05.
    */
   it("names the articles that carry the charge, by the name the library shows", async () => {
-    if (!pool) return;
     for (const n of [1, 2, 3]) await givenCharged(await givenArticle(`counted-${n}`, "private"));
     await givenArticle("grandfathered", "private");
     /* The reader's own rename, so the sentence says what their shelf says —
@@ -734,7 +721,6 @@ describe("tiers, deltas and clamps stay in articles", () => {
    * neither of these would refuse.
    */
   it("meters an upgraded account on 33 articles, not on 91", async () => {
-    if (!pool) return;
     await givenUpgradedMidPeriod();
     /* Thirty-two private articles: 6,400 points, one article below the budget. */
     await pool.query(
@@ -939,7 +925,6 @@ describe("the lock order: billing_accounts before articles", () => {
    * blocked, rather than fired N times in the hope of an unlucky interleaving.
    */
   it("makes a visibility change wait on the owner's billing row", async () => {
-    if (!pool) return;
     await givenArticle("locked-out", "private");
     const holder = await pool.connect();
     try {
@@ -976,7 +961,6 @@ describe("the lock order: billing_accounts before articles", () => {
 
 describe("a successful settlement carries the article it produced", () => {
   it("writes succeeded_at and article_id in the same statement", async () => {
-    if (!pool) return;
     const admitted = await reserveIngest(OWNER);
     expect(admitted.kind).toBe("admitted");
     if (admitted.kind !== "admitted") return;

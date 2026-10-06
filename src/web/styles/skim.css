@@ -147,7 +147,6 @@
 }
 .skim-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
 .skim-place { font-size: 0.88rem; line-height: 1.35; }
-.skim-place-repeat { color: var(--ink-faint); }
 .skim-cue { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
 /* The quote's own words (plan 260928e) — cut short on every row but the
    current one, whose row shows them whole. A touch smaller than the path,

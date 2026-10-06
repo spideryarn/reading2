@@ -32,11 +32,20 @@
  *
  * ## Where the entries come from, and what is deliberately absent
  *
+ * **Both witnesses were deleted on 2026-10-06**, with the four cases that read
+ * them (docs/plans/261006j-sixth-sweep-s1-filesystem-store-leftovers.md): the
+ * filesystem store went on 2026-09-05 and there was nothing condemned left to
+ * witness. So `STORE_MIGRATION` is **a closed record**. Nothing asks a new test
+ * file for an entry, `evidence` is checked by nothing, and every "re-run
+ * witness 2" below is a sentence about an instrument that no longer exists.
+ * `TEST_LANES`, `LANES_BEYOND_THE_SCAN` and `OWNER_AUDIT` are live, and are why
+ * this file is still imported by `vitest.config.ts`.
+ *
  * Two witnesses, neither subsuming the other:
  *
- * 1. **[`scripts/store-migration-candidates.ts`](../scripts/store-migration-candidates.ts)**,
- *    a transitive import-graph walk. A file's imports are a *claim*.
- * 2. **[`store-migration-witness.json`](store-migration-witness.json)**, an
+ * 1. **The candidates script**, a transitive import-graph walk over `src/`,
+ *    `tests/`, `scripts/`, `api/` and `evals/`. A file's imports are a *claim*.
+ * 2. **The witness JSON**, an
  *    instrumented full-suite run recording which files actually *executed* a
  *    condemned function, down to the method. What a file executes is the fact,
  *    and this is the authority on "needs action".
@@ -143,8 +152,8 @@
  *
  * The witness measured 588 test files; the graph walk saw 597 an hour and a
  * half later. Nothing here is a fact about the repository for longer than a
- * morning. The guard re-derives the static universe on every run for exactly
- * that reason.
+ * morning. The guard re-derived the static universe on every run for exactly
+ * that reason, until both went on 2026-10-06.
  */
 
 /** What is to be done with a file. See the table in the header. */
@@ -177,7 +186,9 @@ export type CollateralMechanism =
    */
   | "condemned-symbol-import";
 
-/** How the verdict was reached: watched executing, or read off the graph. */
+/** How the verdict was reached: watched executing, or read off the graph.
+ *  A record only since 2026-10-06, when the case that held it to the witness
+ *  went with the witness. */
 export type Evidence = "dynamic" | "static-only";
 
 interface EntryCommon {
@@ -218,7 +229,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * It is not resting on the import graph alone, though. The ad-hoc witness was
    * pointed at it —
-   * `npx tsx scripts/store-migration-witness.ts --files tests/tree-redundant-rung.test.ts` —
+   * the witness script run with `--files tests/tree-redundant-rung.test.ts` —
    * and reported "ran, touched nothing" under full instrumentation. `evidence`
    * still says `static-only` because that is what the field means: the stored
    * `touched` map does not name this file, and the guard holds the two apart so
@@ -333,7 +344,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * Measured rather than reasoned, on the `tree-redundant-rung.test.ts`
    * precedent above:
-   * `npx tsx scripts/store-migration-witness.ts --files tests/debate-step-registration.test.ts`
+   * the witness script run with `--files tests/debate-step-registration.test.ts`
    * reported **"ran, touched nothing"** under full instrumentation, and the
    * instrument's own `--self-check` passed immediately before — twelve control
    * files, all eight modules still hooked at method level, 24 sites. An
@@ -427,7 +438,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "real `claimSession`, with `expect(STORE).toBe('postgres')` where the `files` self-check " +
       "used to be. Mutation watched red: `error: ending.error ?? null` in `finishIn` set to " +
       "`null`. The category is left alone deliberately — a converted file may only leave this map " +
-      "once `store-migration-witness.json` is re-run at the end of stage B, so this reason says " +
+      "once the witness JSON is re-run at the end of stage B, so this reason says " +
       "the work is done rather than the verdict being quietly re-labelled.",
   },
   "tests/all-skipped-publication-refusal.test.ts": {
@@ -841,7 +852,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * It is not resting on the import graph alone. The ad-hoc witness was pointed
    * at it —
-   * `npx tsx scripts/store-migration-witness.ts --files tests/helpers-store-fakes.test.ts` —
+   * the witness script run with `--files tests/helpers-store-fakes.test.ts` —
    * and reported **"ran, touched nothing"** under full instrumentation. The
    * graph reaches `artifacts-fs` from here only through
    * `helpers/memory-artefacts.ts` → `src/pipeline.ts`, whose `contextPaths` this
@@ -1035,7 +1046,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`openPgStoreSession`, the real `blocks` stage runs forced against a `scratchArticleInPg` " +
       "fixture, and the artefacts come back through `readOnlyPgArtifacts` over the published " +
       "revision instead of `fsArtifacts`. **Still `database-integration` rather than " +
-      "re-categorised**: the map shrinks when `tests/store-migration-witness.json` is re-run at " +
+      "re-categorised**: the map shrinks when the witness JSON is re-run at " +
       "the end of stage B, and converted files drop out of it then rather than being given a " +
       "verdict that no longer describes any outstanding work.",
   },
@@ -1072,7 +1083,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "mutation, `eq(jobs.status, 'queued')` deleted from `claimIn`, is the first evidence any of " +
       "it reaches the SQL that ships. **Still `database-integration` rather than collateral**, and " +
       "that is the honest verdict rather than an un-updated one: the map shrinks when " +
-      "`store-migration-witness.json` is re-run at the end of stage B, at which point converted " +
+      "the witness JSON is re-run at the end of stage B, at which point converted " +
       "files drop out of it entirely. Two things it now needs that no other converted queue suite " +
       "does: an article per case, because `claimSession` opens a draft; and a stamp on every fake " +
       "product, because `publishRevisionIn` refuses a tree that ran against `unstamped`.",
@@ -1106,7 +1117,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "proving the function is on the path — nothing here tells *artefacts present* from *a step " +
       "recorded done*). **Still `database-integration` rather than collateral**, which is the " +
       "honest verdict rather than an un-updated one: the map shrinks when " +
-      "`store-migration-witness.json` is re-run at the end of stage B, at which point converted " +
+      "the witness JSON is re-run at the end of stage B, at which point converted " +
       "files drop out of it entirely.",
   },
   "tests/live-session-routes.test.ts": {
@@ -1126,7 +1137,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "path that cannot be written, and *nothing was journalled* is a row count rather than the " +
       "size of a parsed JSON object. Mutation watched red: the `is null` earliest-wins predicate " +
       "deleted from `markConnected`. The category is left alone deliberately — a converted file " +
-      "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
+      "may only leave this map once the witness JSON is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   /**
@@ -1230,7 +1241,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` because " +
-      "the map shrinks by re-running `store-migration-witness.json` at the end of the stage, not " +
+      "the map shrinks by re-running the witness JSON at the end of the stage, not " +
       "by re-labelling a file whose conversion is done. `claimsOmitted` was computed by the " +
       "validator, printed by the panel, and never carried between the two — and the file was " +
       "checking the one store that cannot have that bug, since a JSON file carries any key it is " +
@@ -1297,7 +1308,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["fixture-loader"],
     reason:
       "The suite written *because* of the 501 postmortem — it pins `postgres`, owns the sentence " +
-      "*these routes work under Postgres*, and fails rather than skips under `REQUIRE_POSTGRES`. " +
+      "*these routes work under Postgres*, and failed rather than skipped under `REQUIRE_POSTGRES`, a flag no code reads now. " +
       "It reaches the filesystem only through `scratchArticleInPg`, and its header's argument for " +
       "existing separately is the thing the hinge makes moot.",
   },
@@ -1426,7 +1437,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * the file arrived into it.
    *
    * The measurement was made rather than inferred:
-   * `npx tsx scripts/store-migration-witness.ts --files tests/reserved-article-address.test.ts`
+   * the witness script run with `--files tests/reserved-article-address.test.ts`
    * reported *ran, touched nothing*. `--files` writes no JSON, so the stored
    * map still predates the file and the honest `evidence` is `static-only`
    * until witness 2 is re-run — which is what would move this entry off the
@@ -1460,7 +1471,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "row. The mutation is `failureKind` deleted from `finishIn` — a column with no filesystem " +
       "counterpart — watched red. **Still `database-integration` rather than collateral**, and " +
       "that is the honest verdict rather than an un-updated one: the entry should simply leave " +
-      "this map, and can only do so when `tests/store-migration-witness.json` is re-run at the end " +
+      "this map, and can only do so when the witness JSON is re-run at the end " +
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
@@ -1487,7 +1498,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`STORE_CONVERSIONS` is what checks the evidence has not shrunk since. **Still " +
       "`database-integration` " +
       "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
-      "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
+      "the entry should simply leave this map when the witness JSON is re-run " +
       "at the end of stage B.",
   },
   "tests/shelf.test.ts": {
@@ -1561,7 +1572,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the read-after-write race the plan asked about is gone**: there is no `data/_jobs/` left in " +
       "it, and ten consecutive runs on a box at load 32–52 were green. The category is left alone " +
       "deliberately — a converted file may only leave this map once " +
-      "`store-migration-witness.json` is re-run at the end of stage B.",
+      "the witness JSON is re-run at the end of stage B.",
   },
   "tests/store-ai-calls.test.ts": {
     category: "filesystem-adapter-behaviour",
@@ -1642,7 +1653,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "entry would have lost all fifty-three. **Kept as `filesystem-adapter-behaviour` rather " +
       "than re-categorised**, on the precedent this map's header states for `fixture-loader`: an " +
       "entry records why a file was classified as it was, and the map shrinks when " +
-      "`store-migration-witness.json` is re-run, not by rewriting verdicts one at a time. The " +
+      "the witness JSON is re-run, not by rewriting verdicts one at a time. The " +
       "reach itself is gone.",
   },
   "tests/store-parity-referee.test.ts": {
@@ -1797,7 +1808,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "never had (the dependency itself went on 2026-09-06) — the file's header records the drop, and the 404-for-an-unknown-slug half " +
       "is kept in a case of its own. Mutation watched red: `entries` emptied in " +
       "`pgArticleReader.loadGlossary`. The category is left alone deliberately — a converted file " +
-      "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
+      "may only leave this map once the witness JSON is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   "tests/the-query-string-does-not-decide-the-route.test.ts": {
@@ -2295,8 +2306,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
 
      The heading survives the entry because the *class* does: a test that reads a
      condemned file's source is invisible to both witnesses, and the next one
-     will need a line here. scripts/store-migration-witness.ts § the blind spots
-     says the same thing from the other end. */
+     will need a line here. The witness script's own list of blind spots said
+     the same thing from the other end, until it was deleted on 2026-10-06. */
 };
 
 /* ------------------------------------------------------------------------- */
@@ -2659,7 +2670,8 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  * By running, not by reading — 260903e's own instruction, and the reason this
  * map could not be written in stage A. Every entry below was run against a
  * database minted by the factory, one file at a time, under `REQUIRE_POSTGRES=1`
- * so that a skip counted as a failure. The results, the tail of suites that
+ * so that a skip counted as a failure (no code reads that flag now; `pgReady`
+ * throws instead). The results, the tail of suites that
  * assume seeded local state, and what was fixed against what was catalogued are
  * in
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md

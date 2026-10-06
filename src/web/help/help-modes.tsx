@@ -240,8 +240,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
-            in <HelpRef to="mode-chat">Chat</HelpRef> with the term quoted and a question ready, and
-            sends nothing until you press <strong>Send</strong>. Use it when you want to go back and
+            in <HelpRef to="mode-chat">Chat</HelpRef> and asks a question about the term straight
+            away, with the term quoted. Use it when you want to go back and
             forth about a term; <strong>Dig deeper</strong> gives one researched answer and keeps it
             on the entry. Once you have asked, a line under the buttons shows how the chat’s latest
             answer begins; press it to open that conversation again beside the Glossary. The
@@ -605,7 +605,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     whenToUse: (
       <p>
         When you want to carry lines out of the piece in its own words — for notes, a review, or to see
-        what the author put best. Quotes is also what <HelpRef to="mode-skim">Skim</HelpRef> walks you
+        which passages are best put. Quotes is also what <HelpRef to="mode-skim">Skim</HelpRef> walks you
         through. <strong>Find more</strong> adds lines to the list rather than replacing it.
       </p>
     ),
@@ -620,18 +620,23 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             the spine shows where the quotes are in the whole piece.
           </li>
           <li>
-            Rest the pointer on a highlighted quote for a moment and a card shows its two scores, why it
-            was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
-            button to open it in Quotes.
+            Rest the pointer on a highlighted quote for a moment and a card says what a quote is, shows
+            the scores the AI gave it (or says it was not scored) and, where there is one, the AI’s
+            reason for choosing it. It also has <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after
+            it in the text and, outside Quotes, a button to open it there.
           </li>
           <li>
-            Each row carries two numbers: how much of the argument rests on the line, and how memorable
-            it is. Both are the AI’s judgement.
+            The AI gives a quote up to two scores: how much of the argument rests on it, and how
+            memorable and well put it is. Both are the AI’s judgement. A row shows every available
+            score under <strong>prioritised</strong>, the relevant score under{" "}
+            <strong>most important</strong> or <strong>most striking</strong> when it has one, and none
+            under <strong>in order</strong>; the card on the quote in the text always shows what it has.
           </li>
           <li>
-            The <strong>(i)</strong> beside a row says why it was chosen. Press a row to jump to it in
-            the text. <kbd>‹</kbd> <kbd>›</kbd> under the list, or <kbd>←</kbd> <kbd>→</kbd> while
-            reading, step from quote to quote in the list’s order.
+            The <strong>(i)</strong> beside a row says why it was chosen when the AI gave one, and always
+            says who chose it and when. Press a row to jump to it in the text. <kbd>‹</kbd> <kbd>›</kbd>{" "}
+            under the list, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from quote to quote in the
+            list’s order.
           </li>
           <li>
             <strong>in order</strong> (the default) lists them as the article says them;{" "}
@@ -728,8 +733,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>
           To look into one claim yourself, press the chat icon on its heading. It opens a new
-          conversation in <HelpRef to="mode-chat">Chat</HelpRef> with the claim quoted and a question
-          ready, and sends nothing until you press <strong>Send</strong>. Once you have asked, a line
+          conversation in <HelpRef to="mode-chat">Chat</HelpRef> and sends a question with the claim
+          quoted. Once you have asked, a line
           under the claim shows how the chat’s latest answer begins; press it to open that
           conversation again beside Debate. If a later search words the claim differently the line
           goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever
@@ -739,8 +744,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           To look at the debate from an angle of your own, such as how the piece relates to another
           paper, type it in the box at the top and press <strong>Ask in chat</strong>. It does not
           change the search results shown here: it opens a new conversation in{" "}
-          <HelpRef to="mode-chat">Chat</HelpRef> with a question that asks for a web search from that
-          angle, and sends nothing until you press <strong>Send</strong>. You can do this before
+          <HelpRef to="mode-chat">Chat</HelpRef> and sends a question that asks for a web search from
+          that angle. You can do this before
           searching at all. <strong>Your angles</strong>, under the box, lists the conversations you
           started this way once you send their first question; press one to open it again beside
           Debate. Only whoever added the article has this.
@@ -844,8 +849,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Ask in chat</strong>, beside <strong>Dig deeper</strong>, opens a new conversation
-            in <HelpRef to="mode-chat">Chat</HelpRef> with the work named and a question ready, and
-            sends nothing until you press <strong>Send</strong>. Use it to go back and forth about a
+            in <HelpRef to="mode-chat">Chat</HelpRef> and asks a question about the work straight
+            away, with the work named. Use it to go back and forth about a
             work; <strong>Dig deeper</strong> gives one researched reading and keeps it on the row.
             Once you have asked, a line under the row shows how the chat’s latest answer begins; press
             it to open that conversation again beside Citations. The conversation is also in Chat’s

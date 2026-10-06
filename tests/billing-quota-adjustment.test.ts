@@ -31,9 +31,10 @@
  * database: every branch of the ordering rule, the clamps, and the property the
  * whole design rests on — that no sequence of switches can gain.
  *
- * Skips loudly when there is no database (tests/helpers/pg-ready.ts). Check a
- * change with `REQUIRE_POSTGRES=1` and read the **count**: a skip looks exactly
- * like a pass. The pure half does not skip.
+ * Fails, rather than skips, when there is no database
+ * (tests/helpers/pg-ready.ts, since 2026-09-05) — the pure half with it, because
+ * the probe throws at module load. Read the **count** after a change all the
+ * same.
  */
 import type Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -132,7 +133,6 @@ function threeDaysLeft(now: Date): { periodStart: Date; periodEnd: Date } {
 }
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   await seedAuthUser(pool, { id: OWNER, email: `quota-adjustment-@example.invalid` });
   for (const tier of [READER, RESEARCHER]) {
@@ -152,7 +152,6 @@ beforeAll(async () => {
 beforeEach(sweep);
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from spideryarn.billing_tiers where id = any($1)", [
     [READER.id, RESEARCHER.id],
@@ -163,7 +162,6 @@ afterAll(async () => {
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   await clearSpending();
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
   forgetCachedTiers();
@@ -171,7 +169,6 @@ async function sweep(): Promise<void> {
 
 /** The ledger only — for a case that asks the wall twice in two periods. */
 async function clearSpending(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
 }
 
@@ -184,7 +181,6 @@ async function storedRow(fields: {
   periodEnd: Date;
   status?: string;
 }): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
@@ -268,7 +264,7 @@ async function sync(subscriptions: Stripe.Subscription[]): Promise<void> {
 
 /** Successful ingests already spent inside the current period. */
 async function alreadySpent(n: number): Promise<void> {
-  if (!pool || n <= 0) return;
+  if (n <= 0) return;
   await pool.query(
     `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
      select $1, now(), now() from generate_series(1, $2)`,
@@ -296,14 +292,6 @@ interface StoredBillingRow {
 }
 
 async function storedBillingRow(): Promise<StoredBillingRow> {
-  if (!pool) {
-    return {
-      quota_limit_delta: null,
-      quota_period_start: null,
-      current_period_start: null,
-      current_period_end: null,
-    };
-  }
   const { rows } = await pool.query<StoredBillingRow>(
     `select quota_limit_delta, quota_period_start, current_period_start, current_period_end
        from spideryarn.billing_accounts where owner_id = $1`,
@@ -507,7 +495,6 @@ describe("which period an override belongs to", () => {
    * change to sync forgets to clear one.
    */
   it("meters on the tier when the stored override belongs to another period", async () => {
-    if (!pool) return;
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 3 * DAY);
     const periodEnd = new Date(now.getTime() + 27 * DAY);
@@ -592,7 +579,6 @@ describe("which period an override belongs to", () => {
    * GPT Sol, 2026-09-04, reproduced.
    */
   it("follows a tier raise for an account carrying an override", async () => {
-    if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -663,7 +649,6 @@ describe("which period an override belongs to", () => {
 describe("what one sync writes", () => {
   /** Everything the write touches, so a column that stopped moving is visible. */
   async function wholeRow(): Promise<Record<string, unknown>> {
-    if (!pool) return {};
     const { rows } = await pool.query(
       `select stripe_subscription_id, price_id, status, current_period_start,
               current_period_end, cancel_at_period_end, cancel_at, livemode,
@@ -771,7 +756,6 @@ describe("what one sync writes", () => {
    * same shape: assert the blocking rather than hoping for an interleaving.
    */
   it("reads and moves the price inside one critical section", async () => {
-    if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -828,7 +812,6 @@ describe("what one sync writes", () => {
  */
 describe("the columns the database will not accept", () => {
   async function setColumns(delta: number | null, periodStart: Date | null): Promise<void> {
-    if (!pool) return;
     await pool.query(
       `update spideryarn.billing_accounts
           set quota_limit_delta = $2, quota_period_start = $3 where owner_id = $1`,

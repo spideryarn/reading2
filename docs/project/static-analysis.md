@@ -94,8 +94,7 @@ dead.
 they are research CLIs run by hand, so nothing imports them and Knip reported all fifteen as unused
 files. The entry is those two folders and not `scripts/**/*.ts`, because an entry is never reported
 as unused, and that glob would hide a helper module under `scripts/` that had really gone dead.
-`vitest.witness.config.ts` is also an entry: it is passed to a spawned Vitest command that Knip
-cannot follow. A full Knip run now reports no unused files. `knip --include files` still reports
+A full Knip run now reports no unused files. `knip --include files` still reports
 `vite.api.config.ts` and `vite.fleet.config.ts`; [knip.jsonc](../../knip.jsonc) records the mode
 difference. The other categories still have findings, so Knip remains advisory.
 

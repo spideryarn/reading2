@@ -897,33 +897,22 @@
      the `max-width` above. GPT Sol, 2026-09-06. */
   overflow-wrap: anywhere;
 }
-.tip-soon-flag {
-  margin-left: 0.4rem;
-  font-weight: 400;
-  font-size: 0.72rem;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .tip-soon p {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
-/* Two footers, one treatment, because they sit in the same place and mean the
-   same kind of thing — an aside under the description rather than more of it.
+/* A footer: an aside under the description rather than more of it. `tap` is
+   "tap again to do it", which a card opened by a finger has to say and no other
+   card does (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). It shared
+   this rule with a `learned` footer until 2026-10-06, when that selector went:
+   nothing had emitted the class for some time.
 
-   `learned` is what that project learned the hard way; `tap` is "tap again to
-   do it", which a card opened by a finger has to say and no other card does
-   (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). One rule rather than
-   two identical ones: if they ever need to differ, split it then.
-
-   Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
+   Selector written as `.tip-soon p.tip-soon-tap` rather than the class on
    its own so it outranks `.tip-soon p` above without an `!important`. Same
    result, and the next person to add a rule here inherits a specificity ladder
    they can reason about rather than one they have to escalate past. */
-.tip-soon p.tip-soon-learned,
 .tip-soon p.tip-soon-tap {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
@@ -935,7 +924,7 @@
    for every reader, so it is quoted rather than blended into the description
    above it: the rule says "and here is what came back", and it keeps its full
    ink because it is the most specific thing in the card. `ControlTip`
-   § `drawn`. Specificity ladder as `.tip-soon-learned` above. */
+   § `drawn`. Specificity ladder as `.tip-soon-tap` above. */
 .tip-soon p.tip-soon-drawn {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
@@ -946,7 +935,7 @@
    paragraph. A rule above, full ink, medium weight, and an arrow before it; not
    italic, which is the gesture hint's (`.tip-soon-tap`) and would make the two
    look like one kind of line. `ControlTip` § `press`, and spya-d886ah for why.
-   Specificity ladder as `.tip-soon-learned` above. */
+   Specificity ladder as `.tip-soon-tap` above. */
 .tip-soon p.tip-soon-press {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);

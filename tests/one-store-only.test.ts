@@ -125,7 +125,7 @@ const SELF = "tests/one-store-only.test.ts";
 const DIRS = ["src", "scripts", "evals", "tests", "api"];
 
 /** Single files that carry executable code and live at the root. */
-const FILES = ["vite.config.ts", "vitest.config.ts", "vitest.witness.config.ts", "package.json"];
+const FILES = ["vite.config.ts", "vitest.config.ts", "package.json"];
 
 /**
  * **Two root files that are not code, read raw, added 2026-09-06.**
@@ -200,22 +200,17 @@ async function sourcesUnder(dir: string): Promise<string[]> {
  * Every file this guard reads, repo-relative — code with its comments stripped,
  * and the two in `NOT_CODE` exactly as they are written.
  */
-async function scanned(): Promise<[string, string][]> {
+async function scanned(files: readonly string[] = FILES): Promise<[string, string][]> {
   const code: string[] = [];
   for (const dir of DIRS) code.push(...(await sourcesUnder(path.join(ROOT, dir))));
-  for (const file of FILES) code.push(path.join(ROOT, file));
+  for (const file of files) code.push(path.join(ROOT, file));
 
   const out: [string, string][] = [];
   const add = async (full: string, strip: boolean): Promise<void> => {
     const rel = path.relative(ROOT, full);
     if (rel === SELF) return;
-    try {
-      const text = await readFile(full, "utf8");
-      out.push([rel, strip ? stripComments(text) : text]);
-    } catch {
-      /* A file that is not there — `vitest.witness.config.ts` goes with the
-         filesystem store in stage G — is not a violation. */
-    }
+    const text = await readFile(full, "utf8");
+    out.push([rel, strip ? stripComments(text) : text]);
   };
 
   for (const full of code) await add(full, true);
@@ -224,6 +219,14 @@ async function scanned(): Promise<[string, string][]> {
 }
 
 describe("the store flag is a dead name, and this is what stops it coming back", () => {
+  it("fails when a required root file cannot be read", async () => {
+    const missing = "__one_store_missing_root__.ts";
+    await expect(scanned([...FILES, missing]).then(() => "scan succeeded")).rejects.toMatchObject({
+      code: "ENOENT",
+      path: path.join(ROOT, missing),
+    });
+  });
+
   /**
    * **The scan found something**, before any assertion about what it did not
    * find. A collector that matches nothing passes every "is it empty" assertion
@@ -372,8 +375,8 @@ describe("no suite gates itself on `reachable`, the alias 103 of them shared", (
    *
    * The name used to be *"no suite decides for itself whether the database is
    * required"*, and that was wider than these three regexes, which all key on the
-   * identifier `reachable`. Two files still write `x ? describe : describe.skip`
-   * against something database-shaped, and both survive on purpose:
+   * identifier `reachable`. One file still writes `x ? describe : describe.skip`
+   * against something database-shaped, and it survives on purpose:
    *
    * - **`tests/db-test-create.test.ts`** gates on the opt-in
    *   `SPIDERYARN_TEST_DB_FACTORY=1`, because those cases create and drop real
@@ -382,11 +385,13 @@ describe("no suite gates itself on `reachable`, the alias 103 of them shared", (
    *   two reasons applied — so it is not the failure this file exists about. Its
    *   `probe` does also fold in reachability, so an opted-in machine with no
    *   container skips quietly; that residual is the factory's, not the store's.
-   * - **`tests/migration-reconciliations.test.ts`** gates on
-   *   `isLocalDatabaseUrl`, because the block asserts things about *the schema
-   *   this laptop actually has*. Pointed at production it would be asking the
-   *   wrong database, and its first case asserts the connection happened, so
-   *   "0 tests, all green" cannot read as "every probe verified".
+   *
+   * There was a second until 2026-10-06:
+   * `tests/migration-reconciliations.test.ts` gated its live half on
+   * `isLocalDatabaseUrl` with a `describe.skip`, because its cases run DDL and
+   * must never be pointed at a database that is not the local one. It still
+   * never is, and it no longer skips: it throws at module scope when
+   * `DATABASE_URL` is unset, not local, or unreachable.
    *
    * **Widening the regex to the structural form was measured and rejected**: a
    * bare `\?\s*describe\s*:\s*describe\.skip` also catches the platform gates in

@@ -381,6 +381,7 @@ async function until(check: () => boolean): Promise<void> {
 }
 
 const commentPosts = () => trace.filter((r) => r.method === "POST" && r.url === LIST);
+const chatPosts = () => trace.filter((r) => r.method === "POST" && r.url === `/api/chat/${SLUG}`);
 const deletes = () => trace.filter((r) => r.method === "DELETE").map((r) => r.url);
 const dialog = () => host.querySelector<HTMLElement>(".cmt-dialog");
 const draftBox = () => host.querySelector<HTMLElement>(".annotate-dialog");
@@ -399,6 +400,42 @@ const button = (re: RegExp) =>
   [...(dialog()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
     re.test((b.textContent ?? "").trim()),
   );
+
+describe("Ask in chat while Chat is already open", () => {
+  it("sends the follow-up at the press instead of hiding it until a later mode change", async () => {
+    const comment: Comment = {
+      id: "spya-cmt777",
+      blockId: PARA,
+      quote: PARAGRAPH.slice(4, 19),
+      start: 4,
+      createdAt: "2026-10-06T10:00:00.000Z",
+      status: "done",
+      answer: "The bumps are the observations the model has to explain.",
+    };
+    stored = [comment];
+    await open(`?mode=chat&note=${comment.id}`);
+    await until(() => dialog() !== null);
+
+    const question = "Why does that follow?";
+    const box = dialog()?.querySelector<HTMLInputElement>(
+      'input[aria-label="Ask a follow-up question about this passage"]',
+    );
+    expect(box, "the explanation has its follow-up box").not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(box, question);
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(/^Ask in chat$/)?.click());
+    await until(() => chatPosts().length > 0);
+
+    expect(chatPosts(), "the press is the Send even when Chat was already open").toHaveLength(1);
+    expect(chatPosts()[0]?.body).toMatchObject({
+      question: expect.stringContaining(question),
+      anchor: { blockId: PARA, quote: comment.quote, start: comment.start },
+    });
+  });
+});
 const swatch = (name: string) =>
   dialog()?.querySelector<HTMLButtonElement>(`[role="radio"][aria-label="${name}"]`);
 
@@ -1456,6 +1493,37 @@ describe("Referee mode keeps the draft box", () => {
     expect(dialog()).toBeNull();
     expect(commentPosts(), "nothing is stored until the referee says").toHaveLength(0);
     expect(marks()).toEqual([]);
+  });
+
+  it("Ask AI stores the comment before sending it with the saved comment id", async () => {
+    await open("?mode=referee");
+    const quote = await drag(4, 19);
+    const words = "How does this support the conclusion?";
+    const note = draftBox()?.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Your comment on this passage"]',
+    );
+    expect(note).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(note, words);
+      note?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => draftBox()?.querySelector<HTMLButtonElement>(".annotate-ask-ai")?.click());
+    await until(() => chatPosts().length > 0);
+
+    expect(commentPosts()).toHaveLength(1);
+    expect(chatPosts()).toHaveLength(1);
+    const saved = commentPosts()[0]!;
+    const sent = chatPosts()[0]!;
+    expect(trace.indexOf(saved), "the free write precedes the paid one").toBeLessThan(
+      trace.indexOf(sent),
+    );
+    expect(saved.body).toMatchObject({ blockId: PARA, quote, start: 4, body: words });
+    expect(sent.body).toMatchObject({
+      question: expect.stringContaining(words),
+      anchor: { blockId: PARA, quote, start: 4 },
+      sourceCommentId: (saved.body as { id: string }).id,
+    });
   });
 });
 

@@ -738,7 +738,9 @@ export function judgeRobotsTxt(contentType: string, body: string): string[] {
      group, and the rules under it belong to all of them until the next run. */
   const groups: { agents: string[]; rules: string[] }[] = [];
   let opening = false;
-  for (const raw of body.split("\n")) {
+  /* Any line ending: `/#.*$/` stops at a carriage return, so a CRLF file's
+     comments would otherwise read as rules. */
+  for (const raw of body.split(/\r\n?|\n/)) {
     const line = raw.replace(/#.*$/, "").trim();
     if (line === "") continue;
     const ua = /^User-agent:\s*(.+)$/i.exec(line);
@@ -1402,6 +1404,13 @@ function runSelfTest(): void {
     judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots).length === 0,
     judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots),
   );
+  /* A served file may arrive with CRLF, and `/#.*$/` does not eat a trailing
+     carriage return: the comment between the groups then reads as a rule.
+     GPT Sol found it through the deploy's caller, 2026-10-06. */
+  for (const [name, ending] of [["CRLF", "\r\n"], ["lone CR", "\r"]] as const) {
+    const served = `${anonymousGroup}# the link-preview fetchers\n${previewGroup}${sitemapLine}`.replaceAll("\n", ending);
+    check(`judgeRobotsTxt: the shipped file with ${name} line endings and a comment between the groups passes`, judgeRobotsTxt("text/plain", served).length === 0, judgeRobotsTxt("text/plain", served));
+  }
   check(
     "judgeRobotsTxt: the older blanket block fails because no preview robot is allowed",
     judgeRobotsTxt("text/plain; charset=utf-8", "User-agent: *\nDisallow: /\n").length > 0,

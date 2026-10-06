@@ -764,8 +764,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>The AI is opt-in.</strong> Type a question in{" "}
-            <strong>Ask the AI about this…</strong> and a conversation about the passage opens
-            with your words ready to send. Nothing is asked until you send it.
+            <strong>Ask the AI about this…</strong> and press <strong>Ask in chat</strong> or
+            Enter: a conversation about the passage opens and your question is sent. Nothing is
+            asked until you do.
           </li>
           <li>
             <strong>In the first seconds after a page opens</strong>, before your earlier comments

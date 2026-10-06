@@ -105,10 +105,11 @@
  * because it claims jobs. Copied from tests/pg-session-exact-base.test.ts, which
  * set the pattern.
  *
- * Skips loudly when there is no database; see tests/helpers/pg-ready.ts. Check a
- * change here with `REQUIRE_POSTGRES=1 npx vitest run tests/billing-settlement.test.ts`
- * and read the *count*: tests/billing-quota-race.test.ts reported "13 skipped"
- * against a live database for hours, because a skip looks exactly like a pass.
+ * Fails, rather than skips, when there is no database; see
+ * tests/helpers/pg-ready.ts (since 2026-09-05). Check a change here with
+ * `npx vitest run tests/billing-settlement.test.ts` and read the *count*:
+ * tests/billing-quota-race.test.ts reported "13 skipped" against a live database
+ * for hours, back when this skipped, because a skip looks exactly like a pass.
  */
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
@@ -592,7 +593,6 @@ async function racedOnJobRow<A, B>(
   first: () => Promise<A>,
   second: () => Promise<B>,
 ): Promise<[Settled<A>, Settled<B>]> {
-  if (!pool) throw new Error("this case needs the kept pool; see pgReady above");
   const holder = await pool.connect();
   try {
     await holder.query("begin isolation level read committed");
@@ -658,7 +658,7 @@ describe("a job's ending settles its quota slot", () => {
           await rm(path.join(ROOT, "data", slug), { recursive: true, force: true });
         }
         await closeDb();
-        await pool?.end();
+        await pool.end();
         await runLock?.client.query("delete from auth.users where id = $1", [OWNER]);
       },
       async () => {

@@ -32,4 +32,7 @@ What would have caught the class, ranked by ease against value:
 3. **Use an anchored regex over uncommented lines.** A small immediate fix, but rejected as the
    final design: one restriction in the wrong group would still satisfy it. **Done the same day**,
    as `hasDisallowAll` in `scripts/deploy-checks.ts`, with the control above as its test. The
-   second item is still the real fix and is still not built.
+   second item was still the real fix. **Built on 2026-10-06**: the per-line check passed a file
+   restricting only Twitterbot beside an unrestricted `User-agent: *`, and the deploy now judges
+   the served file with `judgeRobotsTxt`
+   ([the plan](../plans/261006j-sixth-sweep-s7-s8-robots-check-and-readiness-poll.md)).

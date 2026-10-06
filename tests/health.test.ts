@@ -181,9 +181,10 @@ beforeEach(() => {
  * list is **empty**, which is a claim about the machine as much as about the
  * environment under test, and it is false on a laptop with no Postgres.
  *
- * The table named is the one the handler actually reads. `pgReady` is also what
- * makes `REQUIRE_POSTGRES=1` turn this skip into a failure, so `npm run check`
- * still cannot go green having not run these.
+ * The table named is the one the handler actually reads. Since 2026-09-05
+ * `pgReady` throws rather than skips, so no run can go green having not run
+ * these — and the 24 that "do not care" fail with them, because the probe is at
+ * module scope.
  */
 await pgReady({
   suite: "the health endpoint's four 'nothing left to warn about' cases",

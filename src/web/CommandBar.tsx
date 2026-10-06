@@ -816,7 +816,7 @@ const SUGGEST_ROW: Command = {
 
 /**
  * **A suggested lens, as a row** — the reading view's own handoff (Reader.tsx
- * § `debateThroughLensInChat`), so the question lands in Chat's box and
+ * § `suggestedLensInChat`, the one that waits), so the question lands in Chat's box and
  * nothing is sent until the reader presses Send there. `generates: false` for
  * that reason: this press spends nothing.
  */

@@ -400,6 +400,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
     handoff = {
       slug: SLUG,
       question: "Check this claim",
+      send: false,
       origin: handoffOrigin,
     };
     await arrive("chat");
@@ -682,7 +683,7 @@ describe("a question handed over from another mode", () => {
   const QUESTION = 'What does "axiom" mean here?';
 
   it("survives the round trip untouched, in one conversation", async () => {
-    handoff = { slug: SLUG, question: QUESTION };
+    handoff = { slug: SLUG, question: QUESTION, send: false };
     await arrive("chat");
     expect(box().value).toBe(QUESTION);
     expect(handoff, "the owner was told to forget it").toBeNull();
@@ -695,7 +696,7 @@ describe("a question handed over from another mode", () => {
 
   it("survives untouched when the list load failed on handoff arrival", async () => {
     failList = true;
-    handoff = { slug: SLUG, question: QUESTION };
+    handoff = { slug: SLUG, question: QUESTION, send: false };
     await arrive("chat");
     expect(panel?.loadFailed).toBe(true);
     expect(box().value).toBe(QUESTION);
@@ -708,7 +709,7 @@ describe("a question handed over from another mode", () => {
   });
 
   it("and once cleared, stays cleared", async () => {
-    handoff = { slug: SLUG, question: QUESTION };
+    handoff = { slug: SLUG, question: QUESTION, send: false };
     await arrive("chat");
     await act(async () => {
       box().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

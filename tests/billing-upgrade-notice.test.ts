@@ -131,7 +131,6 @@ const RESEARCHER = { id: "test-notice-researcher", price: "price_test_notice_res
 const DAY = 24 * 60 * 60 * 1000;
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   await seedAuthUser(pool, { id: OWNER, email: "upgrade-notice@example.invalid" });
   for (const [i, t] of [READER, RESEARCHER].entries()) {
@@ -152,7 +151,6 @@ beforeAll(async () => {
 beforeEach(sweep);
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from spideryarn.billing_tiers where id = any($1)", [
     [READER.id, RESEARCHER.id],
@@ -163,14 +161,13 @@ afterAll(async () => {
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
   forgetCachedTiers();
 }
 
 /** A reader who has a Stripe customer and nothing bought — how checkout leaves them. */
 async function freeAccount(): Promise<void> {
-  await pool?.query(
+  await pool.query(
     `insert into spideryarn.billing_accounts (owner_id, stripe_customer_id) values ($1, $2)`,
     [OWNER, CUSTOMER],
   );
@@ -221,7 +218,7 @@ async function sync(subscriptions: Stripe.Subscription[]): Promise<PlanUpgrade[]
       /* A callback inside the transaction would either see the old price on
          this second connection or wait on the row lock. The notice belongs
          strictly after the durable state change. */
-      const { rows } = await pool!.query(
+      const { rows } = await pool.query(
         "select price_id from spideryarn.billing_accounts where owner_id = $1",
         [OWNER],
       );
@@ -234,7 +231,7 @@ async function sync(subscriptions: Stripe.Subscription[]): Promise<PlanUpgrade[]
   return heard;
 }
 
-describe.skipIf(!pool)("the sync announces an upgrade once", () => {
+describe("the sync announces an upgrade once", () => {
   it("a first purchase is announced, and its redelivery is not", async () => {
     await freeAccount();
     const first = await sync([subscription(READER.price)]);
@@ -278,7 +275,7 @@ describe.skipIf(!pool)("the sync announces an upgrade once", () => {
       },
     });
     expect(result).toMatchObject({ kind: "synced", status: "active" });
-    const { rows } = await pool!.query(
+    const { rows } = await pool.query(
       "select price_id from spideryarn.billing_accounts where owner_id = $1",
       [OWNER],
     );

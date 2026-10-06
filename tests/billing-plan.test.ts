@@ -394,11 +394,6 @@ describe("the other plan states", () => {
     /* Because that is the thing somebody reading this line is worried about. */
     expect(words).toMatch(/reading is unaffected/i);
   });
-
-  it("says nothing is metered when the deployment has no Postgres", () => {
-    const words = rendered({ kind: "off" });
-    expect(words).toMatch(/nothing is metered/i);
-  });
 });
 
 /**

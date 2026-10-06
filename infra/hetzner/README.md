@@ -97,10 +97,12 @@ Then, in this order, from the repo root on the laptop:
    **Everything between them — the environment, the database, the migrations, the owner row, the
    fixtures — doctor cannot see at all.**
 10. **Then check the work**, which is the step that actually proves 4, 5 and 6: on the box,
-    `REQUIRE_POSTGRES=1 npm test`. That is stage 3's exit criterion in
-    [the plan](../../docs/plans/260831x-remote-box-dev-environment.md), and
-    [`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) makes an absent database say so
-    rather than failing obscurely.
+    `npm test`. That is stage 3's exit criterion in
+    [the plan](../../docs/plans/260831x-remote-box-dev-environment.md) (which wrote it as
+    `REQUIRE_POSTGRES=1 npm test`; the switch went on 2026-09-05, when the database became
+    required unconditionally), and
+    [`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) makes an absent database a
+    failure that says so, rather than a skip or an obscure error.
 
 ## Before every apply
 

@@ -100,14 +100,6 @@ export interface Gift {
  * and a route come to disagree about whether somebody may add an article.
  */
 export type ReaderPlan =
-  /**
-   * Quota is not enforced on this deployment at all — a filesystem store.
-   *
-   * Not an error and not a plan: docs/project/billing.md § *Billing is a
-   * Postgres feature*. It cannot happen in production, where src/store/index.ts
-   * refuses to boot on a filesystem store, so this is what a developer sees.
-   */
-  | { readonly kind: "off" }
   /** An administrator. No slot is ever taken, so there is no count to show. */
   | { readonly kind: "exempt" }
   /**
@@ -746,13 +738,6 @@ function paidTiming(plan: Extract<ReaderPlan, { kind: "paid" }>, ends: string | 
 
 export function describePlan(plan: ReaderPlan): PlanCopy {
   switch (plan.kind) {
-    case "off":
-      return {
-        headline: "No plan on this copy of the app",
-        detail:
-          "This copy is not running against Postgres, so nothing is metered and nothing can be " +
-          "bought. You will only ever see this on a development machine.",
-      };
     case "exempt":
       return {
         headline: "Administrator — no limit",
@@ -815,7 +800,6 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
  */
 export function planTip(plan: ReaderPlan): string | null {
   switch (plan.kind) {
-    case "off":
     case "exempt":
     case "unknown":
       return null;
@@ -913,7 +897,6 @@ export function planExplainer(plan: ReaderPlan): readonly string[] {
   const half =
     "An article you share publicly counts as half, so the number left — which counts private articles — can stretch further.";
   switch (plan.kind) {
-    case "off":
     case "exempt":
     case "unknown":
       return [];

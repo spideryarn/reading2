@@ -440,7 +440,7 @@ export function newClaudeArgs(
 
 /** Terminal colour, gone — gjd-remote writes to a pipe but still colours. */
 export function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping the escape character is the point
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
 

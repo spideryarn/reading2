@@ -1009,6 +1009,7 @@ export function CitationsPanel({
 
           Otherwise a fragment, not a conditional, so the row stays put while
           the list loads — the choice Timeline and Glossary make. Plan 261001l. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={orders.length > 0 ? null : <></>}
       /* Pinned under the scroller, and **only a job's status now**. The two
          sentences about the whole list that were here went behind the (i) on
@@ -1342,8 +1343,8 @@ function WorkRow({
             onInvestigate={investigate.onInvestigate}
           />
         )}
-        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). It costs
-            nothing until Send, so it needs no tap-to-reveal. It stays once a
+        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). The press
+            sends the question (plan 261006j). It stays once a
             chat exists: a second one can be started. */}
         {chats && (
           <AskInChatButton

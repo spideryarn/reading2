@@ -398,7 +398,10 @@ function once(section: string, word: string, where: string): string {
  * `faults: N`, which must equal the lines.
  */
 function score(): void {
-  if (ROUND === 3) return scorePairs();
+  if (ROUND === 3) {
+    scorePairs();
+    return;
+  }
   const wantedRuns = scoreAudit();
   scorePairs();
   scoreGrounded(wantedRuns);
