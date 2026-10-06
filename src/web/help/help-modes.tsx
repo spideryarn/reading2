@@ -620,13 +620,17 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             the spine shows where the quotes are in the whole piece.
           </li>
           <li>
-            Rest the pointer on a highlighted quote for a moment and a card shows its two scores, why it
-            was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
-            button to open it in Quotes.
+            Rest the pointer on a highlighted quote for a moment and a card says what a quote is, shows
+            the scores the AI gave it (or says it was not scored) and, where there is one, the AI’s
+            reason for choosing it. It also has <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after
+            it in the text and, outside Quotes, a button to open it there.
           </li>
           <li>
-            Each row carries two numbers: how much of the argument rests on the line, and how memorable
-            it is. Both are the AI’s judgement.
+            The AI gives a quote up to two scores: how much of the argument rests on it, and how
+            memorable and well put it is. Both are the AI’s judgement. A row shows both under{" "}
+            <strong>prioritised</strong>, one under <strong>most important</strong> or{" "}
+            <strong>most striking</strong>, and none under <strong>in order</strong>; the card on the
+            quote in the text always shows what it has.
           </li>
           <li>
             The <strong>(i)</strong> beside a row says why it was chosen. Press a row to jump to it in

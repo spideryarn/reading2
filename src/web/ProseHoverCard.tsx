@@ -103,6 +103,7 @@ import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
 import { Link } from "./Link.js";
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
@@ -1683,6 +1684,18 @@ export interface QuoteCardSource {
  *   *"quotes should as well, maybe saying when it was applied and whether it's
  *   AI generated or human highlights."*
  */
+/**
+ * **What a quote is, in the card's first line.** Each claim is one the code
+ * keeps: *a passage*, not a line (src/quotes.ts § `SYSTEM`); *the AI picked
+ * out*, since only a model's quote reaches this card and a reader's own
+ * highlight is another mark; *the article's own words*, never "the author's"
+ * (mode-catalog.ts § quotes says why that cannot be claimed); and the purple,
+ * which `quoteTier` and `quoteAlpha` both take from `priorityOf`. That last is
+ * true one way only: the fade has a floor, so two low scores can draw alike.
+ */
+export const QUOTE_CARD_SAYS =
+  "A passage the AI picked out as worth keeping, in the article’s own words. The stronger the purple, the higher it scored.";
+
 function QuoteCard({
   quote,
   source,
@@ -1713,6 +1726,17 @@ function QuoteCard({
             {at + 1} of {source.listed.length}
           </span>
         )}
+      </p>
+      {/* **What a quote is**, first, because the fills are in the prose in
+          every mode and this card is where a reader who has never opened
+          Quotes meets one. Greg, 2026-10-06 (spya-tpmde9): *"so readers know
+          what they are"*. From the viewer's side, so it is true for a visitor
+          too. docs/plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md. */}
+      <p className="prose-card-meta prose-card-quote-what">
+        {QUOTE_CARD_SAYS}{" "}
+        <Link className="prose-card-quote-help" href={helpHref(modeAnchor("quotes"))} onClick={onClose}>
+          More in Help →
+        </Link>
       </p>
       {scores.length > 0 ? (
         <dl className="prose-card-scores">
