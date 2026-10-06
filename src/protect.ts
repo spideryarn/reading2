@@ -1048,13 +1048,14 @@ export function proseRetention(
   const missing = runs.filter((run) => !kept.includes(run));
   /* **A run the treatment's own table interrupts is not a lost run.** Parsed
      only when something is missing, which is almost never. */
-  const lost = missing.length === 0 ? 0 : missing.filter((run) => !textRoundTables(treatment).includes(run)).length;
+  const roundTables = missing.length === 0 ? [] : textRoundTables(treatment);
+  const lost = missing.filter((run) => !roundTables.some((candidate) => candidate.includes(run))).length;
   return { runs: runs.length, lost, retained: lost === 0 };
 }
 
 /**
- * **The treatment's text with its `<table>`s taken out** — the second reading a
- * missing run is given before it is called lost.
+ * **Each treatment prose run that contains a `<table>`, with its tables taken
+ * out** — the second readings a missing run is given before it is called lost.
  *
  * A rescued table can stand in the middle of a run. Ten tables of arXiv
  * 2610.01658v1 sit inside list items, and six of those items carry on after
@@ -1066,19 +1067,25 @@ export function proseRetention(
  * tests/extract-protect-list-item-tables.test.ts.
  *
  * **Why this is not the loosening it looks like.** The run still has to be in
- * the treatment whole and in order; all that is forgiven is a `<table>`
- * standing inside it. In the failure the fallback exists for, the rescued
- * table has won candidacy and been rewritten as a `<div>`, and the prose is
- * gone: there is then no `<table>` to take out and no prose to find, so the run
- * is lost on this reading exactly as on the first. Prose that survives only
- * *inside* a table cell is found by the first reading and never reaches this
- * one — the blind spot `proseRetention` already names, neither widened nor
- * narrowed.
+ * one treatment prose element whole and in order; all that is forgiven is a
+ * `<table>` standing inside that same element. Removing tables from the whole
+ * document would join unrelated fragments on either side of one and could hide
+ * a genuinely missing paragraph. In the failure the fallback exists for, the
+ * rescued table has won candidacy and been rewritten as a `<div>`, and the
+ * prose is gone: there is then no `<table>` to take out and no prose to find,
+ * so the run is lost on this reading exactly as on the first. Prose that
+ * survives only *inside* a table cell is found by the first reading and never
+ * reaches this one — the blind spot `proseRetention` already names, neither
+ * widened nor narrowed.
  *
  * A clone, because `treatment` is the arm that may be about to ship.
  */
-function textRoundTables(treatment: Element): string {
-  const clone = treatment.cloneNode(true) as Element;
-  for (const table of Array.from(clone.querySelectorAll("table"))) table.remove();
-  return flatten(clone.textContent ?? "");
+function textRoundTables(treatment: Element): string[] {
+  return Array.from(treatment.querySelectorAll(PROSE_RUN_TAGS))
+    .filter((run) => run.querySelector("table") !== null)
+    .map((run) => {
+      const clone = run.cloneNode(true) as Element;
+      for (const table of Array.from(clone.querySelectorAll("table"))) table.remove();
+      return flatten(clone.textContent ?? "");
+    });
 }

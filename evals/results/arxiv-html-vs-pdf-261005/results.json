@@ -6,13 +6,13 @@
       "finalUrl": "https://arxiv.org/html/2608.13566",
       "fetchMs": 61,
       "bytes": 614176,
-      "extractMs": 9171,
+      "extractMs": 9047,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Don’t Claim Benchmark-Oriented Optimization Improves General Coding Capability — Diverse Evaluation Is Required",
       "byline": "Egor Shibaev; Vera Kudrevskaia; Timur Galimzyanov; Mikhail Evtikhiev; Ana Terna; Rastislav Rabatin; Timur Kudashev; Timofey Bryksin; Arina Puchkova; Patrik Bartak; Egor Bogomolov; Sergey Titov",
       "counts": {
-        "words": 11777,
+        "words": 11791,
         "blocks": 283,
         "headings": 63,
         "inlineMaths": 164,
@@ -25,7 +25,7 @@
         "tableCells": 390,
         "referenceBlocks": 33,
         "recallVsTextLayer": 0.922,
-        "precisionVsTextLayer": 0.953
+        "precisionVsTextLayer": 0.952
       }
     },
     "pdf": {
@@ -56,7 +56,7 @@
       "pdfRecall": 0.975,
       "pages": 22
     },
-    "ranAt": "2026-10-05T21:53:45.257Z"
+    "ranAt": "2026-10-06T00:57:42.379Z"
   },
   "2609.28681v1": {
     "id": "2609.28681v1",
@@ -100,15 +100,15 @@
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2605.20355v1",
-      "fetchMs": 45,
+      "fetchMs": 48,
       "bytes": 217556,
-      "extractMs": 3160,
+      "extractMs": 3037,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Proximal State Nudging: Reducing Skill Atrophy from AI Assistance",
       "byline": "Megha Srivastava; Jonathan Ouyang; Eric Zhou; Andrew Silva; Emily Sumner; Dorsa Sadigh; Yuchen Cui; Deepak Gopinath; Guy Rosman",
       "counts": {
-        "words": 6547,
+        "words": 6556,
         "blocks": 153,
         "headings": 32,
         "inlineMaths": 157,
@@ -152,22 +152,22 @@
       "pdfRecall": 0.95,
       "pages": 9
     },
-    "ranAt": "2026-10-05T21:53:53.739Z"
+    "ranAt": "2026-10-06T00:57:50.714Z"
   },
   "2610.01658v1": {
     "id": "2610.01658v1",
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2610.01658v1",
-      "fetchMs": 69,
+      "fetchMs": 72,
       "bytes": 777949,
-      "extractMs": 33806,
+      "extractMs": 34833,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Are random random walks normal?",
       "byline": "Kais Hamza; Laurent Tournier",
       "counts": {
-        "words": 8727,
+        "words": 8730,
         "blocks": 453,
         "headings": 52,
         "inlineMaths": 915,
@@ -211,22 +211,22 @@
       "pdfRecall": 0.931,
       "pages": 27
     },
-    "ranAt": "2026-10-05T21:54:32.177Z"
+    "ranAt": "2026-10-06T00:56:33.394Z"
   },
   "2610.03261v1": {
     "id": "2610.03261v1",
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2610.03261v1",
-      "fetchMs": 50,
+      "fetchMs": 55,
       "bytes": 394631,
-      "extractMs": 11259,
+      "extractMs": 11720,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Consecutive Posterior Fusion for Diffusive Recovery of Unobservable Image Structures",
       "byline": "Elena Morotti; Davide Evangelista; Elena Loli Piccolomini",
       "counts": {
-        "words": 9298,
+        "words": 9306,
         "blocks": 244,
         "headings": 28,
         "inlineMaths": 430,
@@ -270,22 +270,22 @@
       "pdfRecall": 0.982,
       "pages": 21
     },
-    "ranAt": "2026-10-05T21:54:47.357Z"
+    "ranAt": "2026-10-06T00:58:06.525Z"
   },
   "2610.01988v1": {
     "id": "2610.01988v1",
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2610.01988v1",
-      "fetchMs": 60,
+      "fetchMs": 57,
       "bytes": 652790,
-      "extractMs": 13633,
+      "extractMs": 13023,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Effective field theory of scalar glueballs: Form factors and interaction radii",
       "byline": "Adamu Issifu; Orlando Oliveira; Tobias Frederico",
       "counts": {
-        "words": 10023,
+        "words": 10026,
         "blocks": 279,
         "headings": 16,
         "inlineMaths": 534,
@@ -298,7 +298,7 @@
         "tableCells": 590,
         "referenceBlocks": 68,
         "recallVsTextLayer": 0.885,
-        "precisionVsTextLayer": 0.849
+        "precisionVsTextLayer": 0.848
       }
     },
     "pdf": {
@@ -329,6 +329,6 @@
       "pdfRecall": 0.878,
       "pages": 16
     },
-    "ranAt": "2026-10-05T21:55:05.466Z"
+    "ranAt": "2026-10-06T00:58:23.790Z"
   }
 }

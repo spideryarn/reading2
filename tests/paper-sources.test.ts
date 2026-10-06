@@ -104,7 +104,10 @@ describe("resolvePaperSource — arXiv", () => {
       canonicalUrl: "https://arxiv.org/abs/2608.13566",
       key: "arxiv.org/abs/2608.13566",
       slug: "arxiv-2608-13566",
-      candidates: [{ url: "https://arxiv.org/pdf/2608.13566", expect: "pdf" }],
+      candidates: [
+        { url: "https://arxiv.org/html/2608.13566", expect: "html", marker: "ltx_document" },
+        { url: "https://arxiv.org/pdf/2608.13566", expect: "pdf" },
+      ],
     });
   });
 
@@ -120,7 +123,10 @@ describe("resolvePaperSource — arXiv", () => {
       canonicalUrl: "https://arxiv.org/abs/2608.13566v1",
       key: "arxiv.org/abs/2608.13566v1",
       slug: "arxiv-2608-13566v1",
-      candidates: [{ url: "https://arxiv.org/pdf/2608.13566v1", expect: "pdf" }],
+      candidates: [
+        { url: "https://arxiv.org/html/2608.13566v1", expect: "html", marker: "ltx_document" },
+        { url: "https://arxiv.org/pdf/2608.13566v1", expect: "pdf" },
+      ],
     });
   });
 
@@ -137,7 +143,10 @@ describe("resolvePaperSource — arXiv", () => {
     const got = resolvePaperSource(url);
     expect(got).toMatchObject({ source: "arxiv", versionedId, workId, slug });
     expect(got?.canonicalUrl).toBe(`https://arxiv.org/abs/${versionedId}`);
-    expect(got?.candidates).toEqual([{ url: `https://arxiv.org/pdf/${versionedId}`, expect: "pdf" }]);
+    expect(got?.candidates).toEqual([
+      { url: `https://arxiv.org/html/${versionedId}`, expect: "html", marker: "ltx_document" },
+      { url: `https://arxiv.org/pdf/${versionedId}`, expect: "pdf" },
+    ]);
   });
 
   it("takes a five-digit and a four-digit new-style number", () => {
@@ -149,12 +158,16 @@ describe("resolvePaperSource — arXiv", () => {
     expect(resolvePaperSource(url)).toBeNull();
   });
 
-  /* Pinned so that putting the HTML candidate first — the later stage of plan
-     261005l — is a red test somebody changes on purpose. */
-  it("offers exactly one candidate today: the PDF", () => {
+  /* Pinned so that changing the order, or dropping the fallback, is a red test
+     somebody changes on purpose. HTML went first on 2026-10-06, with the fixes
+     in src/latexml.ts — plan 261005l § the HTML arm's faults, and HTML first. */
+  it("offers arXiv's HTML first and its PDF second, and nothing else", () => {
     for (const url of [...SAME_PAPER, ...VERSIONED, ...OLD_STYLE.map((row) => row[0])]) {
       const got = resolvePaperSource(url);
-      expect(got?.candidates).toEqual([{ url: `https://arxiv.org/pdf/${got?.versionedId}`, expect: "pdf" }]);
+      expect(got?.candidates).toEqual([
+        { url: `https://arxiv.org/html/${got?.versionedId}`, expect: "html", marker: "ltx_document" },
+        { url: `https://arxiv.org/pdf/${got?.versionedId}`, expect: "pdf" },
+      ]);
     }
   });
 

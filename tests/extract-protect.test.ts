@@ -416,7 +416,7 @@ describe("rule A — the four tables Readability deleted for saying they have he
     expect(off.chars).toBe(11_434);
   });
 
-  it("ar5iv: 7 → 9 tables, 42 → 60 rows, and the recovered table lands where it belongs", async () => {
+  it("ar5iv: 7 → 9 tables, 40 → 58 rows, and the recovered table lands where it belongs", async () => {
     const { on, off } = await extracted("ar5iv-attention");
     const source = await readFile(path.join(FIXTURES, "ar5iv.html"), "utf8");
 

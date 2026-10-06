@@ -178,8 +178,21 @@ the arm as it was before.
 | `2608.13566` | HTML | **HTML** | the boxed passage is back, all 58 words; 18 listings are 18 code blocks with their indentation (420 blocks became 283); a word-level diff shows one insertion and no deletion |
 | `2605.20355v1` | PDF | **HTML** | equations (1) and (2) are each one aligned formula with its number; nothing else moved. Figure 1 is still missing: arXiv's HTML has not got it |
 | `2610.01658v1` | HTML | **HTML** | all 45 aligned groups match the author's TeX row for row (checked by script against the source annotations); the four introduction tables and seven appendix matrices are real tables; all 65 single-line equations are byte-identical to before |
-| `2610.03261v1` | HTML | **HTML** | 13 equation blocks changed, all to display maths; 107 images, both tables and Algorithm 1 unchanged |
-| `2610.01988v1` | PDF | **HTML** | figures 2 to 6 have their pictures; 17 aligned groups are one formula each; Table II's header row is right where the PDF arm's is scrambled |
+| `2610.03261v1` | HTML | **HTML** | 11 equation blocks changed, all to display maths; 107 images, both tables and Algorithm 1 unchanged |
+| `2610.01988v1` | PDF | **HTML** | figures 2 to 6 have their pictures; 16 aligned groups are one formula each; Table II's header row is right where the PDF arm's is scrambled |
+
+**What the tree holds of this, and what it does not** (GPT Sol's F31). The counts are in
+`results.json`, and each fix has a fixture and a test cut from these pages
+(`tests/latexml.test.ts`, `tests/fixtures/latexml/`). The judges' reports, the before-and-after
+pages and their word diffs are not committed: the pages are the papers' prose, and the reports
+were read in the session that ran them. The table above is my record of those reports, with each
+surprising claim checked against the files before it was written down. Re-running the command at
+the top regenerates the pages for anyone who wants to judge again.
+
+After that judging, GPT Sol's code review tightened several rewrites, and one of its changes
+(refusing any cell holding a row or column break) sent five correct groups of `2610.01658v1` back
+to fragments. It was narrowed to breaks at the cell's top level, and the re-run after that gives
+the same counts as the judged run for all five papers.
 
 **Five of five for the HTML arm, and no regression found in any.** The byline is the paper's
 authors on all five. The judges also caught that the line under the title *inside* the article

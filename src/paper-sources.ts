@@ -97,15 +97,19 @@ const ARXIV_DOI_PATH = new RegExp(`^/10\\.48550/arxiv\\.(${ARXIV_ID_BOUNDED})(${
 /**
  * The addresses to try for one arXiv paper, in order of preference.
  *
- * **The PDF only, for now.** arXiv's HTML reads better where it exists, but its
- * LaTeXML pages have faults the extract step does not yet handle, so the HTML
- * candidate goes in front in a later stage of plan 261005l (§ Stage: the HTML
- * arm's faults, and HTML first). That stage adds this line above the PDF's:
- *
- *   { url: `https://arxiv.org/html/${versionedId}`, expect: "html", marker: "ltx_document" },
+ * **arXiv's HTML first, its PDF when there is none.** The HTML is free to read
+ * and takes seconds where the PDF costs about ten cents and two minutes, and
+ * once src/latexml.ts was in it was the better article on all five papers
+ * compared (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
+ * arXiv answers 404 for a paper its converter could not handle, which is what
+ * sends the fetch step on to the PDF. The marker is LaTeXML's own document
+ * class, so an error page served with a 200 is not taken for the paper.
  */
 function arxivCandidates(versionedId: string): readonly PaperCandidate[] {
-  return [{ url: `https://arxiv.org/pdf/${versionedId}`, expect: "pdf" }];
+  return [
+    { url: `https://arxiv.org/html/${versionedId}`, expect: "html", marker: "ltx_document" },
+    { url: `https://arxiv.org/pdf/${versionedId}`, expect: "pdf" },
+  ];
 }
 
 /**

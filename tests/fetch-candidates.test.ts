@@ -307,11 +307,18 @@ describe("the fetch step itself", () => {
   }
 
   it("asks arXiv for the paper when it is given the abstract page's address", async () => {
-    expect(await requestedBy("https://arxiv.org/abs/2608.13566?utm_source=x")).toEqual([PDF_ADDRESS]);
+    /* Both answer 404 here, so the step asks for the HTML and then for the PDF. */
+    expect(await requestedBy("https://arxiv.org/abs/2608.13566?utm_source=x")).toEqual([
+      "https://arxiv.org/html/2608.13566",
+      PDF_ADDRESS,
+    ]);
   });
 
   it("asks for a versioned paper by its version", async () => {
-    expect(await requestedBy("https://arxiv.org/html/2608.13566v2")).toEqual(["https://arxiv.org/pdf/2608.13566v2"]);
+    expect(await requestedBy("https://arxiv.org/pdf/2608.13566v2")).toEqual([
+      "https://arxiv.org/html/2608.13566v2",
+      "https://arxiv.org/pdf/2608.13566v2",
+    ]);
   });
 
   it("asks for any other address exactly as it was given", async () => {

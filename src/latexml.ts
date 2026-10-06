@@ -20,8 +20,9 @@
  *
  * ## The three rules every rewrite here follows
  *
- * 1. **Only beneath `article.ltx_document`.** A class name alone is not proof a
- *    page is LaTeXML's.
+ * 1. **Only at a supported LaTeXML source address, and only beneath
+ *    `article.ltx_document`.** A class name alone is not proof a page is
+ *    LaTeXML's.
  * 2. **An exact, written-down shape of direct children, and the page is left as
  *    it was when the shape does not hold** — the rule src/maths-import.ts works
  *    to. Every shape here is one that was measured on a real page; a shape
@@ -58,12 +59,19 @@ export interface LatexmlStats {
 /** The element every rule here must find above what it rewrites. */
 const DOCUMENT = "article.ltx_document";
 
+/** The web sources this stage has measured as LaTeXML output. */
+const LATEXML_SOURCES: ReadonlyMap<string, string> = new Map([
+  ["https://arxiv.org", "/html/"],
+  ["https://ar5iv.labs.arxiv.org", "/html/"],
+]);
+
 /** The elements whose text the reading view does not scan for TeX. */
 const SKIP = MATHS_SKIP_TAGS.join(",");
 
 /**
- * Rewrite the four shapes in every LaTeXML document in `doc`, and say how many
- * of each. A page with no `article.ltx_document` is not touched.
+ * Rewrite the four shapes in a supported LaTeXML document in `doc`, and say
+ * how many of each. An unrecognised source address, or a page with no
+ * `article.ltx_document`, is not touched.
  *
  * Called from `prepareDocument` (src/extract.ts) **before `canonicaliseMaths`**:
  * the aligned equation is joined from each cell's TeX annotation, which that
@@ -72,6 +80,7 @@ const SKIP = MATHS_SKIP_TAGS.join(",");
  */
 export function prepareLatexml(doc: Document): LatexmlStats {
   const stats: LatexmlStats = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+  if (!hasLatexmlSource(doc)) return stats;
   const roots = Array.from(doc.querySelectorAll(DOCUMENT));
   if (roots.length === 0) return stats;
   /* Once, not per element: the links do not change while this runs. */
@@ -94,6 +103,21 @@ export function prepareLatexml(doc: Document): LatexmlStats {
     }
   }
   return stats;
+}
+
+/**
+ * Producer evidence outside the page's markup. The document URL is the final
+ * fetched address JSDOM was given; unlike a class or generator comment, a
+ * stranger's page cannot opt itself into these rewrites by writing one.
+ */
+function hasLatexmlSource(doc: Document): boolean {
+  try {
+    const url = new URL(doc.URL);
+    const path = LATEXML_SOURCES.get(url.origin);
+    return path !== undefined && url.pathname.startsWith(path);
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -314,7 +338,59 @@ function formulaCellTex(td: Element): string | null {
   const raw = texOfMathML(math)?.trim();
   if (!raw) return null;
   const tex = raw.replace(/^\\displaystyle(?![A-Za-z])\s*/u, "").trim();
-  return tex === "" ? null : tex;
+  /* A cell has to be a formula on its own. Otherwise an authored alignment
+     control such as a bare `&` or `\\` can become valid only after this pass
+     wraps it in `aligned`, where it changes the rows or columns we build. */
+  return tex !== "" && !hasAlignmentControl(tex) && texWouldDraw(tex, false) ? tex : null;
+}
+
+/**
+ * Does a cell carry alignment syntax **of its own, at its top level**?
+ *
+ * A column or row break inside an environment the cell opens and closes
+ * itself (`cases`, `subarray`, `pmatrix`) belongs to that environment and is
+ * consumed by it wherever the cell is put: 2610.01658v1 has five such groups,
+ * each right in the author's TeX. One at the cell's top level would be read by
+ * the `aligned` this pass wraps round it, as a column or a row nobody wrote.
+ * So the depth counted is `\begin`…`\end` only. Braces are not counted: what a
+ * brace group does with an alignment control differs between renderers, and
+ * declining costs only the layout. A cell whose environments do not balance is
+ * declined too. Comments are skipped because their tokens are not TeX input.
+ *
+ * GPT Sol's F20 made every control a refusal; that sent the five groups above
+ * back to fragments, measured on the re-run, and this is the narrowing.
+ */
+function hasAlignmentControl(tex: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < tex.length; i += 1) {
+    const char = tex[i];
+    if (char === "%") {
+      const end = tex.indexOf("\n", i + 1);
+      if (end === -1) break;
+      i = end;
+      continue;
+    }
+    if (char === "&") {
+      if (depth === 0) return true;
+      continue;
+    }
+    if (char !== "\\") continue;
+    const next = tex[i + 1] ?? "";
+    if (next === "\\") {
+      if (depth === 0) return true;
+      i += 1;
+      continue;
+    }
+    const word = /^[A-Za-z]+/u.exec(tex.slice(i + 1))?.[0] ?? "";
+    if (word === "begin") depth += 1;
+    else if (word === "end") {
+      depth -= 1;
+      if (depth < 0) return true;
+    } else if ((word === "cr" || word === "tabularnewline") && depth === 0) return true;
+    /* The escaped character or control word cannot be a top-level token too. */
+    i += word === "" ? 1 : word.length;
+  }
+  return depth !== 0;
 }
 
 /**
@@ -404,6 +480,7 @@ function listingToPre(listing: Element, targets: ReadonlySet<string>): boolean {
     if (line.tagName !== "DIV" || !line.classList.contains("ltx_listingline")) return false;
     if (line.querySelector(NOT_IN_A_PRE) !== null) return false;
     if (linkedNamesOf(line, targets).length > 0) return false;
+    if (!lineWhitespaceIsExact(line)) return false;
   }
   if (download && holdsALinkTarget(download, targets)) return false;
 
@@ -424,6 +501,20 @@ function listingToPre(listing: Element, targets: ReadonlySet<string>): boolean {
   return true;
 }
 
+/**
+ * LaTeXML writes at most a bare newline at either edge. Pretty-printing
+ * whitespace between inline children collapses in a `<div>` but becomes a
+ * literal new line in `<pre>`, so that is another shape and stays untouched.
+ */
+function lineWhitespaceIsExact(line: Element): boolean {
+  for (const node of Array.from(line.childNodes)) {
+    if (node.nodeType !== 3 || !/[\r\n]/u.test(node.textContent ?? "")) continue;
+    const edge = node === line.firstChild || node === line.lastChild;
+    if (!edge || !/^[\r\n]+$/u.test(node.textContent ?? "")) return false;
+  }
+  return true;
+}
+
 /** `div.ltx_listing_data` holding exactly one `<a href="data:…">` and no words of its own. */
 function isDownloadLink(cell: Element): boolean {
   const a = cell.firstElementChild;
@@ -432,6 +523,7 @@ function isDownloadLink(cell: Element): boolean {
     noOwnText(cell) &&
     a?.tagName === "A" &&
     a.children.length === 0 &&
+    a.hasAttribute("download") &&
     /^data:/iu.test((a.getAttribute("href") ?? "").trim())
   );
 }
@@ -442,6 +534,9 @@ function isDownloadLink(cell: Element): boolean {
 
 /** What an SVG that only frames a passage is drawn with. `text`, `image`, `circle`, `use`: a drawing. */
 const FRAME_TAGS = new Set(["g", "path", "rect"]);
+
+/** Content that would begin loading or running only after it was lifted into ordinary HTML. */
+const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture, script, source, style, svg, video";
 
 /**
  * **`svg.ltx_picture` that is only a frame round one `<foreignObject>` → a
@@ -491,9 +586,15 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
   ) {
     return false;
   }
+  if (content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
   /* Everything else in the SVG is the frame: drawn, wordless, and not linked to. */
   for (const part of Array.from(svg.querySelectorAll("*"))) {
-    if (content.contains(part)) continue;
+    if (content.contains(part)) {
+      /* The wrapper itself is discarded: only its children move. A linked id
+         or name on that wrapper therefore has no faithful home. */
+      if (part === content && linkedNamesOf(part, targets).length > 0) return false;
+      continue;
+    }
     if (linkedNamesOf(part, targets).length > 0) return false;
     if (part === object || part === container) continue;
     if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
@@ -544,6 +645,7 @@ const TRAILING_MARKS = /[\s*∗†‡§¶‖]+$/u;
  * the one Readability made.
  */
 export function latexmlAuthorNames(doc: Document): string[] | null {
+  if (!hasLatexmlSource(doc)) return null;
   const roots = doc.querySelectorAll(DOCUMENT);
   const root = roots[0];
   if (roots.length !== 1 || root === undefined) return null;
@@ -552,7 +654,11 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
   if (blocks.length !== 1 || block === undefined || !noOwnText(block)) return null;
   const names: string[] = [];
   for (const child of Array.from(block.children)) {
-    if (child.matches("span.ltx_author_before")) continue;
+    if (child.matches("span.ltx_author_before")) {
+      const between = (child.textContent ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+      if (child.children.length !== 0 || (between !== "" && between !== "and")) return null;
+      continue;
+    }
     if (!child.matches("span.ltx_creator.ltx_role_author") || !noOwnText(child)) return null;
     const parts = Array.from(child.children);
     const person = parts.filter((p) => p.matches("span.ltx_personname"));

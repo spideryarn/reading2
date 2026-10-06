@@ -71,6 +71,15 @@ describe("a rescued table in the middle of a list item", { timeout: 120_000 }, (
        found by taking the tables out. */
     const inCell = `<table><tr><td>${long(2).slice(0, 60)}</td></tr></table>`;
     expect(proseRetention(control, body(`<ol><li><p>${long(1)}</p>${inCell}</li></ol>`)).retained).toBe(false);
+
+    /* Removing tables from the whole treatment must not join unrelated
+       fragments across a table and call a missing paragraph retained. */
+    expect(
+      proseRetention(
+        body(`<p>${long(1)} ${long(2)}</p>`),
+        body(`<span>${long(1)} </span>${TABLE}<span>${long(2)}</span>`),
+      ),
+    ).toEqual({ runs: 1, lost: 1, retained: false });
   });
 
   const para = (n: number) => `<div class="ltx_para"><p class="ltx_p">${PROSE(n)}</p></div>`;

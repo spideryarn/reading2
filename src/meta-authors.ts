@@ -59,11 +59,24 @@ export function metaAuthors(doc: Document): Author[] | null {
   if (fromCitation.length > 0) return naturalAuthors(fromCitation);
   const fromDc = cleaned(dc);
   if (fromDc.length > 1) return naturalAuthors(fromDc);
+  /* A single dc.creator, or another author meta tag Readability understands,
+     is already its byline source. The LaTeXML title block is a fallback only
+     for a page that declares nobody there. */
+  if (fromDc.length === 1 || hasAuthorMetadata(doc)) return null;
   /* A LaTeXML page (arXiv's HTML, ar5iv) declares nobody in its metadata and
      everybody in its title block. Names only, in the page's order and as
      written: they are already given-name first. src/latexml.ts. */
   const fromLatexml = cleaned((latexmlAuthorNames(doc) ?? []).map((name) => ({ name, affiliations: [] })));
   return fromLatexml.length > 0 ? fromLatexml : null;
+}
+
+/** Any non-empty author/creator meta declaration, in Readability's spellings. */
+function hasAuthorMetadata(doc: Document): boolean {
+  return Array.from(doc.querySelectorAll("meta[content]")).some((el) => {
+    if ((el.getAttribute("content") ?? "").trim() === "") return false;
+    const key = (el.getAttribute("name") || el.getAttribute("property") || "").trim().toLowerCase();
+    return /(?:^|[.:_-])(?:author|creator)$/u.test(key);
+  });
 }
 
 /**

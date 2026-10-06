@@ -36,15 +36,22 @@ const pageWith = (articleClass: string, body: string) =>
   `<!doctype html><html lang="en"><head><title>A Paper</title></head><body><article class="${articleClass}">${body}</article></body></html>`;
 const latexml = (body: string) => pageWith("ltx_document ltx_authors_1line", body);
 const notLatexml = (body: string) => pageWith("post", body);
+const documentAt = (html: string, url = "https://arxiv.org/html/2605.20355v1") => new JSDOM(html, { url }).window.document;
 
-function prepared(html: string) {
-  const doc = new JSDOM(html).window.document;
+function prepared(html: string, url = "https://arxiv.org/html/2605.20355v1") {
+  const doc = documentAt(html, url);
   const before = doc.body.innerHTML;
   const stats = prepareLatexml(doc);
   return { doc, stats, unchanged: doc.body.innerHTML === before };
 }
 
 const NOTHING = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+
+it("does not treat an ordinary page as LaTeXML from article.ltx_document alone", () => {
+  const { unchanged, stats } = prepared(latexml(fx("listing")), "https://example.test/an-ordinary-page");
+  expect(unchanged).toBe(true);
+  expect(stats).toEqual(NOTHING);
+});
 
 const prose = Array.from(
   { length: 8 },
@@ -198,6 +205,60 @@ describe("fix 1 — an aligned equation is one display formula", () => {
       const closes = fx("equation-group-one-tbody").replace(/\\displaystyle\\triangleq/gu, "\\displaystyle\\]\\triangleq");
       expect(prepared(latexml(closes)).unchanged).toBe(true);
     });
+
+    it("a cell whose TeX only becomes valid after the injected alignment syntax", () => {
+      for (const source of ["a &amp; b", String.raw`x \\ y`]) {
+        const html = fx("equation-group-one-tbody").replace(
+          /<annotation encoding="application\/x-tex">[^<]*<\/annotation>/u,
+          `<annotation encoding="application/x-tex">${source}</annotation>`,
+        );
+        expect(html).not.toBe(fx("equation-group-one-tbody"));
+        expect(prepared(latexml(html)).unchanged, source).toBe(true);
+      }
+    });
+  });
+
+  /** `equation-group-one-tbody` with its first formula's TeX source replaced. */
+  const withFirstCell = (source: string): string => {
+    const html = fx("equation-group-one-tbody").replace(
+      /<annotation encoding="application\/x-tex">[^<]*<\/annotation>/u,
+      () => `<annotation encoding="application/x-tex">${source}</annotation>`,
+    );
+    expect(html).not.toBe(fx("equation-group-one-tbody"));
+    return html;
+  };
+
+  it("joins a cell whose rows and columns are inside an environment of its own (2610.01658v1)", () => {
+    const cases = String.raw`\begin{cases}1&amp;\text{if }n=0,\\ 0&amp;\text{otherwise.}\end{cases}`;
+    const { doc, stats } = prepared(latexml(withFirstCell(cases)));
+    expect(stats.alignedEquations).toBe(1);
+    expect(formulaOf(doc.querySelector("table") as Element).tex).toContain(
+      String.raw`\begin{cases}1&\text{if }n=0,\\ 0&\text{otherwise.}\end{cases}`,
+    );
+  });
+
+  it("leaves a cell whose environments do not balance, or whose control is outside them", () => {
+    for (const source of [
+      String.raw`\begin{cases}1&amp;2`,
+      String.raw`\begin{cases}1\end{cases} &amp; 2`,
+      String.raw`1\end{cases}`,
+    ]) {
+      expect(prepared(latexml(withFirstCell(source))).unchanged, source).toBe(true);
+    }
+  });
+
+  it("keeps the alignment point when the right-hand formula cell is empty", () => {
+    const fixture = fx("equation-group-one-tbody");
+    const html = fixture.replace(
+      /<td class="ltx_td ltx_align_left ltx_eqn_cell"><math[\s\S]*?<\/math><\/td>/u,
+      '<td class="ltx_td ltx_align_left ltx_eqn_cell"></td>',
+    );
+    expect(html).not.toBe(fixture);
+    const { doc, stats } = prepared(latexml(html));
+    expect(stats.alignedEquations).toBe(1);
+    const { tex } = formulaOf(doc.querySelector("table") as Element);
+    const firstRow = tex.split(" \\\\\n")[0] ?? "";
+    expect(firstRow).toContain("&");
   });
 
   it("does not touch a single-line equation, which the maths pass already makes one display formula", () => {
@@ -311,6 +372,16 @@ describe("fix 3 — a code listing is one code block", () => {
       expect(html).not.toBe(fixture);
       expect(prepared(latexml(html)).unchanged).toBe(true);
     });
+    it("a visible data link that is not a download control", () => {
+      const html = fixture.replace(/<a href="(data:[^"]*)" download="">⬇<\/a>/u, '<a href="$1">LICENSE: attribution required</a>');
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
+    it("source-formatting whitespace between a line's inline children", () => {
+      const html = fixture.replace(/<\/span><span id="lstnumberx1\.2"/u, '</span>\n  <span id="lstnumberx1.2"');
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
     it("the same markup outside article.ltx_document", () => {
       expect(prepared(notLatexml(fixture))).toMatchObject({ unchanged: true, stats: NOTHING });
     });
@@ -353,7 +424,7 @@ describe("fix 5 — the byline is the paper's authors", () => {
 
   for (const [slug, names] of Object.entries(NAMES)) {
     it(`reads the names of ${slug}, in the page's order, and nothing else`, () => {
-      const doc = new JSDOM(latexml(fx(`authors-${slug}`))).window.document;
+      const doc = documentAt(latexml(fx(`authors-${slug}`)));
       expect(latexmlAuthorNames(doc)).toEqual(names);
       /* The same path a page's declared authors take, names only. */
       expect(metaAuthors(doc)).toEqual(names.map((name) => ({ name, affiliations: [] })));
@@ -371,15 +442,15 @@ describe("fix 5 — the byline is the paper's authors", () => {
 
   it("a page that declares its authors in metadata is read from there", () => {
     const html = latexml(fx("authors-2610-01658v1")).replace("<title>", '<meta name="citation_author" content="Doe, Jane"><title>');
-    expect(metaAuthors(new JSDOM(html).window.document)).toEqual([{ name: "Jane Doe", affiliations: [] }]);
+    expect(metaAuthors(documentAt(html))).toEqual([{ name: "Jane Doe", affiliations: [] }]);
   });
 
   describe("leaves the byline to Readability when the shape is not one it knows", () => {
     const fixture = fx("authors-2610-01658v1");
-    const names = (html: string) => latexmlAuthorNames(new JSDOM(html).window.document);
+    const names = (html: string) => latexmlAuthorNames(documentAt(html));
     it("the same markup outside article.ltx_document", () => {
       expect(names(notLatexml(fixture))).toBeNull();
-      expect(metaAuthors(new JSDOM(notLatexml(fixture)).window.document)).toBeNull();
+      expect(metaAuthors(documentAt(notLatexml(fixture)))).toBeNull();
     });
     it("several names in one personname (older LaTeXML: commas, line breaks, affiliations)", () => {
       const html = (inner: string) =>
@@ -403,6 +474,20 @@ describe("fix 5 — the byline is the paper's authors", () => {
       const html = fixture.replace("Laurent Tournier", "Laurent Tournier, Université Sorbonne Paris Nord");
       expect(html).not.toBe(fixture);
       expect(names(latexml(html))).toBeNull();
+    });
+    it("an author separator with elements or words other than 'and'", () => {
+      const nested = fixture.replace('<span class="ltx_author_before"> and </span>', '<span class="ltx_author_before"><span>Ada Lovelace</span></span>');
+      const words = fixture.replace('<span class="ltx_author_before"> and </span>', '<span class="ltx_author_before">University of Oxford</span>');
+      expect(names(latexml(nested))).toBeNull();
+      expect(names(latexml(words))).toBeNull();
+    });
+    it("leaves a single declared dc.creator to Readability", () => {
+      const html = latexml(fixture).replace("<title>", '<meta name="dc.creator" content="Declared Author"><title>');
+      expect(metaAuthors(documentAt(html))).toBeNull();
+    });
+    it("leaves another author meta declaration to Readability", () => {
+      const html = latexml(fixture).replace("<title>", '<meta name="author" content="Declared Author"><title>');
+      expect(metaAuthors(documentAt(html))).toBeNull();
     });
   });
 });
@@ -444,9 +529,21 @@ describe("fix 7 — a boxed passage keeps its words", () => {
       expect(html).not.toBe(fixture);
       expect(prepared(latexml(html)).unchanged).toBe(true);
     });
+    it("active or fetching content inside the passage", () => {
+      const html = fixture.replace(
+        '<span class="ltx_foreignobject_content">',
+        '<span class="ltx_foreignobject_content"><iframe src="https://www.youtube.com/embed/example"></iframe>',
+      );
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
     it("a link pointing at a part of the frame", () => {
       const html = fixture.replace("<foreignObject", '<foreignObject id="frame"');
       expect(prepared(latexml(`<p><a href="#frame">the box</a></p>${html}`)).unchanged).toBe(true);
+    });
+    it("a link pointing at the content wrapper that the rewrite would delete", () => {
+      const html = fixture.replace('class="ltx_foreignobject_content"', 'id="content" class="ltx_foreignobject_content"');
+      expect(prepared(latexml(`<p><a href="#content">the passage</a></p>${html}`)).unchanged).toBe(true);
     });
     it("the same markup outside article.ltx_document", () => {
       expect(prepared(notLatexml(fixture))).toMatchObject({ unchanged: true, stats: NOTHING });
