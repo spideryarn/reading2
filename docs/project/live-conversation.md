@@ -262,7 +262,12 @@ own, read off the wire by [`gpt-live/meter.ts`](../../src/web/live/gpt-live/mete
 - **`backend` — the text model's tokens**, one row per backend response id. Priced on the model the
   session row names, cached input at its own rate. `LIVE_BACKEND_PRICES` in
   [`src/pricing.ts`](../../src/pricing.ts) says where each number came from, and names the
-  long-context tier it does not model.
+  long-context tier it does not model. A handled terminal event with usable token totals is
+  billed even when it failed or was cut short, and its report says so: `failed` is written as
+  `error`, `incomplete` as `aborted`, the raw word kept in `provider_status`. A report from a tab
+  still running code from before the status field carries no status and is kept as `ok` with a
+  null `provider_status`
+  ([the plan](../plans/261006g-gpt-live-backend-report-carries-its-terminal-status.md)).
 
 **The create call is the server's own, and it bills fifteen seconds.** So
 `POST /api/chat/:slug/:threadId/live-session` writes the session row *before* it asks OpenAI — the

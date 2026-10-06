@@ -123,9 +123,6 @@ function answer(url: string, init: RequestInit = {}): Promise<Response> {
   if (path === "/api/jobs") return Promise.resolve(json({ jobs: [] }));
   return Promise.resolve(json({}));
 }
-const writtenAsB = () =>
-  sent.filter((r) => r.method !== "GET" && r.as === "Bearer TOKEN-B").map((r) => `${r.method} ${r.url}`);
-
 let host: HTMLDivElement;
 let root: Root;
 

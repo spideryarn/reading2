@@ -632,7 +632,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
           break;
         }
         case "usage":
-          meterReport(backendReport(effect.responseId, effect.usage));
+          meterReport(backendReport(effect.responseId, effect.usage, effect.status));
           break;
         case "failed": {
           /* The stall rule is told a delegation ended, not which: it restarts

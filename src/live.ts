@@ -1043,17 +1043,33 @@ export type GptLiveUsage =
   | {
       /**
        * **GPT-Live's backend bill: one text-model response's tokens**, off the
-       * nested `response.completed`. One row per response id, like `response`.
+       * nested terminal event, whichever it was. One row per response id, like
+       * `response`.
        */
       kind: "backend";
       /** The backend response's `id` (`resp_…`). The idempotency key. */
       responseId: string;
+      /**
+       * How the response ended, or `null` when the report did not say: a tab
+       * still running code from before this field sends no status. Refusing
+       * that report would lose its cost, and calling it `completed` would be
+       * a claim nobody made, so it is kept and its `provider_status` is null.
+       */
+      status: GptLiveBackendStatus | null;
       /** `usage.input_tokens` — the whole prompt, cached part included. */
       inputTokens: number;
       /** `usage.input_tokens_details.cached_tokens`. Inside `inputTokens`. */
       cachedInputTokens: number;
       outputTokens: number;
     };
+
+/**
+ * The three GPT-Live backend terminal events handled by the browser. A subset
+ * of `REALTIME_STATUSES`, so `REALTIME_OUTCOME` maps it. A nested cancellation
+ * event, if the provider sends one, is not currently handled.
+ */
+export const GPT_LIVE_BACKEND_STATUSES = ["completed", "failed", "incomplete"] as const satisfies readonly RealtimeStatus[];
+export type GptLiveBackendStatus = (typeof GPT_LIVE_BACKEND_STATUSES)[number];
 
 /** One usage report, from either engine. What `/api/live/:sessionId/usage` takes. */
 export type LiveUsage = RealtimeUsage | GptLiveUsage;
@@ -1254,9 +1270,17 @@ export function parseLiveUsage(body: unknown): LiveUsage {
 
   if (b.kind === "backend") {
     const inputTokens = count(b.inputTokens, "inputTokens", GPT_LIVE_BACKEND_MAX_INPUT_TOKENS);
+    /* **Absent is allowed, wrong is not.** Only a missing key reads as "not
+       said" (see `status` on `GptLiveUsage`); a null, or a word that is not one
+       of the three, is a report this code did not write. */
+    const status = b.status;
+    if ("status" in b && !GPT_LIVE_BACKEND_STATUSES.includes(status as GptLiveBackendStatus)) {
+      throw badReport(`status must be one of: ${GPT_LIVE_BACKEND_STATUSES.join(", ")}`);
+    }
     return {
       kind: "backend",
       responseId: eventIdOf(b.responseId),
+      status: status === undefined ? null : (status as GptLiveBackendStatus),
       inputTokens,
       /* Bounded by its parent: a cached token is an input token, and a count
          larger than the input would price a negative amount of fresh input. */
@@ -1523,8 +1547,8 @@ function ledgerBase(
     /* A live session's call is made by the browser, on a wire this process
        never touches: no retry loop of ours counted it and no gateway saw how it
        failed. `provider_status` is where a realtime row says what happened.
-       These nulls are the default; the one exception is a stopped Realtime
-       response, which `acceptRealtimeUsage` classes as `abort`. */
+       These nulls are the default; stopped Realtime responses and incomplete
+       GPT-Live backend responses carry class `abort`. */
     attempt: null,
     failurePhase: null,
     failureClass: null,
@@ -1631,7 +1655,7 @@ function backendRow(
       : priceLiveBackend(
           model,
           {
-            /* `parseRealtimeUsage` bounded the cached count by the input, so
+            /* `parseLiveUsage` bounded the cached count by the input, so
                this cannot go below zero. */
             freshInputTokens: usage.inputTokens - usage.cachedInputTokens,
             cachedInputTokens: usage.cachedInputTokens,
@@ -1639,12 +1663,20 @@ function backendRow(
           },
           receivedAt,
         );
+  /* **A failed or cut-short response is billed and reported like a finished
+     one, and says which it was.** Mapped as a Realtime response's status is,
+     `abort` class included: we send no backend cancellation command;
+     `incomplete` reports a length cap or a filter. Closing the session can
+     leave an unfinished response without terminal usage. A report with no
+     status is kept as `ok` with a null `provider_status` — see `status` on
+     `GptLiveUsage`. Pricing the reported tokens does not depend on status. */
+  const outcome = usage.status === null ? "ok" : REALTIME_OUTCOME[usage.status];
   return {
     ...ledgerBase(session, "backend", usage.responseId, null, receivedAt.getTime()),
     requestedModel: model ?? GPT_LIVE_BACKEND_MODEL,
-    outcome: "ok",
-    /* Only `response.completed` is reported, so there is no other status. */
-    providerStatus: "completed",
+    outcome,
+    providerStatus: usage.status,
+    failureClass: outcome === "aborted" ? ("abort" as const) : null,
     ...(priced
       ? {
           costSource: "computed" as const,
