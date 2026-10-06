@@ -5,6 +5,13 @@ one set at a time ([edit-important-docs.md](../../reusable/edit-important-docs.m
 before, an after and a one-line reason. They are grouped into sets of related edits and ordered by
 ease × value, most first. Answer by number ("A1, A2, not A5").
 
+**Five of these are settled, as of 2026-10-06**, by the memory port
+([the mapping § The second half](../../investigations/261005d-overseer-auto-memory-ported-to-docs-the-mapping.md#the-second-half-2026-10-06)),
+which landed the same lessons in fuller text under Greg's blanket approval of that day: **E1** (its
+DP4), **E2** (CE7), **K1** (AP8), **K2** (RP6) and **K4** (CP10). Do not put them to him again.
+**F1 and K3** overlap its BP3, BP4 and BP7, which are held back so that he is asked once; the
+mapping recommends landing those three and retiring F1 and K3.
+
 The evidence behind them is in this directory: the probes (`before-P*.md`, `score-before.md`), the
 trawls (`trawl-*.md`) and the writers' reports (`report-W*.md`).
 
