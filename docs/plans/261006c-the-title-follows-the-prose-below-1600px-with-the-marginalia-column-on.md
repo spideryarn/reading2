@@ -40,16 +40,18 @@ prose was pushed" is already exactly `margReserve`.
 
 ## What else it changes, and why that is right
 
-`margReserve` is non-zero from 600px of page (where the column first appears), not from 1000. So
+The column first appears at a fitted page width of 600px with the rail off, or 612px with it on,
+and can reserve room from there, not only from 1000. So
 the bar's right padding also grows on an iPad and on a wide phone with the column on:
 
 - **About 600–1000px.** The plan first said the title's left edge would not move here and only
   its wrap width would. **That was wrong** (GPT Sol, plan review F1): the inner box's `65ch` cap
   can already bind in this range, so the title was being centred, and was misplaced, here too. The
   browser agrees: 65px right of the prose at 768 and 98px at 834 before, 1.6px after. So the bug
-  reaches down to an iPad, not only to 1000px, and the same change fixes it. At 612 the left edge
-  really does not move (0 before and after); there the title now wraps at the prose's width
-  instead of running on under the notes column.
+  reaches down to an iPad, not only to 1000px, and the same change fixes it. At 612 with the
+  measured 16px root and rail on, the left edge does not move (0 before and after); the title
+  wraps in the reduced space clear of the notes column. This is not a guarantee for other
+  roots: with smaller type the title's cap can already bind at 612, so its left edge moves too.
 - **Below 600px.** No column, `margReserve` 0, nothing changes.
 - **1600px and up.** Unchanged; the gate was already open.
 - **Beside a band.** Unchanged; `fit.alone` is false.
@@ -78,7 +80,10 @@ one P2 (F1, above), accepted and written into the section above.
 
 **Browser**, Playwright with system Chrome on the box, `/read/openai-huggingface`, 16px root, rail on.
 The number is the title text's left edge minus the first line of prose's. "Before" is the old
-behaviour, reproduced by forcing `--marg-title-reserve` to `0px` below 1600 and reading it back.
+behaviour in these cases, reproduced by forcing `--marg-title-reserve` to `0px` below 1600 and
+reading it back. The script uses viewport width for that cutoff; the old code used fitted page
+width (after scrollbar and horizontal safe-area insets). This simulation does not establish the
+old behaviour where those widths straddle 1600.
 Script: `output/qi-kfmr6j93/measure.mjs` (not committed; `output/` is ignored).
 
 | | width | before | after | `--marg-reserve` |
@@ -99,9 +104,15 @@ Script: `output/qi-kfmr6j93/measure.mjs` (not committed; `output/` is ignored).
 
 The 9.7px left at 1200 is the residual every centred layout here has, column off included
 (narrow-window.css records it for 261003c). No sideways scroll anywhere. Touch contexts at 390–834
-gave the same numbers. At 612 and 768 the title now wraps to two lines at the prose's width; before,
+gave the same numbers. At 612 and 768 the title now wraps to two lines in the reduced space; before,
 at 768, the notes column's first box lay over the byline row and its *Fold all* control, and after
 it does not. The larger offsets than the queue item's 55–105px are a different article and root;
 the cause is the same.
 
 Not checked: the masthead's controls were looked at, not pressed; the screenshots were dark theme.
+
+**Code review, 2026-10-06:** the 612px unchanged-left-edge claim is scoped above to the measured
+root and rail. The title and prose do not have identical wrap widths: at 612px and a 16px root,
+the masthead inner box has 369.6px, while the prose has 350.4px, before the title row's own
+controls take space. These follow the different padding rules in `shell.css` and
+`narrow-window.css`; matching their widths exactly is outside this stage.
