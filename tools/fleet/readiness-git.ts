@@ -99,6 +99,47 @@ export function gitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessE
 }
 
 /**
+ * The environment for every child the readiness runner starts: {@link gitEnv},
+ * and with **every `npm_config_*` variable removed**, whatever its case.
+ *
+ * npm reads any variable of that name as configuration, and several of them
+ * make a command exit 0 having done nothing. Measured here on npm 11.19.0,
+ * 2026-10-06, against a fixture whose root `postinstall` writes a file:
+ *
+ *     npm_config_ignore_scripts=true    npm ci exits 0, the file is absent
+ *     npm_config_script_shell=/bin/true npm ci exits 0, the file is absent —
+ *                                       and so would `npm run build:fleet`,
+ *                                       `npm run db:migrate` and the check
+ *     npm_config_dry_run=true           npm ci exits 0, node_modules untouched
+ *
+ * Pinning a flag on the command line answers one of those at a time and the
+ * list does not end (GPT Sol's R724-02, then P3R-03 one flag later). Removing
+ * the whole family does. npm then reads its npmrc files again. Inherited
+ * overrides, including legitimate cache, registry and alternate-userconfig
+ * settings, are deliberately discarded. npm also exports CLI settings in
+ * `npm_config_*`, so these variables are not necessarily echoes of npmrc files.
+ *
+ * **What this does not claim:** independence from a user-level or global
+ * npmrc. `script-shell=/bin/true` in an npmrc hollows the same commands and
+ * nothing here sees it.
+ *
+ * `npm_package_*` and `npm_lifecycle_*` are left alone: they describe the
+ * script that started this process, npm does not read them back as
+ * configuration, and each `npm run` below replaces them.
+ *
+ * A separate function, not a change to `gitEnv`, because `gitEnv` is also what
+ * `scripts/worktree-check.ts`, `scripts/worktree-port.ts` and the dashboard run
+ * git with, and none of those is an unattended runner.
+ */
+export function runnerChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = gitEnv(source);
+  for (const name of Object.keys(env)) {
+    if (name.toLowerCase().startsWith("npm_config_")) delete env[name];
+  }
+  return env;
+}
+
+/**
  * The sentence the page shows beside "on dev", instead of a freshness it cannot
  * measure. See the header for the two ways ref mtime lies.
  */

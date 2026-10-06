@@ -336,6 +336,11 @@ imports from `../../../../src/web/`, so it is true — and one broken sentence i
 rewritten. **A second review of this diff is still owed**, and is the first thing to do if this area
 is picked up again.
 
+*(2026-10-06: that review was run by the Overseer and refused the commit on three P1s —
+[the review](260909g-readiness-runner-commit-724c5245-overseer-commissioned-review-sol.md). The
+answer to it is
+[261006h](261006h-readiness-runner-round-3-fleet-bundle-provenance-and-npm-ignore-scripts.md).)*
+
 ## Stages
 
 ### Stage 1 — one git environment, and the guard a clean environment cannot give

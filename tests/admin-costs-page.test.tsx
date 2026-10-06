@@ -469,6 +469,49 @@ describe("over time", () => {
   });
 });
 
+/* Plan 261006h: the chart scrolls sideways in its own box on a narrow window,
+   and the arrow keys scroll whatever has focus. jsdom lays nothing out, so the
+   two widths are stand-ins. */
+describe("reaching the chart from the keyboard", () => {
+  const widths = (content: number) => {
+    vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
+      return this.matches("[data-cost-chart]") ? content : 0;
+    });
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+      return this.matches("[data-cost-chart]") ? 360 : 0;
+    });
+  };
+  const reach = () => {
+    const box = host.querySelector("[data-cost-chart]");
+    if (!box) throw new Error("no chart");
+    return { tabindex: box.getAttribute("tabindex"), role: box.getAttribute("role"), name: box.getAttribute("aria-label") };
+  };
+
+  it("makes the chart's box a named tab stop when the chart is wider than it", async () => {
+    widths(720);
+    try {
+      await show("?by=day");
+      expect(reach()).toEqual({
+        tabindex: "0",
+        role: "region",
+        name: "Recorded amount per UTC day, stacked by category",
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("does not when the chart fits", async () => {
+    widths(360);
+    try {
+      await show("?by=day");
+      expect(reach()).toEqual({ tabindex: null, role: null, name: null });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 describe("URL state", () => {
   it("writes ranking sort and direction into the address", async () => {
     await show();

@@ -9,8 +9,9 @@ ease × value, most first. Answer by number ("A1, A2, not A5").
 ([the mapping § The second half](../../investigations/261005d-overseer-auto-memory-ported-to-docs-the-mapping.md#the-second-half-2026-10-06)),
 which landed the same lessons in fuller text under Greg's blanket approval of that day: **E1** (its
 DP4), **E2** (CE7), **K1** (AP8), **K2** (RP6) and **K4** (CP10). Do not put them to him again.
-**F1 and K3** overlap its BP3, BP4 and BP7, which are held back so that he is asked once; the
-mapping recommends landing those three and retiring F1 and K3.
+**F1 and K3 are retired, as of 2026-10-06**, superseded by its BP3, BP4 and BP7, which landed that
+day and carry the dates and the measurements. Greg left the choice between the two sets to the
+Overseer's judgment, and this is the Overseer's call. Do not put them to him again.
 
 The evidence behind them is in this directory: the probes (`before-P*.md`, `score-before.md`), the
 trawls (`trawl-*.md`) and the writers' reports (`report-W*.md`).
@@ -151,7 +152,8 @@ author's reason.
 
 ## Set F — `long-waits.md`
 
-**F1.** New: "A subagent that starts a tmux job ends its turn and reports nothing, so own long waits
+**F1.** *Retired 2026-10-06, superseded by the memory port's BP3 (`long-waits.md` § While you wait)
+and BP4 (`engineering-manager.md` § Delegate).* New: "A subagent that starts a tmux job ends its turn and reports nothing, so own long waits
 yourself. Polling a log burns turns, not wall-clock: arm one waiter and stop. In a poll loop use
 `grep -q`, never `grep -c … || echo 0`, which fires at once. `kill -0` fails from the sandbox; use
 `[ -d /proc/<pid> ]`." Reason: four auto-memories, each a wasted afternoon.
@@ -219,7 +221,8 @@ session that came up without auto mode stops at its first approval." (W3 P4).
   after a cron, a long wait, a compaction or a `--resume` (W3 P1).
 - **K2** `plans.md` (queued slices) — new: before starting a slice a plan has queued publicly,
   message the live peers and write *Claimed* into the plan (W3 P2).
-- **K3** `docs/reusable/diagnose-box-resources.md` — new: `pgrep -fa vitest | wc -l` counts about
+- **K3** *Retired 2026-10-06, superseded by the memory port's BP7, landed in the same section.*
+  `docs/reusable/diagnose-box-resources.md` — new: `pgrep -fa vitest | wc -l` counts about
   five processes per suite (W3 P3).
 - **K4** `testing.md` — new: record the sha a long gate started from, and check it is still `HEAD`
   before acting on its failure (W3 P5).

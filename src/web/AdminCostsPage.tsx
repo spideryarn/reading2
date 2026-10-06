@@ -90,7 +90,7 @@ import {
   naturalDirections,
   useSortedTable,
 } from "./lib/DataTable.js";
-import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
+import { SidewaysScrollBox, useScrollBox } from "./lib/SidewaysScrollBox.js";
 import {
   isAllNatural,
   localeText,
@@ -862,17 +862,18 @@ function PivotTable({
     return alpha === null ? undefined : { background: `rgb(var(--cat-0-rgb) / ${alpha})` };
   };
 
+  /* The table's caption, and its scroll box's name while it scrolls. */
+  const caption = `Recorded amount, ${DIMENSION_LABEL[rowDim]} by ${DIMENSION_LABEL[colDim]}`;
+
   return (
     <>
       <p data-row-count="" className={`tw:m-0 tw:mb-2 ${SMALL_LABEL}`}>
         {plural(pivot.rows.length, "row")} · {DIMENSION_LABEL[rowDim]} by {DIMENSION_LABEL[colDim].toLowerCase()},
         recorded amount
       </p>
-      <SidewaysScrollBox>
+      <SidewaysScrollBox label={caption}>
         <table data-pivot="" className="tw:w-full tw:border-collapse tw:text-sm">
-          <caption className="tw:sr-only">
-            Recorded amount, {DIMENSION_LABEL[rowDim]} by {DIMENSION_LABEL[colDim]}
-          </caption>
+          <caption className="tw:sr-only">{caption}</caption>
           <thead>
             <tr className="tw:border-b tw:border-border">
               <th scope="col" className={`${HEAD} ${PINNED} tw:text-left`}>
@@ -981,18 +982,17 @@ function OverTime({
   const days = useMemo(() => daysInWindow(since, until, allRows, now), [since, until, allRows, now]);
   /* From the whole cube, so a filter does not repaint the series that remain. */
   const colourKeys = useMemo(() => colourOrder(allRows, stack), [allRows, stack]);
+  const label = `Recorded amount per UTC day, stacked by ${DIMENSION_LABEL[stack].toLowerCase()}`;
+  /* The chart scrolls sideways in its own box on a narrow window. It has no
+     hooks (cost-charts.tsx says why), so the measuring is done here and handed
+     in: the box takes keyboard focus while the chart is wider than it. */
+  const { box } = useScrollBox(label);
 
   return (
     <>
       <figure className="tw:m-0 tw:mb-4 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
-        <figcaption className={`tw:mb-2 ${SMALL_LABEL}`}>
-          Recorded amount per UTC day, stacked by {DIMENSION_LABEL[stack].toLowerCase()}
-        </figcaption>
-        <StackedDayChart
-          data={daySeries(pivot, days)}
-          colourKeys={colourKeys}
-          label={`Recorded amount per UTC day, stacked by ${DIMENSION_LABEL[stack].toLowerCase()}`}
-        />
+        <figcaption className={`tw:mb-2 ${SMALL_LABEL}`}>{label}</figcaption>
+        <StackedDayChart data={daySeries(pivot, days)} colourKeys={colourKeys} label={label} box={box} />
       </figure>
       <PivotTable pivot={pivot} rowDim="day" colDim={stack} drill={drill} />
     </>
@@ -1076,13 +1076,12 @@ function FailureCountsTable({
 }) {
   const groups = fold ? all.filter((group) => !nothingMeasured(group)) : all;
   const folded = all.length - groups.length;
+  const caption = `Retries, calls that gave up, attempts that died part-way and attempts our own clock stopped, by ${label}`;
   return (
     <>
-    <SidewaysScrollBox className="tw:mb-4">
+    <SidewaysScrollBox label={caption} className="tw:mb-4">
       <table data-failures-table={name} className="tw:w-full tw:border-collapse tw:text-sm">
-        <caption className="tw:sr-only">
-          Retries, calls that gave up, attempts that died part-way and attempts our own clock stopped, by {label}
-        </caption>
+        <caption className="tw:sr-only">{caption}</caption>
         <thead>
           <tr className="tw:border-b tw:border-border">
             <th scope="col" className={`${HEAD} ${PINNED} tw:text-left`}>
@@ -1163,7 +1162,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
           {causes.length === 0 ? (
             <p className={`tw:m-0 tw:mb-4 ${SMALL_LABEL}`}>No failed attempt in this view recorded a cause.</p>
           ) : (
-            <SidewaysScrollBox className="tw:mb-4">
+            <SidewaysScrollBox label="Why attempts failed" className="tw:mb-4">
               <table data-failures-table="causes" className="tw:w-full tw:border-collapse tw:text-sm">
                 <caption className="tw:sr-only">Why attempts failed</caption>
                 <thead>

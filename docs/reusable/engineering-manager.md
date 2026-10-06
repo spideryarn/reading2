@@ -146,6 +146,20 @@ A subagent starts with nothing but your prompt. Name the files, say what the sta
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
 
+**Give a subagent work that finishes inside one turn, and own the long waits yourself.** A subagent
+told to run a long loop starts it and ends its turn with "I'll wait for that to complete",
+reporting nothing: the harness counts it finished because a tmux job it spawned is not a child it
+tracks. Resuming it repeats the pattern — on 2026-09-06 three did this and one spent 152k tokens on
+idle re-checks. Ask for the instrument and a bounded measurement, tell it to block in the foreground
+rather than background anything, and read its artefacts yourself. Stopping such an agent leaves its
+tmux sessions running: list them and end each by exact name.
+
+**Do not read a subagent's output before its completion notice arrives.** On an agent still running,
+`TaskOutput` returns the tail of its raw transcript, every tool call and diff included — about 18k
+tokens for one call on a busy agent. After it finishes the same call returns the report. To watch
+progress meanwhile, poll something cheap and external: a file it is due to write, or
+`git status --short`.
+
 **Grep every load-bearing claim in a brief before you send it.** The builder's only source for the
 reasoning is the brief, so a fact asserted there comes back quoted in a source comment, a doc
 paragraph and a test header at once, and each copy then reads as separately established. Three
