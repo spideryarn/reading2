@@ -180,8 +180,40 @@ sentence where a reader would otherwise wonder ("`remember` until 2026-10-06; `?
 still opens it"). `rename-or-move.md`'s example keeps `?mode=remember`: it is inside Greg's quote.
 `tests/doc-links.test.ts` green.
 
+## After the plan review (GPT Sol, 2026-10-06: approve with changes)
+
+[The review](261006a-plan-review-sol.md). All eight findings accepted; the stages above are
+re-cut as below, and where this section disagrees with one above, this section wins.
+
+| Finding | What it said | What changed |
+|---|---|---|
+| PR-1 P1 | Code that does not know the kind `learn` coerces it to `chat` (`pg-chat.ts`, `export.ts`), so in the window a Retry or Edit of a Recall answer is rewritten under Chat's prompt, and stored | **Stage 0, new**: an unknown stored kind is an error, not a chat. It ships in a deploy *before* the rename |
+| PR-2 P1 | Taking `remember` out of `ARTICLE_PARAMS` makes an old `?remember=quiz` link look bare, so the browser's stored view overrides the link | `remember` moves to `NEVER_REMEMBERED`: never stored or restored, but the link still wins. Tested for restore and first open |
+| PR-3 P2 | The frozen fold migration's test seeds `remember` rows, which the new CHECK refuses | That test keeps its historical values and widens the CHECK inside its rolled-back transaction; the new migration gets its own test |
+| PR-4 P2 | Typed `kind: "remember"` in nested `evals/` breaks stage 1's typecheck | One code stage; `evals/` swept recursively |
+| PR-5 P2 | Source comments cite the two docs, and `doc-links.test.ts` checks source comments | The docs move in the same stage as the code |
+| PR-6 P2 | `phrases.ts`' blind case b16 takes its accepted ids from the frozen `blind.raw.json` | A `BLIND_RELABEL` for b16; the raw file untouched |
+| PR-7 P2 | Two eval scripts hardcode `remember-explore.<run>.json` as *input* too | New runs write `learn-*`; reading falls back to the old prefix |
+| PR-8 P2 | The picker's ids are part of its prompt; moving the accept lists does not measure it | A bounded run of the command-pick eval over Learn, its sub-modes, the old name and its neighbours, after the build, written up in `docs/investigations/` |
+
+Sol also confirmed there is no place that equates a thread kind with a mode id, that
+canonicalising the explicit-press filter leaves `chat`, `diagram` and the Marginalia words as they
+are, and that the migration's shape is sound (drop and create the index; no `ALTER INDEX RENAME`).
+
+### The stages as built
+
+- **Stage 0 — an unknown stored thread kind refuses.** `pg-chat.ts` and `export.ts` stop coercing
+  to `chat`. Red first. Small, right by itself (the coercion is the silent mislabel its own
+  comment warns about), and pushed to `dev` at once so a deploy can carry it ahead of the rename.
+  **The order is a request to the Overseer, not a mechanism**: if stage 0 and the rename go out
+  in one deploy, the window is as PR-1 describes — minutes long, and needing a reader to press
+  Retry or Edit on a Recall answer inside it. That fallback is accepted; the order just removes it.
+- **Stage 1 — the whole rename**: kind and migration, mode id, URL words, identifiers, files,
+  evals, docs. One commit that is safe by itself, because nothing in between is.
+- **Stage 2 — the picker measured** (PR-8) and the browser check.
+
 ## Reviews
 
-GPT Sol reads this plan before stage 1 (read-only), then the code after stage 1 and again after
-stages 2–3 (write-capable, fixing inside the stage). Its doc edits are grepped for "Greg" before
+GPT Sol reads this plan before stage 1 (read-only), then the code after stage 1 (write-capable, fixing inside the
+stage; stage 0 rides in the same review). Its doc edits are grepped for "Greg" before
 they are committed.

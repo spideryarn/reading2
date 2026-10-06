@@ -83,7 +83,7 @@ import type {
   RememberStance,
   ToolRun,
 } from "../types.js";
-import { isThreadKind } from "../types.js";
+import { storedThreadKind } from "../types.js";
 import { originColumns, originFromColumns } from "../thread-origin.js";
 import { splitHint } from "../recall-hint.js";
 import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
@@ -200,7 +200,10 @@ function startOf(anchor: ChatAnchor | undefined): number | null {
   return anchor && "start" in anchor ? anchor.start : null;
 }
 
-async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
+/* Exported for tests/unknown-stored-thread-kind.test.ts, which has to hand it a
+   transaction it will roll back. Unguarded: everything else reaches it through
+   `pgChatStore` below. */
+export async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
   const [threadRows, messageRows] = await Promise.all([
     db
       .select()
@@ -230,19 +233,21 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     /* Where it was started from. Named here or it does not exist on the way
        out; `upsertThread` is the write half. src/thread-origin.ts. */
     ...originFromColumns(t),
-    /* Normalised here, the twin of `normaliseKind` in src/chat.ts. The column
-       is `not null default 'chat'` so in practice this only widens the string
-       to the union — but the default lives in exactly two places on purpose,
-       and this is the second. `ChatThread.kind` is required so that nothing
-       downstream has to remember a fallback.
+    /* The column is `not null default 'chat'` with a CHECK listing the kinds,
+       so this only narrows the string to the union. `ChatThread.kind` is
+       required so that nothing downstream has to remember a fallback.
 
-       **The list of kinds is `isThreadKind`'s, not this line's**, and it used to
-       be a ternary naming `"remember"` here. The union grew a third member on
-       2026-09-01 and a ternary would have quietly turned every Candidates thread
-       into a chat on its next read from Postgres — the same conversation
-       answered with a different prompt, and nothing anywhere saying so.
-       src/types.ts § THREAD_KINDS. */
-    kind: isThreadKind(t.kind) ? t.kind : "chat",
+       **A kind this code does not know throws; it is not a chat** (2026-10-06).
+       Until then this line fell back to `"chat"`, which during a deploy that
+       renames a kind is the same conversation answered with a different prompt
+       and stored, and nothing anywhere saying so. One unknown row fails the
+       read of every thread of its article, which is deliberate: the route picks
+       a thread out of this list, and a list that left one out would let a
+       single-thread kind be begun a second time.
+       src/types.ts § storedThreadKind, and
+       docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+       stage 0. */
+    kind: storedThreadKind(t.kind),
     messages: byThread.get(t.id) ?? [],
   }));
 }

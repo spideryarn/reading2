@@ -3380,6 +3380,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      concurrent runs seeing each other's single thread in a `load()` this file
      asserts the length of. */
   "tests/the-query-string-does-not-decide-the-route.test.ts": "private-postgres",
+  /* Drops the `chat_threads_kind` CHECK, but only inside a transaction it
+     always rolls back, so nothing a peer file can see changes. */
+  "tests/unknown-stored-thread-kind.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from `spideryarn.
      uploads` rather than from the bucket: this file mints records and never
      issues a real grant — the issuer is a stand-in and no bytes are PUT — so
