@@ -2075,13 +2075,13 @@ export interface Article {
    * carry one enum that is already on the wire.
    * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
    *
-   * **Absent means *nobody could say*, and never `private`.** The owner's read
-   * always sets it (src/store/pg.ts); what carries none today is a visitor's
-   * payload, a `PublicArticle` drawn as an `Article`
-   * (src/web/article/access.ts). Until 2026-09-05 it was also the filesystem
-   * store, which had no visibility column. A `private` default would have the
-   * mark tell an owner
-   * that only they can read an article nobody ever asked about. That is the one
+   * **Absent means no owner-side visibility field, and never `private`.** The
+   * owner's read always sets it (src/store/pg.ts); a visitor's payload omits it
+   * and carries `sharedBy` instead, a `PublicArticle` drawn as an `Article`
+   * (src/web/article/access.ts, src/public-types.ts). Until 2026-09-05 absence
+   * also meant the filesystem store had no visibility column. A `private`
+   * default would have the mark tell an owner that only they can read an
+   * article nobody ever asked about. That is the one
    * sentence this control must not get wrong, and it is the same rule
    * `ArticleMetadata.sharing` follows for the same reason.
    * docs/reusable/silent-success.md.

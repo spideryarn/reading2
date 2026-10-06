@@ -246,8 +246,7 @@ export interface IngestProvenance {
  * serialised to the browser by `publicJob` (src/jobs.ts) and a ledger id is not
  * the reader's business; the interface was shared with the filesystem adapter
  * until 2026-09-05, where quota did not exist (docs/project/billing.md). So this is a Postgres
- * read with one Postgres-only caller — src/billing/admission.ts, which is
- * already behind that flag.
+ * read with one Postgres-only caller — src/billing/admission.ts.
  *
  * Owner-scoped, like `get`: somebody else's job is one that is not there.
  * Dismissed-scoped like `get`, too: otherwise a direct Retry can reserve a

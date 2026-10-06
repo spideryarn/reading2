@@ -44,10 +44,11 @@
  * **Live is `lease > clock_timestamp()`; over is `lease <= clock_timestamp()`
  * or a lease that is missing altogether.** Exactly complementary, so there is
  * no instant at which a job is neither writable by its claimant nor settleable
- * by the sweep. src/store/jobs-fs.ts has always treated its `expires` the same
- * way (`held.expires > now` is live), and until this the Postgres side used
- * `<`, which is a one-microsecond disagreement between two adapters that
- * `tests/store-jobs-parity.test.ts` is supposed to hold to one contract.
+ * by the sweep. The filesystem adapter (gone 2026-09-05) treated its `expires`
+ * the same way (`held.expires > now` was live), and before this fix the Postgres
+ * side used `<`, a one-microsecond disagreement between two adapters that
+ * `tests/store-jobs-parity.test.ts` was then supposed to hold to one contract
+ * (it still exists, and asserts the one store's contract now).
  *
  * ## A missing lease is *over*, not *live*
  *

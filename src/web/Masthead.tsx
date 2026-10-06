@@ -809,9 +809,10 @@ export function addressParts(url: string): { host: string; rest: string } | null
  *
  * ## Absence is the third state, and it draws nothing
  *
- * `undefined` means *nobody could tell us*, never *private*. It is a visitor's
- * payload, which carries no `visibility` at all, and it was also the filesystem
- * store, which had no visibility column — that store went on 2026-09-05
+ * `undefined` means no owner-side visibility field, never *private*. A visitor's
+ * payload omits `visibility` and carries `sharedBy` instead (src/public-types.ts).
+ * The filesystem store could not answer at all — it had no visibility column
+ * and went on 2026-09-05
  * (docs/project/database.md) and the field is still optional, so the state is
  * still reachable and still has to draw nothing. Silent is the only honest
  * thing it can be: a lock is a claim, and a lock drawn over a source that was

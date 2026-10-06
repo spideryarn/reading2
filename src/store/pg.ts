@@ -2894,9 +2894,10 @@ const rawPgArticleReader: ArticleReader = {
          selects `articles` whole.
 
          Always a value here, never conditional on it being `public` — the
-         mark has three states and one of them is *we could not say*, which is
-         what absence means (a visitor's payload today; the filesystem store
-         too, until 2026-09-05). `describeArticle` keeps the
+         owner's mark has three states and one of them is *we could not say*.
+         Visitor payloads omit this owner-side field and carry `sharedBy`
+         instead (src/public-types.ts); the filesystem store could not answer,
+         until 2026-09-05. `describeArticle` keeps the
          key only when it says `public` because the shelf has no private twin
          to draw (src/library-scalars.ts); this one draws a lock.
 

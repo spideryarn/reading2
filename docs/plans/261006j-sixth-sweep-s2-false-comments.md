@@ -158,3 +158,31 @@ The other seven files, read by hand from `git diff HEAD`:
 - `npx biome lint` on the changed files: the baseline is not clean; no suppression comment was
   added, removed or moved (`grep` of the diff for `biome-ignore`, `eslint-disable`, `@ts-`: 0).
 - The full `npm test` was not run; the orchestrator runs it on the branch.
+
+## Review, round one
+
+[GPT Sol's code review](261006j-sixth-sweep-s2-code-review-sol.md) of `3a8df257a`
+([its prompt](261006j-sixth-sweep-s2-code-review-prompt.md)). Verdict: **ship with these fixes
+(applied)**. It sampled 50 rewritten comment blocks and found 6 wrong, and its own AST comparison
+agreed that no non-comment code changed. Six in fifty is a 12% miss rate, so the unsampled rewrites
+get a second pass in round two.
+
+- **C1, fixed** (`src/types.ts`, `src/store/pg.ts`, `src/web/Masthead.tsx`). A visitor's payload
+  leaving `visibility` out does not mean it is unknown: the payload carries `sharedBy` instead.
+- **C2, fixed** (`src/store/pg-jobs.ts`). "Already behind that flag" named a flag that is gone.
+- **C3, fixed** (`src/store/job-fence.ts`). The deleted `jobs-fs.ts` adapter was still in the
+  present tense.
+- **C4, fixed** (`src/web/styles/structure-mode.css`). "The same rule as Outline" was false:
+  Structure's list face can scroll. Only the two-column panel does not.
+- **C5, fixed** (`src/web/scroll.ts`). Six comment blocks still described the fisheye panels as
+  live.
+- **C6, C7, C8, confirmed and reported, not fixed.** The three pieces of possibly dead code listed
+  under "What was left": the 501 branch, `writeRawFiles`, and `schema === undefined`.
+
+**Two of Sol's fixes were themselves corrected before committing.** It called
+`tests/store-jobs-parity.test.ts` "former"; the file exists and asserts the one store's contract.
+And it called `useColumnContext.ts` "gone" in three places; the file exists, still installs the
+scroll listener, and is Structure's focus-row sampler. Only its rect measuring for the panels went.
+
+Gates after the fixes: the strip-and-compare check against `3a8df257a~1` covers 102 `.ts`, `.tsx`
+and `.css` files, 0 different; `npm run typecheck` clean; `tests/doc-links.test.ts` passed.
