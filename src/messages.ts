@@ -601,6 +601,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "np-share": "blocked",
   "np-power": "blocked",
   "np-reset": "blocked",
+  /* A shared address opened before the import behind it has published: plan
+     261005l § 2c. `retry`: the same request answers differently once the
+     article is ready, and asking again is exactly what the visitor's page does.
+     See `STILL_BEING_ADDED_REFUSAL` below. */
+  "pub-adding": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -4614,8 +4619,72 @@ export const SHARE_AT_ADD_RECALLED =
 
 /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
 export const STILL_BEING_ADDED_HEADING = "Still being added";
+/** The add page's job disappeared from a list requested after its POST answered. */
+export const ADD_IMPORT_LOST = "We lost sight of this import. Look on your shelf before trying again.";
 export const STILL_BEING_ADDED =
   "This article is still being imported. It opens here when the import has finished.";
+
+/**
+ * **The same address, opened by somebody it was shared with** before the
+ * import has published (plan 261005l § 2c;
+ * src/web/article/StillBeingAddedVisitor.tsx). Under the heading above.
+ *
+ * *When it is ready*, and nothing about when that is: a queued import may be
+ * waiting on its owner's browser. Nothing about the article either, since the
+ * server's answer carries none (`STILL_BEING_ADDED_REFUSAL`, below).
+ */
+export const STILL_BEING_ADDED_VISITOR =
+  "This article is still being added. This page will open it when it is ready.";
+
+/* The add page's Sharing section: *Make it public* above, and a private link
+   beside it, behind one row that starts shut. Greg, 2026-10-06: *"bundle all
+   sharing-related stuff in a default-collapsed section, because most people
+   won't want to use it"*. Plan 261005l § 2b. Drawn by src/web/AddSharing.tsx
+   and src/web/AddShareLink.tsx. The link's confirmation is the Metadata
+   card's own (`PRIVATE_LINK_CONFIRM_TITLE` and its neighbours, below). */
+
+/**
+ * The section's one row. **Shut, it names what is on**, so nobody is public,
+ * or holding a live link, behind a row that says nothing.
+ */
+export function sharingAtAddSummary(isPublic: boolean, linkOn: boolean): string {
+  if (isPublic && linkOn) return "Sharing: public, and a private link";
+  if (isPublic) return "Sharing: public";
+  if (linkOn) return "Sharing: private link";
+  return "Sharing";
+}
+
+/** Under the link control's heading, before anything is pressed. The button opens the confirmation. */
+export const LINK_AT_ADD_WHAT =
+  "Anyone who has the link can read the article without signing in, once the import has " +
+  "finished. It is not listed anywhere. The button shows what would be shared and asks you to " +
+  "confirm.";
+
+/** Confirmed, and not made yet: the import has not made the article's row. */
+export const LINK_AT_ADD_WAITING = "The link will be made as soon as the import is ready for it.";
+
+/** A link is on. **"Once the import has finished"**, for `SHARE_AT_ADD_ON`'s reason. */
+export const LINK_AT_ADD_ON =
+  "Private link on. It opens the article for whoever has it once the import has finished.";
+
+/** Five minutes of *not yet* while the job sat queued. `settle` sends it again at completion. */
+export const LINK_AT_ADD_GAVE_UP =
+  "No link made: the import had not started after five minutes. It will be tried again when " +
+  "the import finishes.";
+
+/**
+ * **A create or a turn-off did not come back.** It is not sent again by
+ * itself: making a link a second time replaces the first, and a link the
+ * reader had already copied would stop working (GPT Sol's stage 2 plan
+ * review). *Check again* reads the state, which changes nothing.
+ */
+export const LINK_AT_ADD_UNKNOWN =
+  "That did not come back, so we cannot say whether it took effect. Check again before making " +
+  "another link: a new link replaces the one before it.";
+
+/** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
+export const LINK_AT_ADD_UNREAD =
+  "We could not check whether this article has a private link. Nothing has been changed.";
 
 /* ------------------------------------------------------ the private link --
    The owner's other control on the same card: a link that lets anyone who has
@@ -4649,9 +4718,12 @@ export const PRIVATE_LINK_ALSO_PUBLIC =
 export const PRIVATE_LINK_CONFIRM_TITLE = "Share the full text of this article by a private link?";
 
 /** The confirmation's first sentence. `sharingConfirmBody` is its public twin. */
-export function privateLinkConfirmBody(title: string): string {
+export function privateLinkConfirmBody(title: string | null): string {
+  /* No title: the add page asks while the article is still importing, as
+     `sharingConfirmBody` allows for. */
+  const named = title === null ? "this article" : `“${title}”`;
   return (
-    `This puts the whole extracted text of “${title}” where anyone who has the link can read ` +
+    `This puts the whole extracted text of ${named} where anyone who has the link can read ` +
     "it without signing in. Making this link does not list the article anywhere, but anyone you send the link to can pass it on."
   );
 }
@@ -5952,6 +6024,25 @@ export const NOT_READ_YET_RESET: ReaderFacingFailure = {
   message:
     "There is nothing to start again yet: this paper has not been read through, so trying again " +
     "will not help. Press Read this to make the full article. [np-reset]",
+};
+
+/**
+ * **A visitor opened a shared address before its article was published**, and
+ * an import for it is queued or running. `pgPublicReader.loadArticle` throws it
+ * as `StillBeingAdded` (src/still-being-added.ts), a 409.
+ *
+ * **One fixed sentence, and nothing in it is about the article**: no title, no
+ * slug, no owner, no progress. Greg accepted, 2026-10-06, that the holder of a
+ * shared address learns an unpublished article exists there; that is all they
+ * learn. Plan docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+ * § 2c. It says nothing about *when* either: a queued job may be waiting on its
+ * owner's browser.
+ */
+export const STILL_BEING_ADDED_REFUSAL: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This article is still being added, so there is nothing to read here yet. Looking again " +
+    "later will open it once it is ready. [pub-adding]",
 };
 
 /**

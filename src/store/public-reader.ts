@@ -47,10 +47,15 @@
  * that takes no predicate, and `currentOwnerId()` still throwing as the runtime
  * tripwire.
  *
+ * **Since 2026-10-06 it also names the `jobs` table**, in one query that
+ * selects a constant (`publicPendingImportQuery`), with the lease predicate
+ * from `job-fence.ts`. Not the job store: tests/public-imports.test.ts permits
+ * the table in those two files and still forbids `src/jobs.ts`.
+ *
  * See docs/plans/260827ai-public-read-only-access.md.
  */
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
 import { type LeadImage, leadImageOf, storedAssetFor } from "../asset-delivery.js";
@@ -59,6 +64,7 @@ import {
   articleRevisions,
   articles,
   comments,
+  jobs,
   revisionBlocks,
   searchRuns,
   uploadSourceGuesses,
@@ -74,7 +80,9 @@ import { isStale } from "../search-stale.js";
 import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
 import { isStale as crossrefsIsStale } from "../crossrefs-fingerprint.js";
 import { isSlug } from "../ingest.js";
+import { StillBeingAdded } from "../still-being-added.js";
 import { blobStore } from "./blobs.js";
+import { leaseIsLive } from "./job-fence.js";
 import { canonicalKey } from "../source.js";
 import { type PublicAccess, publicAccessWhere } from "./public-access.js";
 import { publicArticle, publicAuthorNames } from "../public/dto.js";
@@ -585,6 +593,83 @@ export function publicCurrentRevisionQuery<K extends PublicRead>(
     .limit(1);
 }
 
+/**
+ * **A job that may still publish this article**: queued, or running inside its
+ * lease.
+ *
+ * `running` alone is not enough. A claimant that died stays `running` until
+ * its owner's next request sweeps it (`settleExpired`, src/store/pg-jobs.ts),
+ * and a visitor's request sweeps nothing, so without the lease the answer
+ * below would be *still being added* for ever. GPT Sol's F5 on the stage 2
+ * plan. The lease is `leaseIsLive` itself, from [job-fence.ts](job-fence.ts),
+ * so this agrees with the fence and the sweep to the microsecond and on the
+ * same clock: the database's `clock_timestamp()`.
+ *
+ * **A read, and only a read.** Nothing here settles, requeues or claims.
+ *
+ * The two statuses are spelled out and not taken from `ACTIVE` in
+ * src/store/jobs.ts: that module is the job store's contract, and the public
+ * graph stays clear of it. A queued job promises nothing about *when*; it may
+ * be waiting on its owner's browser.
+ */
+const PENDING_JOB = sql`(${jobs.status} = 'queued' or (${jobs.status} = 'running' and ${leaseIsLive}))`;
+
+/**
+ * **Is an import under way for an article this request may read, which has no
+ * published revision yet?** Plan
+ * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md § 2c,
+ * on Greg's instruction of 2026-10-06: the holder of a shared address is told
+ * *still being added* where they used to be told nothing.
+ *
+ * Asked only by `loadArticle`, and only after the current-revision read found
+ * nothing. It selects a constant: a row back means yes, and nothing about the
+ * article or the job is in it. No title, owner, url, error or progress.
+ *
+ * **Three conditions, and each is in this statement's own `where`**, for the
+ * reason `publicCommentsQuery` gives: nothing is taken on trust from an earlier
+ * statement.
+ *
+ *  - **`publicAccessWhere(slug, access)`**, the same predicate every read in
+ *    this file carries. A private article, a wrong key, a turned-off key and an
+ *    absent slug all match no row, so each is still the one `notShared` 404.
+ *  - **`current_revision_id is null`.** A published article never reaches this
+ *    through a mode job running on it, and a published revision that cannot be
+ *    drawn stays a 404 and is not called an import.
+ *  - **A pending job for the same slug *and* the same owner.** `jobs` has no
+ *    article id. Slug alone would let anybody make a stranger's unpublished
+ *    public article answer *still being added* by queueing work under its
+ *    slug. `owner_id` is compared between two rows and never with a value: no
+ *    owner comes into this file, and none is selected.
+ *
+ * **Not `draft_revision_id`**: a queued job may not have a draft yet.
+ *
+ * `jobs` is the eighth table this file names, and
+ * tests/public-imports.test.ts permits it here and in job-fence.ts only.
+ * tests/public-reads.test.ts reads this SQL;
+ * tests/public-still-being-added-pg.test.ts proves what it returns.
+ */
+export function publicPendingImportQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  access: PublicAccess,
+) {
+  return db
+    .select({ pending: sql<boolean>`true`.as("pending") })
+    .from(articles)
+    .where(
+      and(
+        publicAccessWhere(slug, access),
+        isNull(articles.currentRevisionId),
+        sql`exists (
+          select 1 from ${jobs}
+          where ${jobs.slug} = ${articles.slug}
+            and ${jobs.ownerId} = ${articles.ownerId}
+            and ${PENDING_JOB})`,
+      ),
+    )
+    .limit(1);
+}
+
 /** Which way a matched row let the visitor in. Public wins: see public-access.ts. */
 function sharedByOf(found: { isPublic: boolean }): "public" | "link" {
   return found.isPublic ? "public" : "link";
@@ -814,7 +899,14 @@ export const pgPublicReader: PublicArticleReader = {
     return scrubbed("article", async () => {
       const db = getDb();
       const [found] = await publicCurrentRevisionQuery(db, slug, access, "article");
-      if (!found) throw notShared(slug);
+      if (!found) {
+        /* **The one place a public read says anything but 404 about an article
+           it cannot serve**, and only this read: the head, the pictures and the
+           listings have no such arm. See `publicPendingImportQuery`. */
+        const [pending] = await publicPendingImportQuery(db, slug, access);
+        if (pending) throw new StillBeingAdded();
+        throw notShared(slug);
+      }
 
       const rows = await publicBlocksQuery(db, found.revision.id);
       const tree = found.revision.tree;

@@ -118,7 +118,11 @@ function statusLabel(res: Response): string {
  * not do what it was for.
  */
 function logFailure(res: Response, text: string, parsed: boolean): void {
-  console.error(`[api] ${res.status} ${res.url || "(no url)"}${parsed ? "" : " — reply was not JSON"}`, {
+  /* Public reads may carry a private link's key, including an expected 409
+     while importing. Redact here too: the buffer's safePath does not protect
+     the console output. */
+  const url = (res.url || "(no url)").split(/[?#]/)[0];
+  console.error(`[api] ${res.status} ${url}${parsed ? "" : " — reply was not JSON"}`, {
     status: res.status,
     contentType: header(res, "content-type"),
     bytes: text.length,

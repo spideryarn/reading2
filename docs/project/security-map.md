@@ -243,6 +243,11 @@ Four things keep it closed:
   any key or none, and `PublicArticle.sharedBy` says `"public"` of it. Turning a link off takes
   effect on the next request, as un-sharing does.
 
+Since 2026-10-06 the article read has one answer that is not a 404 or a 200: 409
+`still-being-added`, for a request that may read an article whose import has not published.
+What it gives away and what it does not:
+[public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+
 **Where the key may travel, and where it may not.** It is in the page's address and in the query
 string of the two public requests a visitor's page makes for that article, the payload and its
 pictures ([`public-api.ts`](../../src/web/public-api.ts), [`rehost.ts`](../../src/web/rehost.ts)),

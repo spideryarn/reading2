@@ -296,6 +296,7 @@ import {
   processingOf,
 } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
+import { StillBeingAdded } from "./still-being-added.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -7729,6 +7730,9 @@ function declaredFields(err: unknown): Record<string, unknown> {
   if (err instanceof DuplicateUpload) {
     return { code: err.code, ...(err.article ? { article: err.article } : {}) };
   }
+  /* The code and nothing else: this answer is given to a stranger, about an
+     article that is not published yet (src/still-being-added.ts). */
+  if (err instanceof StillBeingAdded) return { code: err.code };
   return {};
 }
 
