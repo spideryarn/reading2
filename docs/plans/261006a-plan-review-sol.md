@@ -11,7 +11,7 @@ I found two P1 issues and six smaller gaps in the [plan](/var/tmp/spideryarn-wor
    **Change:** move `remember` into `NEVER_REMEMBERED`, as already done for `deep` and `name`. It need not parse or restore anything; it only preserves “the link wins.” Test both restoration and first-open handling.
 
 3. **PR-3 — P2, established: the frozen fold-migration test needs historical fixtures.**  
-   [remember-one-thread-migration.test.ts::seed/inRolledBack](/var/tmp/spideryarn-worktrees/learn-rename/tests/remember-one-thread-migration.test.ts:232) only drops the old index before inserting `remember` rows. The new CHECK rejects those fixtures. Renaming them to `learn` instead makes the frozen SQL—which selects only `remember`—fold nothing.
+   [remember-one-thread-migration.test.ts::seed/inRolledBack](/var/tmp/spideryarn-worktrees/learn-rename/tests/learn-one-thread-migration.test.ts:232) only drops the old index before inserting `remember` rows. The new CHECK rejects those fixtures. Renaming them to `learn` instead makes the frozen SQL—which selects only `remember`—fold nothing.
 
    **Change:** preserve the historical fixture values and index assertions. Temporarily permit `remember` in the CHECK inside the rolled-back test transaction; the current Learn index can remain. Test the new rename migration separately, and explicitly exempt these historical test spellings from the sweep.
 
@@ -31,7 +31,7 @@ I found two P1 issues and six smaller gaps in the [plan](/var/tmp/spideryarn-wor
    **Change:** add a b16 `BLIND_RELABEL` accepting the Learn IDs, preserving the raw dataset.
 
 7. **PR-7 — P2, established: renaming eval prefixes also breaks historical result readers.**  
-   [remember-explore.ts::judge](/var/tmp/spideryarn-worktrees/learn-rename/evals/remember-explore.ts:965) and [remember-explore-critic-pairs.ts::load](/var/tmp/spideryarn-worktrees/learn-rename/evals/remember-explore-critic-pairs.ts:40) hardcode `remember-explore.<run>.json` for input as well as output. Mechanically renaming those strings makes retained old runs unreadable through the judging/pairing commands. These prefixes are not derived from filenames, contrary to Stage 2.4.
+   [remember-explore.ts::judge](/var/tmp/spideryarn-worktrees/learn-rename/evals/learn-explore.ts:965) and [remember-explore-critic-pairs.ts::load](/var/tmp/spideryarn-worktrees/learn-rename/evals/learn-explore-critic-pairs.ts:40) hardcode `remember-explore.<run>.json` for input as well as output. Mechanically renaming those strings makes retained old runs unreadable through the judging/pairing commands. These prefixes are not derived from filenames, contrary to Stage 2.4.
 
    **Change:** rename output defaults explicitly, while allowing historical inputs through explicit filenames or a small shared resolver.
 

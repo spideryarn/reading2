@@ -1,7 +1,7 @@
-# Remembering — where Learn mode is going
+# Learning — where Learn mode is going
 
 Up: [reading-view-overview.md](reading-view-overview.md) · what is built:
-[remember-mode.md](remember-mode.md) (Recall, Tutorial, Explore) and [quiz.md](quiz.md) · the research:
+[learn-mode.md](learn-mode.md) (Recall, Tutorial, Explore) and [quiz.md](quiz.md) · the research:
 [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
 
 **A direction, not a spec.** Started 2026-10-02 from Greg's reports `spya-c8x66d` and `spya-j0scgz`.
@@ -60,7 +60,7 @@ what the piece says and whether the reader has it; Explore asks what the reader 
 apply to interesting cases of my own … and a bit less about remembering specifically what's in the
 article."* And on 2026-10-05, widening it: *"it's also about exploring potential problems and
 criticisms and concerns … deepening your thinking around the piece, whereas tutorial submode is more
-about understanding and internalizing what the piece says"* (remember-mode.md § Explore). He renamed the mode
+about understanding and internalizing what the piece says"* (learn-mode.md § Explore). He renamed the mode
 Learn in the same report. It sits under Learn because thinking with a piece is the other half of what
 vision.md calls internalising it, and because it grew out of Tutorial: when Tutorial was turned
 towards the author, the own-view turns it gave up needed somewhere to go. It is also the first
@@ -102,7 +102,7 @@ Explore too.
   back-and-forth first.
 - **Recall and Tutorial knowing about each other and about Quiz** — a Tutorial that starts from what
   the Quiz showed you missed, for instance. Explore is sent the reader's notes and a list of their
-  other conversations on every turn (remember-mode.md § The notes go with every turn); the Quiz's
+  other conversations on every turn (learn-mode.md § The notes go with every turn); the Quiz's
   results and reading time are not in that yet.
 - **Live voice for Explore**, for Tutorial's reason, and with one more thing to solve first: a
   spoken turn carries no notes digest.

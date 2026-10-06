@@ -987,7 +987,7 @@ export function useComments(slug: string): CommentsApi {
   );
 
   /**
-   * Remember, **locally**, that this comment started that conversation.
+   * Learn, **locally**, that this comment started that conversation.
    *
    * There is no request here and there must not be: the link is written by the
    * server from inside the chat stream, which is the only place a real thread

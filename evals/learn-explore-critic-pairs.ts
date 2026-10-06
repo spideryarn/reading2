@@ -2,9 +2,9 @@
  * **The critic reader's conversations, two at a time, with the sides
  * shuffled**: the blind read for plan 261005l's C1, C2, C3, C5 and C6.
  *
- *     npx tsx evals/remember-explore-critic-pairs.ts <stem> <pair>…
+ *     npx tsx evals/learn-explore-critic-pairs.ts <stem> <pair>…
  *
- * A pair is `<run>:<run>`, each a `--out` name of `remember-explore.ts run`.
+ * A pair is `<run>:<run>`, each a `--out` name of `learn-explore.ts run`.
  * Both must be of the same article. Writes `<stem>-pairs.md`, which is all a
  * blind reader is given, and `<stem>-key.json`, which says which run was side
  * A. Spends nothing: it only reads result files.
@@ -20,6 +20,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMain } from "../src/is-main.js";
 import { blindCoin } from "./plain-words/run.js";
+import { storedResult } from "./stored-result.js";
 
 const RESULTS = path.resolve(import.meta.dirname, "results");
 
@@ -38,7 +39,7 @@ interface RunFile {
 }
 
 const load = async (out: string): Promise<RunFile> =>
-  JSON.parse(await readFile(path.join(RESULTS, `remember-explore.${out}.json`), "utf8")) as RunFile;
+  JSON.parse(await readFile(storedResult(path.join(RESULTS, `learn-explore.${out}.json`)), "utf8")) as RunFile;
 
 const conversation = (run: RunFile): string =>
   run.turns
@@ -49,7 +50,7 @@ const conversation = (run: RunFile): string =>
 
 async function main(): Promise<void> {
   const [stem, ...pairs] = process.argv.slice(2);
-  if (!stem || pairs.length === 0) throw new Error("usage: remember-explore-critic-pairs.ts <stem> <run>:<run>…");
+  if (!stem || pairs.length === 0) throw new Error("usage: learn-explore-critic-pairs.ts <stem> <run>:<run>…");
   const coin = blindCoin();
   const out: string[] = [
     "# Two conversations at a time",
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
     key.push({ pair: i + 1, set: one.set, a: a.out, b: b.out, aHash: a.promptHash, bHash: b.promptHash });
     out.push(`## Pair ${i + 1} (article: ${one.set})`, "", "### Side A", "", conversation(a), "", "### Side B", "", conversation(b), "");
   }
-  const file = path.join(RESULTS, `remember-explore.${stem}`);
+  const file = path.join(RESULTS, `learn-explore.${stem}`);
   await writeFile(`${file}-pairs.md`, out.join("\n"));
   await writeFile(`${file}-key.json`, `${JSON.stringify(key, null, 2)}\n`);
   const hashes = [...new Set(key.flatMap((k) => [k.aHash, k.bHash]))];

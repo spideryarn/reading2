@@ -8,13 +8,13 @@ types — about what they remember of the article, and the model corrects briefl
 and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
 the gap when they are stuck. One voice since 2026-10-02; until then four **stances** (Balanced,
 Respond, Socratic, Signposts) were picked per turn. Where the four sub-modes are going:
-[remembering-vision.md](remembering-vision.md).
+[learning-vision.md](learning-vision.md).
 
 **It has been called Learn since 2026-10-05** (Greg, report `spya-mvmpks`;
 [261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md)); until then it
-was Remember. Only the word a reader sees changed: the code, the URL (`?mode=remember`,
-`?remember=`), the thread kind and this file's name still say `remember`, and renaming those is a
-separate queue entry.
+was Remember. **The identifiers said `remember` until 2026-10-06**
+([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)); `?mode=remember` still
+opens the mode, but the old `?remember=` and `?chatfrom=remember` words do not carry over.
 
 Greg, 2026-08-27, when it was still called Review:
 
@@ -24,18 +24,18 @@ Greg, 2026-08-27, when it was still called Review:
 > annoying/patronising/superior, but at the same time the user is earnestly looking to deepen/correct
 > their understanding.
 
-Code: [`src/converse.ts`](../../src/converse.ts) § `REMEMBER_SYSTEM`, `systemFor` (the prompt and
+Code: [`src/converse.ts`](../../src/converse.ts) § `LEARN_SYSTEM`, `systemFor` (the prompt and
 where each piece of it lands), [`src/chat.ts`](../../src/chat.ts) (`withTurn`, `withRetry`,
 `withEdit`), [`src/routes.ts`](../../src/routes.ts) § `streamChat`
-(validation, the 409, `MAX_REMEMBER_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
+(validation, the 409, `MAX_LEARN_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
 (one panel, parameterised by kind),
 [`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
 § `ConversationBand`.
-Tests: [`remember-prompt.test.ts`](../../tests/remember-prompt.test.ts),
-[`remember-store.test.ts`](../../tests/remember-store.test.ts),
-[`remember-route.test.ts`](../../tests/remember-route.test.ts),
-[`remember-panel.test.tsx`](../../tests/remember-panel.test.tsx).
-Eval: [`evals/remember-recall.ts`](../../evals/remember-recall.ts) — **read this before editing
+Tests: [`learn-prompt.test.ts`](../../tests/learn-prompt.test.ts),
+[`learn-store.test.ts`](../../tests/learn-store.test.ts),
+[`learn-route.test.ts`](../../tests/learn-route.test.ts),
+[`learn-panel.test.tsx`](../../tests/learn-panel.test.tsx).
+Eval: [`evals/learn-recall.ts`](../../evals/learn-recall.ts) — **read this before editing
 the prompt.**
 The plan, the reasoning and the cross-family review:
 [260827ah-review-mode.md](../plans/260827ah-review-mode.md).
@@ -99,7 +99,7 @@ So the four stances went, and the per-point triage Balanced did became the whole
 5. **Brief** — usually under 120 words before the hint, with one nudge at the end; the hint has its
    own 25-word ceiling. A long explanation becomes a pointer to the passage and a suggestion that
    Chat is the place to talk it through. (Greg also asked for a tool that starts that chat itself;
-   there is none yet — [remembering-vision.md](remembering-vision.md).)
+   there is none yet — [learning-vision.md](learning-vision.md).)
 
 The ranking that governed the stances survives, with the nudge in their place: **the entitlement
 rules, then the reader's own words, then the nudge.** The research behind the nudges and the hint
@@ -114,7 +114,7 @@ a tab open across the deploy does not 400 — kept indefinitely, because a tab c
 ## The prompt is the feature
 
 Everything else here is plumbing around a page of instructions about tone, so
-[`evals/remember-recall.ts`](../../evals/remember-recall.ts) came **first** and runs again after every
+[`evals/learn-recall.ts`](../../evals/learn-recall.ts) came **first** and runs again after every
 prompt change: thirteen readers against a real article, read by a person (eight readers × four
 stances until 2026-10-02, when it was `remember-stances.ts`). Each is a way the prompt has
 misbehaved rather than a spread of inputs. The original eight cover a reader who is right, one whose
@@ -124,7 +124,7 @@ added for one voice cover a weak account, remembering almost nothing, a failed n
 references and an expert account that needs a harder cue rather than praise.
 
 The three faults that draft had are worth knowing before editing the prompt, because all three are
-the obvious thing to write. They are recorded in full on `REMEMBER_SYSTEM` in
+the obvious thing to write. They are recorded in full on `LEARN_SYSTEM` in
 [`src/converse.ts`](../../src/converse.ts); in short:
 
 1. **It treated the model's reading as ground truth.** Socratic makes that worse than Respond does —
@@ -216,8 +216,8 @@ full and the pass condition is a person reading them.
 > small increments is probably better than big, slow increments.
 
 The chip order and visibility are in [§ Who sees which chip](#who-sees-which-chip-since-2026-10-05)
-(`?remember=tutorial`). **Each visible chip has its
-own card** since 2026-10-04 (`REMEMBER_VIEW_HOW` in
+(`?learn=tutorial`). **Each visible chip has its
+own card** since 2026-10-04 (`LEARN_VIEW_HOW` in
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx)), and the band's (i) is two short sentences
 and a list of the visible parts rather than one paragraph, because a chip's card never opens under a finger
 ([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). Where Recall is closest to
@@ -238,15 +238,15 @@ reading**: every piece it teaches is a short quotation or close paraphrase with 
 sent back into the article, never a summary standing in for it.
 
 **The machinery is Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
-(`chat_threads_one_tutorial`, beside Remember's index; `SINGLE_THREAD_KINDS` in
+(`chat_threads_one_tutorial`, beside Learn's index; `SINGLE_THREAD_KINDS` in
 [`src/types.ts`](../../src/types.ts) is the one list `targetOf` and `ConversationBand` read). Same
 band, same panel, same tall dictation box, Start over, Learn's long length cap, chat's job and
 model. **No Live yet**: Greg named voice as the ideal home and also said Live *"doesn't work very
-well at the moment"*, so the band passes no Live controls and `SpokenKind` stays `chat | remember`.
+well at the moment"*, so the band passes no Live controls and `SpokenKind` stays `chat | learn`.
 The empty state asks the opening question, so the reader speaks first and the model never writes an
 unprompted turn.
 
-**Eval**: [`evals/remember-tutorial.ts`](../../evals/remember-tutorial.ts) — three scripted readers
+**Eval**: [`evals/learn-tutorial.ts`](../../evals/learn-tutorial.ts) — three scripted readers
 (has not read it, remembers some, an expert with a profile and a narrow goal), five turns each,
 read in full. Five runs (`evals/results/remember-tutorial.261002i-run-1.md` … `-run-4.md`, then
 `remember-tutorial.md`). The substance was right from the first: the reader who had not read it was
@@ -328,7 +328,7 @@ And before it was built he said what "push" should not mean:
 >
 > — Greg, 2026-10-03
 
-The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=explore`). Recall and Tutorial are
+The chips read **Recall · Tutorial · Explore · Quiz** (`?learn=explore`). Recall and Tutorial are
 about what the author says; Explore is about what the reader thinks. It is where Tutorial's rationed
 own-view turns go (§ It is about the author first).
 
@@ -364,7 +364,7 @@ It is not Debate. Debate is a stored survey of what the web says about the piece
 of a conversation, about the argument or the reader's own doubt. Tutorial is unchanged.
 
 With the Experimental switch on there are four chips, and the group tightens their side padding
-(`quiz.css`, `.remember-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the
+(`quiz.css`, `.learn-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the
 288px band on an iPad. With three chips the padding is unchanged.
 
 **What a turn does.** One move, in under about 150 words, with one question at most and last:
@@ -378,7 +378,7 @@ With the Experimental switch on there are four chips, and the group tightens the
 ```
 
 The prompt is `EXPLORE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts). Its rules, each from
-the two quotations above or from [remembering-vision.md](remembering-vision.md):
+the two quotations above or from [learning-vision.md](learning-vision.md):
 
 - **Start from what is theirs, and name it**, so the reader can see it was read. One thing, never a
   tour of their notes. A highlight shows that they marked a passage, not what they thought of it.
@@ -447,7 +447,7 @@ kind, where it was a `kind === "tutorial"` check that would have given Explore a
 A spoken turn would also carry no digest. **No command buttons**, as Recall and Tutorial.
 
 **The eval** (2026-10-03):
-[`evals/remember-explore.ts`](../../evals/remember-explore.ts), written up in
+[`evals/learn-explore.ts`](../../evals/learn-explore.ts), written up in
 [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md). Two
 articles, three scripted readers each with fixture notes put through the production digest, five
 turns, Explore against Chat with the tool (a comparison of two products, not of two prompts), a
@@ -504,7 +504,7 @@ being the answer. A pure clarification has neither link nor hint. Recall only: T
 Chat have no hint.
 
 **The model writes the hint in the same reply**, so the button opens at once and costs no second
-call. The contract is one shape, and `REMEMBER_SYSTEM` asks for exactly it:
+call. The contract is one shape, and `LEARN_SYSTEM` asks for exactly it:
 
 ```
 …Do you remember what he used the rainstorm to show [spya-k3m9qt]?
@@ -574,7 +574,7 @@ Tests: [`recall-hint.test.ts`](../../tests/recall-hint.test.ts) (the split),
 the options passed over and what is deferred (Tutorial hints; telling the model about the press):
 [261004h](../plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md).
 
-## Recall's `remember` conversation IS a chat thread
+## Recall's `learn` conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of
 the reuse comes from. Same table, same store, same streaming route, same citation contract, same
@@ -597,8 +597,8 @@ He chose, of two designs, to keep the shared machinery and separate only the scr
 Remember on its own storage was the option passed over. So the reuse above stands, and three things
 make it one thread:
 
-- **The database says so**: a partial unique index, `chat_threads_one_remember`, on `article_id`
-  where `kind = 'remember'`. An article has one owner, so this is one per article per reader.
+- **The database says so**: a partial unique index, `chat_threads_one_learn`, on `article_id`
+  where `kind = 'learn'`. An article has one owner, so this is one per article per reader.
 - **A second one cannot be started by accident.** The client mints thread ids, so a stale tab can
   ask to begin a new Recall thread. `withTurn` appends that typed turn to the existing one instead,
   and the `begin` frame names it; `withSpokenTurn` treats it as the existing one too, so the live
@@ -629,11 +629,11 @@ question of discipline into four compiler errors.
 - **Retry and edit send no kind at all** — their thread already has one, and the route 400s one that
   arrives. That refusal happens *before* `settleThread`, because a request rejected after it has
   already aborted the answer another tab's reader was watching.
-- **A `remember` thread cannot be anchored.** No gesture starts one from a selection, so an anchor
-  with `kind: "remember"` is a 400. That is worth more than tidiness: it means every mark in the prose
+- **A `learn` thread cannot be anchored.** No gesture starts one from a selection, so an anchor
+  with `kind: "learn"` is a 400. That is worth more than tidiness: it means every mark in the prose
   belongs to a chat, which is what lets the floating `ChatDialog` go on being chat's.
 - **A stance on a chat is refused**, because the check constraint can only say "assistant rows
-  only" and the invariant is "Remember threads only". An invariant the database cannot express is one
+  only" and the invariant is "Learn threads only". An invariant the database cannot express is one
   the route has to.
 - **The length cap resolves the thread's kind too.** Reading only the request's was a bug: an edit
   sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character Recall
@@ -645,13 +645,13 @@ Until 2026-10-02 `ChatMessage.stance` was written on the **pending** assistant r
 name across a retry and an edit (from the answer being replaced). Nothing writes it now and nothing
 carries it; a retry or an edit of an old answer is answered in the one voice. The help flag, which
 lives on the **question** row, is a different rule and still crosses both
-(`tests/remember-store.test.ts`).
+(`tests/learn-store.test.ts`).
 
 ## Where each piece lands in the prompt, and why it costs what it does
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │  system:  SYSTEM, REMEMBER_SYSTEM, TUTORIAL_SYSTEM     │  ← the KIND
+   │  system:  SYSTEM, LEARN_SYSTEM, TUTORIAL_SYSTEM     │  ← the KIND
    │           or EXPLORE_SYSTEM                            │
    ├────────────────────────────────────────────────────────┤
    │  user:    the whole article, with block ids            │
@@ -681,7 +681,7 @@ article is written to the cache again every turn — the bug in
 
 "Two prefixes, paid once" is the normal path rather than an invariant: a cold first use earns nothing
 back unless a second request lands inside the TTL, concurrent cold requests can both write, and a
-change of model or tool set makes its own entry. `tests/remember-prompt.test.ts` proves the bytes are
+change of model or tool set makes its own entry. `tests/learn-prompt.test.ts` proves the bytes are
 identical and **cannot** prove the provider read them; the eval run above reported
 `cacheReadTokens: 25226` against a 25k-token article, which is the half that costs money.
 
@@ -746,7 +746,7 @@ beside it and first place in the row. Greg:
 > because talking will be much less annoying than typing.
 
 Because talking is the expected input, a Recall, Tutorial or Explore turn has **its own length limit**
-(`MAX_REMEMBER_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
+(`MAX_LEARN_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
 typed question and an accident applied to a spoken paragraph, and a reader who talked for four
 minutes would have hit it after paying for the transcription. Same mistake `MAX_QUOTE_CHARS` had to
 be rescued from.
@@ -761,7 +761,7 @@ be rescued from.
 - **No model-written title.** A thread is named from the reader's first 60 characters, which for
   speech will regularly be *"Um, so I suppose what I took from this was…"*. Since 2026-10-01 that
   title is shown nowhere — Learn's header just says *Learn* — so there is nothing to rename.
-- **No list of Recall conversations**, and no second one (§ Recall's `remember` conversation IS a chat
+- **No list of Recall conversations**, and no second one (§ Recall's `learn` conversation IS a chat
   thread). Learn's own controls are still to come; Greg's report names more Socratic ones.
 
 ## See also

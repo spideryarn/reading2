@@ -1,7 +1,7 @@
 /**
  * **The Recall eval's heuristics, checked without running the eval.**
  *
- * `evals/remember-recall.ts` spends money and is read by a person. What it
+ * `evals/learn-recall.ts` spends money and is read by a person. What it
  * counts is only a prompt to look, but a count that misreports is worse than
  * none: before this, every correct hinted reply would have been counted as "not
  * ending on a question" and its hint's words charged to the 120-word ceiling
@@ -11,7 +11,7 @@
  * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md
  */
 import { describe, expect, it } from "vitest";
-import { checkReply } from "../evals/remember-recall-checks.js";
+import { checkReply } from "../evals/learn-recall-checks.js";
 
 const KNOWN = new Set(["spya-aaaaaa", "spya-bbbbbb", "spya-cccccc"]);
 const check = (text: string) => checkReply(text, KNOWN);

@@ -82,7 +82,7 @@ const TICKET: LiveTicket = {
   seed: [], tailId: null,
 };
 
-function Harness({ kind }: { kind: "chat" | "remember" }) {
+function Harness({ kind }: { kind: "chat" | "learn" }) {
   live = useLiveConversation("a-piece", {
     wiring: {
       ticket,
@@ -142,7 +142,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it.each(["chat", "remember"] as const)("%s Dictate cancels pending Live before claiming the microphone", async (kind) => {
+it.each(["chat", "learn"] as const)("%s Dictate cancels pending Live before claiming the microphone", async (kind) => {
   await act(async () => { root.render(createElement(Harness, { kind })); });
   await act(async () => { live.start({ threadId: "spya-k3m9qt" }); });
   expect(ticket).toHaveBeenCalledOnce();

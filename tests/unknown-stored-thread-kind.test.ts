@@ -15,7 +15,7 @@
  * - **`threadsFor`** (src/store/pg-chat.ts) reads a real row. The row cannot
  *   exist while the CHECK does, so the CHECK is dropped and the row inserted
  *   inside a transaction that is always rolled back, the pattern of
- *   tests/remember-one-thread-migration.test.ts. The database is shared by the
+ *   tests/learn-one-thread-migration.test.ts. The database is shared by the
  *   whole run, so nothing here may commit.
  * - **`exportArticle`** (src/store/export.ts) opens its own snapshot and cannot
  *   be handed that transaction, so the row is changed in hand instead:
@@ -98,7 +98,7 @@ describe("a stored thread whose kind this code does not know", () => {
       id: "spya-fut223",
       ownerId: owner,
       title: "recall",
-      kind: "remember",
+      kind: "learn",
       createdAt: at,
       updatedAt: at,
     });

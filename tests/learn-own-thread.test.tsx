@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
- * **Remember is its own single thread, and Remember shows nothing else.**
+ * **Learn is its own single thread, and Learn shows nothing else.**
  *
  * Report `spya-peszam` and docs/plans/261001m-remember-is-its-own-single-thread.md
- * § Design 4: Remember never shows a list. It opens the reader's one
+ * § Design 4: Learn never shows a list. It opens the reader's one
  * conversation for the sub-mode directly.
  *
  * **The other half of that rule changed on 2026-10-05.** From 2026-10-01 Chat
- * did not list Remember's conversations; report `spya-hyfqkq` reversed it, and
- * Chat's list now shows them as rows that lead back to Remember
+ * did not list Learn's conversations; report `spya-hyfqkq` reversed it, and
+ * Chat's list now shows them as rows that lead back to Learn
  * (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
  * D5). What Chat may *open* is still only its own kind, so the Chat-side cases
  * here ask about both sets: `listed`, and `threads`.
@@ -110,7 +110,7 @@ const AT = "2026-09-20T10:00:00.000Z";
 
 function thread(
   id: string,
-  kind: "chat" | "remember" | "tutorial" | "explore",
+  kind: "chat" | "learn" | "tutorial" | "explore",
   over: Partial<ChatThread> = {},
 ): ChatThread {
   return {
@@ -128,7 +128,7 @@ function thread(
 }
 
 const CHAT = thread("spya-chat02", "chat");
-const REMEMBER = thread("spya-rem002", "remember");
+const LEARN = thread("spya-rem002", "learn");
 const TUTORIAL = thread("spya-tut002", "tutorial");
 const EXPLORE = thread("spya-exp002", "explore");
 
@@ -174,7 +174,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(kind: "chat" | "remember" | "tutorial" | "explore", search: string): Promise<void> {
+async function mount(kind: "chat" | "learn" | "tutorial" | "explore", search: string): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () =>
     root.render(
@@ -218,81 +218,81 @@ function prop<T>(name: string): T {
 const listed = (props = last()): ChatThread[] => (props?.listed as ChatThread[] | undefined) ?? [];
 
 it("uses URL-parseable conversation ids for its navigation cases", () => {
-  for (const t of [CHAT, REMEMBER, TUTORIAL, EXPLORE]) {
+  for (const t of [CHAT, LEARN, TUTORIAL, EXPLORE]) {
     expect(threadParam.parse(t.id), t.id).toBe(t.id);
   }
   expect(threadParam.parse("spya-gqne02")).toBe("spya-gqne02");
 });
 
-describe("Chat lists Remember's conversations, and opens only its own kind", () => {
-  it("lists a Remember conversation in Chat, and never hands it over as one Chat may open", async () => {
-    stored = [CHAT, REMEMBER];
+describe("Chat lists Learn's conversations, and opens only its own kind", () => {
+  it("lists a Learn conversation in Chat, and never hands it over as one Chat may open", async () => {
+    stored = [CHAT, LEARN];
     await mount("chat", "?mode=chat");
-    expect(listed().map((t) => t.id).sort()).toEqual([CHAT.id, REMEMBER.id].sort());
+    expect(listed().map((t) => t.id).sort()).toEqual([CHAT.id, LEARN.id].sort());
     expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
     for (const props of renders) {
       expect(shown(props).some((t) => t.kind !== "chat")).toBe(false);
     }
   });
 
-  it("hands Remember no list of other conversations", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
-    await mount("remember", "?mode=remember");
+  it("hands Learn no list of other conversations", async () => {
+    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+    await mount("learn", "?mode=learn");
     for (const props of renders) {
       expect(props.listed).toBeUndefined();
-      expect(shown(props).every((t) => t.kind === "remember")).toBe(true);
+      expect(shown(props).every((t) => t.kind === "learn")).toBe(true);
     }
   });
 });
 
-describe("Remember opens its one conversation and never a list", () => {
-  it("opens the stored Remember conversation, on every render, without a list", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("remember", "?mode=remember");
-    expect(last()?.threadId).toBe(REMEMBER.id);
-    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
+describe("Learn opens its one conversation and never a list", () => {
+  it("opens the stored Learn conversation, on every render, without a list", async () => {
+    stored = [CHAT, LEARN];
+    await mount("learn", "?mode=learn");
+    expect(last()?.threadId).toBe(LEARN.id);
+    expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
     expect(renders.length).toBeGreaterThan(0);
     /* The first render as well as the settled one: the list must not appear for
        even a frame while `?thread=` catches up. */
     for (const props of renders) expect(drawsList(props)).toBe(false);
-    await vi.waitFor(() => expect(param("thread")).toBe(REMEMBER.id));
+    await vi.waitFor(() => expect(param("thread")).toBe(LEARN.id));
   });
 
   it("overrides a `?thread=` naming a chat", async () => {
-    stored = [CHAT, REMEMBER];
-    await mount("remember", `?mode=remember&thread=${CHAT.id}`);
+    stored = [CHAT, LEARN];
+    await mount("learn", `?mode=learn&thread=${CHAT.id}`);
     for (const props of renders) {
       expect(drawsList(props)).toBe(false);
       expect(props.threadId).not.toBe(CHAT.id);
     }
-    expect(last()?.threadId).toBe(REMEMBER.id);
-    await vi.waitFor(() => expect(param("thread")).toBe(REMEMBER.id));
+    expect(last()?.threadId).toBe(LEARN.id);
+    await vi.waitFor(() => expect(param("thread")).toBe(LEARN.id));
   });
 
   it("overrides a stale `?thread=` too", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember&thread=spya-gqne02");
+    stored = [LEARN];
+    await mount("learn", "?mode=learn&thread=spya-gqne02");
     for (const props of renders) expect(drawsList(props)).toBe(false);
-    expect(last()?.threadId).toBe(REMEMBER.id);
+    expect(last()?.threadId).toBe(LEARN.id);
   });
 
-  it("begins one fresh Remember conversation when there is none", async () => {
+  it("begins one fresh Learn conversation when there is none", async () => {
     stored = [CHAT];
-    await mount("remember", "?mode=remember");
+    await mount("learn", "?mode=learn");
     for (const props of renders) expect(drawsList(props)).toBe(false);
     expect(shown()).toHaveLength(1);
     const fresh = shown()[0] as ChatThread;
-    expect(fresh.kind).toBe("remember");
+    expect(fresh.kind).toBe("learn");
     expect(fresh.messages).toHaveLength(0);
     expect(last()?.threadId).toBe(fresh.id);
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
   it("prefers the conversation with something in it over an empty one", async () => {
-    const empty = thread("spya-rem000", "remember", { messages: [], createdAt: "2026-09-01T00:00:00.000Z" });
-    stored = [empty, REMEMBER];
-    await mount("remember", "?mode=remember");
-    expect(last()?.threadId).toBe(REMEMBER.id);
+    const empty = thread("spya-rem000", "learn", { messages: [], createdAt: "2026-09-01T00:00:00.000Z" });
+    stored = [empty, LEARN];
+    await mount("learn", "?mode=learn");
+    expect(last()?.threadId).toBe(LEARN.id);
   });
 });
 
@@ -305,9 +305,9 @@ describe("Remember opens its one conversation and never a list", () => {
 describe("Start over is offered only on a settled conversation", () => {
   const deletes = () => calls.filter((c) => c.method === "DELETE");
 
-  it("is not offered on an empty Remember conversation, and pressing anyway sends nothing", async () => {
+  it("is not offered on an empty Learn conversation, and pressing anyway sends nothing", async () => {
     stored = [CHAT];
-    await mount("remember", "?mode=remember");
+    await mount("learn", "?mode=learn");
     const fresh = shown()[0] as ChatThread;
     expect(fresh.messages).toHaveLength(0);
     expect(last()?.canStartOver).toBe(false);
@@ -320,7 +320,7 @@ describe("Start over is offered only on a settled conversation", () => {
 
   it("is not offered while the first answer is pending, and is once it is stored and settled", async () => {
     stored = [];
-    await mount("remember", "?mode=remember");
+    await mount("learn", "?mode=learn");
     const guessed = last()?.threadId as string;
 
     await act(async () => prop<(q: string) => void>("onSend")("What I took"));
@@ -360,15 +360,15 @@ describe("Start over is offered only on a settled conversation", () => {
   });
 
   it("is offered on a stored conversation with nothing in flight", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember");
-    expect(last()?.threadId).toBe(REMEMBER.id);
+    stored = [LEARN];
+    await mount("learn", "?mode=learn");
+    expect(last()?.threadId).toBe(LEARN.id);
     expect(last()?.canStartOver).toBe(true);
   });
 
   it("rechecks the controller's current state before deleting, even before React renders it", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember");
+    stored = [LEARN];
+    await mount("learn", "?mode=learn");
     const send = prop<(q: string) => void>("onSend");
     const startOver = prop<(id: string) => void>("onDelete");
 
@@ -378,7 +378,7 @@ describe("Start over is offered only on a settled conversation", () => {
        as it is now, not the state captured by that render. */
     await act(async () => {
       send("A turn began before the second press");
-      startOver(REMEMBER.id);
+      startOver(LEARN.id);
     });
     await settle();
 
@@ -390,7 +390,7 @@ describe("Start over is offered only on a settled conversation", () => {
 
 describe("Start over waits for the server", () => {
   it("finishes Live before the DELETE starts, so its final spoken POST cannot race the deletion", async () => {
-    stored = [REMEMBER];
+    stored = [LEARN];
     let releaseStop: (() => void) | null = null;
     stopLive.mockImplementation(
       () =>
@@ -398,13 +398,13 @@ describe("Start over waits for the server", () => {
           releaseStop = resolve;
         }),
     );
-    await mount("remember", "?mode=remember");
+    await mount("learn", "?mode=learn");
     livePhase = "live";
-    liveThreadId = REMEMBER.id;
-    await mount("remember", "?mode=remember");
+    liveThreadId = LEARN.id;
+    await mount("learn", "?mode=learn");
 
     await act(async () => {
-      prop<(id: string) => void>("onDelete")(REMEMBER.id);
+      prop<(id: string) => void>("onDelete")(LEARN.id);
       await Promise.resolve();
     });
 
@@ -424,11 +424,11 @@ describe("Start over waits for the server", () => {
   });
 
   it("offers nowhere to type until the DELETE has resolved, then opens a fresh one", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember");
-    expect(last()?.threadId).toBe(REMEMBER.id);
+    stored = [LEARN];
+    await mount("learn", "?mode=learn");
+    expect(last()?.threadId).toBe(LEARN.id);
 
-    await act(async () => prop<(id: string) => void>("onDelete")(REMEMBER.id));
+    await act(async () => prop<(id: string) => void>("onDelete")(LEARN.id));
     await settle();
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
 
@@ -444,8 +444,8 @@ describe("Start over waits for the server", () => {
     await settle();
 
     const fresh = shown()[0];
-    expect(fresh?.kind).toBe("remember");
-    expect(fresh?.id).not.toBe(REMEMBER.id);
+    expect(fresh?.kind).toBe("learn");
+    expect(fresh?.id).not.toBe(LEARN.id);
     expect(fresh?.messages).toHaveLength(0);
     expect(last()?.threadId).toBe(fresh?.id);
 
@@ -457,54 +457,54 @@ describe("Start over waits for the server", () => {
   });
 
   it("puts the conversation back when the DELETE fails", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember");
-    await act(async () => prop<(id: string) => void>("onDelete")(REMEMBER.id));
+    stored = [LEARN];
+    await mount("learn", "?mode=learn");
+    await act(async () => prop<(id: string) => void>("onDelete")(LEARN.id));
     await settle();
     await act(async () => releaseDelete?.(500));
     await settle();
-    expect(last()?.threadId).toBe(REMEMBER.id);
-    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
+    expect(last()?.threadId).toBe(LEARN.id);
+    expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
     expect(last()?.error).toMatch(/Couldn't delete/);
   });
 });
 
-/* Tutorial, Remember's third sub-mode (plan 261002i): its own single thread,
+/* Tutorial, Learn's third sub-mode (plan 261002i): its own single thread,
    with Recall's lifecycle and none of Live. */
 describe("Tutorial opens its own one conversation", () => {
   it("opens the stored Tutorial thread, never Recall's or a list", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL];
-    await mount("tutorial", "?mode=remember&remember=tutorial");
+    stored = [CHAT, LEARN, TUTORIAL];
+    await mount("tutorial", "?mode=learn&learn=tutorial");
     expect(last()?.threadId).toBe(TUTORIAL.id);
     expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
     for (const props of renders) expect(drawsList(props)).toBe(false);
   });
 
   it("is not listed in Recall", async () => {
-    stored = [REMEMBER, TUTORIAL];
-    await mount("remember", "?mode=remember");
-    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
+    stored = [LEARN, TUTORIAL];
+    await mount("learn", "?mode=learn");
+    expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
   });
 
   it("begins its own conversation when there is none, of its own kind", async () => {
-    stored = [REMEMBER];
-    await mount("tutorial", "?mode=remember&remember=tutorial");
+    stored = [LEARN];
+    await mount("tutorial", "?mode=learn&learn=tutorial");
     const opened = shown();
     expect(opened).toHaveLength(1);
     expect(opened[0]?.kind).toBe("tutorial");
-    expect(opened[0]?.id).not.toBe(REMEMBER.id);
+    expect(opened[0]?.id).not.toBe(LEARN.id);
   });
 
   it("offers no Live conversation", async () => {
     stored = [TUTORIAL];
-    await mount("tutorial", "?mode=remember&remember=tutorial");
+    await mount("tutorial", "?mode=learn&learn=tutorial");
     expect(last()?.live).toBeUndefined();
     expect(last()?.onStartLive).toBeUndefined();
   });
 
   it("starts Tutorial over only after the stored thread has been deleted", async () => {
     stored = [TUTORIAL];
-    await mount("tutorial", "?mode=remember&remember=tutorial");
+    await mount("tutorial", "?mode=learn&learn=tutorial");
     await act(async () => prop<(id: string) => void>("onDelete")(TUTORIAL.id));
     await settle();
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
@@ -521,22 +521,22 @@ describe("Tutorial opens its own one conversation", () => {
   });
 });
 
-/* Explore, Remember's fourth sub-mode (plan 261003l): its own single thread,
+/* Explore, Learn's fourth sub-mode (plan 261003l): its own single thread,
    with Recall's lifecycle and none of Live. */
 describe("Explore opens its own one conversation", () => {
   it("opens the stored Explore thread, never Recall's, Tutorial's or a list", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
-    await mount("explore", "?mode=remember&remember=explore");
+    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+    await mount("explore", "?mode=learn&learn=explore");
     expect(last()?.threadId).toBe(EXPLORE.id);
     expect(shown().map((t) => t.id)).toEqual([EXPLORE.id]);
     for (const props of renders) expect(drawsList(props)).toBe(false);
   });
 
   it("is not listed in Recall or in Tutorial; Chat lists it and cannot open it", async () => {
-    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
-    await mount("remember", "?mode=remember");
-    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
-    await mount("tutorial", "?mode=remember&remember=tutorial");
+    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+    await mount("learn", "?mode=learn");
+    expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
+    await mount("tutorial", "?mode=learn&learn=tutorial");
     expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
     await mount("chat", "?mode=chat");
     expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
@@ -544,18 +544,18 @@ describe("Explore opens its own one conversation", () => {
   });
 
   it("begins its own conversation when there is none, of its own kind", async () => {
-    stored = [REMEMBER, TUTORIAL];
-    await mount("explore", "?mode=remember&remember=explore");
+    stored = [LEARN, TUTORIAL];
+    await mount("explore", "?mode=learn&learn=explore");
     const opened = shown();
     expect(opened).toHaveLength(1);
     expect(opened[0]?.kind).toBe("explore");
-    expect(opened[0]?.id).not.toBe(REMEMBER.id);
+    expect(opened[0]?.id).not.toBe(LEARN.id);
     expect(opened[0]?.id).not.toBe(TUTORIAL.id);
   });
 
   it("overrules a stale ?thread= that names another conversation", async () => {
-    stored = [REMEMBER, EXPLORE];
-    await mount("explore", `?mode=remember&remember=explore&thread=${REMEMBER.id}`);
+    stored = [LEARN, EXPLORE];
+    await mount("explore", `?mode=learn&learn=explore&thread=${LEARN.id}`);
     await settle();
     expect(last()?.threadId).toBe(EXPLORE.id);
     expect(param("thread")).toBe(EXPLORE.id);
@@ -563,14 +563,14 @@ describe("Explore opens its own one conversation", () => {
 
   it("offers no Live conversation", async () => {
     stored = [EXPLORE];
-    await mount("explore", "?mode=remember&remember=explore");
+    await mount("explore", "?mode=learn&learn=explore");
     expect(last()?.live).toBeUndefined();
     expect(last()?.onStartLive).toBeUndefined();
   });
 
   it("starts Explore over only after the stored thread has been deleted", async () => {
     stored = [EXPLORE];
-    await mount("explore", "?mode=remember&remember=explore");
+    await mount("explore", "?mode=learn&learn=explore");
     await act(async () => prop<(id: string) => void>("onDelete")(EXPLORE.id));
     await settle();
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
@@ -595,15 +595,15 @@ describe("which conversations offer Live", () => {
   it("is exactly the kinds a spoken turn may create or join", async () => {
     const { OFFERS_LIVE } = await import("../src/web/modes/conversation/ConversationModes.js");
     const { isSpokenKind } = await import("../src/chat.js");
-    expect(Object.keys(OFFERS_LIVE).sort()).toEqual(["chat", "explore", "remember", "tutorial"]);
+    expect(Object.keys(OFFERS_LIVE).sort()).toEqual(["chat", "explore", "learn", "tutorial"]);
     for (const [kind, offers] of Object.entries(OFFERS_LIVE)) {
       expect(`${kind}: ${String(offers)}`).toBe(`${kind}: ${String(isSpokenKind(kind))}`);
     }
   });
 
   it("still hands Live to Recall and to Chat", async () => {
-    stored = [REMEMBER];
-    await mount("remember", "?mode=remember");
+    stored = [LEARN];
+    await mount("learn", "?mode=learn");
     expect(last()?.live).toBeDefined();
     expect(last()?.onStartLive).toBeTypeOf("function");
     stored = [CHAT];

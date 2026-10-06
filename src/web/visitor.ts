@@ -226,7 +226,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   search: { kind: "available" },
   chat: { kind: "owners-only" },
-  remember: { kind: "owners-only" },
+  learn: { kind: "owners-only" },
   /**
    * **Diagram became `available` on 2026-09-04, and the carve-out the old
    * comment said was "real work and not slice 1a's" turned out to be a prop.**

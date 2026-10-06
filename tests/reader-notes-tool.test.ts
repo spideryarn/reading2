@@ -310,7 +310,7 @@ describe("threadIndexRows — the reader's other conversations", () => {
         thread("spya-t00001"),
         thread("spya-t00002", { kind: "candidates", title: "REFEREE-MACHINERY" }),
         thread("spya-t00003", { title: "THE-CURRENT-ONE" }),
-        thread("spya-t00004", { kind: "remember" }),
+        thread("spya-t00004", { kind: "learn" }),
       ],
       "spya-t00003",
     );
@@ -328,7 +328,7 @@ describe("threadIndexRows — the reader's other conversations", () => {
     const rows = threadIndexRows(
       [
         thread("spya-t00001", { kind: "chat" }),
-        thread("spya-t00002", { kind: "remember" }),
+        thread("spya-t00002", { kind: "learn" }),
         thread("spya-t00003", { kind: "tutorial" }),
         thread("spya-t00004", { kind: "explore" }),
       ],
@@ -338,7 +338,7 @@ describe("threadIndexRows — the reader's other conversations", () => {
     expect(rows).toContain("Recall");
     expect(rows).toContain("Tutorial");
     expect(rows).toContain("Explore");
-    expect(rows).not.toContain("remember");
+    expect(rows).not.toContain("learn");
     expect(rows).not.toContain("explore");
   });
 
@@ -569,7 +569,7 @@ describe("threadTranscript — one conversation, bounded", () => {
     const out = threadTranscript(
       [
         thread("spya-t00001", {
-          kind: "remember",
+          kind: "learn",
           messages: [
             msg("user", "I think it is about metabolism.", { createdAt: "2026-09-30T08:00:00.000Z" }),
             msg("assistant", "Partly.", { createdAt: "2026-09-30T08:00:09.000Z" }),
@@ -592,7 +592,7 @@ describe("threadTranscript — one conversation, bounded", () => {
      at (src/recall-hint.ts § answerAsSeen; plan 261004h). */
   it("leaves out a Recall hint the reader never opened, and keeps one they did", () => {
     const answer = "Do you remember what he sets it against?\n\nHint: A-REAL-STORM-CLUE.";
-    const transcript = (over: Partial<ChatMessage>, kind: "remember" | "chat" = "remember") =>
+    const transcript = (over: Partial<ChatMessage>, kind: "learn" | "chat" = "learn") =>
       fenced(
         threadTranscript(
           [
@@ -772,7 +772,7 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(names(kind)).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes"]);
   });
 
-  it.each(["remember", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
+  it.each(["learn", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
     expect(names(kind)).toEqual(CHAT_TOOLS.map((t) => t.function.name));
   });
 
@@ -838,7 +838,7 @@ describe("runTool — reader_notes", () => {
     expect(out.content).not.toContain("<<<UNTRUSTED");
   });
 
-  it.each(["remember", "tutorial", "candidates"] as const)(
+  it.each(["learn", "tutorial", "candidates"] as const)(
     "is not a tool at all for a %s thread, and reads nothing",
     async (kind) => {
       const out = await runTool("reader_notes", {}, ctx({ kind }));
@@ -982,7 +982,7 @@ describe("converse — the request it sends, per thread kind", () => {
     expect(result).not.toContain("THE-THREAD-THIS-TURN-IS-IN");
   });
 
-  it.each(["remember", "tutorial", "candidates"] as const)(
+  it.each(["learn", "tutorial", "candidates"] as const)(
     "does not offer it to %s, and a model that asks anyway is told there is no such tool",
     async (kind) => {
       const { offered, result } = await turn(kind);

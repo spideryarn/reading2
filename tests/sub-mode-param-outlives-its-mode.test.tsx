@@ -3,19 +3,19 @@
  * **A sub-mode parameter outlives its mode, on purpose — and the one place
  * that costs something.**
  *
- * `remember=quiz` beside `mode=chat` was reported as a leak (qi-e99pjdz2). It
+ * `learn=quiz` beside `mode=chat` was reported as a leak (qi-e99pjdz2). It
  * is a decision: the Dock writes `mode` alone, so every sub-mode parameter
- * (`remember`, `diagram`, `referee`, `summary`, `structure`, `debate`) stays in
+ * (`learn`, `diagram`, `referee`, `summary`, `structure`, `debate`) stays in
  * the address when the reader leaves its mode, and that is what returns them to
  * the half or the picture they chose when they press the mode again. The first
  * half of this file pins that, so the next reader of the address finds a
  * decision rather than an omission. It passed from the day it was written.
  *
  * The second half is the defect keeping it leaves (GPT Sol, F2 of the 261004l
- * plan review). With `remember=quiz` retained and a Chat conversation open,
- * pressing Remember used to write `mode` alone: Remember mounted on Quiz with
- * the Chat thread still selected, and `RememberBand` cleared `thread` an effect
- * later. params.ts § `rememberParam` rule 1 says Quiz and a cleared `thread`
+ * plan review). With `learn=quiz` retained and a Chat conversation open,
+ * pressing Learn used to write `mode` alone: Learn mounted on Quiz with
+ * the Chat thread still selected, and `LearnBand` cleared `thread` an effect
+ * later. params.ts § `learnParam` rule 1 says Quiz and a cleared `thread`
  * are **one navigation**. So these assert the frames the Quiz half is rendered
  * with, from its first, and not the address after the repair effect has run —
  * that address is right with or without the fix.
@@ -64,20 +64,20 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 /**
  * **Every frame the Quiz half is rendered with**: what the address state said
- * each time `RememberBand` drew `QuizPanel`. The stub reads the same nuqs keys
+ * each time `LearnBand` drew `QuizPanel`. The stub reads the same nuqs keys
  * the band does, so a frame in which Quiz is up with a thread still selected
  * is recorded here whether or not the address ever shows it (nuqs moves React
  * first and may fold the repair into the same history write).
  */
-const quizFrames = vi.hoisted(() => [] as { mode: string; remember: string; thread: string | null }[]);
+const quizFrames = vi.hoisted(() => [] as { mode: string; learn: string; thread: string | null }[]);
 
 vi.mock("../src/web/QuizPanel.js", async (original) => {
   const real = await original<typeof import("../src/web/QuizPanel.js")>();
   const { useQueryStates } = await import("nuqs");
-  const { modeParam, rememberParam, threadParam } = await import("../src/web/params.js");
+  const { modeParam, learnParam, threadParam } = await import("../src/web/params.js");
   function QuizPanel() {
-    const [frame] = useQueryStates({ mode: modeParam, remember: rememberParam, thread: threadParam });
-    quizFrames.push({ mode: frame.mode, remember: frame.remember, thread: frame.thread });
+    const [frame] = useQueryStates({ mode: modeParam, learn: learnParam, thread: threadParam });
+    quizFrames.push({ mode: frame.mode, learn: frame.learn, thread: frame.thread });
     return createElement("div", { className: "quiz-stub" });
   }
   return { ...real, QuizPanel };
@@ -183,7 +183,7 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
-  /* The switch is on. Remember was behind it when this was written; since
+  /* The switch is on. Learn was behind it when this was written; since
      2026-10-05 only its Explore part is (docs/project/experimental-features.md). */
   if (url === "/api/reader") return json({ experimentalSince: "2026-10-02T00:00:00.000Z" });
   if (method === "POST") return new Response(null, { status: 204 });
@@ -270,43 +270,43 @@ async function pressMode(label: string): Promise<void> {
 }
 
 describe("a sub-mode parameter outlives its mode", () => {
-  it("leaving Remember's Quiz for Chat keeps `remember=quiz`, and pressing Remember again opens Quiz", async () => {
-    await open("?mode=remember&remember=quiz");
+  it("leaving Learn's Quiz for Chat keeps `learn=quiz`, and pressing Learn again opens Quiz", async () => {
+    await open("?mode=learn&learn=quiz");
     expect(host.querySelector(".quiz-stub"), "Quiz is the half that is open").not.toBeNull();
 
     await pressMode("Chat");
     await until(() => param("mode") === "chat", "Chat never opened");
-    expect(param("remember"), "kept beside another mode, on purpose").toBe("quiz");
+    expect(param("learn"), "kept beside another mode, on purpose").toBe("quiz");
     expect(host.querySelector(".quiz-stub"), "and inert there: Chat's band, not the Quiz").toBeNull();
 
     await pressMode("Learn");
-    await until(() => param("mode") === "remember", "Remember never opened");
-    expect(param("remember")).toBe("quiz");
+    await until(() => param("mode") === "learn", "Learn never opened");
+    expect(param("learn")).toBe("quiz");
     expect(host.querySelector(".quiz-stub"), "back on the half the reader chose").not.toBeNull();
   });
 });
 
-describe("returning to Remember's Quiz from a Chat conversation", () => {
+describe("returning to Learn's Quiz from a Chat conversation", () => {
   it("opens Quiz and clears the thread in one navigation: no frame has both", async () => {
-    await open(`?mode=chat&remember=quiz&thread=${THREAD_ID}`);
+    await open(`?mode=chat&learn=quiz&thread=${THREAD_ID}`);
     expect(param("thread"), "Chat keeps its conversation selected").toBe(THREAD_ID);
-    expect(param("remember")).toBe("quiz");
+    expect(param("learn")).toBe("quiz");
     expect(quizFrames, "Quiz is not drawn under Chat").toEqual([]);
     const push = vi.spyOn(history, "pushState");
 
     await pressMode("Learn");
-    await until(() => param("mode") === "remember" && param("thread") === null, "Remember's Quiz never opened");
+    await until(() => param("mode") === "learn" && param("thread") === null, "Learn's Quiz never opened");
 
     expect(quizFrames.length, "the Quiz half was drawn").toBeGreaterThan(0);
     expect(
       quizFrames.filter((f) => f.thread !== null),
       "Quiz was drawn with the Chat conversation still selected",
     ).toEqual([]);
-    expect(quizFrames.every((f) => f.mode === "remember" && f.remember === "quiz")).toBe(true);
+    expect(quizFrames.every((f) => f.mode === "learn" && f.learn === "quiz")).toBe(true);
     /* One entry, and it is the whole trip: nothing pushed carries the pair. */
     const pushed = push.mock.calls.map((call) => new URL(String(call[2]), location.href).searchParams);
-    expect(pushed.filter((p) => p.get("mode") === "remember")).toHaveLength(1);
-    expect(pushed.some((p) => p.get("remember") === "quiz" && p.get("thread") !== null)).toBe(false);
+    expect(pushed.filter((p) => p.get("mode") === "learn")).toHaveLength(1);
+    expect(pushed.some((p) => p.get("learn") === "quiz" && p.get("thread") !== null)).toBe(false);
 
     await act(async () => history.back());
     await until(
@@ -319,45 +319,45 @@ describe("returning to Remember's Quiz from a Chat conversation", () => {
     /* Each of those bands overrules a stale thread itself and writes its own
        (ConversationModes.tsx § ConversationBand); only Quiz has no thread. */
     for (const view of ["recall", "tutorial", "explore"] as const) {
-      expect(returnToSubMode("remember", { remember: view })).toBeNull();
+      expect(returnToSubMode("learn", { learn: view })).toBeNull();
     }
-    expect(returnToSubMode("remember", { remember: "quiz" })).toEqual(
-      subModeParams({ mode: "remember", view: "quiz" }),
+    expect(returnToSubMode("learn", { learn: "quiz" })).toEqual(
+      subModeParams({ mode: "learn", view: "quiz" }),
     );
-    /* And only for Remember: another mode's press writes `mode` alone. */
-    expect(returnToSubMode("chat", { remember: "quiz" })).toBeNull();
-    expect(returnToSubMode("diagram", { remember: "quiz" })).toBeNull();
+    /* And only for Learn: another mode's press writes `mode` alone. */
+    expect(returnToSubMode("chat", { learn: "quiz" })).toBeNull();
+    expect(returnToSubMode("diagram", { learn: "quiz" })).toBeNull();
   });
 });
 
-describe("the metadata page's plain Remember link", () => {
+describe("the metadata page's plain Learn link", () => {
   /* The carried query string keeps everything but `panel=` (router.ts §
      `carriedSearch`), so a reader who went from a Chat conversation to the
-     metadata page with `remember=quiz` retained really does carry both. */
+     metadata page with `learn=quiz` retained really does carry both. */
   it("does not carry a Chat thread into Quiz", () => {
-    const href = modeLinkHref(SLUG, `mode=chat&remember=quiz&thread=${THREAD_ID}&at=spya-s1aaaa`, "remember");
+    const href = modeLinkHref(SLUG, `mode=chat&learn=quiz&thread=${THREAD_ID}&at=spya-s1aaaa`, "learn");
     const url = new URL(href, "https://example.com");
     expect(url.pathname).toBe(`/read/${SLUG}`);
-    expect(url.searchParams.get("mode")).toBe("remember");
-    expect(url.searchParams.get("remember")).toBe("quiz");
+    expect(url.searchParams.get("mode")).toBe("learn");
+    expect(url.searchParams.get("learn")).toBe("quiz");
     expect(url.searchParams.get("thread"), "Quiz and a thread in one address").toBeNull();
     expect(url.searchParams.get("at"), "the reader's place still travels").toBe("spya-s1aaaa");
   });
 
   it("keeps the thread when the retained half is not Quiz, and for every other mode's link", () => {
-    const recall = new URL(modeLinkHref(SLUG, `mode=chat&thread=${THREAD_ID}`, "remember"), "https://example.com");
+    const recall = new URL(modeLinkHref(SLUG, `mode=chat&thread=${THREAD_ID}`, "learn"), "https://example.com");
     expect(recall.searchParams.get("thread")).toBe(THREAD_ID);
     const tutorial = new URL(
-      modeLinkHref(SLUG, `mode=chat&remember=tutorial&thread=${THREAD_ID}`, "remember"),
+      modeLinkHref(SLUG, `mode=chat&learn=tutorial&thread=${THREAD_ID}`, "learn"),
       "https://example.com",
     );
     expect(tutorial.searchParams.get("thread")).toBe(THREAD_ID);
-    expect(tutorial.searchParams.get("remember")).toBe("tutorial");
+    expect(tutorial.searchParams.get("learn")).toBe("tutorial");
     const chat = new URL(
-      modeLinkHref(SLUG, `mode=glossary&remember=quiz&thread=${THREAD_ID}`, "chat"),
+      modeLinkHref(SLUG, `mode=glossary&learn=quiz&thread=${THREAD_ID}`, "chat"),
       "https://example.com",
     );
     expect(chat.searchParams.get("thread")).toBe(THREAD_ID);
-    expect(chat.searchParams.get("remember"), "the sub-mode parameter outlives its mode here too").toBe("quiz");
+    expect(chat.searchParams.get("learn"), "the sub-mode parameter outlives its mode here too").toBe("quiz");
   });
 });

@@ -1039,7 +1039,7 @@ await vi.waitFor(() => {
 ```
 
 A fixed delay works today and bakes the current throttle into the file, so it goes quietly
-green-then-flaky if that number ever moves. `tests/remember-url-rules.test.tsx`'s `until()` helper
+green-then-flaky if that number ever moves. `tests/learn-url-rules.test.tsx`'s `until()` helper
 and `sendNew` in `tests/conversation-band-send-new.test.tsx` are the two worked examples.
 
 ## Nothing under `tests/` may call a paid provider

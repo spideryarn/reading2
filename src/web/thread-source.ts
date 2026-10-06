@@ -5,7 +5,7 @@
  * report `spya-hyfqkq`).
  *
  * One pure function, so the order of the rules is in one place: a stored
- * origin, then a Remember kind, then an anchor, then a plain chat. The order
+ * origin, then a Learn kind, then an anchor, then a plain chat. The order
  * matters because two can be true of one conversation: a claim check that
  * also had an anchor is still a claim check.
  *
@@ -18,11 +18,11 @@
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
 import { type ChatThread, isLensOrigin, type SingleThreadKind, type ThreadKind } from "../types.js";
-import { CHAT_FROM_WORDS, type ChatFrom, type RememberView } from "./params.js";
-import { REMEMBER_SUB_MODES } from "./sub-modes.js";
+import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
+import { LEARN_SUB_MODES } from "./sub-modes.js";
 
-/** The parts of Remember that are a conversation: every part but Quiz. */
-export type RememberConversationView = Exclude<RememberView, "quiz">;
+/** The parts of Learn that are a conversation: every part but Quiz. */
+export type LearnConversationView = Exclude<LearnView, "quiz">;
 
 export interface ThreadSource {
   /** The filter's word for it (`?chatfrom=`). Never `chats`: a plain chat has no source. */
@@ -40,11 +40,11 @@ export interface ThreadSource {
    */
   voice?: "reader";
   /**
-   * **The part of Remember this conversation lives in**, on a Remember row
+   * **The part of Learn this conversation lives in**, on a Learn row
    * and on no other. A row with this is not opened in Chat's band: a press
-   * goes to Remember, and it has no rename or delete (D5).
+   * goes to Learn, and it has no rename or delete (D5).
    */
-  remember?: RememberConversationView;
+  learn?: LearnConversationView;
 }
 
 /** What the fields of a conversation `threadSource` reads. */
@@ -59,12 +59,12 @@ export const SOURCE_DEBATE_LENS = "Started from an angle in Debate";
 export const SOURCE_PASSAGE = "About a passage";
 
 /**
- * Which part of Remember each of its kinds is. `remember` is the stored word
+ * Which part of Learn each of its kinds is. `learn` is the stored word
  * for Recall's conversation (src/types.ts § ThreadKind). A `Record`, so a new
  * single-thread kind has to say.
  */
-const REMEMBER_VIEW_OF: Readonly<Record<SingleThreadKind, RememberConversationView>> = {
-  remember: "recall",
+const LEARN_VIEW_OF: Readonly<Record<SingleThreadKind, LearnConversationView>> = {
+  learn: "recall",
   tutorial: "tutorial",
   explore: "explore",
 };
@@ -94,15 +94,15 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
     }
   }
   switch (kind) {
-    case "remember":
+    case "learn":
     case "tutorial":
     case "explore": {
-      const view = REMEMBER_VIEW_OF[kind];
+      const view = LEARN_VIEW_OF[kind];
       return {
-        from: "remember",
-        mode: "remember",
-        label: `From ${MODE_LABEL.remember} › ${REMEMBER_SUB_MODES[view].label}`,
-        remember: view,
+        from: "learn",
+        mode: "learn",
+        label: `From ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}`,
+        learn: view,
       };
     }
     case "chat":
@@ -133,7 +133,7 @@ export function chatFrom(thread: SourcedThread): ChatFrom {
 export const CHAT_FROM_LABEL: Readonly<Record<ChatFrom, string>> = {
   chats: "Chats",
   debate: MODE_LABEL.debate,
-  remember: MODE_LABEL.remember,
+  learn: MODE_LABEL.learn,
   passage: SOURCE_PASSAGE,
 };
 

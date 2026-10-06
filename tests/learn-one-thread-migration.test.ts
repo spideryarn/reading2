@@ -12,9 +12,19 @@
  * migration, so the index is dropped first (inside the same transaction) to
  * make room for the duplicates the fold exists for.
  *
+ * **This file keeps the word `remember`, on purpose.** The kind became `learn`
+ * on 2026-10-06 (drizzle/20261006005914_rename_remember_thread_kind_to_learn.sql,
+ * tested in tests/learn-kind-migration.test.ts), but the SQL replayed here is
+ * frozen: it selects `kind = 'remember'` and creates
+ * `chat_threads_one_remember`. So the fixtures and the assertions keep the
+ * values that were true when it ran, and `inRolledBack` puts the database back
+ * to that day first: the CHECK is widened to allow `remember` again. Renaming
+ * the fixtures to `learn` instead would leave the frozen SQL folding nothing,
+ * and passing. GPT Sol's plan review of 261006a, PR-3.
+ *
  * docs/plans/261001m-remember-is-its-own-single-thread.md § Design 2. The pure
  * rule that keeps new turns out of a second thread is
- * tests/remember-one-thread.test.ts.
+ * tests/learn-one-thread.test.ts.
  */
 import { readFileSync } from "node:fs";
 
@@ -28,7 +38,7 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 const { pool } = await pgReady({
-  suite: "tests/remember-one-thread-migration.test.ts",
+  suite: "tests/learn-one-thread-migration.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.chat_messages", "spideryarn.realtime_sessions"],
   keepPool: true,
   max: 2,
@@ -229,12 +239,26 @@ async function snapshot(c: PoolClient): Promise<string> {
   return JSON.stringify(rows[0]);
 }
 
-/** Run `body` in a transaction with the index out of the way, and always roll back. */
+/**
+ * Run `body` in a transaction with the database as it was the day this
+ * migration ran, and always roll back.
+ *
+ * Two things stand between today's schema and that day. The index this
+ * migration creates must not exist yet (it does not, since the kind's rename
+ * dropped it; `if exists` covers a database that has not had that one). And
+ * the CHECK must allow `remember`, which it has refused since the rename. The
+ * later index, `chat_threads_one_learn`, stays: no row here is a `learn` one.
+ */
 async function inRolledBack(body: (c: PoolClient) => Promise<void>): Promise<void> {
   const c = await pool!.connect();
   try {
     await c.query("begin");
     await c.query('drop index if exists "spideryarn"."chat_threads_one_remember"');
+    await c.query('alter table "spideryarn"."chat_threads" drop constraint "chat_threads_kind"');
+    await c.query(
+      `alter table "spideryarn"."chat_threads" add constraint "chat_threads_kind"
+         check ("kind" in ('chat','remember','learn','candidates','tutorial','explore'))`,
+    );
     await body(c);
   } finally {
     await c.query("rollback");

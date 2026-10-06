@@ -1,33 +1,35 @@
 // @vitest-environment jsdom
 /**
- * **The URL after Review became Remember, and the two rules that are
- * navigations rather than parsing.**
+ * **The URL after Review became Remember and then Learn, and the two rules
+ * that are navigations rather than parsing.**
  *
  * The mode key moved from `review` to `remember` on 2026-09-01, and so did its
  * sub-mode parameter — `?review=recall|quiz` became `?remember=recall|quiz`.
- * Greg's licence for the rename was explicit that no alias is kept:
+ * Both moved again on 2026-10-06, to `learn` and `?learn=`; what is left of
+ * `remember` is pinned in tests/learn-name.test.ts.
+ * Greg's licence for the first rename was explicit that no alias is kept:
  *
  * > We have no real users yet, so it's fine to break things (e.g. urls) without
  * > aliases etc.
  *
  * So the first half of this file pins what the parsers now accept and, just as
  * importantly, what they now refuse: a `?mode=review` link lands on the article
- * rather than on Remember, and a stale `?review=quiz` is an unread key.
+ * rather than on Learn, and a stale `?review=quiz` is an unread key.
  *
- * The second half is the part a parser test cannot reach. `?remember=` and
- * `?thread=` collide — a Remember conversation cannot be shown while the Quiz
+ * The second half is the part a parser test cannot reach. `?learn=` and
+ * `?thread=` collide — a Learn conversation cannot be shown while the Quiz
  * half is open — and the rules that resolve it are **navigations**, written in
- * `RememberBand` and `ConversationBand`
+ * `LearnBand` and `ConversationBand`
  * (src/web/modes/conversation/ConversationModes.tsx) rather than in the
  * parser. The cross-family review of
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md asked
  * for both, because the rename touches **two** URL registrations — the paired
- * `useQueryStates` in `RememberBand` and the write-only `useQueryState` in
+ * `useQueryStates` in `LearnBand` and the write-only `useQueryState` in
  * `ConversationBand` — and missing the second one is silent: opening a
  * conversation would go on writing the dead `review` key, and nothing on
  * screen would say so.
  *
- * docs/project/remember-mode.md · docs/project/url-state.md.
+ * docs/project/learn-mode.md · docs/project/url-state.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -35,17 +37,17 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
 import type { QuizRead } from "../src/web/useQuiz.js";
-import { MODES, modeParam, REMEMBER_VIEWS, rememberParam } from "../src/web/params.js";
+import { MODES, modeParam, LEARN_VIEWS, learnParam } from "../src/web/params.js";
 import type { QuizSections } from "../src/web/QuizPanel.js";
 
 const NO_QUIZ_SECTIONS: QuizSections = { sections: [], rowOf: new Map() };
 
 /* -------------------------------------------------------------- parsing -- */
 
-describe("the mode key is `remember`, and `review` is not a mode any more", () => {
+describe("the mode key is `learn`, and `review` is not a mode any more", () => {
   it("recognises the new name", () => {
-    expect(MODES).toContain("remember");
-    expect(modeParam.parse("remember")).toBe("remember");
+    expect(MODES).toContain("learn");
+    expect(modeParam.parse("learn")).toBe("learn");
   });
 
   it("treats the old name as a mode this version has never had", () => {
@@ -59,21 +61,21 @@ describe("the mode key is `remember`, and `review` is not a mode any more", () =
   });
 });
 
-describe("the sub-mode parameter is `?remember=`", () => {
+describe("the sub-mode parameter is `?learn=`", () => {
   it("accepts its four views, in the order the chips are drawn, and nothing else", () => {
-    expect(REMEMBER_VIEWS).toEqual(["recall", "tutorial", "explore", "quiz"]);
-    for (const view of REMEMBER_VIEWS) expect(rememberParam.parse(view)).toBe(view);
-    expect(rememberParam.parse("review")).toBeNull();
-    expect(rememberParam.parse("")).toBeNull();
+    expect(LEARN_VIEWS).toEqual(["recall", "tutorial", "explore", "quiz"]);
+    for (const view of LEARN_VIEWS) expect(learnParam.parse(view)).toBe(view);
+    expect(learnParam.parse("review")).toBeNull();
+    expect(learnParam.parse("")).toBeNull();
   });
 
   it("opens Recall when the value is unknown or absent", () => {
-    expect(rememberParam.defaultValue).toBe("recall");
+    expect(learnParam.defaultValue).toBe("recall");
   });
 
   it("round-trips each half through the query string", () => {
-    for (const view of REMEMBER_VIEWS) {
-      expect(rememberParam.parse(rememberParam.serialize(view))).toBe(view);
+    for (const view of LEARN_VIEWS) {
+      expect(learnParam.parse(learnParam.serialize(view))).toBe(view);
     }
   });
 });
@@ -82,7 +84,7 @@ describe("the sub-mode parameter is `?remember=`", () => {
 
 /** The props the panel was last handed. Stubbed: this file is about the URL. */
 let panel: Record<string, unknown> | undefined;
-/** The Quiz panel separately, for the Remember → Quiz prop seam. */
+/** The Quiz panel separately, for the Learn → Quiz prop seam. */
 let quizPanel: Record<string, unknown> | undefined;
 
 vi.mock("../src/web/ChatPanel.js", () => ({
@@ -98,7 +100,7 @@ vi.mock("../src/web/QuizPanel.js", () => ({
     quizPanel = props;
     return null;
   },
-  RememberSubModeToggle: () => null,
+  LearnSubModeToggle: () => null,
 }));
 
 const STORED: ChatThread = {
@@ -106,7 +108,7 @@ const STORED: ChatThread = {
   /* The **persisted** thread kind — src/types.ts § ThreadKind. Spelled `review`
      until 2026-09-01; the column moved with it in
      drizzle/0048_rename_review_thread_kind.sql. */
-  kind: "remember",
+  kind: "learn",
   title: "What I took from it",
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-01T10:00:00.000Z",
@@ -129,7 +131,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { ConversationBand, RememberBand } = await import(
+const { ConversationBand, LearnBand } = await import(
   "../src/web/modes/conversation/ConversationModes.js"
 );
 
@@ -203,7 +205,7 @@ const QUIZ_READ: QuizRead = {
 
 async function mount(
   search: string,
-  band: "remember" | "conversation",
+  band: "learn" | "conversation",
   sections: QuizSections = NO_QUIZ_SECTIONS,
 ): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
@@ -212,8 +214,8 @@ async function mount(
       createElement(
         NuqsAdapter,
         null,
-        band === "remember"
-          ? createElement(RememberBand, {
+        band === "learn"
+          ? createElement(LearnBand, {
               slug: "a-piece",
               quizRead: QUIZ_READ,
               blocks: new Map<string, string>(),
@@ -224,7 +226,7 @@ async function mount(
               slug: "a-piece",
               blocks: new Map<string, string>(),
               onJump: () => {},
-              kind: "remember" as const,
+              kind: "learn" as const,
             }),
       ),
     );
@@ -232,42 +234,42 @@ async function mount(
   await settle();
 }
 
-describe("`?remember=` and `?thread=` cannot both be honoured", () => {
+describe("`?learn=` and `?thread=` cannot both be honoured", () => {
   it("drops the thread when a pasted URL asks for Quiz as well", async () => {
     /* Rule 2. Quiz wins, and `thread` goes with a *replace* rather than a push
        — a push would leave the broken combination one Back press away from the
        reader we have just rescued from it. */
-    await mount("?mode=remember&remember=quiz&thread=spya-k3m9qt", "remember");
+    await mount("?mode=learn&learn=quiz&thread=spya-k3m9qt", "learn");
     await until(() => param("thread") === null);
-    expect(param("remember")).toBe("quiz");
+    expect(param("learn")).toBe("quiz");
     expect(param("thread")).toBeNull();
   });
 
   it("leaves a thread alone when Recall is the half that is open", async () => {
-    await mount("?mode=remember&thread=spya-k3m9qt", "remember");
+    await mount("?mode=learn&thread=spya-k3m9qt", "learn");
     expect(param("thread")).toBe("spya-k3m9qt");
   });
 });
 
 describe("the Quiz prop seam", () => {
-  it("carries the Reader's section projection through RememberBand and QuizSubBand", async () => {
+  it("carries the Reader's section projection through LearnBand and QuizSubBand", async () => {
     const sections = { sections: [], rowOf: new Map() };
-    await mount("?mode=remember&remember=quiz", "remember", sections);
+    await mount("?mode=learn&learn=quiz", "learn", sections);
     expect(quizPanel?.sections).toBe(sections);
   });
 });
 
 /*
- * Rule 3 — opening a Remember conversation from chat's shared list set
- * `remember=recall` in the same navigation — was tested here until 2026-10-01.
- * It went with the shared list (plan 261001m): chat no longer lists Remember
- * conversations, so `ConversationBand` no longer registers `?remember=` at all,
+ * Rule 3 — opening a Learn conversation from chat's shared list set
+ * `learn=recall` in the same navigation — was tested here until 2026-10-01.
+ * It went with the shared list (plan 261001m): chat no longer lists Learn
+ * conversations, so `ConversationBand` no longer registers `?learn=` at all,
  * and Recall writes `?thread=` itself. What is left to pin is that it writes the
  * live key and only that.
  */
 describe("Recall writes its one conversation into `?thread=`", () => {
-  it("names the Remember conversation, and never writes the retired `review` key", async () => {
-    await mount("?mode=remember", "conversation");
+  it("names the Learn conversation, and never writes the retired `review` key", async () => {
+    await mount("?mode=learn", "conversation");
     await until(() => param("thread") === STORED.id);
     expect(param("thread")).toBe(STORED.id);
     expect(panel?.threadId).toBe(STORED.id);
@@ -280,8 +282,8 @@ describe("a stale `?review=` is an unread key", () => {
     /* No alias, on Greg's licence. The old key is now an ordinary unknown
        parameter: it is neither read nor rewritten, and the band opens on the
        default half. */
-    await mount("?mode=remember&review=quiz&thread=spya-k3m9qt", "remember");
-    expect(param("remember")).toBeNull();
+    await mount("?mode=learn&review=quiz&thread=spya-k3m9qt", "learn");
+    expect(param("learn")).toBeNull();
     expect(param("thread")).toBe("spya-k3m9qt");
     expect(param("review")).toBe("quiz");
   });

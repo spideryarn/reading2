@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
- * **The top of the Remember band, after Greg's three reports of 2026-10-04**
+ * **The top of the Learn band, after Greg's three reports of 2026-10-04**
  * (spya-pmjy40, spya-wbhrm7, spya-usyhwy;
  * docs/plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md):
  *
  *  1. the profile badge is an icon with no words in every mode, and
  *     it has a card;
- *  2. each of Remember's four chips has a card of its own;
- *  3. Remember's (i) is short pieces and a list, not one paragraph.
+ *  2. each of Learn's four chips has a card of its own;
+ *  3. Learn's (i) is short pieces and a list, not one paragraph.
  *
  * The cards are opened the way tests/referee-tooltips.test.tsx opens them: a
  * `mouseenter`, the open delay on a faked clock, and the card looked for in the
@@ -48,18 +48,18 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-/* The (i) list reads the switch itself (RememberAbout.tsx); each test says
+/* The (i) list reads the switch itself (LearnAbout.tsx); each test says
    which way it is. On unless a test turns it off. */
 const switchIs = { on: true };
 vi.mock("../src/web/useExperimental.js", () => ({ useExperimental: () => ({ on: switchIs.on }) }));
 
-const { RememberSubModeToggle, REMEMBER_VIEW_HOW } = await import("../src/web/QuizPanel.js");
-const { RememberSubModesAbout } = await import("../src/web/RememberAbout.js");
+const { LearnSubModeToggle, LEARN_VIEW_HOW } = await import("../src/web/QuizPanel.js");
+const { LearnSubModesAbout } = await import("../src/web/LearnAbout.js");
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
-const { REMEMBER_SUB_MODES, visibleRememberViews } = await import("../src/web/sub-modes.js");
+const { LEARN_SUB_MODES, visibleLearnViews } = await import("../src/web/sub-modes.js");
 const { subModeRows } = await import("../src/web/CommandBar.js");
-const { REMEMBER_VIEWS } = await import("../src/web/params.js");
+const { LEARN_VIEWS } = await import("../src/web/params.js");
 
 /** Past the grouped chips' 300ms and the lone tooltip's own delay. */
 const PAST_THE_OPEN_DELAY = 400;
@@ -229,12 +229,12 @@ describe("the profile badge", () => {
   });
 });
 
-describe("Remember's chips", () => {
+describe("Learn's chips", () => {
   it("each has its own card without adding a layout wrapper or changing the toggle buttons", async () => {
     const changed: string[] = [];
     act(() => {
       root.render(
-        createElement(RememberSubModeToggle, {
+        createElement(LearnSubModeToggle, {
           slug: "a-paper",
           value: "recall",
           experimental: true,
@@ -242,22 +242,22 @@ describe("Remember's chips", () => {
         }),
       );
     });
-    const chips = [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")];
-    const row = host.querySelector(".remember-submode");
+    const chips = [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")];
+    const row = host.querySelector(".learn-submode");
     expect([...(row?.children ?? [])]).toEqual(chips);
-    expect(chips.map((c) => c.textContent)).toEqual(REMEMBER_VIEWS.map((v) => REMEMBER_SUB_MODES[v].label));
+    expect(chips.map((c) => c.textContent)).toEqual(LEARN_VIEWS.map((v) => LEARN_SUB_MODES[v].label));
     expect(chips.map((c) => c.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
     act(() => chips[1]?.click());
     expect(changed).toEqual(["tutorial"]);
-    for (const [i, view] of REMEMBER_VIEWS.entries()) {
+    for (const [i, view] of LEARN_VIEWS.entries()) {
       const chip = chips[i] as HTMLElement;
       await hover(chip);
       expect(cards(), view).toHaveLength(1);
       const card = cards()[0];
-      expect(card?.querySelector(".tip-soon-head")?.textContent, view).toBe(REMEMBER_SUB_MODES[view].label);
+      expect(card?.querySelector(".tip-soon-head")?.textContent, view).toBe(LEARN_SUB_MODES[view].label);
       const paras = [...(card?.querySelectorAll("p") ?? [])].map((p) => flat(p.textContent));
-      expect(paras[0], view).toBe(`${REMEMBER_SUB_MODES[view].description}.`);
-      expect(paras[1], view).toBe(REMEMBER_VIEW_HOW[view]);
+      expect(paras[0], view).toBe(`${LEARN_SUB_MODES[view].description}.`);
+      expect(paras[1], view).toBe(LEARN_VIEW_HOW[view]);
       await leave(chip);
       expect(cards(), view).toHaveLength(0);
       vi.useRealTimers();
@@ -267,10 +267,10 @@ describe("Remember's chips", () => {
   it("opens the same card from keyboard focus", () => {
     act(() => {
       root.render(
-        createElement(RememberSubModeToggle, { slug: "a-paper", value: "recall", experimental: true, onChange: () => {} }),
+        createElement(LearnSubModeToggle, { slug: "a-paper", value: "recall", experimental: true, onChange: () => {} }),
       );
     });
-    const tutorial = host.querySelector<HTMLButtonElement>(".remember-submode-btn:nth-of-type(2)");
+    const tutorial = host.querySelector<HTMLButtonElement>(".learn-submode-btn:nth-of-type(2)");
     if (!tutorial) throw new Error("no Tutorial chip");
     act(() => tutorial.focus());
     expect(cards()).toHaveLength(1);
@@ -279,9 +279,9 @@ describe("Remember's chips", () => {
   });
 
   it("keep the claims the catalog used to carry about Recall's one voice", () => {
-    expect(REMEMBER_VIEW_HOW.recall).toContain("One adaptive voice");
-    expect(REMEMBER_VIEW_HOW.recall).toContain("fills the gap");
-    expect(Object.values(REMEMBER_VIEW_HOW).join(" ")).not.toMatch(
+    expect(LEARN_VIEW_HOW.recall).toContain("One adaptive voice");
+    expect(LEARN_VIEW_HOW.recall).toContain("fills the gap");
+    expect(Object.values(LEARN_VIEW_HOW).join(" ")).not.toMatch(
       /four stances|Balanced|Respond|Socratic|Signposts/i,
     );
   });
@@ -300,46 +300,46 @@ describe("Explore is behind the switch, and the other three are not", () => {
 
   function chipLabels(value: "recall" | "tutorial" | "explore" | "quiz", experimental: boolean): (string | null)[] {
     act(() => {
-      root.render(createElement(RememberSubModeToggle, { slug: "a-paper", value, experimental, onChange: () => {} }));
+      root.render(createElement(LearnSubModeToggle, { slug: "a-paper", value, experimental, onChange: () => {} }));
     });
-    return [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")].map((c) => c.textContent);
+    return [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")].map((c) => c.textContent);
   }
 
   function aboutLabels(current: "recall" | "tutorial" | "explore" | "quiz"): (string | null | undefined)[] {
     act(() => {
-      root.render(createElement(RememberSubModesAbout, { current }));
+      root.render(createElement(LearnSubModesAbout, { current }));
     });
     return [...host.querySelectorAll("li strong")].map((s) => s.textContent);
   }
 
-  function barLabels(experimentalOn: boolean, remember: "recall" | "tutorial" | "explore" | "quiz"): string[] {
-    return subModeRows(["remember"], experimentalOn, { diagram: "sketch", remember }).map((row) =>
-      row.kind === "submode" ? REMEMBER_SUB_MODES[row.sub.view as "recall"].label : "not a sub-mode row",
+  function barLabels(experimentalOn: boolean, learn: "recall" | "tutorial" | "explore" | "quiz"): string[] {
+    return subModeRows(["learn"], experimentalOn, { diagram: "sketch", learn }).map((row) =>
+      row.kind === "submode" ? LEARN_SUB_MODES[row.sub.view as "recall"].label : "not a sub-mode row",
     );
   }
 
   /* The policy, written out rather than read from the table, so that one edit
      to a flag cannot move a chip in front of every reader. */
-  it("is the one experimental flag among Remember's sub-modes", () => {
-    const flagged = REMEMBER_VIEWS.filter((v) => REMEMBER_SUB_MODES[v].experimental);
+  it("is the one experimental flag among Learn's sub-modes", () => {
+    const flagged = LEARN_VIEWS.filter((v) => LEARN_SUB_MODES[v].experimental);
     expect(flagged).toEqual(["explore"]);
-    expect(MODE_CATALOG.remember.experimental).toBe(false);
+    expect(MODE_CATALOG.learn.experimental).toBe(false);
   });
 
   it("the helper: three views with the switch off, four with it on, and Explore while it is open", () => {
-    expect(visibleRememberViews(false, "recall")).toEqual(["recall", "tutorial", "quiz"]);
-    expect(visibleRememberViews(false, "quiz")).toEqual(["recall", "tutorial", "quiz"]);
-    expect(visibleRememberViews(true, "recall")).toEqual(["recall", "tutorial", "explore", "quiz"]);
-    expect(visibleRememberViews(false, "explore")).toEqual(["recall", "tutorial", "explore", "quiz"]);
+    expect(visibleLearnViews(false, "recall")).toEqual(["recall", "tutorial", "quiz"]);
+    expect(visibleLearnViews(false, "quiz")).toEqual(["recall", "tutorial", "quiz"]);
+    expect(visibleLearnViews(true, "recall")).toEqual(["recall", "tutorial", "explore", "quiz"]);
+    expect(visibleLearnViews(false, "explore")).toEqual(["recall", "tutorial", "explore", "quiz"]);
   });
 
   it("the chips", () => {
     for (const on of [false, true]) {
-      for (const current of REMEMBER_VIEWS) {
+      for (const current of LEARN_VIEWS) {
         expect(chipLabels(current, on)).toEqual(on || current === "explore" ? ALL_FOUR : WITHOUT_EXPLORE);
         /* Every state has one pressed chip, including an old Explore link. */
-        const pressed = [...host.querySelectorAll<HTMLElement>('.remember-submode-btn[aria-pressed="true"]')];
-        expect(pressed.map((c) => c.textContent)).toEqual([REMEMBER_SUB_MODES[current].label]);
+        const pressed = [...host.querySelectorAll<HTMLElement>('.learn-submode-btn[aria-pressed="true"]')];
+        expect(pressed.map((c) => c.textContent)).toEqual([LEARN_SUB_MODES[current].label]);
       }
     }
   });
@@ -359,26 +359,26 @@ describe("Explore is behind the switch, and the other three are not", () => {
   });
 });
 
-describe("Remember's (i)", () => {
+describe("Learn's (i)", () => {
   it("lists the four sub-modes, one line each", () => {
     act(() => {
-      root.render(createElement(RememberSubModesAbout, { current: "recall" }));
+      root.render(createElement(LearnSubModesAbout, { current: "recall" }));
     });
     const items = [...host.querySelectorAll("li")].map((li) => flat(li.textContent));
-    expect(items).toHaveLength(REMEMBER_VIEWS.length);
-    for (const [i, view] of REMEMBER_VIEWS.entries()) {
-      expect(items[i]).toContain(REMEMBER_SUB_MODES[view].label);
-      expect(items[i]).toContain(REMEMBER_SUB_MODES[view].description);
+    expect(items).toHaveLength(LEARN_VIEWS.length);
+    for (const [i, view] of LEARN_VIEWS.entries()) {
+      expect(items[i]).toContain(LEARN_SUB_MODES[view].label);
+      expect(items[i]).toContain(LEARN_SUB_MODES[view].description);
     }
   });
 
   it("opens with a short paragraph, not the walk through every sub-mode", () => {
-    const words = MODE_CATALOG.remember.how.split(/\s+/).length;
-    expect(words, MODE_CATALOG.remember.how).toBeLessThanOrEqual(45);
+    const words = MODE_CATALOG.learn.how.split(/\s+/).length;
+    expect(words, MODE_CATALOG.learn.how).toBeLessThanOrEqual(45);
   });
 
-  it("is added to each Remember conversation band, and not to Chat", () => {
-    const props = (kind: "chat" | "remember" | "tutorial" | "explore") => ({
+  it("is added to each Learn conversation band, and not to Chat", () => {
+    const props = (kind: "chat" | "learn" | "tutorial" | "explore") => ({
       slug: "a-paper",
       kind,
       loaded: true,
@@ -403,13 +403,13 @@ describe("Remember's (i)", () => {
       error: null,
     });
 
-    act(() => root.render(createElement(ChatPanel, props("remember"))));
+    act(() => root.render(createElement(ChatPanel, props("learn"))));
     const about = host.querySelector<HTMLButtonElement>('.band-about[aria-label="About this mode"]');
-    if (!about) throw new Error("no Remember (i)");
+    if (!about) throw new Error("no Learn (i)");
     act(() => about.click());
     for (const on of [false, true]) {
       switchIs.on = on;
-      for (const kind of ["remember", "tutorial", "explore"] as const) {
+      for (const kind of ["learn", "tutorial", "explore"] as const) {
         act(() => root.render(createElement(ChatPanel, props(kind))));
         const labels = [...document.querySelectorAll(".band-about-list li strong")].map((s) => s.textContent);
         expect(labels, `${kind}, experimental=${on}`).toEqual(

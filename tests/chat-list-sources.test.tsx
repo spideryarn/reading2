@@ -37,7 +37,7 @@ function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): C
 }
 
 const CHAT = thread("spya-chat21", "chat");
-const REMEMBER = thread("spya-rem021", "remember");
+const LEARN = thread("spya-rem021", "learn");
 const TUTORIAL = thread("spya-tut022", "tutorial");
 const EXPLORE = thread("spya-exp022", "explore");
 const CLAIM = thread("spya-clm023", "chat", {
@@ -46,10 +46,10 @@ const CLAIM = thread("spya-clm023", "chat", {
 const PASSAGE = thread("spya-psg024", "chat", {
   anchor: { blockId: "spya-cccccc", quote: "the felt quality", start: 4 },
 });
-const EVERY = [CHAT, REMEMBER, TUTORIAL, EXPLORE, CLAIM, PASSAGE];
+const EVERY = [CHAT, LEARN, TUTORIAL, EXPLORE, CLAIM, PASSAGE];
 
 const opened: string[] = [];
-const wentToRemember: [string, string][] = [];
+const wentToLearn: [string, string][] = [];
 const chose: (ChatFrom | null)[] = [];
 const renamed: string[] = [];
 const deleted: string[] = [];
@@ -77,8 +77,8 @@ function paint(
         onFrom: (next: ChatFrom | null) => {
           chose.push(next);
         },
-        onOpenRemember: (view: string, id: string) => {
-          wentToRemember.push([view, id]);
+        onOpenLearn: (view: string, id: string) => {
+          wentToLearn.push([view, id]);
         },
         onThread: (id: string | null) => {
           if (id) opened.push(id);
@@ -110,7 +110,7 @@ function paint(
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   opened.length = 0;
-  wentToRemember.length = 0;
+  wentToLearn.length = 0;
   chose.length = 0;
   renamed.length = 0;
   deleted.length = 0;
@@ -139,9 +139,9 @@ const press = (el: Element | null | undefined): void => {
 };
 
 describe("a row's source icon", () => {
-  it("wears the source's glyph: Brain for Remember, Globe for Debate and Pilcrow for a passage", () => {
+  it("wears the source's glyph: Brain for Learn, Globe for Debate and Pilcrow for a passage", () => {
     paint(EVERY);
-    for (const t of [REMEMBER, TUTORIAL, EXPLORE]) {
+    for (const t of [LEARN, TUTORIAL, EXPLORE]) {
       expect(mark(t)?.querySelector("svg.lucide-brain"), t.id).not.toBeNull();
     }
     expect(mark(CLAIM)?.querySelector("svg.lucide-globe")).not.toBeNull();
@@ -152,7 +152,7 @@ describe("a row's source icon", () => {
     paint(EVERY);
     expect(rows()).toHaveLength(EVERY.length);
     expect(mark(CHAT)).toBeNull();
-    expect(mark(REMEMBER)?.getAttribute("aria-label")).toBe("From Learn › Recall");
+    expect(mark(LEARN)?.getAttribute("aria-label")).toBe("From Learn › Recall");
     expect(mark(TUTORIAL)?.getAttribute("aria-label")).toBe("From Learn › Tutorial");
     expect(mark(EXPLORE)?.getAttribute("aria-label")).toBe("From Learn › Explore");
     expect(mark(CLAIM)?.getAttribute("aria-label")).toBe("Started from a claim in Debate");
@@ -193,9 +193,9 @@ describe("a row's source icon", () => {
     press(debate);
     expect(debate?.getAttribute("aria-expanded")).toBe("false");
 
-    press(mark(REMEMBER));
+    press(mark(LEARN));
     expect(cards().some((c) => c.includes("From Learn › Recall"))).toBe(true);
-    expect(wentToRemember).toEqual([]);
+    expect(wentToLearn).toEqual([]);
   });
 });
 
@@ -204,39 +204,39 @@ describe("pressing a row", () => {
     paint(EVERY);
     for (const t of [CHAT, CLAIM, PASSAGE]) press(row(t).querySelector(".chat-thread-open"));
     expect(opened).toEqual([CHAT.id, CLAIM.id, PASSAGE.id]);
-    expect(wentToRemember).toEqual([]);
+    expect(wentToLearn).toEqual([]);
   });
 
-  it("goes to Remember, on its sub-mode, for a Remember row, and never opens it here", () => {
+  it("goes to Learn, on its sub-mode, for a Learn row, and never opens it here", () => {
     paint(EVERY);
-    for (const t of [REMEMBER, TUTORIAL, EXPLORE]) press(row(t).querySelector(".chat-thread-open"));
-    expect(wentToRemember).toEqual([
-      ["recall", REMEMBER.id],
+    for (const t of [LEARN, TUTORIAL, EXPLORE]) press(row(t).querySelector(".chat-thread-open"));
+    expect(wentToLearn).toEqual([
+      ["recall", LEARN.id],
       ["tutorial", TUTORIAL.id],
       ["explore", EXPLORE.id],
     ]);
     expect(opened).toEqual([]);
   });
 
-  it("does not draw a Remember conversation as the open one, whatever `threadId` says", () => {
-    paint(EVERY, { threadId: REMEMBER.id });
+  it("does not draw a Learn conversation as the open one, whatever `threadId` says", () => {
+    paint(EVERY, { threadId: LEARN.id });
     /* The list, not a transcript with a composer that would send to it. */
     expect(rows()).toHaveLength(EVERY.length);
     expect(host.querySelector(".chat-head-title")).toBeNull();
   });
 });
 
-describe("a Remember row", () => {
+describe("a Learn row", () => {
   it("is named for its sub-mode, not for the first sixty characters said in it", () => {
     paint(EVERY);
-    expect(row(REMEMBER).querySelector(".chat-thread-title")?.textContent).toBe("Recall");
+    expect(row(LEARN).querySelector(".chat-thread-title")?.textContent).toBe("Recall");
     expect(row(TUTORIAL).querySelector(".chat-thread-title")?.textContent).toBe("Tutorial");
     expect(row(EXPLORE).querySelector(".chat-thread-title")?.textContent).toBe("Explore");
   });
 
   it("has no rename and no delete; a chat's row keeps both", () => {
     paint(EVERY);
-    for (const t of [REMEMBER, TUTORIAL, EXPLORE]) {
+    for (const t of [LEARN, TUTORIAL, EXPLORE]) {
       expect(row(t).querySelector('button[title="Rename this conversation"]'), `${t.id} rename`).toBeNull();
       expect(row(t).querySelector('button[title="Delete this conversation"]'), `${t.id} delete`).toBeNull();
     }
@@ -256,16 +256,16 @@ describe("the filter above the list", () => {
   it("is not drawn when every conversation is from one source", () => {
     paint([CHAT]);
     expect(host.querySelector(".chat-from")).toBeNull();
-    paint([REMEMBER, TUTORIAL]);
+    paint([LEARN, TUTORIAL]);
     expect(host.querySelector(".chat-from")).toBeNull();
   });
 
-  it("offers All, Chats, then one choice per other source present, with Remember's three as one", () => {
+  it("offers All, Chats, then one choice per other source present, with Learn's three as one", () => {
     paint(EVERY);
     expect(words()).toEqual(["All", "Chats", "Debate", "Learn", "About a passage"]);
     paint([CHAT, TUTORIAL, EXPLORE]);
     expect(words()).toEqual(["All", "Chats", "Learn"]);
-    paint([REMEMBER, CLAIM]);
+    paint([LEARN, CLAIM]);
     expect(words()).toEqual(["All", "Debate", "Learn"]);
   });
 
@@ -277,16 +277,16 @@ describe("the filter above the list", () => {
     expect(rows()).toHaveLength(EVERY.length);
   });
 
-  it("does not hide an explicitly opened chat when the list's filter is Remember", () => {
-    paint(EVERY, { from: "remember", threadId: CHAT.id });
+  it("does not hide an explicitly opened chat when the list's filter is Learn", () => {
+    paint(EVERY, { from: "learn", threadId: CHAT.id });
     expect(host.querySelector(".chat-head-title")).not.toBeNull();
     expect(rows()).toHaveLength(0);
     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
   });
 
   it("narrows the rows to the chosen source", () => {
-    paint(EVERY, { from: "remember" });
-    expect(rows().map((r) => r.dataset.thread).sort()).toEqual([REMEMBER.id, TUTORIAL.id, EXPLORE.id].sort());
+    paint(EVERY, { from: "learn" });
+    expect(rows().map((r) => r.dataset.thread).sort()).toEqual([LEARN.id, TUTORIAL.id, EXPLORE.id].sort());
     expect(choices().find((b) => b.getAttribute("aria-pressed") === "true")?.textContent).toBe("Learn");
     paint(EVERY, { from: "chats" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CHAT.id]);
@@ -297,7 +297,7 @@ describe("the filter above the list", () => {
   });
 
   it("tells the band which was pressed, and null for All", () => {
-    paint(EVERY, { from: "remember" });
+    paint(EVERY, { from: "learn" });
     press(choices().find((b) => b.textContent === "Debate"));
     press(choices().find((b) => b.textContent === "All"));
     expect(chose).toEqual(["debate", null]);
@@ -309,9 +309,9 @@ describe("the filter above the list", () => {
   });
 });
 
-describe("an article whose only conversations are Remember's", () => {
+describe("an article whose only conversations are Learn's", () => {
   it("shows their rows, with the box and the button to start a chat", () => {
-    paint([REMEMBER, TUTORIAL]);
+    paint([LEARN, TUTORIAL]);
     expect(rows()).toHaveLength(2);
     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
     expect(host.querySelector('button[title="Start a new conversation"]')).not.toBeNull();

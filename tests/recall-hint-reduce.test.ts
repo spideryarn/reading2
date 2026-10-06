@@ -50,7 +50,7 @@ function thread(reply: Partial<ChatMessage> = {}): ChatThread {
     title: "What I took from it",
     createdAt: AT,
     updatedAt: AT,
-    kind: "remember",
+    kind: "learn",
     messages: [
       { id: "spya-usr001", role: "user", text: "what I took", createdAt: AT, status: "done" },
       { id: ANSWER, role: "assistant", text: TEXT, createdAt: AT, status: "done", ...reply },

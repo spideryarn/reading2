@@ -1,7 +1,7 @@
 # Tutorial leans to retention, a softer blurb, and quote links that show the quote
 
-Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/remember-mode.md) ·
-where it is going: [remembering-vision.md](../project/remembering-vision.md)
+Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/learn-mode.md) ·
+where it is going: [remembering-vision.md](../project/learning-vision.md)
 
 **Three of Greg's reports on Remember's Tutorial sub-mode, 2026-10-03**, all from one sitting on one
 article (`entropy-26-00481-with-cover-from-taylor-beck-spya-naz564`, Levin's *Self-Improvising

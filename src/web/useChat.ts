@@ -151,7 +151,7 @@ export interface SendOptions {
    */
   origin?: ThreadOrigin;
   /**
-   * Chat or Remember — **only on the send that creates the thread**, and the
+   * Chat or Learn — **only on the send that creates the thread**, and the
    * server 409s one that contradicts a thread that already exists.
    *
    * Deliberately absent from `retry` and `edit`: their thread already has a
@@ -342,7 +342,7 @@ export interface ChatApi {
   openHint(threadId: string, messageId: string, hint: string): void;
   /**
    * Delete a conversation. `restoreOnFailure` puts it back if the server
-   * refuses — Remember's Start over, which must not leave its one conversation
+   * refuses — Learn's Start over, which must not leave its one conversation
    * hidden while it still exists. See `DeleteOperation.restoreOnFailure`.
    */
   remove(threadId: string, opts?: { restoreOnFailure?: boolean }): void;
@@ -351,7 +351,7 @@ export interface ChatApi {
    * DELETE is answered either way — including a held one, which has not left
    * yet because the conversation's first turn has not been named.
    *
-   * Derived from the operations, like `recovering`. One reader: Remember's
+   * Derived from the operations, like `recovering`. One reader: Learn's
    * Start over, which must not begin the fresh conversation (and so offer a
    * composer) until the old one is gone from the server, or the first question
    * would be folded into the thread the DELETE is about to remove. Plan
@@ -360,7 +360,7 @@ export interface ChatApi {
   deleting: boolean;
   /**
    * **Stored, and nothing in flight for it from this tab** — see `isSettled`
-   * in chat/model.ts. One reader: Remember offers Start over only when this is
+   * in chat/model.ts. One reader: Learn offers Start over only when this is
    * true, so its DELETE always targets a conversation the server has named.
    */
   settled(threadId: string): boolean;
@@ -407,7 +407,7 @@ const chatEffects: ChatEffects = {
  */
 const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   chat: "New chat",
-  remember: "Remembering",
+  learn: "Remembering",
   candidates: "Finding reviewers",
   tutorial: "Tutorial",
   explore: "Exploring",
@@ -737,7 +737,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
                      rather than defaulted: this thread is rendered — and
                      filtered by kind in the panel — in the frame before the
                      server answers. A `?? "chat"` here would flash a new
-                     Remember thread into the list as a chat. */
+                     Learn thread into the list as a chat. */
                   kind: kind ?? "chat",
                   messages: [],
                 },
@@ -773,7 +773,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
                and what keeps an old tab working.
 
                **This was `kind === "remember"` until 2026-09-01**, written when
-               Remember was the only second kind. Candidates arrived as the third
+               Remember (Learn, now) was the only second kind. Candidates arrived as the third
                and this line did not widen, so a Candidates turn posted no kind,
                the server stored it as chat and answered it with chat's prompt,
                and the panel's whole shortlist — including every honesty line it

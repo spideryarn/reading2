@@ -69,7 +69,7 @@ type StepAutoRunTarget = StepTarget<
      it; it is here because `beginAutoAttempt` is keyed on this union
      (useAutoRun.ts § `useAutoRunOnArrival`). */
   | "tweets"
-  /* The second half of Remember: the questions the piece asks you back. */
+  /* The second half of Learn: the questions the piece asks you back. */
   | "quiz"
   /* Summary's plain-words work, armed by its bar button and by its Brief and
      Fuller segments and command rows — docs/plans/261002a-summary-generates-on-open.md. */

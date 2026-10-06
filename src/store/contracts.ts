@@ -1139,7 +1139,7 @@ export interface ChatStore {
       question: string;
       anchor?: ChatAnchor;
       /**
-       * Chat or Remember — like `anchor`, applied **only when this turn creates
+       * Chat or Learn — like `anchor`, applied **only when this turn creates
        * the thread**. `withTurn` throws `ChatConflict` on one that contradicts
        * an existing thread rather than ignoring it, which is what makes the
        * rule hold under Postgres too: the route's own check runs inside

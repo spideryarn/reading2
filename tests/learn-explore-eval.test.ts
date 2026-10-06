@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { normaliseSavedAnswer } from "../evals/remember-explore.js";
+import { normaliseSavedAnswer } from "../evals/learn-explore.js";
 
 const oldRaw = JSON.stringify({
   own_material: "notes",

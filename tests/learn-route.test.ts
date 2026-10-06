@@ -1,7 +1,7 @@
 /**
- * **What the chat endpoint refuses once Remember mode exists.**
+ * **What the chat endpoint refuses once Learn mode exists.**
  *
- * Remember added two optional fields to `POST /api/chat/:slug` — `kind` and
+ * Learn added two optional fields to `POST /api/chat/:slug` — `kind` and
  * `stance` — and every test here is about a request that must NOT be quietly
  * accepted. That emphasis is the point: an API that ignores an unknown key and
  * a client that never checks look identical from both ends, so the failure mode
@@ -30,10 +30,10 @@ import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-artic
 
 loadEnvLocal();
 
-const SLUG = "test-remember-route-fixture";
+const SLUG = "test-learn-route-fixture";
 
 await pgReady({
-  suite: "tests/remember-route.test.ts",
+  suite: "tests/learn-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
@@ -123,20 +123,20 @@ async function post(body: unknown): Promise<{ status: number; body: string }> {
   return { status: (res as { statusCode: number }).statusCode, body: written };
 }
 
-/** A stored Remember thread, so the "already a different kind" cases have one to hit. */
-async function seedRemember(threadId: string) {
-  await post({ threadId, question: "what I took from it", kind: "remember" });
+/** A stored Learn thread, so the "already a different kind" cases have one to hit. */
+async function seedLearn(threadId: string) {
+  await post({ threadId, question: "what I took from it", kind: "learn" });
 }
 
 /* A stance is legacy since 2026-10-02 (one Recall voice): still validated, so
-   a client with a bug hears about it, and accepted on an ordinary Remember send
+   a client with a bug hears about it, and accepted on an ordinary Learn send
    from a tab left open across the deploy — then dropped, never stored. */
 describe("a stance the server does not know is refused, not ignored", () => {
   it("400s an unknown stance", async () => {
     const { status } = await post({
       threadId: "spya-r4v3wz",
       question: "what I took",
-      kind: "remember",
+      kind: "learn",
       stance: "socratik",
     });
     expect(status).toBe(400);
@@ -146,7 +146,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
     const { body } = await post({
       threadId: "spya-r4v3wz",
       question: "q",
-      kind: "remember",
+      kind: "learn",
       stance: "nonsense",
     });
     for (const s of ["balanced", "respond", "socratic", "signposts"]) expect(body).toContain(s);
@@ -157,25 +157,25 @@ describe("a stance the server does not know is refused, not ignored", () => {
       const { status } = await post({
         threadId: `spya-s${stance.slice(0, 5)}`,
         question: "what I took",
-        kind: "remember",
+        kind: "learn",
         stance,
       });
       // 200: the turn is written and the stream opens before the model is called.
       expect(status, `${stance} was refused`).not.toBe(400);
     }
-    /* One Remember thread per article, so all four landed in the same one. */
-    const remember = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "remember");
-    expect(remember?.messages.length).toBeGreaterThanOrEqual(8);
-    for (const m of remember?.messages ?? []) expect(m).not.toHaveProperty("stance");
+    /* One Learn thread per article, so all four landed in the same one. */
+    const learn = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "learn");
+    expect(learn?.messages.length).toBeGreaterThanOrEqual(8);
+    for (const m of learn?.messages ?? []) expect(m).not.toHaveProperty("stance");
   });
 
-  it("accepts a legacy stance on a kind-less follow-up to a stored Remember thread", async () => {
+  it("accepts a legacy stance on a kind-less follow-up to a stored Learn thread", async () => {
     const id = "spya-staee2";
-    await seedRemember(id);
+    await seedLearn(id);
     const { status } = await post({ threadId: id, question: "and another thing", stance: "socratic" });
     expect(status).not.toBe(400);
-    const remember = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
-    for (const m of remember?.messages ?? []) expect(m).not.toHaveProperty("stance");
+    const learn = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
+    for (const m of learn?.messages ?? []) expect(m).not.toHaveProperty("stance");
   });
 
   it("400s a valid legacy stance on an ordinary Chat send", async () => {
@@ -193,23 +193,23 @@ describe("a stance the server does not know is refused, not ignored", () => {
   });
 });
 
-describe("a Remember turn cannot be anchored to a passage", () => {
+describe("a Learn turn cannot be anchored to a passage", () => {
   /* There is no gesture that starts one from a selection — both the
      paragraph button and the selection open a chat — so an anchor arriving with
-     `kind: "remember"` is a confused client. It is refused rather than dropped
-     because an unanchored Remember turn draws no mark in the prose, which is the
+     `kind: "learn"` is a confused client. It is refused rather than dropped
+     because an unanchored Learn turn draws no mark in the prose, which is the
      property the reading view's overlay relies on. */
-  it("400s an anchor sent with the Remember kind", async () => {
+  it("400s an anchor sent with the Learn kind", async () => {
     /* `ANCHOR` is a REAL block of the fixture article, and that matters: the
        first version of this test used a made-up id and passed for the wrong
        reason — `checkAnchor` rejects an id the article does not have, so the 400
-       arrived whether or not the Remember rule existed. With a genuine block,
+       arrived whether or not the Learn rule existed. With a genuine block,
        the only thing that can refuse this is the rule under test. Which is why
        it is read off the seeded article rather than written down here. */
     const { status } = await post({
       threadId: "spya-r4v3wz",
       question: "what I took",
-      kind: "remember",
+      kind: "learn",
       anchor: { blockId: ANCHOR },
     });
     expect(status).toBe(400);
@@ -233,25 +233,25 @@ describe("a thread's kind belongs to the thread", () => {
        because the route reads under `inTurnOrder` and that is only
        per-process. Remove both and this goes red. */
     const id = "spya-r7k2wz";
-    await seedRemember(id);
+    await seedLearn(id);
     const { status } = await post({ threadId: id, question: "sneaky", kind: "chat" });
     expect(status).toBe(409);
   });
 
   it("accepts a send that agrees, so a duplicate request is harmless", async () => {
     const id = "spya-r7k3wz";
-    await seedRemember(id);
-    const { status } = await post({ threadId: id, question: "and also", kind: "remember" });
+    await seedLearn(id);
+    const { status } = await post({ threadId: id, question: "and also", kind: "learn" });
     expect(status).not.toBe(409);
   });
 
   it("accepts a send that names no kind at all", async () => {
     const id = "spya-r7k4wz";
-    await seedRemember(id);
+    await seedLearn(id);
     const { status } = await post({ threadId: id, question: "and also" });
     expect(status).not.toBe(409);
     const threads = await asTestOwner(() => chatStore.load(SLUG));
-    expect(threads.find((t) => t.id === id)?.kind).toBe("remember");
+    expect(threads.find((t) => t.id === id)?.kind).toBe("learn");
   });
 
   /* **Refused before anything is read, let alone settled.** A retry's thread
@@ -261,21 +261,21 @@ describe("a thread's kind belongs to the thread", () => {
      answer someone was watching in another tab and record it as stopped. */
   it("400s a retry that carries a kind", async () => {
     const id = "spya-r7k5wz";
-    await seedRemember(id);
-    const { status } = await post({ threadId: id, retry: "spya-whatever", kind: "remember" });
+    await seedLearn(id);
+    const { status } = await post({ threadId: id, retry: "spya-whatever", kind: "learn" });
     expect(status).toBe(400);
   });
 
   it("400s a retry that carries a stance", async () => {
     const id = "spya-r7k6wz";
-    await seedRemember(id);
+    await seedLearn(id);
     const { status } = await post({ threadId: id, retry: "spya-whatever", stance: "respond" });
     expect(status).toBe(400);
   });
 
   it("400s an edit that carries a stance", async () => {
     const id = "spya-r7k7wz";
-    await seedRemember(id);
+    await seedLearn(id);
     const { status } = await post({
       threadId: id,
       edit: "spya-whatever",
@@ -289,9 +289,9 @@ describe("a thread's kind belongs to the thread", () => {
 describe("what actually gets stored", () => {
   it("writes the kind on the very first turn", async () => {
     const id = "spya-r8m2wz";
-    await post({ threadId: id, question: "what I took from it", kind: "remember" });
+    await post({ threadId: id, question: "what I took from it", kind: "learn" });
     const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
-    expect(thread?.kind).toBe("remember");
+    expect(thread?.kind).toBe("learn");
     // `fetch` is stubbed to reject, so the answer failed — but it was stored.
     expect(thread?.messages.at(-1)?.status).toBe("error");
   });
@@ -304,35 +304,35 @@ describe("what actually gets stored", () => {
     expect(thread?.messages.at(-1)).not.toHaveProperty("stance");
   });
 
-  /* A spoken Remember turn runs three or four times longer than a typed question, so
+  /* A spoken Learn turn runs three or four times longer than a typed question, so
      the two have their own limits. Sharing chat's 4,000 would 413 a reader who
      talked for four minutes, after they had already paid for the
      transcription. */
-  it("lets a Remember turn be much longer than a question", async () => {
+  it("lets a Learn turn be much longer than a question", async () => {
     const long = "so what I took from this is ".repeat(300); // ~8,400 chars
     expect(long.length).toBeGreaterThan(4000);
     const asChat = await post({ threadId: "spya-r9m2wz", question: long });
-    const asRemember = await post({
+    const asLearn = await post({
       threadId: "spya-r9m3wz",
       question: long,
-      kind: "remember",
+      kind: "learn",
     });
     expect(asChat.status).toBe(413);
-    expect(asRemember.status).not.toBe(413);
+    expect(asLearn.status).not.toBe(413);
   });
 
-  it("still has a ceiling on a Remember turn", async () => {
+  it("still has a ceiling on a Learn turn", async () => {
     const absurd = "x".repeat(20_001);
-    const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "remember" });
+    const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "learn" });
     expect(status).toBe(413);
   });
 });
 
-/* Tutorial, Remember's third sub-mode (plan 261002i): its own kind, stored as
-   itself, dictated so it shares Remember's long cap — and it never had a
+/* Tutorial, Learn's third sub-mode (plan 261002i): its own kind, stored as
+   itself, dictated so it shares Learn's long cap — and it never had a
    stance, so a stance on one is refused rather than dropped. */
 describe("a Tutorial turn", () => {
-  it("is stored as a Tutorial thread and takes Remember's long cap", async () => {
+  it("is stored as a Tutorial thread and takes Learn's long cap", async () => {
     const long = "so what I remember is ".repeat(300);
     expect(long.length).toBeGreaterThan(4000);
     const { status } = await post({ threadId: "spya-t7m2wz", question: long, kind: "tutorial" });
@@ -354,15 +354,15 @@ describe("a Tutorial turn", () => {
   });
 });
 
-/* Explore, Remember's fourth sub-mode (plan 261003l): its own kind, stored as
-   itself, dictated so it shares Remember's long cap on a send AND on an edit
+/* Explore, Learn's fourth sub-mode (plan 261003l): its own kind, stored as
+   itself, dictated so it shares Learn's long cap on a send AND on an edit
    (which names no kind, so the stored thread's has to decide), about the whole
    article so never anchored, and never given a stance. What its turn carries
    is tests/explore-digest-route.test.ts. */
 describe("an Explore turn", () => {
   const long = "so what I keep coming back to is ".repeat(200);
 
-  it("is stored as an Explore thread and takes Remember's long cap", async () => {
+  it("is stored as an Explore thread and takes Learn's long cap", async () => {
     expect(long.length).toBeGreaterThan(4000);
     const { status } = await post({ threadId: "spya-x7m2wz", question: long, kind: "explore" });
     expect(status).not.toBe(413);
@@ -407,12 +407,12 @@ describe("an Explore turn", () => {
 /* Report spya-f3b6ab (Greg, 2026-10-01): "I tried editing a previous message in
    Recall mode, hoping that it would then trigger a response to that modified
    message, but it didn't." The request the real client sends for an edit —
-   tests/remember-edit-asks-again.test.tsx pins its exact shape — must open a
+   tests/learn-edit-asks-again.test.tsx pins its exact shape — must open a
    stream and start a fresh answer under the rewritten question. */
-describe("an edit in a Remember conversation is answered", () => {
+describe("an edit in a Learn conversation is answered", () => {
   it("rewrites the question and begins a new answer under it", async () => {
     const id = "spya-r7k8wz";
-    await seedRemember(id);
+    await seedLearn(id);
     const before = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
     const question = before?.messages[0];
     const tail = before?.messages.at(-1);

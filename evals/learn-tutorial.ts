@@ -1,5 +1,5 @@
 /**
- * Eval — does Remember's **Tutorial** prompt hold a short, teaching
+ * Eval — does Learn's **Tutorial** prompt hold a short, teaching
  * back-and-forth over several turns?
  *
  *     npm run eval:tutorial -- data/noema-mythology-of-conscious-ai
@@ -22,11 +22,11 @@
  *   richRecall a long, good, opinionated    → leaving the piece for the reader's
  *              account, then own musings      own views (Greg, `spya-mtsf0y`)
  *
- * `--out=<name>` writes `results/<name>.md` instead of `remember-tutorial.md`,
+ * `--out=<name>` writes `results/<name>.md` instead of `learn-tutorial.md`,
  * so one arm of a before/after never overwrites another
  * (docs/project/prompting-guide.md § Measuring a prompt change).
  *
- * As in evals/remember-recall.ts, **the pass condition is a person reading
+ * As in evals/learn-recall.ts, **the pass condition is a person reading
  * it.** The counts (words, questions, citations) are prompts to look.
  * docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
  */
@@ -168,7 +168,7 @@ const BANNED_OPENERS = [
   ["perfect", /^perfect\b/i],
 ] as const;
 
-/** Exported for evals/remember-explore.ts, which reuses this file's machinery. */
+/** Exported for evals/learn-explore.ts, which reuses this file's machinery. */
 export async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }> {
   const { blocks } = JSON.parse(await readFile(path.join(dir, "blocks.json"), "utf-8")) as { blocks: Block[] };
   const meta = JSON.parse(await readFile(path.join(dir, "meta.json"), "utf-8")) as Meta;
@@ -202,7 +202,7 @@ async function oneTurn(
     slug: "eval-tutorial",
     kind: "tutorial",
     profile,
-    /* Our own tools off, as in remember-recall.ts: every turn is answerable
+    /* Our own tools off, as in learn-recall.ts: every turn is answerable
        from the article, and tools would make runs slow and non-comparable. */
     useTools: false,
   })) {
@@ -319,7 +319,7 @@ function ownView(text: string): boolean {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const outName = args.find((a) => a.startsWith("--out="))?.slice("--out=".length) ?? "remember-tutorial";
+  const outName = args.find((a) => a.startsWith("--out="))?.slice("--out=".length) ?? "learn-tutorial";
   if (!/^[a-z0-9.-]+$/.test(outName)) throw new Error(`--out takes a plain file stem, got: ${outName}`);
   const dir = args.find((a) => !a.startsWith("--")) ?? "data/noema-mythology-of-conscious-ai";
   const setName = args.find((a) => a.startsWith("--readers="))?.slice("--readers=".length) ?? "noema";
@@ -332,9 +332,9 @@ async function main(): Promise<void> {
     lines.push(s);
     console.log(s);
   };
-  say(`# Remember: Tutorial — ${meta.title ?? dir}`);
+  say(`# Learn: Tutorial — ${meta.title ?? dir}`);
   say();
-  say(`Article: \`${dir}\` (${blocks.length} blocks). ${readers.length} scripted readers (\`${setName}\`) × 5 turns. **Read the conversations.** See the header of \`evals/remember-tutorial.ts\`.`);
+  say(`Article: \`${dir}\` (${blocks.length} blocks). ${readers.length} scripted readers (\`${setName}\`) × 5 turns. **Read the conversations.** See the header of \`evals/learn-tutorial.ts\`.`);
   /* Which prompt this run used, so two arms of a before/after can be told
      apart afterwards: the system prompt and the canned opening line, as
      production builds them. */
@@ -428,7 +428,7 @@ async function main(): Promise<void> {
 }
 
 /* `withLedger` so the spend is recorded under an eval scope — see the note at
-   the foot of evals/remember-recall.ts. */
+   the foot of evals/learn-recall.ts. */
 if (isMain(import.meta.url)) {
   loadEnvLocal();
   await withLedger("eval", main);

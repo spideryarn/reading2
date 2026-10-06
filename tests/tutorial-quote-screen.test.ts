@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quoteCheck } from "../evals/remember-tutorial.js";
+import { quoteCheck } from "../evals/learn-tutorial.js";
 import type { Block } from "../src/types.js";
 
 const blocks: Block[] = [{

@@ -12,7 +12,7 @@
  * system section still owns the meanings and rationale. Fable's recommendation,
  * 2026-09-13.
  *
- * Chat only: Remember has its own prompt and its own idea of what an answer is.
+ * Chat only: Learn has its own prompt and its own idea of what an answer is.
  */
 import { describe, expect, it } from "vitest";
 import { buildConverseMessages } from "../src/converse.js";
@@ -86,8 +86,8 @@ describe("the provenance reminder", () => {
     }
   });
 
-  it("is absent from a Remember turn", () => {
-    expect(finalUser(buildConverseMessages({ ...base, kind: "remember" }))).not.toContain(LINE);
+  it("is absent from a Learn turn", () => {
+    expect(finalUser(buildConverseMessages({ ...base, kind: "learn" }))).not.toContain(LINE);
   });
 
   it("changes nothing above the cache breakpoint", () => {

@@ -1,5 +1,5 @@
 /**
- * **The one paid call evals/remember-explore.ts makes itself**: its blind
+ * **The one paid call evals/learn-explore.ts makes itself**: its blind
  * judge. The product turns go through `converse`; this goes through the
  * gateway's JSON seam under the `eval` scope, inside the `withLedger("eval", …)`
  * the entry module opens, so `npm run cost` sees it.

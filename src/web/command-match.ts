@@ -276,7 +276,7 @@ export interface CommandText {
  * rows only. A sub-mode row takes its parent's *label* as a nickname, not the
  * parent's catalogue aliases, so when a label changes the old compound
  * (*remember quiz*) would find nothing, though the old word alone still finds
- * the mode through its alias (`MODE_CATALOG.remember.aliases`). GPT Sol, plan
+ * the mode through its alias (`MODE_CATALOG.learn.aliases`). GPT Sol, plan
  * review of 261005l, PR-2.
  *
  * Store compounds and not a bare alias. Prefix matching still lists the four
@@ -285,8 +285,9 @@ export interface CommandText {
  * aliases.
  */
 const FORMER_PARENT_NAMES: Partial<Record<Mode, readonly string[]>> = {
-  /* Learn was Remember until 2026-10-05 (Greg, spya-mvmpks). */
-  remember: ["Remember"],
+  /* Learn was Remember until 2026-10-05 (Greg, spya-mvmpks). The key is the
+     mode id, which followed on 2026-10-06; the value is the old word. */
+  learn: ["Remember"],
 };
 
 export function commandText(command: Command): CommandText {

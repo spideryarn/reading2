@@ -1,6 +1,6 @@
 # Recall: a question links its passage, and carries a Hint button
 
-Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/remember-mode.md)
+Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/learn-mode.md)
 
 **Status: built 2026-10-04** (§ As built, at the end; the plan above it is as it stood after GPT
 Sol's two plan reviews). Report `spya-fryxrf` (an admin's, so trusted input), queue item `qi-e5qjsmbq`.
@@ -132,7 +132,7 @@ told. Its next reply is written the same whether or not you looked.
 
 What would decide it: whether you would want an opened hint to change the next question.
 **Recommendation: A now**; B belongs with the "come back to what you struggled with" work in
-[remembering-vision.md](../project/remembering-vision.md), which is the first thing that needs it.
+[remembering-vision.md](../project/learning-vision.md), which is the first thing that needs it.
 
 ## Deferred, with its own queue entry
 
@@ -164,7 +164,7 @@ What would decide it: whether you would want an opened hint to change the next q
    heuristic gets unit tests (correction id only, hint id only, unknown id, id inside the question,
    id after `?`, a clarification). A hint goes into the `justTellMe` and `nudgeFailed` histories.
    Run on the Noema article, read all thirteen, write up in `docs/investigations/`.
-7. Docs: [remember-mode.md](../project/remember-mode.md), [database.md](../project/database.md) or
+7. Docs: [remember-mode.md](../project/learn-mode.md), [database.md](../project/database.md) or
    wherever columns are listed, `/help` (`src/web/help/help-modes.tsx`) if it describes Recall's
    replies.
 8. Browser check by a Sonnet subagent at desktop, iPad and phone widths.

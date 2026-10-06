@@ -866,7 +866,7 @@ any change to the query string re-renders this whole tree".
 Half true, and the false half matters: **nuqs subscriptions are key-isolated.** Its adapter filters
 `location.search` down to the keys each hook watches and returns the cached snapshot when those are
 unchanged, so a parameter owned by a *child* wakes only that child. Ten reading parameters are like
-that — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`, `dx`, `dhue`, `referee`, `remember`. It never
+that — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`, `dx`, `dhue`, `referee`, `learn`. It never
 bit because `?at=` re-rendered the reading view eighty-odd times a scroll and refreshed every href on
 the way past. **A memo turns a self-healing staleness into a permanent one.** Found by GPT Sol
 reviewing the plan, before it shipped.

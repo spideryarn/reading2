@@ -261,7 +261,7 @@ function kindWords(kind: ThreadKind): string {
   switch (kind) {
     case "chat":
       return "a chat";
-    case "remember":
+    case "learn":
       return "Recall";
     case "tutorial":
       return "Tutorial";

@@ -29,7 +29,7 @@ Round-1 status:
 
    The plan says “Start over clears” without specifying whether that happens before or after successful deletion, so timing remains a material inference.
 
-   Evidence: [planned clearing](docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md:62), [Start over with restoration enabled](/home/greg/code/spideryarn2/.claude/worktrees/qi-ja6rdqm8-chat-draft-on-mode-change/src/web/modes/conversation/ConversationModes.tsx:848), and the existing [failed-delete test](/home/greg/code/spideryarn2/.claude/worktrees/qi-ja6rdqm8-chat-draft-on-mode-change/tests/remember-own-thread.test.tsx:432).
+   Evidence: [planned clearing](docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md:62), [Start over with restoration enabled](/home/greg/code/spideryarn2/.claude/worktrees/qi-ja6rdqm8-chat-draft-on-mode-change/src/web/modes/conversation/ConversationModes.tsx:848), and the existing [failed-delete test](/home/greg/code/spideryarn2/.claude/worktrees/qi-ja6rdqm8-chat-draft-on-mode-change/tests/learn-own-thread.test.tsx:432).
 
    **Fix:** specify that successful Start over clears the draft; refusal preserves it. Test both outcomes for all three kinds.
 

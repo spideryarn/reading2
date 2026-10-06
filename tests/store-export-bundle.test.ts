@@ -645,7 +645,7 @@ describe("the bundle is the faithful projection", () => {
     const threads = parsed("augmentations/chat.json").threads as { kind: string }[];
     expect(threads[0]?.kind).toBe("candidates");
 
-    /* Until 2026-10-02 `export.ts` mapped anything that was not `remember` to
+    /* Until 2026-10-02 `export.ts` mapped anything that was not `learn` to
        `chat`, so a reader's Candidates thread came back as an ordinary chat,
        silently, and this test pinned that contrast. Adding Tutorial as a fourth
        kind made it a loss of the same shape, so the rollback now writes every

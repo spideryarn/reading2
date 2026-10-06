@@ -6,7 +6,7 @@
  * in Recall mode, hoping that it would then trigger a response to that
  * modified message, but it didn't."*
  *
- * Asked end to end on the client: the real Remember band, the real `useChat`
+ * Asked end to end on the client: the real Learn band, the real `useChat`
  * and the real `ChatPanel`, with only the network and the live session faked.
  * The pencil is pressed, the question rewritten, Ask again pressed — and then
  * the request that leaves and the answer that streams back are what is checked.
@@ -86,9 +86,9 @@ vi.mock("../src/web/live/useLiveConversation.js", () => ({
 const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
 
 const AT = "2026-10-01T18:00:00.000Z";
-const REMEMBER: ChatThread = {
+const LEARN: ChatThread = {
   id: "spya-jxcxj7",
-  kind: "remember",
+  kind: "learn",
   title: "What I took from it",
   createdAt: AT,
   updatedAt: AT,
@@ -122,7 +122,7 @@ enableHistorySync();
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
-  stored = [REMEMBER];
+  stored = [LEARN];
   answer = null;
   host = document.createElement("div");
   document.body.append(host);
@@ -143,7 +143,7 @@ async function settle(turns = 6): Promise<void> {
 }
 
 async function mount(): Promise<void> {
-  history.replaceState(null, "", `/a-piece?mode=remember&thread=${REMEMBER.id}`);
+  history.replaceState(null, "", `/a-piece?mode=learn&thread=${LEARN.id}`);
   await act(async () => {
     root.render(
       createElement(
@@ -153,7 +153,7 @@ async function mount(): Promise<void> {
           slug: "a-piece",
           blocks: new Map<string, string>(),
           onJump: () => {},
-          kind: "remember",
+          kind: "learn",
         }),
       ),
     );
@@ -188,9 +188,9 @@ describe("rewriting a question in Recall", () => {
     await mount();
     await rewrite(0, "What I meant to say");
     expect(posted()).toHaveLength(1);
-    expect(posted()[0]).toEqual({ threadId: REMEMBER.id, edit: "spya-q1q1q1", question: "What I meant to say", at: null, expectedTailId: "spya-a2a2a2" });
+    expect(posted()[0]).toEqual({ threadId: LEARN.id, edit: "spya-q1q1q1", question: "What I meant to say", at: null, expectedTailId: "spya-a2a2a2" });
     expect(posted()[0]).toMatchObject({
-      threadId: REMEMBER.id,
+      threadId: LEARN.id,
       edit: "spya-q1q1q1",
       question: "What I meant to say",
     });
@@ -202,8 +202,8 @@ describe("rewriting a question in Recall", () => {
     expect(posted()).toHaveLength(1);
     await act(async () => {
       frame("begin", {
-        threadId: REMEMBER.id,
-        title: REMEMBER.title,
+        threadId: LEARN.id,
+        title: LEARN.title,
         messageId: "spya-a3a3a3",
         questionId: "spya-q2q2q2",
         attempt: "an-attempt",
@@ -220,7 +220,7 @@ describe("rewriting a question in Recall", () => {
     stored = [];
     await mount();
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
-    expect(box, "Remember begins a conversation and offers a composer").not.toBeNull();
+    expect(box, "Learn begins a conversation and offers a composer").not.toBeNull();
     await act(async () => type(box as HTMLTextAreaElement, "What I first said"));
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')?.click());
     await settle();
@@ -316,8 +316,8 @@ describe("an editor that cannot ask again yet says why", () => {
     );
     await act(async () => {
       frame("begin", {
-        threadId: REMEMBER.id,
-        title: REMEMBER.title,
+        threadId: LEARN.id,
+        title: LEARN.title,
         messageId: "spya-a3a3a3",
         questionId: "spya-q3q3q3",
         attempt: "an-attempt",

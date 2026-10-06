@@ -255,7 +255,7 @@ that asked for it, `spya-mtsf0y`:
 > — Greg, 2026-10-03
 
 Explore is that plan's second stage
-([remember-mode.md § Explore, the fourth sub-mode](remember-mode.md#explore-the-fourth-sub-mode)).
+([learn-mode.md § Explore, the fourth sub-mode](learn-mode.md#explore-the-fourth-sub-mode)).
 This is the plumbing it needs, and Chat got it first.
 
 `reader_notes` is one read-only tool with two shapes of call:
@@ -316,7 +316,7 @@ reads and what to say when one fails.
 shared eight plus this for `chat` and `explore`, and the shared eight for every other kind; the
 `switch` is exhaustive, so a new kind has to be given an answer. Chat reaches for it when the reader
 asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
-(remember-mode.md § The notes go with every turn), so there the tool is for reading one earlier
+(learn-mode.md § The notes go with every turn), so there the tool is for reading one earlier
 conversation in full. Why each of the others is left out (PR-3):
 
 - **Live** shares `CHAT_TOOLS`, and its tool endpoint is given a tool's name and an article and no
@@ -450,13 +450,13 @@ From 2026-10-01 it showed chats only.
   Candidates thread is not: it is not a conversation the reader had.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Debate*), one of Learn's conversation kinds (`remember`, `tutorial` or `explore`,
+  from a claim in Debate*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
   rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
   ([`mode-icons.ts`](../../src/web/mode-icons.ts), which the Dock reads too), with a card a tap
   opens. A plain chat has none.
-- **A Learn row leads back to Learn.** A press goes to `mode=remember` on that sub-mode with
+- **A Learn row leads back to Learn.** A press goes to `mode=learn` on that sub-mode with
   `thread` set, in one navigation. It is named for its sub-mode and has no rename or delete;
   *Start over* lives in Learn.
 - **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
@@ -578,7 +578,7 @@ of the one column a shared transcript would have to publish.
 **Two smaller things its own plan must also handle**, both found in the same review and both
 verified against the schema:
 
-- **`chat_threads.kind` is `'chat' | 'remember' | 'candidates' | 'tutorial' | 'explore'`**
+- **`chat_threads.kind` is `'chat' | 'learn' | 'candidates' | 'tutorial' | 'explore'`**
   ([`schema.ts`](../../src/db/schema.ts) § `chatThreads`; [`types.ts`](../../src/types.ts) §
   `THREAD_KINDS`). A public query that does not filter `kind = 'chat'`
   **in SQL** publishes Learn conversation transcripts and Referee candidate machinery, whatever the visitor's

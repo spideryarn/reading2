@@ -143,12 +143,12 @@ describe("rememberableSearch", () => {
 
   it("drops the four modes that start something merely by being arrived in", () => {
     /* Diagram POSTs `/api/similar` or `/api/projection` for three of its five
-       pictures, and Remember opens a conversation exactly as Chat does — both
+       pictures, and Learn opens a conversation exactly as Chat does — both
        found by GPT Sol (F1, F2) after a first survey wrongly reported all
        thirteen modes inert. last-view.ts § NEEDS_AN_EXPLICIT_PRESS. */
     expect(rememberableSearch("?mode=chat")).toBe("");
     expect(rememberableSearch("?mode=diagram")).toBe("");
-    expect(rememberableSearch("?mode=remember")).toBe("");
+    expect(rememberableSearch("?mode=learn")).toBe("");
     expect(rememberableSearch("?at=spya-a&mode=chat&thread=spya-b")).toBe("?at=spya-a");
     /* **The one that would have cost money**: the mode goes, the picture stays,
        so pressing Diagram later still returns Force — but nothing fetches while
@@ -156,7 +156,7 @@ describe("rememberableSearch", () => {
     expect(rememberableSearch("?at=spya-a&mode=diagram&diagram=force&dhue=topic")).toBe(
       "?at=spya-a&diagram=force&dhue=topic",
     );
-    expect(rememberableSearch("?mode=remember&remember=quiz")).toBe("?remember=quiz");
+    expect(rememberableSearch("?mode=learn&learn=quiz")).toBe("?learn=quiz");
     /* **Summary's Thread** (the Tweets mode until 2026-10-03): opening it with
        no thread writes one on arrival (useTweets.ts § `useAutoRunOnArrival`),
        and a restore is the one arrival nobody chose. So the mode is dropped
@@ -573,7 +573,7 @@ describe("the two lists cover every parameter the client writes", () => {
       }
       /* **`useQueryStates` too, and finding it is the reason this test exists.**
          The plural form takes an object of name → parser, so a parameter reached
-         only that way is invisible to the singular pattern above — `?remember=`
+         only that way is invisible to the singular pattern above — `?learn=`
          and `?thread=` are set through one of them in
          modes/conversation/ConversationModes.tsx. Both happened
          already to be in the lists, so this caught no live bug; it closes the

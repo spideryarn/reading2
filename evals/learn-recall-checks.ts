@@ -1,5 +1,5 @@
 /**
- * What `evals/remember-recall.ts` counts about one reply. Pure, and apart from
+ * What `evals/learn-recall.ts` counts about one reply. Pure, and apart from
  * that file because that one runs (and spends money) when it is imported.
  *
  * **Every number here is a prompt to look, never a verdict** — the eval's own
@@ -10,12 +10,12 @@
  * reply used to satisfy the check, which is how "Do you remember what comes
  * next?" passed with only the correction cited (Greg's report `spya-fryxrf`).
  *
- * Tested by tests/remember-recall-checks.test.ts.
+ * Tested by tests/learn-recall-checks.test.ts.
  * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md
  */
 import { endsWithRecallQuestion, splitHint } from "../src/recall-hint.js";
 
-/** The hint's own ceiling, from `REMEMBER_SYSTEM` in src/converse.ts. */
+/** The hint's own ceiling, from `LEARN_SYSTEM` in src/converse.ts. */
 export const HINT_WORD_LIMIT = 25;
 /** The body's ceiling, from the same prompt. */
 export const BODY_WORD_LIMIT = 120;

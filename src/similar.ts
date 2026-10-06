@@ -262,7 +262,7 @@ export async function similarBlocks(
   const hit = CACHE.get(key);
   if (hit) {
     /* **Re-inserted, which is what makes this an LRU rather than a FIFO.**
-       `Map` iterates in insertion order and `remember` evicts the first key, so
+       `Map` iterates in insertion order and `learn` evicts the first key, so
        without this a heavily-read article is thrown out on schedule while
        something nobody has opened since survives. ⟨Sol⟩ — the doc called it an
        LRU and it was not one. */

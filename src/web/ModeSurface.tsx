@@ -139,13 +139,13 @@ export function ModeSurface({
    * landmark; an unnamed one is announced as "complementary" and a reader
    * moving by landmark cannot tell Chat from Quotes. Several panels vary it
    * with state — Chat says "Remember what you took from this article" in
-   * Remember mode — so it is a value rather than a constant.
+   * Learn mode — so it is a value rather than a constant.
    */
   label: string;
   /**
    * The mode's own hook class, appended to `mode-band`: `"srch"`, `"chat"`,
    * `"gloss ideas"`. Space-separated is deliberate — Chat's is conditional
-   * (`chat remember`) and Glossary's carries two.
+   * (`chat learn`) and Glossary's carries two.
    *
    * **Optional, because two bands genuinely have no hook class**: the visitor
    * band in `PublicChrome.tsx` and `FeatureBoundary`'s fallback are both a bare

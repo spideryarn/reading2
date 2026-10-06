@@ -70,7 +70,7 @@ Revise `LENGTH` to call 120 words the **body** ceiling and allow the one final h
 
 ### F7 — P2 — The proposed eval would misreport valid replies and can silently count the wrong link
 
-**Evidence: established.** The existing eval defines a nudge as a question at the absolute end of the reply ([remember-recall.ts:299](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/evals/remember-recall.ts:299>)) and counts every word against 120 ([remember-recall.ts:362](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/evals/remember-recall.ts:362>)). Every correct hinted response would therefore be reported as not ending in a question, and hint words would create false length warnings.
+**Evidence: established.** The existing eval defines a nudge as a question at the absolute end of the reply ([remember-recall.ts:299](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/evals/learn-recall.ts:299>)) and counts every word against 120 ([remember-recall.ts:362](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/evals/learn-recall.ts:362>)). Every correct hinted response would therefore be reported as not ending in a question, and hint words would create false length warnings.
 
 A naive “question plus an id somewhere” heuristic would also pass when only the correction or hint is cited—the failure this feature exists to catch—or when the adjacent id is invented and therefore not clickable.
 

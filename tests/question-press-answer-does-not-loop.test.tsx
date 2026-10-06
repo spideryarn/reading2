@@ -349,7 +349,7 @@ async function pressAndStream(search: string): Promise<void> {
 }
 
 const GREG =
-  `?remember=quiz&gate=0.00&term=${TERM}&diagram=illustrated&rank=prioritised&bar=0.30&citeby=document&mode=summary&at=spya-bbbbbb`;
+  `?learn=quiz&gate=0.00&term=${TERM}&diagram=illustrated&rank=prioritised&bar=0.30&citeby=document&mode=summary&at=spya-bbbbbb`;
 
 /* **The control.** Every case below asserts `loops()` is empty, and an empty
    list from a detector that cannot hear React is the silent-success shape.
@@ -388,7 +388,7 @@ describe("a '?' answer streaming into the floating dialog", () => {
     expect(loops()).toEqual([]);
   });
 
-  it("does not loop with Greg's address: Summary open, a term selected, remember=quiz", async () => {
+  it("does not loop with Greg's address: Summary open, a term selected, learn=quiz", async () => {
     await pressAndStream(GREG);
     expect(host.textContent).toContain("doing the arguing");
     expect(loops()).toEqual([]);

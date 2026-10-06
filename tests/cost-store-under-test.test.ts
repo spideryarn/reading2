@@ -8,7 +8,7 @@
  * `data/_ai-calls.test.jsonl`; the Postgres adapter never had the other half of
  * that contract, so with `SPIDERYARN_STORE=postgres` those fixture calls went
  * into the **real dev ledger**. On 2026-09-02 that was 4,714 of 4,750 rows —
- * `test-chat-route-fixture`, `test-remember-route-fixture` and
+ * `test-chat-route-fixture`, `test-learn-route-fixture` and
  * `test-candidates-route-fixture` — which made every `By owner` and `By article`
  * line in `npm run cost` meaningless and buried the unpriced-call warning under
  * thousands of fixtures.

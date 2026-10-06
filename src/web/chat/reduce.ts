@@ -257,7 +257,7 @@ function tombstoned(
 
 /**
  * **The tombstones once a DELETE is refused.** Unchanged for chat's delete,
- * which leaves the conversation off screen with the error above it. Remember's
+ * which leaves the conversation off screen with the error above it. Learn's
  * Start over asks for `restoreOnFailure`, and then its own tombstone comes off
  * and the conversation is back — see `DeleteOperation.restoreOnFailure`.
  *
@@ -488,8 +488,8 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
 function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcome {
   /* The conversation's own kind, from `base` — not the mode's, which differs
      whenever the reader has opened a thread of the other kind. A conversation
-     Remember began is in `base` from `thread.begun`, before anything is stored,
-     and this is what lets the first spoken exchange create it as Remember
+     Learn began is in `base` from `thread.begun`, before anything is stored,
+     and this is what lets the first spoken exchange create it as Learn
      rather than as a chat. A candidates thread has no Live control; if one ever
      got here, sending nothing keeps the server's default rather than a 400. */
   const kind = state.base.find((t) => t.id === op.threadId)?.kind;
@@ -513,7 +513,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
         ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
-        ...(kind === "chat" || kind === "remember" ? { kind } : {}),
+        ...(kind === "chat" || kind === "learn" ? { kind } : {}),
       },
     ],
   };

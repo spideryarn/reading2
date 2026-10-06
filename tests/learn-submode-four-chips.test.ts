@@ -9,10 +9,10 @@ import { describe, expect, it } from "vitest";
  */
 const css = readFileSync(new URL("../src/web/styles/quiz.css", import.meta.url), "utf8");
 
-describe("Remember's four chips", () => {
+describe("Learn's four chips", () => {
   it("tighten their padding only when the group holds four", () => {
     expect(css).toMatch(
-      /\.remember-submode:has\(> \.remember-submode-btn:nth-child\(4\)\) > \.remember-submode-btn\s*\{[^}]*padding-inline:\s*0\.25rem/,
+      /\.learn-submode:has\(> \.learn-submode-btn:nth-child\(4\)\) > \.learn-submode-btn\s*\{[^}]*padding-inline:\s*0\.25rem/,
     );
   });
 });

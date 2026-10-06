@@ -80,7 +80,7 @@ import type {
   Citation,
   ChatMessage,
   ChatThread,
-  RememberStance,
+  LearnStance,
   ToolRun,
 } from "../types.js";
 import { storedThreadKind } from "../types.js";
@@ -144,7 +144,7 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     /* Absent, never `stance: undefined` — the filesystem store simply has no
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
        byte for byte. Same rule as every field above it. */
-    ...(row.stance === null ? {} : { stance: row.stance as RememberStance }),
+    ...(row.stance === null ? {} : { stance: row.stance as LearnStance }),
     /* `true` or nothing at all, exactly like `stopped` and `interrupted` above —
        the filesystem store has no key on an ordinary question and
        tests/store-roundtrip.test.ts compares the two byte for byte. */
@@ -346,7 +346,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          disappearing from the prose rather than an error anybody sees.
 
          **So is `kind`, and it is the sharpest case of the three.** Every later
-         turn of a Remember thread comes through here. Naming `kind` in `set`
+         turn of a Learn thread comes through here. Naming `kind` in `set`
          would let a stale tab's `kind: "chat"` turn one into a chat on its
          second question — the system prompt changes, the list tag changes, a
          new cache prefix appears, and the transcript reads as one conversation
@@ -752,7 +752,7 @@ const rawPgChatStore: ChatStore = {
         )
         .where(thisMessage);
       if (!row) return { ok: false, reason: "no-such-message" };
-      if (row.kind !== "remember" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
+      if (row.kind !== "learn" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
       if (splitHint(row.text).hint !== hint) return { ok: false, reason: "hint-changed" };
 
       const [stamped] = await tx

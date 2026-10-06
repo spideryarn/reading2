@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
- * **The Remember composer, and the two things about it that are not obvious.**
+ * **The Learn composer, and the two things about it that are not obvious.**
  *
- * Remember reuses chat's `Composer` rather than copying it, so almost nothing
- * here is about Remember specifically — the Escape ladder, the auto-resize and
+ * Learn reuses chat's `Composer` rather than copying it, so almost nothing
+ * here is about Learn specifically — the Escape ladder, the auto-resize and
  * the key-propagation stop are chat's and are tested by chat's own files. What
  * is new is a taller box and a labelled microphone. Until 2026-10-02 there was
  * a stance `<select>` too; Recall is one voice now
@@ -15,20 +15,20 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ChatThread, RememberStance } from "../src/types.js";
+import type { ChatThread, LearnStance } from "../src/types.js";
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
 const AT = "2026-08-28T10:00:00.000Z";
 
-/** A Remember turn with one finished answer, asked for in `stance`. */
-function rememberThread(stance?: RememberStance): ChatThread {
+/** A Learn turn with one finished answer, asked for in `stance`. */
+function learnThread(stance?: LearnStance): ChatThread {
   return {
     id: "spya-k3m9qt",
     title: "What I took from it",
     createdAt: AT,
     updatedAt: AT,
-    kind: "remember",
+    kind: "learn",
     messages: [
       { id: "spya-usr2aa", role: "user", text: "what I took", createdAt: AT, status: "done" },
       {
@@ -48,7 +48,7 @@ let root: Root;
 
 const sent: { question: string }[] = [];
 
-function paint(thread: ChatThread, kind: "chat" | "remember" | "tutorial" | "explore" = "remember") {
+function paint(thread: ChatThread, kind: "chat" | "learn" | "tutorial" | "explore" = "learn") {
   act(() => {
     root.render(
       createElement(ChatPanel, {
@@ -93,35 +93,35 @@ afterEach(() => {
   host.remove();
 });
 
-describe("the Remember composer is chat's, with two differences", () => {
-  it("gives a Remember turn a box you can put a paragraph in", () => {
-    paint(rememberThread());
+describe("the Learn composer is chat's, with two differences", () => {
+  it("gives a Learn turn a box you can put a paragraph in", () => {
+    paint(learnThread());
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
-    /* Not a style preference. A spoken Remember turn is a paragraph or three, and a
+    /* Not a style preference. A spoken Learn turn is a paragraph or three, and a
        one-row box is what tells the reader this is a place for a sentence. */
     expect(box?.rows).toBe(6);
   });
 
   it("leaves chat's box exactly as it was", () => {
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
   });
 
-  it("offers no stance picker, in Remember or in chat", () => {
-    paint(rememberThread());
+  it("offers no stance picker, in Learn or in chat", () => {
+    paint(learnThread());
     expect(host.querySelector(".chat-stance")).toBeNull();
     expect(host.querySelector("select")).toBeNull();
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector(".chat-stance")).toBeNull();
   });
 
-  it("labels the microphone in Remember and not in chat", () => {
+  it("labels the microphone in Learn and not in chat", () => {
     /* Greg asked for the microphone to be emphasised because talking a
        paragraph beats typing one. An unlabelled icon among three other
        unlabelled icons is not an invitation to talk. */
-    paint(rememberThread());
+    paint(learnThread());
     const labelled = host.querySelector(".chat-talk-label");
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    paint({ ...learnThread(), kind: "chat" }, "chat");
     const unlabelled = host.querySelector(".chat-talk-label");
     // Dictation may be unsupported in jsdom, in which case neither renders —
     // the assertion that matters is that they never differ the wrong way round.
@@ -133,7 +133,7 @@ describe("an old answer's stance is not shown", () => {
   /* Rows written before 2026-10-02 keep their stored stance. A tag naming it
      would describe an instruction the reader can no longer give. */
   it("does not tag an old socratic answer", () => {
-    paint(rememberThread("socratic"));
+    paint(learnThread("socratic"));
     expect(host.querySelector(".chat-stance-tag")).toBeNull();
     expect(host.textContent).not.toContain("socratic");
   });
@@ -143,7 +143,7 @@ describe("an old answer's stance is not shown", () => {
 function props(over: Record<string, unknown>) {
   return {
     slug: "a-piece",
-    kind: "remember" as const,
+    kind: "learn" as const,
     loaded: true,
     loadFailed: false,
     threads: [] as ChatThread[],
@@ -169,22 +169,22 @@ function props(over: Record<string, unknown>) {
 }
 
 /**
- * **Remember is one conversation, and its panel has nothing for choosing
+ * **Learn is one conversation, and its panel has nothing for choosing
  * another.** Report `spya-peszam`; docs/plans/261001m-remember-is-its-own-single-thread.md
  * § Design 4. Until 2026-10-01 these tests pinned the opposite — a list shared
- * with chat, with Remember rows tagged — and that product decision is gone.
+ * with chat, with Learn rows tagged — and that product decision is gone.
  */
-describe("Remember's panel is one conversation", () => {
+describe("Learn's panel is one conversation", () => {
   it("never draws a list or the list's composer, even when handed no open thread", () => {
-    act(() => root.render(createElement(ChatPanel, props({ threads: [rememberThread()], threadId: null }))));
+    act(() => root.render(createElement(ChatPanel, props({ threads: [learnThread()], threadId: null }))));
     expect(host.querySelector(".chat-threads")).toBeNull();
     expect(host.querySelector(".chat-empty")).toBeNull();
     expect(host.querySelector("textarea")).toBeNull();
     expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
   });
 
-  it("says Remember in the header, and offers Start over but no close, new or rename", () => {
-    paint(rememberThread());
+  it("says Learn in the header, and offers Start over but no close, new or rename", () => {
+    paint(learnThread());
     expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector('button[title="All conversations"]')).toBeNull();
     expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
@@ -197,7 +197,7 @@ describe("Remember's panel is one conversation", () => {
      an empty, unnamed or still-answering conversation has no Start over, so
      its DELETE can never be held waiting for a name. Plan 261001m. */
   it("draws no Start over when the band says the conversation is not settled", () => {
-    const open = rememberThread();
+    const open = learnThread();
     act(() =>
       root.render(createElement(ChatPanel, props({ threads: [open], threadId: open.id, canStartOver: false }))),
     );
@@ -206,15 +206,15 @@ describe("Remember's panel is one conversation", () => {
   });
 
   it("leaves chat's header as it was", () => {
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector(".band-head h2")?.textContent).toBe("What I took from it");
     expect(host.querySelector('button[title="All conversations"]')).not.toBeNull();
   });
 });
 
-describe("chat's list has no Remember tag any more", () => {
+describe("chat's list has no Learn tag any more", () => {
   it("draws no kind tag on a row", () => {
-    const chat: ChatThread = { ...rememberThread(), id: "spya-p7w2dn", kind: "chat", title: "A question" };
+    const chat: ChatThread = { ...learnThread(), id: "spya-p7w2dn", kind: "chat", title: "A question" };
     act(() => root.render(createElement(ChatPanel, props({ kind: "chat", threads: [chat] }))));
     expect(host.querySelectorAll(".chat-thread")).toHaveLength(1);
     expect(host.querySelector(".chat-thread-kind")).toBeNull();
@@ -225,7 +225,7 @@ describe("chat's list has no Remember tag any more", () => {
  * **A short band gets a short box.** On a landscape phone the band is about
  * 338px tall and six rows at rest took 280 of it. Plan 261001m § 5.
  */
-describe("the Remember composer on a short viewport", () => {
+describe("the Learn composer on a short viewport", () => {
   const real = window.matchMedia;
   const realInnerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
   const realScrollHeight = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "scrollHeight");
@@ -255,7 +255,7 @@ describe("the Remember composer on a short viewport", () => {
 
   it("is two rows at rest when the viewport is short", () => {
     viewport(true);
-    paint(rememberThread());
+    paint(learnThread());
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(2);
   });
 
@@ -266,27 +266,27 @@ describe("the Remember composer on a short viewport", () => {
       get: () => 1_000,
     });
     viewport(true);
-    paint(rememberThread());
+    paint(learnThread());
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.style.height).toBe("117px");
   });
 
   it("is still six rows on a tall one", () => {
     viewport(false);
-    paint(rememberThread());
+    paint(learnThread());
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(6);
   });
 
   it("leaves chat's one row alone either way", () => {
     viewport(true);
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
   });
 });
 
-/* Explore, Remember's fourth sub-mode (plan 261003l): the same panel and the
+/* Explore, Learn's fourth sub-mode (plan 261003l): the same panel and the
    same tall box, an empty state of its own with three ways in, and no Live. */
 describe("Explore's panel", () => {
-  const empty = (): ChatThread => ({ ...rememberThread(), kind: "explore", title: "Exploring", messages: [] });
+  const empty = (): ChatThread => ({ ...learnThread(), kind: "explore", title: "Exploring", messages: [] });
 
   it("says what Explore is for, in two short lines, and offers its starters as buttons", async () => {
     const { EXPLORE_STARTERS } = await import("../src/web/ChatPanel.js");
@@ -313,11 +313,11 @@ describe("Explore's panel", () => {
   });
 
   it("draws no starters once the conversation has begun", () => {
-    paint({ ...rememberThread(), kind: "explore" }, "explore");
+    paint({ ...learnThread(), kind: "explore" }, "explore");
     expect(host.querySelector(".chat-suggest")).toBeNull();
   });
 
-  it("has Remember's tall box, its own placeholder, and Remember in the header", () => {
+  it("has Learn's tall box, its own placeholder, and Learn in the header", () => {
     paint(empty(), "explore");
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
     expect(box?.rows).toBe(6);
@@ -333,13 +333,13 @@ describe("Explore's panel", () => {
     expect(host.textContent).not.toMatch(/What do you remember about this article/);
   });
 
-  /* The band hands it no Live props (tests/remember-own-thread.test.tsx §
+  /* The band hands it no Live props (tests/learn-own-thread.test.tsx §
      which conversations offer Live); with none, the panel draws no control. */
   it("has no Live control", () => {
     paint(empty(), "explore");
     expect(host.querySelector(".chat-live")).toBeNull();
     expect(host.querySelector(".chat-live-btn")).toBeNull();
-    paint({ ...rememberThread(), kind: "explore" }, "explore");
+    paint({ ...learnThread(), kind: "explore" }, "explore");
     expect(host.querySelector(".chat-live-btn")).toBeNull();
   });
 });

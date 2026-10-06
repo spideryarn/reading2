@@ -1,8 +1,8 @@
 /**
- * Eval — does Remember mode's Recall prompt behave when the reader is right, is
+ * Eval — does Learn mode's Recall prompt behave when the reader is right, is
  * defensible, is garbled, is lost, or remembers very little?
  *
- *     npm run eval:remember -- data/noema-mythology-of-conscious-ai
+ *     npm run eval:learn -- data/noema-mythology-of-conscious-ai
  *
  * **Called `remember-stances.ts` until 2026-10-02**, when Recall's four stances
  * became one adaptive voice (docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
@@ -11,17 +11,17 @@
  * filled when the reader is stuck, a clarification that needs no id.
  *
  * **This one spends money**, and it is the reason the feature was built in the
- * order it was. Remember's prompt *is* the feature: the schema, the panel and the
+ * order it was. Learn's prompt *is* the feature: the schema, the panel and the
  * composer are plumbing around a paragraph of instructions about tone, and
  * nothing deterministic can tell you whether that paragraph works.
- * tests/remember-prompt.test.ts pins where the words go; only a model can say
+ * tests/learn-prompt.test.ts pins where the words go; only a model can say
  * what they do.
  *
  * ## Where the cases come from
  *
  * They are not a spread of inputs. Each one is a way the **first draft** of the
  * prompt would have misbehaved, taken from GPT Sol's review of
- * docs/plans/260827ah-review-mode.md — see the header on `REMEMBER_SYSTEM` in
+ * docs/plans/260827ah-review-mode.md — see the header on `LEARN_SYSTEM` in
  * src/converse.ts for the three faults, and the table in the plan for the rest.
  * A case is here because there is a specific wrong answer it invites:
  *
@@ -65,7 +65,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
-import { BODY_WORD_LIMIT, checkReply, HINT_WORD_LIMIT } from "./remember-recall-checks.js";
+import { BODY_WORD_LIMIT, checkReply, HINT_WORD_LIMIT } from "./learn-recall-checks.js";
 
 loadEnvLocal();
 
@@ -254,8 +254,8 @@ async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }
   return { meta, blocks };
 }
 
-/** One Remember turn, start to finish, with tools off so the run is about the prompt. */
-async function rememberOnce(
+/** One Learn turn, start to finish, with tools off so the run is about the prompt. */
+async function learnOnce(
   meta: Meta,
   blocks: Block[],
   said: string,
@@ -276,8 +276,8 @@ async function rememberOnce(
     blocks,
     history,
     question: said,
-    slug: "eval-remember",
-    kind: "remember",
+    slug: "eval-learn",
+    kind: "learn",
     /* Our own tools off. They would make the run slower, dearer and
        non-comparable between passes, and every one of these cases is answerable
        from the article — which is what the prompt tells the model anyway. The
@@ -302,7 +302,7 @@ function flags(text: string): string[] {
 
 /* Whether a reply ends on a question, how long it is, whether its question
    carries a block id and what its hint looks like are all `checkReply`'s, in
-   ./remember-recall-checks.ts — a module of its own so that it can be tested
+   ./learn-recall-checks.ts — a module of its own so that it can be tested
    without importing this file, which runs the eval. */
 
 async function main(): Promise<void> {
@@ -315,12 +315,12 @@ async function main(): Promise<void> {
     console.log(s);
   };
 
-  say(`# Remember: Recall — ${meta.title ?? dir}`);
+  say(`# Learn: Recall — ${meta.title ?? dir}`);
   say();
   say(`Article: \`${dir}\` (${blocks.length} blocks)`);
   say();
   say(
-    `${CASES.length} readers, one voice. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of \`evals/remember-recall.ts\`.`,
+    `${CASES.length} readers, one voice. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of \`evals/learn-recall.ts\`.`,
   );
   say();
 
@@ -351,9 +351,9 @@ async function main(): Promise<void> {
       text: m.text.replaceAll("spya-placeholder", blocks[0]?.id ?? "spya-aaaaaa"),
     }));
     const started = performance.now();
-    let out: Awaited<ReturnType<typeof rememberOnce>>;
+    let out: Awaited<ReturnType<typeof learnOnce>>;
     try {
-      out = await rememberOnce(meta, blocks, c.said, history);
+      out = await learnOnce(meta, blocks, c.said, history);
     } catch (err) {
       say(`### FAILED`);
       say();
@@ -440,7 +440,7 @@ async function main(): Promise<void> {
     "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, whether `lost`, `dontRemember` and `nudgeFailed` were told rather than questioned, and whether each nudge makes the next recollection likely without giving it away — and only reading them says that. For the hints, read each one against its question: does it make the answer much easier to reach without stating it, and does `justTellMe` or `nudgeFailed` talk as if the reader had opened the hint in its history?",
   );
 
-  const out = path.resolve(import.meta.dirname, "results", "remember-recall.md");
+  const out = path.resolve(import.meta.dirname, "results", "learn-recall.md");
   await mkdir(path.dirname(out), { recursive: true });
   await writeFile(out, `${lines.join("\n")}\n`, "utf-8");
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);

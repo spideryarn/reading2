@@ -2,7 +2,7 @@
  * **When the server answers a new conversation with the name of one this tab
  * already holds, the two become one.**
  *
- * Since plan 261001m an article has one Remember conversation, and a typed turn
+ * Since plan 261001m an article has one Learn conversation, and a typed turn
  * into a second one (a stale tab, a bookmark) is appended to the first by the
  * server, whose `begin` frame then names it. The tab may already hold that
  * conversation in its list — so renaming the provisional thread in place would
@@ -29,8 +29,8 @@ function msg(id: string, role: "user" | "assistant", status: ChatMessage["status
 
 const EXISTING: ChatThread = {
   id: "spya-rem001",
-  kind: "remember",
-  title: "The one Remember conversation",
+  kind: "learn",
+  title: "The one Learn conversation",
   createdAt: AT,
   updatedAt: AT,
   messages: [msg("spya-q00001", "user"), msg("spya-a00001", "assistant")],
@@ -38,7 +38,7 @@ const EXISTING: ChatThread = {
 
 const PROVISIONAL: ChatThread = {
   id: "spya-prov01",
-  kind: "remember",
+  kind: "learn",
   title: "What I took",
   createdAt: LATER,
   updatedAt: LATER,

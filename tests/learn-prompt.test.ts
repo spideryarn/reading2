@@ -1,7 +1,7 @@
 /**
- * **Remember mode's prompt, and the one property that costs money if it breaks.**
+ * **Learn mode's prompt, and the one property that costs money if it breaks.**
  *
- * Remember adds a second system prompt. Where it lands in the message array is
+ * Learn adds a second system prompt. Where it lands in the message array is
  * not a style question: everything above the
  * `cache_control` breakpoint has to stay byte-identical for the life of a
  * conversation, or the whole article is written to the cache again on every
@@ -54,18 +54,18 @@ describe("the article message is the same bytes whatever the mode", () => {
      should be free — which is exactly why it is worth pinning: a future change
      that "helpfully" mentions the mode near the article would break it
      silently, and the only symptom would be a larger bill. */
-  it("chat and remember send an identical article block", () => {
+  it("chat and learn send an identical article block", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const remember = buildConverseMessages({ ...base, kind: "remember" });
-    expect(articleMessage(remember)).toEqual(articleMessage(chat));
+    const learn = buildConverseMessages({ ...base, kind: "learn" });
+    expect(articleMessage(learn)).toEqual(articleMessage(chat));
   });
 
-  it("a different history, profile and question leave the Remember article block unchanged", () => {
-    const first = articleMessage(buildConverseMessages({ ...base, kind: "remember" }));
+  it("a different history, profile and question leave the Learn article block unchanged", () => {
+    const first = articleMessage(buildConverseMessages({ ...base, kind: "learn" }));
     const later = articleMessage(
       buildConverseMessages({
         ...base,
-        kind: "remember",
+        kind: "learn",
         profile: "A neuroscientist",
         question: "something else entirely",
         history: [
@@ -76,9 +76,9 @@ describe("the article message is the same bytes whatever the mode", () => {
     expect(later).toEqual(first);
   });
 
-  it("keeps its cache_control marker in Remember mode", () => {
-    const remember = buildConverseMessages({ ...base, kind: "remember" });
-    const article = articleMessage(remember);
+  it("keeps its cache_control marker in Learn mode", () => {
+    const learn = buildConverseMessages({ ...base, kind: "learn" });
+    const article = articleMessage(learn);
     expect(Array.isArray(article?.content)).toBe(true);
     const parts = article?.content as { cache_control?: unknown }[];
     expect(parts[0]?.cache_control).toEqual({ type: "ephemeral" });
@@ -86,10 +86,10 @@ describe("the article message is the same bytes whatever the mode", () => {
 });
 
 describe("the kind chooses the system prompt", () => {
-  it("sends a different system message for remember than for chat", () => {
+  it("sends a different system message for learn than for chat", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const remember = buildConverseMessages({ ...base, kind: "remember" });
-    expect(remember[0]?.content).not.toEqual(chat[0]?.content);
+    const learn = buildConverseMessages({ ...base, kind: "learn" });
+    expect(learn[0]?.content).not.toEqual(chat[0]?.content);
   });
 
   it("defaults to chat's system prompt when no kind is given", () => {
@@ -103,9 +103,9 @@ describe("the kind chooses the system prompt", () => {
      not otherwise find out that it was deliberate. */
   it("greets somebody recollecting differently from a questioner, below the breakpoint", () => {
     const chat = buildConverseMessages({ ...base, kind: "chat" });
-    const remember = buildConverseMessages({ ...base, kind: "remember" });
-    expect(remember[2]?.content).not.toEqual(chat[2]?.content);
-    expect(String(remember[2]?.content)).toMatch(/tell me what you took from it/i);
+    const learn = buildConverseMessages({ ...base, kind: "learn" });
+    expect(learn[2]?.content).not.toEqual(chat[2]?.content);
+    expect(String(learn[2]?.content)).toMatch(/tell me what you took from it/i);
   });
 });
 
@@ -113,22 +113,22 @@ describe("there is one Recall voice, and no stance", () => {
   /* The four stances went on 2026-10-02. A stance line left in the final
      message would be an instruction naming a section the prompt no longer has. */
   it("sends no stance line, in the system prompt or the final message", () => {
-    const messages = buildConverseMessages({ ...base, kind: "remember" });
+    const messages = buildConverseMessages({ ...base, kind: "learn" });
     for (const m of messages) expect(JSON.stringify(m.content)).not.toMatch(/stance for this turn/i);
   });
 
   it("names none of the old four in the prompt", () => {
-    const system = String(buildConverseMessages({ ...base, kind: "remember" })[0]?.content);
+    const system = String(buildConverseMessages({ ...base, kind: "learn" })[0]?.content);
     for (const old of ["SIGNPOSTS", "SOCRATIC —", "RESPOND —", "BALANCED —"]) expect(system).not.toContain(old);
   });
 });
 
-describe("the Remember prompt itself", () => {
-  const system = String(buildConverseMessages({ ...base, kind: "remember" })[0]?.content);
+describe("the Learn prompt itself", () => {
+  const system = String(buildConverseMessages({ ...base, kind: "learn" })[0]?.content);
 
   /* Not a style check. Each of these is a rule GPT Sol's review of the plan
      required, and each is the fix for a specific way the first draft would have
-     misbehaved — see the header comment on REMEMBER_SYSTEM in src/converse.ts.
+     misbehaved — see the header comment on LEARN_SYSTEM in src/converse.ts.
      They are pinned by name because they are the kind of paragraph a later
      tidy-up would shorten out of the prompt without knowing what it was for. */
   it("tells the model its own reading is not the article", () => {

@@ -1,5 +1,5 @@
 /**
- * Eval — does Remember's **Explore** sub-mode do what Greg asked of it, and
+ * Eval — does Learn's **Explore** sub-mode do what Greg asked of it, and
  * does it do it better than Chat with the `reader_notes` tool?
  *
  *     npm run eval:explore -- run --arm=explore --readers=noema --out=<name>
@@ -26,7 +26,7 @@
  *
  * ## The machinery is Tutorial's
  *
- * evals/remember-tutorial.ts: scripted readers per article, five turns each,
+ * evals/learn-tutorial.ts: scripted readers per article, five turns each,
  * the model's own replies as history, `--readers`, `--out`, a prompt hash in
  * every result file, and its quotation screen (`quoteCheck`), imported.
  *
@@ -123,8 +123,9 @@ import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { renderProfile } from "../src/profile.js";
 import { readerNotesDigest, threadTranscript } from "../src/reader-notes.js";
 import type { Block, BlockId, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
-import { askJudge } from "./remember-explore-judge.js";
-import { loadArticle, quoteCheck, row, words } from "./remember-tutorial.js";
+import { askJudge } from "./learn-explore-judge.js";
+import { loadArticle, quoteCheck, row, words } from "./learn-tutorial.js";
+import { storedResult } from "./stored-result.js";
 
 const RESULTS = path.resolve(import.meta.dirname, "results");
 const FIXTURES = path.resolve(import.meta.dirname, "..", "tests", "fixtures", "data-root", "data");
@@ -271,7 +272,7 @@ const NOEMA: ReaderSet = {
       earlier: [
         {
           id: "thr-noema-recall",
-          kind: "remember",
+          kind: "learn",
           title: "Recall",
           exchanges: [
             [
@@ -438,7 +439,7 @@ const AGENTS: ReaderSet = {
       earlier: [
         {
           id: "thr-agents-recall",
-          kind: "remember",
+          kind: "learn",
           title: "Recall",
           exchanges: [
             [
@@ -741,9 +742,9 @@ async function run(args: readonly string[]): Promise<void> {
 
   const lines: string[] = [];
   const say = (s = "") => lines.push(s);
-  say(`# Remember: Explore eval, the \`${arm}\` arm — ${meta.title ?? dir}`);
+  say(`# Learn: Explore eval, the \`${arm}\` arm — ${meta.title ?? dir}`);
   say();
-  say(`Article: \`${path.relative(process.cwd(), dir)}\` (${blocks.length} blocks). ${set.readers.length} scripted readers (\`${setName}\`) × 5 turns. Arm \`${arm}\`: thread kind \`${ARM_KIND[arm]}\`, ${arm === "explore" ? "the notes digest in every final message" : "the notes only through `reader_notes`"}; web search and our tools on. **Read the conversations.** See the header of \`evals/remember-explore.ts\`.`);
+  say(`Article: \`${path.relative(process.cwd(), dir)}\` (${blocks.length} blocks). ${set.readers.length} scripted readers (\`${setName}\`) × 5 turns. Arm \`${arm}\`: thread kind \`${ARM_KIND[arm]}\`, ${arm === "explore" ? "the notes digest in every final message" : "the notes only through `reader_notes`"}; web search and our tools on. **Read the conversations.** See the header of \`evals/learn-explore.ts\`.`);
   say();
   say(`Prompt: \`${hash}\` (sha256 of the system prompt, the opening line and the final message's fixed parts, first 12).`);
   say();
@@ -790,7 +791,7 @@ async function run(args: readonly string[]): Promise<void> {
   say(`- quoted with an id, but not the article's words as quoted: ${sum((t) => t.quotes.altered.length)}`);
 
   await mkdir(RESULTS, { recursive: true });
-  const stem = path.join(RESULTS, `remember-explore.${outName}`);
+  const stem = path.join(RESULTS, `learn-explore.${outName}`);
   await writeFile(`${stem}.md`, `${lines.join("\n")}\n`, "utf-8");
   const file: RunFile = { out: outName, set: setName as SetName, arm, promptHash: hash, turns: all };
   await writeFile(`${stem}.json`, `${JSON.stringify(file, null, 1)}\n`, "utf-8");
@@ -940,7 +941,7 @@ function itemText(turn: Turn, reader: Reader): string {
 async function judgeOne(context: string, item: string): Promise<{ raw: string; labels: Labels | null }> {
   let raw = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    /* The call itself lives in ./remember-explore-judge.ts, so this entry
+    /* The call itself lives in ./learn-explore-judge.ts, so this entry
        module imports no provider seam (tests/paid-cli-ledger.test.ts). Room
        for the model's thinking as well as the object: at 700 tokens, 46 of
        the first 60 answers came back empty. */
@@ -966,10 +967,10 @@ async function judge(args: readonly string[]): Promise<void> {
   const runs = (flagOf("runs", args) ?? "").split(",").filter(Boolean).map(plainStem);
   if (runs.length === 0) throw new Error("--runs takes the --out names of the runs to judge, comma-separated");
   const outName = plainStem(flagOf("out", args) ?? "judge");
-  const stem = path.join(RESULTS, `remember-explore.${outName}`);
+  const stem = path.join(RESULTS, `learn-explore.${outName}`);
 
   const files = await Promise.all(
-    runs.map(async (name) => JSON.parse(await readFile(path.join(RESULTS, `remember-explore.${name}.json`), "utf-8")) as RunFile),
+    runs.map(async (name) => JSON.parse(await readFile(storedResult(path.join(RESULTS, `learn-explore.${name}.json`)), "utf-8")) as RunFile),
   );
   const articles = new Map<SetName, Block[]>();
   for (const setName of Object.keys(READER_SETS) as SetName[])
@@ -1018,7 +1019,7 @@ async function judge(args: readonly string[]): Promise<void> {
     /* A rescore reuses old answers indexed by this key. It must neither pair
        them with different items nor rewrite the historical record of the
        prompt that obtained them with today's JUDGE_SYSTEM. */
-    const held = JSON.parse(await readFile(`${stem}-judge-key.json`, "utf-8")) as KeyRow[];
+    const held = JSON.parse(await readFile(storedResult(`${stem}-judge-key.json`), "utf-8")) as KeyRow[];
     if (JSON.stringify(held) !== JSON.stringify(key))
       throw new Error("--rescore items do not match the saved judge key; run a new judge under a new --out name");
   } else {
@@ -1036,14 +1037,14 @@ async function judge(args: readonly string[]): Promise<void> {
   const labelsFile = `${stem}-judge-labels.json`;
   let answers: Record<string, JudgeAnswer> = {};
   if (rescore) {
-    const saved = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+    const saved = (JSON.parse(await readFile(storedResult(labelsFile), "utf-8")) as { answers: typeof answers }).answers;
     answers = Object.fromEntries(Object.entries(saved).map(([n, answer]) => [n, normaliseSavedAnswer(answer)]));
   } else {
     /* `--resume` keeps the answers that parsed and asks again only for the
        rest. Only for the same `--runs`: the item numbers are a function of
        them. */
     if (args.includes("--resume")) {
-      const saved = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+      const saved = (JSON.parse(await readFile(storedResult(labelsFile), "utf-8")) as { answers: typeof answers }).answers;
       answers = Object.fromEntries(Object.entries(saved).map(([n, answer]) => [n, normaliseSavedAnswer(answer)]));
     }
     let next = 0;
@@ -1125,11 +1126,11 @@ async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   if (command === "run") return run(args);
   if (command === "judge") return judge(args);
-  throw new Error("usage: remember-explore.ts run --arm=chat|explore --readers=noema|agents --out=<name> | judge --runs=<name>,… --out=<name> [--rescore]");
+  throw new Error("usage: learn-explore.ts run --arm=chat|explore --readers=noema|agents --out=<name> | judge --runs=<name>,… --out=<name> [--rescore]");
 }
 
 /* `withLedger` so the spend is recorded under an eval scope — see the note at
-   the foot of evals/remember-recall.ts. */
+   the foot of evals/learn-recall.ts. */
 if (isMain(import.meta.url)) {
   loadEnvLocal();
   await withLedger("eval", main);
