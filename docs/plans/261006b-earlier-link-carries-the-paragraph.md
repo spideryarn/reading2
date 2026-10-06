@@ -165,3 +165,22 @@ the reading view's live position, which is more parts than the case is worth.
 The fixes above are Sol's own (the code review ran write-capable); I read the diff, re-ran the four
 feedback test files, `tests/doc-links.test.ts` and the typecheck, and committed them. Its answer is
 [here](261006b-earlier-link-carries-the-paragraph-code-review-sol.md).
+
+## Browser check
+
+By a Sonnet subagent with Playwright, 2026-10-06, after Sol's fixes were committed, at 1440x900,
+820x1180 and 390x844, on `/read/scaling-hypothesis` in the local database. All passed at all three:
+
+- A report filed at `?mode=summaries&at=spya-cbz06n` shows the text `/read/scaling-hypothesis` and
+  the `href` `/read/scaling-hypothesis?at=spya-cbz06n`: the paragraph and no mode.
+- Followed from the shelf, the link opens the article in the same tab with the dialog gone and the
+  paragraph at the top of the window, just under the header (56px down; 80px on the phone).
+- Followed from another section of the same article, it moves to the report's paragraph.
+- Followed while already at that paragraph, with and without a `mode=` in the address, the dialog
+  closes and the page does not move.
+- A report filed from `/profile` links to `/profile` with no `?at=`.
+- On the phone the row wraps and the dialog does not scroll sideways.
+- No page errors. The only console errors were 404s for data that article does not have.
+
+One caveat from the subagent: on the phone its script may have nudged the page 40px to reach the
+Feedback button before the stay-put click, and it did not log whether that happened.
