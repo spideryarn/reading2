@@ -620,6 +620,7 @@ describe("the producer's disagreement sentinel", () => {
   const snapshot: FleetSnapshot = {
     rows: [],
     tmuxServerPid: 132280,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
     collectedAt: EARLIER_AT,
     tookMs: 1200,
   };

@@ -1153,6 +1153,24 @@ export type ProducerStamp = {
 export type ProducerCapability = "argv-resume-uuid";
 
 /**
+ * Whether the tmux listing behind `rows` was a listing of this box — collect.ts
+ * § `selfCheck` decides it and says what each arm proves. Declared here so the
+ * verdict can be served; collect.ts imports it rather than the other way round.
+ */
+export type SelfCheckVerdict =
+  /** This process's own pane is in the listing. */
+  | { kind: "present"; paneId: string }
+  /** Not in a pane, and the listing came from this user's default tmux socket. */
+  | { kind: "socket-matches"; socketPath: string }
+  /** Neither anchor could be used. Not a fault, and not a pass. */
+  | { kind: "cannot-check"; why: string }
+  /** The server/socket differs, or our pane is missing. This collection is refused. */
+  | { kind: "absent"; why: string };
+
+/** The verdict as served: `not-collected` when there is no snapshot for it to be about. */
+export type SelfCheckFeed = SelfCheckVerdict | { kind: "not-collected" };
+
+/**
  * **WHAT `/api/state` RETURNS AND `/api/live` PUSHES**, declared once so the
  * three consumers cannot disagree about it.
  *
@@ -1257,6 +1275,13 @@ export type FleetState<Row, Health> = {
    * looks in both. Null when it could not be read.
    */
   tmuxServerPid: number | null;
+  /**
+   * Whether the listing behind `rows` was checked to be of this box, and how.
+   * It describes the rows being served: a later attempt that was refused keeps
+   * the previous rows and their verdict, and shows up in `error`.
+   * `cannot-check` means neither anchor could be verified for those rows.
+   */
+  selfCheck: SelfCheckFeed;
   tookMs: number;
   /** The last collection's failure, or null. A stale payload keeps its old rows. */
   error: string | null;
