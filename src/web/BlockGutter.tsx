@@ -135,7 +135,7 @@ import {
   CircleHelp,
   Ellipsis,
   Link2,
-  MessageSquare,
+  MessagesSquare,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -551,10 +551,11 @@ export function BlockGutter({
 
           A `Bookmark` rather than the flag or speech bubble Greg offered,
           because comments.md is explicit that a comment *is* a bookmark — the
-          words and the AI answer are both optional — and because a second
-          message-square a slot away from the chat button would read as a second
-          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
-          uses in the prose, so the gutter and the passage read as one thing.
+          words and the AI answer are both optional — and because the one-bubble
+          family now means comments while the two-bubble button below means
+          chat (docs/project/icons.md). Its colour is `--highlight`, which is
+          exactly what `mark.cmt` uses in the prose, so the gutter and the
+          passage read as one thing.
 
           **It is the head of the column**, which is what a mark has to be: a
           mark that is not beside its own words is not a mark, and the foot of a
@@ -661,7 +662,13 @@ export function BlockGutter({
              singular, so the count on screen was the one thing a screen reader
              could not hear. Nothing about the count is decoration.
 
-             With no conversation on the block, both are unchanged. */
+             With no conversation on the block, both are unchanged.
+
+             **The glyph is Chat's own two bubbles**, since 2026-10-06. It was
+             one bubble, which reads as a comment and is the family the bar's
+             Comments button wears. Greg, spya-vj7wv0: "change the comment icon
+             to a chat icon (because that's really what it is)". The words
+             already said chat. docs/project/icons.md § A chat is two bubbles. */
           data-tip={
             chatCount
               ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
@@ -673,7 +680,7 @@ export function BlockGutter({
               : "Chat with the AI about this paragraph"
           }
         >
-          <MessageSquare size={GLYPH} aria-hidden="true" />
+          <MessagesSquare size={GLYPH} aria-hidden="true" />
           {/* Every conversation anchored to this block, selections included —
               counting only the whole-block ones would make the number disagree
               with the marks sitting beside it. */}

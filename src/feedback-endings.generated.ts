@@ -8,6 +8,7 @@ import type { FeedbackEnding } from "./feedback-ending-values.js";
 
 export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a0ep9m": "shipped",
+  "spya-a0wpv4": "shipped",
   "spya-a353as": "shipped",
   "spya-a4rfbk": "shipped",
   "spya-a4xsg3": "shipped",
@@ -377,6 +378,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-vafkvw": "shipped",
   "spya-vbeyse": "shipped",
   "spya-vgwt4z": "declined",
+  "spya-vj7wv0": "shipped",
   "spya-vn72ww": "shipped",
   "spya-vp4mdn": "shipped",
   "spya-vr6m34": "shipped",

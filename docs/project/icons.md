@@ -243,6 +243,28 @@ Going forwards, then:
 [design-css-overview.md](design-css-overview.md) carries it as a one-line pointer, approved by Greg
 on 2026-09-29 (`1a44cb57`).
 
+## A chat is two bubbles
+
+> In the vertical gutter next to blocks, change the comment icon to a chat icon (because that's
+> really what it is)
+>
+> — Greg, 2026-10-06 (`spya-vj7wv0`)
+
+**A conversation with the AI wears `MessagesSquare`, Chat mode's own icon, wherever it is drawn**:
+the gutter's chat button, the head of the card it opens (`ChatDialog.tsx`), the marks that reopen a
+chat started from a Glossary entry, a cited work or a Debate claim or angle (`OriginChat.tsx`,
+`DebatePanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
+
+**One square bubble is the comment family**: `MessageSquareText` on the bar's Comments button,
+`MessageSquarePlus` on the comment box. Until 2026-10-06 the bare one bubble also meant "a
+conversation opened beside the mode, not in Chat's band", a split that was written down nowhere and
+that the gutter's button showed did not read. What tells a control that reopens one conversation
+from one that starts a new one is what sits beside the glyph: a count, the answer's first words, or
+a label. [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)
+has the narrower option that was passed over. Two places still cross the families and were left:
+Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Debate row wears
+`MessagesSquare` while Debate's mode icon is `Globe`.
+
 ## Where they're used
 
 - [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `ChevronDown`, rotated by `.chevron.up` for

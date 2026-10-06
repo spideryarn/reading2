@@ -20,7 +20,9 @@ import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MessagesSquare } from "lucide-react";
 import { BlockGutter } from "../src/web/BlockGutter.js";
+import { MODE_ICON } from "../src/web/mode-icons.js";
 import type { BlockId, Comment } from "../src/types.js";
 
 const ID = "spya-k3m9qt" as BlockId;
@@ -343,6 +345,16 @@ describe("the chat button", () => {
   it("is present and unmarked on a block with none", () => {
     paint();
     expect(host.querySelector(".block-chat")?.classList.contains("has")).toBe(false);
+  });
+
+  /* Greg, spya-vj7wv0: "change the comment icon to a chat icon (because
+     that's really what it is)". The name and the tooltip already said chat;
+     the one bubble was the part that said comment. Plan 261006i. */
+  it("wears Chat's own two bubbles, not the one that reads as a comment", () => {
+    paint();
+    const glyph = host.querySelector(".block-chat svg")?.getAttribute("class") ?? "";
+    expect(glyph).toContain("lucide-messages-square");
+    expect(MODE_ICON.chat).toBe(MessagesSquare);
   });
 
   it("offers to open one of them, rather than promising a new one", () => {
