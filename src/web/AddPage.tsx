@@ -58,6 +58,7 @@ import {
   codeOfMessage,
   DIRECT_ADD_SENT_TEXT_AWAY,
   UPLOAD_STILL_ARRIVING,
+  ADD_IMPORT_LOST,
   worthRetrying,
 } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -65,6 +66,7 @@ import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
+import { jobEngine } from "./jobEngine.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -475,6 +477,7 @@ interface Started {
   source: string;
   reader: string | null;
   job: Job;
+  vanished?: true;
 }
 
 export function AddPage({
@@ -594,7 +597,6 @@ export function AddPage({
    * two nulls mean opposite things. `null` here is "the POST has not failed".
    */
   const [failure, setFailure] = useState<{ reason: string | null } | null>(null);
-  const failed = failure !== null;
 
   // Through a ref, the same way `useJobs` holds `onFinished`. `queue.add` is a
   // fresh closure on every poll, so depending on it directly would re-run this
@@ -864,13 +866,49 @@ export function AddPage({
      leave this page mounted: reader A's job is not reader B's to see (F1). */
   const current = started?.source === wanted && started.reader === readerId ? started : null;
   const startedId = current?.id ?? null;
+  const vanished = current?.vanished === true;
+  const failed = failure !== null || vanished;
   /* **The list's copy, and until it has one, the copy the POST answered
      with** (plan 261005l § 2a). Everything keyed on the job's slug below
      (the card and its link button, High-powered AI, Sharing, the purpose
      box) so starts with the POST's answer and not a poll later. The held
-     copy is the job as it was at that moment and never changes; what
-     happens to the job afterwards is the list's to say. */
-  const job = queue.jobs.find((j) => j.id === startedId) ?? current?.job ?? null;
+     copy follows every newer list answer; it never reverts to POST-time
+     status when a later list omits a dismissed job. */
+  const listed = queue.jobs.find((j) => j.id === startedId) ?? null;
+  const heldStatus = current?.job.status;
+  const heldEnded = heldStatus === "done" || heldStatus === "error" || heldStatus === "cancelled";
+  /* An advance may report an ending before the list catches up. A terminal
+     job never becomes active under the same id; Retry makes a new id. */
+  const listedIsOlder = heldEnded && (listed?.status === "queued" || listed?.status === "running");
+  const newerList = listedIsOlder ? null : listed;
+  const job = vanished ? null : newerList ?? current?.job ?? null;
+  useLayoutEffect(() => {
+    if (!newerList) return;
+    setStarted((held) =>
+      held?.id === startedId && held.source === wanted && held.reader === readerId && held.job !== newerList
+        ? { ...held, job: newerList }
+        : held,
+    );
+  }, [newerList, startedId, wanted, readerId]);
+
+  /* A fresh omission, or an advance ending while list polling is paused,
+     must also supersede the provisional POST answer. The engine already
+     fences lists requested before this watcher; an old empty list is not
+     evidence of disappearance. Every callback belongs to this attachment. */
+  useLayoutEffect(() => {
+    if (!startedId || vanished || (heldStatus !== "queued" && heldStatus !== "running")) return;
+    let live = true;
+    const stop = jobEngine.watchTerminal(startedId, (outcome) => {
+      if (!live) return;
+      setStarted((held) => {
+        if (held?.id !== startedId || held.source !== wanted || held.reader !== readerId) return held;
+        return outcome.kind === "vanished"
+          ? { ...held, vanished: true }
+          : { ...held, job: outcome.job };
+      });
+    });
+    return () => { live = false; stop(); };
+  }, [startedId, heldStatus, vanished, wanted, readerId]);
 
   /**
    * **The three ways an add finishes, as one value.** A job reaching `done`, the
@@ -904,7 +942,7 @@ export function AddPage({
      Alive until the job ends; before there is a job, alive while nothing has
      finished. Every render: `observe` only sends when there is something to. */
   const highPowerSlug = job?.slug ?? completion?.slug ?? null;
-  const highPowerAlive = job ? job.status === "queued" || job.status === "running" : completion === null;
+  const highPowerAlive = !vanished && (job ? job.status === "queued" || job.status === "running" : completion === null);
   const highPowerLate = mayHaveStartedOnStandard(job?.steps, Boolean(job?.upload)) || (job === null && completion !== null);
   useEffect(() => {
     highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
@@ -1283,7 +1321,7 @@ export function AddPage({
           them the other way round is the bug this pair was written to fix —
           see `failure` above. */}
       <QuotaNotice
-        message={engineFailure(mine) ?? failure?.reason ?? queue.error}
+        message={engineFailure(mine) ?? failure?.reason ?? (vanished ? ADD_IMPORT_LOST : queue.error)}
         className="tw:mb-4 tw:text-sm tw:text-destructive"
       />
 
@@ -1325,7 +1363,7 @@ export function AddPage({
 
           The generic line goes with it: when the refusal above says what
           happened, "It didn't get as far as the queue" adds nothing. */}
-      {failed && !stillArriving && worthRetrying(failure?.reason) && (
+      {failed && !vanished && !stillArriving && worthRetrying(failure?.reason) && (
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           It didn't get as far as the queue.{" "}
           <button

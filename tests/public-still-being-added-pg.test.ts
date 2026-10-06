@@ -169,6 +169,12 @@ const MINIMAL = fixture("minimal", {
   published: published("minimal"),
   processing: "minimal",
 });
+/** No published revision and a live job still confer no sharing permission. */
+const MINIMAL_UNPUBLISHED = fixture("minimal-unpublished", {
+  visibility: "private",
+  processing: "minimal",
+  jobs: [{ status: "running", leaseMs: LIVE }],
+});
 
 const ALL = [
   PUBLIC_RUNNING,
@@ -184,6 +190,7 @@ const ALL = [
   ARCHIVED,
   PUBLISHED,
   MINIMAL,
+  MINIMAL_UNPUBLISHED,
 ];
 const ABSENT = `test-still-adding-absent-${RUN}`;
 /** Key-shaped, and nobody's. */
@@ -370,9 +377,9 @@ async function seed(who: Fixture): Promise<void> {
       html: `<p>${prose}</p>`,
       gistable: true,
     });
-    if (who.processing === "minimal") {
-      await db.update(articles).set({ processing: "minimal" }).where(eq(articles.id, who.articleId));
-    }
+  }
+  if (who.processing === "minimal") {
+    await db.update(articles).set({ processing: "minimal" }).where(eq(articles.id, who.articleId));
   }
 
   for (const job of who.jobs) {
@@ -590,6 +597,21 @@ describe("a visitor before publication", { timeout: 60_000 }, () => {
     expect(r.status, r.text).toBe(409);
     expect(r.body.code).toBe("not-processed");
     expect(r.body.error).not.toBe(messages.STILL_BEING_ADDED_REFUSAL.message);
+  });
+
+  it("cannot share an unpublished minimal row, and its live job exposes nothing", async () => {
+    const refused = await link("POST", MINIMAL_UNPUBLISHED, { rightsConfirmed: true });
+    expect(refused.status, refused.text).toBe(409);
+    expect(refused.body.code).toBe("not-processed");
+    for (const key of [undefined, NOBODYS_KEY]) {
+      expect(shape(await article(MINIMAL_UNPUBLISHED, key))).toEqual(sameAs(absent, MINIMAL_UNPUBLISHED.slug));
+    }
+  });
+
+  it("the pending query itself excludes a published article even with a live job", async () => {
+    expect(await publicReader.publicPendingImportQuery(getDb(), PUBLISHED.slug, PUBLIC_ONLY)).toEqual([]);
+    expect(await publicReader.publicPendingImportQuery(getDb(), PUBLIC_RUNNING.slug, PUBLIC_ONLY))
+      .toEqual([{ pending: true }]);
   });
 
   it("sends the statement the SQL test reads, with a real connection", () => {

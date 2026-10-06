@@ -672,8 +672,16 @@ Three things, all in the browser, in
   engine for a fresh list, and if a live import job has that slug it draws the job's card and
   re-reads the article when the job is done. It does not send the reader to the add page, because
   arriving there posts an import.
-- **A third tick box, *Make it public*.** What it asks and what it sends are in
+- **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
+  *Create a private link*. What each asks and sends, and what a visitor sees who arrives before
+  the import has published, are in
   [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+- **The card is drawn from the POST's answer** (since 2026-10-06). The page used to look its job
+  up only in the polled list, so it said *Queueing it…* for about eight seconds, and a web import
+  now takes about ten: the card, the link button and the sharing section often never appeared.
+  The returned job is held in the `started` record and gives way to the list's copy, or to a
+  later ending the list reports
+  ([postmortem 261006c](../postmortems/261006c-a-provisional-job-snapshot-outlived-newer-evidence.md)).
 
 ### The three traps in a page whose whole job is one effect
 

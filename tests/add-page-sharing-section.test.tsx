@@ -140,6 +140,7 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
 const { AddPage, resetAddPurposeForTests } = await import("../src/web/AddPage.js");
 const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
 const { retireAddSharing } = await import("../src/web/add-sharing-session.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 const {
   PRIVATE_LINK_ALSO_PUBLIC,
   PRIVATE_LINK_CONFIRM_TITLE,
@@ -299,6 +300,59 @@ afterEach(async () => {
 });
 
 describe("2a: the job card comes from the POST's answer", () => {
+  it("hears a terminal advance before the list replaces its running copy", async () => {
+    let end: (outcome: import("../src/web/jobEngine.js").TerminalOutcome) => void = () => {};
+    const watch = vi.spyOn(jobEngine, "watchTerminal").mockImplementation((_id, callback) => {
+      end = callback;
+      return () => {};
+    });
+    try {
+      await importing();
+      act(() => end({ kind: "done", job: makeJob("job-1", "done") }));
+      await settle();
+      expect(navigations).toEqual([`/read/${SLUG}`]);
+    } finally {
+      watch.mockRestore();
+    }
+  });
+
+  it("never resurrects the POST's running status after the list showed a cancelled job", async () => {
+    addResult = makeJob("job-1", "running");
+    render();
+    await settle();
+    jobs = [makeJob("job-1", "cancelled")];
+    render();
+    await settle();
+    expect(text()).toContain("Retry");
+    jobs = [];
+    render();
+    await settle();
+    expect(text()).toContain("Retry");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Stop")).toBe(false);
+  });
+
+  it("stops showing the POST snapshot when the engine proves the job vanished from a fresh list", async () => {
+    let end: (outcome: import("../src/web/jobEngine.js").TerminalOutcome) => void = () => {};
+    const watch = vi.spyOn(jobEngine, "watchTerminal").mockImplementation((_id, callback) => {
+      end = callback;
+      return () => {};
+    });
+    try {
+      addResult = makeJob("job-1", "running");
+      jobs = [];
+      render();
+      await settle();
+      expect(text()).toContain("The job job-1");
+      act(() => end({ kind: "vanished" }));
+      await settle();
+      expect(text()).not.toContain("The job job-1");
+      expect(text()).not.toContain(QUEUEING);
+      expect(text()).toContain("Look on your shelf before trying again");
+    } finally {
+      watch.mockRestore();
+    }
+  });
+
   it("draws the card, the link button and the Sharing row before any list has the job", async () => {
     addResult = makeJob("job-1", "running");
     jobs = [];

@@ -256,7 +256,8 @@ A third question for Greg came out of the review:
   The owner-only visibility read is not built, and the second-tab limit stays as documented.
 ## Stage 2: one sharing section with both controls, a visitor's "still being added", and the card that never appears
 
-**Status: proposed, 2026-10-06.** From Greg's answers above and the browser check's finding.
+**Status: built, 2026-10-06.** § What landed in stage 2, at the end, says what differs. From
+Greg's answers above and the browser check's finding.
 Stage 1's design sections above stay as the record of stage 1.
 
 ### 2a. The job card appears at once
@@ -414,3 +415,25 @@ archived article is readable by link); `openEarly`'s first publication (200); an
 to the link's create does not create again by itself (a second create would rotate the key); the
 visitor page stops asking when hidden, unmounted, or its slug or key changes; and what it does
 when the article publishes, the import fails, or sharing is turned off while it waits.
+
+## What landed in stage 2
+
+2026-10-06. 2a, 2b and 2c as amended by the plan review.
+
+- **Server**: `StillBeingAdded` (`src/still-being-added.ts`), `publicPendingImportQuery` and one
+  arm in `loadArticle`, one `declaredFields` branch. Pending is `queued`, or `running` with
+  `lease_expires_at > clock_timestamp()` (`leaseIsLive`, `src/store/job-fence.ts`).
+  `tests/public-imports.test.ts` lets `public-reader.ts` and `job-fence.ts`, and nothing else
+  public, name the `jobs` table. A running job being cancelled still counts while its lease
+  lives.
+- **Browser**: two controller classes and not one. The link's rules differ where the risk is (it
+  reads the truth, never re-sends an unanswered create, never draws a key it could not re-read),
+  and a shared base made both harder to read. Reader identity reaches `AddPage` as a prop.
+- **GPT Sol's [code review](261005l-stage-2-code-review-sol.md)** found the server predicate
+  sound and fixed three things: a private link's key printed to the browser console by the
+  failure logger, an older read overwriting a newer link write, and the held job outliving a
+  stopped import. Postmortems 261006a, b and c.
+- **Left open, older than this work, and reported to the Overseer**: after a direct switch from
+  one account to another with an add page still mounted, the purpose session, the High-powered
+  AI intent and the remembered answer are not scoped to the reader (Sol's P1). The sharing
+  controllers and the held job are.

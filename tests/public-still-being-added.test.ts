@@ -70,6 +70,23 @@ describe("loadPublicArticle", () => {
     expect(asked).toEqual([`/api/public/article/a-paper?key=${key}`]);
   });
 
+  it.each([409, 500])("never logs a private key from a real response URL (%s)", async (status) => {
+    const key = "AAAAAAAAAAAAAAAAAAAAAA" as ShareKey;
+    publicAnswer = () => {
+      const res = status === 409 ? STILL() : json({ error: "Failed" }, status);
+      /* Response() has an empty url; a browser fetch supplies the requested URL. */
+      Object.defineProperty(res, "url", {
+        value: `https://spideryarn.com/api/public/article/a-paper?key=${key}#fragment`,
+      });
+      return res;
+    };
+    await loadPublicArticle("a-paper", undefined, key).catch(() => {});
+    const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logged).toContain("/api/public/article/a-paper");
+    expect(logged).not.toContain(key);
+    expect(logged).not.toContain("fragment");
+  });
+
   it.each([
     ["another code", { error: "Not read through yet", code: "not-processed" }],
     ["no code", { error: "Conflict" }],

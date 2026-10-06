@@ -149,6 +149,8 @@ export class LinkAtAdd {
   /** Whether the job may still create the row — a `404` on the create is then *not yet*. */
   private jobAlive = true;
   private inFlight: Promise<void> | null = null;
+  /** A read overlapping a write cannot supersede that write's answer. */
+  private writes = 0;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private notYet = 0;
   /** A terminal pre-claim 404 is waiting for Retry to make the job live again. */
@@ -340,6 +342,9 @@ export class LinkAtAdd {
   private ask(): void {
     if (this.asking || this.retired) return;
     this.asking = true;
+    const write = this.writes;
+    const writing = this.inFlight !== null;
+    const mayReconcile = (): boolean => !writing && write === this.writes;
     void this.io.probe(this.slug).then(
       (found) => found,
       (): Probe => "unknown",
@@ -349,17 +354,17 @@ export class LinkAtAdd {
       /* A published article is Metadata's; and with nothing held, not knowing
          whether there is one already means no control, whatever the row says. */
       if (found === "article" || (found === "unknown" && first)) {
-        this.asked(found, null);
+        this.asked(found, null, mayReconcile());
         return;
       }
       void this.io.read(this.slug).then(
-        (read) => this.asked(found, read),
-        () => this.asked(found, null),
+        (read) => this.asked(found, read, mayReconcile()),
+        () => this.asked(found, null, mayReconcile()),
       );
     });
   }
 
-  private asked(found: Probe, read: LinkRead): void {
+  private asked(found: Probe, read: LinkRead, mayReconcile: boolean): void {
     this.asking = false;
     if (this.retired) return;
     const owed = this.settleOwed;
@@ -379,9 +384,10 @@ export class LinkAtAdd {
       } else this.set(read !== "none" && read.on ? { kind: "on", link: linkOf(read) } : { kind: "off" });
       return;
     }
-    /* A later attachment, over a state from an earlier visit. A write still
-       out will answer after this read was taken, so its answer stands. */
-    if (!this.inFlight) this.reconcile(now, read);
+    /* A later attachment, over a state from an earlier visit. A read may
+       have seen the row before an overlapping write even when its reply
+       arrives after the write's reply. Keep the write's answer in both orders. */
+    if (mayReconcile && !this.inFlight) this.reconcile(now, read);
     /* Nothing published and the row read lifts the hold. Otherwise it stays,
        unless completion has since asked for the create to be sent. */
     if ((found === "none" && read !== null) || owed) this.held = false;
@@ -424,6 +430,8 @@ export class LinkAtAdd {
 
   private send(to: "on" | "off"): void {
     if (this.retired) return;
+    this.writes += 1;
+    this.turn += 1;
     const before = this.state;
     this.set({ kind: "saving", to });
     const request = to === "on" ? this.io.create(this.slug) : this.io.remove(this.slug);

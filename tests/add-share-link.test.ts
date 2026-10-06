@@ -395,6 +395,39 @@ describe("the server's other answers", () => {
 });
 
 describe("attached to a page again, it reads first", () => {
+  it("keeps a create's answer when a reattachment read taken before it arrives later", async () => {
+    let created: (state: ShareLinkState) => void = () => {};
+    let readBack: (state: ShareLinkState) => void = () => {};
+    const { io } = scripted("none", "none",
+      new Promise<ShareLinkState>((resolve) => { created = resolve; }));
+    const link = await offered(io);
+    confirm(link);
+    link.pause();
+    io.read = () => new Promise<ShareLinkState>((resolve) => { readBack = resolve; });
+    link.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    created(ON);
+    await vi.advanceTimersByTimeAsync(0);
+    readBack(OFF);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(link.get()).toEqual({ kind: "on", link: { key: KEY, since: AT } });
+  });
+
+  it("keeps a turn-off's answer when an older reattachment read arrives later", async () => {
+    let readBack: (state: ShareLinkState) => void = () => {};
+    const { io } = scripted("none", ON, OFF);
+    const link = await offered(io);
+    link.pause();
+    io.read = () => new Promise<ShareLinkState>((resolve) => { readBack = resolve; });
+    link.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    link.turnOff();
+    await vi.advanceTimersByTimeAsync(0);
+    readBack(ON);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(link.get()).toEqual({ kind: "off" });
+  });
+
   it("on, then the article published: gives way to Metadata", async () => {
     const { io, now } = scripted("none", "none", ON);
     const link = await offered(io);

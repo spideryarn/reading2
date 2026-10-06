@@ -4563,6 +4563,8 @@ export const SHARE_AT_ADD_RECALLED =
 
 /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
 export const STILL_BEING_ADDED_HEADING = "Still being added";
+/** The add page's job disappeared from a list requested after its POST answered. */
+export const ADD_IMPORT_LOST = "We lost sight of this import. Look on your shelf before trying again.";
 export const STILL_BEING_ADDED =
   "This article is still being imported. It opens here when the import has finished.";
 

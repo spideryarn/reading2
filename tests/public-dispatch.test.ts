@@ -55,7 +55,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type AuthedUser, requireUser, type VerifiedUser } from "../src/auth.js";
-import { UNEXPECTED_FAILURE } from "../src/messages.js";
+import { STILL_BEING_ADDED_REFUSAL, UNEXPECTED_FAILURE } from "../src/messages.js";
+import { StillBeingAdded } from "../src/still-being-added.js";
 import { runInRequest } from "../src/owner.js";
 import { pathOf } from "../src/public/route-names.js";
 import { PUBLIC_ROUTES } from "../src/public/routes.js";
@@ -360,6 +361,26 @@ function readerRan(name: string) {
 describe("the closed public namespace", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("serializes still-being-added as exactly the declared fixed fields, without authentication", async () => {
+    const read = readerRan("article").mockRejectedValue(Object.assign(new StillBeingAdded(), {
+      title: "PRIVATE-TITLE", owner: "PRIVATE-OWNER", progress: "PRIVATE-PROGRESS",
+    }));
+    const r = await call("GET", "/api/public/article/example?key=AAAAAAAAAAAAAAAAAAAAAA");
+    expect(read).toHaveBeenCalledWith("example", { kind: "link", key: "AAAAAAAAAAAAAAAAAAAAAA" });
+    expect(r.status).toBe(409);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+    expect(r.body).toEqual({ error: STILL_BEING_ADDED_REFUSAL.message, code: "still-being-added" });
+  });
+
+  it("does not serialize a still-being-added code from an unrelated 409", async () => {
+    readerRan("article").mockRejectedValue(Object.assign(new Error("Another conflict"), {
+      status: 409, code: "still-being-added",
+    }));
+    const r = await call("GET", "/api/public/article/example");
+    expect(r.status).toBe(409);
+    expect(r.body).toEqual({ error: "Another conflict" });
   });
 
   /**
