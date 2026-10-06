@@ -125,17 +125,24 @@
        that strength the ink, soft ink, links and opaque search bands are more
        readable. Some translucent search outlines and the cross-reference rule
        lose contrast; the independent review records those trade-offs. docs/project/quotes.md § A deeper purple in the dark prose;
-       docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md. */
-    --quote-prose-rgb: 151 48 208;
+       docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md.
+
+       **A fifth less chroma since 2026-10-06.** It was `151 48 208`, and Greg
+       the next day: "Now the purple Quote highlighting is a little toooo
+       saturated. Just dial it down a bit." Same hue and lightness.
+       docs/plans/261006e-dark-quote-fill-a-little-less-saturated.md. */
+    --quote-prose-rgb: 143 70 189;
     /* **How strong the fill is, per tier** (annotations.css § quote fills
        multiplies these by the fade). Per theme since 2026-10-05, and these
        belong to `--quote-prose-rgb`: change the colour and they have to be
        summed again. The blue search colour (`--cat-4`), whose outline over a
        quote clears 3:1 at full confidence, and the soft ink in a block drawn on `--muted`
        hold the heavy one near 0.60; the step between the tiers holds the
-       light one under it. tests/quote-fill.test.ts has the sums. */
+       light one under it. tests/quote-fill.test.ts has the sums. The heavy
+       one was 0.60 until 2026-10-06: the less saturated purple is a little
+       lighter over `--muted`, and at 0.60 the soft ink there fell to 4.42. */
     --quote-fill-light: 0.48;
-    --quote-fill-heavy: 0.6;
+    --quote-fill-heavy: 0.58;
 
     /* The sheet an article's pictures are printed on, deliberately light in
        either appearance.
