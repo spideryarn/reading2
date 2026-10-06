@@ -82,7 +82,14 @@ function row(over: Partial<FleetRow> = {}): FleetRow {
 }
 
 function snap(over: Partial<FleetSnapshot> = {}): FleetSnapshot {
-  return { rows: [row()], collectedAt: "2026-09-08T12:00:00.000Z", tookMs: 13_000, tmuxServerPid: TMUX_GENERATION, ...over };
+  return {
+    rows: [row()],
+    collectedAt: "2026-09-08T12:00:00.000Z",
+    tookMs: 13_000,
+    tmuxServerPid: TMUX_GENERATION,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
+    ...over,
+  };
 }
 
 /* ------------------------------------------------------------------ *

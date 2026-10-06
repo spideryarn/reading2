@@ -17,6 +17,7 @@
  * on the box it wants to ask.
  */
 import { execFile } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
@@ -31,7 +32,7 @@ import {
 import { capturePaneAsync, parsePane, readPaneMode, type PaneAutoMode, type PaneQuestion } from "./pane.js";
 import { limit, type ProbeOwner } from "./child.js";
 import { statusesOf, type FleetStatus } from "./status.js";
-import type { ExecutionReading, Pause, SessionDescription } from "./wire.js";
+import type { ExecutionReading, Pause, SelfCheckVerdict, SessionDescription } from "./wire.js";
 import {
   readBootIdentity,
   readExecutionIdentity,
@@ -217,6 +218,13 @@ export type FleetSnapshot = {
    * across a reboot without checking it silently equates different sessions.
    */
   tmuxServerPid: number | null;
+  /**
+   * Whether the listing these rows were joined from was checked to be of this
+   * box, and by which anchor — see `selfCheck`. Never `absent`: that listing is
+   * refused, not published. Kept on the snapshot so the answer is served, where
+   * it used to be computed and dropped.
+   */
+  selfCheck: SelfCheck;
 };
 
 /** A pane's address, and the pid that changes when it is respawned under it. */
@@ -271,6 +279,21 @@ export function tmuxServerPid(listPanesOutput: string): number | null {
     const parts = line.trim().split(/\s+/);
     const pid = parts[3];
     if (pid !== undefined && /^\d{1,10}$/.test(pid)) return Number(pid);
+  }
+  return null;
+}
+
+/**
+ * The socket the answering tmux server listens on, from the same listing.
+ *
+ * `#{socket_path}` is the fifth field and the LAST one, because a path may
+ * contain a space and the four before it may not: this takes the rest of the
+ * line rather than the fifth word. Null when the field is missing or empty.
+ */
+export function tmuxSocketPath(listPanesOutput: string): string | null {
+  for (const line of listPanesOutput.split("\n")) {
+    const rest = /^\S+ \S+ \S+ \S+ (.*)$/.exec(line)?.[1];
+    if (rest !== undefined && rest.trim() !== "") return rest;
   }
   return null;
 }
@@ -526,13 +549,20 @@ export async function readPanes(rows: FleetRow[], capture: (paneId: string) => P
  */
 
 /**
- * One `list-panes -a` answers two questions, so they travel together: which
- * pane belongs to which session, and which tmux server all of those handles
- * belong to. Grouped rather than passed as two arguments because a caller that
- * can supply the panes and omit the generation is a caller that will.
+ * One `list-panes -a` answers three questions, so they travel together: which
+ * pane belongs to which session, which tmux server all of those handles belong
+ * to, and which socket that server answered on. Grouped rather than passed as
+ * separate arguments because a caller that can supply the panes and omit the
+ * generation is a caller that will.
  */
 export type PaneListing =
-  | { kind: "read"; panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid: number | null }
+  | {
+      kind: "read";
+      panes: ReadonlyMap<string, PaneInfo>;
+      tmuxServerPid: number | null;
+      /** Null when the listing did not carry one — `tmuxSocketPath`. */
+      socketPath: string | null;
+    }
   | { kind: "unread"; why: string };
 
 type ReadPaneListing = Extract<PaneListing, { kind: "read" }>;
@@ -541,13 +571,11 @@ type ReadPaneListing = Extract<PaneListing, { kind: "read" }>;
  * Every pane on the box, keyed by its session, and the server they are on, or
  * the reason no listing arrived.
  *
- * Failure is a separate arm rather than an empty map. A collector running
- * under tmux must verify that its own pane is present before publishing
- * anything, so a failed listing cannot safely produce a snapshot; calling it
- * empty made that guard blame a different box instead of the tmux failure that
- * actually happened. The production dashboard runs under systemd, where
- * `selfCheck` returns `cannot-check`; making that deployment checkable is a
- * separate decision.
+ * Failure is a separate arm rather than an empty map. `selfCheck` must find
+ * this process's own pane, or the socket it expects, in the listing before
+ * anything is published, so a failed listing cannot safely produce a snapshot;
+ * calling it empty made that guard blame a different box instead of the tmux
+ * failure that actually happened.
  */
 export async function panes(owner: ProbeOwner): Promise<PaneListing> {
   try {
@@ -556,12 +584,18 @@ export async function panes(owner: ProbeOwner): Promise<PaneListing> {
       cmd: "tmux",
       // `#{pid}` is the SERVER's pid, not the pane's — a fourth field on a call
       // we were already making, and the only cheap way to tell one tmux server's
-      // `$1643` from the next one's.
-      args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+      // `$1643` from the next one's. `#{socket_path}` is last because it is the
+      // one field that may contain a space — `tmuxSocketPath`.
+      args: ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid} #{socket_path}"],
       timeoutMs: 10_000,
     });
     if (outcome.kind !== "ok") return { kind: "unread", why: outcome.why };
-    return { kind: "read", panes: panesBySession(outcome.stdout), tmuxServerPid: tmuxServerPid(outcome.stdout) };
+    return {
+      kind: "read",
+      panes: panesBySession(outcome.stdout),
+      tmuxServerPid: tmuxServerPid(outcome.stdout),
+      socketPath: tmuxSocketPath(outcome.stdout),
+    };
   } catch (cause) {
     return {
       kind: "unread",
@@ -592,6 +626,8 @@ export function sessionScript(): string {
 export function snapshotFrom(
   parsed: ReturnType<typeof parseSessions>,
   listing: ReadPaneListing,
+  /** Required, not defaulted: a snapshot that can omit its verdict is one that will. */
+  self: SelfCheck,
   tookMs: number,
   now = new Date(),
 ): FleetSnapshot {
@@ -601,6 +637,7 @@ export function snapshotFrom(
     collectedAt: now.toISOString(),
     tookMs,
     tmuxServerPid: listing.tmuxServerPid,
+    selfCheck: self,
   };
 }
 
@@ -625,31 +662,60 @@ export function snapshotFrom(
  * a listing of the right server that has somehow lost us, which is a listing
  * that may have lost others.
  *
- * NOT BEING UNDER TMUX IS NOT A FAULT. The production dashboard runs under
- * systemd without `TMUX`, so `selfCheck` returns `cannot-check` there; a
- * `tmux-job.ts` dashboard or the collection bench can run inside tmux and can
- * perform this check. An absent `TMUX` must not block — the `/logs/` lesson in
- * `worktree-check.ts`, which is that an alarm nobody can clear is one somebody
- * deletes. Giving the systemd service its own anchor is a separate decision.
+ * NOT BEING IN A PANE IS NOT A FAULT. The production dashboard runs under
+ * systemd, with no `TMUX`. A process outside tmux reaches tmux through its
+ * user's default socket, so there the check asks whether the socket that
+ * answered is that one — `socketAnchor`, plan 261006h. Before that it answered
+ * `cannot-check` on every production collection for four weeks, and nothing
+ * said so (postmortem 260910b).
+ *
+ * THE SOCKET ANCHOR IS THE WEAKER OF THE TWO. It proves which server answered.
+ * The pane check can also notice that our own pane went missing; neither anchor
+ * proves the whole listing survived. And both trust the `tmux` executable: a
+ * wrapper that fabricates output is outside what either can see.
+ *
+ * `cannot-check` must not block — the `/logs/` lesson in `worktree-check.ts`,
+ * which is that an alarm nobody can clear is one somebody deletes. It is served
+ * on `/api/state` instead, so a deployment that lands there is visible.
+ *
+ * The arms are declared in wire.ts § `SelfCheckVerdict`, because the verdict is
+ * served.
  */
-export type SelfCheck =
-  /** We are in the listing, so it is ours. */
-  | { kind: "present"; paneId: string }
-  /** Not running under tmux, so there is nothing to look for. Not a fault. */
-  | { kind: "cannot-check"; why: string }
-  /** We ARE under tmux and are not in this listing. The listing is not of our box. */
-  | { kind: "absent"; why: string };
+export type SelfCheck = SelfCheckVerdict;
+
+/**
+ * What the check knows about this process, as a parameter so `collect` can be
+ * driven without being this process. `productionAnchor` is the real one.
+ */
+export type SelfAnchor = {
+  env: { TMUX?: string | undefined; TMUX_PANE?: string | undefined; TMUX_TMPDIR?: string | undefined };
+  /** Undefined where the platform has no uid. */
+  uid: number | undefined;
+  /** May throw, as `fs.realpathSync` does for a path that is not there. */
+  realpath: (path: string) => string;
+};
+
+export function productionAnchor(): SelfAnchor {
+  return { env: process.env, uid: process.getuid?.(), realpath: (path) => realpathSync(path) };
+}
 
 export function selfCheck(
-  panes: ReadonlyMap<string, PaneInfo>,
-  listedServerPid: number | null,
-  env: { TMUX?: string | undefined; TMUX_PANE?: string | undefined },
+  listing: Pick<ReadPaneListing, "panes" | "tmuxServerPid" | "socketPath">,
+  anchor: SelfAnchor,
 ): SelfCheck {
-  const pane = env.TMUX_PANE;
-  const tmux = env.TMUX;
-  if (typeof pane !== "string" || pane === "" || typeof tmux !== "string" || tmux === "") {
-    return { kind: "cannot-check", why: "this process is not running under tmux, so it cannot look for itself" };
+  const pane = anchor.env.TMUX_PANE;
+  const tmux = anchor.env.TMUX;
+  // ONLY WITH NO `TMUX` AT ALL. tmux picks its socket from `TMUX` alone, so a
+  // process with `TMUX` and no `TMUX_PANE` may be reading a named server quite
+  // correctly, and comparing that with `default` would refuse it.
+  if (typeof tmux !== "string" || tmux === "") return socketAnchor(listing.socketPath, anchor);
+  if (typeof pane !== "string" || pane === "") {
+    return {
+      kind: "cannot-check",
+      why: "TMUX is set and TMUX_PANE is not, so this process has no pane to look for and no default socket to expect",
+    };
   }
+  const listedServerPid = listing.tmuxServerPid;
   // `TMUX` is `<socket>,<server pid>,<session index>`.
   const ourServer = Number(tmux.split(",")[1]);
   if (Number.isInteger(ourServer) && listedServerPid !== null && ourServer !== listedServerPid) {
@@ -660,7 +726,7 @@ export function selfCheck(
         `every handle in it belongs to a different world`,
     };
   }
-  for (const info of panes.values()) {
+  for (const info of listing.panes.values()) {
     if (info.paneId === pane) return { kind: "present", paneId: pane };
   }
   return {
@@ -668,6 +734,53 @@ export function selfCheck(
     why:
       `this process runs in pane ${pane} and that pane is not in the listing — ` +
       `so the listing is not of this box, or it is missing rows`,
+  };
+}
+
+/**
+ * The anchor for a process that is not in a pane: did the listing come from the
+ * socket such a process reaches, `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`?
+ *
+ * We work out the expected path; the tmux child reports the listed one. They
+ * disagree when the child was pointed somewhere else — a `TMUX` or
+ * `TMUX_TMPDIR` set only for it, a `-S` or `-L` in a wrapper, another `tmux` on
+ * `PATH`.
+ *
+ * `absent` IS ONLY FOR TWO PATHS THAT BOTH RESOLVED AND DIFFER. A socket removed
+ * after the listing was read must not turn into a wrong-box refusal, so a
+ * `realpath` that throws is `cannot-check`. Both go through `realpath` because
+ * macOS reports `/private/tmp/…` for `/tmp/…`.
+ */
+function socketAnchor(listed: string | null, anchor: SelfAnchor): SelfCheck {
+  if (listed === null) {
+    return { kind: "cannot-check", why: "this process is not under tmux, and the listing carried no socket path" };
+  }
+  if (anchor.uid === undefined) {
+    return { kind: "cannot-check", why: "this process is not under tmux, and its uid cannot be read to find its socket" };
+  }
+  // tmux ignores an empty `TMUX_TMPDIR`, so `||` rather than `??`.
+  const expected = `${anchor.env.TMUX_TMPDIR || "/tmp"}/tmux-${anchor.uid}/default`;
+  const resolved: string[] = [];
+  for (const [what, path] of [["listed", listed], ["expected", expected]] as const) {
+    try {
+      resolved.push(anchor.realpath(path));
+    } catch (cause) {
+      return {
+        kind: "cannot-check",
+        why: `the ${what} tmux socket ${path} could not be resolved: ${cause instanceof Error ? cause.message : String(cause)}`,
+      };
+    }
+  }
+  const [listedReal, expectedReal] = resolved;
+  if (listedReal === undefined || expectedReal === undefined) {
+    return { kind: "cannot-check", why: "the tmux socket paths were not resolved" };
+  }
+  if (listedReal === expectedReal) return { kind: "socket-matches", socketPath: listedReal };
+  return {
+    kind: "absent",
+    why:
+      `this listing came from the tmux socket ${listedReal} and this process, which is not under tmux, ` +
+      `reaches ${expectedReal} — so the listing is of another server`,
   };
 }
 
@@ -774,7 +887,11 @@ export function collectionAbandoned(ms: number): string {
   );
 }
 
-export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
+/**
+ * `anchor` is what `selfCheck` knows about this process. It defaults to the
+ * real one and is a parameter so a test can drive the wiring by calling this.
+ */
+export async function collect(owner: ProbeOwner, anchor: SelfAnchor = productionAnchor()): Promise<FleetSnapshot> {
   const startedAt = Date.now();
   /**
    * THE GENERATION, READ BEFORE THE INVENTORY AND CHECKED AFTER IT.
@@ -817,9 +934,9 @@ export async function collect(owner: ProbeOwner): Promise<FleetSnapshot> {
   if (drift) throw new Error(drift);
   // Before anything is derived from the listing, not after: a listing of the
   // wrong box produces rows that are individually perfect.
-  const self = selfCheck(listing.panes, listing.tmuxServerPid, process.env);
+  const self = selfCheck(listing, anchor);
   if (self.kind === "absent") throw new Error(`this is not a listing of this box: ${self.why}`);
-  const snapshot = snapshotFrom(parsed, listing, 0);
+  const snapshot = snapshotFrom(parsed, listing, self, 0);
   const rows = snapshot.rows;
 
   /* ONE PASS OVER THE PANES, for the two facts that only the terminal has: what
