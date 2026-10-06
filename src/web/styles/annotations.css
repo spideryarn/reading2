@@ -1286,16 +1286,6 @@ td.text.has-hit[data-hues="8"] {
   }
 }
 
-.cmt-transport-error {
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  color: var(--destructive);
-  max-width: 18rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* `.linky` is a shape, not a shared class: the `.controls` one and this one are
    two independent rules that happen to agree about underlines. Neither inherits
    a button reset from anywhere — there isn't one — so each states its own in
