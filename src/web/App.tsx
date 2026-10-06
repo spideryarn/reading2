@@ -380,19 +380,22 @@ export function App() {
      counts — including, since the bug above, the two addresses that reach the
      shelf sideways. */
   return (
-    <FeedbackHost readerId={user.id}>
-      {/* Who every page below was drawn for, so a write one of them makes late
-          (an unmount, an idle save, `pagehide`) can name its reader:
-          lib/made-for.ts, plan 261006f § Stage 2. */}
-      <SignedInReader.Provider value={user.id}>
+    /* Who everything below was drawn for, so a write any of it makes late (an
+       unmount, an idle save, `pagehide`, a recording still draining) can name
+       its reader: lib/made-for.ts, plan 261006f § Stage 2. **Outside
+       `FeedbackHost`**, which draws the Feedback dialog itself, beside its
+       children: inside it, the pages had a reader and the dialog had none
+       (tests/feedback-dialog-has-its-reader.test.tsx). */
+    <SignedInReader.Provider value={user.id}>
+      <FeedbackHost readerId={user.id}>
         {/* What tells a page's `HomeLink` that the corner logo is beside it, so
             it draws no second way home — BackLink.tsx § `SignedInShell`. */}
         <SignedInShell.Provider value={true}>
           <SignedIn route={route} user={user} addVisit={addVisit} />
         </SignedInShell.Provider>
-      </SignedInReader.Provider>
-      {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
-    </FeedbackHost>
+        {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
+      </FeedbackHost>
+    </SignedInReader.Provider>
   );
 }
 /**

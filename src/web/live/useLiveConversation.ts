@@ -94,7 +94,8 @@ import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
-import { apiWiring, type LiveWiring } from "./wiring.js";
+import { apiWiringFor, type LiveWiring } from "./wiring.js";
+import { useMadeFor } from "../lib/made-for.js";
 import { ToolResponses } from "./tool-responses.js";
 import { stallOf, type LiveStall } from "./stall.js";
 import { type TalkMode, type TapEventKind, tapRefusal } from "./tap.js";
@@ -342,6 +343,8 @@ const freshTally = (): StallTally => ({
 });
 
 export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveApi {
+  const madeFor = useMadeFor();
+  const defaultWiring = useRef(apiWiringFor(madeFor)).current;
   const [phase, setPhase] = useState<LivePhase>("idle");
   const [step, setStep] = useState<LiveStep | null>(null);
   const [reconnectPending, setReconnectPending] = useState(false);
@@ -976,7 +979,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
       try {
         const out = await Promise.race([
-          (wired.current.wiring ?? apiWiring).runTool(slug, name, args, request.signal),
+          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
           new Promise<never>((_, reject) => {
             request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
           }),
@@ -990,7 +993,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         toolRequests.current.delete(request);
       }
     },
-    [send, slug, continueAfterTools],
+    [send, slug, continueAfterTools, defaultWiring],
   );
 
   /**
@@ -1754,7 +1757,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           setPlacement(where);
           placedAs.current = where.placement;
 
-          const wiring = wired.current.wiring ?? apiWiring;
+          const wiring = wired.current.wiring ?? defaultWiring;
           const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
           /* **The tail travels with the history it belongs to**, and the first
              exchange claims exactly this. Read separately they would be a claim
@@ -2144,7 +2147,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       })();
     },
-    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff],
+    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff, defaultWiring],
   );
 
   const say = useCallback(

@@ -57,9 +57,11 @@ export function tokenOwnerOf(
 let held: Session | null = null;
 /** False until the SDK has said anything at all. Not "signed out". */
 let heard = false;
+let revision = 0;
 const subscribers = new Set<(session: Session | null) => void>();
 
 function adopt(session: Session | null): void {
+  revision += 1;
   held = session;
   heard = true;
   noteReader(session?.user?.id ?? null);
@@ -73,7 +75,17 @@ function adopt(session: Session | null): void {
   }
 }
 
-supabase.auth.onAuthStateChange((_event, session) => adopt(session));
+supabase.auth.onAuthStateChange((event, session) => {
+  // INITIAL_SESSION reads storage asynchronously. A cross-tab event may have
+  // overtaken that read; the initial answer is only for an unheard tab.
+  if (event === "INITIAL_SESSION" && heard) return;
+  adopt(session);
+});
+
+/** Changes on every adopted session, including a refresh or A → null → A. */
+export function sessionRevision(): number {
+  return revision;
+}
 
 /** The token this tab last heard, for a request that cannot wait to ask (`leavingFetch`). */
 export function heldToken(): string | undefined {
@@ -112,9 +124,12 @@ export function onSession(tell: (session: Session | null) => void): () => void {
  * be refused until the SDK got round to saying so.
  *
  * Only known to different known. Never signs anybody out, which is the SDK's
- * to announce, and never replaces a session with an equal one.
+ * to announce, and never replaces a session with an equal one. The revision
+ * captured before the lookup must still match: reader-id equality misses a
+ * sign-out followed by sign-in of the same reader, and same-reader refreshes.
  */
-export function sessionObserved(session: Session): void {
+export function sessionObserved(session: Session, observedAt: number): void {
+  if (observedAt !== revision) return;
   const theirs = tokenOwnerOf(session);
   const ours = heldReader();
   if (theirs === null || ours === null || theirs === ours) return;
@@ -127,6 +142,7 @@ export function sessionObserved(session: Session): void {
  * holds would otherwise be the last case's reader. Subscribers are kept.
  */
 export function resetSessionForTests(): void {
+  revision += 1;
   held = null;
   heard = false;
   noteReader(null);

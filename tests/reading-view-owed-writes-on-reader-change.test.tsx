@@ -368,6 +368,62 @@ describe("a write the view owes as it unmounts, after the reader changed", () =>
   });
 });
 
+describe("queued comment writes keep their mounted reader", () => {
+  it.each(["edit", "place", "recolour"] as const)("a queued %s is not sent as B", async (kind) => {
+    let comments!: ReturnType<typeof useComments>;
+    function View() { comments = useComments(SLUG); return null; }
+    draw("A", createElement(View));
+    await settle();
+    let release!: () => void;
+    vi.stubGlobal("fetch", (url: string, init: RequestInit = {}) => {
+      const response = answer(url, init);
+      if (init.method === "PATCH" && !release) {
+        return new Promise<Response>((resolve) => { release = () => { void response.then(resolve); }; });
+      }
+      return response;
+    });
+    let first!: Promise<void>;
+    act(() => { first = comments.edit("comment-a", "A's first words"); });
+    await settle();
+    expect(writtenAsA()).toHaveLength(1);
+    let queued!: Promise<void>;
+    act(() => {
+      queued = kind === "edit" ? comments.edit("comment-a", "A's queued words")
+        : kind === "place" ? comments.place("comment-a", { criterionId: "criterion-a", valence: null })
+        : comments.recolour("comment-a", "yellow");
+    });
+    await becomeB();
+    release();
+    await act(async () => { await first; await queued; });
+    expect(writtenAsB()).toEqual([]);
+  });
+
+  it("a create's late deletion is not sent as B", async () => {
+    let comments!: ReturnType<typeof useComments>;
+    function View() { comments = useComments(SLUG); return null; }
+    draw("A", createElement(View));
+    await settle();
+    let release!: () => void;
+    vi.stubGlobal("fetch", (url: string, init: RequestInit = {}) => {
+      const response = answer(url, init);
+      if (init.method === "POST") {
+        return new Promise<Response>((resolve) => { release = () => { void response.then(resolve); }; });
+      }
+      return response;
+    });
+    let created!: Promise<unknown>;
+    act(() => {
+      created = comments.create({ id: "comment-a", blockId: "spya-aaaaaa" as BlockId, body: "A's words" });
+    });
+    await settle();
+    act(() => { comments.remove("comment-a"); });
+    await becomeB();
+    release();
+    await act(async () => { await created; });
+    expect(writtenAsB()).toEqual([]);
+  });
+});
+
 describe("and the reader's own writes still go", () => {
   it("the profile panel's unmount save is sent for A while the tab is A's", async () => {
     draw("A", createElement(WrittenForYou, { written: true, changed: false, slug: SLUG }));

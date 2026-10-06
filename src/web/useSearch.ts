@@ -38,6 +38,7 @@ import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
+import { useMadeFor } from "./lib/made-for.js";
 
 /**
  * A saved run, plus the one thing about it that is not on the run.
@@ -191,6 +192,8 @@ export function useSearch(
     onRenamed?: (from: string, to: string) => void;
   } = {},
 ): SearchApi {
+  // Queued colours, revisions and stream re-deletes retain this screen's reader.
+  const madeFor = useMadeFor();
   const renamed = useRef(onRenamed);
   renamed.current = onRenamed;
   const [runs, setRuns] = useState<SearchRun[]>([]);
@@ -442,12 +445,13 @@ export function useSearch(
         // `fetchOk` in both because the omission happened twice.
         await fetchOk(`/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
+          madeFor,
         );
       } catch (e) {
         if (!quiet) setError(describeFetchFailure(e as Error));
       }
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -488,6 +492,7 @@ export function useSearch(
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ colour }),
             },
+            madeFor,
           );
         } catch (e) {
           setError(describeFetchFailure(e as Error));
@@ -511,7 +516,7 @@ export function useSearch(
       patching.current.set(id, next);
       void next;
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -646,7 +651,7 @@ export function useSearch(
               revises ? { id, criterion, kind, revises: true } : { id, criterion, kind },
             ),
             signal: me.abort.signal,
-          });
+          }, madeFor);
           if (!belongsHere() || me.superseded) return;
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is
@@ -776,7 +781,7 @@ export function useSearch(
         }
       })();
     },
-    [slug, put, forget, flown, recolour, articleToken],
+    [slug, put, forget, flown, recolour, articleToken, madeFor],
   );
 
   const revise = useCallback(

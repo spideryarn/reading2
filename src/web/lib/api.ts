@@ -90,7 +90,7 @@ import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.
 import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
 import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
-import { heldReader, heldToken, onSession, sessionObserved, tokenOwnerOf } from "./session.js";
+import { heldReader, heldToken, onSession, sessionObserved, sessionRevision, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
 import type { QuizResponse } from "../../types.js";
@@ -1239,7 +1239,7 @@ async function accessToken(): Promise<Credential> {
      retry below handles it. Being refused quickly is recoverable. Hanging is
      not. */
   /* What this tab held as the lookup went out: see `sessionObserved` below. */
-  const before = heldReader();
+  const before = sessionRevision();
   return await Promise.race([
     supabase.auth.getSession().then((r) => {
       /* **The lookup knows something the tab does not.** It answered as a
@@ -1249,7 +1249,7 @@ async function accessToken(): Promise<Credential> {
          still refused by its caller's check, since it was made for the
          earlier reader. Not if an event arrived while this was out: then the
          tab has newer news than this answer. lib/session.ts § `sessionObserved`. */
-      if (r.data.session && heldReader() === before) sessionObserved(r.data.session);
+      if (r.data.session) sessionObserved(r.data.session, before);
       return r;
     }).then((r) => ({
       token: r.data.session?.access_token,

@@ -115,8 +115,14 @@ kept as it was written. What that plan landed, and what it did not:
 - **The reading view was looked at, and its leaks are fenced**: the writes it owes as it unmounts,
   the module-level stores, the Feedback dialog, and two things found outside it, `/profile` and
   the retry of a spoken exchange.
-- **Still open**: none of it has been checked in a browser; the live meter's flush on stop is
-  unfenced on the client (the server checks whose session it is); and `spya.lastView.<slug>` in
+- **The built-code review found more delayed work**: comment PATCH queues and late deletions,
+  search revisions and search/criteria colour queues, audio conversion/retries, and live startup
+  and provider callbacks. They need
+  the same original-reader fence. It also found two stale-session orderings: a late initial SDK
+  snapshot, and a lookup overtaken by A → signed out → A. One subscription removes disagreement
+  between subscribers; a revision fence is additionally needed to reject an overtaken lookup.
+  The fixes and regression tests are recorded in [261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md).
+- **Still open**: none of it has been checked in a browser; and `spya.lastView.<slug>` in
   browser storage carries no reader.
 
 **A plain `apiFetch` that names nobody, begun under A, whose token lookup straddles the change, is

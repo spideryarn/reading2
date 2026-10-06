@@ -320,8 +320,8 @@ export function useComments(slug: string): CommentsApi {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /* **Whose comments these are** (lib/made-for.ts), for the two creates a
-     draft can reach late: `AnnotateDialog` stores an unsaved draft from its
+  /* **Whose comments these are** (lib/made-for.ts), for creates and queued
+     edits that can send late: `AnnotateDialog` stores an unsaved draft from its
      unmount cleanup and from `pagehide`, and a change of reader is what
      unmounts it. Unnamed, the draft was stored on the next reader's article
      of the same slug. `null` for a visitor, who makes none.
@@ -530,6 +530,7 @@ export function useComments(slug: string): CommentsApi {
         // `fetchOk` is that check made unforgettable — lib/api.ts.
         await fetchOk(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
+          madeFor,
         );
       } catch (e) {
         /* A write captured for the article we just left must still finish, but
@@ -537,7 +538,7 @@ export function useComments(slug: string): CommentsApi {
         if (reportFailure) setError(describeFetchFailure(e as Error));
       }
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -888,6 +889,7 @@ export function useComments(slug: string): CommentsApi {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ body }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
           /* **The server's comment replaces the stored one; it is not merged
@@ -907,7 +909,7 @@ export function useComments(slug: string): CommentsApi {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor],
   );
 
   /**
@@ -957,6 +959,7 @@ export function useComments(slug: string): CommentsApi {
                  start travelling by accident. */
               body: JSON.stringify({ criterionId: mark.criterionId, valence: mark.valence }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
           if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
@@ -964,7 +967,7 @@ export function useComments(slug: string): CommentsApi {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor],
   );
 
   /**
@@ -988,6 +991,7 @@ export function useComments(slug: string): CommentsApi {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ colour }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
           if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
@@ -995,7 +999,7 @@ export function useComments(slug: string): CommentsApi {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor],
   );
 
   /**

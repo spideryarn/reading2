@@ -118,7 +118,10 @@ the page leaves, a call still waiting for its token) could go out as the next re
 - **A refusal moves the tab on.** When a token lookup answers as a different known reader from the
   one held, the held session is replaced by that one and every subscriber is told, as an SDK event
   would. The request that noticed is still refused; the screen redraws for the reader the token
-  belongs to, so their requests go. A lookup never signs the tab out.
+  belongs to, so their requests go. A lookup never signs the tab out. A session revision, captured
+  before the lookup, prevents an answer overtaken by any adopted session from replacing it,
+  including a sign-out and sign-in of the same reader. `INITIAL_SESSION` only fills an unheard
+  tab; its asynchronous storage read cannot replace a newer event.
 
 **What the binding cannot see is a request made late.** A timer, a retry loop, a flush as the page
 unmounts, a module-level service: each *makes* its call after the reader's gesture, possibly after
@@ -147,6 +150,11 @@ signed-in `App`:
 The Feedback dialog is the one thing above every page: `FeedbackHost` takes the reader and gives
 its draft up when the reader changes. A page that holds a reader's words and is not under
 the article's gate is keyed on the reader in `App.tsx`: the shelf, the add page and `/profile`.
+
+The dictation boxes use `useReaderTranscriber` from `dictation-upload.ts`, which captures their
+mounted reader before recording; audio conversion and retries retain that reader. Both live
+engines retain `apiWiringFor(madeFor)` from `live/wiring.ts`, so device detection, offer creation,
+provider tool callbacks and meter retirement cannot send as a later reader.
 
 ## The signed-out page is the landing page
 

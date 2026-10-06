@@ -22,7 +22,7 @@
 import type { GptLiveTicket, MicPlacement } from "../../types.js";
 import type { GptLiveUsageReport } from "./gpt-live/meter.js";
 import type { MeterTransport, PostOutcome } from "./meter.js";
-import { apiFetch, failure, readJson } from "../lib/api.js";
+import { apiFetch, failure, NotThisReader, readJson } from "../lib/api.js";
 
 /** What one live session is opened with. The server's half is `liveChatToken`. */
 export interface LiveTicket {
@@ -131,7 +131,7 @@ export interface LiveWiring extends MeterTransport {
  * `408` and `429` are the two 4xx statuses that mean "not now" rather than
  * "not ever", so they retry.
  */
-async function post(path: string, body: unknown, keepalive: boolean): Promise<PostOutcome> {
+async function post(path: string, body: unknown, keepalive: boolean, madeFor: string | null): Promise<PostOutcome> {
   try {
     const res = await apiFetch(path, {
       method: "POST",
@@ -144,7 +144,7 @@ async function post(path: string, body: unknown, keepalive: boolean): Promise<Po
          it cannot set an `Authorization` header, and every route under `/api/`
          takes a bearer token and no cookie. */
       ...(keepalive ? { keepalive: true } : {}),
-    });
+    }, madeFor);
     if (res.ok) return "accepted";
     if (res.status === 408 || res.status === 429 || res.status >= 500) return "retry";
     /* **Said out loud, once per refusal.** The body of a 400 from this endpoint
@@ -154,7 +154,8 @@ async function post(path: string, body: unknown, keepalive: boolean): Promise<Po
        they could do about it. */
     console.error(`[live-meter] ${res.status} on ${path}`, (await failure(res)).message);
     return "refused";
-  } catch {
+  } catch (err) {
+    if (err instanceof NotThisReader) return "refused";
     return "retry";
   }
 }
@@ -168,100 +169,111 @@ async function post(path: string, body: unknown, keepalive: boolean): Promise<Po
  * nothing to draw, nothing to withdraw, and the only sensible answer is to stop
  * and say why. The hook has one `catch` around the whole of `start` for exactly
  * that, and it releases the microphone before it reports.
+ *
+ * `madeFor` is captured by the mounted page, before device detection, offers,
+ * provider callbacks or the meter's retirement can outlive a reader change.
+ * Each late request names that reader; a rejected meter post is terminal.
  */
-export const apiWiring: LiveWiring = {
-  async ticket(slug, threadId, placement, signal) {
-    const res = await apiFetch(
-      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live`,
-      {
+export function apiWiringFor(madeFor: string | null): LiveWiring {
+  return {
+    async ticket(slug, threadId, placement, signal) {
+      const res = await apiFetch(
+        `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ placement }),
+          ...(signal ? { signal } : {}),
+        },
+        madeFor,
+      );
+      if (!res.ok) throw await failure(res);
+      const ticket = await readJson<Partial<LiveTicket>>(res);
+      /* Checked rather than cast. Without a token there is nothing to connect
+         with, and the string "undefined" reaching the SDP exchange comes back as
+         a 400 about SDP — one layer away from what is actually wrong. */
+      if (!ticket.token) throw new Error("The server started a session without a key for it.");
+      return {
+        token: ticket.token,
+        expiresAt: ticket.expiresAt ?? 0,
+        model: ticket.model ?? "",
+        seed: ticket.seed ?? [],
+        /* `null` rather than `??`-ing to something: an absent tail and a tail of
+           `null` mean the same thing here — an empty conversation — and there is
+           no third answer to guess at. */
+        tailId: ticket.tailId ?? null,
+        /* **Absent is not fatal, and deliberately.** A session id missing from
+           this response means a server too old to journal, and refusing to start
+           would take a working feature down over accounting. The hook says so in
+           the console and meters nothing. */
+        sessionId: typeof ticket.sessionId === "string" ? ticket.sessionId : null,
+      };
+    },
+
+    async session(slug, threadId, offer, signal) {
+      const res = await apiFetch(
+        `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(offer),
+          ...(signal ? { signal } : {}),
+        },
+        madeFor,
+      );
+      if (!res.ok) throw await failure(res);
+      const ticket = await readJson<Partial<GptLiveTicket>>(res);
+      /* Checked rather than cast, as `ticket` is. Without an answer there is
+         nothing to connect with. Without our session id the call would run
+         unmetered, and by now OpenAI has already billed its first fifteen
+         seconds, so this is refused rather than shrugged at. */
+      if (typeof ticket.sdp !== "string" || ticket.sdp === "") {
+        throw new Error("The server started a session without an answer for it. [live-upstream]");
+      }
+      if (typeof ticket.sessionId !== "string" || ticket.sessionId === "") {
+        throw new Error("The server started a session without a record of it. [live-upstream]");
+      }
+      return {
+        sdp: ticket.sdp,
+        sessionId: ticket.sessionId,
+        liveSessionId: typeof ticket.liveSessionId === "string" ? ticket.liveSessionId : "",
+        tailId: ticket.tailId ?? null,
+      };
+    },
+
+    async runTool(slug, name, args, signal) {
+      const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placement }),
+        body: JSON.stringify({ name, args }),
         ...(signal ? { signal } : {}),
-      },
-    );
-    if (!res.ok) throw await failure(res);
-    const ticket = await readJson<Partial<LiveTicket>>(res);
-    /* Checked rather than cast. Without a token there is nothing to connect
-       with, and the string "undefined" reaching the SDP exchange comes back as
-       a 400 about SDP — one layer away from what is actually wrong. */
-    if (!ticket.token) throw new Error("The server started a session without a key for it.");
-    return {
-      token: ticket.token,
-      expiresAt: ticket.expiresAt ?? 0,
-      model: ticket.model ?? "",
-      seed: ticket.seed ?? [],
-      /* `null` rather than `??`-ing to something: an absent tail and a tail of
-         `null` mean the same thing here — an empty conversation — and there is
-         no third answer to guess at. */
-      tailId: ticket.tailId ?? null,
-      /* **Absent is not fatal, and deliberately.** A session id missing from
-         this response means a server too old to journal, and refusing to start
-         would take a working feature down over accounting. The hook says so in
-         the console and meters nothing. */
-      sessionId: typeof ticket.sessionId === "string" ? ticket.sessionId : null,
-    };
-  },
+      }, madeFor);
+      if (!res.ok) throw await failure(res);
+      const out = await readJson<Partial<LiveToolResult>>(res);
+      return { content: out.content ?? "", label: out.label ?? name, detail: out.detail ?? "" };
+    },
 
-  async session(slug, threadId, offer, signal) {
-    const res = await apiFetch(
-      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live-session`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(offer),
-        ...(signal ? { signal } : {}),
-      },
-    );
-    if (!res.ok) throw await failure(res);
-    const ticket = await readJson<Partial<GptLiveTicket>>(res);
-    /* Checked rather than cast, as `ticket` is. Without an answer there is
-       nothing to connect with. Without our session id the call would run
-       unmetered, and by now OpenAI has already billed its first fifteen
-       seconds, so this is refused rather than shrugged at. */
-    if (typeof ticket.sdp !== "string" || ticket.sdp === "") {
-      throw new Error("The server started a session without an answer for it. [live-upstream]");
-    }
-    if (typeof ticket.sessionId !== "string" || ticket.sessionId === "") {
-      throw new Error("The server started a session without a record of it. [live-upstream]");
-    }
-    return {
-      sdp: ticket.sdp,
-      sessionId: ticket.sessionId,
-      liveSessionId: typeof ticket.liveSessionId === "string" ? ticket.liveSessionId : "",
-      tailId: ticket.tailId ?? null,
-    };
-  },
+    /* The three accounting posts. None of them throws and none of them tells the
+       reader anything: a conversation that is going well must not be interrupted
+       because the ledger could not be written, and a conversation that has ended
+       has nobody left to tell. */
+    liveConnected(sessionId, keepalive) {
+      return post(`/api/live/${encodeURIComponent(sessionId)}/connected`, {}, keepalive, madeFor);
+    },
 
-  async runTool(slug, name, args, signal) {
-    const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, args }),
-      ...(signal ? { signal } : {}),
-    });
-    if (!res.ok) throw await failure(res);
-    const out = await readJson<Partial<LiveToolResult>>(res);
-    return { content: out.content ?? "", label: out.label ?? name, detail: out.detail ?? "" };
-  },
+    liveUsage(sessionId, report, keepalive) {
+      return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive, madeFor);
+    },
 
-  /* The three accounting posts. None of them throws and none of them tells the
-     reader anything: a conversation that is going well must not be interrupted
-     because the ledger could not be written, and a conversation that has ended
-     has nobody left to tell. */
-  liveConnected(sessionId, keepalive) {
-    return post(`/api/live/${encodeURIComponent(sessionId)}/connected`, {}, keepalive);
-  },
+    gptLiveUsage(sessionId, report, keepalive) {
+      return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive, madeFor);
+    },
 
-  liveUsage(sessionId, report, keepalive) {
-    return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive);
-  },
+    liveClose(sessionId, reason, keepalive) {
+      return post(`/api/live/${encodeURIComponent(sessionId)}/close`, { reason }, keepalive, madeFor);
+    },
+  };
+}
 
-  gptLiveUsage(sessionId, report, keepalive) {
-    return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive);
-  },
-
-  liveClose(sessionId, reason, keepalive) {
-    return post(`/api/live/${encodeURIComponent(sessionId)}/close`, { reason }, keepalive);
-  },
-};
+/** Unbound wiring for callers without a signed-in page. Hooks bind their own. */
+export const apiWiring = apiWiringFor(null);

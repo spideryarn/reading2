@@ -6,17 +6,18 @@
  * adopts dictation like so:
  *
  * ```tsx
+ * const transcribe = useReaderTranscriber();
  * const dictate = useDictationField({
  *   value, onChange, box,
  *   context: { kind: "article", slug },
- *   transcribe: sendForTranscription,
+ *   transcribe,
  * })
  * <textarea ref={box} readOnly={dictate.readOnly} … />
  * <DictationStrip {...dictate.strip} />
  * ```
  *
  * `transcribe` is the seam that lets the fleet dashboard reuse this file rather
- * than copy it; the product's answer is always `sendForTranscription` from
+ * than copy it; the product's answer is always `useReaderTranscriber` from
  * [dictation-upload.ts](./dictation-upload.ts). [transcriber.ts](./transcriber.ts)
  * says why it is a parameter.
  *
@@ -148,7 +149,7 @@ export function useDictationField<C>({
    * [transcriber.ts](./transcriber.ts).
    */
   context: C;
-  /** How a recording becomes words. The product passes `sendForTranscription`. */
+  /** How a recording becomes words. The product passes `useReaderTranscriber()`'s bound sender. */
   transcribe: Transcriber<C>;
   /**
    * Where a copy is kept until the words are in the box, so a closed tab does

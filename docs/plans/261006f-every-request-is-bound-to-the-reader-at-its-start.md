@@ -58,6 +58,12 @@ still refused, since it was made for the earlier reader; the screen redraws for 
 token belongs to. A lookup's word never signs the tab out, and is ignored if an SDK event arrived
 while the lookup was out.
 
+The built-code review found that comparing reader ids did not enforce this: A → signed out → A
+still compared equal. The lookup now carries the session revision, which changes on every
+adoption. The SDK's asynchronous `INITIAL_SESSION` also only fills a tab that has heard nothing;
+it cannot overwrite an event that overtook its storage read. Both orderings are exercised against
+the installed SDK in `tests/session-sdk-ordering.test.ts`.
+
 **Why nobody is not bound.** A call made signed out and sent with the token of the reader who then
 signed in carries nobody else's words and reads only that reader's data. Binding it would refuse
 the first requests after every sign-in whenever the lookup beat the event.
@@ -131,13 +137,18 @@ of A's may stay open for B. To be confirmed by a test and, if so, keyed on the r
 | A spoken exchange is retried after a gap (`appendSpoken` in `chat/effects.ts`), and a first exchange creates its thread, so A's transcript could be stored for B | every attempt names one reader: the band's, or the tab's as the call is made. A refusal ends the loop as a plain failure |
 | A, then signed out, then B: the stores survived the signed-out moment | they are emptied on departure from a known reader, not on arrival of the next |
 
-### Not done here, and reported
+### Initially left, and what remains
 
-- **The live meter's flush on stop** (`live/meter.ts`): unfenced on the client. The server checks
-  that the session is the caller's, so B is not charged for A; its post is injected, so a fence
-  is more than a line. Left.
+- **The live meter's flush on stop** was initially left unfenced: the server checks that the
+  session is the caller's, so B is not charged for A. The built-code review additionally found
+  delayed live startup and provider tool callbacks, including a paid GPT-Live session created as
+  the next reader. Both live hooks now retain default API wiring bound to their mounted reader;
+  startup, tools and meter posts all name that reader. Injected preview/test wiring is unchanged.
 - **`spya.lastView.<slug>` and the thorough-search pair in browser storage** carry no reader id.
-  B is restored to A's view position. No words are shown. Low; reported.
+  The first can restore B to A's view position. The second retains private search words in
+  localStorage; restored pairs are checked against the current reader's rows before use, and
+  unmatched pairs are discarded without displaying their words. This browser-storage work
+  remains deliberately outside the scope.
 
 ### The simpler option passed over
 
@@ -191,10 +202,37 @@ fences are needed either way, so the reload adds nothing they do not.
     with the provider's value taken out, the unmount save goes out as B and the test fails.
   - **F4 and F5** were already built; each now has a test by name in
     `tests/reader-change-empties-the-stores.test.tsx`, and the shelf's failed state is reset too.
-- **Not checked in a browser yet**: the stage's *done* asks for desktop, iPad and phone widths.
-  - **Tests adapted for the one subscription: four.** `use-session.test.ts` (its harness was the
+- The built-code review additionally fenced queued comment edits, placements, colours and late
+  deletions (`tests/reading-view-owed-writes-on-reader-change.test.tsx`), queued search/criteria
+  settings, search revisions and late deletions (`tests/search-criteria-late-reader.test.tsx`),
+  dictation conversion/retries (`tests/dictation-reader-change.test.ts`) and delayed live startup,
+  tools and metering (`tests/live-reader-change.test.tsx`). A recording retains its first reader
+  across retries, and each dictation box binds its sender at mount, before recording or tape
+  draining can start the first upload late. Each regression was seen failing before its fix.
+- **Tests adapted for the one subscription: four.** `use-session.test.ts` (its harness was the
     hook's own SDK listener), `add-page-reader-change.test.tsx` (it cleared the SDK's listeners
     between cases, which now removes the only one), `the-enter-key-really-sends.test.tsx` (its SDK
     stand-in had no `onAuthStateChange`, and the experimental-features store now reaches
     `session.ts` at import) and `eager-client-graph.test.ts` (two new modules every reader
     downloads, each a decision recorded there). `resetSessionForTests` exists for the first two.
+- **GPT Sol's code review: approve with fixes**
+  ([261006f-code-review-sol.md](261006f-code-review-sol.md), C1 to C7). It fixed C1 to C6 itself:
+  the bullet above, and two in `session.ts` (a late `INITIAL_SESSION` only fills a tab that has
+  heard nothing; a lookup's answer is adopted only if no session was adopted while it was out,
+  counted by a revision). C7, the search words and reading position in browser storage with no
+  reader id, is reported and not done.
+- **Sol's own fixes were then checked by an Opus subagent, read-only**, since the reviewer that
+  wrote a fix is the wrong one to check it. Five were sound. **C4 was incomplete**: the Feedback
+  dialog is drawn by `FeedbackHost`, which sat outside the reader provider in `App.tsx`, so
+  dictation in the Feedback box had no reader and fell back to a lookup made late. The provider
+  now wraps `FeedbackHost`; `tests/feedback-dialog-has-its-reader.test.tsx` was red first
+  (`expected 'nobody' to be 'A'`). Two of Sol's live-conversation fences were mutation-checked
+  (the paid session and the tool call), and both tests noticed.
+- **Browser check, 2026-10-06**, a Sonnet subagent with Playwright at 1440, 820 and 390: shelf,
+  article, chat draft, comment, `/profile` save, Feedback draft and sign-out then sign-in all
+  worked for one reader, with no refused request. It ran on the tree as committed at stage 2,
+  before the code review's fixes. **The change of account itself was not driven in a browser**:
+  the local database has one seeded reader. That path rests on the tests.
+- **Still open, reported to the Overseer:** C7 above; and the late senders Sol listed and did not
+  fence because the server checks ownership before access or spending (chat recovery reads, mode
+  polling, link-preview retries, chained link summaries).
