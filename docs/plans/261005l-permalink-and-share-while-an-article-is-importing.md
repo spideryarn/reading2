@@ -367,3 +367,50 @@ to GPT Sol with the question *does anything else leak*.
   Client tests for the visitor page and its re-asking.
 - `npm test`, `npm run typecheck`, GPT Sol on this plan and on the code, a browser check at three
   widths.
+
+### What the stage 2 plan review changed
+
+GPT Sol, 2026-10-06 ([its answer](261005l-stage-2-plan-review-sol.md)): the 2c access design is
+sound, six findings, all taken. **Where these differ from 2a to 2c above, these are the design.**
+
+- **F1 (P1): controllers and the held job belong to one reader.** A private link's key is now in
+  a controller's state, and an account change can leave the add page mounted. So the registry is
+  keyed by reader and slug, is emptied when the session changes (where `useJobSession` already
+  fences the upload engine and the batch), and an answer that arrives for a retired controller
+  changes nothing and is shown to nobody. The same goes for stage 1's public controller and for
+  2a's held job. Tests: a direct switch from reader A to reader B, and A's answer arriving after it.
+- **F2: the error's code has to be declared.** `StillBeingAdded` is a leaf error class with
+  `status = 409` and a fixed message that names nothing; `declaredFields` in `src/routes.ts` gets
+  a branch for it, or the body has no `code`. Test the exact JSON through `handleApi`, and that
+  another 409 does not become this one.
+- **F3: the owner is not asked first today**, so 2c's last paragraph was wrong. `findArticle`
+  falls through to the public read, which will now say *still being added* for the owner of a
+  shared import. So a signed-in reader with that answer goes through `OwnerNotShared`'s job
+  detection (fresh list, the completed-job re-read), and the visitor page is what it falls back
+  to where it falls back to `NotSharedPage` today. Tests for owner, signed-in non-owner, signed
+  out.
+- **F4: the held job follows Retry.** It lives in the existing source-tagged `started` record,
+  written from the add POST and from Retry's answer, and is used only while its source and job
+  id are the current ones. The upload engine's own snapshot (`mine.phase.job`) is the same
+  fallback for an upload, so 2a has no upload exception.
+- **F5: *pending* means queued, or running with a lease that has not expired.** A dead claimant
+  stays `running` until an owner's request settles it, and a visitor's poll settles nothing. The
+  read uses the existing lease predicate and never the sweep that writes. A queued job may still
+  wait on its owner's browser, so the page promises nothing about when.
+- **F6: there is no public comments route to assert a 404 on.** Comments, searches and the source
+  guess ride inside the article payload. The test asserts the 409 body has exactly `error` and
+  `code`; the head and asset 404s each get a published control that answers 200.
+
+**The query for 2c**, from the review: one ownerless existence read from `articles` with
+`publicAccessWhere(slug, access)` and `current_revision_id is null`, and a correlated `exists` on
+`jobs` by `jobs.slug = articles.slug and jobs.owner_id = articles.owner_id` and the pending
+predicate. It selects a constant. Jobs have no article id column. `tests/public-imports.test.ts`
+excludes the `jobs` table from public code today; it gets the one narrow permission, with SQL
+tests for the access predicate, the owner and slug correlation and the null revision.
+
+**Added to Done looks like**: a turned-off and a rotated key; a cancelled and a failed job; an
+expired lease; another owner's job on the same slug; an archived row (409, as a published
+archived article is readable by link); `openEarly`'s first publication (200); an uncertain answer
+to the link's create does not create again by itself (a second create would rotate the key); the
+visitor page stops asking when hidden, unmounted, or its slug or key changes; and what it does
+when the article publishes, the import fails, or sharing is turned off while it waits.
