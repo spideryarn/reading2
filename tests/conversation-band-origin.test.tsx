@@ -201,6 +201,32 @@ describe("a conversation handed over with an origin", () => {
     expect(open()).toBe("spya-rgn444");
   });
 
+  it("still reports the corrected saved-comment id after the band unmounts", async () => {
+    let release: (() => void) | undefined;
+    onPost = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(answered("spya-rgn444"));
+      });
+    const handoff = {
+      slug: SLUG,
+      question: SEED,
+      send: true,
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      sourceCommentId: "spya-cmt777",
+    };
+    history.replaceState(null, "", "/a-piece?mode=chat");
+    await act(async () => root.render(band(handoff)));
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    const guessed = String(posts[0]?.body.threadId);
+    expect(handoffThreads.map((row) => row.id)).toEqual([guessed]);
+
+    await leave();
+    await act(async () => release?.());
+    await settleChat();
+
+    expect(handoffThreads.map((row) => row.id)).toEqual([guessed, "spya-rgn444"]);
+  });
+
   it("keeps the origin beside the conversation, sends nothing, then sends exactly it with the first question", async () => {
     await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();

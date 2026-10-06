@@ -1118,27 +1118,26 @@ export function ConversationBand({
        a corrupted transcript. */
     const origin = pendingOrigin(to);
     const id = send(to, question, at, {
-      onThreadId: (corrected) => {
-        void setThread(corrected);
-        if (first) onHandoffThread?.(first, corrected);
-      },
-      ...(origin && to ? {
-        /* Data survives a mode change; URL navigation above does not.
-
-           Accepted residual (review CR-6, plan 261005i): this moves the
-           draft's bookkeeping to a corrected id, but a band that was
-           closed and reopened before `begin` arrived still addresses the
-           guess. The server corrects a chat's id only when the guess
-           equals an existing message id in this article (about one in a
-           million), and then a follow-up from the reopened composer
-           starts a separate conversation with no origin. The first
-           conversation and its origin are intact. */
+      onThreadId: (corrected) => void setThread(corrected),
+      ...((first || (origin && to)) ? {
+        /* Data survives a mode change; URL navigation above does not. */
         onConfirmed: (confirmed: string) => {
-          if (confirmed !== to) {
+          /* This is data too: the comment must learn the server's id even if
+             the band has unmounted and its navigation callback was detached. */
+          if (first && confirmed !== to) onHandoffThread?.(first, confirmed);
+          /* Accepted residual (review CR-6, plan 261005i): this moves the
+             draft's bookkeeping to a corrected id, but a band that was
+             closed and reopened before `begin` arrived still addresses the
+             guess. The server corrects a chat's id only when the guess
+             equals an existing message id in this article (about one in a
+             million), and then a follow-up from the reopened composer
+             starts a separate conversation with no origin. The first
+             conversation and its origin are intact. */
+          if (origin && to && confirmed !== to) {
             drafts.moveThread(to, confirmed);
             if (drafts.destination() === to) drafts.setDestination(confirmed);
           }
-          drafts.clearOrigin(confirmed);
+          if (origin && to) drafts.clearOrigin(confirmed);
         },
       } : {}),
       kind,

@@ -184,5 +184,39 @@ One stage; it is small.
   Opus (D2). PR-4 accepted (D6). PR-5 accepted (D4). PR-6 accepted: a test with the list fetch
   held, and one for the same follow-up asked twice.
 - 2026-10-06: the pending-origin machinery in the band (an origin kept beside an unsent draft
-  across a mode change) is now reached only by a first send that fails. It is kept, and its
-  band-level tests keep building hand-offs with `send: false`.
+  across a mode change) is now reached only by a first send that fails and by the command bar's
+  row, which still waits. It is kept, and its band-level tests keep building hand-offs with
+  `send: false`.
+- 2026-10-06: built and committed as `2d3fb0166`. The app-level tests for Glossary, Citations and
+  Debate were re-pointed by a subagent; none was deleted. The follow-up tests in
+  `tests/help-sends-once.test.tsx` were checked red by mutating the latch.
+- 2026-10-06: browser check (Playwright on the box, a Sonnet subagent, local article
+  `vb-spya-vu3xen`): Glossary (entry, and an absent word), Citations and the highlight box's
+  follow-up each made exactly one chat POST on the press, with the question in the transcript and
+  the box empty and unfocused, at 1440 and at 390; leaving Chat and returning sent nothing more;
+  the Summary button still pre-filled and sent nothing. Not seen: the brief *Asking…* state on
+  the floating chat, which the unit test holds. Shots `261006j-shot-1` to `-5`.
+- 2026-10-06: GPT Sol's code review of `2d3fb0166`
+  (`261006j-ask-in-chat-sends-code-review-sol.md`), verdict *ship with my fixes*, three P1s, all
+  fixed by the reviewer and committed as `2c75820ae`:
+  - **CR-1.** A follow-up or Ask AI pressed **while Chat or Learn was open** went into the
+    floating dialog, which those modes hide. It would not have sent, and then would have sent on
+    some later mode change. Path B now uses Path A's hand-off there (`askPassageInChat`), carrying
+    the anchor and `sourceCommentId`. This is the bug my own doubt about "no app-level test of the
+    wiring" was pointing at; the reviewer added that test.
+  - **CR-2.** StrictMode's cleanup dropped `onThreadId` after a send made inside the hand-off
+    effect. The send is queued one microtask.
+  - **CR-3.** Help and docs that still said a paid press waits.
+  Round two is a narrow check of those fixes only.
+- 2026-10-06: round two (`261006j-ask-in-chat-sends-code-review-2-sol.md`), verdict *ship with my
+  fixes*, one P2 fixed by the reviewer: CR-1's fix told the saved comment its corrected thread id
+  through the navigation callback, which is dropped when the band unmounts; it now goes through
+  `onConfirmed`. The reviewer wrote it up as
+  [261006o](../postmortems/261006o-a-shorter-lived-navigation-callback-cannot-own-durable-data.md).
+  It confirmed the rest of round one's fixes, including a Learn-mode probe. Discovery is closed.
+- 2026-10-06: gates. `npm run typecheck` green. Full `npm test`, started while round two was
+  still editing: 39,094 passed, 2 failed. One was `tests/feedback-endings.test.ts`, stale until
+  this report's note was generated, and now regenerated. **The other failure's name was cut off
+  the captured output and I did not identify it.** After round two finished I reran the 377 test
+  files about chat, comments, the modes touched, help, docs and feedback: all 7,031 tests pass.
+  The likeliest cause is the reviewer's red-first test being on disk mid-run, but that is a guess.
