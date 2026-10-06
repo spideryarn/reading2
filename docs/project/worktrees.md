@@ -174,6 +174,12 @@ session's uncommitted work. So a task briefed as unstarted may be most of the wa
 branch may already be several commits along. **Look before you begin**: `git log --oneline
 origin/dev..HEAD` and `git status` in the tree, not `git log origin/dev`, which is where somebody
 checks, sees nothing, and starts again from scratch on top of a half-finished job.
+If there is work there, neither trust it nor throw it away: read it and check its claims
+yourself, by breaking each fix and watching its test go red. On 2026-09-05 that took twenty
+minutes for three inherited stages, and they were sound. And look before you enter, too: "I
+grepped `dev` and it isn't done" does not mean nobody has done it, because uncommitted work in a
+worktree is invisible to `origin/dev` and to the primary. With a dozen agents in their own trees,
+check `git worktree list` for one on the topic before assuming a clean start.
 
 **A subagent spawned before `EnterWorktree` loses its shell.** Bash inside a worktree-isolated
 session refuses any command it cannot statically prove stays inside the tree — a pipeline whose
@@ -353,7 +359,7 @@ landed, not against the file.
 ```bash
 # from a worktree, when a piece of work is done
 git fetch origin dev
-git merge origin/dev           # NOT rebase — see below
+git merge origin/dev           # NOT rebase — see below. Commit first: never merge on a dirty tree
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
 
@@ -379,6 +385,9 @@ after the merge.
 In the shared primary, look first: if `git rev-list --left-right --count HEAD...origin/dev` shows
 nothing local-only, `git merge --ff-only origin/dev` moves the branch without a merge commit and
 without touching what other agents have uncommitted there.
+
+**Commit before every merge.** A merge refused over modified tracked files has once left them at
+`HEAD` — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
 
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.

@@ -683,6 +683,14 @@ Each of these has cost somebody real time on this box.
 - **`idle` describes the pane, not the work.** A session that ended its turn by handing Greg a
   decision in prose shows as idle; ten of fifteen did, and a mechanical check for question marks
   found one of twenty-three, because decisions end in full stops.
+- **`idle` is not abandoned either.** Measured 2026-09-06 across sixteen sessions: most `idle` ones
+  had armed a `CronCreate` one-shot hours ahead and stopped on purpose. Before calling a session
+  stuck or finished, `tmux capture-pane` and look for a `CronCreate` near the tail, and check for a
+  running `sleep` or `until` child: a session that scheduled its own wake-up is not to be killed.
+  The percentage in its status line is the context bar, not progress — "7%" was once reported as
+  "stage 1 not yet coded" on a branch eight commits deep — so take `git log origin/dev..<branch>`
+  and the plan doc's status line over any reading of the pane. Killing a finished session loses
+  nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
   and the id is in your own register.
@@ -715,6 +723,12 @@ Each of these has cost somebody real time on this box.
   allowed `kill -TERM` of the daemon and refused every relaunch, and the daemon was down eleven
   minutes on 2026-09-08 until Greg typed it. Run the exact relaunch shape against something harmless
   first; if that is refused, leave the old one running and hand Greg both halves as one command pair.
+  Worktree isolation is a second gate of the same shape: on 2026-09-09 a session in a worktree was
+  allowed to stop the readiness loop and refused every way of starting it, because the launch runs
+  git in another worktree. So probe the real path, not only the command's shape. Do not ask a peer
+  to run the half you were refused. The way out of an isolation refusal is `ExitWorktree` with
+  `action: "keep"`, which returns the session to the primary, where restarting a service is an
+  ordinary operation; say so to the Overseer before doing it.
 
 ## The log, and the surface Greg reads
 
