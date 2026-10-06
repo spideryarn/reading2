@@ -211,4 +211,37 @@ done <<EOF
 $segments
 EOF
 
+# ---------------------------------------------------------------------------
+# Killing processes by name.
+#
+# Added 2026-10-06, after a browser subagent tidied up with
+# `pkill -f "node_modules/.bin/vite"`: the pattern also matched `vitest`, and it
+# took down every dev server on the box and several sessions' test runs, which
+# then read as failures of their changes. Greg, the same day: "the safety hook
+# sounds sensible". Every process on the box is somebody's; a name or a pattern
+# cannot say whose. `kill <pid>` of a process you started can.
+#
+# Per segment and only as the COMMAND (optionally after sudo), so a grep or a
+# commit message that merely mentions the word is fine.
+# The second alternative is for the python3-less fallback above, where the text is
+# the raw JSON and the command sits after `"command":"` rather than at a line start.
+KILL_BY_NAME='(^[[:space:]]*|"command"[[:space:]]*:[[:space:]]*")(sudo[[:space:]]+)?(pkill|killall)([[:space:]]|$)'
+printf 'pkill -f x' | grep -Eq "$KILL_BY_NAME" || refuse "self-test failed: kill-by-name matcher missed pkill"
+printf 'grep pkill notes' | grep -Eq "$KILL_BY_NAME" && refuse "self-test failed: kill-by-name matcher hit a grep"
+
+while IFS= read -r segment; do
+  printf '%s' "$segment" | grep -Eq "$KILL_BY_NAME" || continue
+  printf 'Refused by .claude/hooks/protect-shared-tree.sh: %s\n\n' "$segment" >&2
+  cat >&2 <<'EOF'
+Killing processes by name or pattern (pkill, killall) is banned in this repo: the
+box is shared, and a pattern cannot tell your dev server from another session's,
+or `vite` from `vitest`. Stop the process you started by its PID: note it when
+you start it, check `readlink /proc/<pid>/cwd` is your own tree, then `kill <pid>`.
+See docs/project/browser-testing-playwright.md.
+EOF
+  exit 2
+done <<EOF
+$segments
+EOF
+
 exit 0
