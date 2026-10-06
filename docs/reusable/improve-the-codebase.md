@@ -131,6 +131,14 @@ notions of "current", two config readers, a helper and the hand-rolled version o
 side. These are worse than duplication because a reader cannot tell which one is correct, and a fix
 lands in whichever the author happened to know about.
 
+**Look for siblings that have drifted apart.** Where a product has several things of one kind —
+modes, pages, panels, routes, jobs — compare them with each other, in the code and on screen: the
+same kind of state (loading, empty, failed), control, wording, size or read handled differently in
+each, for no reason anyone wrote down. Each difference is a choice a reader has to relearn and an
+edit the next author has to make N ways. Greg, 2026-10-06: *"looking for inconsistencies across
+modes is a good thing to try and improve"*. Bring them into line through one shared piece where the
+deletion test passes; where the difference is a product question, it goes to the product owner.
+
 **And notice what slowed you down** in the last few hours of real work: what you had to read twice,
 where you hesitated because you couldn't tell which of two paths was live, what you were afraid to
 touch. That is first-hand evidence and nobody else has it.
