@@ -1,0 +1,21 @@
+# Runs box-tidy.service once an hour.
+# docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
+# note in overseer.service. tests/systemd-units.test.ts compares these bytes
+# against the heredoc in that script.
+[Unit]
+Description=Timer for box-tidy.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/hetzner-remote-server-box.md
+
+[Timer]
+# Ten minutes after boot, so it does not compete with everything else starting.
+OnBootSec=10min
+# An hour after the END of the previous run, so a slow run cannot overlap the
+# next. /home went from comfortable to full inside a day on 2026-10-05; hourly
+# is often enough to matter and rare enough to cost nothing.
+OnUnitActiveSec=1h
+Unit=box-tidy.service
+
+[Install]
+WantedBy=timers.target

@@ -101,6 +101,18 @@ export type DiskReading =
   | { kind: "value"; totalKiB: number; usedKiB: number; availableKiB: number; usePercent: number }
   | { kind: "unknown"; why: string };
 
+/**
+ * `/home`, when it is a filesystem of its own.
+ *
+ * On the Hetzner box it is: a 49 GB volume beside a 300 GB `/`, and it is the
+ * one that fills. It reached 100% on 2026-10-05, peers' commits failed and the
+ * Overseer daemon died of ENOSPC, while this module watched `/` at 80% and
+ * said nothing. `none` is a laptop, or a box before the volume is bound: the
+ * same filesystem as `/`, which is already counted, or macOS's zero-sized
+ * automount. Not the same as unknown.
+ */
+export type HomeDiskReading = DiskReading | { kind: "none" };
+
 export type SwapActivityReading =
   | {
       kind: "value";
@@ -146,6 +158,11 @@ export type HealthReport = {
   memory: MemoryReading;
   swap: SwapReading;
   disk: DiskReading;
+  /**
+   * Optional only so that a report from a build before 2026-10-07, and the
+   * fixtures that stand for one, still type. `assembleHealth` always sets it.
+   */
+  homeDisk?: HomeDiskReading;
   swapActivity: SwapActivityReading;
   attribution: AttributionReading;
   verdict: Verdict;
@@ -162,6 +179,8 @@ export type HealthReads = {
   free: CommandOutcome;
   swapon: CommandOutcome;
   df: CommandOutcome;
+  /** `df -k /home`. Absent from a caller that predates the reading, which reads as `none`. */
+  dfHome?: CommandOutcome;
   /** `skipped` is the caller opting out of `vmstat`, which is not a failure. */
   vmstat: CommandOutcome | { skipped: true };
   ps: CommandOutcome;
@@ -273,6 +292,21 @@ export function parseDisk(dfOut: string): DiskReading {
     return { kind: "unknown", why: `df -k / line did not have the expected numeric columns: ${line}` };
   }
   return { kind: "value", totalKiB, usedKiB, availableKiB, usePercent };
+}
+
+/**
+ * `df -k /home` to totals, or `none` when `/home` is not a filesystem of its own.
+ *
+ * Told apart by the LAST column, the mount point, and only `/home` itself
+ * counts. Asked about a directory on the root filesystem, `df` answers with the
+ * line for `/`; macOS answers `map auto_home 0 0 0 100%` mounted somewhere
+ * under `/System`, and 100% of nothing is not a full disk. No data line at all
+ * is still `unknown`, from `parseDisk`.
+ */
+export function parseHomeDisk(dfOut: string): HomeDiskReading {
+  const line = dfOut.split("\n").filter((l) => l.trim().length > 0)[1];
+  if (line !== undefined && line.trim().split(/\s+/).at(-1) !== "/home") return { kind: "none" };
+  return parseDisk(dfOut);
 }
 
 /**
@@ -405,6 +439,7 @@ export function computeVerdict(input: {
   memory: MemoryReading;
   swap: SwapReading;
   disk: DiskReading;
+  homeDisk?: HomeDiskReading;
   swapActivity: SwapActivityReading;
 }): Verdict {
   const reasons: string[] = [];
@@ -500,6 +535,16 @@ export function computeVerdict(input: {
     else if (input.disk.usePercent >= RESOURCE_POLICY.diskUsed.strained) raise("strained", `/ is ${input.disk.usePercent}% full`);
   }
 
+  // The same thresholds as `/`. `none` and an absent reading contribute
+  // nothing: there is no second disk to be full.
+  const home = input.homeDisk;
+  if (home?.kind === "unknown") {
+    reasons.push(`could not measure /home: ${home.why}`);
+  } else if (home?.kind === "value") {
+    if (home.usePercent >= RESOURCE_POLICY.diskUsed.critical) raise("critical", `/home is ${home.usePercent}% full`);
+    else if (home.usePercent >= RESOURCE_POLICY.diskUsed.strained) raise("strained", `/home is ${home.usePercent}% full`);
+  }
+
   if (!coreReadable) {
     // Load, memory AND swap all failed: there is no basis for any of "ok",
     // "strained" or "critical", so say so rather than default to the first.
@@ -550,6 +595,11 @@ export function assembleHealth(reads: HealthReads, startedAtMs: number, nowMs: n
   const disk: DiskReading = reads.df.ok
     ? parseDisk(reads.df.out)
     : { kind: "unknown", why: `df failed: ${reads.df.why}` };
+  const homeDisk: HomeDiskReading = reads.dfHome === undefined
+    ? { kind: "none" }
+    : reads.dfHome.ok
+      ? parseHomeDisk(reads.dfHome.out)
+      : { kind: "unknown", why: `df failed: ${reads.dfHome.why}` };
   const swapActivity: SwapActivityReading = "skipped" in reads.vmstat
     ? { kind: "skipped" }
     : reads.vmstat.ok
@@ -558,13 +608,14 @@ export function assembleHealth(reads: HealthReads, startedAtMs: number, nowMs: n
   const attribution: AttributionReading = reads.ps.ok
     ? parseAttribution(reads.ps.out)
     : { kind: "unknown", why: `ps failed: ${reads.ps.why}` };
-  const verdict = computeVerdict({ load, memory, swap, disk, swapActivity });
+  const verdict = computeVerdict({ load, memory, swap, disk, homeDisk, swapActivity });
 
   return {
     load,
     memory,
     swap,
     disk,
+    homeDisk,
     swapActivity,
     attribution,
     verdict,
@@ -627,6 +678,7 @@ export function collectHealth(options: CollectHealthOptions = {}): HealthReport 
     free: run("free", ["-b"]),
     swapon: run("swapon", ["--show", "--bytes"]),
     df: run("df", ["-k", "/"]),
+    dfHome: run("df", ["-k", "/home"]),
     // "1 2" (one second apart, two samples): the first line is a since-boot
     // average and is discarded by parseSwapActivity, so two samples are the
     // minimum that yields one real reading — about 1s, not the doc survey's
@@ -746,12 +798,13 @@ export async function collectHealthAsync(options: {
   // is deliberate waiting, not pressure worth making `free` queue behind. Its
   // ten-second deadline gives the sample room to finish on a loaded box while
   // distinguishing it from a wedged child.
-  const [uptime, nproc, free, swapon, df, ps, vmstat] = await Promise.all([
+  const [uptime, nproc, free, swapon, df, dfHome, ps, vmstat] = await Promise.all([
     cheap("health:uptime", "uptime", []),
     cheap("health:nproc", "nproc", []),
     cheap("health:free", "free", ["-b"]),
     cheap("health:swapon", "swapon", ["--show", "--bytes"]),
     cheap("health:df", "df", ["-k", "/"]),
+    cheap("health:df-home", "df", ["-k", "/home"]),
     cheap("health:ps", "ps", ["-eo", "rss,args", "--no-headers"]),
     includeSwapActivity
       ? runHealthOwned(options.owner, {
@@ -764,5 +817,5 @@ export async function collectHealthAsync(options: {
       : Promise.resolve({ skipped: true } as const),
   ]);
 
-  return assembleHealth({ uptime, nproc, free, swapon, df, vmstat, ps }, startedAtMs, nowMs());
+  return assembleHealth({ uptime, nproc, free, swapon, df, dfHome, vmstat, ps }, startedAtMs, nowMs());
 }
