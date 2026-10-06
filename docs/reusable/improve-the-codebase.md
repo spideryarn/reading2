@@ -131,6 +131,14 @@ notions of "current", two config readers, a helper and the hand-rolled version o
 side. These are worse than duplication because a reader cannot tell which one is correct, and a fix
 lands in whichever the author happened to know about.
 
+**Look for siblings that have drifted apart.** Where a product has several things of one kind —
+modes, pages, panels, routes, jobs — compare them with each other, in the code and on screen: the
+same kind of state (loading, empty, failed), control, wording, size or read handled differently in
+each, for no reason anyone wrote down. Each difference is a choice a reader has to relearn and an
+edit the next author has to make N ways. Greg, 2026-10-06: *"looking for inconsistencies across
+modes is a good thing to try and improve"*. Bring them into line through one shared piece where the
+deletion test passes; where the difference is a product question, it goes to the product owner.
+
 **And notice what slowed you down** in the last few hours of real work: what you had to read twice,
 where you hesitated because you couldn't tell which of two paths was live, what you were afraid to
 touch. That is first-hand evidence and nobody else has it.
@@ -182,6 +190,17 @@ just a long file.
 The same goes for duplication. **Prove the drift** — the strongest evidence is a fix that has
 already failed to reach one of the copies. Copies stable for months are usually honest, and merging
 them couples two things that were independent.
+
+### Look at the schema, not only the code
+
+The database outlives every refactor, so a flaw there is the most expensive one to leave. Sweep the
+schema and its migrations as a zone of their own: columns nothing reads or writes; a JSON blob
+holding what should be columns or keys; a foreign key, unique constraint, `NOT NULL` or `CHECK` the
+code assumes and the database does not enforce; one fact stored twice; indexes the real queries lack,
+or that no query uses; enum or `CHECK` values nothing produces any more; names that no longer match
+the code's. An "unused" column is an absence, so check scripts and raw SQL too. Anything that drops a
+column or rewrites existing data is hard to reverse: count the rows in production first, and propose
+it rather than building it.
 
 ### Look at the defences, not only the code
 

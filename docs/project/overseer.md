@@ -551,6 +551,10 @@ Every few hours, as a tmux loop like the feedback sweep's:
    Help page has been updated accordingly"*. A Help commit rolls to the next release's notes like
    any late commit; there is no need to run step 3 again. It is a step, not a gate: the deploy does
    not check it.
+   **The project docs get the same read, in a Sonnet subagent** while the deploy runs: the release's
+   commits against the docs that own what they changed, fixing what is now false or missing a
+   signpost. Greg, 2026-10-06: *"ideally we update them periodically (e.g. when pushing, or
+   deploying)"* — [documentation-policy.md § Keeping it true](../reusable/documentation-policy.md#keeping-it-true).
 5. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
@@ -598,6 +602,12 @@ seven days ago, and the directories that leaves empty:
 `find ~/.codex/sessions -type f -name 'rollout-*.jsonl' -mtime +7 -delete`. They were 6.8 GB that
 day, half of it older than a week. A review's conclusions are in the repo's `*-sol.md` files.
 Claude's transcripts under `~/.claude/projects/` are **not** covered.
+
+**Old screenshots in the repo.** Greg, 2026-10-06: *"Yes, old screenshots (>1w) can be deleted - you
+have permission going forwards. Perhaps add this and other measures to keep the hard disk fullness
+down to some routine daemon/service"*. Image files under `docs/plans/` (and the other dated folders)
+last committed more than a week ago may be deleted from the tree in an ordinary commit; they stay in
+git history. A plan that links one is left with a dead image link, which is acceptable.
 
 ### Dispatching agents
 
