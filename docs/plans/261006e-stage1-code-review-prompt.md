@@ -13,7 +13,7 @@ Commit `0432a7404` on this worktree's branch. `git show --stat 0432a7404` lists 
 - `tests/skim-panel.test.tsx`, `tests/stop-card.test.ts`, `tests/skim-purpose-line.test.tsx`
 - `docs/project/skim.md`, `docs/project/tooltips.md`
 - the plan `docs/plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md`
-  and your own plan review `docs/plans/261006e-plan-review-sol.md` (F2, F3, F4 are this stage's)
+  and your own plan review `docs/plans/261006e-skim-plan-review-sol.md` (F2, F3, F4 are this stage's)
 
 **Out of scope, and do not touch:** `src/skim.ts`, `src/types.ts`, `tests/skim.test.ts`,
 `scripts/eval/**`, `src/skim-v9-eval-tmp.ts`, `evals/**`, `docs/investigations/**`. Another agent is

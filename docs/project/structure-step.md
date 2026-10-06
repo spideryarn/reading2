@@ -768,15 +768,33 @@ The rule the split turns on:
 A label's job is to tell its paragraph apart from *its neighbours*
 ([entry length](#granularity)), so every pair a reader compares has to have been written in the same
 call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
-never splits one. Batching on a token window instead would break exactly that and nothing else,
-which is why it would be hard to notice.
+keeps them whole while the packed batches can be asked. Batching on a token window instead would
+break exactly that and nothing else, which is why it would be hard to notice.
+
+**The one exception is a section in a batch whose re-draw would not fit one answer** (over
+1,741 blocks in the packed batch: `labelCallBudget` throws `TooLongForOnePass` for the re-draw a truncated
+batch gets, which has twice the reasoning room, `LABEL_RETRY_HEADROOM`. The first call alone
+would fit up to 2,032, and a batch whose only retry could not be sent lost the labels to one
+truncation). `planBatches` asks about it
+in consecutive near-equal windows of at most 60 blocks, a window not ending on a heading where it
+can help it (`cutIntoWindows`, the cut the [bounded headings tree](#when-one-answer-will-not-fit)
+uses for its sections). Each window is a sibling set of its own with the section's node, crumb
+and gist; the tree is not touched. The rule is on the finished plan, not on the section, because
+the floor and the tail merge below join sets: pack as always, and if any batch could not be
+asked, cut every section over 60 in that batch and pack again. So no plan holds a batch too long
+to ask, and a tree whose batches already fit both calls plans exactly as it did, which its checkpoint
+keys depend on. What it gives up: that section's labels are written without the far windows in view. A
+section between 61 and 1,741 blocks stays whole unless the floor or tail merge puts it in an
+unaskable batch (`oversizedSets` counts those left whole, and nothing more); cutting the rest too
+would move the batches of trees that label fine today.
 
 **There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
 `MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
 `MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
 than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
-backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
-case here — which is the same give the cap already has for an oversized sibling set. Measured before
+backwards into the batch before it. The floor and tail merge can each add up to twelve beyond the
+60, even with no oversized set: sets of `[12, 60, 12]` pack into 84. The widest real case measured
+here was 71. Measured before
 it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
 three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
 merge into. The residue is `acceptGap`'s to refuse.
@@ -1162,22 +1180,46 @@ tree, and is an ordinary finished tree.
   the rest of the first pass. The second pass asks only for what is missing, once each, under the
   same deadline rules, and a slice that fails there is the end of the run. How many slices were
   actually asked in it is `secondPass` on `StructureSource`, in the step's log line and in its `detail`.
+- **The root call is asked for once more too.** If it does not come back, or its answer and the
+  one re-ask of it do not pass, it is asked a second time, one call, under the same deadline
+  rules; the slices and refills are in hand and are not asked again. A refused or cut-short root
+  answer is not asked for again, and neither is one that ran past its cap, which is out of time
+  (and so, with a lease window left, is asked for again in the next one: see below).
+  That a second ask was actually started is `rootAskedTwice` on `StructureSource`, in the step's
+  log line and in its `detail` ("the top line asked for twice").
 - **Slices, halves, refills and the root are each checkpointed** under their own request, so a
   second run on unchanged blocks asks for nothing. A refused or cut-short slice leaves a marker
   under its own key (an entry with `halve` and no `answer`), so a later run goes straight to the
   halves and does not buy the refused answer again.
 - **The slices keep a deadline of their own, ahead of the queue's**, and every call has a time
-  cap. If the queue's deadline fired first the job would end as interrupted, whatever this step
-  returned.
-- **On a failure it cannot get past, it stops starting calls, waits for the ones in flight, and
-  falls back** to the tree below. A slice that failed in both passes, a slice refused or cut short
-  that could not be read in halves, a failed root call, a joined tree that will not build, a
-  section the labels step could not ask about, or time running out, which stops both passes at
-  once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
+  cap. That is so the step stops itself with every call settled and its spend counted, and is
+  never still returning a tree when the queue's deadline fires, which would end the job as
+  interrupted whatever the step returned. Running out of time stops both passes at once.
+- **Out of time with a lease window left, it hands the job back and returns no tree** (since
+  2026-10-06). The step throws `NeedsAnotherWindow`
+  ([`src/another-window.ts`](../../src/another-window.ts)) once every call in flight has settled,
+  and the queue puts the job down exactly as it does at its own deadline: same row, same draft,
+  up to `REQUEUE_BUDGET` more windows, re-driven by the browser
+  ([ingest-queue.md § a step can ask for the same pause itself](ingest-queue.md)). Saved answers
+  are read before any deadline is consulted, so the next window asks only for what is missing.
+  The step is told which window it is in (`StepContext.window`), and its log line carries it.
+  "Out of time" is also a required call running past its own cap, so a hand-back can come early
+  in a window and still spends one of the three; and nothing requires progress, so a window in
+  which no answer was bought spends one too. A call that always exceeds its cap can be bought
+  in all three windows before falling back, with no improvement in the result.
+- **On a failure it cannot get past, or out of time with no window left (or a direct call without
+  a queue), it stops starting calls, waits for the ones in flight, and falls back** to the tree
+  below. A slice that failed in both passes, a slice refused or cut short that could not be read
+  in halves, a root call refused, cut short or failed twice, or a joined tree that will not
+  build: none of these hands back, because a second window would fail the same way. What was
+  spent is still counted. A reader's Stop is a cancellation, not a fallback and not a hand-back.
+
+The stage command line uses the same queue and receives the same windows
+([`scripts/stage.ts`](../../scripts/stage.ts)); the no-queue behavior is for direct calls.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
 seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is
-not time, so the step falls back.
+not time in one window, so it takes up to three, and falls back after them.
 
 ### The fallback: a tree from the document's own headings
 
@@ -1213,8 +1255,12 @@ this step.
   That value means the opposite: a `["structure"]` job is queued to replace it. Ask
   `awaitingStructure(tree)` ([`src/types.ts`](../../src/types.ts)), never the bare flag, since the
   two values want different things from every reader.
-- **A model's tree takes the same path when the labels step could not start on it**: one holding a
-  section too long for one labels call (`unaskableBatches`, [`src/labels.ts`](../../src/labels.ts)).
+- **A model's tree no longer takes this path for a section too long for one labels call.** From
+  2026-10-05 to 2026-10-06 it did (`labels-could-not-ask`), and the reader lost every gist. The
+  labels planner now asks about such a section in windows
+  ([§ Why they are two steps](#two-steps)), so the tree stands.
+  `unaskableBatches` ([`src/labels.ts`](../../src/labels.ts)) is kept as the measure: it is empty
+  for every tree, and the tests and the long-document evals ask it.
 - **`StructureRun.source` says which path ran** (one answer, slices, or headings and why), and the
   step logs it at every value and puts it in its `detail`, so a fallback that became the common
   case would show.

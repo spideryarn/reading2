@@ -103,6 +103,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 
 - **`src/web/lib/api.ts` § `apiFetch`, `fetchOk`, `readJson`** — any call to our own API: the
   session, offline, and an error the reader can be shown ([§ Reading an API response](#reading-an-api-response)).
+  A request that is sent after its page may have gone (a timer, a retry, a flush on the way out)
+  passes the reader it was made for as the third argument —
+  [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another).
 - **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
   then exactly one `done` or `error`.
   The lower-level `readEvents` is what most older hooks loop over by hand —

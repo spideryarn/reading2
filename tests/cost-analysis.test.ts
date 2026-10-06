@@ -496,6 +496,11 @@ describe("failures and retries", () => {
       retries: 3,
       gaveUp: 1,
       diedPartWay: 1,
+      /* Nothing in it was stopped. */
+      stalled: { attempts: 0, partWay: 0 },
+      timedOut: { attempts: 0, partWay: 0 },
+      stopsClassified: 0,
+      stopsNotClassified: 0,
     });
     expect(analyse(detail, { includeNonProduct: true }).failures.total).toMatchObject({ counted: 6, gaveUp: 2 });
   });
@@ -535,8 +540,66 @@ describe("failures and retries", () => {
     const notes = analyse(detail).failures.notes.join(" ");
     expect(notes).toContain("counts, not rates");
     expect(notes).toContain("one attempt, not one call");
-    expect(notes).toContain("Stalls are not measured");
+    expect(notes).not.toContain("Stalls are not measured");
+    expect(notes).toContain("Stalls and timeouts are counted only on stopped attempts that say who stopped them");
     expect(notes).toContain("PDF reader and the embeddings");
+  });
+
+  describe("the calls our own clock stopped", () => {
+    const stopped = (failureClass: string | null, failurePhase: string | null, over: Partial<SpendDetailRow> = {}) =>
+      call({ outcome: "aborted", failureClass, failurePhase, attempt: failureClass === null ? null : 1, ...over });
+    const stops = [
+      /* The 9th: a stop from before anything said who. */
+      stopped(null, null, { startedAt: "2031-03-09T10:00:00.000Z" }),
+      /* The 10th: two stalls, a deadline, a reader's Stop, and a death beside them. */
+      stopped("stall", "mid_answer"),
+      stopped("stall", "before_answer"),
+      stopped("deadline", "mid_answer"),
+      stopped("abort", "mid_answer"),
+      call({ attempt: 1, outcome: "error", failurePhase: "mid_answer", failureClass: "unfinished", failureStatus: 200 }),
+      /* The 11th: one stall, and a live-conversation stop that does not say. */
+      stopped("stall", "mid_answer", { startedAt: "2031-03-11T10:00:00.000Z" }),
+      stopped(null, null, { startedAt: "2031-03-11T10:00:00.000Z", wire: "realtime" }),
+    ];
+
+    it("counts stalls and timeouts with how many were part-way, and adds none of them to the deaths", () => {
+      expect(analyse(stops).failures.total).toMatchObject({
+        diedPartWay: 1,
+        stalled: { attempts: 3, partWay: 2 },
+        timedOut: { attempts: 1, partWay: 1 },
+        stopsClassified: 5,
+        stopsNotClassified: 2,
+      });
+    });
+
+    it("says not measured for a day whose stops do not say, a number for one whose do, and both for a mixed day", () => {
+      const { byDay } = analyse(stops).failures;
+      expect(byDay.map((d) => [d.label, d.stalled, d.timedOut, d.stopsNotClassified])).toEqual([
+        ["2031-03-09", null, null, 1],
+        ["2031-03-10", { attempts: 2, partWay: 1 }, { attempts: 1, partWay: 1 }, 0],
+        ["2031-03-11", { attempts: 1, partWay: 1 }, { attempts: 0, partWay: 0 }, 1],
+      ]);
+    });
+
+    it("lists the stalls and the deadline among the causes, and never the reader's Stop", () => {
+      expect(analyse(stops).failures.causes.map((c) => [c.phase, c.failureClass, c.attempts])).toEqual([
+        ["part-way through the answer", "stall", 2],
+        ["before the answer began", "stall", 1],
+        ["part-way through the answer", "deadline", 1],
+        ["part-way through the answer", "unfinished", 1],
+      ]);
+    });
+
+    /* The stop figures are folds of class and phase, which both reads group by:
+       the two-reads check is what says the cube's stalls are the ledger's. */
+    it("is covered by the two-reads check: a stall in one read and a reader's Stop in the other is refused", () => {
+      expect(() => analyse(stops)).not.toThrow();
+      const cube = cubeOf(stops);
+      const relabelled = stops.map((row) => (row.failureClass === "stall" ? { ...row, failureClass: "abort" } : row));
+      expect(() => analyse(relabelled, { cube })).toThrow(/grouped population/);
+      const unsaid = stops.map((row) => (row.failureClass === "deadline" ? { ...row, failureClass: null } : row));
+      expect(() => analyse(unsaid, { cube })).toThrow(/grouped population/);
+    });
   });
 
   it("measures nothing in a ledger from before the columns", () => {

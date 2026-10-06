@@ -89,6 +89,7 @@ import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { isAdmin } from "./admin.js";
 import { isMinimalJob, isReadThisFor, processingOf } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
+import { NeedsAnotherWindow } from "./another-window.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
@@ -987,8 +988,15 @@ function stillForced(step: JobStep): boolean {
   return step.force === true && step.status !== "done";
 }
 
-/** What one step of a job did. */
-type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
+/**
+ * What one step of a job did.
+ *
+ * `handed-back`: the step stopped itself and asked for another lease window
+ * (`NeedsAnotherWindow`, src/another-window.ts). Its own outcome and not a
+ * kind of `cancelled`, because the walk's hand-back otherwise asks whether the
+ * *controller* was aborted by the deadline, and here nothing aborted it.
+ */
+type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
 
 /**
  * **A running step's preview: put on the job row, and taken off before the
@@ -1129,6 +1137,14 @@ async function runStep(
        to know *when*, not only *that*. See `StepContext.deadlineAt`. */
     deadlineAt,
     stepBudgetMs: STEP_BUDGET_MS[step.name],
+    /* Which lease window this is, and whether `pauseForDeadline` would grant
+       one more. `requeues` is absent at zero (src/store/pg-jobs.ts), so it is
+       defaulted before it is compared: `undefined < 2` is false, which would
+       deny the first claim its second window. See `LeaseWindow`. */
+    window: {
+      number: (job.requeues ?? 0) + 1,
+      anotherAvailable: (job.requeues ?? 0) < REQUEUE_BUDGET,
+    },
     /* Mark the article when any *other* step of this job is in the same cache
        group — in either direction. The list used to be `slice(i + 1)`, later
        steps only, which marked the stage that writes the entry and never the one
@@ -1370,7 +1386,18 @@ async function runStep(
        `DeadlineReached`, which is also where the argument for a type rather
        than a message match lives. */
     const ranOutOfTime = controller.signal.reason instanceof DeadlineReached;
-    if (stopped) {
+    /* **The step asked for another window** (src/another-window.ts). Not when
+       the signal has fired: a reader's Stop wins, and our own deadline already
+       has its branch, which ends in the same hand-back. Recorded below exactly
+       as a deadline is, because the walk's three refusals fall through to the
+       same endings and need the same narrative on the claimant's copy. */
+    const askedForWindow = !stopped && err instanceof NeedsAnotherWindow;
+    if (askedForWindow) {
+      jlog.debug(
+        { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
+        `step asked for another window: ${step.name} — ${job.slug}`,
+      );
+    } else if (stopped) {
       jlog.debug(
         {
           step: step.name,
@@ -1433,9 +1460,9 @@ async function runStep(
      * back"* — which is what a claimant handing back at its own deadline is,
      * from the reader's side.
      */
-    const stopping = ranOutOfTime ? INTERRUPTED : STEP_STOPPED;
-    const reader = stopped ? stopping : readerFailureOf(err, step.label);
-    if (!stopped) noteUndeclaredBlocked(jlog, err, reader, step.label);
+    const stopping = ranOutOfTime || askedForWindow ? INTERRUPTED : STEP_STOPPED;
+    const reader = stopped || askedForWindow ? stopping : readerFailureOf(err, step.label);
+    if (!stopped && !askedForWindow) noteUndeclaredBlocked(jlog, err, reader, step.label);
     step.status = "error";
     /* **The reader's sentence on both fields, and it has to be both.** The band
        renders `job.error` and the shelf card renders `step.error`
@@ -1445,14 +1472,14 @@ async function runStep(
        any rendered HTML. */
     step.error = reader.message;
     step.finishedAt = new Date().toISOString();
-    if (stopped) {
+    if (stopped || askedForWindow) {
       markCancelled(job, reader.message);
       /* Not on a cancel: the reader stopped it, and a stopped job is always
          worth starting again. `STEP_STOPPED` is `retry` and agrees, which is
          the pairing that came apart when this branch shared the failure
          sentence. */
       recordFailureKind(job, undefined);
-      return { outcome: "cancelled" };
+      return { outcome: askedForWindow ? "handed-back" : "cancelled" };
     }
     job.status = "error";
     job.error = reader.message;
@@ -2811,7 +2838,7 @@ async function walkClaim(
       if (ran.outcome === "skipped") continue;
       lastRan = step.name;
 
-      if (ran.outcome === "cancelled" || ran.outcome === "failed") {
+      if (ran.outcome === "cancelled" || ran.outcome === "failed" || ran.outcome === "handed-back") {
         /**
          * **We ran out of our own time inside a step: put the job down rather
          * than end it.**
@@ -2835,8 +2862,16 @@ async function walkClaim(
          * they must: only the store can tell a spent budget from a Stop, a lease
          * that lapsed during the unwind, or a claim that moved. See
          * `PauseOutcome` in src/store/jobs.ts.
+         *
+         * **Two things lead here and they are one path.** Our deadline aborted
+         * the step, or the step stopped itself ahead of the deadline and asked
+         * for another window (`handed-back`: the structure step's slices,
+         * src/another-window.ts). Both are a live claimant out of time with
+         * work banked, both spend the same budget, and every refusal ends the
+         * same way for both.
          */
-        if (ran.outcome === "cancelled" && overran()) {
+        const askedForWindow = ran.outcome === "handed-back";
+        if (askedForWindow || (ran.outcome === "cancelled" && overran())) {
           /* **The claimant's own copy of the steps is left carrying the failure
              narrative on purpose**, because the three refusals below fall
              through to an ending that needs it. What the *store* writes on a
@@ -2852,7 +2887,12 @@ async function walkClaim(
                somebody reading the log of a job that took three requests should
                be able to see that we chose it, and which window this was. */
             jlog.info(
-              { step: step.name, ms: since(startedMs), window: paused.job.requeues },
+              {
+                step: step.name,
+                ms: since(startedMs),
+                window: paused.job.requeues,
+                why: askedForWindow ? "step-asked" : "deadline",
+              },
               `handing the claim back mid-${step.name}: out of time, and the draft is kept — ${job.slug}`,
             );
             /* The session is left alone deliberately: it holds no open
@@ -2866,7 +2906,9 @@ async function walkClaim(
               job,
               owner,
               jlog,
-              "while handing back at its own deadline",
+              askedForWindow
+                ? "while handing back for another window"
+                : "while handing back at its own deadline",
               new StaleAttemptError(job.id),
             );
           }
@@ -2906,9 +2948,10 @@ async function walkClaim(
            step was interrupted by its own claimant — so it ends as an error
            the reader may retry, with `INTERRUPTED`'s wording rather than
            whatever the abort happened to say. */
-        const ending = overran()
-          ? interruptedEnding(job)
-          : endingFrom(job, ran.outcome === "cancelled" ? "cancelled" : "error");
+        const ending =
+          askedForWindow || overran()
+            ? interruptedEnding(job)
+            : endingFrom(job, ran.outcome === "cancelled" ? "cancelled" : "error");
         const after = await endJob(job, attempt, ending, jlog, startedMs, session);
         return { job: after, ran: step.name, busy: false, done: true };
       }

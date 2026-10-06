@@ -265,20 +265,30 @@ export async function requestGrant(
    * authors and abstract read (plan 261001m). A single upload passes neither.
    */
   claim: { sha256?: string; level?: "minimal" } = {},
+  /**
+   * The reader whose file this is, taken before the hashing below, which can
+   * be seconds: a grant asked for as anybody else is not asked for
+   * (`NotThisReader` in lib/api.ts). `null` names nobody.
+   */
+  madeFor: string | null = null,
 ): Promise<Grant> {
   const sha256 = claim.sha256 ?? (await sha256Hex(file));
   return readJson<Grant>(
-    await apiFetch("/api/uploads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        bytes: file.size,
-        sha256,
-        ...(claim.level ? { level: claim.level } : {}),
-      }),
-      ...(signal ? { signal } : {}),
-    }),
+    await apiFetch(
+      "/api/uploads",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          bytes: file.size,
+          sha256,
+          ...(claim.level ? { level: claim.level } : {}),
+        }),
+        ...(signal ? { signal } : {}),
+      },
+      madeFor,
+    ),
   );
 }
 

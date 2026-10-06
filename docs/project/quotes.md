@@ -471,9 +471,9 @@ unscored — to **1.00** at 1.0, linearly, and travels as `--quote-a` in the inl
 `annotateHtml` already writes for `--hit-a`. **The fill's strength is the tier's base times that.**
 The bases are per appearance (`--quote-fill-light` and `--quote-fill-heavy`, beside `--quote-rgb` in
 `styles/tokens.css`): 0.20 and 0.32 on the light page, so light runs 0.14 to 0.18 (a light quote's
-priority stops below 0.80) and heavy 0.28 to 0.32; 0.48 and 0.60 on the dark page, so 0.34 to 0.42
-and 0.53 to 0.60, of a darker colour than the light page's
-(§ [A deeper purple in the dark prose](#a-deeper-purple-in-the-dark-prose-since-2026-10-05)). Tier
+priority stops below 0.80) and heavy 0.28 to 0.32; 0.48 and 0.58 on the dark page, so 0.34 to 0.42
+and 0.51 to 0.58, of a darker colour than the light page's
+(§ [A little less saturated](#a-little-less-saturated-since-2026-10-06)). Tier
 and fade **move the same way**, so a heavier quote is always also a brighter one and the two can never
 cancel. It spends the finding of 260907c's acceptance pass, that priority *"does help skimming — but
 through brightness more than thickness"*: with a fill, brightness is all there is.
@@ -524,6 +524,9 @@ counts chroma. So on the dark page the test asks for both.
 
 #### A deeper purple in the dark prose, since 2026-10-05
 
+**The numbers in this section are that day's. The colour was turned down the next morning**, and
+the current values are in § A little less saturated, below.
+
 Greg, the same day, having looked at the stronger lavender on an iPad:
 
 > the purple Quote-highlights in dark mode on an iPad screen were a little hard to see. I don't mind
@@ -566,6 +569,31 @@ outline is the next step if a search hit over a heavy quote proves hard to see. 
 [261005j § Independent review](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md#independent-review-overlaps-and-grounds).
 
 **Change `--quote-prose-rgb` and the two strengths have to be summed again**: they are a set.
+
+#### A little less saturated, since 2026-10-06
+
+Greg, the next morning (`spya-hsbz0z`):
+
+> Now the purple Quote highlighting is a little toooo saturated. Just dial it down a bit.
+
+**So the dark fill is `143 70 189` at 0.48 and 0.58**: the same hue and lightness as the purple of
+the day before, with four fifths of its chroma, and the heavy tier a touch weaker. On the page it is
+about a quarter less saturated at both ends (the faintest quote's chroma 0.099 to 0.076, the
+strongest's 0.156 to 0.119). The light page and the spine strip did not move. Plan:
+[261006e](../plans/261006e-dark-quote-fill-a-little-less-saturated.md), which has the table.
+
+**It is a band now, with a complaint at each end.** The lavender was too grey (0.035) and the first
+purple too much (0.099), and the test holds the faintest quote's chroma between 0.065 and 0.09.
+**Keeping it visible after his "hard to see" complaint bounds the cut**: the faintest quote is
+0.162 from the page against an adopted floor of 0.16, so a bigger cut spends more of the remaining
+visibility margin.
+
+**The heavy strength moved for the soft ink in a code block.** A less saturated purple of the same
+lightness is a little brighter, and at 0.60 the soft ink on `--muted` fell to 4.42; at 0.58 it is
+4.52. Ink, soft ink, a link and the blue search colour on the strongest fill are within 0.05 of
+what they were on the page. Other grounds and adjacent signals have regressions recorded in
+[261006e](../plans/261006e-dark-quote-fill-a-little-less-saturated.md#independent-review).
+The step between the tiers is 1.13, down from 1.16, floor 1.12.
 
 **Purple, because the reader has fills of their own.** Since 2026-10-03 a reader's highlight is a
 wash in yellow, green, blue or pink. The quote colour was a green at hue about 163, which as a wash

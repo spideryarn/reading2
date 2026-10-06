@@ -1,0 +1,13 @@
+- **F7:** Correct; no regression found. No caller or test requires the first effect or its cleanup to remain passive.
+- **F8:** Correct; no regression found. Late-grant cleanup captures the operation’s reader before awaiting; ordinary cancellation still uses the bound reader. [batchUpload.ts:407](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/batchUpload.ts:407)
+- **F9:** Correct; no regression found. The added check closes the continuation gap after `sendIt`; live operations still queue normally. [batchUpload.ts:504](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/batchUpload.ts:504)
+
+For F7, I checked these timing dependencies:
+
+- **Resume ordering:** Binding and teardown finish before the still-passive `resume` effect. Token-only changes still skip teardown, and resume order remains jobs → upload → batch. [useJobs.ts:254](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/useJobs.ts:254)
+- **StrictMode:** The existing tests explicitly exercise start → stop → start, late poll answers, refreshed tokens and sharing retirement. All six passed. [job-session-effect.test.tsx:133](/var/tmp/spideryarn-worktrees/add-page-reader-change/tests/job-session-effect.test.tsx:133)
+- **Sharing and settings:** Sharing retirement notifies the epoch subscriber so the page obtains fresh controllers; settings retain a mount-time `load` even when binding precedes subscription. Neither requires passive session cleanup/setup. [AddPage.tsx:1060](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/AddPage.tsx:1060), [auto-modes-setting.ts:226](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/auto-modes-setting.ts:226)
+- **Before paint:** `jobEngine.start` initiates polling immediately. Credential lookup can synchronously initiate an SDK refresh, but neither network completion nor polling is awaited by the layout effect. No dependency on starting after paint found. [jobEngine.ts:927](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/jobEngine.ts:927), [api.ts:1205](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/lib/api.ts:1205)
+- **Server rendering:** The sole production caller is `App`, mounted with client `createRoot`; no server renderer calls this hook. [App.tsx:166](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/App.tsx:166), [main.tsx:235](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/main.tsx:235)
+
+No F10+ findings. Ran only `tests/job-session-effect.test.tsx`: **6/6 passed**. F8/F9 were checked statically; no files changed.

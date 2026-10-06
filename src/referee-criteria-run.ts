@@ -77,6 +77,7 @@
  * check rule 1. `evals/referee-mirror.ts` is the shape to copy.
  */
 
+import { StallReached } from "./call-failure.js";
 import { classifyEnd, openRouterStream, ProviderRefused } from "./ai-call.js";
 import {
   articleWithIds,
@@ -520,7 +521,7 @@ export async function* runCriterionStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), silenceMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), silenceMs);
   };
 
   const started = Date.now();

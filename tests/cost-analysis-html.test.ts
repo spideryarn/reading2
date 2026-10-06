@@ -33,7 +33,7 @@ import {
   writePrivateFile,
 } from "../scripts/cost-analysis-html.js";
 import { PRODUCTION_USERS_NOTE } from "../scripts/cost-analysis.js";
-import { type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
+import { type CostAnalysis, type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
 import { type CostCubeGroup, failureSummary } from "../src/cost-cube.js";
 import type { SpendDetailRow } from "../src/store/ai-calls-spend-pg.js";
 import { formatCostNanos } from "../src/web/admin-costs-view.js";
@@ -513,6 +513,31 @@ describe("the report: its figures are the analysis's", () => {
 });
 
 describe("the report: failures and retries", () => {
+  it.each([
+    ["abort", "mid_answer", "0", "0", "0"],
+    [null, null, "not measured", "not measured", "2"],
+    ["stall", null, "2 (0 part-way)", "0", "0"],
+    ["deadline", null, "0", "2 (0 part-way)", "0"],
+  ] as const)("shows isolated unnumbered %s stops from the JSON folds", (failureClass, failurePhase, stalled, timedOut, unsaid) => {
+    const detail = [call({ outcome: "aborted", failureClass, failurePhase }), call({ outcome: "aborted", failureClass, failurePhase })];
+    const analysis = analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null }));
+    const json: CostAnalysis = JSON.parse(JSON.stringify(analysis));
+    expect(json.failures.total).toMatchObject({
+      counted: 0, retries: null, gaveUp: null, diedPartWay: null,
+      stopsClassified: failureClass === null ? 0 : 2,
+      stopsNotClassified: failureClass === null ? 2 : 0,
+    });
+    const report = parse(renderCostReport(json, { commentary: null, chart: null, commit: null }));
+    const figures = ["0", "not measured", "not measured", "not measured", stalled, timedOut, unsaid];
+    for (const [section, label] of [["failures-days", "2031-03-10"], ["failures-tasks", "glossary"]]) {
+      const rows = [...report.querySelectorAll(`table[data-section="${section}"] tbody tr`)].map((tr) =>
+        [...tr.querySelectorAll("td")].map((td) => td.textContent ?? ""),
+      );
+      expect(rows).toEqual([[label, ...figures]]);
+    }
+    expect(report.querySelector('table[data-section="failures-causes"]')).toBeNull();
+  });
+
   it("shows zero deaths beside unmeasured retries on an unnumbered phase-recorded failure", () => {
     const detail = [call({ attempt: null, outcome: "error", failurePhase: "before_answer", failureClass: "refused", failureStatus: 503 })];
     const report = parse(renderCostReport(analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null })), {
@@ -520,7 +545,7 @@ describe("the report: failures and retries", () => {
     }));
     for (const table of ["failures-days", "failures-tasks"]) {
       const cells = [...report.querySelectorAll(`[data-section="${table}"] tbody tr td`)].map((td) => td.textContent);
-      expect(cells.slice(1)).toEqual(["0", "not measured", "not measured", "0"]);
+      expect(cells.slice(1)).toEqual(["0", "not measured", "not measured", "0", "0", "0", "0"]);
     }
     expect(report.querySelector("[data-failures-summary]")?.textContent).toContain("0 attempts died part-way.");
   });
@@ -539,11 +564,12 @@ describe("the report: failures and retries", () => {
 
   it("counts per UTC day and per task, and writes not measured where nothing was counted", () => {
     expect(cells("failures-days")).toEqual([
-      ["2031-03-10", "2", "2", "1", "0"],
-      ["2031-03-12", "0", "not measured", "not measured", "not measured"],
+      /* The fixture's one stop does not say who stopped it. */
+      ["2031-03-10", "2", "2", "1", "0", "not measured", "not measured", "1"],
+      ["2031-03-12", "0", "not measured", "not measured", "not measured", "0", "0", "0"],
     ]);
     const glossary = cells("failures-tasks").find((row) => row[0] === "glossary");
-    expect(glossary).toEqual(["glossary", "2", "2", "1", "0"]);
+    expect(glossary).toEqual(["glossary", "2", "2", "1", "0", "not measured", "not measured", "1"]);
   });
 
   it("lists the causes, and shows a hostile class as the text that was written", () => {
@@ -555,7 +581,9 @@ describe("the report: failures and retries", () => {
   it("says what the counts are not, and draws no percentage", () => {
     const section = doc.querySelector("[data-failures]")?.textContent ?? "";
     for (const note of ANALYSIS.failures.notes) expect(section).toContain(note);
-    expect(section).toContain("Stalls are not measured.");
+    expect(section).not.toContain("Stalls are not measured.");
+    expect(section).toContain("Stalls and timeouts are counted only on stopped attempts that say who stopped them.");
+    expect(section).toContain("An attempt stalled when we stopped it because the provider had sent nothing for too long");
     expect(section).not.toContain("%");
   });
 
@@ -569,9 +597,42 @@ describe("the report: failures and retries", () => {
       }),
     );
     expect(report.querySelector("[data-failures-summary]")?.textContent).toBe(
-      "Not measured: none of the 2 attempts was numbered by our retry loop.",
+      "Retries, give-ups and part-way deaths are not measured: none of the 2 attempts was numbered by our retry loop. 0 attempts stalled and 0 timed out.",
     );
     expect(report.querySelector("[data-failures] table")).toBeNull();
+  });
+
+  it("shows stalls and timeouts beside the deaths, not measured where no stop says who stopped it, and no reader's Stop as a cause", () => {
+    const stopped = (failureClass: string | null, failurePhase: string | null, startedAt: string) =>
+      call({ outcome: "aborted", failureClass, failurePhase, attempt: failureClass === null ? null : 1, startedAt });
+    const detail = [
+      stopped(null, null, "2031-03-09T10:00:00.000Z"),
+      stopped("stall", "mid_answer", "2031-03-10T10:00:00.000Z"),
+      stopped("stall", "before_answer", "2031-03-10T10:00:00.000Z"),
+      stopped("deadline", "before_answer", "2031-03-10T10:00:00.000Z"),
+      stopped("abort", "mid_answer", "2031-03-10T10:00:00.000Z"),
+      stopped("stall", "mid_answer", "2031-03-11T10:00:00.000Z"),
+      stopped(null, null, "2031-03-11T10:00:00.000Z"),
+    ];
+    const report = parse(renderCostReport(analyseCosts(input({ cube: cubeOf(detail), detail, lookups: null })), {
+      commentary: null, chart: null, commit: null,
+    }));
+    const rows = (name: string) =>
+      [...report.querySelectorAll(`table[data-section="${name}"] tbody tr`)].map((tr) =>
+        [...tr.querySelectorAll("td")].map((td) => td.textContent ?? ""),
+      );
+    expect([...report.querySelectorAll('table[data-section="failures-days"] thead th')].map((th) => th.textContent).slice(4)).toEqual([
+      "Died part-way", "Stalled", "Timed out", "Stops not classified",
+    ]);
+    expect(rows("failures-days").map((cells) => [cells[0], ...cells.slice(4)])).toEqual([
+      ["2031-03-09", "not measured", "not measured", "not measured", "1"],
+      ["2031-03-10", "0", "2 (1 part-way)", "1 (0 part-way)", "0"],
+      ["2031-03-11", "0", "1 (1 part-way)", "0", "1"],
+    ]);
+    expect(rows("failures-causes").map((cells) => cells[1])).toEqual(["stall", "deadline", "stall"]);
+    expect(report.querySelector("[data-failures-summary]")?.textContent).toContain(
+      "3 attempts stalled (2 part-way) and 1 timed out (0 part-way). 2 stops not classified.",
+    );
   });
 });
 

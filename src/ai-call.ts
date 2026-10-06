@@ -73,7 +73,16 @@ import { imageDimensions, sniffImage } from "./assets.js";
    exists — so this closes no cycle, and taking the type rather than restating
    it means the gateway cannot be handed a container the browser never
    validated. */
-import { type CallFailure, type FailureClass, isErrorEnvelope, networkClass, thrownClass } from "./call-failure.js";
+import {
+  type AbortClass,
+  type CallFailure,
+  type FailureClass,
+  abortClass,
+  isErrorEnvelope,
+  networkClass,
+  stoppedByOurClock,
+  thrownClass,
+} from "./call-failure.js";
 import type { AudioFormat } from "./dictation-limits.js";
 /* `log.ts` imports only pino and its redaction list, so this closes no cycle. */
 import { log } from "./log.js";
@@ -1389,16 +1398,17 @@ interface WireUsage {
  * outcome and an optional failure beside it, so an `error` that does not say
  * where and why does not compile, and an `ok` cannot carry a failure.
  *
- * `aborted` says nothing more on purpose. The signal a seam is handed is the
- * caller's composite — its own, its deadline, its stall clock — and a stall's
- * reason is a plain `Error`, the same shape as a reader's Stop, made in eight
- * different runners. Until those reasons are typed where they are made, a
- * provider that went silent and a reader who left are one row here, and a
- * count of part-way deaths does not include the first. Plan 261006b § Stalls.
+ * **Nor does an `aborted` that does not say who stopped it.** The signal a
+ * seam is handed is the caller's composite — its own, its deadline, its stall
+ * clock — and until 2026-10-06 a provider that went silent and a reader who
+ * left were one row here. The signal's reason now tells them apart
+ * (`abortClass` in call-failure.ts), so an `aborted` end carries the class,
+ * and how far the call had got. `Meter.stopped` is the one place it is made.
+ * Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md.
  */
 type CallEnd =
   | { outcome: "ok" }
-  | { outcome: "aborted" }
+  | { outcome: "aborted"; failure: CallFailure & { class: AbortClass } }
   | { outcome: "error"; failure: CallFailure };
 
 /** Who is calling, for a log line: the three names a failure is counted under. */
@@ -1433,7 +1443,7 @@ function unansweredFailure(err: unknown): CallFailure {
   };
 }
 
-/** What both of this file's log lines about a failure carry, and nothing else. */
+/** What each of this file's log lines about a failure carries, and nothing else. */
 function failureFields(who: Caller, attempt: number | null, failure: CallFailure): Record<string, unknown> {
   return { job: who.job, wire: who.wire, model: who.model, attempt, class: failure.class, status: failure.status };
 }
@@ -1542,6 +1552,26 @@ class Meter {
   }
 
   /**
+   * **An attempt that was stopped rather than failed**: who stopped it, from
+   * the signal's reason, and how far it had got, by the same acceptance
+   * boundary an error is placed by.
+   *
+   * A signal that has not fired, or none, is `abort`: the consumer closed the
+   * stream early and nobody's clock did it. The reason is read only off a
+   * signal that has fired, and only to pick a label.
+   */
+  stopped(signal: AbortSignal | undefined): CallEnd {
+    return {
+      outcome: "aborted",
+      failure: {
+        phase: this.accepted ? "mid_answer" : "before_answer",
+        class: abortClass(signal?.aborted ? signal.reason : undefined),
+        status: this.status,
+      },
+    };
+  }
+
+  /**
    * **How an attempt that threw ended**, from how far it had got.
    *
    * The phase is the acceptance boundary and nothing else: not whether the
@@ -1557,7 +1587,7 @@ class Meter {
    *   not an answer. `unreadable`, or `in_band` where it was an error envelope.
    */
   failed(err: unknown, signal: AbortSignal | undefined): CallEnd {
-    if (abortedBy(err, signal)) return { outcome: "aborted" };
+    if (abortedBy(err, signal)) return this.stopped(signal);
     if (!this.responded || err instanceof ProviderRefused) return { outcome: "error", failure: unansweredFailure(err) };
     if (!this.accepted) {
       return { outcome: "error", failure: { phase: "before_answer", class: "refused", status: this.status } };
@@ -1640,11 +1670,17 @@ class Meter {
   finish(end: CallEnd): void {
     if (this.done) return;
     this.done = true;
-    const failure = end.outcome === "error" ? end.failure : null;
+    const failure = end.outcome === "ok" ? null : end.failure;
     /* **One line for a call that died after its answer began** — the event the
-       retry does not cover, and the one plan 261006b exists to count. */
-    if (failure?.phase === "mid_answer") {
-      log("model").warn(failureFields(this.caller(), this.attempt, failure), "ai call died part-way");
+       retry does not cover, and the one plan 261006b exists to count. An
+       error only: a call somebody stopped part-way did not die. */
+    if (end.outcome === "error" && end.failure.phase === "mid_answer") {
+      log("model").warn(failureFields(this.caller(), this.attempt, end.failure), "ai call died part-way");
+    }
+    /* **And one for a call our own clock stopped**, at either phase. Not for
+       `abort`: a reader pressing Stop is not news. Plan 261006d. */
+    if (end.outcome === "aborted" && stoppedByOurClock(end.failure)) {
+      log("model").warn(failureFields(this.caller(), this.attempt, end.failure), "ai call stopped by our clock");
     }
     recordSpend(
       {
@@ -2279,10 +2315,11 @@ async function acceptedStream(
  * `sseChunks` yields; what it loses is the fetch, the status check, and the
  * ability to forget the accounting.
  *
- * `signal.aborted` decides `"aborted"` against `"error"`. That is a coarser
- * question than the one [`stoppedByReader`](openrouter-stream.ts) answers — that
- * one separates a reader pressing Stop from our own deadline, which matters to
- * the reader and does not matter to the bill.
+ * A thrown failure is `aborted` only when it is the abort itself; a clean
+ * loop end also checks `signal.aborted` for the cancelled-read race. An
+ * observed in-band error wins over both. For an abort, the signal's reason
+ * says who stopped it (`Meter.stopped`). [`stoppedByReader`](openrouter-stream.ts)
+ * asks much the same of the caller's separate signals for the reader's message.
  */
 export async function* openRouterStream(
   job: ChatJob,
@@ -2376,9 +2413,10 @@ export async function* openRouterStream(
          reader on abort and a cancelled read resolves `{done: true}` rather than
          throwing. Both streaming callers carry a guard for exactly that race in
          their own logging; this is its equivalent for the bill. */
-      if (options.signal.aborted) end = { outcome: "aborted" };
-      /* The consumer closed us early — see `ranToEnd` above. */
-      else if (!ranToEnd) end = { outcome: "aborted" };
+      if (options.signal.aborted) end = meter.stopped(options.signal);
+      /* The consumer closed us early — see `ranToEnd` above. No signal fired,
+         so `stopped` says `abort`: nobody's clock did this. */
+      else if (!ranToEnd) end = meter.stopped(undefined);
       /* **The stream stopped without saying it had finished.** `[DONE]` is the
          only clean end there is, and every caller already treats its absence as
          a failure (`ENDED_UNFINISHED`). Recording that call as `"ok"` made the

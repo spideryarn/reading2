@@ -115,7 +115,7 @@ GPT Sol on this plan (read-only), then on each stage's code (write-capable).
 
 ### Sol's plan review, 2026-10-06 — not ready, 2 P1 and 5 P2; all seven accepted
 
-[The review](261006e-plan-review-sol.md). **Where the text above and this section disagree, this
+[The review](261006e-skim-plan-review-sol.md). **Where the text above and this section disagree, this
 section is the plan.** No second plan round: each fix is a narrowing, and the code review checks them.
 
 - **F1 (P1), the judge could not tell a grounded scene from an invented one.** The judge is given

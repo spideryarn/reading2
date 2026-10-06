@@ -2,14 +2,13 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05, late evening: **on `dev`: stage 0 (the line in Structure), the eval
-(stage 2) and its write-up, and the slices half of stage 1a.** Evidence: `src/web/StructureNotice.tsx`
-exists and `StructureBand` mounts it; `evals/results/long-structure-2026-10-05/matrix/` holds the
-cells and judgements; `runSlices` has `readSlice`, `halvingCut` and a `secondPass` count, pinned
-by `tests/structure-slices-second-pass.test.ts`. **Not started:** the rest of 1a (an unaskable
-section cut into windows, and a retry as a successor job; the open-before-structure work they
-waited on reached `dev` the same evening), 1b, 3, 4 and 5. Not deployed by this work, and the
-full test suite was not run by it: the box was overloaded and sessions were asked not to.
+Status as of 2026-10-06: **on `dev`: stage 0 (the line in Structure), the eval (stage 2) and its
+write-up, and all of stage 1a.** Evidence for 1a: `runSlices` has `readSlice`, `halvingCut`,
+`secondPass` and `rootAskedTwice` (`tests/structure-slices-second-pass.test.ts`); `planBatches`
+windows a section in a batch no call could label and `StructureSource` has no
+`labels-could-not-ask` (`tests/labels-batching.test.ts`); `src/another-window.ts` exists and
+`tests/job-hands-back-for-another-window.test.ts` passes. **Not started:** 1b, 3, 4 and 5. Not
+deployed by this work.
 
 **What the next session needs to know first.** Stage 3 is not "build top level first": read
 § Result: stage 2. One question is with Greg (through the Overseer): whether the staged shape
@@ -230,7 +229,8 @@ wholly plain, today against 1a.
 
 ### Result: stage 1a (the slices half)
 
-Built 2026-10-05, in `runSlices` only. Not committed or reviewed as this is written.
+Built 2026-10-05, in `runSlices` only; on `dev` as `266cfc8d3`, with its
+[code review](261005j-stage-1a-code-review-sol.md).
 
 **What landed.**
 
@@ -260,7 +260,8 @@ Built 2026-10-05, in `runSlices` only. Not committed or reviewed as this is writ
 and the retry as a successor job is in the job queue. Both are held until the
 open-before-structure work has landed in those files. A failed root call is still a required
 call asked in one pass (with its one re-ask): `source` does not yet say why a first attempt fell
-back, because inside one run there is no first attempt to report, only `secondPass`.
+back, because inside one run there is no first attempt to report, only `secondPass`. (All three
+were built on 2026-10-06: § Result: the rest of stage 1a.)
 
 **Decisions made while building, each a judgement.**
 
@@ -300,6 +301,220 @@ halving cannot snap across consecutive headings beyond the allowed middle band.
 
 **Dry scenario.** `evals/long-structure/dry.ts` now expects the refused slice to succeed by
 halving, matching the new behaviour.
+
+### Plan: the rest of stage 1a (2026-10-06)
+
+Claimed, 2026-10-06, by the session working queue item qi-kssrwchh. Three small stages, one commit
+each. Unpaid: every test uses the injected model seam.
+
+**What changed about the plan while reading the code.** Two of the three are smaller than the
+bullets in § Stage 1a say, because machinery that already exists does the job.
+
+**A. A section too long for one labels call is cut into windows by the labels planner, and the
+tree is left alone.**
+
+Today `generateStructure` asks `unaskableBatches(tree, blocks)` (`src/labels.ts`) in two places
+(`src/structure.ts`: after the slices are stitched, and at the end of the one-call path) and, if
+any planned labels batch could not be asked, throws the model's whole tree away for the headings
+tree (`labels-could-not-ask`). A batch is unaskable only when one sibling set (the leaves of one
+section) is itself past the labels answer budget: `200 + 55n + 16,000 > 128,000`, so more than
+2,032 leaves in one section. `planBatches` never cuts a sibling set ("the sibling rule outranks
+the cap"), which is the whole cause.
+
+The change: `planBatches` cuts **only a sibling set whose own call would be refused** into
+consecutive near-equal windows of at most `MAX_BATCH` (60) leaves, a window not ending on a
+heading where it can help it (the rule `windows` in `src/heading-tree.ts` already follows; share
+the function if it lifts out cleanly, do not write a second copy of the arithmetic). Each window
+is a sibling set of its own with the same parent and crumb. Then no plan holds an unaskable
+batch, so both fallbacks in `src/structure.ts` go, and with them the `labels-could-not-ask` arm
+of `StructureSource` and of `SlicesFailure`, its words in `SLICES_FAILED_WORDS` and in
+`structureSourceDetail`, and `unaskableBatches` itself if nothing else calls it. The compiler
+finds every reader.
+
+- *Why not cut the tree* (the reading § Stage 1a's bullet invites, "the way the plain tree
+  already cuts one"): windows as new sibling sections of a finished tree need a title and a gist
+  each, and no model wrote one; windows as children of the section put its paragraphs a level
+  deeper than everyone else's, which is review F1. Both are the mixed tree of stage 1b. Cutting
+  the *calls* needs neither.
+- *What it gives up:* labels in such a section are written without the far siblings in view, so
+  two windows can label alike. The section is over 2,000 paragraphs under one title; today it
+  costs the reader every gist in the document.
+- *Not done:* cutting sets between 61 and 2,032 leaves (`oversizedSets` warns about them and
+  nothing more). It would be the better labels call, and it changes the batches, and so the
+  checkpoint keys, of trees that label fine today. Reported, not built.
+- The labels step itself (`generateLabels`, the `labels` job) plans with the same function, so
+  it sees the same windows. To check: nothing downstream assumes one set per parent (the labels
+  prompt, `LabelBatchRecord`, `mergeLabels`, `assertCoversEveryBlock`, `oversizedSets`, the
+  pending labels file).
+
+Tests, red first: a tree with one section of 2,100 leaves plans only askable batches, every block
+in exactly one, no window over 60, no window ending on a heading; `generateStructure` on a model
+answer with such a section returns `source.by === "model"` and the model's gists (the existing
+expectations in `tests/structure-step-bounded-fallback.test.ts` and
+`tests/structure-step-slices.test.ts` that encode the fallback are reversed and named); a section
+of 2,032 leaves plans exactly as it does today.
+
+**B. A failed root call is asked once more in the same run.**
+
+In `runSlices` (`src/structure-slices.ts`) the root call (one sentence and one question for the
+whole document) is one required call with its one re-ask of an answer that does not pass. A
+transport failure or its time cap ends the run `root-call-failed` and discards every slice. The
+change: one second ask, under the same rules the slices' second pass follows (F4: the same pool,
+the cap must fit before the deadline, usage read before the answer is judged, a reader's Stop is
+a cancellation; a refused or cut-short answer is not asked again). No time for it reports
+`out-of-time`, not `root-call-failed`. The slices source gains `rootAskedTwice: boolean`, logged,
+and in the step's detail. The checkpoint means the second ask is the only call it buys.
+
+Tests, red first: a root call that fails once gives a finished tree with `rootAskedTwice: true`
+and one extra call; one that fails twice gives `root-call-failed`; no time for the second gives
+`out-of-time`; a Stop during the first is a cancellation and no second is started.
+
+**C. Out of time hands the claim back for another window; it does not publish the headings
+tree while a window is left.**
+
+The plan said "as a successor job". The queue already has the simpler thing: a step cancelled by
+its own deadline is put down with `store.pauseForDeadline(job.id, attempt, REQUEUE_BUDGET)` and
+the same job gets another lease window, up to `REQUEUE_BUDGET` (2) more, driven by the browser
+with no client change (`src/jobs.ts`, "We ran out of our own time inside a step"). The slices
+path never reaches it, because it stops itself `SLICES_FINISH_RESERVE_MS` early and returns the
+headings tree as a *finished step*. Since saved answers are read before the deadline is consulted
+(F5), a second window starts from where the first stopped.
+
+The change: `StepContext` and `generateStructure` gain a typed "a further window is available"
+(read from `job.requeues` against `REQUEUE_BUDGET` where the context is built). When the slices
+end `out-of-time` and one is, the step does not return a tree: it throws a typed
+`NeedsAnotherWindow`, which `runStep`/the walk treat exactly as the deadline branch does (pause,
+requeue, draft kept). When none is left, or there is no queue (the command line), today's
+fallback stands. So a first import keeps its "being built" line for up to three windows and then
+gets either the finished tree or the headings tree with Try again, as now.
+
+- *Passed over: a successor `["structure"]` job queued by publishing the headings tree as
+  `awaiting-structure`.* The publishing job is itself the active holder of that work key, so the
+  successor insert collapses onto the job that is about to end (`enqueueSuccessorIn`,
+  `alreadyQueued`); fixing that, plus a persisted attempt count and a client hook that waits for
+  a second job, is three new things where the queue needs none.
+- *The cap* is the queue's (three windows in all, shared with a lapsed lease), not "one retry".
+- *The retreat, decided now:* if the pause is refused (budget spent between the read and the
+  pause, a Stop, a moved claim) the existing fall-through endings apply, and the step ends
+  failed, not on a headings tree. The reader's way out is the Structure band's build offer.
+  Accepted: it is a race, and it is logged.
+- Only `out-of-time` hands back. `slice-failed` and `root-call-failed` have had their second
+  ask; `could-not-plan` and `tree-unsound` would fail the same way.
+- The step's log line says which window it ran in.
+
+Tests, red first: with a window available, slices that run out of time throw `NeedsAnotherWindow`
+and nothing is published; with none, the headings tree as today; the job walk requeues on it
+(`requeues` goes up, the draft is kept, `done: false`); a second run with the first's
+checkpoints buys only the missing slices and finishes; the command line (no deadline) is
+unchanged.
+
+**Docs in the same stages:** `docs/project/structure-step.md` § When one answer will not fit,
+`docs/project/structure.md` if the reader's line changes (it should not), this plan's status and
+stage list.
+
+**The plan review of these three stages, and what changed.** GPT Sol, read-only, 2026-10-06:
+[the review](261005j-stage-1a-rest-plan-review-sol.md), **build with changes** for each. I checked
+each finding against the code it cites. Where the text above differs, this wins.
+
+- **F1 (P1, established, by a probe): A's rule does not make every batch askable. Taken.** The
+  planner budgets the *batch*, not the set: `MIN_BATCH` keeps a short set open into the next one
+  and merges a short tail backwards, so sets of `[1, 2032]`, `[2032, 1]` and `[2032, 12]` each plan
+  one batch of over 2,032. So the invariant is on the **final plan**: window a set whose own call
+  would be refused, then make sure no batch left by the floor or the tail merge is unaskable, and
+  the two fallbacks in `src/structure.ts` are deleted only once tests hold that. Those three
+  arrangements, a heading-heavy run and the tail merge are tests. The existing test that parent
+  ids are unique across sets (`tests/labels-batching.test.ts`) is narrowed, by name.
+- **F2 (P2): B, said precisely. Taken.** A root *time-out* already reports `out-of-time`, not
+  `root-call-failed`, and stays that (C gives it another window). The second chance is for a
+  transport failure or an answer that failed validation twice; it is one call; a refusal or a
+  cut-short answer gets none. `ask` latches `gaveUp`, so a second call needs that state handled
+  and not just a second invocation. `rootAskedTwice` stays false when admission denies the call.
+- **F3 (P2): C.** `job.requeues` is absent at zero: `(job.requeues ?? 0) < REQUEUE_BUDGET`. The
+  hand-back is an explicit outcome of `runStep` that the walk handles beside the deadline branch
+  (a typed throw alone reaches neither of that branch's two conditions), and a reader's Stop
+  still wins. The tests include one composed, Postgres-backed job test with the model mocked:
+  hand back with answers bought, the same draft and published revision kept, the step pending
+  with no error, ledger rows present; reclaim and finish from the saved answers; the same over
+  an already-published real tree; budget spent, Stop, and a stale claim.
+- **F4 (P3): corrections.** The passed-over successor insert would answer `boundToOlderBase`,
+  not `alreadyQueued` (the publishing job owns a draft), and only for the matching unforced work
+  key. A refused pause does not always end failed: a Stop ends cancelled and a stale claim takes
+  the lost-claim path. "The existing endings apply" is the rule.
+
+### Result: the rest of stage 1a, built 2026-10-06
+
+Three stages, each built by a subagent from the plan above, each reviewed by GPT Sol with write
+access, each fix checked and committed separately.
+
+**A. `a8bc7b1ae`, then `dcb5f6cc1`.** `planBatches` packs as before; only if a packed batch could
+not be asked does it cut the sections over `MAX_BATCH` in that batch into windows and pack again.
+A plan that was askable comes back from the first packing untouched (held against the old
+planner on six real trees and, by the reviewer, on 731 synthetic plans, prompts and fingerprints
+included). Both fallbacks and the `labels-could-not-ask` arm are gone; `unaskableBatches` stays
+because four eval files measure with it. The window cut is one function, `cutIntoWindows`,
+shared with the bounded headings tree.
+[Sol's review](261005j-stage-1a-rest-A-code-review-sol.md): land with the fixes made (prose).
+Its **A1** was real and older than this work: a truncated batch is re-drawn with doubled
+headroom, so a batch of 1,742 to 2,032 leaves fitted once and its only retry threw before it was
+sent. Fixed in `dcb5f6cc1`: "askable" means askable with the retry's headroom
+(`LABEL_RETRY_HEADROOM`, one home), so **the line is 1,741 blocks in a packed batch, not 2,032**,
+and plans in between moved.
+
+**B. `b18de4c3b`.** The root's first ask is a `second-chance` question, so a failure another ask
+might mend latches nothing and one more call follows. A refused or cut-short answer, a passed
+cap and a Stop start no second ask. `rootAskedTwice` is on the outcome, the source, the log and
+the detail ("the top line asked for twice").
+[Sol's review](261005j-stage-1a-rest-B-code-review-sol.md): land with the fixes made. Its **B1**
+was a real defect in the new code: a transport rejection that lost the race with its cap's timer
+could start the second ask and report success. Fixed by the reviewer, red first.
+
+**C. `e2cc2af40`.** Out of time with a lease window left, `generateStructure` throws
+`NeedsAnotherWindow` (`src/another-window.ts`) once every call has settled; `runStep` reports
+`handed-back` and the walk pauses through the block the deadline branch already used. Nothing
+new in the queue's store, the publication path or the client.
+[Sol's review](261005j-stage-1a-rest-C-code-review-sol.md): land with the fixes made (prose; no
+P0 or P1). It confirmed the four endings of the pause match the deadline branch, that nothing is
+captured as a failure on a hand-back, and that the paid reservation stays open on a pause and is
+released on the unsuccessful endings as before. Two things from it:
+
+- **C1.** The stage command line (`scripts/stage.ts`) runs through `advanceJob`, so it has
+  windows too. Only a direct call of `generateStructure` with no `window` keeps the old fallback.
+- **C3 (P2, reasoned), kept as built, and it is a judgement.** A required call that passes its
+  own cap in every window spends all three before the same fallback: about twelve minutes where
+  it was four. Kept because a slow call is more often a slow hour than a property of the
+  request, the reader of a first import is reading on the outline meanwhile, and the other
+  choice gives up every gist after one slow call. If the log shows windows 2 and 3 ending the
+  way window 1 did, hand back only when the *lease* ran out, not a call's cap: the step's log
+  line carries the window number for exactly that reading.
+
+**What the builders found that the plan had wrong**, beyond what the plan review caught:
+
+- `out-of-time` is not only the deadline: a required call past its own cap (240 s for a slice,
+  60 s for the root) reports it too. So a hand-back can come four minutes into a window, and
+  spends one of the three.
+- A hand-back does not require progress: a window that admits no call hands back too. The bound
+  is `REQUEUE_BUDGET` alone, the weakness that constant's own comment already owns.
+- Across windows the root can be asked more than three times (each window has its own pair).
+
+**Not done, and why.**
+
+- Sections of 61 to 1,741 leaves are still one labels call. The better call, and it moves the
+  batches of trees that label fine today; `oversizedSets` goes on warning.
+- No browser check. The one thing a reader can see is a clause in the import card's structure
+  line, on a document past the slices line whose root call failed once.
+- The successor job. § Plan, C says why.
+
+**The arithmetic, again** (`npx tsx evals/long-structure/fallback-arithmetic.ts`; assumptions,
+not a measurement, as before). Wholly plain: before, with slices asked twice, with the root too.
+
+| assumed per-pass failure | 4 slices | 8 slices | 20 slices | 45 slices |
+|---|---|---|---|---|
+| 1% | 4.9% → 1.0% → 0.0% | 8.6% → 1.1% → 0.1% | 19.0% → 1.2% → 0.2% | 37.0% → 1.4% → 0.5% |
+| 3% | 14.1% → 3.3% → 0.4% | 24.0% → 3.7% → 0.8% | 47.3% → 4.7% → 1.9% | 75.4% → 6.9% → 4.1% |
+| 10% | 41.0% → 13.5% → 4.9% | 61.3% → 17.0% → 8.6% | 89.1% → 26.4% → 19.0% | 99.2% → 42.7% → 37.0% |
+
+The root is no longer the floor. What is left is a slice failing twice, which only the mixed
+tree of 1b would soften, and the eval did not show 1b is needed.
 
 ### Stage 1b: a failed part is plain, and the rest is kept (robust, the larger half)
 
@@ -543,13 +758,15 @@ honestly and costs about $47 and two hours of an open tab for one article, with 
   patched to a headings tree; the light theme and a signed-out visitor were not looked at. The
   full suite was not run (the box was overloaded and the Overseer asked sessions not to).
 - [x] Plan review by GPT Sol (read-only).
-- [ ] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
+- [x] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
   Tests red first, gates, Sol code review, the arithmetic.
   - [x] The slices half, in `src/structure-slices.ts`: a failed refill keeps its section, a
     refused or cut-short slice is read in halves, one second pass over what failed, the
-    arithmetic. § Result: stage 1a (the slices half). Not yet through the Sol code review.
-  - [ ] A section too long for one labels call cut into windows on its own.
-  - [ ] The retry as a successor job, and a second attempt after a failed root call.
+    arithmetic. § Result: stage 1a (the slices half).
+  - [x] A section too long for one labels call is asked about in windows (the labels planner
+    cuts the calls; the tree is left alone). § Result: the rest of stage 1a.
+  - [x] A second ask after a failed root call; and out of time hands the job back for another
+    window, which replaced the successor job. § Result: the rest of stage 1a.
 - [ ] **1b.** The mixed tree, if 1a leaves a need. Its contract (F1, F2, F6) first.
 - [x] **2.** The eval. About $32.4. § Result: stage 2.
 - [ ] **3.** A strict schema for the per-part round, the first call measured alone, then B past

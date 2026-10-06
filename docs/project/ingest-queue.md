@@ -700,6 +700,20 @@ Three things, all in the browser, in
   reader to wherever they came from rather than dropping them here to watch a job that has already
   finished.
 
+**And a visit is one reader's**, since 2026-10-06. The page starts an import by arriving and holds
+one reader's typed purpose, their High-powered tick and their job. So if a different reader turns
+up at the same address, because another tab signed in as somebody else or this one signed out and
+in again, they get a short stopped page that posts nothing
+([`AddStopped.tsx`](../../src/web/AddStopped.tsx)) until the address is left, and they add the
+article from the shelf. A fresh page would have started the import for them unasked. Somebody who
+arrives signed out and then signs in is a first arrival, and the page runs as usual. `App` keeps
+whose visit it is, above its signed-out branch; the rule is a table in
+[`src/web/add-visit.ts`](../../src/web/add-visit.ts). Every request the page and the engines make
+also names its reader
+([auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another));
+the plan is
+[261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md).
+
 ### Three ways the address can lie about itself
 
 All three were found by review rather than by use, and together they are the argument for the
@@ -1894,6 +1908,21 @@ only the third. And the cap is what the pause needs and the between-steps releas
 hand-back before this one was preceded by a *completed* step, so progress was structurally
 guaranteed, where a step that can never fit in one window would otherwise pause, re-claim and spend
 another window for ever.
+
+**A step can ask for the same pause itself, since 2026-10-06.** The structure step's slices stop
+themselves ahead of the deadline, so the queue's abort never reaches them; out of time, they used
+to finish the step on the headings tree and lose every gist. With a window left they now throw
+`NeedsAnotherWindow` ([`src/another-window.ts`](../../src/another-window.ts)). `runStep` reports
+that as its own outcome, `handed-back`, and `walkClaim` takes it through the same
+`pauseForDeadline` call and the same four answers as its own deadline: one path, two triggers.
+The step is told which window it is in and whether another is left (`StepContext.window`, from
+`requeues` when the step starts), and with none left it finishes on the headings tree as before.
+If the store then refuses the pause, the endings are the ones above, and the step does not fall
+back to the headings tree a second time.
+[structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)
+has the step's side;
+[261005j § Plan: the rest of stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)
+has the reasoning, stage C.
 
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
