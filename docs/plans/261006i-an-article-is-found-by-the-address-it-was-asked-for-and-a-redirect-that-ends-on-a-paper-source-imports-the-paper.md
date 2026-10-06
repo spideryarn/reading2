@@ -1,6 +1,6 @@
 # An article is found by the address it was asked for, and a redirect that ends on a paper source imports the paper
 
-Status as of 2026-10-06: **plan reviewed (GPT Sol, one round), being built.** Queue entry `qi-fbrh4kck`, deferred from
+Status as of 2026-10-06: **built and reviewed; stages 1 to 3 are committed (`fb8a55b5d`, `bfbbb742e`). OSF is not built and is re-queued.** Evidence: `asked_url` in `src/db/schema.ts`, `fetchByAddress` in `src/pipeline.ts`, `nber` in `SOURCES`. Queue entry `qi-fbrh4kck`, deferred from
 [261005m](261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) § Deferred
 (report `spya-ayettj`, part 2). Greg said yes to the new column on 2026-10-06 (*"qi-fbrh4kck yes"*),
 relayed by the Overseer with one condition: the column must be additive.
@@ -172,43 +172,77 @@ a GPT Sol code review (write-capable, fixes inside the stage), one commit.
 
 ### Stage 1: the column and the lookup
 
-- [ ] Red: `tests/find-article.test.ts` — an article whose `asked_url` is a short link and whose
+- [x] Red: `tests/find-article.test.ts` — an article whose `asked_url` is a short link and whose
       `final_url` is a paper address is found by the short link's key, by the paper's key, and not
       by an unrelated key; **an article whose `final_url` is not a paper is not found by its
       `asked_url`**; an unpublished article with an `asked_url` is not found; two articles, one
       matching by `final_url` and one by `asked_url`, answer the `final_url` one.
-- [ ] Red, through `claimSession`: the row a URL job creates carries the job's address; a second
+- [x] Red, through `claimSession`: the row a URL job creates carries the job's address; a second
       job on the same published slug with a different address leaves it unchanged; an upload's row
       has null; **an existing unpublished row with null gets the retry's address** (K1).
-- [ ] Schema, migration (`npm run db:generate`, `npm run db:chain`), `lockOrCreateArticle`,
+- [x] Schema, migration (`npm run db:generate`, `npm run db:chain`), `lockOrCreateArticle`,
       `slugForUrlKey`. Applied locally; `Target:` line read.
-- [ ] Mutations seen red: drop the `asked_url` half of the match; write `asked_url` on every lock
+- [x] Mutations seen red: drop the `asked_url` half of the match; write `asked_url` on every lock
       rather than on insert.
-- [ ] Docs: `database.md` or `ingest-queue.md` (whichever owns "do we already have this"),
+- [x] Docs: `database.md` or `ingest-queue.md` (whichever owns "do we already have this"),
       `find-article.ts`'s header.
 
 ### Stage 2: the redirect look
 
-- [ ] Red, in the fetch step's tests with a fake `fetchDocument` that counts requests: a short link
+- [x] Red, in the fetch step's tests with a fake `fetchDocument` that counts requests: a short link
       ending on `arxiv.org/abs/<id>` fetches arXiv's HTML and stores it; one ending on
       `arxiv.org/pdf/<id>` with the HTML absent makes **no second request for the PDF**; one ending
       on an ACL landing page fetches the PDF; one ending on an unknown host is kept as it is with
       one request; an address that did not move is never re-resolved; the last candidate absent
       fails `[fetch-paper-missing]`; the detail says the source.
-- [ ] Build it in `src/pipeline.ts`. `fetchFirstCandidate`'s rules for moving on are unchanged.
-- [ ] `evals/paper-sources/resolve-live.ts` gains the redirecting cases the probe found; output
+- [x] Build it in `src/pipeline.ts`. `fetchFirstCandidate`'s rules for moving on are unchanged.
+- [x] `evals/paper-sources/resolve-live.ts` gains the redirecting cases the probe found; output
       under `261006i-evidence/`.
-- [ ] Mutations seen red: resolve a middle hop; skip the promise check on the held document; always
+- [x] Mutations seen red: resolve a middle hop; skip the promise check on the held document; always
       refetch.
-- [ ] Docs: `fetching.md` (the sources section), `ingest-queue.md`, `paper-sources.ts`'s header
+- [x] Docs: `fetching.md` (the sources section), `ingest-queue.md`, `paper-sources.ts`'s header
       (which says a source known only after a fetch "does not fit here").
-- [ ] A full import of one short link through the queue on the local stack, and a second paste of
+- [x] A full import of one short link through the queue on the local stack, and a second paste of
       the same link, checked in the browser at three widths by a Sonnet subagent: the second paste
       opens the first article.
 
+**What landed in stages 1 and 2, and what changed from the plan** (2026-10-06):
+
+- The migration is one statement, `ALTER TABLE "spideryarn"."articles" ADD COLUMN "asked_url" text;`
+  (`drizzle/20261006144348_articles_asked_url.sql`), applied to the local database only.
+- `askedUrl` is a required part of `lockOrCreateArticle`'s `birth`, so each of its three callers
+  says which it is. `rememberAskedUrl` is the K1 exception, and it also covers a row found after
+  losing the insert race.
+- The redirect look is `fetchByAddress` in `src/pipeline.ts`, pulled out of `STEPS.fetch` so a
+  test and the live check can run it without writing to storage. The held document is one line in
+  `fetchFromPaperSource`'s existing wrapper, so it goes back through `fetchFirstCandidate` as an
+  ordinary answer. It counts in `tried`.
+- `paperAt` strips `www.` from the key, as `urlKey` does, so NBER can be known by its real `www.`
+  address. No earlier source's key changes (none had a `www.` landing address).
+- Mutations seen red are listed in the two builders' reports; the ones the plan named all were.
+- Live check, free (`261006i-evidence/resolve-live.txt`): six of six. Four real redirects went
+  through the look: `www.aclweb.org/anthology/N19-1423` to ACL's PDF,
+  `www.doi.org/10.48550/arXiv.1706.03762` to arXiv's HTML, `papers.nber.org/papers/w30000` to
+  NBER's PDF, and `papers.nber.org/papers/w30000.pdf`, which ended on the PDF itself and needed no
+  second request.
+- `docs/project/database.md` and `export.md` have no per-column list, so neither changed. The
+  owner's export bundle carries the column in `article.json` and a test pins that.
+- **One real import through the queue**, local stack, in a browser (a Sonnet subagent, about 26
+  US cents): `https://www.doi.org/10.48550/arXiv.1810.04805` imported the paper (9.6k words; the
+  card said `257 KB, arXiv HTML`), with `asked_url` the pasted link and `final_url`
+  `https://arxiv.org/html/1810.04805`. Pasting the same link again came back to the same slug in
+  1.7 seconds with every step skipped and no model call; so did `arxiv.org/abs/1810.04805`. One
+  article on the shelf. Shots: `261006i-shot-1440.png`, `-820.png`, `-390.png`.
+- **Found on the way, not from this change and not fixed:** that article scrolls sideways at 820
+  and 390 wide (scroll width 921 and 625). An older PDF import of another arXiv paper does not.
+  Probably wide content in arXiv's own HTML. Reported in the debrief.
+- **Known and left:** the reader who holds the paper and then pastes a new short link to it still
+  gets a second article (§ Not solved). A subscriber-held NBER paper was never found to measure.
+  `tests/feedback-payload.test.ts` was red before this work (`MalformedReply`, from `832b1d2b4`).
+
 ### Stage 3: NBER, OSF
 
-- [ ] NBER, by 261005m's rules for a source: `nber.org` and `www.nber.org`, `/papers/w<N>`,
+- [x] NBER, by 261005m's rules for a source: `nber.org` and `www.nber.org`, `/papers/w<N>`,
       `/papers/w<N>.pdf`, `/system/files/working_papers/w<N>/w<N>.pdf`, and its DOI
       `10.3386/w<N>` by pattern; one candidate, the `system/files` PDF; the key is what `urlKey`
       gave the landing page before. Live-checked.
@@ -238,3 +272,12 @@ a GPT Sol code review (write-capable, fixes inside the stage), one commit.
   | K7 (P3) | The export puts the column in `article.json`, not beside `requestedUrl` | **Fixed** |
 
   One round on the plan: the fixes are checked in the stage's code review.
+- **Code review, GPT Sol** (`261006i-code-review-sol.md`, on commit `fb8a55b5d`, write-capable):
+  *ship with the fixes I made*. K1 and K3 confirmed closed as built; no new charge found; no
+  existing key changed by the `www.` strip; NBER's patterns meet the rules.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | K8 (P2) | The paper-only lookup looked only at `final_url`, so a paper whose candidate redirected to an address the registry does not know would not be found by its asked-for address | **Fixed by Sol**, read by me: the lookup also takes the published revision's `requested_url`, which for a paper source is the candidate we derived. `tests/asked-url-lookup.test.ts`, seen red by Sol; `tests/find-article.test.ts` re-run by me on Postgres, green |
+
+  One round: the verdict was ship, and the one fix is small and tested.
