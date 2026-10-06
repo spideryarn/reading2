@@ -46,7 +46,19 @@ import { readHref } from "./router.js";
 import { sharedInventory } from "./shared-inventory.js";
 
 /** Every flag false, from the card's own list of keys so a new artefact cannot be left out. */
-const NOTHING_BUILT = Object.fromEntries(ARTEFACT_KEYS.map((key) => [key, false])) as unknown as PublicArtefacts;
+export const NOTHING_BUILT = Object.fromEntries(ARTEFACT_KEYS.map((key) => [key, false])) as unknown as PublicArtefacts;
+
+/**
+ * **Whether there is anything to draw.** No box until the probe has said
+ * there is no article here yet, and none when it could not say. Outside the
+ * interval the page offers its boxes in (`offer`), an untouched box and the
+ * *already an article* line are not drawn either. Exported because the
+ * Sharing section (AddSharing.tsx) must not draw a row with nothing in it.
+ */
+export function shareDraws(state: ShareAtAddState, offer: boolean): boolean {
+  if (state.kind === "probing" || state.kind === "unavailable") return false;
+  return offer || (state.kind !== "adopted" && state.kind !== "off");
+}
 
 export function AddShare({
   share,
@@ -64,10 +76,7 @@ export function AddShare({
 }) {
   const state = useSyncExternalStore(share.subscribe, share.get);
 
-  /* No box until the probe has said there is no article here yet, and none
-     when it could not say. */
-  if (state.kind === "probing" || state.kind === "unavailable") return null;
-  if (!offer && (state.kind === "adopted" || state.kind === "off")) return null;
+  if (!shareDraws(state, offer)) return null;
   if (state.kind === "adopted") {
     return (
       <p data-add-share="adopted" className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
@@ -188,7 +197,8 @@ function line(state: ShareAtAddState) {
   }
 }
 
-function Warning({ children }: { children: React.ReactNode }) {
+/** A line the reader should not miss: a refusal, a give-up, a state we cannot vouch for. */
+export function Warning({ children }: { children: React.ReactNode }) {
   return (
     <span className="tw:inline-flex tw:items-start tw:gap-1 tw:text-highlight-text">
       <TriangleAlert size={12} className="tw:mt-[3px] tw:shrink-0" />

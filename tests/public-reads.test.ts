@@ -25,6 +25,7 @@ import {
   publicBlocksQuery,
   publicCommentsQuery,
   publicCurrentRevisionQuery,
+  publicPendingImportQuery,
   publicSearchesQuery,
   publicSourceGuessQuery,
 } from "../src/store/public-reader.js";
@@ -653,6 +654,78 @@ describe("the public reads, asked with a private link's key", () => {
     for (const q of [keyed.article, keyed.head, keyed.asset, articleQuery, headQuery, assetQuery]) {
       expect(q.sql).toMatch(/"spideryarn"\."articles"\."visibility" = 'public' as "is_public"/);
     }
+  });
+});
+
+/**
+ * **"Is an import under way here?"**, the one read that names `jobs`. Plan
+ * 261005l § 2c: `loadArticle` asks it when it finds no published revision, and
+ * a row back is a 409 *still being added* where it used to be a 404.
+ *
+ * What the statement has to say for that to be safe, each read off the SQL:
+ * the same access predicate as every other public read, in its own `where`;
+ * no published revision; and a pending job tied to the article by slug **and**
+ * owner, since `jobs` has no article id. It is the one public statement where
+ * `owner_id` appears at all, and it appears only as one column compared with
+ * another.
+ */
+describe("the public read of an import still under way", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+  const LINK: PublicAccess = { kind: "link", key: KEY as ShareKey };
+  const bare = publicPendingImportQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY).toSQL();
+  const keyed = publicPendingImportQuery(new QueryBuilder() as never, "a-slug", LINK).toSQL();
+  const A = '"spideryarn"."articles"';
+  const J = '"spideryarn"."jobs"';
+
+  it("selects a constant from articles, and nothing of the article or the job", () => {
+    for (const q of [bare, keyed]) {
+      expect(q.sql.startsWith(`select true as "pending" from ${A} where `), q.sql).toBe(true);
+      for (const column of ["title", "url", "error", "steps", "share_token_at", "title_override"]) {
+        expect(q.sql, column).not.toContain(`"${column}"`);
+      }
+    }
+  });
+
+  it("carries the access predicate every public read carries, first in its own where", () => {
+    expect(bare.sql).toContain(` where ((${A}."slug" = $1 and ${A}."visibility" = $2) and `);
+    expect(bare.params.slice(0, 2)).toEqual(["a-slug", "public"]);
+    expect(keyed.sql).toContain(
+      ` where (((${A}."slug" = $1 and ${A}."visibility" = $2) or (${A}."slug" = $3 and ${A}."share_token" = $4)) and `,
+    );
+    expect(keyed.params.slice(0, 4)).toEqual(["a-slug", "public", "a-slug", KEY]);
+    /* Bound, never written into the statement, and never selected. */
+    expect(keyed.sql).not.toContain(KEY);
+    expect(keyed.sql.match(/"share_token"/g)).toHaveLength(1);
+    expect(bare.sql).not.toContain("share_token");
+  });
+
+  it("asks only about an article with no published revision", () => {
+    for (const q of [bare, keyed]) expect(q.sql).toContain(` and ${A}."current_revision_id" is null and exists (`);
+  });
+
+  it("ties the job to the article by slug and by owner, and compares the owner with nothing else", () => {
+    for (const q of [bare, keyed]) {
+      const inner = q.sql.slice(q.sql.indexOf("exists (")).replace(/\s+/g, " ");
+      expect(inner).toContain(
+        `select 1 from ${J} where ${J}."slug" = ${A}."slug" and ${J}."owner_id" = ${A}."owner_id" and (`,
+      );
+      /* Twice in the whole statement: the two sides of that one comparison.
+         No owner is selected and none is bound. */
+      expect(q.sql.match(/"owner_id"/g)).toHaveLength(2);
+      expect(q.sql.split(" from ")[0]).not.toContain("owner_id");
+    }
+  });
+
+  it("counts a job as pending only when queued, or running inside its lease on the database's clock", () => {
+    for (const q of [bare, keyed]) {
+      expect(q.sql.replace(/\s+/g, " ")).toContain(
+        `and (${J}."status" = 'queued' or (${J}."status" = 'running' and ${J}."lease_expires_at" > clock_timestamp())))`,
+      );
+      expect(q.sql).not.toContain("now()");
+    }
+    /* Nothing beyond the access predicate and the limit is bound. */
+    expect(bare.params).toEqual(["a-slug", "public", 1]);
+    expect(keyed.params).toEqual(["a-slug", "public", "a-slug", KEY, 1]);
   });
 });
 

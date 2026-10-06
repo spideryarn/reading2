@@ -29,11 +29,16 @@ What was built, in the browser only
 - **A *Make it public* box on the add page**, with the same confirmation as the Metadata page. The
   article becomes readable by others when the import finishes.
 
-Put to Greg as questions, and answered on 2026-10-06: a private link from the add page (yes, in
-one collapsed sharing section) and a "still being added" page for a visitor who arrives early
-(yes) are the plan's stage 2; a small server read so that a second tab shows the box as it really
-is was declined.
+Put to Greg as questions, and answered on 2026-10-06. Built as the plan's stage 2, also on `dev`:
 
-Checked in a browser at desktop, iPad and phone widths on 2026-10-06; the plan's § What landed
-has what was seen. Greg's answers to the three questions, and the second stage they started, are
-in the plan too.
+- **One *Sharing* section on the add page, closed until opened**, with *Create a private link*
+  beside *Make it public*.
+- **A visitor who opens a shared article before its import has finished** is told it is still
+  being added, and the page opens it when it is ready.
+- The import's card now appears as soon as the import is accepted. It used to take about eight
+  seconds, longer than some imports.
+
+Declined: a small server read so that a second tab shows the public box as it really is.
+
+Both stages were checked in a browser at desktop, iPad and phone widths on 2026-10-06; the plan
+says what was seen and what was not.

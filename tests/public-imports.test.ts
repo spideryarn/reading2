@@ -360,7 +360,8 @@ describe("the public API's tables", () => {
    * § Stage 3 — so the sentence this comment used to carry, that everything a
    * *reader* does is a different table by design, is no longer true of all of
    * them. It is still true of chats, searches, lookups, profiles, uploads and
-   * jobs, and those are still refused here.
+   * jobs, and those are still refused here (`jobs` in all but two named files
+   * since 2026-10-06: see `ALLOWED_IN` below).
    *
    * **What makes this a widening rather than the hole this test was written
    * for**, stated so the next person to add a line has to clear the same bar:
@@ -435,6 +436,39 @@ describe("the public API's tables", () => {
   ];
 
   /**
+   * **One table, in two named files, and not a line of `ALLOWED`.**
+   *
+   * `jobs` joined the public surface on 2026-10-06, on Greg's instruction: a
+   * visitor who opens a shared address before its article is published is told
+   * *still being added*
+   * (docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+   * § 2c). Its three sentences, as the list above asks:
+   *
+   *  - the read is `publicPendingImportQuery` in src/store/public-reader.ts,
+   *    which starts from `articles`, carries `publicAccessWhere` in its own
+   *    `where`, and reaches `jobs` only inside a correlated `exists`;
+   *  - it selects a constant, so no column of a job crosses: not its title,
+   *    its address, its error, its steps or its owner;
+   *  - and the authenticated job store (src/store/pg-jobs.ts, src/jobs.ts) is
+   *    not what serves it, and stays forbidden above.
+   *
+   * **Why it is a permission per file and not an eighth line**: `ALLOWED`
+   * covers every module in the public graph, and `jobs` is a queue of
+   * everybody's work. The route file, the DTOs and the listing have no reason
+   * to name it, and with this they still may not. `job-fence.ts` is the second
+   * file because the lease predicate is imported from where it is defined
+   * rather than written a second time; it holds predicates and runs no query.
+   *
+   * The raw-SQL and relational arm below does not read this record, so `jobs`
+   * spelled in a template string, or `db.query.jobs`, is still refused in every
+   * public file including these two.
+   */
+  const ALLOWED_IN: Record<string, string[]> = {
+    "src/store/public-reader.ts": ["jobs"],
+    "src/store/job-fence.ts": ["jobs"],
+  };
+
+  /**
    * **Detected through the import, not by grepping for the word.**
    *
    * The first version matched the identifier anywhere in the stripped source and
@@ -500,7 +534,9 @@ describe("the public API's tables", () => {
         const braces = /\{([\s\S]*)\}/.exec(clause);
         for (const raw of (braces?.[1] ?? "").split(",")) {
           const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim() ?? "";
-          if (name && forbidden.includes(name)) offenders.push(`${file} → ${name}`);
+          if (!name || !forbidden.includes(name)) continue;
+          if (ALLOWED_IN[file]?.includes(name)) continue;
+          offenders.push(`${file} → ${name}`);
         }
       }
     }
@@ -581,6 +617,27 @@ describe("the public API's tables", () => {
     const reader = readFileSync(path.join(ROOT, "src/store/public-reader.ts"), "utf8");
     for (const table of ["articles", "articleRevisions", "revisionBlocks"]) {
       expect(reader, table).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+  });
+
+  /**
+   * **And each per-file permission is still being used, by a file still in the
+   * graph.** A permission left behind after its query has gone is a door
+   * nobody is watching. It also holds the two lists apart: a table in both
+   * would be allowed everywhere, whatever `ALLOWED_IN` said.
+   */
+  it("and every per-file permission names a public file that really imports that table", () => {
+    const graph = publicFiles();
+    for (const [file, tables] of Object.entries(ALLOWED_IN)) {
+      expect(graph, file).toContain(file);
+      const source = readFileSync(path.join(ROOT, file), "utf8");
+      for (const table of tables) {
+        expect(ALLOWED, table).not.toContain(table);
+        expect(everyTable(), table).toContain(table);
+        expect(source, `${file} → ${table}`).toMatch(
+          new RegExp(`import\\s*\\{[^}]*\\b${table}\\b[^}]*\\}\\s*from\\s*["'][^"']*db/schema\\.js["']`),
+        );
+      }
     }
   });
 });

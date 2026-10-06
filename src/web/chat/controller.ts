@@ -322,7 +322,8 @@ export class ChatController {
     /* A lost stream or refused write is still being reconciled. Its recovery
        or repair will notify when it finishes, including after detach. */
     const handedOver = event.type === "turn.disconnected" && state.operations.has(event.recovery.id)
-      || event.type === "turn.refused" && state.operations.has(event.repair.id);
+      || (event.type === "turn.refused" || event.type === "turn.failed")
+        && state.operations.has(event.repair.id);
     const finished = operation && (operation.kind === "turn" || operation.kind === "recovery"
       || operation.kind === "repair") && !state.operations.has(operation.id) && !handedOver;
     if (state !== before.state) {
@@ -721,6 +722,7 @@ export class ChatController {
           opId,
           error,
           ...(text === undefined ? {} : { text }),
+          repair: { id: asOpId(mintId()) },
         });
       },
       refused: (error) => {
@@ -740,7 +742,12 @@ export class ChatController {
          effects in effects.ts — it is here so that one later changed into a
          function that throws joins the same path rather than becoming a second
          one. That is the shape the two worst bugs in this file's history had. */
-      this.dispatch({ type: "turn.failed", opId, error: describeFetchFailure(e) });
+      this.dispatch({
+        type: "turn.failed",
+        opId,
+        error: describeFetchFailure(e),
+        repair: { id: asOpId(mintId()) },
+      });
     });
   }
 

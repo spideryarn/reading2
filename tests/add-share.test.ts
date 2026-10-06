@@ -24,6 +24,7 @@ import {
   type ShareIo,
   shareUnsettled,
 } from "../src/web/add-share.js";
+import { retireAddSharing } from "../src/web/add-sharing-session.js";
 
 const AT = "2026-10-05T12:00:00.000Z";
 const PUBLIC = { visibility: "public", publicAt: AT } as const;
@@ -765,5 +766,81 @@ describe("shareUnsettled — what holds the add page from leaving by itself", ()
     expect(shareUnsettled({ kind: "unavailable" })).toBe(false);
     expect(shareUnsettled({ kind: "off" })).toBe(false);
     expect(shareUnsettled({ kind: "on", publicAt: AT })).toBe(false);
+  });
+});
+
+describe("controllers belong to one reader (GPT Sol's stage 2 plan review, F1)", () => {
+  it("gives another reader their own controller for the same slug, starting from nothing", async () => {
+    const a = scripted("none", PUBLIC);
+    const forA = shareAtAddFor("an-essay", a.io, "reader-a");
+    forA.start();
+    await vi.advanceTimersByTimeAsync(0);
+    confirm(forA);
+    await vi.runAllTimersAsync();
+    expect(forA.get()).toEqual({ kind: "on", publicAt: AT });
+
+    const forB = shareAtAddFor("an-essay", scripted("none").io, "reader-b");
+    expect(forB).not.toBe(forA);
+    expect(forB.get()).toEqual({ kind: "probing" });
+    expect(shareAtAddFor("an-essay", a.io, "reader-a")).toBe(forA);
+  });
+
+  it("a session change empties the registry: the same reader and slug get a fresh one", async () => {
+    const { io } = scripted("none", PUBLIC);
+    const before = shareAtAddFor("an-essay", io, "reader-a");
+    before.start();
+    await vi.advanceTimersByTimeAsync(0);
+    confirm(before);
+    await vi.runAllTimersAsync();
+
+    retireAddSharing();
+    expect(before.get()).toEqual({ kind: "probing" });
+    expect(shareAtAddFor("an-essay", io, "reader-a")).not.toBe(before);
+  });
+
+  it("a publish answered after its controller was retired changes nothing and tells nobody", async () => {
+    let answer: (state: typeof PUBLIC) => void = () => {};
+    const { io } = scripted("none");
+    io.put = () => new Promise((resolve) => { answer = resolve; });
+    const share = shareAtAddFor("an-essay", io, "reader-a");
+    share.start();
+    await vi.advanceTimersByTimeAsync(0);
+    confirm(share);
+    expect(share.get()).toEqual({ kind: "saving", to: "public" });
+
+    retireAddSharing();
+    const told = vi.fn();
+    share.subscribe(told);
+    answer(PUBLIC);
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "probing" });
+    expect(told).not.toHaveBeenCalled();
+  });
+
+  it("a probe answered after its controller was retired changes nothing", async () => {
+    let answer: (found: Probe) => void = () => {};
+    const { io } = scripted("none");
+    io.probe = () => new Promise<Probe>((resolve) => { answer = resolve; });
+    const share = shareAtAddFor("an-essay", io, "reader-a");
+    share.start();
+    retireAddSharing();
+    answer("none");
+    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "probing" });
+  });
+
+  it("a retired controller sends nothing, whatever is pressed", async () => {
+    const { io, calls, probes } = scripted("none", PUBLIC);
+    const share = await offered(io);
+    share.retire();
+    probes.length = 0;
+    share.start();
+    share.resume();
+    confirm(share);
+    share.untick();
+    await share.settle();
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([]);
+    expect(probes).toEqual([]);
   });
 });

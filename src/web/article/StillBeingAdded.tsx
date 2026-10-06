@@ -39,7 +39,7 @@
  * A signed-out visitor never reaches this file: `ArticlePage` draws them the
  * landing page, and this mounts a job subscription only an owner has.
  */
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { isImportJob } from "../../job-state.js";
 import { STILL_BEING_ADDED, STILL_BEING_ADDED_HEADING } from "../../messages.js";
@@ -65,12 +65,22 @@ export function OwnerNotShared({
   slug,
   onPublished,
   retryCompleted,
+  otherwise,
 }: {
   slug: string;
   /** The import is done: read the article again. */
   onPublished: () => void;
   /** One reread may close a race between the access 404 and the job list. */
   retryCompleted: boolean;
+  /**
+   * **What to draw when it is not this reader's import**: no such job in a
+   * fresh list, or a list that could not be read. `NotSharedPage` when left
+   * out, as it always was. `ArticlePage` passes the visitor's waiting page
+   * when the public read said *still being added*: a shared import is its
+   * owner's to see as a card, and anybody else's to wait on (plan 261005l
+   * § 2c; GPT Sol's stage 2 plan review, F3).
+   */
+  otherwise?: ReactNode;
 }) {
   /** A list asked for after this page arrived has landed, or the wait for one is over. */
   const [settled, setSettled] = useState(false);
@@ -136,7 +146,7 @@ export function OwnerNotShared({
       />
     );
   }
-  if (settled || queue.error !== null) return <NotSharedPage />;
+  if (settled || queue.error !== null) return otherwise ?? <NotSharedPage />;
   /* Not known yet. The corner pair and nothing else, as `ArticlePage` draws a
      load that is not slow yet: a second of *Not shared* before the import
      appears is the sentence this file exists to stop. */
