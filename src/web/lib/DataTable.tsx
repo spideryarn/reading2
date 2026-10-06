@@ -75,7 +75,7 @@ import {
 import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
 import { ContextMenu, DropdownMenu } from "radix-ui";
 import { ControlTip, Tooltip } from "../Tooltip.js";
-import { SCROLL_BOX, SidewaysScrollBox } from "./SidewaysScrollBox.js";
+import { SidewaysScrollBox } from "./SidewaysScrollBox.js";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -653,22 +653,25 @@ export function DataTable<T>({
         </tbody>
       </table>
   );
-  if (sidewaysCue) return <SidewaysScrollBox>{drawn}</SidewaysScrollBox>;
+  /* The table scrolls inside its own box rather than pushing the page
+     sideways: a horizontally scrolling *page* makes everything hard to read,
+     not just the table.
+
+     Tailwind's `sr-only` labels are absolutely positioned. The box is
+     `relative`, which makes it their containing block, so its `overflow` clip
+     contains them too. Without it, the Actions label's static position at the
+     table's intrinsic right edge contributed to page overflow outside this
+     box; the page measured ~300px too wide at 390px. Browser measurement,
+     2026-09-28 (plan 260928a). `relative` with no z-index creates no stacking
+     context.
+
+     One component with or without the cue, because either way the box has to
+     be measured: while it overflows it is a tab stop named by the caption
+     (plan 261006h). */
   return (
-    /* The table scrolls inside its own box rather than pushing the page
-       sideways: a horizontally scrolling *page* makes everything hard to read,
-       not just the table.
-
-       Tailwind's `sr-only` labels are absolutely positioned. `relative` makes
-       this wrapper their containing block, so its `overflow` clip contains
-       them too. Without it, the Actions label's static position at the table's
-       intrinsic right edge contributed to page overflow outside this box; the
-       page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
-       (plan 260928a). `relative` with no z-index creates no stacking context.
-
-       `SidewaysScrollBox` above is this same box with a cue; `SCROLL_BOX` is
-       the one copy of its classes. */
-    <div className={SCROLL_BOX}>{drawn}</div>
+    <SidewaysScrollBox label={caption} cue={sidewaysCue}>
+      {drawn}
+    </SidewaysScrollBox>
   );
 }
 

@@ -171,6 +171,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   share only `applyThreshold`.
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
   the URL.
+- **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide
+  table scrolls sideways in. While its content overflows it is a named tab stop, so the arrow keys
+  can scroll it; `DataTable` draws it for you. A hand-written `overflow-x-auto` div is the older
+  shape, and cannot be reached from the keyboard in Safari.
 - **`src/web/key-chord.ts` § `isTyping`, `isModChord`; `src/web/keynav.ts` § `useArrowNav`;
   `src/web/useEscapeToClose.ts`** — a keyboard shortcut that must not fire while the reader is
   typing ([keyboard.md](keyboard.md)).

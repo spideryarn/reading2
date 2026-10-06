@@ -20,6 +20,7 @@
 import type { CSSProperties } from "react";
 
 import { type DaySeries, OTHER_KEY, formatCostNanos } from "./admin-costs-view.js";
+import type { ScrollBoxProps } from "./lib/SidewaysScrollBox.js";
 
 /** How many categorical hues are handed out before they repeat — colour-scales.md. */
 const HUES = 8;
@@ -139,12 +140,19 @@ export function StackedDayChart({
   data,
   colourKeys,
   label,
+  box,
 }: {
   data: DaySeries;
   /** The fixed order colours are assigned in — `colourOrder`. */
   colourKeys: readonly string[];
   /** The chart's accessible name. */
   label: string;
+  /**
+   * Spread onto the scrolling box. The page passes what `useScrollBox` gives
+   * it, so the box takes keyboard focus while the chart is wider than it; the
+   * static report passes nothing. A prop because this file has no hooks.
+   */
+  box?: ScrollBoxProps;
 }) {
   const { days, series, values } = data;
   const dayTotal = (day: string) =>
@@ -164,7 +172,7 @@ export function StackedDayChart({
   const labelEvery = Math.max(1, Math.ceil(days.length / 10));
 
   return (
-    <div data-cost-chart="" style={{ overflowX: "auto" }}>
+    <div {...box} data-cost-chart="" style={{ overflowX: "auto" }}>
       <svg
         role="img"
         aria-label={label}

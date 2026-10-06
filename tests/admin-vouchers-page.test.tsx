@@ -188,6 +188,36 @@ describe("/admin/vouchers", () => {
     expect(box?.className).toMatch(/\btw:relative\b/);
   });
 
+  /* Plan 261006h: the arrow keys scroll whatever has focus. jsdom lays nothing
+     out, so the two widths are stand-ins. */
+  for (const [what, content, expected] of [
+    ["makes the table's box a named tab stop when the table is wider than it", 900, { tabindex: "0", role: "region", name: "Every gift voucher, newest first" }],
+    ["does not make the table's box a tab stop when the table fits", 360, { tabindex: null, role: null, name: null }],
+  ] as const) {
+    it(what, async () => {
+      const isBox = (el: Element) => el === host?.querySelector("table")?.parentElement;
+      vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
+        return isBox(this) ? content : 0;
+      });
+      vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+        return isBox(this) ? 360 : 0;
+      });
+      try {
+        await mount();
+        /* The list arrives after the first paint; let the box be measured with it in. */
+        await settle();
+        const box = host.querySelector("table")?.parentElement;
+        expect({
+          tabindex: box?.getAttribute("tabindex") ?? null,
+          role: box?.getAttribute("role") ?? null,
+          name: box?.getAttribute("aria-label") ?? null,
+        }).toEqual(expected);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+  }
+
   it("sends the right PATCH on Revoke, and reads the list again", async () => {
     await mount();
     const before = calls.length;

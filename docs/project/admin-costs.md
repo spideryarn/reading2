@@ -191,6 +191,8 @@ full comparison is in the plan.
   scrolled. All four are one component,
   [`SidewaysScrollBox`](../../src/web/lib/SidewaysScrollBox.tsx), which the ranking reaches through
   `DataTable`'s `sidewaysCue`; its header says why the shade is measured rather than CSS-only.
+  While a box overflows it is also a tab stop named by its table's caption, so the arrow keys
+  scroll it; the per-day chart's box is the same, through `useScrollBox`.
 - **Charts are our own** ([`src/web/cost-charts.tsx`](../../src/web/cost-charts.tsx)): ranking bars
   in HTML, one SVG chart of stacked bars per day. They use only attributes and CSS custom
   properties (`CHART_TOKENS`), so the script renders the same components into the static report.
