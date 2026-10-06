@@ -2315,11 +2315,11 @@ async function acceptedStream(
  * `sseChunks` yields; what it loses is the fetch, the status check, and the
  * ability to forget the accounting.
  *
- * `signal.aborted` decides `"aborted"` against `"error"`, and the signal's
- * reason then says who stopped it: our stall clock, our deadline, or anybody
- * else (`Meter.stopped`). [`stoppedByReader`](openrouter-stream.ts) asks much
- * the same of the caller's separate signals, for the message the reader sees;
- * this is the ledger's copy of the answer, from the one signal it is handed.
+ * A thrown failure is `aborted` only when it is the abort itself; a clean
+ * loop end also checks `signal.aborted` for the cancelled-read race. An
+ * observed in-band error wins over both. For an abort, the signal's reason
+ * says who stopped it (`Meter.stopped`). [`stoppedByReader`](openrouter-stream.ts)
+ * asks much the same of the caller's separate signals for the reader's message.
  */
 export async function* openRouterStream(
   job: ChatJob,

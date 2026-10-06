@@ -1039,6 +1039,35 @@ describe("streamMessage — every attempt's row says which go it was, and how it
     expect(rows).toEqual([[1, "error", midAnswer("provider:overloaded_error")]]);
   });
 
+  it.each([false, true])("a provider error wins over a later clock, begun=%s", async (begun) => {
+    const stop = new AbortController();
+    const prefix = begun ? sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } }) : "";
+    const t = scriptTransport([{ body: prefix + errorEvent({ type: "billing_error", message: "badgers" }) }]);
+    const real = Anthropic.Messages.prototype.stream;
+    let failed!: Promise<void>;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      const stream: ReturnType<typeof real> = real.apply(this, args);
+      failed = new Promise((resolve) => stream.on("error", () => resolve()));
+      return stream;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: stop.signal });
+        await failed;
+        stop.abort(new StallReached());
+        await call.finalMessage().catch(() => undefined);
+        expect(call.aborted()).toBe(false);
+      });
+      expect(t.sent()).toBe(1);
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([
+        [1, "error", (begun ? midAnswer : beforeAnswer)("provider:billing_error", 200)],
+      ]);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
+  });
+
   /* ------------------------------------------------ who stopped an aborted call --
      Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md.
      An `aborted` row says who stopped it, from the reason on the signal, and
@@ -1175,7 +1204,7 @@ describe("streamMessage — every attempt's row says which go it was, and how it
   /* F17. The SDK can abort a stream without the caller's signal having fired.
      If that signal fires afterwards, and only then is `finalMessage()` awaited,
      the signal's reason says `deadline` about a stream the deadline did not
-     stop. The class is taken when the SDK reports the abort. */
+     stop. The class is captured at the controller's abort boundary. */
   /* F16, where it bites. When the caller's signal fired, the wait before a
      retry refuses to start, so a loop that took an abort for a failure would
      still make one request. An abort with no signal behind it has no such
@@ -1226,6 +1255,31 @@ describe("streamMessage — every attempt's row says which go it was, and how it
         await call.finalMessage().catch(() => undefined);
       });
       expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", midAnswer("abort")]]);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
+  });
+
+  it("an SDK abort followed synchronously by a clock keeps the SDK as its cause", async () => {
+    const outside = new AbortController();
+    const t = hangingTransport(BEGUN);
+    const real = Anthropic.Messages.prototype.stream;
+    let opened: ReturnType<typeof real> | undefined;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      opened = real.apply(this, args);
+      return opened;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: outside.signal });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        opened?.abort();
+        outside.abort(new StallReached());
+        await call.finalMessage().catch(() => undefined);
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", midAnswer("abort")]]);
+      expect(t.sent()).toBe(1);
     } finally {
       Anthropic.Messages.prototype.stream = real;
       t.restore();

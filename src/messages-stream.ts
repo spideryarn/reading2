@@ -661,7 +661,7 @@ export function streamMessage(
       startedAt,
       begun: false,
       n,
-      /** Who stopped this stream, set as the SDK reports its abort. See the `abort` listener below. */
+      /** Who stopped this stream, captured as its controller aborts. */
       stoppedBy: null as AbortClass | null,
     };
     stream.on("streamEvent", (event) => {
@@ -690,15 +690,17 @@ export function streamMessage(
        that method is never called) without also leaking a process-level
        rejection. The abort event follows the same SDK rule. */
     stream.on("error", () => {});
-    /* **Who stopped it is taken here, as the SDK says the stream was aborted,
-       and not when the row is written.** The row is written when
-       `finalMessage()` is awaited, which can be later, and the caller's signal
-       can have fired in between: a stream the SDK aborted by itself would then
-       be recorded under a deadline that did not stop it. A signal that has not
-       fired by now did not do this, and that is `abort`. GPT Sol, plan 261006d
-       finding F17. */
-    stream.on("abort", () => {
+    /* The controller aborts synchronously; the SDK's `abort` event follows
+       asynchronously after the transport settles. Capture at the controller
+       so a later external clock cannot claim an independent SDK abort, even
+       when both happen in the same turn. The SDK forwards external cancellation
+       to this controller, after the external signal has its reason. */
+    stream.controller.signal.addEventListener("abort", () => {
       attempt.stoppedBy = abortClass(options.signal?.aborted ? options.signal.reason : undefined);
+    }, { once: true });
+    /* An SDK abort error can also arrive without its controller firing. */
+    stream.on("abort", () => {
+      attempt.stoppedBy ??= "abort";
     });
     return attempt;
   };
@@ -803,7 +805,7 @@ export function streamMessage(
           failure: {
             /* The same boundary an error is placed by. */
             phase: begun ? "mid_answer" : "before_answer",
-            /* What the `abort` listener saw. Where the SDK reported no abort
+            /* What the controller or SDK abort listener saw. Where the SDK reported no abort
                the error is itself the signal's abort, seen here for the first
                time, so the reason is read now. */
             class: stoppedBy ?? abortClass(isAbort(err, options.signal) ? options.signal?.reason : undefined),
