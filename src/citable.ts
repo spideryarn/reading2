@@ -48,7 +48,7 @@
  * yields.
  */
 import { fromMarkdown } from "mdast-util-from-markdown";
-import type { Nodes, Paragraph, RootContent } from "mdast";
+import type { ListItem, Nodes, Paragraph, RootContent } from "mdast";
 import { splitCommandTokens, tokensOnOwnLine, withoutCommandTokens } from "./command-token.js";
 import { withoutWebLinks } from "./urls.js";
 
@@ -66,8 +66,27 @@ import { withoutWebLinks } from "./urls.js";
  */
 const OPAQUE = new Set(["link", "linkReference", "image", "imageReference"]);
 
-/** Kept in step with `MAX_DEPTH` in src/web/Cited.tsx — see `citableText`. */
-const MAX_DEPTH = 12;
+/**
+ * **How many blocks deep the renderer reads structure** — a quote inside a list
+ * inside a quote — before it draws the rest as its own characters, chips and
+ * all (src/web/Cited.tsx § `drawBlock`, which has why there is a cap at all).
+ *
+ * The one copy, imported by the renderer. It counts **block nesting as the
+ * renderer nests**, which is not levels of the tree:
+ *
+ *  - a quote's contents are one deeper than the quote;
+ *  - a list item's contents are one deeper than the list, **unless** the item
+ *    is a single paragraph, which the renderer draws in place (`drawList`);
+ *  - a paragraph, a heading, `strong` and `emphasis` are no deeper at all.
+ *
+ * Until 2026-10-06 each side had its own `MAX_DEPTH = 12` and a comment saying
+ * the other was kept in step. They were equal and still disagreed, because the
+ * walk here counted every level of the tree: eleven quotes deep, or six lists,
+ * the reader was shown a chip the log never counted. Equal constants cannot
+ * hold two walks together; `tests/chat-markdown-render.test.tsx` § agrees at the
+ * depth cap does, by painting each shape and counting the chips.
+ */
+export const MAX_BLOCK_DEPTH = 12;
 
 /**
  * The answer with everything uncitable blanked, character for character.
@@ -92,31 +111,47 @@ export function citableText(answer: string): string {
  */
 export function linkFreeProse(answer: string): string {
   const kept = new Array<string>(answer.length).fill(" ");
-  const visit = (node: Nodes, opaque: boolean, depth: number) => {
-    /* The same cap the renderer draws to (src/web/Cited.tsx § MAX_DEPTH), for
-       the same two reasons: a walk deep enough to overflow the stack would take
-       the request with it, and past that depth the renderer stops drawing chips,
-       so counting them here would be counting what nobody was offered. */
-    if (depth > MAX_DEPTH) return;
-    if (node.type === "text" && !opaque) {
-      const from = node.position?.start.offset;
-      const to = node.position?.end.offset;
-      if (from !== undefined && to !== undefined) {
-        for (let i = from; i < to && i < answer.length; i++) kept[i] = answer[i] ?? " ";
-      }
-      return;
-    }
-    if ("children" in node) {
-      const inside = opaque || OPAQUE.has(node.type);
-      for (const child of node.children) visit(child, inside, depth + 1);
-    }
+  const keep = (node: Nodes) => {
+    const from = node.position?.start.offset;
+    const to = node.position?.end.offset;
+    if (from === undefined || to === undefined) return;
+    for (let i = from; i < to && i < answer.length; i++) kept[i] = answer[i] ?? " ";
   };
-  visit(fromMarkdown(answer), false, 0);
+  /* A list of work rather than a recursive walk. Block nesting stops at the cap
+     below, but `strong` inside `emphasis` inside `strong` has no cap on either
+     side, and a walk deep enough to overflow the stack would take the request
+     with it. Order does not matter: every node writes only its own offsets. */
+  const todo: { node: Nodes; opaque: boolean; depth: number }[] = [
+    { node: fromMarkdown(answer), opaque: false, depth: 0 },
+  ];
+  for (let next = todo.pop(); next; next = todo.pop()) {
+    const { node, opaque, depth } = next;
+    /* Past the cap the renderer draws a block as its source and offers no chip
+       in it, so counting one here would be counting what nobody was offered.
+       `depth` moves exactly where the renderer's does — see MAX_BLOCK_DEPTH. */
+    if (depth >= MAX_BLOCK_DEPTH) continue;
+    if (node.type === "text") {
+      if (!opaque) keep(node);
+      continue;
+    }
+    if (!("children" in node)) continue;
+    const inside = opaque || OPAQUE.has(node.type);
+    const deeper =
+      node.type === "blockquote" || (node.type === "listItem" && !isOneParagraph(node));
+    for (const child of node.children) {
+      todo.push({ node: child, opaque: inside, depth: deeper ? depth + 1 : depth });
+    }
+  }
   /* A bare address is not a citation either, and `webLinks` in src/urls.ts is
      the single matcher for that — the renderer runs it over exactly this text
      (src/web/Cited.tsx § leaf). No `remark-gfm`, so the parser leaves bare
      addresses in the text nodes for it to find. */
   return withoutWebLinks(kept.join(""));
+}
+
+/** A list item the renderer draws in place, without a level of its own (`drawList`). */
+function isOneParagraph(item: ListItem): boolean {
+  return item.children.length === 1 && item.children[0]?.type === "paragraph";
 }
 
 /**
@@ -187,7 +222,7 @@ function commandTokensByLine(
   };
 
   const blocks = (nodes: readonly RootContent[], depth = 0) => {
-    if (depth >= MAX_DEPTH) return;
+    if (depth >= MAX_BLOCK_DEPTH) return;
     for (const node of nodes) {
       if (node.type === "paragraph") {
         paragraph(node);

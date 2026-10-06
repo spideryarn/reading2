@@ -571,7 +571,7 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
           </span>
         )}
         {/* Given up when the space runs out, the way the wordmark gives up its
-            word — styles.css § feedback for the corner, § the bar's fit ladder
+            word — feedback.css § feedback for the corner, dock-fit.css § the bar's fit ladder
             for the bar. The icon and the `aria-label` carry it from there.
 
             **The masthead shape keeps it at every width**, so its `word` class

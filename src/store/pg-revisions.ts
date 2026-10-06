@@ -104,6 +104,7 @@ import {
   type JobShape,
   type SharingStep,
 } from "../sharing-steps.js";
+import { blockOf } from "./block-rows.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
@@ -945,23 +946,7 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
     .where(eq(revisionBlocks.revisionId, revisionId))
     .orderBy(asc(revisionBlocks.ordinal));
 
-  return rows.map((row) => ({
-    id: row.id,
-    tag: row.tag,
-    kind: row.kind,
-    ...(row.level === null ? {} : { level: row.level }),
-    text: row.text,
-    words: row.words,
-    html: row.html,
-    gistable: row.gistable,
-    ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment }),
-    ...(row.noteId === null ? {} : { noteId: row.noteId }),
-    ...(row.contextId === null || row.contextType === null
-      ? {}
-      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-  }));
+  return rows.map((row) => blockOf(row.id, row));
 }
 
 /**
@@ -1684,9 +1669,10 @@ export async function beginStepRun(
 /**
  * This step has ended, and only the attempt that started it may say so.
  *
- * One fenced `UPDATE`, which is what the filesystem adapter's own comment has
- * been asking for since it was written. Two conditions carry the whole
- * protocol, and they refuse different things:
+ * First the owning job and draft are fenced by `requireLiveJobOwnsDraft`.
+ * Then one conditional `UPDATE` finishes the step, which is what the
+ * filesystem adapter's comment had asked for. Its two row conditions refuse
+ * different things:
  *
  * - **`attempt_id`** — somebody else's claim. A lapsed claimant whose lease was
  *   swept still holds a token and would otherwise finish a step the new

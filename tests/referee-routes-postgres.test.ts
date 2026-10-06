@@ -37,7 +37,7 @@
  * **So: a small suite of its own.** The existing suites kept their fixtures,
  * their speed and their no-model guarantee; this one owns the sentence *these
  * routes work under Postgres*, needs a database, and fails rather than skips
- * under `REQUIRE_POSTGRES=1`.
+ * without one (tests/helpers/pg-ready.ts).
  *
  * ## Nothing here reaches a model either, and it is bought differently
  *

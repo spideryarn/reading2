@@ -97,7 +97,7 @@ const ATTEMPT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export type LogRecord = {
   /** Schema version. */
   v: number;
-  /** ISO 8601 with the laptop's offset — the offset matters, see remote-box.md. */
+  /** ISO 8601 with the laptop's offset — the offset matters: hetzner-remote-server-box.md. */
   t: string;
   /** The same instant in epoch milliseconds, so arithmetic needs no parsing. */
   ms: number;

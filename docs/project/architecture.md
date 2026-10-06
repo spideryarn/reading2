@@ -426,6 +426,10 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 - **`src/db/insert-batches.ts` § `inBatches`** — a many-row insert, cut so no statement passes
   Postgres' 65,535 parameters. An unbatched one fails at a row count nobody chose, with an error
   that reads like a network blip.
+- **[`src/store/block-rows.ts`](../../src/store/block-rows.ts) § `blockOf`, `publicBlockOf`** — one
+  `revision_blocks` row as a `Block`. Every read that selects block rows calls one of the two; the
+  visitor's has no `note` and its row type has no such column. A new block column is an edit to
+  each SELECT and one edit here.
 - **`src/retry-after.ts` § `parseRetryAfter`** — a `Retry-After` header, as milliseconds or `null`.
   The only parser: the gateway, the page fetcher and the deepening wave all call it. A wait that is
   not positive (`0`, a date already past) is `null`, so the caller's own backoff applies.

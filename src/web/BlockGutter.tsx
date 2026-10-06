@@ -44,7 +44,7 @@
  * one-line paragraph has room for one 24px target beside it, a two-line one for
  * two, a three-line one for three; the gutter is a size container and a
  * `@container` query draws the first however-many fit, with the last slot
- * becoming the "…" whenever something is left over. styles.css § the gutter has
+ * becoming the "…" whenever something is left over. gutter.css § the gutter has
  * the table and the arithmetic.
  *
  * **Source order is the priority order** — that is why the mark is first in
@@ -93,14 +93,14 @@
  * argument is in the plan § Rejected, because anybody looking at four icons
  * will have it again.
  *
- * **A visitor's gutter is the permalink and nothing else** — one element at the
- * head of the column, not four with three of them blank, because none of these
- * is a placeholder, and no "…", because there is nothing behind it. The chat
+ * **A visitor's gutter has the permalink and any shared owner's mark.** When
+ * there is a mark, the disclosure can expose the permalink beneath it; without
+ * a mark there is only one control and no "…". The chat
  * button is absent rather than dead: opening a conversation costs a
  * model call, which is not theirs to spend, so `onChatAbout` is optional and the
  * button exists only where the callback does. The bookmark
- * never draws for them either, for a different reason — the marks in it are the
- * reader's own, and a visitor has none. The "?" is gated on the same callback
+ * never draws for them either: visitors cannot create marks, though shared
+ * owner's marks can be shown. The "?" is gated on the same callback
  * pattern as the chat button and for the same reason. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the
@@ -382,7 +382,7 @@ export function BlockGutter({
    *
    * **The row decides how many of these controls are drawn, and this is the way
    * to the rest of them.** A one-line paragraph has room for exactly one 24px
-   * target and a two-line one for two (styles.css § the gutter has the
+   * target and a two-line one for two (gutter.css § the gutter has the
    * arithmetic), so on a short row the last slot that fits becomes the "..."
    * and pressing it releases the gutter's own height. Greg, 2026-09-05:
    * *"for short paragraphs we simply show a `...` button that reveals them all?
@@ -778,7 +778,7 @@ export function BlockGutter({
 
           A one-line paragraph has room for one 24px target, a two-line one for
           two, a three-line one for three — measured, and the whole arithmetic is
-          in styles.css § the gutter. Until today the row was *stretched* to hold
+          in gutter.css § the gutter. Until today the row was *stretched* to hold
           the column, which cost every short paragraph 24px of the article's
           rhythm; Greg looked at that twice and then named the fix: *"for short
           paragraphs we simply show a `...` button that reveals them all? That

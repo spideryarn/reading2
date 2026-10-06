@@ -18,7 +18,8 @@
  * docs/reusable/silent-success.md warns about, and this whole piece of work
  * exists because `db:migrate` reported success while doing nothing.
  *
- * The live half is skipped unless `DATABASE_URL` is local and reachable. It
+ * The live half **refuses to run at all** unless `DATABASE_URL` is local, and
+ * fails rather than skips when that database is not there. It
  * never leaves anything behind: every mutation is `begin` … `rollback`, which
  * is the same bargain `scripts/db-corpus-readiness.ts --seed-a-bad-row` makes
  * and for the same reason.
@@ -29,6 +30,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
+import { pgReady, refusePostgres } from "./helpers/pg-ready.js";
 import {
   columnShape,
   constraintShape,
@@ -112,23 +114,46 @@ describe("shapeGuards", () => {
 /* ------------------------------------------------------------------ */
 
 loadEnvLocal();
-const URL_ = process.env.DATABASE_URL;
+const SUITE = "tests/migration-reconciliations.test.ts";
 
 /**
- * Local only, and skipped rather than failed when there is no container.
+ * The local database this file may break things in, or no return at all.
  *
- * A refusal to run is not a pass, so the first test in the block below asserts
- * that the connection happened at all — otherwise "0 tests, all green" would
- * read the same as "every probe verified".
+ * **Local only, and that is the one rule here that must never loosen**: every
+ * case below runs DDL — rolled back, but run — so it is never pointed at a
+ * database that is not the throwaway container. The address is judged by
+ * `isLocalDatabaseUrl` *before* anything connects, including the probe below.
+ *
+ * **A failure, not a skip.** Until 2026-10-06 this was
+ * `URL_ && isLocalDatabaseUrl(URL_) ? describe : describe.skip`, so an unset or
+ * a remote `DATABASE_URL` printed "9 passed | 21 skipped" under a green tick —
+ * the silent skip tests/helpers/pg-ready.ts removed everywhere else on
+ * 2026-09-05. It throws at module scope now, like every `pgReady` caller, and
+ * the mutations still cannot reach a remote database: refusing is not running.
  */
-const live = URL_ && isLocalDatabaseUrl(URL_) ? describe : describe.skip;
+function localDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) refusePostgres(SUITE, "DATABASE_URL is not set", "no-url");
+  if (!isLocalDatabaseUrl(url)) {
+    throw new Error(
+      `${SUITE} refuses to run: DATABASE_URL does not point at the local container, and ` +
+        "these cases break the schema inside a transaction to watch each probe go red. " +
+        "That is never done to a database that is not the throwaway one. Run it through " +
+        "`npm test`, which hands every file its own local database.",
+    );
+  }
+  return url;
+}
 
-live("every probe, against the schema this laptop actually has", () => {
+const URL_ = localDatabaseUrl();
+await pgReady({ suite: SUITE });
+
+describe("every probe, against the schema this laptop actually has", () => {
   let client: Client | null = null;
   let connected = false;
 
   beforeAll(async () => {
-    const c = new Client({ connectionString: URL_!, ssl: sslDecisionFor(URL_!).ssl });
+    const c = new Client({ connectionString: URL_, ssl: sslDecisionFor(URL_).ssl });
     try {
       await c.connect();
       client = c;

@@ -147,8 +147,8 @@ describe("the bottom bar's mode segment", () => {
 
   /* The claim the group still makes, and it is the one worth keeping: exactly
      one of these is on. Fourteen buttons where only one ever lights up read as
-     fourteen toggles you could turn on together — styles.css § the modes
-     segment says the same thing about the hairline frame. */
+     fourteen toggles you could turn on together — dock-fit.css § the mode
+     switch says the same thing about the hairline frame. */
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();
     /* The radios' own box since 2026-10-01, inside the segment beside

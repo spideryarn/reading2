@@ -110,7 +110,6 @@ describe("who sees it", () => {
     },
     { kind: "exempt" },
     { kind: "unknown" },
-    { kind: "off" },
   ] as ReaderPlan[]) {
     it(`is not drawn for ${plan.kind}`, () => {
       render(plan);

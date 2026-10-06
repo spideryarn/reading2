@@ -52,7 +52,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Explain, type Tip } from "./Tooltip";
 import { WorkHistory } from "./WorkHistory";
-import { type HistoryApi, type HistoryView, type RetentionView } from "./health-history-client";
+import type { HistoryApi, HistoryView, RetentionView } from "./health-history-client";
 import {
   collapseVerdict,
   describeDuration,

@@ -934,6 +934,7 @@ export function QuotesPanel({
           2026-10-02 (plan 261002e), so this row holds nothing of its own.
           Still a fragment rather than `null`, for the reason above: the row
           holds its place while the list loads, and the corner sits in it. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={ranks.length > 0 ? null : <></>}
       /* Pinned under the list rather than at the end of it. Same guard it had
           as a trailing child of the band — and **not on a stale or an outdated

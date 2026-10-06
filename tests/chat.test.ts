@@ -286,13 +286,13 @@ describe("fitView in a mode — the band beside the prose", () => {
    *
    * It is the wrong answer for the same reason it was wrong there. At 390px it
    * asked a phone for 832px of content and produced two half-visible panels,
-   * neither of them readable. And it is inconsistent even on a laptop: below
-   * 744px the reading view has already given up sideways scrolling entirely, so
-   * a mode that reintroduces it contradicts the page the reader just left.
+   * neither of them readable. At the time, the reading view had already
+   * given up sideways scrolling below 744px, so a mode that reintroduced it
+   * contradicted the page the reader had just left.
    *
    * `modeW: 0` is not a claim that there is no band — it is how much horizontal
    * room the band takes *from the table*, and a fixed full-screen panel takes
-   * none. layout.ts § fitMode, and styles.css § a narrow window.
+   * none. layout.ts § fitMode, and narrow-window.css § a band with no room.
    */
   it("gives the band the whole screen once the two no longer fit", () => {
     // 699 − 12 of rail = 687, one under `MODE_MIN + MODE_PROSE_FLOOR`. It was 843
@@ -309,7 +309,7 @@ describe("fitView in a mode — the band beside the prose", () => {
    * **The number the stylesheet used to have to agree with, and no longer
    * carries at all.**
    *
-   * styles.css § a band with no room widened the fixed `.mode-band` to the
+   * narrow-window.css § a band with no room widened the fixed `.mode-band` to the
    * window below `843px`, and this was the only thing keeping that literal
    * honest until 2026-08-28. They were out of step for a while and the failure
    * was total rather than untidy: `fitMode` handed the band `modeW: 0` from 855
@@ -319,7 +319,7 @@ describe("fitView in a mode — the band beside the prose", () => {
    * **The literal went on 2026-09-03**, because it could not be right in both
    * spine states: the crossover is the window *minus the rail*, so it is 700
    * with the rail on and 688 with `?spine=0`, and a media query cannot see a
-   * query parameter. `App.tsx` writes `band-covers` from `fit.modeW === 0` and
+   * query parameter. `Reader.tsx` writes `band-covers` from `fit.modeW === 0` and
    * the stylesheet keys off that instead — so the assertion below is now the
    * *whole* statement of the crossover rather than one of a pair, and moving it
    * moves the page. `tests/spine-width.test.ts` is what stops the query coming

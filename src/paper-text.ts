@@ -457,7 +457,7 @@ export async function readPaperText(url: string, opts: ReadPaperOptions = {}): P
   }
 
   const { JSDOM } = jsdom();
-  const dom = new JSDOM(doc.text ?? "", { url: doc.url });
+  const dom = new JSDOM(doc.text, { url: doc.url });
   const meta = metaFrom(dom.window.document, doc.url);
 
   const hop = meta.pdfUrl ? await followPdfLink(meta.pdfUrl, fetchOpts, signal) : null;

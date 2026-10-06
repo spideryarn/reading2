@@ -30,7 +30,7 @@
  *    likewise replaced.
  *
  * FABRICATED, AND DECLARED AS SUCH: `claude-json-stale.json` reproduces the
- * measured failure from docs/project/orchestrator-direction.md — a file 48
+ * measured failure from docs/project/overseer-direction.md — a file 48
  * minutes old whose `five_hour` window reset 27 minutes ago while still
  * reading `utilization: 70`. `claude-json-no-cache.json` and
  * `auth-status-logged-out.json` and `transcript-429-malformed.jsonl` are

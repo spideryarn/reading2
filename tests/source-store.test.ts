@@ -247,7 +247,7 @@ const { pool } = await pgReady({
  * that opts out and keeps its connections is worse than one that fails.
  */
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 describe("the Postgres source store", { timeout: 20_000 }, () => {
@@ -453,7 +453,7 @@ describe("the Postgres source store", { timeout: 20_000 }, () => {
 
 /** One statement through the kept pool. See the note above `pgReady`. */
 async function sql(text: string, values: unknown[] = []): Promise<void> {
-  await pool?.query(text, values);
+  await pool.query(text, values);
 }
 
 /**

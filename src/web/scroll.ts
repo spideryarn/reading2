@@ -123,7 +123,7 @@ export function dockOffset(): number {
    * **How much of the bottom of the viewport the bar is covering** — not how
    * tall it is. The distinction is exactly `stickyOffset`'s, and it arrived
    * here for exactly the same reason: since 2026-08-28 the bar slides out of
-   * the way on a small device scrolled down through (styles.css § a small
+   * the way on a small device scrolled down through (narrow-window.css § a small
    * device), by `transform`, which moves where it is drawn and **does not
    * change what it measures**. Reading `.height` went on reporting a confident
    * 52 for a bar that was entirely off screen, so a centred jump would have
@@ -160,10 +160,10 @@ export function dockOffset(): number {
  * term, `document.querySelector("thead th")`, and two things went wrong with
  * that at once:
  *
- *  - **It measures nothing now.** The head keeps its element — the fisheye
- *    panels take every column's rectangle from it (useColumnContext.ts) and a
- *    `<th scope="col">` is what names a column for a screen reader — and gives
- *    up its height (styles.css § the head with no row). A term that is always zero
+ *  - **It measures nothing now.** The head keeps its element — a
+ *    `<th scope="col">` names the column for a screen reader (the fisheye
+ *    panels also took column rectangles from it until 2026-09-29) — and gives
+ *    up its height (table.css § the head with no row). A term that is always zero
  *    is not a term.
  *  - **The query had no scope on it.** An article's own prose can contain a
  *    `<table><thead><th>`, and it survives sanitising — checked by running
@@ -194,7 +194,7 @@ export function stickyOffset(): number {
    *
    * The height was right for as long as the bar could only ever be stuck at
    * `top: 0`. On a small device it now slides out of the way while you read
-   * forwards (styles.css § a small device) — by `transform`, which moves where
+   * forwards (narrow-window.css § a small device) — by `transform`, which moves where
    * it is drawn and **does not change what it measures**. (`getBoundingClientRect`
    * does include the transform, which is why reading `bottom` below works and
    * reading `height` would not.) So the old expression
@@ -338,11 +338,12 @@ export const BAR_KEEP_UNTIL = 160;
  * **How long `data-bar-moving` may stay on without a `transitionend` to end
  * it**, and the reason there is a number here at all.
  *
- * The attribute scopes the fisheye panels' `transition: top` to the one case
- * that should have one — the bar moving — because a panel's `top` also changes
- * on ordinary scrolling, while the sticky head settles out from under the
- * masthead over the first ~150px, and there a slide is a lag rather than an
- * animation (useColumnContext.ts § ColumnRect.top; GPT Sol F1, 2026-09-07).
+ * Historically, the attribute scoped the fisheye panels' `transition: top` to
+ * the one case that should have one — the bar moving — because a panel's `top` also changed
+ * on ordinary scrolling, while the sticky head settled out from under the
+ * masthead over the first ~150px, and there a slide was a lag rather than an
+ * animation (useColumnContext.ts § ColumnRect.top, since removed; GPT Sol F1,
+ * 2026-09-07). Those panels went on 2026-09-29; the attribute's lifecycle remains.
  *
  * `transitionend` is what normally ends it. **A transition that never starts
  * never ends**, and there are at least three ways to have one: `prefers-
@@ -439,9 +440,9 @@ export function stepBar(hidden: boolean, y: number, from: number): BarStep {
  * What that costs, stated rather than waved past, because performance.md argues
  * against a scroll listener on every machine: this one is `passive`, coalesced
  * into a `requestAnimationFrame`, and its body is `stepBar` — arithmetic on
- * three numbers with no DOM read in it. The page already installs a scroll
- * listener at every width for the fisheye panels (useColumnContext.ts), and
- * that one measures rects.
+ * three numbers with no DOM read in it. When Structure or the headings crumbs
+ * are mounted, useColumnContext.ts also installs a scroll listener and measures
+ * rects; that sampler once served the fisheye panels too.
  *
  * **The bottom bar did not come with it.** `--dock-bottom` stays inside § a
  * small device: the Dock is 40px, it names the mode and it is the way out of
@@ -457,6 +458,9 @@ export function watchBarVisibility(): () => void {
 
   /**
    * **`data-bar-moving`: the bar is travelling right now.**
+   *
+   * The rationale below describes the fisheye panels before they went on
+   * 2026-09-29; the attribute's lifecycle is still here.
    *
    * The fisheye panels are the one thing under the bar that CSS does not move:
    * they are `position: fixed` with a `top` measured off the table head by
@@ -551,9 +555,9 @@ export function watchBarVisibility(): () => void {
     from = next.from;
     if (next.hidden === hidden) return;
     hidden = next.hidden;
-    /* Before the attribute the panels answer to, so a `MutationObserver` on
-       `data-bars` (useColumnContext.ts) already sees the slide is on when it
-       takes its fresh measurement. */
+    /* Before `data-bars`: the fisheye panels' `MutationObserver` used to need
+       the slide marked before taking its fresh measurement
+       (in useColumnContext.ts, until 2026-09-29). */
     startMoving();
     if (hidden) document.documentElement.dataset.bars = "hidden";
     else delete document.documentElement.dataset.bars;
@@ -565,7 +569,9 @@ export function watchBarVisibility(): () => void {
   };
 
   /**
-   * **Focus moves the bar too, and nothing else can tell.**
+   * **The historical reason for watching focus as well as scroll.**
+   * The rationale below describes the fisheye panels and granularity pills
+   * before they went on 2026-09-29; the focus listener is still here.
    *
    * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
    * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still

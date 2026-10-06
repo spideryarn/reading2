@@ -1038,7 +1038,7 @@ describe("a figure the page could not place, located", () => {
     expect(asked?.aborted).toBe(true);
     expect(asked?.reason).toBeInstanceOf(CallDeadlineReached);
     expect(abortClass(asked?.reason)).toBe("deadline");
-    expect((asked?.reason as Error).message).toBe("pdf figures budget spent");
+    expect((asked?.reason as Error | undefined)?.message).toBe("pdf figures budget spent");
   }, 120_000);
 });
 

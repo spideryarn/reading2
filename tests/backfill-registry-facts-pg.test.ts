@@ -43,7 +43,6 @@ const { pool } = await pgReady({
   keepPool: true,
   max: 3,
 });
-if (!pool) throw new Error("pgReady kept no pool");
 
 const TARGET = backfillTargetOf(process.env.DATABASE_URL as string);
 const PREFIX = "test-backfill-registry-";
@@ -51,8 +50,8 @@ const PREFIX = "test-backfill-registry-";
 let db: PoolClient;
 
 async function cleanUp(): Promise<void> {
-  await pool!.query("update spideryarn.articles set current_revision_id = null where slug like $1", [`${PREFIX}%`]);
-  await pool!.query("delete from spideryarn.articles where slug like $1", [`${PREFIX}%`]);
+  await pool.query("update spideryarn.articles set current_revision_id = null where slug like $1", [`${PREFIX}%`]);
+  await pool.query("delete from spideryarn.articles where slug like $1", [`${PREFIX}%`]);
 }
 
 beforeEach(async () => {
@@ -77,7 +76,7 @@ interface Held {
 }
 
 async function revisionFor(articleId: string, held: Partial<Held> = {}, status = "published"): Promise<string> {
-  const made = await pool!.query<{ id: string }>(
+  const made = await pool.query<{ id: string }>(
     `insert into spideryarn.article_revisions (article_id, status, title, byline, doi, journal, published_at, published_year)
      values ($1, $2, 'A Piece Written For The Backfill', 'Nobody', $3, $4, $5, $6) returning id`,
     [articleId, status, held.doi ?? null, held.journal ?? null, held.published_at ?? null, held.published_year ?? null],
@@ -88,18 +87,18 @@ async function revisionFor(articleId: string, held: Partial<Held> = {}, status =
 /** An article with one published revision, which is its current one. */
 async function given(name: string, held: Partial<Held> = {}): Promise<{ slug: string; articleId: string; revisionId: string }> {
   const slug = `${PREFIX}${name}`;
-  const article = await pool!.query<{ id: string }>(
+  const article = await pool.query<{ id: string }>(
     "insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id",
     [ADMIN_USER_ID_LOCAL, slug],
   );
   const articleId = article.rows[0]!.id;
   const revisionId = await revisionFor(articleId, held);
-  await pool!.query("update spideryarn.articles set current_revision_id = $1 where id = $2", [revisionId, articleId]);
+  await pool.query("update spideryarn.articles set current_revision_id = $1 where id = $2", [revisionId, articleId]);
   return { slug, articleId, revisionId };
 }
 
 async function held(revisionId: string): Promise<Held> {
-  const found = await pool!.query<Held>(
+  const found = await pool.query<Held>(
     "select doi, journal, published_at, published_year from spideryarn.article_revisions where id = $1",
     [revisionId],
   );
@@ -127,7 +126,7 @@ const NOTHING: Held = { doi: null, journal: null, published_at: null, published_
 async function waitForBlock(blockedPid: number, blockerPid: number, settled: () => boolean): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    const result = await pool!.query<{ blocked: boolean }>(
+    const result = await pool.query<{ blocked: boolean }>(
       "select $2::integer = any(pg_blocking_pids($1::integer)) as blocked", [blockedPid, blockerPid],
     );
     if (result.rows[0]?.blocked) return;

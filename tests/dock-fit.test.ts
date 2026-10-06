@@ -172,7 +172,7 @@ describe("the bar chooses the widest rung that fits", () => {
    * row that fits exactly both report `scrollWidth === clientWidth` — so any
    * `- slack` in the comparison is true at every width and compacts everything.
    * This is also the real behaviour of a coarse-pointer bar, where the buttons
-   * `flex-grow` to fill whatever room is going (styles.css § a coarse pointer).
+   * `flex-grow` to fill whatever room is going (narrow-window.css § a coarse pointer).
    */
   it("fits with room to spare: a bar whose buttons grow to fill it keeps its labels", () => {
     const grown = fakeDock([0, 0, 0, 0]); // content always fills exactly

@@ -35,7 +35,7 @@ const { pool } = await pgReady({
 });
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 const MIGRATION = readFileSync(
@@ -130,7 +130,7 @@ async function indexNames(c: PoolClient): Promise<string[]> {
 
 /** Run `body` in a transaction with the schema as it was the day before, and always roll back. */
 async function inRolledBack(body: (c: PoolClient) => Promise<void>): Promise<void> {
-  const c = await pool!.connect();
+  const c = await pool.connect();
   try {
     await c.query("begin");
     await c.query('drop index "spideryarn"."chat_threads_one_learn"');

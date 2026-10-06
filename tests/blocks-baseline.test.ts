@@ -622,7 +622,7 @@ describe("the step", () => {
     store.plant("a", "extract", "extractedHtml", EXTRACTED);
 
     const first = await stage3(store);
-    const blocks = (first.parts?.blocks as { blocks: Block[] }).blocks;
+    const blocks = (first.parts?.blocks as { blocks: Block[] } | undefined)?.blocks ?? [];
     const html = first.parts?.stampedHtml as string;
     expect(blocks).toHaveLength(3);
     /* The pair, again, and through what the store is handed this time: the ids
@@ -634,7 +634,7 @@ describe("the step", () => {
        written back into the store the way the queue's commit would. */
     store.plant("a", "blocks", "blocks", blocksArtefact(blocks));
     const second = await stage3(store);
-    expect(idsIn((second.parts?.blocks as { blocks: Block[] }).blocks)).toEqual(idsIn(blocks));
+    expect(idsIn((second.parts?.blocks as { blocks: Block[] } | undefined)?.blocks ?? [])).toEqual(idsIn(blocks));
   });
 
   it("refuses a page with no prose in it, and writes nothing at all", async () => {

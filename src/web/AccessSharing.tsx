@@ -22,7 +22,7 @@
  * a reload.
  *
  * **The absence is still the important state.** `sharing` is optional and
- * absent means *this store cannot say* — the filesystem store has no column, and
+ * absent means *nobody could say* — the filesystem store had no column, and
  * `ArticleMetadata.sharing` says at length why it refuses rather than defaulting
  * to `private`. The card keeps the state it had for a failed probe: it says it
  * does not know, and offers no switch. A toggle that reads "not shared" because
@@ -32,9 +32,8 @@
  *
  * ## Why the confirmation is inline rather than a modal
  *
- * There is no dialog component in this app — `AnnotateDialog` and
- * `CommentDialog` are hand-built floating panels for the reading view — and a
- * modal is machinery (focus trap, restore, escape, scroll lock) for something
+ * Keeping this inline avoids modal machinery (focus trap, restore, escape,
+ * scroll lock) for something
  * that is not an interruption. This is a form: read three sentences, tick the
  * box, press the button. It appears in place, it cannot be skipped, and the
  * `PUT` behind it is refused by the server without `rightsConfirmed: true`

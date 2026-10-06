@@ -354,10 +354,10 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  *    and would re-run for ever with nothing to show for it.
  * 2. **A product with no `parts` is permitted only for a step still on
  *    `LEGACY_UNCONVERTED_STEPS`** — and a transactional session passes an empty
- *    set, so no step is. Such a stage wrote its own files during `run`, which is
- *    what the filesystem runner has always done and what `assertProduced` then
- *    checks; the same stage under a transaction would write nothing and report
- *    success.
+ *    set, so no step is. The legacy set is empty today too (src/pipeline.ts).
+ *    An unconverted stage used to write its files during `run`; under a
+ *    transaction those files would leave the draft unchanged while its carried
+ *    artefacts could still pass `assertProduced`.
  * 3. **A product with `parts` must have all of them**, as its **own**
  *    properties. `ArtifactParts` is `Partial`, so nothing in the type system
  *    asks. `Object.hasOwn` rather than a lookup, because `write` iterates
@@ -366,9 +366,9 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  *    postcondition against the artefact the draft carried forward. The same hole
  *    as rule 2 through a different door.
  * 4. **And nothing it does not declare.** An extra kind is a caller error, and
- *    the store finds out about it half way through: the filesystem adapter
- *    writes the valid entries and then throws on the unknown `(step, kind)`
- *    pair, leaving a step that is neither written nor untouched.
+ *    late validation once left partial output: the filesystem adapter
+ *    (gone 2026-09-05) wrote the valid entries and then threw on the unknown
+ *    `(step, kind)` pair, leaving a step that was neither written nor untouched.
  *
  * `{}` is not "no parts". An empty object is truthy, has none of the declared
  * kinds, and would call `write` with nothing in it — so it goes through rule 3

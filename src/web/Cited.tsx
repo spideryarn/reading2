@@ -56,6 +56,7 @@ import { createElement, Fragment, useMemo, type ReactElement, type ReactNode } f
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
+import { MAX_BLOCK_DEPTH } from "../citable.js";
 import { chipFor } from "./chat-commands.js";
 import { quotesBefore, splitCitations, splitLinks } from "./citations.js";
 import { CommandChip } from "./CommandChip.js";
@@ -202,14 +203,22 @@ function Drawn({
  */
 function lastText(tree: Root, source: string): Text | null {
   let last: Text | null = null;
-  const walk = (node: Nodes) => {
+  // Streaming inspects the whole tree, including blocks past the render cap.
+  // Keep that inspection off the call stack too.
+  const todo: Nodes[] = [tree];
+  for (let node = todo.pop(); node; node = todo.pop()) {
     if (node.type === "text") {
       if (!last || (node.position?.end.offset ?? 0) > (last.position?.end.offset ?? 0)) last = node;
-      return;
+      continue;
     }
-    if ("children" in node) for (const child of node.children) walk(child);
-  };
-  walk(tree);
+    // Reverse insertion preserves the old traversal's tie-breaking order.
+    if ("children" in node) {
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        const child = node.children[i];
+        if (child) todo.push(child);
+      }
+    }
+  }
   /* **Only if it really is the end of the answer.** An answer whose last block
      is a code fence has its greatest-offset `text` node somewhere above it —
      that text has finished arriving, and suppressing a link in it left a
@@ -257,11 +266,14 @@ function sourceOf(node: Nodes, ctx: Ctx): string {
  * the shape of mistake a rewrite makes — the guard lived in the thing being
  * replaced rather than in the thing that needed it. GPT Sol, 2026-08-31.
  *
- * Twelve is past anything a model writes and nowhere near the stack.
- * `citableText` (src/citable.ts) stops at the same depth, so the server counts
- * citations in exactly the text the reader is shown chips in.
+ * Twelve is past anything a model writes and nowhere near the stack — the
+ * number is `MAX_BLOCK_DEPTH` in src/citable.ts, which says what counts as a
+ * level. `citableText` there stops where this does, so the server counts
+ * citations in exactly the text the reader is shown chips in; sharing the
+ * number is not what makes that true, and
+ * tests/chat-markdown-render.test.tsx § agrees at the depth cap is what checks it.
  */
-const MAX_DEPTH = 12;
+const MAX_DEPTH = MAX_BLOCK_DEPTH;
 
 /**
  * A run of blocks.

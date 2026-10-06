@@ -169,7 +169,11 @@ function CostTable({ cost }: { cost: ArticleCost }) {
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Work</th>
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Kind</th>
                 <th className="tw:py-1 tw:pr-3 tw:text-right tw:font-normal">Calls</th>
-                <th className="tw:py-1 tw:text-right tw:font-normal">Cost</th>
+                {/* "Total", because "Calls, Cost" can be read as so many calls
+                    at so much each, and Greg asked for a total-cost column
+                    here (2026-10-06, spya-h2dzab). Kept on one line:
+                    at 390px the two words broke over two. */}
+                <th className="tw:py-1 tw:text-right tw:font-normal tw:whitespace-nowrap">Total cost</th>
               </tr>
             </thead>
             <tbody>

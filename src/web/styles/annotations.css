@@ -690,6 +690,7 @@ mark.hit[data-wash]:not([data-hues]) {
    is never lost, only unannounced. */
 mark.hit[data-dir]::after {
   content: "−";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "−" / "counts against";
   font-size: 0.7em;
   /* `line-height: 0` with `vertical-align: super` raises the glyph without
@@ -704,14 +705,17 @@ mark.hit[data-dir]::after {
 }
 mark.hit[data-dir="for"]::after {
   content: "+";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "+" / "counts for";
 }
 mark.hit[data-dir="neither"]::after {
   content: "·";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "·" / "counts neither way";
 }
 mark.hit[data-dir="mixed"]::after {
   content: "±";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "±" / "counts both ways";
 }
 
@@ -743,20 +747,24 @@ mark.hit[data-dir="mixed"]::after {
    words; the `✳` has never had an accessible name of its own. */
 mark.cmt.hit[data-mark-end][data-dir]::after {
   content: "−✳";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "−✳" / "counts against";
   color: var(--highlight-text);
   opacity: 1;
 }
 mark.cmt.hit[data-mark-end][data-dir="for"]::after {
   content: "+✳";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "+✳" / "counts for";
 }
 mark.cmt.hit[data-mark-end][data-dir="neither"]::after {
   content: "·✳";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "·✳" / "counts neither way";
 }
 mark.cmt.hit[data-mark-end][data-dir="mixed"]::after {
   content: "±✳";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "±✳" / "counts both ways";
 }
 
@@ -1284,16 +1292,6 @@ td.text.has-hit[data-hues="8"] {
   .cmt-dialog .cmt-followup button {
     min-height: var(--control-h-lg);
   }
-}
-
-.cmt-transport-error {
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  color: var(--destructive);
-  max-width: 18rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* `.linky` is a shape, not a shared class: the `.controls` one and this one are

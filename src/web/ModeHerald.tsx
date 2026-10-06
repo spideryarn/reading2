@@ -35,8 +35,8 @@
  * This draws a press it is handed and says when it is finished with it.
  * **Which presses count is `Reader`'s**: a Dock button or a command-bar pick,
  * never a pasted `?mode=`, a Back step or a reload — the same *a mount is not a
- * click* line `activation.ts` draws for paid runs — and never Plain or
- * Hierarchy, which have no band to stand on.
+ * click* line `activation.ts` draws for paid runs — and never Plain, which
+ * has no band to stand on.
  *
  * ## It never takes a tap
  *

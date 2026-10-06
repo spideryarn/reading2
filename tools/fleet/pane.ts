@@ -353,12 +353,16 @@ function question(prompt: string, material: PaneMaterial, options: PaneOption[])
  */
 export function stripAnsi(s: string): string {
   return s
-    .replace(new RegExp("\\u001b\\][^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)", "g"), "")
-    .replace(new RegExp("\\u001b\\[[0-9;?]*[ -/]*[@-~]", "g"), "")
-    .replace(new RegExp("\\u001b[@-Z\\\\-_]", "g"), "")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
+    .replace(/\u001b[@-Z\\-_]/g, "")
     // ESC ( B and friends: the nF charset-designation sequences, which a
     // terminal emits around box drawing and which are not Fe escapes.
-    .replace(new RegExp("\\u001b[ -/]+[0-~]", "g"), "");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
+    .replace(/\u001b[ -/]+[0-~]/g, "");
 }
 
 /**

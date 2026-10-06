@@ -138,7 +138,7 @@ export function PublicLibraryPage({
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
-       properties are declared on `.site` (styles.css § the site), so without it
+       properties are declared on `.site` (site.css § the site), so without it
        `SiteNav`'s bar and the glow below draw against nothing — a page that looks
        unstyled rather than broken, which is the version nobody reports. Copied
        from PricingPage.tsx, which found that out the hard way. */

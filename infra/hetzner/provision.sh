@@ -1292,7 +1292,7 @@ run 30 "gjd-remote loopback ssh config" su - "$GJD_USERNAME" -c '
   touch ~/.ssh/config && chmod 600 ~/.ssh/config
   grep -qF "gjd-remote-loopback" ~/.ssh/config || cat >> ~/.ssh/config <<EOF
 
-# gjd-remote-loopback -- written by provision.sh, see docs/project/remote-box.md.
+# gjd-remote-loopback -- written by provision.sh, see docs/project/hetzner-remote-server-box.md.
 # Lets a Claude session running ON the box drive gjd-remote against the box
 # itself. Reaches nowhere else. Delete this block and the key to undo it.
 Host 127.0.0.1 localhost

@@ -111,7 +111,7 @@ describe("addZoomHandles", () => {
     );
   });
 
-  /* A 1x1 GIF given a wrapper gets the light sheet with it (styles.css § the
+  /* A 1x1 GIF given a wrapper gets the light sheet with it (prose.css § figures, and the
      light sheet under them), which is a pale square in the middle of a
      sentence. The floor is on the declared width because this runs on a string
      with no layout. */

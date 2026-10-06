@@ -58,7 +58,7 @@ for the `Checked N files` summary line, before believing it.
 
 **Scope does not narrow it.** `biome lint src` crashed too, and so did a one-line file
 in `/tmp`. The scanner walks the whole `includes` allowlist whatever path you hand it,
-so the only lever is the allowlist itself. `!evals/extraction/fixtures/**` is in
+so the only lever is the allowlist itself. `!evals/extraction/fixtures` is in
 `biome.jsonc` for that reason.
 
 Neither commit was wrong on its own. `evals/**` joined the allowlist on 2026-08-26,

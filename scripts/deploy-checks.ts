@@ -20,6 +20,7 @@ import {
   type ExpectedMigration,
 } from "../src/migration-digest.js";
 import { sameCommit } from "./build-stamp.js";
+import { judgeRobotsTxt } from "./check-public-shell.js";
 
 /* ------------------------------------------------------------------ */
 /* Migrations                                                          */
@@ -721,12 +722,12 @@ export function readLogQuery(exitCode: number, stdout: string, deploymentId: str
 }
 
 /**
- * The tracked corpus the gate worktree copies `data/` and `output/` out of.
+ * The tracked fixture corpus, present in every gate worktree through Git.
  *
- * The interim coupling to the old store layout is deliberately visible in the
- * path: underneath this directory sit a `data/` and an `output/` shaped exactly
- * like the ones the filesystem store still expects, so the gate can materialise
- * both by copying. docs/plans/260901b-committed-fixture-corpus.md.
+ * Its `data/` and `output/` retain the old filesystem store's layout for tests
+ * that still read file fixtures. The gate copies both to the worktree root
+ * (`materialiseCorpus`, scripts/corpus-materialise.ts), as `worktree:setup`
+ * does. docs/plans/260901b-committed-fixture-corpus.md.
  */
 export const GATE_FIXTURE_ROOT = "tests/fixtures/data-root";
 
@@ -1026,20 +1027,26 @@ export function findSecretsInBundle(js: string): string[] {
 }
 
 /**
- * **Does this `robots.txt` carry a `Disallow: /` directive** — a line of its
- * own, with any comment stripped first?
+ * **What the deploy says about the `/robots.txt` a host served.** Empty means
+ * it is the file we mean to serve.
  *
- * The check it replaces was `/disallow/i` over the whole body, which the
- * file's own comments satisfy: they say "Disallow" several times, so the check
- * passed with every real directive deleted. Found by GPT Sol on 2026-10-05;
+ * The judging is `judgeRobotsTxt`, which reads the file the way a crawler
+ * does: by group, since a bot obeys the one group naming it and inherits
+ * nothing from `*`. Its own comment has the rule it holds the file to.
+ *
+ * This is the third check here. `/disallow/i` over the whole body passed on
+ * the file's comments alone; a `Disallow: /` line anywhere (`hasDisallowAll`,
+ * 2026-10-05) passed a file restricting only Twitterbot beside an unrestricted
+ * `User-agent: *`, which GPT Sol reproduced on 2026-10-06.
  * docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
  *
- * **Still the small fix and not the whole one**, and that postmortem says so:
- * one directive in the wrong group satisfies this too. `judgeRobotsTxt` in
- * scripts/check-public-shell.ts reads the groups, and a deploy does not run it.
+ * Only the pure judge is borrowed. The deploy still does not run that script's
+ * requests, so the `X-Robots-Tag` header is not checked by a deploy.
  */
-export function hasDisallowAll(robotsTxt: string): boolean {
-  return robotsTxt.split("\n").some((raw) => /^Disallow:\s*\/$/i.test(raw.replace(/#.*$/, "").trim()));
+export function judgeServedRobots(status: number, contentType: string, body: string): string[] {
+  const problems: string[] = [];
+  if (status !== 200) problems.push(`answered ${status}`);
+  return [...problems, ...judgeRobotsTxt(contentType, body)];
 }
 
 /** The `/assets/*.js` files an `index.html` asks the browser to load. */

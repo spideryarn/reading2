@@ -1075,7 +1075,7 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
       attempts: 1,
       ...(ctx.signal ? { signal: ctx.signal } : {}),
     });
-    if (doc.kind === "pdf" || doc.text === null) {
+    if (doc.kind === "pdf") {
       log("model").info({ tool: "read_web_page", host, kind: doc.kind }, "chat tool: not HTML");
       return {
         label,

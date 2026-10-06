@@ -39,7 +39,7 @@
  * the box is pinned by its bottom edge so it grows upward, and the whole box
  * scrolls so the header then leaves out of the top. So: three parts, only the
  * middle one scrolls, and a stable height once there is a transcript. The
- * matching rules are in styles.css § the floating panels.
+ * matching rules are in dialogs.css § the floating chat panel.
  *
  * ## Three places, one panel
  *
@@ -95,14 +95,27 @@ export type ChatTarget =
       /** The passage, or a paragraph's opening words — shown above the box. */
       opening: string;
       /**
-       * Text to start the box with.
-       *
-       * Set when the reader typed a follow-up into the explanation panel: their
-       * words are carried across and **not sent**. Firing a question typed in
-       * one box from another is a model call they did not quite ask for, which
-       * is the thing this whole change is about.
+       * Text to start the box with: carried across and **not sent**, unless
+       * `sendNow` says the reader has already asked it. Both of today's
+       * senders set `sendNow`, so this alone has no caller; it is what the
+       * field means without it.
        */
       question?: string;
+      /**
+       * **The reader has already asked: send `question` as the panel opens,
+       * once, and draw no box.** With no words, the passage itself is the
+       * question (`askAboutBlock`: *Explain this passage.*).
+       *
+       * Two senders: the follow-up box under an explanation, whose button is
+       * *Ask in chat*, and the comment box's **Ask AI**. Until 2026-10-06
+       * both carried the words across to wait for a second press. Greg
+       * (spya-x896vu): *"When I click "ask in Chat" anywhere, automatically
+       * submit the input (rather than just prefilling the input box and
+       * waiting for me to hit send)"*. A second field beside `question`, not
+       * a change to what `question` means, for the reason `help` below
+       * gives. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4, D6.
+       */
+      sendNow?: true;
       /**
        * The comment this conversation is being started from, if it is.
        *
@@ -342,7 +355,9 @@ export function ChatDialog({
      yet, so it stays here. */
   const drafts = chatDraftsFor(slug);
   const draftTarget = target.kind === "draft" ? `draft:${target.anchor.blockId}` : `thread:${target.threadId}`;
-  const initialDraft = target.kind === "draft" ? (target.question ?? "") : "";
+  /* A question that is sent as the panel opens (`sendNow`) is not also left
+     in the box to be sent again. */
+  const initialDraft = target.kind === "draft" && !target.sendNow ? (target.question ?? "") : "";
   const [draftState, setDraftState] = useState(() => ({ target: draftTarget, text: initialDraft }));
   const threadTarget = target.kind === "thread" ? target.threadId : null;
   const draft =
@@ -1025,12 +1040,44 @@ export function ChatDialog({
    * there was deleted on 2026-09-05 once a test proved its absence could not be
    * observed — the reasoning is in App.tsx beside `helpAboutBlock`.
    */
+  /**
+   * **This draft is already asked, by either effect below**: a "?" press, or
+   * a `sendNow`. It is drawn as *Asking…* with no composer for the frame or
+   * two it exists, for the reason the body's note gives.
+   */
+  const sendsItself = target.kind === "draft" && (target.help === true || target.sendNow === true);
   const sentHelpFor = useRef<string | null>(null);
   useEffect(() => {
     if (target.kind !== "draft" || !target.help) return;
     if (sentHelpFor.current === target.anchor.blockId) return;
     sentHelpFor.current = target.anchor.blockId;
     ask(HELP_QUESTION);
+  }, [target, ask]);
+
+  /**
+   * **A question the reader has already asked sends itself too, once**
+   * (`sendNow` on the target), and the latch is the "?"'s above with one
+   * difference: it holds the passage *and the words*, and it is let go when
+   * the target stops being such a draft. `ask` turns the draft into a
+   * conversation in the same tick (`onThread`, and `Reader` clears its draft
+   * there), so the latch is only ever needed for the re-runs listed above,
+   * StrictMode's among them. Letting go is what makes the same question asked
+   * again later, of the same passage, a second send rather than a silent
+   * nothing. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4.
+   */
+  const sentNowFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (target.kind !== "draft" || !target.sendNow || target.help) {
+      sentNowFor.current = null;
+      return;
+    }
+    /* Empty is Ask AI with nothing written: `ask` turns it into "Explain
+       this passage." */
+    const question = target.question?.trim() ?? "";
+    const key = `${target.anchor.blockId}\n${question}`;
+    if (sentNowFor.current === key) return;
+    sentNowFor.current = key;
+    ask(question);
   }, [target, ask]);
 
   /**
@@ -1180,9 +1227,12 @@ export function ChatDialog({
       </header>
 
       <div className="chat-dialog-body" hidden={collapsed}>
-        {target.kind === "draft" && target.help ? (
+        {sendsItself ? (
           /* **A help draft is a draft for one paintless instant, and must not
-              say so.** The auto-send is a passive effect, and React does not
+              say so.** (Nor a follow-up already asked, since 2026-10-06:
+              `sendsItself`. GPT Sol's review of plan 261006j, PR-5: a
+              composer here would also take focus and raise a phone's
+              keyboard before the send.) The auto-send is a passive effect, and React does not
               promise a passive effect runs before paint — so the ordinary draft
               body below can reach the screen, showing a composer and the words
               "Nothing is asked until you send" over a press that has already
@@ -1298,7 +1348,7 @@ export function ChatDialog({
         {/* Nothing under a help draft either, for the reason the body gives:
             the question is already sent, so a composer offering to send it is
             the same contradiction one row down. */}
-        {target.kind === "draft" && target.help ? null : target.kind === "draft" ? (
+        {sendsItself ? null : target.kind === "draft" ? (
           <Composer
             slug={slug}
             onSend={ask}

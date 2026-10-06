@@ -49,8 +49,8 @@
  * **The trade that made:** the "actually writes" half now skips where there is
  * no database, where the source scan always ran. A check that always runs and
  * proves nothing is not the safer of those two — it is the more dangerous one,
- * because it reads as the check having been done. `pgReady` says out loud when
- * it skips, and `REQUIRE_POSTGRES=1` turns the skip into a failure.
+ * because it reads as the check having been done. Since 2026-09-05 it does not
+ * skip either: `pgReady` throws when there is no database, so the file fails.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";

@@ -9,12 +9,19 @@
  * conversation band and the draft store on the way out, and comes back
  * through the thread summaries `Reader` holds. This is that file's harness.
  *
+ * **Enter in the box is the Send**, since 2026-10-06. Greg, in report
+ * spya-x896vu: *"When I click "ask in Chat" anywhere, automatically submit the
+ * input (rather than just prefilling the input box and waiting for me to hit
+ * send)"*. Until then the question waited in Chat's box for a second press.
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+ *
  * What is claimed, in order:
  *
- * 1. Enter in the box lands in Chat, in a **fresh** conversation, with the
- *    fenced angle and the fixed question in the box, and **nothing sent**;
- * 2. Send posts once, and the body's origin is **exactly** `{ mode, lens }`:
- *    no block, no quote, no anchor;
+ * 1. Enter in the box lands in Chat, in a **fresh** conversation, and **sends
+ *    the fenced angle and the fixed question once**: Chat's box is left empty
+ *    and without the caret, and nothing else is posted anywhere;
+ * 2. that one request's origin is **exactly** `{ mode, lens }`: no block, no
+ *    quote, no anchor;
  * 3. Back returns to Debate, and *Your angles* has the line, never reloaded;
  * 4. the line opens that conversation **beside Debate** (`?thread=`, the mode
  *    unchanged);
@@ -407,18 +414,6 @@ const composer = (): HTMLTextAreaElement | null =>
   host.querySelector<HTMLTextAreaElement>(".mode-band textarea.chat-input");
 const dialog = (): HTMLElement | null => document.querySelector<HTMLElement>(".chat-dialog");
 
-async function typeAndSend(box: HTMLTextAreaElement, text: string): Promise<void> {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    setter?.call(box, text);
-    box.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    box.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-  });
-  await settle();
-}
-
 async function typeLensAndEnter(words: string): Promise<void> {
   const box = lensBox() as HTMLInputElement;
   await act(async () => {
@@ -432,50 +427,93 @@ async function typeLensAndEnter(words: string): Promise<void> {
 }
 
 describe("looking at the debate from an angle", () => {
-  it("lists no angle until Send and restores the unsent lens on returning to Chat", async () => {
+  /* Until 2026-10-06 this test held the opposite: nothing listed until Send,
+     and the unsent lens restored on coming back to Chat. Enter is the Send
+     now, so there is no unsent lens to restore; what is left to hold is that
+     the one press is one request however often Chat is left and reopened.
+     The unsent-draft machinery itself is tests/conversation-band-origin.test.tsx's. */
+  it("sends the angle once on Enter, lists it in Debate, and does not send or refill it on returning to Chat", async () => {
     who.set(OWNER);
     await open("?mode=debate");
     await until(() => lensBox() !== null, "the box in Debate");
+    nextAnswer = "One reply takes that angle.";
     await typeLensAndEnter(LENS);
-    await until(() => param("mode") === "chat" && composer() !== null, "the unsent lens composer");
-    expect(composer()?.value).toBe(askDebateThroughLens(LENS));
+    await until(() => param("mode") === "chat" && composer() !== null, "Chat");
+    /* Zero here is the old behaviour (waiting for Send); two is a double send. */
+    expect(chatPosts(), "Enter alone sent it, once").toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin } | undefined;
+    expect(sent?.question).toBe(askDebateThroughLens(LENS));
+    expect(sent?.origin).toEqual({ mode: "debate", lens: LENS });
+    expect(composer()?.value, "and left nothing in the box").toBe("");
+    expect(server, "the conversation is on the server").toHaveLength(2);
+
     await act(async () => history.back());
-    await until(() => param("mode") === "debate" && lensBox() !== null, "Debate again");
-    expect(angles(), "a draft is not a saved thread").toHaveLength(0);
-    expect(server).toHaveLength(1);
-    expect(chatPosts()).toHaveLength(0);
+    await until(() => param("mode") === "debate" && angles().length === 1, "Debate again, with the angle listed");
 
     history.pushState(null, "", `/read/${SLUG}?mode=chat`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
-    await until(() => composer()?.value === askDebateThroughLens(LENS), "the restored lens draft");
-    await typeAndSend(composer() as HTMLTextAreaElement, askDebateThroughLens(LENS));
-    expect(chatPosts()).toHaveLength(1);
-    const sent = chatPosts()[0]?.body as { origin: ThreadOrigin } | undefined;
-    expect(sent?.origin).toEqual({ mode: "debate", lens: LENS });
+    await until(
+      () =>
+        param("mode") === "chat" &&
+        host.querySelector(".mode-band .chat-thread, .mode-band textarea.chat-input") !== null,
+      "Chat again",
+    );
+    expect(chatPosts(), "coming back does not send it a second time").toHaveLength(1);
+    expect(server, "and starts no second conversation").toHaveLength(2);
+    for (const box of host.querySelectorAll<HTMLTextAreaElement>(".mode-band textarea.chat-input")) {
+      expect(box.value, "nor put the question back in a box").toBe("");
+    }
   });
 
-  /* One press is one action. Enter in Debate's box moves the caret into Chat's
-     box, already holding the question; the same key, still held, must not then
-     send it. Found by GPT Sol's review; docs/postmortems/261005o. */
-  it("does not send on a held Enter repeating into Chat's box, and a fresh Enter still sends", async () => {
+  /* One press is one action. Until 2026-10-06 Enter in Debate's box moved the
+     caret into Chat's box, already holding the question, and the same key,
+     still held, must not then send it (found by GPT Sol's review;
+     docs/postmortems/261005o). Enter now sends the question itself and the
+     caret does not move to Chat's box, so the held key has nowhere to land.
+     What is still held: the press is one request, and a repeating Enter in
+     Chat's box, whatever is in it, is never a Send of its own. */
+  it("does not send a second time on a held Enter repeating into Chat's box, and a fresh Enter still sends", async () => {
     who.set(OWNER);
     await open("?mode=debate");
     await until(() => lensBox() !== null, "the box in Debate");
     await typeLensAndEnter(LENS);
-    await until(() => param("mode") === "chat" && document.activeElement === composer(), "the caret in Chat's box");
+    await until(() => param("mode") === "chat" && composer() !== null, "Chat");
+    expect(chatPosts(), "Enter sent the angle").toHaveLength(1);
     const box = composer() as HTMLTextAreaElement;
+    expect(document.activeElement, "the caret did not follow the key into Chat's box").not.toBe(box);
+
+    /* The key still held, on the empty box. */
     const held = new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true, cancelable: true });
     await act(async () => {
       box.dispatchEvent(held);
     });
     await settle();
-    expect(chatPosts(), "holding the handoff key is not a separate Send").toHaveLength(0);
-    expect(held.defaultPrevented, "and it adds no blank line to the question").toBe(true);
+    expect(chatPosts(), "holding the handoff key is not a second Send").toHaveLength(1);
+
+    /* And on a box with words in it, where a Send would have something to send. */
     await act(async () => {
-      box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(box, "And who disagrees?");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const heldOnWords = new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true, cancelable: true });
+    await act(async () => {
+      box.dispatchEvent(heldOnWords);
     });
     await settle();
-    expect(chatPosts(), "a press of its own sends").toHaveLength(1);
+    expect(chatPosts(), "a repeating Enter does not send what is typed either").toHaveLength(1);
+    expect(heldOnWords.defaultPrevented, "and it adds no blank line to the question").toBe(true);
+    expect(composer()?.value).toBe("And who disagrees?");
+
+    await act(async () => {
+      composer()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(chatPosts(), "a press of its own sends").toHaveLength(2);
+    expect((chatPosts()[1]?.body as { question: string }).question).toBe("And who disagrees?");
+    expect((chatPosts()[1]?.body as { threadId: string }).threadId, "to the same conversation").toBe(
+      (chatPosts()[0]?.body as { threadId: string }).threadId,
+    );
   });
 
   it("starts a fresh chat that records the angle, and Debate lists the way back to it", async () => {
@@ -485,7 +523,8 @@ describe("looking at the debate from an angle", () => {
     expect(angles(), "no chat was started from an angle yet").toHaveLength(0);
     const postsAtLoad = posts().length;
 
-    /* 1. Enter in the box. */
+    /* 1. Enter in the box, which is the Send. */
+    nextAnswer = "Two replies take that angle.\n\nThe first is a 2021 review.";
     await typeLensAndEnter(`  ${LENS} `);
     await until(
       () => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id,
@@ -495,16 +534,14 @@ describe("looking at the debate from an angle", () => {
     expect(fresh).not.toBeNull();
     const seed = askDebateThroughLens(LENS);
     expect(seed).toContain(`"""\n${LENS}\n"""`);
-    expect(composer()?.value).toBe(seed);
-    expect(document.activeElement, "the handoff puts the caret in Chat's box").toBe(composer());
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+    expect(document.activeElement, "and the caret is not put there: there is nothing to type").not.toBe(composer());
     expect(host.textContent, "the earlier conversation is not what is open").not.toContain("An earlier question");
-    expect(chatPosts(), "Enter sends nothing to chat").toHaveLength(0);
-    expect(posts().length, "and nothing anywhere else: no search was started").toBe(postsAtLoad);
 
-    /* 2. Send, as it stands. */
-    nextAnswer = "Two replies take that angle.\n\nThe first is a 2021 review.";
-    await typeAndSend(composer() as HTMLTextAreaElement, seed);
-    expect(chatPosts(), "one request, on Send").toHaveLength(1);
+    /* 2. What it sent. Zero would be the question waiting for a second press,
+       as it did until 2026-10-06; two would be a double send. */
+    expect(chatPosts(), "one request, from Enter alone").toHaveLength(1);
+    expect(posts().length, "and nothing anywhere else: no search was started").toBe(postsAtLoad + 1);
     const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown; anchor?: unknown };
     expect(sent.threadId).toBe(fresh);
     expect(sent.question).toBe(seed);

@@ -133,7 +133,7 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * there is nothing: the article had the whole window and sat hard against the
  * left of it, with 800px of empty page to its right on a 1600px screen. Greg,
  * 2026-09-03: *"In Plain mode, can you centre the text on the page?"* Capping
- * the column is what leaves a margin for `styles.css` § plain, centred to
+ * the column is what leaves a margin for narrow-window.css § `.reader.text-alone` to
  * divide between the two sides.
  *
  * **The condition is "no band", not "Plain"** — the mode is not what makes the
@@ -169,7 +169,7 @@ export const PROSE_ALONE_MAX_REM = 49;
 
 /**
  * **One cell of the prose gutter, in rem and in px — the two halves of
- * `--blk-slot: max(1.5rem, 24px)` in styles.css § tokens.**
+ * `--blk-slot: max(1.5rem, 24px)` in shell.css.**
  *
  * A copy, and copies are what this file spends its comments warning about, so
  * it needs its reason: **CSS knows the reader's root font size and this file
@@ -389,7 +389,7 @@ export interface Fit {
   /**
    * **How much horizontal room the mode band takes from the table.** Set as
    * `--mode-w` on `.reader`; every rule that has to make room for the band
-   * reads it from there (styles.css § mode band).
+   * reads it from there (mode-band.css § mode band).
    *
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
    * the second: Plain, where there genuinely is no band — and **a window under
@@ -402,9 +402,9 @@ export interface Fit {
    */
   modeW: number;
   /**
-   * **The article is the only thing on this page** — no band, just the prose
-   * across the whole window. It is where `PROSE_ALONE_MAX_REM` and the auto
-   * margins in styles.css § plain, centred come in.
+   * **No mode band beside the prose.** Marginalia may still be
+   * beside it (`fitMargin`). It is where `PROSE_ALONE_MAX_REM` and the auto
+   * margins in narrow-window.css § `.reader.text-alone` come in.
    */
   alone: boolean;
   /**
@@ -456,7 +456,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * The crossover `fitMode` turns on, lifted out so there is exactly one
  * statement of it. Below this width the band stops taking room from the prose
  * and is laid over it instead — see the long note inside `fitMode` for why that
- * is the design and not a failure, and styles.css § a band with no room for the
+ * is the design and not a failure, and narrow-window.css § a band with no room for the
  * other half of it.
  *
  * **It is `MODE_PROSE_FLOOR` and not `PROSE_MIN`**, and that distinction is what
@@ -472,7 +472,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * rail was on would miss a phone by twelve pixels, and one that guessed it was
  * off would warn a reader whose band fits perfectly well. Getting that wrong
  * from a hand-copied breakpoint is the accident this codebase has already had
- * once — see `App.tsx` § `band-covers`.
+ * once — see `Reader.tsx` § `band-covers`.
  *
  * **It answers a hypothetical when no band is open**, and that is the point:
  * `SmallScreenHint` is the other caller, and its whole job is to say what will
@@ -719,7 +719,7 @@ function fitBoth(
  * 738px measure is 850px of empty page rather than a wide reading column. See
  * `PROSE_ALONE_MAX_REM` for why the cap is phrased as "alone" rather than
  * "Plain", `proseAloneMaxPx` for why it is a function of the root rather than
- * one number, and styles.css § plain, centred for the auto margins that put the
+ * one number, and narrow-window.css § `.reader.text-alone` for the auto margins that put the
  * leftover on both sides instead of one. Below the cap the prose takes the
  * whole window, however narrow — a 390px phone gets a 378px column, and the
  * page never scrolls sideways.
@@ -804,7 +804,7 @@ function fitMode(
    * table* — it is written straight out as `--mode-w`, which five rules in
    * styles.css subtract from the two sticky bars and add to `.reader`'s
    * padding. On a phone the band takes none: it is `position: fixed`, so
-   * styles.css § a narrow window simply widens it to the whole window and it
+   * narrow-window.css § a band with no room simply widens it to the whole window and it
    * sits on top of the article. Everything else on the page can then keep the
    * geometry it has when no band is open at all.
    *
@@ -829,7 +829,7 @@ function fitMode(
    * that era's, deliberately, because it is a reproduction and not a
    * description.
    *
-   * `styles.css` § a band with no room used to be a plain
+   * narrow-window.css § a band with no room used to be a plain
    * `@media (max-width: 843px)`, which knows nothing about `?spine=0`, and
    * between **832 and 843 with the rail off** the two disagreed: this function
    * handed the band 288–299px and squeezed the table to make room, while the

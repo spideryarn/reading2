@@ -155,7 +155,6 @@
   --depth-0: oklch(0.82 0.155 58);
   --depth-1: oklch(0.68 0.120 52);
   --depth-2: oklch(0.55 0.080 46);
-  --depth-3: oklch(0.44 0.045 40);
 
   /**
    * ------------------------------------------------------------ safe areas --
@@ -311,19 +310,21 @@
   /* **The table head's height, and it is zero on purpose since 2026-09-05.**
      Greg: *"I'm even wondering if we can get rid of the row of
      column-header-labels in Hierarchy mode … to save on vertical space"* — so
-     the row went, and the element stayed. It is still doing three jobs that
-     have nothing to do with being visible: the fisheye panels take every
+     the row went, and the element stayed. It was still doing three jobs that
+     had nothing to do with being visible: the fisheye panels took every
      column's rectangle from `thead th[data-col]` (useColumnContext.ts), a
      `<th scope="col">` is what names a column for a screen reader, and the
-     head's sticky `top` is what a panel's `bottom` resolves to. Deleting it
+     head's sticky `top` was what a panel's `bottom` resolved to. Deleting it
      would have emptied Hierarchy's Parts and Sections columns outright — the
-     gist cell under a panel deliberately draws nothing (TableView.tsx).
+     gist cell under a panel deliberately drew nothing (TableView.tsx). The
+     panels and the gist columns went on 2026-09-29; the `<th>` is the job
+     that is left.
 
      **Changed here rather than on `thead th` alone**, because `td.gist .sticky`
-     positions itself at `--bar-bottom + --head-h` (§ table): moving the token
-     keeps that consumer right for free, where a rule on the head would have
-     left every gist floating a head's height below the bar. Three consumers
-     and no more — this line, the head's own `height`, and that one.
+     positioned itself at `--bar-bottom + --head-h` (§ table): moving the token
+     kept that consumer right for free, where a rule on the head would have
+     left every gist floating a head's height below the bar. One consumer is
+     left: the head's own `height` in table.css.
 
      `0px` and not `0`: it goes into a `calc()` sum with a length, and a
      unitless zero there makes the whole declaration invalid.
@@ -480,5 +481,4 @@
   --depth-0: oklch(0.55 0.155 52);
   --depth-1: oklch(0.64 0.120 50);
   --depth-2: oklch(0.73 0.080 46);
-  --depth-3: oklch(0.82 0.045 40);
 }

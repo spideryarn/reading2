@@ -117,7 +117,6 @@ const SECRET_NOTE = "SECRET-NOTE-do-not-send";
 const PROD = { VERCEL_ENV: "production", RESEND_API_KEY: "re_test_key" } as const;
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   for (const owner of [READER, OTHER]) await seedAuthUser(pool, { id: owner, email: emailOf(owner) });
 });
@@ -131,14 +130,12 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   /* Deliveries go with their voucher (on delete cascade). */
   await pool.query(
     "delete from spideryarn.billing_vouchers where email like 'vmail-0000b0c5-%' or claimed_by::text like $1",
@@ -191,7 +188,6 @@ const resendError = (status: number, name: string) => async () =>
 
 /** One delivery row, as the database has it. */
 async function delivery(id: string): Promise<Record<string, unknown>> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query("select * from spideryarn.billing_voucher_emails where id = $1", [id]);
   const [row] = rows as Record<string, unknown>[];
   if (!row) throw new Error(`no delivery ${id}`);
@@ -219,7 +215,7 @@ async function givenVoucher(
 }
 
 async function backdateLease(id: string, minutes: number): Promise<void> {
-  await pool?.query(
+  await pool.query(
     `update spideryarn.billing_voucher_emails
         set attempt_started_at = now() - make_interval(mins => $2), updated_at = now() - make_interval(mins => $2)
       where id = $1`,
@@ -438,7 +434,7 @@ describe("at most once", () => {
   it("lets one of many concurrent Retries reserve an already-old row", async () => {
     const box = mailbox();
     const { delivery: id } = await givenVoucher(READER, 2);
-    await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [id]);
+    await pool.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [id]);
     await backdateLease(id, 60);
     const answers = await Promise.all(Array.from({ length: 10 }, () => reserveVoucherEmailRetry(id)));
     const won = answers.filter((a) => a.kind === "reserved");
@@ -452,7 +448,7 @@ describe("at most once", () => {
 
   it("does not let an attempt that lost its lease record over the one that took it", async () => {
     const { delivery: id } = await givenVoucher(READER, 2);
-    await pool?.query(
+    await pool.query(
       "update spideryarn.billing_voucher_emails set status = 'sending', attempts = 1, attempt_started_at = now() - interval '11 minutes' where id = $1",
       [id],
     );
@@ -479,7 +475,7 @@ describe("at most once", () => {
     expect(box.fetch).toHaveBeenCalledTimes(1);
 
     const { delivery: fresh } = await givenVoucher(OTHER, 2);
-    await pool?.query(
+    await pool.query(
       "update spideryarn.billing_voucher_emails set status = 'sending', attempts = 1, attempt_started_at = now() - interval '1 minute' where id = $1",
       [fresh],
     );
@@ -532,7 +528,7 @@ describe("at most once", () => {
     /* Readdressed: the old delivery is for an address the voucher no longer has. */
     const moved = await givenVoucher(OTHER, 3);
     await sendQueuedVoucherEmail(moved.delivery, box.deps);
-    await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [moved.delivery]);
+    await pool.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [moved.delivery]);
     await updateVoucher(moved.id, { email: `moved-${emailOf(OTHER)}` });
     expect(await reserveVoucherEmailRetry(moved.delivery)).toEqual({ kind: "refused" });
   });
@@ -913,7 +909,6 @@ describe("the recipient's email is written for who they are", () => {
   });
 
   it("reads the wall's public, minimal, in-flight and high-power costs for the email", async () => {
-    if (!pool) return;
     const { rows } = await pool.query<{ id: string }>(
       `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
        values ($1, $2, 'public', now()) returning id`,
@@ -939,7 +934,7 @@ describe("the recipient's email is written for who they are", () => {
   it("includes claimed gifts in a lapsed reader's Free limit", async () => {
     const old = await givenVoucher(READER, 4);
     expect((await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).claimed).toBe(1);
-    await pool?.query(
+    await pool.query(
       `update spideryarn.billing_accounts
           set status = 'canceled', stripe_subscription_id = $2, stripe_customer_id = $3
         where owner_id = $1`,
@@ -1215,7 +1210,7 @@ describe("what is said, and to whom", () => {
       );
       control.deps = mailbox({ lookup: async () => ({ kind: "unavailable", reason: "Auth answered 503" }) }).deps;
       control.auth.set(READER, { kind: "confirmed", email: emailOf(READER) });
-      await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where status = 'queued'");
+      await pool.query("update spideryarn.billing_voucher_emails set status = 'failed' where status = 'queued'");
       await drive("GET", "/api/billing/usage", "", READER);
       control.deps = mailbox().deps;
       const notice = (await deliveriesOf(id)).find((d) => d.kind === "claimed");
@@ -1235,7 +1230,6 @@ describe("what is said, and to whom", () => {
     ]) {
       expect(said).not.toContain(secret);
     }
-    if (!pool) return;
     const { rows } = await pool.query(
       "select detail from spideryarn.billing_voucher_emails e join spideryarn.billing_vouchers v on v.id = e.voucher_id where v.email like 'vmail-0000b0c5-%'",
     );
@@ -1246,7 +1240,7 @@ describe("what is said, and to whom", () => {
   it("refuses the Retry route to anybody but the administrator, and checks the id", async () => {
     const box = mailbox();
     const { delivery: id } = await givenVoucher(READER, 2);
-    await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [id]);
+    await pool.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [id]);
     control.deps = box.deps;
     expect((await drive("POST", `/api/admin/voucher-emails/${id}/retry`, "", READER)).status).toBe(403);
     expect(box.fetch).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 /**
  * **We hand-wrote a replacement for Tailwind's preflight, and it has been
- * incomplete three times. This is the checklist that makes a fourth loud.**
+ * incomplete four times. This is the checklist that makes a fifth loud.**
  *
  * [`tailwind.css`](../src/web/tailwind.css) deliberately imports no preflight —
  * it would reset the article author's own HTML inside `.prose`, the one place
@@ -13,6 +13,10 @@
  * | 2026-08-27 | scoped to `[data-slot]`, so most buttons got nothing | 36 of 59 buttons wore the UA's `2px outset white` border; all 59 had `cursor: default` |
  * | 2026-08-27 | `img { height: auto }` | the landing page's screenshots were stretched 1.95× |
  * | 2026-09-04 | `font-family` / `font-size` | every button that set no font of its own rendered in the UA's Arial on a Geist page |
+ * | 2026-10-06 | `html { -webkit-text-size-adjust }` | an iPhone in landscape drew a band's wrapped text half as big again as the article beside it |
+ *
+ * The fourth was on `html`, which the checklist did not cover: it looked only
+ * at `button`. It covers both now (`DECLINED_HTML`).
  *
  * Each was found by eye, late, by somebody looking at something else. The
  * pattern is always the same and it is the [silent-success](../docs/reusable/silent-success.md)
@@ -23,18 +27,19 @@
  *
  * It reads **Tailwind's own `preflight.css` out of `node_modules`** — the real
  * source of truth, which updates when the dependency does — pulls out every
- * property preflight sets on a `<button>`, and requires each one to be either
- * mirrored in our block or listed in `DECLINED` with a reason.
+ * property preflight sets on a bare `<button>` or `html`, and requires each one
+ * to be either mirrored in our block or listed in the element's decision list
+ * with a reason.
  *
  * That is deliberately not "our block is correct". Nothing here can know that.
  * What it can know is that **nobody has decided** about a property preflight
- * thinks a button needs — which is exactly the state all three findings above
- * were in. A new property in a Tailwind upgrade fails this test until somebody
- * reads it and either copies it or writes down why not.
+ * thinks either element needs — which is exactly the state all four findings
+ * above were in. A new property in a Tailwind upgrade fails this test until
+ * somebody reads it and either copies it or writes down why not.
  *
- * Buttons only, because buttons are what this app's substitute is for and what
- * all three findings were about. `input`, `select` and `textarea` share
- * preflight's rule and are deliberately not covered — see `DECLINED`.
+ * `button` and `html` only, because those are the elements whose missing
+ * preflight rules have caused bugs here. `input`, `select` and `textarea` share
+ * the button rule and are deliberately not covered — see `DECLINED`.
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
@@ -85,6 +90,28 @@ const DECLINED: Record<string, Declined | string> = {
     "the UA appearance is already defeated by the background and border we set; no bug seen.",
 };
 
+/**
+ * The same decision list for preflight's `html` rule, added 2026-10-06 with the
+ * fourth finding: `-webkit-text-size-adjust`. Without it an iPhone in landscape
+ * enlarged the wrapped text in a mode's band by half while the article beside
+ * it stayed at its own size (report spya-ar65p3, plan 261006k).
+ */
+const DECLINED_HTML: Record<string, string> = {
+  "line-height": "`body` sets the app's own (styles/shell.css), and `.prose` the article's.",
+  "tab-size":
+    "keep the browser's tab width for preserved-whitespace article and model content; the app " +
+    "has made no four-column tab-width decision.",
+  "font-family": "`body` names the app's face from the tokens, and the voices set theirs.",
+  "font-feature-settings":
+    "the app defines no Tailwind default feature settings; its body and voice rules own the fonts.",
+  "font-variation-settings":
+    "the app sets no global variation coordinates: weights use `font-weight`, and Source Serif's " +
+    "optical sizing remains automatic.",
+  "-webkit-tap-highlight-color":
+    "keep Safari's native tap feedback: the app does not supply an `:active` state for every link " +
+    "and button.",
+};
+
 /** Strip comments so a property named in prose is not read as a declaration. */
 function decomment(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, " ");
@@ -127,6 +154,38 @@ async function oursButtonProps(): Promise<string[]> {
     }
   }
   return [...props];
+}
+
+/** Every property a stylesheet declares in a rule whose selector list names bare `html`. */
+function htmlProps(css: string): string[] {
+  const props = new Set<string>();
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const targetsHtml = (selector ?? "")
+      .split(",")
+      .some((s) => s.trim() === "html");
+    if (!targetsHtml) continue;
+    for (const decl of (body ?? "").split(";")) {
+      const name = decl.split(":")[0]?.trim();
+      if (name) props.add(name);
+    }
+  }
+  return [...props];
+}
+
+async function preflightHtmlProps(): Promise<string[]> {
+  const props = htmlProps(decomment(await readFile(PREFLIGHT, "utf8")));
+  /* As above: an empty read must not pass, and this is the property the check is for. */
+  expect(props, `no html rule found in ${PREFLIGHT}; has preflight moved?`).toContain(
+    "-webkit-text-size-adjust",
+  );
+  return props;
+}
+
+async function oursHtmlProps(): Promise<string[]> {
+  const css = decomment(await readFile(TAILWIND_CSS, "utf8"));
+  const base = css.match(/@layer base \{([\s\S]*?)\n\}/g)?.join("\n") ?? "";
+  expect(base, "no @layer base block found in tailwind.css").not.toBe("");
+  return htmlProps(base);
 }
 
 describe("the hand-written preflight substitute", () => {
@@ -175,5 +234,35 @@ describe("the hand-written preflight substitute", () => {
       stale,
       "DECLINED explains why we skip properties preflight does not set any more — delete these",
     ).toEqual([]);
+  });
+
+  it("has a decision recorded for every property preflight sets on html", async () => {
+    const preflight = await preflightHtmlProps();
+    const ours = new Set(await oursHtmlProps());
+    const undecided = preflight.filter((p) => !ours.has(p) && !(p in DECLINED_HTML));
+    expect(
+      undecided,
+      "Tailwind's preflight sets these on `html` and this app neither mirrors them in the " +
+        "@layer base block in tailwind.css nor records why not in DECLINED_HTML.",
+    ).toEqual([]);
+  });
+
+  it("switches Safari's landscape text autosizing off, at 100%", async () => {
+    /* The check above compares names, so `auto` would pass it. This is the value. */
+    const css = decomment(await readFile(TAILWIND_CSS, "utf8"));
+    const base = css.match(/@layer base \{([\s\S]*?)\n\}/g)?.join("\n") ?? "";
+    const html = [...base.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) => (selector ?? "").trim() === "html")
+      .map(([, , body]) => (body ?? "").replace(/\s+/g, ""))
+      .join("");
+    expect(html).toContain("-webkit-text-size-adjust:100%;");
+    expect(html).toMatch(/(^|;)text-size-adjust:100%;/);
+  });
+
+  it("keeps DECLINED_HTML honest: nothing preflight stopped setting, nothing we now set", async () => {
+    const preflight = new Set(await preflightHtmlProps());
+    const ours = new Set(await oursHtmlProps());
+    const stale = Object.keys(DECLINED_HTML).filter((p) => !preflight.has(p) || ours.has(p));
+    expect(stale, "delete these from DECLINED_HTML").toEqual([]);
   });
 });

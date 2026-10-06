@@ -548,7 +548,7 @@ export function DesignPage() {
         <div className="design-panel">
           {/* `design-sample` restates the row padding the reading view gets from
               its table, off the same --block-pad. Without it these blocks touch —
-              see styles.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
+              see design-page.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
           <div className="prose design-sample">
             <h2>How markets learn, and how slowly</h2>
             <p>

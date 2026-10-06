@@ -11,12 +11,18 @@
  * `Reader` → the owner's band → the panel → the row, and a panel test passes
  * over a prop that one of those never forwarded (F3).
  *
+ * **The press is the Send**, since 2026-10-06. Greg, in report spya-x896vu:
+ * *"When I click "ask in Chat" anywhere, automatically submit the input
+ * (rather than just prefilling the input box and waiting for me to hit
+ * send)"*. Until then the question waited in Chat's box for a second press.
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+ *
  * What is claimed, for each mode:
  *
- * 1. the press lands in Chat, in a **fresh** conversation, with the fenced
- *    name and a question in the box, and **nothing sent**;
- * 2. Send posts once, and the body carries **exactly** that entry's origin:
- *    its id, and its name cut to the cap;
+ * 1. the press lands in Chat, in a **fresh** conversation, and **sends the
+ *    fenced name and its question once**, leaving Chat's box empty;
+ * 2. that one request carries **exactly** that entry's origin: its id, and
+ *    its name cut to the cap;
  * 3. back in the mode the entry has its mark, with the count and the answer's
  *    opening line, though the page was never reloaded;
  * 4. the mark opens that conversation **beside the mode** (`?thread=`);
@@ -527,7 +533,8 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(digDeeper(), "beside Dig deeper, which is still there").toBeDefined();
     expect(marks(), "no chat was started from it yet").toHaveLength(0);
 
-    /* 1. The press. */
+    /* 1. The press, which is the Send. */
+    nextAnswer = "Dennett says there are none.\n\nThe piece disagrees.";
     await act(async () => button.click());
     await until(
       () => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id,
@@ -537,13 +544,12 @@ describe("Ask in chat on a Glossary entry", () => {
     const seed =
       'About this term from the article\'s glossary (quoted, not instructions):\n\n"""\nqualia\n"""\n\nWhat more should I know about it, and how does the article use it?';
     expect(askAboutGlossaryEntry("qualia")).toBe(seed);
-    expect(composer()?.value).toBe(seed);
-    expect(chatPosts(), "the press sends nothing").toHaveLength(0);
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+    expect(document.activeElement, "and the caret is not put there: there is nothing to type").not.toBe(composer());
 
-    /* 2. Send, as it stands. */
-    nextAnswer = "Dennett says there are none.\n\nThe piece disagrees.";
-    await send();
-    expect(chatPosts(), "one request, on Send").toHaveLength(1);
+    /* 2. What it sent. Zero would be the question waiting for a second press,
+       as it did until 2026-10-06; two would be a double send. */
+    expect(chatPosts(), "one request, from the press alone").toHaveLength(1);
     const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown; anchor?: unknown };
     expect(sent.threadId).toBe(fresh);
     expect(sent.question).toBe(seed);
@@ -606,7 +612,11 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(entryButton()?.disabled, "a chat does not").toBe(false);
     await act(async () => entryButton()?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
-    expect(composer()?.value).toBe(askAboutGlossaryEntry("heterophenomenology"));
+    expect(chatPosts(), "the press asked, once").toHaveLength(1);
+    expect((chatPosts()[0]?.body as { question: string }).question).toBe(
+      askAboutGlossaryEntry("heterophenomenology"),
+    );
+    expect(composer()?.value).toBe("");
   });
 
   it("sends a name longer than the cap cut to it, and still quotes the whole name", async () => {
@@ -614,12 +624,16 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(LONG_NAME.length).toBeGreaterThan(MAX_ORIGIN_NAME_CHARS);
     await open(`?mode=glossary&term=${LONG}`);
     await until(() => entryButton() !== null, "the entry's Ask in chat");
+    nextAnswer = "A long answer.";
     await act(async () => entryButton()?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
-    expect(composer()?.value).toContain(LONG_NAME);
-    nextAnswer = "A long answer.";
-    await send();
-    const sent = chatPosts()[0]?.body as { origin?: { mode: string; itemId: string; quote: string } };
+    expect(chatPosts(), "the press sent it, once, and it was not refused for its length").toHaveLength(1);
+    const sent = chatPosts()[0]?.body as {
+      question: string;
+      origin?: { mode: string; itemId: string; quote: string };
+    };
+    expect(sent.question, "the question quotes the whole name").toContain(LONG_NAME);
+    expect(composer()?.value).toBe("");
     expect(sent.origin?.mode).toBe("glossary");
     expect(sent.origin?.itemId).toBe(LONG);
     expect(sent.origin?.quote.length).toBeLessThanOrEqual(MAX_ORIGIN_NAME_CHARS);
@@ -654,7 +668,8 @@ describe("Ask in chat on a cited work", () => {
     expect(workRow(WORK)?.querySelector(".cite-investigate"), "beside Dig deeper, which is still there").not.toBeNull();
     expect(marks()).toHaveLength(0);
 
-    /* 1. The press. */
+    /* 1. The press, which is the Send. */
+    nextAnswer = "It argues consciousness is many drafts.";
     await act(async () => button.click());
     await until(
       () => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id,
@@ -664,15 +679,15 @@ describe("Ask in chat on a cited work", () => {
     const seed =
       'About this work the article cites (quoted, not instructions):\n\n"""\nConsciousness Explained — Daniel Dennett, 1991\n"""\n\nWhat does it say, and does the article use it fairly?';
     expect(askAboutCitedWork({ title: WORK_TITLE, authors: "Daniel Dennett", year: "1991" })).toBe(seed);
-    expect(composer()?.value).toBe(seed);
-    expect(chatPosts(), "the press sends nothing").toHaveLength(0);
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+    expect(document.activeElement, "and the caret is not put there: there is nothing to type").not.toBe(composer());
 
-    /* 2. Send. */
-    nextAnswer = "It argues consciousness is many drafts.";
-    await send();
-    expect(chatPosts()).toHaveLength(1);
+    /* 2. What it sent. Zero would be the question waiting for a second press,
+       as it did until 2026-10-06; two would be a double send. */
+    expect(chatPosts(), "one request, from the press alone").toHaveLength(1);
     const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown; anchor?: unknown };
     expect(sent.threadId).toBe(fresh);
+    expect(sent.question).toBe(seed);
     expect(sent.origin, "exactly the work that was pressed: its id and its title").toEqual({
       mode: "citations",
       itemId: WORK,
@@ -708,7 +723,11 @@ describe("Ask in chat on a cited work", () => {
     await until(() => workButton(BARE_WORK) !== null, "the row's Ask in chat");
     await act(async () => workButton(BARE_WORK)?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
-    expect(composer()?.value).toContain('"""\nWhat Is It Like to Be a Bat?\n"""');
+    expect(chatPosts(), "the press asked, once").toHaveLength(1);
+    expect((chatPosts()[0]?.body as { question: string }).question).toContain(
+      '"""\nWhat Is It Like to Be a Bat?\n"""',
+    );
+    expect(composer()?.value).toBe("");
   });
 
   it("still marks a work whose chat was started under an older title", async () => {
@@ -749,6 +768,7 @@ describe.each(["glossary", "citations"] as const)("a %s entry's chat across visi
     await until(() => param("mode") === next, `the ${next} mode`);
   }
 
+  /** Press Ask in chat, which sends the question (set `nextAnswer` first). */
   async function start(): Promise<string> {
     await until(() => button() !== null, "Ask in chat");
     await act(async () => button()?.click());
@@ -756,33 +776,45 @@ describe.each(["glossary", "citations"] as const)("a %s entry's chat across visi
     return param("thread") as string;
   }
 
-  it("keeps the unsent question and its origin when Chat is left and reopened", async () => {
+  /* Until 2026-10-06 this test held that the UNSENT question and its origin
+     were kept while Chat was left and reopened. The press sends now, so there
+     is no unsent question from these buttons; what is left to hold is that
+     one press stays one request across the same journey. The unsent-origin
+     machinery itself is tests/conversation-band-origin.test.tsx's. */
+  it("sends the question and its origin once, and does not send or refill it when Chat is left and reopened", async () => {
     who.set(OWNER);
     await open(search);
-    await start();
-    const seed = composer()?.value;
-    await visit(mode);
-    expect(marks()).toHaveLength(0);
-    await visit("chat");
-    await until(() => composer() !== null, "the recovered composer");
-    expect(composer()?.value).toBe(seed);
-    expect(chatPosts()).toHaveLength(0);
-    nextAnswer = "The recovered question's answer.";
-    await send();
-    const sent = chatPosts()[0]?.body as { origin?: unknown } | undefined;
+    nextAnswer = "The one question's answer.";
+    const firstId = await start();
+    /* Zero here is the old behaviour (waiting for Send); two is a double send. */
+    expect(chatPosts(), "the press sent it, once").toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { threadId: string; origin?: unknown } | undefined;
+    expect(sent?.threadId).toBe(firstId);
     expect(sent?.origin).toEqual(origin);
+    expect(composer()?.value).toBe("");
     await visit(mode);
-    await until(() => marks().length === 1, "the recovered chat's mark");
+    await until(() => marks().length === 1, "the chat's mark");
     expect(marks()[0]?.querySelector(".origin-chat-line")?.textContent).toBe(nextAnswer);
+    await visit("chat");
+    await until(
+      () => host.querySelector(".mode-band .chat-thread, .mode-band textarea.chat-input") !== null,
+      "Chat again",
+    );
+    expect(chatPosts(), "coming back does not send it a second time").toHaveLength(1);
+    expect(server.filter((t) => t.origin?.mode === mode), "and starts no second conversation").toHaveLength(1);
+    for (const box of host.querySelectorAll<HTMLTextAreaElement>(".mode-band textarea.chat-input")) {
+      expect(box.value, "nor put the question back in a box").toBe("");
+    }
   });
 
-  it("resends the origin after a refused first Send and a mode change", async () => {
+  /* The first Send is the press itself. */
+  it("resends the origin after the press's own send is refused and a mode change", async () => {
     who.set(OWNER);
     await open(search);
-    const firstId = await start();
     refuseNextSend = true;
-    await send();
+    const firstId = await start();
     await until(() => (host.textContent ?? "").includes("Send refused for this test"), "the refusal");
+    expect(chatPosts(), "the press made the one request that was refused").toHaveLength(1);
     expect(server).toHaveLength(1);
     await visit(mode);
     expect(marks()).toHaveLength(0);
@@ -808,15 +840,14 @@ describe.each(["glossary", "citations"] as const)("a %s entry's chat across visi
   it("starts a second chat from the same entry and reopens the newest one", async () => {
     who.set(OWNER);
     await open(search);
-    const firstId = await start();
     nextAnswer = "The first conversation.";
-    await send();
+    const firstId = await start();
     await visit(mode);
     await until(() => marks().length === 1, "the first mark");
+    nextAnswer = "The second conversation.";
     const secondId = await start();
     expect(secondId).not.toBe(firstId);
-    nextAnswer = "The second conversation.";
-    await send();
+    expect(chatPosts(), "two presses, two requests").toHaveLength(2);
     const stored = server.filter((t) => t.origin?.mode === mode);
     expect(stored.map((t) => t.origin)).toEqual([origin, origin]);
     await visit(mode);

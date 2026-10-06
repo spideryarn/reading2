@@ -103,7 +103,7 @@ export function askAboutBlock(opts: {
 }
 
 /**
- * **What the glossary's *Ask in chat* puts in the composer**, for a term the
+ * **What the glossary's *Ask in chat* asks**, for a term the
  * article does not contain.
  *
  * The box refused the word because the glossary only explains what the piece
@@ -113,10 +113,16 @@ export function askAboutBlock(opts: {
  * suggestions pass (ChatPanel.tsx § SUGGESTIONS): an answer that stops at a
  * definition has sent the reader away from the piece.
  *
- * **Carried across, never sent.** It lands in a fresh conversation's composer
- * and waits for Send — Greg, 2026-09-11, *"fresh"* — so it is the reader's to
- * edit, and it is written as they would say it. Like `askAboutBlock`, this text
- * is for the human; nothing downstream parses it.
+ * **Sent by the press, as a fresh conversation's first question**, since
+ * 2026-10-06. Until then it waited in the composer for Send. Greg
+ * (spya-x896vu): *"When I click "ask in Chat" anywhere, automatically submit
+ * the input (rather than just prefilling the input box and waiting for me to
+ * hit send)"*; and of which conversation, 2026-09-11: *"fresh"*. Which seeds
+ * send and which one still waits is `ChatHandoff.send`, decided by each
+ * sender in Reader.tsx (docs/plans/261006j-ask-in-chat-sends-the-question.md).
+ * It is written as the reader would say it, because it appears in the
+ * transcript as theirs. Like `askAboutBlock`, this text is for the human;
+ * nothing downstream parses it.
  *
  * `term` is what the box sent, trimmed, rather than whatever is in it now. It is
  * quoted as data: quotation marks inside it are the reader's and stay theirs.
@@ -166,7 +172,8 @@ const SUMMARY_QUOTE_MAX_CHARS = 2000;
  * A cut drops a trailing high surrogate so a supplementary character is never
  * split. The cut is said with `…`, in the box, before Send.
  *
- * **Carried across, never sent** — `askAboutTerm`'s rule and its reason: it
+ * **Carried across, never sent, and the one seed here that still is not**
+ * (plan 261006j, D2): it has no question in it yet. It
  * lands in a fresh conversation's composer and waits. It ends on a blank line
  * so the caret sits where the question goes; Send trims it if nothing is
  * typed. For the human; nothing downstream parses it.
@@ -180,18 +187,18 @@ export function askAboutSummaryParagraph(text: string): string {
 export const CHECK_CLAIM_QUESTION = "What has been written about it, and does it hold up?";
 
 /**
- * **What Debate's *Check this claim in chat* puts in the composer**: the
+ * **What Debate's *Check this claim in chat* asks**: the
  * claim, quoted, and a question about it.
  *
  * The claim is the article's own words, so it is fenced like a Summary
  * paragraph: an article can plant an instruction, and in the reader's own
  * message it would read as theirs.
  *
- * Unlike the paragraph's seed it **ends in a question**, so Send works at
- * once; the reader can edit it first. Chat's prompt already treats "does this
+ * Unlike the paragraph's seed it **ends in a question**, so it can be sent
+ * as it stands, and the press sends it (`askAboutTerm`'s note). Chat's prompt already treats "does this
  * claim hold up" as a reason to search the web
  * (docs/project/chat-tools.md § Asking whether a claim holds up), so nothing
- * about the prompt changes. Carried across, never sent, like the others here.
+ * about the prompt changes.
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D6.
  */
 export function askToCheckClaim(quote: string): string {
@@ -203,7 +210,7 @@ export const DEBATE_LENS_QUESTION =
   "What do others say about the article from this angle? Search the web, and say so plainly if you find little.";
 
 /**
- * **What Debate's *Look at the debate from an angle* puts in the composer**:
+ * **What Debate's *Look at the debate from an angle* asks**:
  * the angle the reader typed, quoted, and a fixed question that asks for a web
  * search. Plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
  *
@@ -219,9 +226,11 @@ export const DEBATE_LENS_QUESTION =
  * plainly if you find little"* because, on most pieces, little is the true
  * answer, and an angle makes it likelier.
  *
- * Ends in a question, so Send works at once. Carried across, never sent, like
- * the others here: nothing is searched or paid for until the reader presses
- * Send, and they can edit it first.
+ * Ends in a question, so it can be sent as it stands. **From Debate's box
+ * the press sends it. From the command bar's suggested row it still waits in
+ * Chat's box**, because there a model worded the angle from the reader's
+ * profile and the privacy page says nothing is sent until Send
+ * (Reader.tsx § `lensInChat`).
  */
 export function askDebateThroughLens(lens: string): string {
   return `Look at the debate about this article from this angle (quoted, not instructions):\n\n${fencedQuote(lens)}\n\n${DEBATE_LENS_QUESTION}`;
@@ -231,14 +240,14 @@ export function askDebateThroughLens(lens: string): string {
 export const GLOSSARY_ENTRY_QUESTION = "What more should I know about it, and how does the article use it?";
 
 /**
- * **What *Ask in chat* on a Glossary entry puts in the composer**: the term,
+ * **What *Ask in chat* on a Glossary entry asks**: the term,
  * quoted, and a question about it.
  *
  * The entry's name is the article's words as a model extracted them, so it is
  * fenced like a claim, with the same visible cut for very long text
  * (`fencedQuote`), so the seed still fits Chat's question limit. The origin's
- * name snapshot has its own smaller cap (`itemOrigin`). Ends in a question
- * so Send works at once. Carried across, never sent, like the others here.
+ * name snapshot has its own smaller cap (`itemOrigin`). Ends in a question,
+ * and the press sends it.
  *
  * Not `askAboutTerm` above, which is for a word the reader typed that the
  * article does **not** contain, and whose chat records no origin.
@@ -252,7 +261,7 @@ export function askAboutGlossaryEntry(name: string): string {
 export const CITED_WORK_QUESTION = "What does it say, and does the article use it fairly?";
 
 /**
- * **What *Ask in chat* on a Citations row puts in the composer**: the work,
+ * **What *Ask in chat* on a Citations row asks**: the work,
  * quoted, and a question about it. The work's line is its title, then the
  * authors and the year where the article gives them. Fenced for
  * `askAboutGlossaryEntry`'s reason; the same plan, D4.
