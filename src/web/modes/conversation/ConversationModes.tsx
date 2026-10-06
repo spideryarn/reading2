@@ -22,7 +22,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { BlockId, ChatThread, SingleThreadKind, ThreadKind, ThreadOrigin } from "../../../types.js";
+import type {
+  BlockId,
+  ChatAnchor,
+  ChatThread,
+  SingleThreadKind,
+  ThreadKind,
+  ThreadOrigin,
+} from "../../../types.js";
 import { isSingleThreadKind } from "../../../types.js";
 import { chatFromParam, currentAt, modeParam, learnParam, threadParam } from "../../params.js";
 import { listedInChat, sourcesIn } from "../../thread-source.js";
@@ -335,6 +342,10 @@ export interface ChatHandoff {
    * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
    */
   readonly origin?: ThreadOrigin;
+  /** A passage the handed-over question is about. */
+  readonly anchor?: ChatAnchor;
+  /** The saved comment that asked this question, when there is one. */
+  readonly sourceCommentId?: string;
 }
 
 /**
@@ -443,6 +454,8 @@ type ConversationBandProps = {
   handoff?: ChatHandoff | null | undefined;
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
   onHandoffTaken?: (() => void) | undefined;
+  /** The fresh conversation a sent handoff opened, including a corrected id. */
+  onHandoffThread?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
   /** An answer settled, including after this band has gone. */
   onSettled?: (() => void) | undefined;
   /**
@@ -461,6 +474,7 @@ export function ConversationBand({
   subMode,
   handoff,
   onHandoffTaken,
+  onHandoffThread,
   onSettled,
   onScreen,
 }: ConversationBandProps) {
@@ -847,24 +861,52 @@ export function ConversationBand({
    * one read finds it.
    */
   const taken = useRef<ChatHandoff | null>(null);
-  const sendToRef = useRef<(id: string | null, question: string) => void>(() => {});
+  const sendToRef = useRef<
+    (id: string | null, question: string, first?: ChatHandoff) => void
+  >(() => {});
   useEffect(() => {
     if (!handoff) return;
     /* Asked in another article: not this conversation's question. */
     const ours = handoff.slug === slug;
     if (ours) started.current = true;
     if (taken.current === handoff) return;
-    taken.current = handoff;
-    if (ours) {
-      const id = beginHere(!handoff.send);
-      /* Under the conversation's id, so it goes wherever its words go, and
-         before the send, which reads it (`pendingOrigin`). */
-      if (handoff.origin) drafts.setOrigin(id, handoff.origin);
-      if (handoff.send) sendToRef.current(id, handoff.question);
-      else drafts.setThread(id, handoff.question);
+    const take = () => {
+      if (taken.current === handoff) return;
+      taken.current = handoff;
+      if (ours) {
+        const id = beginHere(!handoff.send);
+        /* Under the conversation's id, so it goes wherever its words go, and
+           before the send, which reads it (`pendingOrigin`). */
+        if (handoff.origin) drafts.setOrigin(id, handoff.origin);
+        if (handoff.send) {
+          sendToRef.current(id, handoff.question, handoff);
+          onHandoffThread?.(handoff, id);
+        } else drafts.setThread(id, handoff.question);
+      }
+      onHandoffTaken?.();
+    };
+    if (!ours || !handoff.send) {
+      take();
+      return;
     }
-    onHandoffTaken?.();
-  }, [handoff, slug, beginHere, onHandoffTaken, drafts]);
+
+    /* `useChat` drops navigation callbacks in its effect cleanup, correctly:
+       a real unmount must not repoint a later screen. StrictMode also performs
+       that cleanup once immediately after mount. Sending inside this effect's
+       first setup registered `onThreadId` just before that synthetic cleanup,
+       so a corrected server id could never reach the URL. Queue the paid work;
+       the first setup cancels its task and the replayed setup performs it once,
+       after the cleanup. Production has one setup and the same one microtask
+       delay. The synchronous `started` latch above still prevents the arrival
+       effect from beginning another conversation meanwhile. */
+    let live = true;
+    queueMicrotask(() => {
+      if (live) take();
+    });
+    return () => {
+      live = false;
+    };
+  }, [handoff, slug, beginHere, onHandoffTaken, onHandoffThread, drafts]);
 
   /**
    * **Arriving in chat: one decision, in this order**, made once per visit and
@@ -1062,7 +1104,11 @@ export function ConversationBand({
    * conversation the handoff effect has just begun (which `to` does not
    * name until the next render).
    */
-  const sendTo = (to: string | null, question: string): void => {
+  const sendTo = (
+    to: string | null,
+    question: string,
+    first?: ChatHandoff,
+  ): void => {
     if (resettingNow.current) return;
     // `send` returns the thread it went to, minted here when this is a new
     // conversation — so the URL can name it before the request lands.
@@ -1074,6 +1120,7 @@ export function ConversationBand({
     const id = send(to, question, at, {
       onThreadId: (corrected) => {
         void setThread(corrected);
+        if (first) onHandoffThread?.(first, corrected);
       },
       ...(origin && to ? {
         /* Data survives a mode change; URL navigation above does not.
@@ -1097,6 +1144,8 @@ export function ConversationBand({
       kind,
       ...(onScreen ? { visible: onScreen() } : {}),
       ...(origin ? { origin } : {}),
+      ...(first?.anchor ? { anchor: first.anchor } : {}),
+      ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box

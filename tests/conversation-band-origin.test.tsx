@@ -102,6 +102,7 @@ const refused = (): Response =>
 
 let host: HTMLDivElement;
 let root: Root;
+let handoffThreads: { handoff: ChatHandoff; id: string }[] = [];
 
 enableHistorySync();
 
@@ -111,6 +112,7 @@ beforeEach(() => {
   posts.length = 0;
   stored = [];
   panel = undefined;
+  handoffThreads = [];
   onPost = (body) => answered(String(body.threadId), body.origin);
   host = document.createElement("div");
   document.body.append(host);
@@ -137,6 +139,9 @@ function band(handoff: ChatHandoff | null) {
         onScreen: () => [],
         handoff,
         onHandoffTaken: () => {},
+        onHandoffThread: (taken: ChatHandoff, id: string) => {
+          handoffThreads.push({ handoff: taken, id });
+        },
       }),
     ),
   );
@@ -176,6 +181,26 @@ async function send(question: string): Promise<void> {
 }
 
 describe("a conversation handed over with an origin", () => {
+  it("reports both the guessed and corrected id for a saved-comment handoff", async () => {
+    onPost = () => answered("spya-rgn444");
+    const handoff = {
+      slug: SLUG,
+      question: SEED,
+      send: true,
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      sourceCommentId: "spya-cmt777",
+    };
+    await mount(handoff);
+
+    expect(posts).toHaveLength(1);
+    const guessed = String(posts[0]?.body.threadId);
+    expect(handoffThreads.filter((row) => row.handoff === handoff).map((row) => row.id)).toEqual([
+      guessed,
+      "spya-rgn444",
+    ]);
+    expect(open()).toBe("spya-rgn444");
+  });
+
   it("keeps the origin beside the conversation, sends nothing, then sends exactly it with the first question", async () => {
     await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
     const fresh = open();

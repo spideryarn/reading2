@@ -1400,7 +1400,7 @@ function Angles({ chats }: { chats: DebateClaimChats }) {
           e.preventDefault();
           if (words === "") return;
           chats.onLens(words);
-          /* The words are in Chat's box now, where they can still be edited. */
+          /* The words have become the fresh chat's first question. */
           setLens("");
         }}
       >

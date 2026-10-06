@@ -76,8 +76,9 @@ Greg answered that this kind of digging should be a chat:
 What the reader gets:
 
 - **A button on each claim's heading**, *Check this claim in chat*. It goes to Chat and opens a
-  fresh conversation with the claim quoted and a question after it. Nothing is sent until Send, so
-  a press spends nothing, and Back returns to Debate. It is the glossary's *Ask in chat* route
+  fresh conversation with the claim quoted and sends its first question. The press is the Send
+  since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns
+  to Debate. It is the glossary's *Ask in chat* route
   ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
   started from.
 - **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
@@ -116,9 +117,9 @@ How it works, and what to know before changing it:
   earlier answer had it: a row the reader's own Send put there stays until the server lists it
   or the reader drops it, because the floating dialog is drawn from that row
   ([261005q](../postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md)).
-- **Until the first typed Send lands, the origin waits beside the conversation's unsent words**
-  ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a look at another mode and a
-  first Send that fails. **Live is not offered on that conversation until then**: a spoken first
+- **Until the first send is confirmed, the origin stays in the tab's draft bookkeeping**
+  ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a mode change and a failed first
+  POST. **Live is not offered on that conversation until then**: a spoken first
   turn creates the thread by another route, which would leave it with no origin for good.
 
 **A glossary entry and a cited work are callers too, since 2026-10-06**

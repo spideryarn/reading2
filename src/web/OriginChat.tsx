@@ -32,7 +32,7 @@ import { TipNote, Tooltip } from "./Tooltip.js";
 export interface ItemChats<Item> {
   /** The reading view's thread summaries, which `Reader` owns and keeps current. */
   summaries: readonly ThreadSummary[];
-  /** Start a fresh chat about this item. Goes to Chat with the question unsent; spends nothing. */
+  /** Start a fresh chat about this item and send its first question. */
   onAsk(item: Item): void;
   /** Open a conversation already started from an item, beside the mode. */
   onOpen(threadId: string): void;

@@ -70,7 +70,7 @@ import {
 } from "../modes/skim/SkimMode.js";
 import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
-import type { Quote } from "../../types.js";
+import type { ChatAnchor, Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -91,6 +91,7 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   askAboutGlossaryEntry,
+  askAboutBlock,
   askAboutTerm,
   itemOrigin,
   askDebateThroughLens,
@@ -917,6 +918,13 @@ export function Reader({
    */
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  /* A saved comment can finish after the reader has changed mode. The action
+     it releases must use the mode that is committed then, not the one in the
+     render where Save was pressed. */
+  const currentMode = useRef(mode);
+  useEffect(() => {
+    currentMode.current = mode;
+  }, [mode]);
   /**
    * **A question on its way into chat mode from another mode.** The first two
    * senders: the glossary's *Ask in chat*, for a term the article does not
@@ -936,9 +944,11 @@ export function Reader({
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
    * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
-   * draft about a passage, and it is left exactly as it was — suppressed in chat
-   * mode, back when the reader leaves. This one lives for one commit: the chat
-   * band takes it, opens a new conversation with it, and clears it.
+   * ordinary draft about a passage, and it is left exactly as it was — suppressed
+   * in chat mode, back when the reader leaves. A completed passage question asked
+   * while a conversation mode is open joins this handoff through
+   * `askPassageInChat` below. The handoff lives for one commit: the chat band takes
+   * it, opens a new conversation with it, and clears it.
    * `ChatHandoff` in ConversationModes.tsx says what else it guards against.
    */
   const [chatHandoff, setChatHandoff] = useState<ChatHandoff | null>(null);
@@ -947,11 +957,53 @@ export function Reader({
      is whether this press is the Send, and each sender says: one press is one
      handoff object, which the band takes once, so it is one model call. */
   const handToChat = useCallback(
-    (question: string, then: "send" | "wait", origin?: ThreadOrigin) => {
-      setChatHandoff({ slug, question, send: then === "send", ...(origin ? { origin } : {}) });
+    (
+      question: string,
+      then: "send" | "wait",
+      origin?: ThreadOrigin,
+      passage?: { anchor: ChatAnchor; sourceCommentId?: string },
+    ) => {
+      setChatHandoff({
+        slug,
+        question,
+        send: then === "send",
+        ...(origin ? { origin } : {}),
+        ...(passage ? { anchor: passage.anchor } : {}),
+        ...(passage?.sourceCommentId ? { sourceCommentId: passage.sourceCommentId } : {}),
+      });
       showBand("chat");
     },
     [slug, showBand],
+  );
+  /**
+   * Send a completed question about a passage. Outside the conversation modes
+   * the floating dialog owns the turn. Chat and Learn deliberately suppress
+   * that dialog, so there the question must use the band's handoff path; a
+   * hidden `chatDraft` would otherwise wait and spend on some later visit.
+   */
+  const askPassageInChat = useCallback(
+    (target: Extract<ChatTarget, { kind: "draft" }>) => {
+      if (currentMode.current !== "chat" && currentMode.current !== "learn") {
+        setChatDraft(target);
+        return;
+      }
+      const quote =
+        "quote" in target.anchor ? target.anchor.quote : target.help ? target.opening : undefined;
+      handToChat(
+        askAboutBlock({
+          blockId: target.anchor.blockId,
+          ...(quote ? { quote } : {}),
+          question: target.question,
+        }),
+        "send",
+        undefined,
+        {
+          anchor: target.anchor,
+          ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+        },
+      );
+    },
+    [handToChat],
   );
   /* **A third sender since 2026-10-05, and the first whose conversation
      remembers where it was started**: Debate's *Check this claim in chat*. The
@@ -1013,6 +1065,12 @@ export function Reader({
     [handToChat],
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
+  const handoffThread = useCallback(
+    (taken: ChatHandoff, id: string) => {
+      if (taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
+    },
+    [owner],
+  );
   /* **And a handoff chat mode never took does not wait for the next visit.** The
      band takes it in the commit that switches mode, so this is the case where
      the switch did not happen, or the reader was elsewhere before it could —
@@ -3078,6 +3136,7 @@ export function Reader({
               onScreen={chatOnScreen}
               handoff={chatHandoff}
               onHandoffTaken={handoffTaken}
+              onHandoffThread={handoffThread}
               onSettled={refreshChats}
             />
           </ChatCommands>
@@ -3976,7 +4035,7 @@ export function Reader({
                  can write the link once it knows the real thread id — the
                  client's is a guess it only learns was wrong if it was. */
               void setThread(null);
-              setChatDraft({
+              askPassageInChat({
                 kind: "draft",
                 anchor: {
                   blockId: anchor.blockId,
@@ -4163,45 +4222,48 @@ export function Reader({
                   }
                 : undefined,
             onDiscuss: (question) => {
-            copyOnlyProtected.current.add(openComment.id);
-            /* **Into the floating panel, not into chat mode.** The follow-up
-               box has always handed the reader to a conversation rather than
-               growing a transcript in this dialog — Greg's call, chat-handoff.ts
-               — and since 2026-08-26 that conversation floats over the article
-               instead of replacing it.
+              copyOnlyProtected.current.add(openComment.id);
+              /* **Into the floating panel, unless a conversation mode is already
+                 open.** The follow-up box has always handed the reader to a
+                 conversation rather than growing a transcript in this dialog —
+                 Greg's call, chat-handoff.ts — and since 2026-08-26 that
+                 conversation floats over the article instead of replacing it.
+                 Chat and Learn suppress that floating panel, so in either one
+                 `askPassageInChat` hands the same anchored first turn to a fresh
+                 Chat conversation instead.
 
-               It carries the comment's own anchor, so the new chat is tied to
-               the same words the explanation was about: the passage keeps a mark
-               and the model is told what "this" refers to on every turn, not
-               just the first.
+                 It carries the comment's own anchor, so the new chat is tied to
+                 the same words the explanation was about: the passage keeps a
+                 mark and the model is told what "this" refers to on every turn,
+                 not just the first.
 
-               **The question is sent as the panel opens** (`sendNow`), since
-               2026-10-06. It used to be pre-filled for the reader to send, on
-               the argument that a follow-up typed into one box and fired from
-               another was a model call they did not quite ask for. Greg, of
-               every *Ask in chat*: *"automatically submit the input (rather
-               than just prefilling the input box and waiting for me to hit
-               send)"*. They typed it and pressed a button named Ask
-               (docs/plans/261006j-ask-in-chat-sends-the-question.md, D4).
+                 **The question is sent as the panel opens** (`sendNow`), since
+                 2026-10-06. It used to be pre-filled for the reader to send, on
+                 the argument that a follow-up typed into one box and fired from
+                 another was a model call they did not quite ask for. Greg, of
+                 every *Ask in chat*: *"automatically submit the input (rather
+                 than just prefilling the input box and waiting for me to hit
+                 send)"*. They typed it and pressed a button named Ask
+                 (docs/plans/261006j-ask-in-chat-sends-the-question.md, D4).
 
-               The dialog closes on the way through: one panel in the slot. */
-            /* A whole-block bookmark hands chat the whole-block anchor, which
-               is `ChatAnchor`'s other arm — and the paragraph as the opening,
-               because there are no selected words to quote. */
-            setChatDraft({
-              kind: "draft",
-              anchor:
-                openComment.quote === undefined
-                  ? { blockId: openComment.blockId }
-                  : {
-                      blockId: openComment.blockId,
-                      quote: openComment.quote,
-                      start: openComment.start,
-                    },
-              opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
-              question,
-              sendNow: true,
-            });
+                 The dialog closes on the way through: one panel in the slot. */
+              /* A whole-block bookmark hands chat the whole-block anchor, which
+                 is `ChatAnchor`'s other arm — and the paragraph as the opening,
+                 because there are no selected words to quote. */
+              askPassageInChat({
+                kind: "draft",
+                anchor:
+                  openComment.quote === undefined
+                    ? { blockId: openComment.blockId }
+                    : {
+                        blockId: openComment.blockId,
+                        quote: openComment.quote,
+                        start: openComment.start,
+                      },
+                opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
+                question,
+                sendNow: true,
+              });
               void setNote(null);
               void setThread(null);
             },

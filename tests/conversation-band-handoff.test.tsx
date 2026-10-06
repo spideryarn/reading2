@@ -79,6 +79,7 @@ const QUESTION = 'What does "axiom" mean, and does it have anything to do with w
 let host: HTMLDivElement;
 let root: Root;
 let taken = 0;
+let handedThreads: { handoff: ChatHandoff; id: string }[] = [];
 
 enableHistorySync();
 
@@ -91,6 +92,7 @@ beforeEach(() => {
   release = null;
   panel = undefined;
   taken = 0;
+  handedThreads = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -125,6 +127,9 @@ function band(handoff: ChatHandoff | null) {
         handoff,
         onHandoffTaken: () => {
           taken += 1;
+        },
+        onHandoffThread: (takenHandoff: ChatHandoff, id: string) => {
+          handedThreads.push({ handoff: takenHandoff, id });
         },
       }),
     ),
@@ -185,6 +190,28 @@ describe("ConversationBand's handoff that sends", () => {
     expect(posts()[0]?.body).toMatchObject({ question: QUESTION, origin });
   });
 
+  it("sends a passage anchor and saved-comment id, and reports the fresh thread once", async () => {
+    const anchor = { blockId: "spya-bbbbbb", quote: "a passage", start: 4 } as const;
+    const handoff = {
+      slug: SLUG,
+      question: QUESTION,
+      send: true,
+      anchor,
+      sourceCommentId: "spya-cmt777",
+    };
+    await mount(handoff);
+
+    const fresh = threads()[0] as ChatThread;
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]?.body).toMatchObject({
+      question: QUESTION,
+      threadId: fresh.id,
+      anchor,
+      sourceCommentId: handoff.sourceCommentId,
+    });
+    expect(handedThreads).toEqual([{ handoff, id: fresh.id }]);
+  });
+
   it("does not send again when the band re-renders with the same handoff", async () => {
     const handoff = { slug: SLUG, question: QUESTION, send: true };
     await mount(handoff);
@@ -207,7 +234,7 @@ describe("ConversationBand's handoff that sends", () => {
     await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: true })));
     await settle();
     expect(posts()).toHaveLength(1);
-    const sentTo = (posts()[0]?.body as { threadId: string }).threadId;
+    const sentTo = (posts()[0]!.body as { threadId: string }).threadId;
     expect(panel?.threadId).toBe(sentTo);
 
     await act(async () => release?.());

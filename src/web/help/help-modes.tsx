@@ -728,8 +728,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>
           To look into one claim yourself, press the chat icon on its heading. It opens a new
-          conversation in <HelpRef to="mode-chat">Chat</HelpRef> with the claim quoted and a question
-          ready, and sends nothing until you press <strong>Send</strong>. Once you have asked, a line
+          conversation in <HelpRef to="mode-chat">Chat</HelpRef> and sends a question with the claim
+          quoted. Once you have asked, a line
           under the claim shows how the chat’s latest answer begins; press it to open that
           conversation again beside Debate. If a later search words the claim differently the line
           goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever

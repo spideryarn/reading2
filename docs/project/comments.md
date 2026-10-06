@@ -935,15 +935,15 @@ open up as a new chat (rather than making the [dialog] itself too complex)"*. Wh
 comment at one question and one answer: the dialog does not grow a transcript, the reader is moved to
 the thing that already is one. The box's button is **Ask in chat**, and since 2026-10-06 pressing it
 sends the question there rather than pre-filling it for a second press
-([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D4). The mechanics, and the three silent ways a handoff goes wrong, are in
-[`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts).
+([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D4). `Reader.tsx` owns the handoff;
+`ChatDialog.tsx` and `ConversationModes.tsx` own its two sending paths.
 
 > [!WARNING]
 > **The question does not go in the URL.** [`useChat.ts`](../../src/web/useChat.ts) already argues
 > this for its own POST — the question is arbitrary length and it is the reader's private text,
 > which would then be in browser history, in any shared link, and in every access log on the way. It
-> travels in a module-level cell and is lost on reload, which is the right trade: the cost is
-> retyping one sentence.
+> travels in the reading view's component state and is lost on reload, which is the right trade:
+> the cost is retyping one sentence.
 
 ## Anchoring <a id="anchoring"></a>
 

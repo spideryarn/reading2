@@ -585,8 +585,9 @@ This book argues that what you experience is your brain's best guess about the w
 ```
 
 - **A new conversation, and not sent.** The reader came to ask something, so the box waits for
-  their question, and a press spends nothing. It is the glossary's *Ask in chat* route, unchanged
-  ([glossary.md](glossary.md), `ChatHandoff` in
+  their question, and a press spends nothing. It uses the same handoff as the glossary's *Ask in
+  chat*, but deliberately sets it to wait rather than send ([glossary.md](glossary.md),
+  `ChatHandoff` in
   [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)): `Reader`
   sets the handoff and the mode together, and the chat band takes it. No server field and no
   prompt change. The wording is `askAboutSummaryParagraph` in

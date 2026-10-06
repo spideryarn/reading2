@@ -959,7 +959,8 @@ started from:
 What the owner gets:
 
 - **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
-  after it. Nothing is sent until Send, so a press spends nothing, and Back returns to the Glossary.
+  after it, then sends that question. The press is the Send since 2026-10-06
+  ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
 - **A line under the buttons once a chat exists**: how many questions were asked, and how the
   chat's latest answer begins. Pressing it opens that conversation beside the Glossary
   (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.

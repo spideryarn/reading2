@@ -24,8 +24,8 @@
  *
  * Select a sentence and this appears over the article: the words you chose, a
  * place to say something about them, and two buttons: **Save**, and **Ask AI**
- * if you also want the model's help. **Saving is free**, and so is pressing Ask
- * AI: it saves, and opens the chat composer on those words for you to send.
+ * if you also want the model's help. **Saving is free**. Ask AI saves first,
+ * then sends those words to a new chat as its first question.
  *
  * ## What it replaced, twice
  *
@@ -696,8 +696,8 @@ export function AnnotateDialog({
             {/* **`type="button"`, and it matters.** Enter in a form presses its
                 first submit button, and this one opens a conversation: the only
                 thing a key may press here is the free Save. It stores the
-                comment and opens the chat composer on it, pre-filled; it sends
-                nothing itself. */}
+                comment first, then sends the passage and those words to a new
+                chat. */}
             <button
               type="button"
               className="annotate-ask-ai"

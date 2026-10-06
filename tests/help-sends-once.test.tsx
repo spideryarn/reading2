@@ -308,9 +308,8 @@ describe("a follow-up the reader already asked sends once", () => {
   const box = () => document.querySelector<HTMLTextAreaElement>("textarea");
 
   it("leaves a carried question in the box, unsent, without `sendNow`", () => {
-    /* The control: the comment box's Ask AI still hands over words that wait
-       (plan 261003i, D5). If `question` alone became the trigger, that button
-       would start spending. */
+    /* The control: `question` alone still means an editable draft. If it became
+       the trigger, any ordinary pre-filled composer would start spending. */
     act(() => {
       root.render(dialog({ target: { kind: "draft", anchor: { blockId: BLOCK }, opening: OPENING, question: ASKED } }));
     });
