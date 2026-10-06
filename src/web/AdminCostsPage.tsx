@@ -117,7 +117,7 @@ const dimensionParam = createParser<PageDimension>({
   serialize: (v) => v,
 });
 
-/** The ranking's resting order: the largest recorded amount first. */
+/** The ranking's resting order: the largest total cost (the recorded amount) first. */
 const DEFAULT_SORT = ["amount"];
 
 const sortParam = createParser<string[]>({
@@ -678,14 +678,22 @@ function rankingColumns({
       },
     },
     {
+      /* **Headed "Total cost", and it is the recorded amount.** It was headed
+         "Recorded amount" when Greg asked for *"a total-cost column"* from
+         this page (spya-h2dzab, 2026-10-06): beside "Calls" and "Per priced
+         call" the heading has to say that it is the row's whole cost.
+         The headline keeps "recorded amount", where it is set against
+         estimated cash, and the hint says which of the two this adds up to.
+         The id stays `amount`, which is what `?sort=` links carry.
+         docs/plans/261006j-total-cost-column-on-admin-costs-and-metadata.md. */
       id: "amount",
-      header: "Recorded amount",
+      header: "Total cost",
       accessorFn: (g) => g.recordedNanos,
       sortDescFirst: true,
       sortingFn: numberOrMissing<CubeGroup>(),
       meta: {
-        label: "Recorded amount",
-        hint: "Credits, BYOK and computed amounts added; a floor where a call is unpriced (marked +)",
+        label: "Total cost",
+        hint: "The row's recorded amounts added up: credits, BYOK and computed amounts; a floor when any call is unpriced (marked +). The rows add up to the recorded ledger amount above, not to the estimated cash",
         ends: ["smallest first", "largest first"],
         numeric: true,
       },
@@ -807,7 +815,7 @@ function Ranking({
         <DataTable
           table={table}
           rows={sorted}
-          caption={`Recorded amount by ${DIMENSION_LABEL[dim].toLowerCase()}`}
+          caption={`Total cost by ${DIMENSION_LABEL[dim].toLowerCase()}`}
           sidewaysCue
         />
       </div>
