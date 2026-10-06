@@ -97,20 +97,26 @@ step agreeing with every other one.
 Another tab can sign in as somebody else while this one is open, and the token is looked up when a
 request is sent, not when it was asked for. So a write that waits (a debounce, a retry, a flush as
 the page leaves, a call still waiting for its token) could go out as the next reader. Since
-2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md)):
+2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md),
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md)):
 
-- **A caller can name its reader**: `apiFetch(input, init, madeFor)`, and the same third argument
-  on `apiFetchOwned` and `leavingFetch`. If the token about to be used is known to be another
-  reader's, nothing is sent and the caller gets `NotThisReader`, which has no HTTP status. It
-  refuses only when both readers are known and differ. Leave `madeFor` out and nothing is checked.
+- **Every `apiFetch` is bound to the reader the tab held when the call was made.** That reader is
+  read synchronously, before the token lookup, from what the SDK last told the tab. If the token
+  that comes back is known to be another reader's, nothing is sent and the caller gets
+  `NotThisReader`, which has no HTTP status; the refusal is written to the log buffer as
+  `not-sent`. It refuses only when both readers are known and differ, so a call made while nobody
+  is signed in is unfenced.
+- **A caller can name its reader instead**: `apiFetch(input, init, madeFor)`, and the same third
+  argument on `apiFetchOwned` and `leavingFetch`. The name is believed over the tab.
 - **The retry after a 401 is never sent as a different reader**, for every caller. A refresh that
   comes back as somebody else is a change of account, and the first 401 is the answer.
 
-**Anything that sends after its page may have gone should pass `madeFor`**, and anything that holds
-a reader's words should be keyed on the reader. The add page, the job and upload engines and the
-main-modes setting do. **Most callers do not**: a plain `apiFetch` begun under one reader whose
-token lookup straddles the change is still sent as the next. What closing that for everybody would
-take, and the other places this class has turned up, are in
+**What the binding cannot see is a request made late.** A timer, a retry loop, a flush as the page
+unmounts, a module-level service: each *makes* its call after the reader's gesture, possibly after
+the reader has changed, and the tab's reader at that moment is the new one. Those pass `madeFor`,
+with the reader taken when the work was begun. `leavingFetch` is always one of these, because it is
+called as the page goes. And anything that holds a reader's words is keyed on the reader, not on
+the address or the slug. The other places this class has turned up are in
 [the postmortem](../postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md).
 
 ## The signed-out page is the landing page

@@ -110,7 +110,11 @@ export type ApiOutcome =
   | "not-json"
   /** `fetch` threw: no network, no DNS, a captive portal. There is no status. */
   | "transport-failed"
-  /** We chose not to send it — `leavingFetch` over the keepalive budget. */
+  /**
+   * We chose not to send it: `leavingFetch` over the keepalive budget, or a
+   * request made for one reader about to go out as another (`error` is then
+   * `NotThisReader`).
+   */
   | "not-sent";
 
 /** One request to our own API. */

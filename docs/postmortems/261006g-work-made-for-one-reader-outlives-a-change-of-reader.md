@@ -104,6 +104,10 @@ problem, and three in a row on the add page did not.
 
 ## What is still open
 
+**Closed on 2026-10-06 by
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md)**: both items
+below. The text is kept as it was written.
+
 **A plain `apiFetch` that names nobody, begun under A, whose token lookup straddles the change, is
 still sent as B.** That is every page not listed in 2 above: over a hundred call sites in
 `src/web`. The window is small, a pending token lookup rather than a timer, but the hole is the class.

@@ -433,7 +433,8 @@ export async function apiFetch(
   /**
    * **The reader this request was made for**, when it must not go out as
    * anybody else — see `NotThisReader` below. `null`, which is every caller
-   * that names nobody, is unfenced.
+   * that names nobody, means the reader this tab held as the call was made
+   * (`apiFetchOwned` § *Bound when it is made*).
    */
   madeFor: string | null = null,
 ): Promise<Response> {
@@ -454,7 +455,11 @@ export async function apiFetch(
  *
  * So a caller that knows who a request is for passes them as `apiFetch`'s
  * third argument, and gets this instead of a response when the credential is
- * somebody else's.
+ * somebody else's. **A caller that names nobody gets the same, for the reader
+ * the tab held as the call was made** (`apiFetchOwned` § *Bound when it is
+ * made*), so naming a reader is only for a request made after its page or its
+ * reader may have gone: a retry loop, a retirement flush, a module-level
+ * service.
  *
  * **No HTTP status**, so `statusOf` answers `null`: nothing was asked, and a
  * caller that retries on a 404 or pauses on a 401 does neither.
@@ -515,9 +520,28 @@ export async function apiFetchOwned(
   init: RequestInit = {},
   madeFor: string | null = null,
 ): Promise<Owned> {
+  /**
+   * **Bound when it is made.** A caller that names nobody is making the
+   * request for whoever this tab holds right now, so that reader is read here,
+   * synchronously, before anything is awaited: the token lookup below can wait
+   * across a change of account, and what it answers with is then the next
+   * reader's. `cachedTokenOwner` is what the SDK last told this tab, written
+   * by the listener at the bottom of this file, which is registered before any
+   * component's and so is never behind the screen that made the call.
+   *
+   * **Nobody is not a reader.** Before the SDK has said anything, or signed
+   * out, this is `null` and the request is unfenced, as it always was: a
+   * request made by nobody and sent as the reader who then signed in carries
+   * nobody else's words.
+   *
+   * A named reader is believed over the tab: the callers that name one are
+   * the ones whose request is made long after the reader's gesture.
+   * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md.
+   */
+  const boundTo = madeFor ?? cachedTokenOwner;
   noteRequest(input, init.method);
   try {
-    return await sendOwned(input, init, madeFor);
+    return await sendOwned(input, init, boundTo);
   } finally {
     noteRequest(input, init.method);
   }
@@ -577,7 +601,23 @@ async function sendOwned(
   const { token, owner, tokenOwner } = await accessToken();
   /* Here and not before the lookup: a lookup that was waiting while the
      reader changed answers with the new reader's token (`NotThisReader`). */
-  if (notTheirs(tokenOwner, madeFor)) throw new NotThisReader();
+  if (notTheirs(tokenOwner, madeFor)) {
+    /* Said where a bug report can see it: to the caller this is one more
+       failed request, and nothing else would tell it from the network. */
+    recordLog({
+      kind: "api",
+      outcome: "not-sent",
+      method: (init.method ?? "GET").toUpperCase(),
+      path: input,
+      status: null,
+      ms: null,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: "NotThisReader",
+    });
+    throw new NotThisReader();
+  }
   /**
    * **The queue place, taken before the request goes out.**
    *

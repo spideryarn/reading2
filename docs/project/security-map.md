@@ -53,7 +53,9 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
 - **[auth.md](auth.md)** — the gate. Why auth here is about an open proxy and an open wallet rather
   than user accounts, why Supabase Auth won, the four things to know before touching it (a 401 is
   not "the session is gone"; JWKS unreachable is a 503), **whose data is whose** now the shelf is no
-  longer shared, and the one test that has to exist.
+  longer shared, and the one test that has to exist. And the browser half of that last one, for two
+  accounts in one browser:
+  [§ A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another).
 - **[admin.md](admin.md)** — the one request that reads across owners, and how narrow the exception
   is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
   are courtesies, why the check is on the prefix rather than the route, and what the page
@@ -95,6 +97,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
+| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — every request is bound to the reader the tab held as it was made, and is not sent with a token known to be another reader's (`NotThisReader`). The server cannot see this one: reader B's token on reader A's words is a valid request. [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another) |
 | [`src/store/pg.ts`](../../src/store/pg.ts) | `ownedSlug()` — keeps one reader's shelf out of another's |
 | [`src/asset-delivery.ts`](../../src/asset-delivery.ts) | `storedAssetFor()` — **the storage key is rebuilt from this article's own manifest entry, never from the caller's string.** The bucket is content-addressed and shared by every article and every reader, so a route that concatenated a caller's hash into a key would be an arbitrary-object read. A hash absent from this article's manifest is a 404 **even for its owner**. Both `GET /api/asset/…` and its public twin go through it. See below |
 | [`src/db/ssl.ts`](../../src/db/ssl.ts) | `sslDecisionFor` — **the database connection verifies Supabase's certificate or does not happen.** Against the remote there is no unverified answer: a missing CA, or a TLS key in `DATABASE_URL` that `pg` would let override ours (`?sslmode=no-verify` turned checking off while we said "verified"), is a thrown error saying what to fix. Local is untouched. Every pool and script goes through it. [security.md § verified or refused](security.md#database-tls) |
