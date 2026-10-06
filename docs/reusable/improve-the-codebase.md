@@ -183,6 +183,17 @@ The same goes for duplication. **Prove the drift** — the strongest evidence is
 already failed to reach one of the copies. Copies stable for months are usually honest, and merging
 them couples two things that were independent.
 
+### Look at the schema, not only the code
+
+The database outlives every refactor, so a flaw there is the most expensive one to leave. Sweep the
+schema and its migrations as a zone of their own: columns nothing reads or writes; a JSON blob
+holding what should be columns or keys; a foreign key, unique constraint, `NOT NULL` or `CHECK` the
+code assumes and the database does not enforce; one fact stored twice; indexes the real queries lack,
+or that no query uses; enum or `CHECK` values nothing produces any more; names that no longer match
+the code's. An "unused" column is an absence, so check scripts and raw SQL too. Anything that drops a
+column or rewrites existing data is hard to reverse: count the rows in production first, and propose
+it rather than building it.
+
 ### Look at the defences, not only the code
 
 The tests, the type system, the static analysis and the production signals are all part of the
