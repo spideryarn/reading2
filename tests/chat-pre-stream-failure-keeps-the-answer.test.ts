@@ -30,6 +30,7 @@ const server = vi.hoisted(() => ({
   threads: [] as unknown[],
   turn: (): Promise<Response> => Promise.reject(new Error("no turn expected")),
   posts: 0,
+  read: null as null | (() => Promise<Response>),
 }));
 
 vi.mock("../src/web/lib/api.js", async (importOriginal) => {
@@ -38,6 +39,7 @@ vi.mock("../src/web/lib/api.js", async (importOriginal) => {
     ...real,
     apiFetch: (_url: string, init?: RequestInit) => {
       if ((init?.method ?? "GET") === "GET") {
+        if (server.read) return server.read();
         return Promise.resolve(Response.json({ threads: server.threads }));
       }
       server.posts++;
@@ -86,7 +88,7 @@ async function settled(c: Controller): Promise<void> {
   expect([...c.state.operations.values()].map((o) => o.kind), "still in flight").toEqual([]);
 }
 
-async function loaded(): Promise<Controller> {
+async function loaded(onSettled?: () => void): Promise<Controller> {
   server.threads = [stored()];
   const unused = async () => ({ ok: false as const, error: "not in this test" });
   const real: ChatEffects = {
@@ -100,7 +102,7 @@ async function loaded(): Promise<Controller> {
     cancelThread: unused,
     markHintOpened: unused,
   };
-  const c = new ChatController(SLUG, real);
+  const c = new ChatController(SLUG, real, onSettled);
   c.dispatch({ type: "load.started", op: { id: asOpId("spya-bz5ld1"), kind: "load" } });
   await settled(c);
   expect(rows(c)).toEqual(TWO_TURNS);
@@ -168,10 +170,37 @@ const unreachable = () => Promise.reject(new TypeError("Failed to fetch"));
 
 afterEach(() => {
   server.posts = 0;
+  server.read = null;
   server.turn = () => Promise.reject(new Error("no turn expected"));
 });
 
 describe("a turn that fails before its stream starts", () => {
+  it.each([
+    ["failed", "succeeded"],
+    ["failed", "failed"],
+    ["disconnected", "succeeded"],
+    ["disconnected", "failed"],
+  ] as const)("settles once after a %s retry's repair %s", async (ending, repairEnding) => {
+    const onSettled = vi.fn();
+    const c = await loaded(onSettled);
+    let finishRead: ((response: Response) => void) | undefined;
+    server.read = () => new Promise((resolve) => { finishRead = resolve; });
+    server.turn = ending === "failed" ? unreachable : () =>
+      Promise.resolve(new Response("", { headers: { "Content-Type": "text/event-stream" } }));
+    retry(c);
+    c.detach();
+    for (let i = 0; i < 400 && !finishRead; i++) await task();
+    expect(finishRead, "the failure must actually start the repair").toBeTypeOf("function");
+    expect([...c.state.operations.values()].map((op) => op.kind)).toEqual(["repair"]);
+    expect(onSettled).not.toHaveBeenCalled();
+    finishRead!(repairEnding === "succeeded"
+      ? Response.json({ threads: server.threads })
+      : Response.json({ error: "repair read failed" }, { status: 500 }));
+    await settled(c);
+    expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(rows(c)).toEqual(TWO_TURNS);
+  });
+
   it("leaves the answer on screen after a retry the database was too busy for", async () => {
     const c = await loaded();
     server.turn = busy;

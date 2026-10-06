@@ -69,7 +69,7 @@ export interface LoadOperation extends Registered {
 }
 
 /**
- * One conversation, re-fetched because a 409 said the screen is wrong.
+ * One conversation, re-fetched after a refusal or an uncertain write.
  *
  * Registered in the same transition that drops the operation the server
  * refused — they are one decision, and split across two transitions there is a
@@ -80,18 +80,15 @@ export interface RepairOperation extends Registered {
   kind: "repair";
   threadId: string;
   /**
-   * The rows the refused turn had already written into `base`, which the
-   * server has just said do not exist.
-   *
-   * Only a **send** has any: it writes its question and its empty answer down
-   * at registration, because nothing withdraws the reader's own words — except
-   * this, the one case where the server says the turn never happened. A retry
-   * and an edit *draw*, so dropping their operation is the whole of putting the
-   * screen back and there is nothing here for them.
+   * Rows in `base` that must not be kept if the server's copy lacks them:
+   * a refused send's own provisional pair, or the stored rows an edit would
+   * discard. See `discardedBy` in reduce.ts for the provisional sends excluded
+   * from an edit's discard. A retry has no exclusions of its own, but a repair
+   * inherits any exclusions still unresolved by an earlier read.
    *
    * Named rather than implied, because the repair no longer replaces the
    * conversation wholesale: it merges, and a merge that kept everything would
-   * keep these two rows for ever.
+   * keep excluded rows for ever.
    */
   drop: readonly string[];
   /**
@@ -531,6 +528,9 @@ export interface ChatState {
    * stand in for it. GPT Sol, 2026-08-28.
    */
   tombstones: ReadonlyMap<string, Tombstone>;
+  /** Unresolved repair exclusions survive a superseded or failed read. Cleared
+   * only when a fresh conversation actually reconciles them. */
+  repairDrops: ReadonlyMap<string, readonly string[]>;
   /**
    * Where the one fetch that fills the list got to — **and it outlives that
    * fetch's operation**, which is why it is a field rather than a lookup.
@@ -574,6 +574,7 @@ export function initialState(slug: string): ChatState {
     base: [],
     operations: new Map(),
     tombstones: new Map(),
+    repairDrops: new Map(),
     loadPhase: "loading",
     unnamed: new Set(),
     error: null,
@@ -682,8 +683,8 @@ export type ChatResult =
    * what arrived is kept, because the reader watched it appear.
    *
    * **`repair` is for the one case that keeps nothing**: a retry or an edit
-   * that failed before its `begin` frame is withdrawn and repaired, as a
-   * `turn.refused` is. Always carried, because whether the turn had begun is
+   * of a confirmed conversation that failed before `begin` is withdrawn and
+   * repaired, as a `turn.refused` is. Always carried, because whether the turn had begun is
    * the reducer's to know and the id is not the reducer's to mint.
    */
   | { type: "turn.failed"; opId: OpId; error: string; text?: string; repair: { id: OpId } }
@@ -697,9 +698,9 @@ export type ChatResult =
    * projecting its pending row over the answer when it arrived, so the answer
    * would land and be invisible. GPT Sol's second blocker, 2026-08-28.
    *
-   * Unless the server never named the row, in which case there is nothing to
-   * look for and `error` is what the reader is told. The reducer decides that,
-   * because `began` is a fact about the operation.
+   * Before `begin`, a send or an attempt on an unnamed draft keeps its row
+   * with the error. A retry or edit of a confirmed conversation is withdrawn
+   * and repaired, using `recovery.id` as the repair's id. The reducer decides.
    */
   | {
       type: "turn.disconnected";

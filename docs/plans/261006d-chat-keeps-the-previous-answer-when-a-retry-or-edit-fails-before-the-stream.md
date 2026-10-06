@@ -90,6 +90,34 @@ the code.
 It also confirmed that an `error` frame can arrive before `begin` (the route's `try` opens before
 the header flush), with the store write already made; un-draw and repair is right there, given F1.
 
+## The code review (GPT Sol, 2026-10-06)
+
+[261006d-code-review-sol.md](261006d-code-review-sol.md), from
+[its prompt](261006d-code-review-prompt.md), of `c6e162610`. Approve with changes; it fixed three
+things inside the change, each red first, and wrote a postmortem for each. Its diff was read, and
+two of the three fixes were undone by hand to watch its tests fail (six did) and put back.
+
+| Finding | What it said | What it did |
+|---|---|---|
+| P1 | A first send that failed leaves a draft the server never heard of. A retry or edit of *that* failing before `begin` started a repair, which found no conversation and took the reader's question away | The two new withdrawals ask `state.unnamed` first; an unnamed draft keeps the old ending. [Postmortem](../postmortems/261006e-a-populated-local-conversation-is-not-a-confirmed-conversation.md) |
+| P1 | `discardedBy` left out the rows of *every* turn in flight. A retry names a stored row and a send that has begun has confirmed its pair, so those are the edit's to discard | Only a send that has not begun is left out. [Postmortem](../postmortems/261006d-operation-ownership-is-not-persistence-provenance-in-a-snapshot-merge.md) |
+| P1 | A repair that was superseded, or whose read failed, forgot the edit's discard, so a later repair or spoken write could put the turns back | `ChatState.repairDrops` keeps the exclusions per conversation until a server copy is actually merged. [Postmortem](../postmortems/261006f-replacing-a-read-must-not-erase-unresolved-reconciliation-facts.md) |
+
+The third is the one piece of new state this change adds. It was kept because the alternative is
+the defect, and a stale entry can only ever drop a stored row the server no longer has.
+
+It also added four controller tests that `onSettled` fires exactly once after the repair, and left
+F3, F4 and F5 as the plan review did. One more thing it noticed and left: a retry or edit of an
+unnamed draft cannot work at all (it resubmits ids the server never minted), and the older 409 path
+can still remove such a draft.
+
+## The browser check (2026-10-06)
+
+A Sonnet subagent, Playwright on the box, against a real two-turn conversation, with the turn's
+POST answered by a 500 carrying `STORAGE_BUSY`. At 1440, 820 and 390 wide: after Retry and after
+Edit the four original rows were on screen and the sentence was in `.chat-error`, not clipped; a
+reload showed the same conversation. The panel header kept the edited title until reload (F5).
+
 ## What landed
 
 - `src/web/chat/reduce.ts`: `withdrawn` is the old body of `turn.refused`. `turn.failed` and
