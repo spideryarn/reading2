@@ -214,8 +214,9 @@ saved reading position and in the arc alike. See [260828o-footnotes.md](../plans
 Most web essays are structurally flat — the Noema test article is ~54 minutes of largely bare
 `<p>` with few subheads — so "chapters → sections" usually has to be *proposed*, not read off the
 document — and the brief's own "chapters → sections → pages or paragraphs" is a book's structure,
-not an essay's. Provisional approach, with the alternatives weighed in
-[Q1](open-questions.md#q1):
+not an essay's. The approach, adopted over the two it was weighed against — the author's headings
+alone (faithful and free, but a flat article collapses to two levels) and a model segmenting the
+whole piece (uniform depth, but every boundary is the model's opinion):
 
 - Use the author's real headings as hard boundaries where they exist. They are ground truth about
   where the author thought the seams were, and readers recognise them.
@@ -835,7 +836,10 @@ The sketch, recorded so it isn't lost:
   screen. Whether that rank is derived from tree position (each node promoting its best sentence,
   which guarantees even coverage and gives literally "one sentence per chapter" at the far left) or
   from a global salience score (honest about which passages are dense, but it clumps and leaves whole
-  sections blank) is **undecided** — see [Q8](open-questions.md#q8).
+  sections blank) was **never decided**, because the view was never built. The recommendation at the
+  time was the first, the hierarchical budget: it delivers the brief's own description of the
+  leftmost column and degrades gracefully. A global score with a per-section floor would read better
+  than either and is two interacting mechanisms to tune.
 
 Note this view leans toward showing the author's real sentences rather than generated gists, which
 is a different bargain from the tabular view's and closer to
@@ -860,8 +864,8 @@ stays put while the text breathes around it.
   every level of this view. ← / → then came back to granularity after all: they move that *aim*
   sideways across the columns, so the level can be chosen without a mouse. See
   [keyboard.md](keyboard.md#choosing-the-level-without-a-mouse).
-- **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom is a later
-  question ([Q4](open-questions.md#q4)).
+- **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom was left as a
+  later question, and went with the columns.
 - **Click a gist to descend into just that node**, leaving the rest of the article coarse. This is
   the focus+context mode and it's likely how the feature is actually used — you scan L1, spot the
   one chapter you care about, and drop into it alone. v1 should support it even if uniform-level

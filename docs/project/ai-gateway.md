@@ -457,8 +457,9 @@ credits are bought rather than on a per-token markup.
 assets`, of which only `structure` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
 debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
 
-[open-questions.md § Q7](open-questions.md#q7) is what this answers, and
 [billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
+The per-token economics of a *search* pass, cold and warm, are a different measurement:
+[evals/results/](../../evals/results/README.md).
 
 ## Two spellings of one model, and why both survive
 
