@@ -25,20 +25,22 @@ sees is the UI sweep's; this one is the code behind it.
 
 ## The short version
 
-- **The sixth sweep's "weak null" was not a clean bill.** A real read found **about fifteen live
-  defects**, eleven reproduced against the running code or real Postgres. None loses a reader's
-  data. The worst a reader can meet: a referee who can neither add nor delete a criterion once the
-  oldest has a note on it; an import that ends in *error* with its finished work thrown away when
-  the images step outruns its budget; a note that visibly reverts to its old text while an
-  explanation streams.
-- **One shape explains most of them: an invariant enforced in one layer and not carried to the
-  next.** The store refuses a stale chat edit after the route has already stopped somebody's
-  answer. A fix put a chat thread's kind and origin inside the transaction and left its anchor and
-  help flag outside. `e039d2acd` taught three always-mounted reads to hear a job finish and missed
-  the fourth. It is the fifth sweep's "a fix does not travel to the siblings", one level down.
+- **The sixth sweep's "weak null" was not a clean bill.** A real read found live defects in every
+  zone. **Thirteen were reproduced** against the running code or real Postgres: SV1, SV2/WC1,
+  SVO1/DB1, SVO2, SVO3, WCO1, WCO2, WCO5, PQ1, PQ2, PQ3, PQO1, PQO2. No data loss was reproduced
+  (one hypothesis: a note shown stale invites a save over the newer one). The worst a reader can
+  meet: a referee who can neither add nor delete a criterion once the oldest has a note on it; an
+  import that ends in *error* when the images step outruns its budget; a note that visibly reverts
+  to its old text while an explanation streams.
+- **Three recurring shapes, none of them a majority.** A rule enforced at one boundary and not the
+  next (the store refuses a stale chat edit after the route has already stopped somebody's answer;
+  a fix put a thread's kind and origin inside the transaction and left its anchor and help flag
+  outside) — about 17 of the 64 finding IDs. A fix that reached some siblings (`e039d2acd` taught
+  three always-mounted reads to hear a job finish and missed the fourth; Debate's sub-modes were
+  not told to two lists). And failure exits nobody walked (the queue).
 - **The schema is sound, and under-declared.** No table is wrong. Six indexes and five CHECKs exist
-  only in migrations; four constraints the code relies on are not in the database though today's
-  data satisfies every one; one index is an exact duplicate. All additive, all being built. The
+  only in migrations; three constraints the code relies on are not in the database though today's
+  data satisfies every one; one index is an exact duplicate. All being built. The
   expensive questions are about **retention** (86% of block rows belong to superseded revisions) and
   are Greg's.
 - **The read type (sixth sweep item 5) is being spiked on `useIdeas`**, as both families
@@ -256,8 +258,8 @@ After C9, because both touch `useSkim.ts`.
 
 ## For Greg
 
-Nothing here is built. Each has a recommendation. The plain-words version goes to Greg as one batch
-through the Overseer.
+**Superseded by the revised list at the end of § What the review changed**, which is the one that
+went to Greg. This first draft is kept so the review's findings about it can be read against it.
 
 1. **Stop pressed during an import's last step.** Today the article is kept if the Stop reached one
    server instance and thrown away if it reached another. *Recommend:* keep it — the work is done
@@ -328,18 +330,162 @@ request and store division works; the queue's design is right and its defects ar
 walked; the schema has no table that should not exist; the client's ordering machinery
 (`useOrderedRead`, the rewrite hold) is where the hard problems already live.
 
-What the sweep adds to the fifth's "a fix does not travel": **it does not travel downwards either.**
-A rule gets enforced where the bug was seen (the route, the hook at hand, the per-process lock) and
-the layer that could have made it structural (the transaction, the database, the type) is left
-agreeing by convention. The cheapest fixes found were all of one kind: move the existing check one
-layer down, and keep the early one for its better error message.
+What the sweep adds to the fifth's "a fix does not travel" is one more direction it fails to travel
+in: **across a boundary.** A rule gets enforced where the bug was seen (the route, the per-process
+lock) and the next layer (the transaction, the database) is left agreeing by convention, or the
+other way round. GPT Sol counted this class at 17 of 64 finding IDs, generously; it is one recurring
+class beside sibling drift and unwalked failure exits, not the explanation of the whole. Where it
+applies the fix is cheap: carry the existing check to the other side and keep both.
 
 ## Review status
 
 - The eight investigations: each cross-reviewed by the other family (table above). Of the Tier 0s,
   the pipeline's four and the schema's one were reproduced against Postgres by the reviewer.
 - The read-type plan: GPT Sol, ready with fixes, applied.
-- This umbrella: GPT Sol review pending.
+- This umbrella, round 1: [GPT Sol](261006m-seventh-codebase-sweep-depth-umbrella-review-sol.md),
+  read-only, **not ready**, 23 findings. All applied in § What the review changed; none overruled.
+  No second round of discovery: the changes narrow what is built, and each cluster's code gets its
+  own review.
+
+## What the review changed
+
+**Binding on the builders wherever it and a cluster's text above differ.** Reviewed at `b7a0d9253`.
+
+- **U1, C3.** On our own deadline, the step's returned product is **not committed**: `assets` can
+  return an incomplete manifest with unfetched images stamped current. The fix discards it, keeps
+  what earlier steps committed, and reuses `pauseForDeadline` with all its outcomes. "Stop
+  discarding the finished work" was the wrong description.
+- **U2, C5. The trim is not built; it goes to Greg** (question 3a). Letting a criteria list exceed
+  twenty to protect notes is a retention choice, and one of the four reviews said so. C5 builds
+  only the two refusals: a hand delete of a criterion with notes is a 409 with a sentence, and a
+  placement that loses a race with a delete (SVR1) is a refusal, not a 500. Until 3a is answered a
+  twenty-first criterion on such an article still fails; production has no such article.
+- **U3, C7.** Item 6 declares the **five** migration-only indexes that survive item 5, and the five
+  CHECKs. Declaring them makes `db:generate` emit `CREATE` statements for objects that exist: the
+  builder reconciles the snapshot and journal so none runs, and proves the migrations apply to both
+  an existing database and an empty one. All C7 stages are sequential, one migration at a time.
+- **U4, NEW1 — held, with a reason.** `scripts/db-reown.ts` updates tables alphabetically, so it
+  moves `ingest_events.owner_id` before `jobs.owner_id` and trips the immediate composite foreign
+  key between them (C, not run). A local script; nothing a reader reaches. Its repair (a deferrable
+  key) is a migration that wants its own plan and shares C7's sequence. It is the real dependency
+  of question 10, which the first draft tied to question 9 by mistake.
+- **U5, C9. The authorised work ends at the spike and its written evidence.** Rolling the type out
+  is a recommendation to Greg through the Overseer, not a continuation. (The session brief does
+  say to migrate if the spike passes; the narrower reading costs a day's wait and is the safe one
+  for a change that touches every mode.)
+- **U6. Findings with no home, now placed:** WCO8 (stale counts and filesystem wording in client
+  comments: each cluster fixes them in the files it touches; the rest go to C10) and WCO9 (a
+  signpost in `mode.md` to `Reader.tsx`'s 19 `mode ===` comparisons outside the switch, on 17
+  lines, covering seven modes, plus the two sub-mode lists) go to **C10**; PQO6 (two regression
+  tests that have passed and never been seen red; the Messages continuation boundary has none) goes
+  to **C8**. Aliases for the ledger: WC3 and WCO10 are C9; DBO7 is question 5; DB6 and DBO10 are
+  question 6.
+- **U7. Requirements the summaries dropped:** C2's WCO1 needs a guard that names the always-mounted
+  artefact reads with explicit exclusions, not a fourth hand-written entry; WCO2 clears links on a
+  successful absence or a stale answer and stays silent on failure; WCO5 covers `StageRecord`'s
+  truthiness gate. C4 corrects the false chat-guarantee comments and the two comment-resurrection
+  comments. C6's SVO8 includes `pg-reader.ts` and `public-reader.ts`. C8's PQO3 leaves the public
+  terminal fixture methods (`JobStore.finish`, `releaseStep`) alone and says so.
+- **U8, U9. Evidence and tiers, per item rather than per cluster.** PQ1's freshness failure is
+  R (pg); its three `note()` exits are C. PQO2 is C in one review and reproduced at the coordinator
+  in the other, Tier 0 to Sol and Tier 1 to Opus. PQ3 is Tier 0 by the letter, P2 in effect.
+  SV3/SVO4 is Tier 0 to Sol and Tier 1 to Opus, because no client today produces the colliding
+  first sends. WC4 needs a band to throw first. WCO7 is a key correction with no missed completion
+  shown. WCO5's raw wording is R; an empty message is H. PQ4/PQO4 span four files, and a persisted
+  title touches the job-store contract.
+- **U10. Two fixes with a plausible broken twin.** C5's check for notes on a criterion must lock
+  the candidate rows and then check references in a **separate statement** (READ COMMITTED: a
+  single snapshot `NOT EXISTS` still fails after a concurrent placement). C8's surviving-successor
+  helper must exclude the settling job, keep the owner scope and keep the live path's
+  `unfinished === "labels"` trigger, or a running job counts as its own successor.
+- **U11, C7.** `created_at` is added nullable **with no default**, and the default installed in a
+  second statement, or existing rows get an invented date. The comment corrections are the union of
+  DB2's eight entries and DBO11's five locations; the `comments.thread_id` history stays as history.
+- **U13. Collisions the table missed**, and the order they force: C2 before C10
+  (`useIllustrated.ts`); C5 before C6 (`pg-comments.ts`); C5 before C7's stage 7
+  (`tests/store-parity-referee.test.ts`); C6 before C7's comment stage (`pg.ts`); C3 before C8
+  (`jobs.ts`, `store/jobs.ts`, `pg-jobs.ts`, `pipeline.ts`); C4 before C6 (`routes.ts`,
+  `types.ts`); C9 and C10 share `useSkim.ts` and the read-error and rewrite-hold tests.
+- **U14. The holds come before the spike.** WCO3 is a reachable second paid run; the spike is
+  Tier 2. C10 is split: **C10a**, the hold on the six hooks that are not Skim, plus WCO9, runs
+  first; **C10b**, Skim's hold and WCO4, runs after C9.
+- **U15, C10b.** An intended `200 null` is absence, not a malformed reply.
+- **U16. The refusals this sweep adds, and who can reach each:** C4's stale-edit 409 (an ordinary
+  stale tab; an existing refusal moved before the abort); C4's anchor and help refusals (colliding
+  first sends only; an identical anchor and an unanchored follow-up must pass; help stays 400,
+  anchor 409); C5's delete 409 (a criterion with notes; none in production) and stale-placement
+  refusal (an ordinary two-tab race); C6's 404 for a malformed session id (hand-made only); C7's
+  three CHECKs (0 of 10, 0 of 4, 0 of 460 violate; test fixtures can); C10b's malformed-reply throw
+  (no producer today). Tier 3's PQO5 CHECK needs a production count of terminal jobs still holding
+  a draft pointer, and a change to `discardAfterCancel` as well as `releaseStepIn`.
+- **U17, U18. § For Greg rewritten** below: consequences before options, engineering work taken
+  out. Question 2 was not a question (`pipeline.ts` § `STEPS.simple.stamp` already records it as a
+  deliberate exception; C8 writes that into `summaries.md`). Question 11 is an investigation, not a
+  decision, and moves to § After. Question 12b (finish "none yet is not a 404", behind the same
+  opt-in header) is bounded compatibility work and joins C6. Question 12a stays unasked: 24 days is
+  not evidence that every old tab is gone.
+- **U19. The scope line described Opus's coverage.** Sol read `Reader.tsx`, `activation.ts`,
+  `params.ts`, the mode catalogue and the SSE machinery in full, and parts of `ai-call.ts` and
+  `simple-summary.ts`. So: read by one family only, not unread. Read by neither: `messages.ts`,
+  `messages-stream.ts`, `models.ts`, `fetch.ts`, `extract.ts`, most route families outside chat,
+  comments, search and referee, and `scripts/`, `tools/`, `evals/`.
+- **U20.** § One level up and the short version no longer claim one shape explains most findings.
+- **U21.** C1's plan was not in the reviewed commit; it and its own code review landed with the
+  cluster.
+- **U22, confirmed as build decisions:** dropping the exact-duplicate index, and C10's holds, whose
+  written rule is [mode.md § forced verbs](../project/mode.md) ("every forced control honours
+  `rewriting`").
+
+### § For Greg, as revised (this list replaces the one above)
+
+1. **Stop, pressed while an import's last step is finishing.** Today the result depends on which
+   server answered: one keeps and publishes the article, the other discards the draft. If the last
+   step is the image step, "keep" can publish an article some of whose images were not fetched.
+   *Options:* always keep (the text is done; missing images can be re-run); always discard (Stop
+   means stop; the reader imports again and pays again). *Recommend:* always keep.
+2. *(Withdrawn: already decided and written in the code.)*
+3. **A Referee criterion (one of the questions a reviewer asks of a paper) that has the reader's
+   notes placed on it.** Two decisions.
+   **3a. The list is capped at twenty, oldest dropped first.** If the oldest carries notes, adding a
+   new criterion currently fails outright. *Options:* never drop one that has notes, so a list can
+   run past twenty; or drop it and detach its notes. *Recommend:* never drop one with notes.
+   **3b. The reader deletes such a criterion by hand.** After this sweep it is refused with a
+   sentence. *Options:* keep refusing; delete it and keep the notes, detached — which also clears
+   each note's for/against score, since the score means nothing without the criterion; delete both
+   after a confirmation. *Recommend:* keep refusing for now; it loses nothing.
+4. **After a mode has said "none yet", a read has failed and *Try again* has failed too**, twelve
+   modes remove their Generate button and Tweets keeps it. Keeping it lets the reader spend on a
+   run while the app does not know whether a result already exists. *Recommend:* keep the button
+   everywhere; a possible duplicate run is cheaper than a dead end. Per hook, a few lines each.
+5. **One old rate-limit record in production** (from 2026-09-29, no reader text in it) belongs to a
+   limit that no longer exists. The database's list of allowed limit names cannot be tidied while
+   it is there. *Recommend:* leave both; deleting it buys nothing at runtime.
+6. **An unused column, `queue_state.running_job_id`**: nothing reads or writes it and its one row
+   is empty. Dropping it also removes a link the export tool follows. *Recommend:* drop it, low
+   priority.
+7. **Callout blocks**: the database still allows a block kind the pipeline never produces (0 rows).
+   Narrow it only if callouts are abandoned for good. *Recommend:* leave it.
+8. **Thirteen of 62 production articles never finished their first import** and are never removed;
+   they hold 38% of all block ids. Unlike the abandoned drafts you approved deleting on 2026-10-04,
+   these are whole article rows with checkpoints, uploads and billing records attached, and a retry
+   of the same URL reuses them. *Recommend:* its own small plan with those safeguards; not urgent.
+9. **Old published copies of each article are kept for ever** (411 of 460; 86% of block rows). A
+   sharing draft needs the copy it was based on, so any rule must protect copies in use.
+   *Recommend:* nothing at this size; decide before the table is ten times larger.
+10. **Eight tables store the owner twice** (on the row and on its article); 0 of 157 rows disagree.
+    Dropping the copy, or enforcing it, changes how ownership transfer works, and the transfer
+    script already has an ordering bug (NEW1). *Recommend:* fix NEW1 first, then decide.
+
+
+## After the clusters: named, not built
+
+- **Paid calls with no per-reader limit** (chat, meaning search, Referee, quiz marking, the command
+  bar, dictation, a forced step re-run, Glossary's Ask): an investigation with cost and frequency
+  numbers, before anybody is asked to choose limits.
+- **NEW1**, the ownership-transfer ordering bug in `scripts/db-reown.ts` (above, U4).
+- **`GET /api/reader` reads one row three times (SVO13); every article load re-sanitises every
+  block (SVO15):** each wants a measurement before a change.
+- **Retiring `?anchors=whole-block`:** needs evidence that no old client still sends it.
 
 ## What landed
 

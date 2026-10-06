@@ -130,16 +130,14 @@ paragraph under § Shared code (client) only if the type stays.
 ## What the plan review changed
 
 [GPT Sol's review](261006n-one-type-for-a-read-spiked-on-useideas-review-sol.md), read-only, verdict
-**ready with these fixes, for the one-hook spike only**. Eight findings; seven accepted, one
-accepted in part. **Where this section and the text above differ, this section wins.** The shape,
+**ready with these fixes, for the one-hook spike only**. Eight findings, all accepted. **Where this section and the text above differ, this section wins.** The shape,
 stages and stop condition are the orchestrator's (Claude's), not Greg's.
 
-- **R1 (in part).** Sol read "then decide" as needing a fresh decision from Greg before any
-  migration. The session's brief, relayed by the Overseer with Greg's approval, is wider: *if the
-  spike shows the type removes the class without making the hook harder to read, migrate the rest in
-  stages; if not, stop and write down why.* So the decision after stage 2 is the orchestrator's to
-  take, and it is **a written decision with the evidence, in this doc**, not an automatic
-  continuation. Passing the stop condition is necessary, not sufficient.
+- **R1 (accepted, after the umbrella's review raised it again as U5).** The authorised work ends at
+  the spike and its written evidence. The session's brief does say to migrate the rest if the spike
+  passes, but Greg's own words are "a one-hook spike first, then decide", and a change that touches
+  every mode is worth a day's wait. So stage 2 ends with **a recommendation, with the evidence, in
+  this doc**, sent to Greg through the Overseer. Stages 3 to 5 are what would follow a yes.
 - **R2.** `useFreshReads` holds a `useState`, not only refs. The gate is **"no independently stored
   duplicate read fact"**; all `FreshReads` bookkeeping stays exactly as it is.
 - **R3. The transitions, pinned:**
