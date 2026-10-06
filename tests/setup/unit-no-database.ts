@@ -67,17 +67,17 @@
  * parses, points at a closed port and names itself gets the reader to the answer
  * from the first line of the error.
  *
- * ## What this catches, and what it turns into a skip
+ * ## What this catches
  *
  * Stated rather than left for somebody to discover. An escapee that opens its
  * own connection — the aliased constructor, the helper, the transitive
  * `getDb()` — gets `ECONNREFUSED` and fails. An escapee that goes through
- * `pgReady` **skips**, with the warning that helper already prints, because that
- * is what `pgReady` does with an unreachable URL. That is a real gap and it is
- * a small one: a file calling `pgReady(` is exactly what the lane scan does see,
- * so it cannot be an escapee in the first place, and under `REQUIRE_POSTGRES=1`
- * — which `npm run check` sets — the skip is a failure too. Measured both ways
- * on 2026-09-04; see docs/plans/260903f… § T-D.
+ * `pgReady` fails too, since 2026-09-05: that helper throws on an unreachable
+ * URL. (When this was written it **skipped** there, and only
+ * `REQUIRE_POSTGRES=1`, a switch that no longer exists, made that a failure;
+ * measured both ways on 2026-09-04, docs/plans/260903f… § T-D.) A file calling
+ * `pgReady(` is also exactly what the lane scan does see, so it cannot be an
+ * escapee in the first place.
  *
  * ## `DATABASE_URL` was never the only door, and Storage is the other one
  *

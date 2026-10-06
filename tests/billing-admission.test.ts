@@ -38,10 +38,11 @@
  * tests/billing-admission.test.ts` — see the report in the plan. The counts here
  * are all 0-or-1 differences, so each mutation reddens a small, named set.
  *
- * Skips loudly when there is no database (tests/helpers/pg-ready.ts). Check a
- * change with `REQUIRE_POSTGRES=1` and read the **count**: a skip looks exactly
- * like a pass, which is how tests/billing-quota-race.test.ts reported "13
- * skipped" against a live database for hours.
+ * Fails, rather than skips, when there is no database
+ * (tests/helpers/pg-ready.ts, since 2026-09-05). It used to skip, and a skip
+ * looks exactly like a pass, which is how tests/billing-quota-race.test.ts
+ * reported "13 skipped" against a live database for hours — so read the
+ * **count** after a change all the same.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";

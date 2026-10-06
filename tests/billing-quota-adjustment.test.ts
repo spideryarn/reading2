@@ -31,9 +31,10 @@
  * database: every branch of the ordering rule, the clamps, and the property the
  * whole design rests on — that no sequence of switches can gain.
  *
- * Skips loudly when there is no database (tests/helpers/pg-ready.ts). Check a
- * change with `REQUIRE_POSTGRES=1` and read the **count**: a skip looks exactly
- * like a pass. The pure half does not skip.
+ * Fails, rather than skips, when there is no database
+ * (tests/helpers/pg-ready.ts, since 2026-09-05) — the pure half with it, because
+ * the probe throws at module load. Read the **count** after a change all the
+ * same.
  */
 import type Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";

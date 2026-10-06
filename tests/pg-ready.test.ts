@@ -26,7 +26,7 @@
  * by then.
  */
 import type { Pool } from "pg";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
 import { type MissingKind, pgReady, requiredFailureMessage } from "./helpers/pg-ready.js";
@@ -43,10 +43,6 @@ loadEnvLocal();
 const DEAD_URL = "postgresql://postgres:postgres@127.0.0.1:1/postgres";
 
 /** Restored per case, because every one of these stubs `DATABASE_URL`. */
-beforeEach(() => {
-  vi.stubEnv("REQUIRE_POSTGRES", "");
-});
-
 afterEach(() => {
   vi.unstubAllEnvs();
 });

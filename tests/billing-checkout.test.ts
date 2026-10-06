@@ -30,9 +30,9 @@
  * The two cases that use the **real** client are the ones about configuration:
  * they assert a 503 before any Stripe object is constructed.
  *
- * Skips loudly with no database (tests/helpers/pg-ready.ts). Check a change with
- * `REQUIRE_POSTGRES=1 npx vitest run tests/billing-checkout.test.ts` and read the
- * count — a skip looks exactly like a pass.
+ * Fails, rather than skips, with no database (tests/helpers/pg-ready.ts, since
+ * 2026-09-05). Check a change with
+ * `npx vitest run tests/billing-checkout.test.ts` and read the count.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";

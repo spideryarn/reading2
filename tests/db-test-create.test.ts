@@ -493,11 +493,10 @@ describe("eventTriggersIn", () => {
  *
  *     SPIDERYARN_TEST_DB_FACTORY=1 npx vitest run tests/db-test-create.test.ts
  *
- * `REQUIRE_POSTGRES=1` still turns an unreachable stack into a failure rather
- * than a skip — but only for a run that opted in. It deliberately does **not**
- * opt in by itself: `scripts/check.ts` sets it, and a gate that started
- * creating databases because somebody ran `npm run check` is the change this
- * variable exists to prevent.
+ * Nothing else opts in. `REQUIRE_POSTGRES=1`, which `scripts/check.ts` used to
+ * set, deliberately did not, and that switch is gone since 2026-09-05: a gate
+ * that started creating databases because somebody ran `npm run check` is the
+ * change this variable exists to prevent.
  */
 const OPT_IN = "SPIDERYARN_TEST_DB_FACTORY";
 const optedIn = process.env[OPT_IN] === "1";

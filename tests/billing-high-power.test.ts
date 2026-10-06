@@ -48,8 +48,8 @@
  * - `usageSql`'s `full_price` without `e.kind = 'ingest'` (an upgrade counted as
  *   an ingest too): red on eight cases.
  *
- * Skips loudly when there is no database (tests/helpers/pg-ready.ts); check with
- * `REQUIRE_POSTGRES=1` and read the count.
+ * Fails, rather than skips, when there is no database
+ * (tests/helpers/pg-ready.ts, since 2026-09-05). Read the count after a change.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 

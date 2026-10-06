@@ -25,9 +25,9 @@
  * sends can choose a price — because the button this route draws is the thing
  * that posts to `/api/billing/checkout`.
  *
- * Skips loudly with no database (tests/helpers/pg-ready.ts). Check a change with
- * `REQUIRE_POSTGRES=1 npx vitest run tests/billing-usage-route.test.ts` and read
- * the count — a skip looks exactly like a pass.
+ * Fails, rather than skips, with no database (tests/helpers/pg-ready.ts, since
+ * 2026-09-05). Check a change with
+ * `npx vitest run tests/billing-usage-route.test.ts` and read the count.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
