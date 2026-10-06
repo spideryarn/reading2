@@ -69,6 +69,14 @@ same run counted 162 "chrome" processes that were mostly MCP servers belonging t
 the real figure was 46, and killing on the first number would have broken every agent's browser
 tooling. `pgrep -x` matches the executable name; `-f` is for when you genuinely mean the arguments.
 
+**`pgrep -fa vitest | wc -l` counts about five processes per suite.** One `npx vitest run` is the
+shell wrapper, `npm exec`, `sh -c`, the `.bin/vitest` node and its worker. On 2026-09-08, 24
+processes were about five single-file runs on a box with load 13 and 13 GB free, and a threshold of
+"eight vitest processes" written after that morning's overload would have blocked a healthy gate.
+Count suites — `pgrep -fa "vitest run" | grep -c "\.bin/vitest"` — or read load and available
+memory, which measure the thing itself. A threshold invented during an incident inherits that
+incident's units.
+
 **`ps -eo args | grep -c <flag>` counts its own apparatus.** On 2026-09-08 it answered 3 for a flag
 no process was using: the two `bash -c` wrappers whose argv carried the whole pipeline, and the
 grep itself. Under an agent harness any flag merely *named* in a command becomes a phantom, because

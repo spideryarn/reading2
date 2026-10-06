@@ -9,9 +9,10 @@ plan: [261005k](../plans/261005k-port-overseer-auto-memory-into-docs.md) · queu
 if we were to start a new box, it would not have lost valuable insights."* This file says, for each
 of the 85 memory files, where its lessons now are, and whether the file can be deleted.
 
-**Where it stands (2026-10-06).** 75 of the 85 files are deleted, every lesson in a doc or dropped
-for a stated reason. Ten remain, each holding one lesson that waits on Greg: five proposals were
-held back for him (BP3, BP4, BP7, BP12, CP4). The proposal-by-proposal and file-by-file record is
+**Where it stands (2026-10-06): finished.** All 85 files are deleted, every lesson in a doc or
+dropped for a stated reason; only the index, `MEMORY.md`, is left in the folder. The last ten went
+when Greg answered the five proposals held back for him (BP3, BP4, BP7, BP12, CP4). The
+proposal-by-proposal and file-by-file record is
 [§ The second half, 2026-10-06](#the-second-half-2026-10-06) at the end; everything between here
 and there is the 2026-10-05 state, kept as the record of how each verdict was reached.
 
@@ -1463,13 +1464,13 @@ contradicted anything newer.
 |---|---|
 | AP1–AP10 | Applied by the Overseer before this job. AP4 replaced the old rationing paragraph; AP5 carries Greg's two conditions; AP6 landed without its `flock` line. |
 | BP1, BP2 | Applied as written. |
-| **BP3, BP4, BP7** | **Not applied: waiting on Greg.** They overlap F1 and K3 in `docs/plans/261001i-probes/proposals.md`. Recommendation: land these three and retire F1 and K3. F1 and K3 are one-sentence sketches with no before and after; these have the dates and the measurements, and put the subagent lessons in `engineering-manager.md` § Delegate, where a brief is written, not in `long-waits.md`. F1's fourth clause (`kill -0` fails from the sandbox) did not reproduce on 2026-10-05, so retiring F1 loses nothing true. |
+| BP3, BP4, BP7 | Held back at first, then applied as written later on 2026-10-06 ([§ The five held back, answered](#the-five-held-back-answered)). They overlapped F1 and K3 in `docs/plans/261001i-probes/proposals.md`, which are now marked retired there. F1 and K3 are one-sentence sketches with no before and after; these have the dates and the measurements, and put the subagent lessons in `engineering-manager.md` § Delegate, where a brief is written, not in `long-waits.md`. F1's fourth clause (`kill -0` fails from the sandbox) did not reproduce on 2026-10-05, so retiring F1 loses nothing true. |
 | BP5, BP6 | Applied as written. BP6 keeps "the full gate for the tree you push", so it loosens nothing. |
 | BP8, BP9, BP10, BP11 | Applied as written. BP8 follows the `pgrep -x` paragraph directly, since BP7 is not there. |
-| **BP12** | **Not applied: waiting on Greg.** It loosens `AGENTS.md`'s "`npm run check` before you commit". |
+| BP12 | Held back at first because it loosens `AGENTS.md`'s "`npm run check` before you commit"; Greg said yes, and it was applied as written with the matching sentence in `AGENTS.md` § Writing code. |
 | CP1, CP2 | Applied as written. |
 | CP3 | Applied. The "Commit before every merge" paragraph sits after the fast-forward paragraph AP8 added, beside the other merge paragraphs, not after "Type the three dots". |
-| **CP4** | **Not applied: waiting on Greg.** It permits a push over a red full suite, which `AGENTS.md` does not. |
+| CP4 | Held back at first because it permits a push over a red full suite, which `AGENTS.md` did not; Greg said yes, and it was applied as written, after the "commit before every merge" paragraph CP3 added, with the matching sentence in `AGENTS.md`'s "Other agents will get in your way" bullet. |
 | CP5 – CP11 | Applied as written. CP10 sits after the `silent-success.md` line, as proposed. |
 | DP1 – DP10 | Applied as written. DP2 renames the heading to "Seventeen more"; nothing links to its anchor. |
 | RP1 – RP4, RP6 | Applied as written. |
@@ -1508,20 +1509,21 @@ box and no doc names it.
 AP1–AP5 had already gone. Their hashes were checked against the table above before anything was
 deleted, and none had moved.
 
-**Kept, 10** — each holds a lesson only a held-back proposal carries:
+**Kept at first, 10, and deleted later the same day** once the proposal each waited on had landed
+([§ The five held back, answered](#the-five-held-back-answered)):
 
-| memory file | waits on |
-|---|---|
-| `full-suite-needs-tmux-on-this-box` | BP3 (L7) |
-| `grep-c-fallback-fires-immediately` | BP3 |
-| `long-waits-need-a-persistent-monitor` | BP3 (L8) |
-| `polling-a-log-burns-turns-not-time` | BP3 |
-| `wait-for-real-notifications` | BP3 |
-| `subagents-end-turns-while-their-jobs-run` | BP4 |
-| `taskoutput-on-a-running-agent-dumps-its-transcript` | BP4 |
-| `vitest-process-count-is-five-per-suite` | BP7 |
-| `npm-run-check-runs-the-full-suite` | BP12 |
-| `diff-against-a-base-includes-the-merge` | CP4 |
+| memory file | waited on | now in |
+|---|---|---|
+| `full-suite-needs-tmux-on-this-box` | BP3 (L7) | `long-waits.md` § While you wait |
+| `grep-c-fallback-fires-immediately` | BP3 | `long-waits.md` § While you wait |
+| `long-waits-need-a-persistent-monitor` | BP3 (L8) | `long-waits.md` § While you wait |
+| `polling-a-log-burns-turns-not-time` | BP3 | `long-waits.md` § While you wait |
+| `wait-for-real-notifications` | BP3 | `long-waits.md` § While you wait |
+| `subagents-end-turns-while-their-jobs-run` | BP4 | `engineering-manager.md` § Delegate |
+| `taskoutput-on-a-running-agent-dumps-its-transcript` | BP4 | `engineering-manager.md` § Delegate |
+| `vitest-process-count-is-five-per-suite` | BP7 | `diagnose-box-resources.md` § The traps |
+| `npm-run-check-runs-the-full-suite` | BP12 | `static-analysis.md`, the note under the command list |
+| `diff-against-a-base-includes-the-merge` | CP4 | `worktrees.md` § The workflow |
 
 **Deleted, 43** — every lesson is in a doc, by the proposals named in the file's row above, or was
 dropped there with its reason: `a-check-can-answer-a-weaker-question`,
@@ -1548,10 +1550,37 @@ dropped there with its reason: `a-check-can-answer-a-weaker-question`,
 `tmux-outlives-closed-tabs`, `two-joins-that-disagree-are-a-measurement`,
 `writing-escapes-produces-raw-bytes`.
 
-`check-mapping.py` now reports a row with no file for each of the 75 deleted, which is what a
-finished port looks like to it; for the ten kept it still checks the hash.
+`check-mapping.py` reports a row with no file for each one deleted, which is what a finished port
+looks like to it: 75 after this job, and all 85 once the ten above had gone. Their hashes were
+checked against the table one last time before that, and none had moved.
+
+### The five held back, answered
+
+Greg, 2026-10-06, to the three questions below:
+
+> BP12 yes
+> CP4 yes
+> BP3, BP4 and BP7 versus F1 and K3 use your judgment
+
+The third was left to the Overseer, and its call was the recommendation already made here: land
+BP3, BP4 and BP7, and retire F1 and K3, which `docs/plans/261001i-probes/proposals.md` now says.
+All five were applied as written, each anchor read again on `dev` first and found unchanged. BP12
+and CP4 each loosen a rule in `AGENTS.md`, so it gained one sentence apiece: commit on the fast
+gates and read `npm run check`'s verdict when it lands; and a push may go ahead over a full-suite
+red in files that are not yours, once your files are shown disjoint from the failing ones and your
+own tests pass. Then the last ten memory files and their `MEMORY.md` lines were deleted.
+
+GPT Sol read the two `AGENTS.md` sentences (read-only) and found no words put in Greg's mouth. It
+named older sentences that still say the whole of `npm test` before every commit, which BP12's
+"the suites you touched" now sits beside: `testing.md` (the line under the command block, and § Why
+the docs have a test), `typechecking.md` and `linting.md` near their tops, and
+`docs/reusable/git-commit-changes.md` step 3. `get-ready-to-deploy.md` says a surviving red "is now
+between you and a push" and, further down, to push anyway over a red that is not yours. None was
+changed: each is a rule's wording, so each is a proposal for Greg, not an edit.
 
 ### For Greg, through the Overseer
+
+Answered above; kept as the questions he was asked.
 
 1. **BP12** — may an agent commit on the fast gates (typecheck, the suites it touched, the doc-links
    test) and read `npm run check`'s verdict when it lands, instead of waiting for it first?
