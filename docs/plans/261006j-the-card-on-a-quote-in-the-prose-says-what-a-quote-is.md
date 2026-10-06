@@ -186,7 +186,10 @@ queue entry marked as needing Greg carries the question.
     a different repair.** Sol's wording was one 29-word sentence on every card (*"For scored quotes,
     stronger purple means…; unscored quotes use the lightest purple."*). Instead the sentence about
     the purple is shorter and is drawn only where there is a score. This repair was not in Sol's
-    snapshot, so it went back for a narrow check: (to be filled in)
+    snapshot, so it went back for a narrow, read-only check
+    ([prompt](261006j-quote-card-says-what-a-quote-is-fix-check-prompt.md),
+    [answer](261006j-quote-card-says-what-a-quote-is-fix-check-sol.md)): exit 0, *F8 closed*, for
+    a quote with both scores, one, or none.
   - F9 (P1) Help promised both scores under *prioritised*; a quote may have one or none. **Taken.**
   - F10 (P1) a ⌘/Ctrl/Shift/Alt-click on *More in Help →* closed the card in this tab although the
     browser was opening Help elsewhere. **Taken**, with four tests. Graded high for what it is, but
@@ -196,8 +199,37 @@ queue entry marked as needing Greg carries the question.
   - F12 (P1) Help said every row's (i) says why it was chosen; the reason is optional. **Taken.**
   - F13 (P3) quotes.md said "one sentence". **Taken.**
 - **Browser, Chrome on the box** (a Sonnet subagent, Playwright), article `fowler-phrenology` in
-  Citations mode: (to be filled in)
+  Citations mode, twice (the second after the rewording):
+  - 1440×900, [light](261006j-shot-card-light-1440.png) and [dark](261006j-shot-card-dark-1440.png):
+    the paragraph is first under the label and reads as intended; the link's `href` is
+    `/help#mode-quotes`.
+  - The card stays open with the pointer on the link; a click ends on `/help#mode-quotes` with the
+    Quotes heading at the top of the window and no card left behind.
+  - [820×500](261006j-shot-card-820x500.png): the whole card is on screen and its foot is one row.
+  - An unscored quote's card reads *"A passage the AI picked out as worth keeping, in the article's
+    own words. More in Help →"*, with no sentence about the purple.
+  - In Quotes mode the card has the paragraph and no *open Quotes*. No console errors.
+  - **The first run reported the link going to `/help#spine`.** It was reading the tree while the
+    code reviewer was mutating the `href` to see whether the tests noticed. The source never said
+    that outside the review; the second run, with nobody editing, is the one above. Worth knowing:
+    a write-capable review and a browser check should not share a tree at the same moment.
+  - **Found, and older than this work:** where a quote is also a glossary term the two halves stack,
+    and at 820×500 that card was about 1048px tall, with the quote half and its buttons off screen
+    and unreachable, because the card has no height cap. The glossary's explanation is nearly all of
+    it; this change adds about 50px. Not fixed here (it wants a height cap and scrolling on a card
+    every mode uses); queued as `qi-ee6ke78h`.
 
 ## What landed
 
-(to be filled in)
+Commits `48b835bb5` (the change) and `6cee2c751` (the code review's fixes and the shorter sentence
+about the purple), then the note in `docs/user-feedback/`.
+
+- `QuoteCard` in `src/web/ProseHoverCard.tsx` opens with `QUOTE_CARD_SAYS`, adds
+  `QUOTE_CARD_PURPLE` where the quote has a score, and ends the paragraph with *More in Help →*.
+- Help's Quotes entry says so, and five sentences there that were false of some quotes are corrected.
+- Tests: `tests/quote-hover-card.test.tsx` 18, `tests/help-page.test.tsx`; typecheck clean; the full
+  suite: 39,162 passed and 4 failed, all four in `tests/worktree-remove.test.ts`, which touches none of these files and passes 53 of 53 run on its own (the box was busy; the run took 73 minutes).
+- Queue entries for what was left: `qi-d79es6n8` (the spine strip's card), `qi-78gf6x87` (the 900ms
+  question, needs Greg), `qi-ee6ke78h` (the stacked card's height), and `qi-hrr5p2qn` from before (a tap
+  opening the card).
+- Not deployed. Not checked on a real phone or iPad: the card is pointer-only there by design.
