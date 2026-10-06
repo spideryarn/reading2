@@ -71,6 +71,7 @@ function draw(dockRoom: number | null) {
         onOpenFull={() => {}}
         onCreated={() => {}}
         onDropped={() => {}}
+        onRenamed={() => {}}
       />,
     ),
   );

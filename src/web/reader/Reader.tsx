@@ -3973,6 +3973,7 @@ export function Reader({
             reopen={chatReopen}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
+            onRenamed={owner.chatAnchors.rename}
             onSettled={owner.chatAnchors.refresh}
           />
         </ChatCommands>

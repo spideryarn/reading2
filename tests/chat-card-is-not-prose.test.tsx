@@ -148,6 +148,7 @@ function Page() {
         onOpenFull={() => {}}
         onCreated={() => {}}
         onDropped={() => {}}
+        onRenamed={() => {}}
       />
     </>
   );

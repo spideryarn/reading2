@@ -89,15 +89,16 @@ any list response here named it. This tab cannot distinguish that absence from a
 POST: it keeps the row until a local discard or reload. Confirmation and unseen ids are reset
 on an article change and discarded with the hook on unmount.
 
-Not done, found by GPT Sol's review of this fix: the tab guesses a new conversation's id and the
-server stores another when the guess is already taken in the article ([`chat.ts`](../../src/chat.ts),
-`mintUniqueId`). The row under the guess is then one no answer will ever name, so it now stays
-beside the real row until a reload, and the paragraph counts one conversation as two. Before
-`eaf3a3fee` the guessed row stayed as well and the real one never arrived. It needs two random
-ids to collide, or a stale tab; the repair is for the dialog to swap the row when it hears the
-real id ([`ChatDialog.tsx`](../../src/web/ChatDialog.tsx) § `onThreadId`). A test for it was
-tried and needed a stub that serves whole threads, so it was reported to the Overseer rather
-than built unverified.
+Found by GPT Sol's review of this fix, and done later the same day
+([261005n](../plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md)): the tab guesses a
+new conversation's id and the server stores another when a message uses the guess, including
+one minted for this turn ([`chat.ts`](../../src/chat.ts) § `taken`, `withTurn`). The row under
+the guess is then one no answer will ever name, so it stayed beside the real row until a reload, and the paragraph counted
+one conversation as two. It needs two random ids to collide. The red test showed more
+than the count: `?thread=` followed the server's id while the row stayed under the guess, so the
+dialog closed on the answer's first frame, which predates this postmortem's fix. The dialog now
+renames the row when it hears the real id ([`ChatDialog.tsx`](../../src/web/ChatDialog.tsx) §
+`onConfirmed`, [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `rename`).
 
 Also not done: the overlay still depends on a summary row to draw a dialog whose
 real state lives in the chat store. Drawing it from the chat store's own thread would remove the
