@@ -981,7 +981,8 @@ is this mode's own:
   when it is not, the line goes and the conversation stays in Chat's list.
 - **The name is cut to 300 characters before it is sent** (`originName`, `MAX_ORIGIN_NAME_CHARS`),
   because a glossary name has no length limit of its own and the route refuses a longer snapshot.
-  The question in the box still quotes the whole name.
+  The question in the box uses the shared bounded quote (`fencedQuote` in `chat-handoff.ts`),
+  with a visible ellipsis for very long names so it still fits Chat's question limit.
 - **The server never looks the id up.** It checks the shape and nothing else, so a chat about an
   entry that has since been hidden or regenerated away is still a chat.
 - **It is offered on a term the article never quotes**, where Dig deeper is disabled: Dig deeper

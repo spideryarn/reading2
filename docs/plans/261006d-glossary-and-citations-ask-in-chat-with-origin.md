@@ -3,7 +3,8 @@
 Up: [plans.md](../project/plans.md) · queue item `qi-mh276fx8` · the later stage named in
 [261005i](261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md) § Later stages
 
-**Status as of 2026-10-06: built and uncommitted. The migration is generated and not yet applied to the local database (see the Log). Still to do: the full suite, GPT Sol's code review, the browser check.**
+**Status as of 2026-10-06: built, reviewed, checked in a browser and on `dev`; not deployed.** The
+migration `20261006042012_chat_thread_origin_item` is applied to the local database only.
 
 ## What Greg asked for
 
@@ -55,8 +56,9 @@ export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string
   work: …*) and the tooltip in Chat's list need no look-up, and still read after the entry has gone.
   **At most `MAX_ORIGIN_NAME_CHARS` (300), and the sender cuts it to that** with one shared
   function, so the route's cap is never met by an ordinary press (plan review F1: a glossary name
-  has no length limit; a cited title is at most 120). The seed still quotes the whole name, through
-  `fencedQuote`. A resend with a different snapshot is the same origin and overwrites nothing.
+  has no length limit; a cited title is at most 120). The seed uses `fencedQuote`'s larger bound,
+  with a visible ellipsis for very long names so it still fits Chat's question limit. A resend
+  with a different snapshot is the same origin and overwrites nothing.
 - *Passed over: the id alone*, as 261005i sketched. Then the title and the list's tooltip need the
   glossary or the citations loaded wherever a thread is named, server and client.
 
@@ -160,6 +162,34 @@ entry it came from"* (option A as Greg read it) is.
 - [ ] Browser check by a Sonnet subagent at 1440, 820 and 390 wide, both modes; one paid send each.
 
 ## Log
+
+- 2026-10-06 — merged `origin/dev` (`f24959fd1`). Three conflicts of one shape: dev renamed
+  `remember` to `learn` on the lines where this added `glossary` and `citations` to Chat's filter;
+  both kept. The migration was regenerated on dev's journal as
+  `20261006042012_chat_thread_origin_item` (one `ADD CONSTRAINT`, the same expression) and applied
+  locally (`Target: postgresql://postgres@127.0.0.1:54362/postgres`); 0 local rows would have
+  broken it. **Production has not been counted**: that is the Overseer's, before the deploy.
+- 2026-10-06 — GPT Sol code review
+  ([answer](261006d-glossary-and-citations-ask-in-chat-code-review-sol.md)): land, no P0 or P1.
+  F7 and F8 fixed by the reviewer (an older test picked a button by a label that is no longer
+  unique; a comment and two docs promised the whole name in the seed, which `fencedQuote` cuts at
+  2,000 characters), with six more whole-app cases and a
+  [postmortem](../postmortems/261006d-fixtures-without-competing-controls-hide-ambiguous-selectors-and-bounds.md).
+  F10, a stale comment in `ConversationModes.tsx`, fixed by me. **F9 left as it is**: `chats` is
+  optional on the owner arm of both panels, so a future caller could forget it and draw no button
+  without a type error; the whole-app tests hold today's one caller. One round: nothing it found
+  changed behaviour.
+- 2026-10-06 — browser check (Sonnet, Playwright, article `openai-huggingface`, two paid sends)
+  at 1440, 820 and 390 wide, both modes: the button beside Dig deeper, the same size as it
+  (104 by 28 px in Glossary and 93 by 25 px in Citations at 390), no horizontal scroll; the press
+  lands in Chat with the seed and no POST; Back returns; after one Send the mark is there with no
+  reload and survives one; the mark opens the chat over the mode with `?thread=` set, Marginalia
+  on or off; Chat's list titles them *Glossary: …* and *Cited work: …*, with the icon, tooltip and
+  filter. Screenshots: `261006d-shot-*.png`. What it found and did not check:
+  - **The mark's line shows the answer's raw `[spya-…]` references.** 261005i's known gap, more
+    visible here because these answers cite blocks in their first sentence. Not fixed.
+  - **Not checked in a browser**: Debate's claim mark after the move to the shared component (the
+    article had no claims; its tests pass), and a visitor (tests only).
 
 - 2026-10-06 — **built, uncommitted** (one Opus subagent, tests red first). What landed:
   - `ThreadOrigin` gains `GlossaryOrigin` and `CitationsOrigin`; `sameOrigin` matches them by mode

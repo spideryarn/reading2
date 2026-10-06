@@ -235,9 +235,10 @@ export const GLOSSARY_ENTRY_QUESTION = "What more should I know about it, and ho
  * quoted, and a question about it.
  *
  * The entry's name is the article's words as a model extracted them, so it is
- * fenced like a claim. The whole name is quoted, however long; only the
- * origin's snapshot of it is cut (`itemOrigin`). Ends in a question so Send
- * works at once. Carried across, never sent, like the others here.
+ * fenced like a claim, with the same visible cut for very long text
+ * (`fencedQuote`), so the seed still fits Chat's question limit. The origin's
+ * name snapshot has its own smaller cap (`itemOrigin`). Ends in a question
+ * so Send works at once. Carried across, never sent, like the others here.
  *
  * Not `askAboutTerm` above, which is for a word the reader typed that the
  * article does **not** contain, and whose chat records no origin.

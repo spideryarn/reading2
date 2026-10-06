@@ -307,6 +307,7 @@ function startedFrom(id: string, origin: ThreadOrigin, answer: string): ChatThre
 let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
+let refuseNextSend = false;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srv${"abcdefgh"[minted++ % 8]}22`;
 
@@ -377,6 +378,10 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince: null });
   if (url === `/api/chat/${SLUG}` && method === "POST") {
+    if (refuseNextSend) {
+      refuseNextSend = false;
+      return json({ error: "Send refused for this test" }, 400);
+    }
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
   if (method === "POST") return new Response(null, { status: 204 });
@@ -410,6 +415,7 @@ beforeEach(() => {
   server = [structuredClone(STORED)];
   nextAnswer = "";
   minted = 0;
+  refuseNextSend = false;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -724,5 +730,100 @@ describe("Ask in chat on a cited work", () => {
     expect(host.querySelector(".origin-chat")).toBeNull();
     expect([...host.querySelectorAll("button")].filter((b) => (b.textContent ?? "").includes("Ask in chat"))).toEqual([]);
     expect(chatPosts()).toHaveLength(0);
+  });
+});
+
+describe.each(["glossary", "citations"] as const)("a %s entry's chat across visits", (mode) => {
+  const itemId = mode === "glossary" ? QUOTED : WORK;
+  const quote = mode === "glossary" ? "qualia" : WORK_TITLE;
+  const origin = { mode, itemId, quote };
+  const search = `?mode=${mode}${mode === "glossary" ? `&term=${QUOTED}` : ""}`;
+  const button = () => mode === "glossary" ? entryButton() : workButton(WORK);
+
+  async function visit(next: "chat" | "glossary" | "citations"): Promise<void> {
+    const params = new URLSearchParams(location.search);
+    params.set("mode", next);
+    if (next !== "chat") params.delete("thread");
+    history.pushState(null, "", `/read/${SLUG}?${params}`);
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    await until(() => param("mode") === next, `the ${next} mode`);
+  }
+
+  async function start(): Promise<string> {
+    await until(() => button() !== null, "Ask in chat");
+    await act(async () => button()?.click());
+    await until(() => param("mode") === "chat" && composer() !== null, "the new chat");
+    return param("thread") as string;
+  }
+
+  it("keeps the unsent question and its origin when Chat is left and reopened", async () => {
+    who.set(OWNER);
+    await open(search);
+    await start();
+    const seed = composer()?.value;
+    await visit(mode);
+    expect(marks()).toHaveLength(0);
+    await visit("chat");
+    await until(() => composer() !== null, "the recovered composer");
+    expect(composer()?.value).toBe(seed);
+    expect(chatPosts()).toHaveLength(0);
+    nextAnswer = "The recovered question's answer.";
+    await send();
+    const sent = chatPosts()[0]?.body as { origin?: unknown } | undefined;
+    expect(sent?.origin).toEqual(origin);
+    await visit(mode);
+    await until(() => marks().length === 1, "the recovered chat's mark");
+    expect(marks()[0]?.querySelector(".origin-chat-line")?.textContent).toBe(nextAnswer);
+  });
+
+  it("resends the origin after a refused first Send and a mode change", async () => {
+    who.set(OWNER);
+    await open(search);
+    const firstId = await start();
+    refuseNextSend = true;
+    await send();
+    await until(() => (host.textContent ?? "").includes("Send refused for this test"), "the refusal");
+    expect(server).toHaveLength(1);
+    await visit(mode);
+    expect(marks()).toHaveLength(0);
+    await visit("chat");
+    await until(() => composer() !== null, "the recovered composer");
+    expect(param("thread")).toBe(firstId);
+    const box = composer() as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, "Please try again.");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    nextAnswer = "The retried question's answer.";
+    await send();
+    expect(chatPosts()).toHaveLength(2);
+    expect(chatPosts().map((r) => (r.body as { origin?: unknown }).origin)).toEqual([origin, origin]);
+    expect(server.find((t) => t.id === firstId)?.origin).toEqual(origin);
+    await visit(mode);
+    await until(() => marks().length === 1, "the retried chat's mark");
+    await act(async () => marks()[0]?.click());
+    await until(() => param("thread") === firstId && dialog() !== null, "the retried conversation");
+  });
+
+  it("starts a second chat from the same entry and reopens the newest one", async () => {
+    who.set(OWNER);
+    await open(search);
+    const firstId = await start();
+    nextAnswer = "The first conversation.";
+    await send();
+    await visit(mode);
+    await until(() => marks().length === 1, "the first mark");
+    const secondId = await start();
+    expect(secondId).not.toBe(firstId);
+    nextAnswer = "The second conversation.";
+    await send();
+    const stored = server.filter((t) => t.origin?.mode === mode);
+    expect(stored.map((t) => t.origin)).toEqual([origin, origin]);
+    await visit(mode);
+    await until(() => marks()[0]?.querySelector(".origin-chat-line")?.textContent === nextAnswer, "the newest mark");
+    expect(marks()).toHaveLength(1);
+    await act(async () => marks()[0]?.click());
+    await until(() => param("thread") === secondId && dialog() !== null, "the second conversation");
+    expect(server.find((t) => t.id === firstId)?.messages[1]?.text).toBe("The first conversation.");
   });
 });

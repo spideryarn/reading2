@@ -27,6 +27,7 @@ import {
   askToCheckClaim,
   CHECK_CLAIM_QUESTION,
   DEBATE_LENS_QUESTION,
+  GLOSSARY_ENTRY_QUESTION,
 } from "../src/web/chat-handoff.js";
 
 describe("the message a selection pre-fills", () => {
@@ -271,5 +272,27 @@ describe("the messages a glossary entry and a cited work pre-fill", () => {
 
   it("builds no origin for a blank name, which the route would refuse", () => {
     expect(itemOrigin("glossary", "spya-ttm222", "   ")).toBeUndefined();
+  });
+
+  it("visibly clips a very long name so its ready-to-send question still fits Chat", () => {
+    const name = "n".repeat(5000);
+    const seed = askAboutGlossaryEntry(name);
+    expect(seed).toContain(`\n${"n".repeat(2000)}…\n`);
+    expect(seed).not.toContain(name);
+    expect(seed.endsWith(GLOSSARY_ENTRY_QUESTION)).toBe(true);
+    expect(seed.length).toBeLessThanOrEqual(4000);
+    expect(itemOrigin("glossary", "spya-ttm222", name)).toEqual({
+      mode: "glossary", itemId: "spya-ttm222", quote: "n".repeat(MAX_ORIGIN_NAME_CHARS),
+    });
+  });
+
+  it("counts fence escaping towards the seed cap and never splits a surrogate pair", () => {
+    const escaped = askAboutGlossaryEntry('"""'.repeat(500));
+    expect(escaped).toContain("…\n");
+    expect(escaped.match(/"""/g)).toHaveLength(2);
+    expect(escaped.endsWith(GLOSSARY_ENTRY_QUESTION)).toBe(true);
+    expect(escaped.length).toBeLessThanOrEqual(4000);
+    const unicode = askAboutGlossaryEntry(`${"n".repeat(1999)}😀${"z".repeat(300)}`);
+    expect(unicode).toContain(`\n${"n".repeat(1999)}…\n`);
   });
 });

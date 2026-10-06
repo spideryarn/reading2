@@ -314,9 +314,12 @@ export interface ChatHandoff {
   readonly question: string;
   /**
    * The item the question is about, when the conversation should remember it
-   * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05.
+   * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
+   * and *Ask in chat* on a Glossary entry or a Citations row since 2026-10-06
+   * (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md).
    * The band keeps it beside the new conversation's words and sends it with
-   * the first question. The glossary's and the Summary's handoffs send none.
+   * the first question. The Summary's handoff sends none, and nor does the
+   * glossary's other one, for a typed word the article does not contain.
    * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
    */
   readonly origin?: ThreadOrigin;
