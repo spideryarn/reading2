@@ -615,8 +615,8 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
      is answered by reading again rather than by spending. useAutoRun.ts § A
      failed read is not an answer.
 
-     The press is minted by Remember's own sub-mode toggle (App.tsx §
-     `RememberBand`), not by the `?remember=` setter beside it — Back and Forward
+     The press is minted by Learn's own sub-mode toggle (App.tsx §
+     `LearnBand`), not by the `?learn=` setter beside it — Back and Forward
      move that, and retracing your steps must not buy a model call. */
   useAutoRun(slug, "quiz", status, ensure, reload);
 

@@ -69,7 +69,7 @@ The shelf's browser-only preference instead skips the server and uses `localStor
 | Contract | `readExperimental` / `writeExperimental` on `ReaderStore` — [`src/store/contracts.ts`](../../src/store/contracts.ts) |
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
-| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Learn's band and [information list](../../src/web/RememberAbout.tsx) |
+| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Learn's band and [information list](../../src/web/LearnAbout.tsx) |
 | Copy | [`experimental-copy.ts`](../../src/web/experimental-copy.ts) — the two sentences and the name, shared by both controls. **Not `src/messages.ts`**, which is the reader-facing *failure* copy and says so in its first line |
 
 **A date, not a boolean**, and [sql.md](sql.md#a-nullable-timestamp-says-more-than-a-boolean) has the
@@ -427,14 +427,14 @@ Four of Diagram's pictures, and one of Learn's four parts.
 **Learn's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
 Recall, Quiz and Tutorial; Explore was two days old and stays here. With the switch off the chips
 read Recall · Tutorial · Quiz, the band's (i) lists those three, and the command bar has no
-*Learn › Explore* row. `?remember=explore` still opens it, and while the reader is in it the chip
+*Learn › Explore* row. `?learn=explore` still opens it, and while the reader is in it the chip
 is drawn and pressed. That address outlives the mode
 ([url-state.md](url-state.md)), so a reader who used Explore and then turned the switch off comes
 back to it when they press Learn: hidden, not unreachable. It is the flag Diagram's pictures
 use, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), read by
-`visibleRememberViews` there for the chips and the (i), and by `subModeRows`
+`visibleLearnViews` there for the chips and the (i), and by `subModeRows`
 ([`CommandBar.tsx`](../../src/web/CommandBar.tsx)) for the bar. The policy is written out a second
-time in `tests/remember-header-cards.test.tsx`, so moving the flag alone fails a test.
+time in `tests/learn-header-cards.test.tsx`, so moving the flag alone fails a test.
 
 **Diagram, since 2026-09-04.** It came out from behind the switch and four of its five pictures went
 behind it instead, on a reader's report:

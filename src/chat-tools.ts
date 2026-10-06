@@ -519,7 +519,7 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
     case "chat":
     case "explore":
       return CHAT_TOOLS_WITH_NOTES;
-    case "remember":
+    case "learn":
     case "tutorial":
     case "candidates":
       return CHAT_TOOLS;

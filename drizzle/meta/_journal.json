@@ -1044,6 +1044,20 @@
       "when": 1791232554680,
       "tag": "20261005203554_chat_thread_origin_lens",
       "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1791250876486,
+      "tag": "20261006014116_ai_calls_attempt_and_failure",
+      "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1791258835782,
+      "tag": "20261006035355_rename_remember_thread_kind_to_learn",
+      "breakpoints": true
     }
   ]
 }

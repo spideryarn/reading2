@@ -86,7 +86,7 @@ const PRODUCERS = {
 /**
  * **The modes with no passage producer**, named rather than derived — the
  * point of the file is that this set is a decision somebody made and not a
- * fall-through. `chat` and `remember` were verified to publish nothing when
+ * fall-through. `chat` and `learn` were verified to publish nothing when
  * they moved out of `App.tsx`; `glossary`'s selection is a different currency
  * (`termSelections`) that never reaches this state.
  *
@@ -104,7 +104,7 @@ const SILENT: BandMode[] = [
   "glossary",
   "summary",
   "diagram",
-  "remember",
+  "learn",
   "structure",
   "debate",
   /* Earned, not the cheap fix: v1's row has a "first cited" *jump* to one

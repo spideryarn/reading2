@@ -1,7 +1,7 @@
 # Review Quiz — the questions the piece can ask you back
 
 Review mode today is **free recall**: the reader says what they took from the article and the model
-shows them where that comes apart ([remember-mode.md](../project/remember-mode.md)). This adds a second
+shows them where that comes apart ([remember-mode.md](../project/learn-mode.md)). This adds a second
 sub-mode beside it — **Quiz** — where the questions come from the article instead.
 
 Greg, 2026-08-31:
@@ -52,7 +52,7 @@ obvious one.
    *"I don't know, tell me"* costs nothing.
 4. **The reply is: what you got, what's missing, where to look.** No score, no grade, no praise —
    review-mode's entitlement rules carry over wholesale
-   ([remember-mode.md § The prompt is the feature](../project/remember-mode.md#the-prompt-is-the-feature)).
+   ([remember-mode.md § The prompt is the feature](../project/learn-mode.md#the-prompt-is-the-feature)).
    A quiz question has a right answer, so *confirming* is allowed where *grading the reader* is not;
    that distinction is fault 6 in review-mode's list and it is the one to get right here.
 5. **Attempts are not stored** in v1. Answer, read the reply, move on; a reload starts the quiz
@@ -308,7 +308,7 @@ reader who lands on a shared link must land where the link-maker was. It is the 
 `?mode=review&review=quiz&thread=<id>` otherwise leaves a review thread selected and invisible:
 
 - switching to Quiz sets `review=quiz` **and clears `thread`, in one navigation** — two would put a
-  half-state on the Back stack, which is the bug [remember-mode.md](../project/remember-mode.md) already
+  half-state on the Back stack, which is the bug [remember-mode.md](../project/learn-mode.md) already
   records for opening a thread of the other kind;
 - opening a review thread sets `review=recall` and `thread=<id>`, also in one;
 - a pasted URL carrying both: **Quiz wins**, and `thread` is dropped with a *replace*;
@@ -322,7 +322,7 @@ with stored attempts, which is what would make it true.
 
 ## References
 
-- [remember-mode.md](../project/remember-mode.md) — free recall, the four stances, and the prompt faults
+- [remember-mode.md](../project/learn-mode.md) — free recall, the four stances, and the prompt faults
   this one must not repeat. **Read § The prompt is the feature before writing the mark prompt.**
 - [`src/ideas.ts`](../../src/ideas.ts) — the closest artefact: model-named block ids, all validated;
   replaces rather than appends; profile in the stamp.
@@ -339,7 +339,7 @@ with stored attempts, which is what would make it true.
 ## Stages
 
 **Recut after review.** The first cut had the prompt evaluated in stage 4, after the UI was built —
-which is the exact ordering [remember-mode.md](../project/remember-mode.md) avoided, and the reason it
+which is the exact ordering [remember-mode.md](../project/learn-mode.md) avoided, and the reason it
 avoided it is that in this feature the prompt *is* the product and everything else is plumbing around
 a page of instructions. It also had a stage 1 producing an artefact nothing read and a stage 2
 producing routes nothing called, neither of which is an abandonable increment.
@@ -429,7 +429,7 @@ One question, one answer, one streamed reply, visible in the browser.
       post while a transcript is still on its way.
 - [x] Docs: new [quiz.md](../project/quiz.md), linked from
       [reading-view-overview.md](../project/reading-view-overview.md),
-      [remember-mode.md](../project/remember-mode.md) and AGENTS.md;
+      [remember-mode.md](../project/learn-mode.md) and AGENTS.md;
       `architecture.md` gains `quiz` to the `articleWithIdsFingerprint` row; `dictation.md` counts
       the fifth box. `url-state.md` already had the parameter, spelled `?remember=` after the
       2026-09-01 rename.

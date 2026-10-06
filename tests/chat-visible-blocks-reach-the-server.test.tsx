@@ -110,7 +110,7 @@ async function settle(turns = 4): Promise<void> {
   }
 }
 
-async function mount(kind: "chat" | "remember"): Promise<void> {
+async function mount(kind: "chat" | "learn"): Promise<void> {
   history.replaceState(null, "", `/a-piece?mode=${kind}&thread=${STORED.id}`);
   await act(async () => {
     root.render(
@@ -179,8 +179,8 @@ describe("the blocks on screen, sent with a chat question", () => {
     expect(posted()[0]).not.toHaveProperty("visible");
   });
 
-  it("are not sent by Remember, whose prop type forbids a getter", async () => {
-    await mount("remember");
+  it("are not sent by Learn, whose prop type forbids a getter", async () => {
+    await mount("learn");
     await press("onSend", "Why?");
     expect(posted()).toHaveLength(1);
     expect(posted()[0]).not.toHaveProperty("visible");

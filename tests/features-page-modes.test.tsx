@@ -60,8 +60,8 @@ const TITLES = {
   "Or say it out loud.": "chat",
   "FAQ.": "faq",
   "Debate.": "debate",
-  "Learn.": "remember",
-  "Quiz.": "remember",
+  "Learn.": "learn",
+  "Quiz.": "learn",
   "Referee mode.": "referee",
   /* The thread is Summary's Thread view since 2026-10-03 (plan 261003l); its
      tile stays, tagged with the mode it is found in. */
@@ -72,7 +72,7 @@ const TITLES = {
  * Every titled feature promised above, found from its visible title rather
  * than from `[data-mode]`. Starting with `[data-mode]` made an omitted `mode`
  * prop disappear from the test altogether — particularly bad for the duplicate
- * Search, Chat and Remember representations, whose other occurrence kept the
+ * Search, Chat and Learn representations, whose other occurrence kept the
  * coverage assertion green.
  */
 function expectedMentions(page: HTMLElement): (ModeMention & { expectedMode: Mode })[] {

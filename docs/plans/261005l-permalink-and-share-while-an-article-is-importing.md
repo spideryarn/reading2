@@ -256,7 +256,8 @@ A third question for Greg came out of the review:
   The owner-only visibility read is not built, and the second-tab limit stays as documented.
 ## Stage 2: one sharing section with both controls, a visitor's "still being added", and the card that never appears
 
-**Status: proposed, 2026-10-06.** From Greg's answers above and the browser check's finding.
+**Status: built, 2026-10-06.** § What landed in stage 2, at the end, says what differs. From
+Greg's answers above and the browser check's finding.
 Stage 1's design sections above stay as the record of stage 1.
 
 ### 2a. The job card appears at once
@@ -367,3 +368,101 @@ to GPT Sol with the question *does anything else leak*.
   Client tests for the visitor page and its re-asking.
 - `npm test`, `npm run typecheck`, GPT Sol on this plan and on the code, a browser check at three
   widths.
+
+### What the stage 2 plan review changed
+
+GPT Sol, 2026-10-06 ([its answer](261005l-stage-2-plan-review-sol.md)): the 2c access design is
+sound, six findings, all taken. **Where these differ from 2a to 2c above, these are the design.**
+
+- **F1 (P1): controllers and the held job belong to one reader.** A private link's key is now in
+  a controller's state, and an account change can leave the add page mounted. So the registry is
+  keyed by reader and slug, is emptied when the session changes (where `useJobSession` already
+  fences the upload engine and the batch), and an answer that arrives for a retired controller
+  changes nothing and is shown to nobody. The same goes for stage 1's public controller and for
+  2a's held job. Tests: a direct switch from reader A to reader B, and A's answer arriving after it.
+- **F2: the error's code has to be declared.** `StillBeingAdded` is a leaf error class with
+  `status = 409` and a fixed message that names nothing; `declaredFields` in `src/routes.ts` gets
+  a branch for it, or the body has no `code`. Test the exact JSON through `handleApi`, and that
+  another 409 does not become this one.
+- **F3: the owner is not asked first today**, so 2c's last paragraph was wrong. `findArticle`
+  falls through to the public read, which will now say *still being added* for the owner of a
+  shared import. So a signed-in reader with that answer goes through `OwnerNotShared`'s job
+  detection (fresh list, the completed-job re-read), and the visitor page is what it falls back
+  to where it falls back to `NotSharedPage` today. Tests for owner, signed-in non-owner, signed
+  out.
+- **F4: the held job follows Retry.** It lives in the existing source-tagged `started` record,
+  written from the add POST and from Retry's answer, and is used only while its source and job
+  id are the current ones. The upload engine's own snapshot (`mine.phase.job`) is the same
+  fallback for an upload, so 2a has no upload exception.
+- **F5: *pending* means queued, or running with a lease that has not expired.** A dead claimant
+  stays `running` until an owner's request settles it, and a visitor's poll settles nothing. The
+  read uses the existing lease predicate and never the sweep that writes. A queued job may still
+  wait on its owner's browser, so the page promises nothing about when.
+- **F6: there is no public comments route to assert a 404 on.** Comments, searches and the source
+  guess ride inside the article payload. The test asserts the 409 body has exactly `error` and
+  `code`; the head and asset 404s each get a published control that answers 200.
+
+**The query for 2c**, from the review: one ownerless existence read from `articles` with
+`publicAccessWhere(slug, access)` and `current_revision_id is null`, and a correlated `exists` on
+`jobs` by `jobs.slug = articles.slug and jobs.owner_id = articles.owner_id` and the pending
+predicate. It selects a constant. Jobs have no article id column. `tests/public-imports.test.ts`
+excludes the `jobs` table from public code today; it gets the one narrow permission, with SQL
+tests for the access predicate, the owner and slug correlation and the null revision.
+
+**Added to Done looks like**: a turned-off and a rotated key; a cancelled and a failed job; an
+expired lease; another owner's job on the same slug; an archived row (409, as a published
+archived article is readable by link); `openEarly`'s first publication (200); an uncertain answer
+to the link's create does not create again by itself (a second create would rotate the key); the
+visitor page stops asking when hidden, unmounted, or its slug or key changes; and what it does
+when the article publishes, the import fails, or sharing is turned off while it waits.
+
+## What landed in stage 2
+
+2026-10-06. 2a, 2b and 2c as amended by the plan review.
+
+- **Server**: `StillBeingAdded` (`src/still-being-added.ts`), `publicPendingImportQuery` and one
+  arm in `loadArticle`, one `declaredFields` branch. Pending is `queued`, or `running` with
+  `lease_expires_at > clock_timestamp()` (`leaseIsLive`, `src/store/job-fence.ts`).
+  `tests/public-imports.test.ts` lets `public-reader.ts` and `job-fence.ts`, and nothing else
+  public, name the `jobs` table. A running job being cancelled still counts while its lease
+  lives.
+- **Browser**: two controller classes and not one. The link's rules differ where the risk is (it
+  reads the truth, never re-sends an unanswered create, never draws a key it could not re-read),
+  and a shared base made both harder to read. Reader identity reaches `AddPage` as a prop.
+- **GPT Sol's [code review](261005l-stage-2-code-review-sol.md)** found the server predicate
+  sound and fixed three things: a private link's key printed to the browser console by the
+  failure logger, an older read overwriting a newer link write, and the held job outliving a
+  stopped import. Postmortems 261006a, b and c.
+- **Left open, older than this work, and reported to the Overseer**: after a direct switch from
+  one account to another with an add page still mounted, the purpose session, the High-powered
+  AI intent and the remembered answer are not scoped to the reader (Sol's P1). The sharing
+  controllers and the held job are.
+
+**Checked in a browser, 2026-10-06**, by the same Sonnet subagent with Playwright, at desktop
+1440, iPad 820 and phone 390, on a freshly started dev server. Eight screenshots, `s2-*` in
+[261005l-shots/](261005l-shots/).
+
+- **The card**: on six web imports it appeared with the link button and the Sharing row when the
+  POST answered, 2.9 to 7.4 seconds after navigation, with no need to slow the import down. Not
+  instant: the wait is now the POST itself, which was slow on a loaded box.
+- **The Sharing section**: shut by default at all three widths; both controls inside; no
+  sideways scroll; *Create the link* disabled until the rights box is ticked; the link box does
+  not widen a 390 page; all four summaries of the shut row seen; no way to shut it while a link
+  was being made. Not seen: what it does on a refusal or an unknown.
+- **A private link end to end** (desktop and phone): made during the import, Metadata then showed
+  the same link, a signed-out browser read the article through it with the private-link notice,
+  and the address without the key gave the landing page. Turned off from the add page, Metadata
+  showed no link.
+- **A visitor before publication** (one PDF import): signed out, the public address and the
+  private link each showed *Still being added*; the link without its key and an unshared import
+  showed the landing page. The public visitor's tab became the article by itself when the import
+  finished. The 409 body was the fixed sentence and the code, and the document's title was
+  `Spideryarn`. Not seen: the private-link visitor's tab turning into the article (it was read
+  in the moment the import ended), and a visitor arriving during a web import, which is too
+  fast to catch.
+- **No console line held `key=`.**
+- **Not rechecked this round**: the reload warning inside the new section.
+- **Seen and not explained, on Metadata and not in this change's code**: for some minutes after
+  an import finished, Access & sharing said *We could not check who can read this…*, and later
+  read correctly on reload. Seen on four articles while the box was also running the full suite.
+  Reported to the Overseer.

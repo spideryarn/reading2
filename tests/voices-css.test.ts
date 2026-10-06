@@ -186,7 +186,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   summary: [".simple-text", ".tweets-text"],
   diagram: [".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
   ideas: [".ideas-name", ".ideas-reason"],
-  remember: [".chat-turn.model", ".quiz-question"],
+  learn: [".chat-turn.model", ".quiz-question"],
   quotes: [".quotes-why-card"],
   timeline: [".tl-label"],
   debate: [".dbt-ai", ".dbt-title-ai", ".dbt-thread-gist"],

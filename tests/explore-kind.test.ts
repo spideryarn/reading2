@@ -1,8 +1,8 @@
 /**
- * **Explore, Remember's fourth sub-mode, as a fifth `ThreadKind`.**
+ * **Explore, Learn's fourth sub-mode, as a fifth `ThreadKind`.**
  *
  * Greg, `spya-mtsf0y` and his reframing of it (both 2026-10-03, quoted in
- * docs/project/remember-mode.md § Explore): a conversation that is about what
+ * docs/project/learn-mode.md § Explore): a conversation that is about what
  * the *reader* thinks, started from what they marked and discussed, and free
  * to look outside the article. One thread per article like Recall's and
  * Tutorial's, its own system prompt, and the one kind whose final message
@@ -11,7 +11,7 @@
  * These are the pure halves. What the route sends is
  * tests/explore-digest-route.test.ts; the export round trip is
  * tests/store-export-thread-kind.test.ts; the band is
- * tests/remember-own-thread.test.tsx.
+ * tests/learn-own-thread.test.tsx.
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md.
  */
 import { describe, expect, it } from "vitest";
@@ -22,7 +22,7 @@ import { buildConverseMessages, defaultModel, jobFor, webSearchTool } from "../s
 import { readerNotesDigest } from "../src/reader-notes.js";
 import type { Block, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
 import { isSingleThreadKind, isThreadKind, SINGLE_THREAD_KINDS, THREAD_KINDS } from "../src/types.js";
-import { REMEMBER_SUB_MODES, subModeParams } from "../src/web/sub-modes.js";
+import { LEARN_SUB_MODES, subModeParams } from "../src/web/sub-modes.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -66,13 +66,13 @@ describe("the kind itself", () => {
   it("is a thread kind, and a single-thread one like Recall and Tutorial", () => {
     expect(isThreadKind("explore")).toBe(true);
     expect(THREAD_KINDS).toContain("explore");
-    expect(SINGLE_THREAD_KINDS).toEqual(["remember", "tutorial", "explore"]);
+    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore"]);
     expect(isSingleThreadKind("explore")).toBe(true);
   });
 
-  it("bills and runs as chat, like Remember", () => {
+  it("bills and runs as chat, like Learn", () => {
     expect(jobFor("explore")).toBe("chat");
-    expect(defaultModel("standard", "explore")).toBe(defaultModel("standard", "remember"));
+    expect(defaultModel("standard", "explore")).toBe(defaultModel("standard", "learn"));
     expect(webSearchTool("explore")).toEqual(webSearchTool("chat"));
   });
 
@@ -87,7 +87,7 @@ describe("the kind itself", () => {
 describe("Explore's prompt", () => {
   it("is its own system prompt, not chat's, Recall's or Tutorial's", () => {
     const explore = systemOf("explore");
-    for (const other of ["chat", "remember", "tutorial", "candidates"] as const) {
+    for (const other of ["chat", "learn", "tutorial", "candidates"] as const) {
       expect(explore).not.toEqual(systemOf(other));
     }
     expect(explore).toContain("thinking partner");
@@ -108,19 +108,19 @@ describe("Explore's prompt", () => {
       expect(start, "missing the spoken-input section").toBeGreaterThanOrEqual(0);
       return text.slice(start, text.indexOf("\n\n", start + heading.length + 2));
     };
-    expect(section(systemOf("explore"))).toBe(section(systemOf("remember")));
+    expect(section(systemOf("explore"))).toBe(section(systemOf("learn")));
   });
 
   it("carries Recall's rules for ids and for quotations, word for word", () => {
     const explore = systemOf("explore");
-    const remember = systemOf("remember");
+    const learn = systemOf("learn");
     const from = (text: string, heading: string, chars: number) => {
       const start = text.indexOf(heading);
       expect(start, `missing: ${heading}`).toBeGreaterThanOrEqual(0);
       return text.slice(start, start + chars);
     };
     for (const heading of ["CITING THE ARTICLE — THE ONE RULE THAT MATTERS", "EVERY QUOTATION CARRIES THE ID"]) {
-      expect(from(explore, heading, 500)).toBe(from(remember, heading, 500));
+      expect(from(explore, heading, 500)).toBe(from(learn, heading, 500));
     }
     /* Recall's "beyond citing: QUOTE" is about correcting the reader, which is
        not what a turn here is for. */
@@ -203,7 +203,7 @@ describe("Explore's prompt", () => {
     expect(testing).toMatch(/on later turns[\s\S]*latest message/i);
     /* Tutorial and Recall are not given the move. */
     expect(systemOf("tutorial")).not.toContain("TESTING THE PIECE");
-    expect(systemOf("remember")).not.toContain("TESTING THE PIECE");
+    expect(systemOf("learn")).not.toContain("TESTING THE PIECE");
     /* The mode's name, where the prompt says it (it was "the rest of Remember"). */
     expect(explore).toMatch(/like the rest of Learn/);
     expect(explore).not.toMatch(/the rest of Remember/);
@@ -232,7 +232,7 @@ describe("Explore's prompt", () => {
     const last = lastOf(build("explore"));
     expect(last).toContain("under 150 words");
     expect(last.indexOf("under 150 words")).toBeLessThan(last.indexOf(base.question));
-    expect(lastOf(build("remember"))).not.toContain("under 150 words");
+    expect(lastOf(build("learn"))).not.toContain("under 150 words");
     expect(lastOf(build("chat"))).not.toContain("under 150 words");
   });
 });
@@ -267,7 +267,7 @@ describe("the reader's notes in an Explore turn (PR-1)", () => {
   /* The route builds one for Explore only; the builder refuses to carry one for
      anybody else, so a caller's mistake cannot put a reader's notes into a
      Recall, Tutorial or Candidates turn. */
-  it.each(["chat", "remember", "tutorial", "candidates"] as const)(
+  it.each(["chat", "learn", "tutorial", "candidates"] as const)(
     "is never carried by a %s turn, even when one is handed in",
     (kind) => {
       const messages = build(kind, { notes: digest });
@@ -298,7 +298,7 @@ describe("the reader's notes in an Explore turn (PR-1)", () => {
 });
 
 describe("one Explore thread per article", () => {
-  it.each(["chat", "remember"] as const)("still allows an omitted-kind spoken append to %s", (kind) => {
+  it.each(["chat", "learn"] as const)("still allows an omitted-kind spoken append to %s", (kind) => {
     const begun = withTurn([], { threadId: "spya-expar4", question: "a typed thought", kind }, AT);
     const appended = withSpokenTurn(begun.threads, {
       threadId: begun.thread.id,
@@ -323,23 +323,23 @@ describe("one Explore thread per article", () => {
   });
 
   it("appends a second Explore turn to the existing one, never to Recall's or Tutorial's", () => {
-    const recall = withTurn([], { threadId: "spya-recab4", question: "what I took", kind: "remember" }, AT);
+    const recall = withTurn([], { threadId: "spya-recab4", question: "what I took", kind: "learn" }, AT);
     const tutorial = withTurn(recall.threads, { threadId: "spya-tutar4", question: "not read it", kind: "tutorial" }, AT);
     const explore = withTurn(tutorial.threads, { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
     const again = withTurn(explore.threads, { threadId: "spya-expar5", question: "and again", kind: "explore" }, AT);
     expect(again.thread.id).toBe("spya-expar4");
     expect(again.threads.filter((t) => t.kind === "explore")).toHaveLength(1);
-    expect(again.threads.find((t) => t.kind === "remember")?.messages).toHaveLength(2);
+    expect(again.threads.find((t) => t.kind === "learn")?.messages).toHaveLength(2);
     expect(again.threads.find((t) => t.kind === "tutorial")?.messages).toHaveLength(2);
   });
 });
 
 describe("the sub-mode", () => {
   it("has a chip and a URL of its own, and keeps `thread` as Recall does", () => {
-    expect(REMEMBER_SUB_MODES.explore.label).toBe("Explore");
-    expect(subModeParams({ mode: "remember", view: "explore" })).toEqual({
-      mode: "remember",
-      remember: "explore",
+    expect(LEARN_SUB_MODES.explore.label).toBe("Explore");
+    expect(subModeParams({ mode: "learn", view: "explore" })).toEqual({
+      mode: "learn",
+      learn: "explore",
     });
   });
 });
@@ -358,7 +358,7 @@ describe("the profile reminder beside the question", () => {
   });
 
   it("is unchanged for the other kinds", () => {
-    for (const kind of ["chat", "remember", "tutorial", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "tutorial", "candidates"] as const) {
       const last = lastOf(build(kind, { profile }));
       expect(last).toContain("Do not address\nthe reader and do not mention this.");
     }

@@ -97,7 +97,7 @@ import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { holdTarget, roomNeeded } from "./chat-hold.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { RememberSubModesAbout } from "./RememberAbout.js";
+import { LearnSubModesAbout } from "./LearnAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
@@ -113,7 +113,7 @@ import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import {
   CHAT_FROM_LABEL,
-  type RememberConversationView,
+  type LearnConversationView,
   narrowed,
   sourcesIn,
   type ThreadSource,
@@ -121,7 +121,7 @@ import {
 } from "./thread-source.js";
 import { MODE_ICON } from "./mode-icons.js";
 import type { ChatFrom } from "./params.js";
-import { REMEMBER_SUB_MODES } from "./sub-modes.js";
+import { LEARN_SUB_MODES } from "./sub-modes.js";
 import { usePressToggle } from "./usePressToggle.js";
 import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
@@ -137,7 +137,7 @@ import { rowTitle } from "./chat-list-row.js";
 interface Props {
   /**
    * **The conversations this panel may open.** `threadId` is resolved among
-   * these and nowhere else. In Remember it is the one conversation; in Chat
+   * these and nowhere else. In Learn it is the one conversation; in Chat
    * it is the `chat`-kind ones, which since 2026-10-05 is fewer than the list
    * draws (`listed` below).
    */
@@ -146,12 +146,12 @@ interface Props {
    * **What Chat's list draws**: every conversation about the article but
    * Referee's Candidates, since 2026-10-05 (report `spya-hyfqkq`; plan
    * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
-   * D5). Absent in Remember, which draws no list, and then the list is
+   * D5). Absent in Learn, which draws no list, and then the list is
    * `threads`.
    *
    * **A second set, and never merged into `threads`** (the plan review's F3).
    * A Recall conversation in `threads` would be opened here by a `?thread=`
-   * carried over from Remember, under a composer that sends the blocks on
+   * carried over from Learn, under a composer that sends the blocks on
    * screen, which the server refuses on any kind but `chat`.
    */
   listed?: ChatThread[] | undefined;
@@ -159,11 +159,11 @@ interface Props {
   from?: ChatFrom | null | undefined;
   onFrom?: ((next: ChatFrom | null) => void) | undefined;
   /**
-   * A press on a Remember row: go to that part of Remember, with its
+   * A press on a Learn row: go to that part of Learn, with its
    * conversation named. The band does it in one navigation. Without it a
-   * Remember row is drawn and cannot be pressed.
+   * Learn row is drawn and cannot be pressed.
    */
-  onOpenRemember?: ((view: RememberConversationView, id: string) => void) | undefined;
+  onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
   /**
    * The live conversation, owned above this component.
    *
@@ -234,7 +234,7 @@ interface Props {
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
   /**
-   * **May Remember offer Start over now?** Only when its one conversation is
+   * **May Learn offer Start over now?** Only when its one conversation is
    * stored, named by the server and has nothing of this tab's in flight — see
    * `settled` in useChat.ts. Chat's delete ignores it.
    */
@@ -280,7 +280,7 @@ interface Props {
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
   /**
-   * Which mode this panel is being shown in — chat, or Remember.
+   * Which mode this panel is being shown in — chat, or Learn.
    *
    * **One panel with a kind, not two panels.** Everything under here is the
    * same in both: the transcript, the scroll-follow, the citation chips, the
@@ -291,16 +291,16 @@ interface Props {
    * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
    * Only chat draws a list of conversations. It shows every one about the
-   * article, Remember's included (`listed` above); Remember shows its own
+   * article, Learn's included (`listed` above); Learn shows its own
    * one and no list.
    */
   kind: ThreadKind;
   /**
    * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
-   * Remember's conversation views. Absent in chat mode.
+   * Learn's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
-   * belongs to `RememberBand` (src/web/App.tsx): the navigation rules behind it —
+   * belongs to `LearnBand` (src/web/App.tsx): the navigation rules behind it —
    * clearing `?thread=` in one step, Quiz winning a pasted collision — are
    * about two parameters this panel knows nothing about. Handing down a rendered
    * node keeps that knowledge where it is, and keeps `ChatPanel` unaware there
@@ -390,7 +390,7 @@ export function ChatPanel({
   listed,
   from,
   onFrom,
-  onOpenRemember,
+  onOpenLearn,
   threadId,
   onThread,
   onSend,
@@ -415,11 +415,11 @@ export function ChatPanel({
   onStartLive,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Remember's layout, for all three of its conversations** — Recall,
+  /* **Learn's layout, for all three of its conversations** — Recall,
      Tutorial and Explore are each one thread per article, dictated into a tall
      box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
-  const remember = isSingleThreadKind(kind);
+  const learn = isSingleThreadKind(kind);
   /* Among `threads`, never among `listed`: what the list draws and what may
      be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -435,7 +435,7 @@ export function ChatPanel({
 
   /**
    * What the reader has typed and not sent yet: per conversation in chat, per
-   * kind in Remember, and one more for the box under chat's list.
+   * kind in Learn, and one more for the box under chat's list.
    *
    * Above the composer because two different things need it, and neither is
    * the composer. Switching conversation used to carry the half-typed question
@@ -474,16 +474,16 @@ export function ChatPanel({
    * the store once (`ChatHandoff` in ConversationModes.tsx), does not come
    * back after the reader has cleared it.
    *
-   * **Remember's is by kind, not by id.** Recall, Tutorial and Explore are each
+   * **Learn's is by kind, not by id.** Recall, Tutorial and Explore are each
    * one conversation per article and the band decides which conversation that
    * is — it can be a different one on the way back, when a stored one has
    * arrived or Start over has begun another — so the words go to whichever it
    * picked. GPT Sol's review of the plan above, F4.
    */
   const draftFor = (id: string): string =>
-    isSingleThreadKind(kind) ? drafts.remember(kind) : (drafts.thread(id) ?? "");
+    isSingleThreadKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
   const setDraftFor = (id: string, text: string): void => {
-    if (isSingleThreadKind(kind)) drafts.setRemember(kind, text);
+    if (isSingleThreadKind(kind)) drafts.setLearn(kind, text);
     else drafts.setThread(id, text);
   };
 
@@ -553,13 +553,13 @@ export function ChatPanel({
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
     <ModeSurface
-      feature={`chat${remember ? " remember" : ""}`}
-      /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
-      mode={remember ? "remember" : "chat"}
+      feature={`chat${learn ? " learn" : ""}`}
+      /* Learn's Recall half is this same panel, so its (i) says Learn's words. */
+      mode={learn ? "learn" : "chat"}
       /* …and then its visible parts, a line each (spya-usyhwy). */
       about={
-        remember ? (
-          <RememberSubModesAbout
+        learn ? (
+          <LearnSubModesAbout
             current={kind === "tutorial" ? "tutorial" : kind === "explore" ? "explore" : "recall"}
           />
         ) : undefined
@@ -569,23 +569,23 @@ export function ChatPanel({
           ? "A tutorial on this article"
           : kind === "explore"
             ? "Explore what you think about this article"
-            : remember
+            : learn
             ? "Remember what you took from this article"
             : "Chat about this article"
       }
       head={
         <>
           {/* **The header says the mode's name** (Learn; Remember until 2026-10-05), never the thread's title: there
-              is one Remember conversation per article, so the title names
+              is one Learn conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
           {/* **Read out, not drawn, beside the sub-mode chips.** Four chips left
               the word one letter wide in a narrow band (the browser pass on
               261003l), and the Dock already says which mode this is — the
               reason Quiz's own row dropped its name on 2026-09-05. */}
-          <h2 className={remember && subMode ? "sr-only" : undefined}>
-            {remember ? (
-              MODE_LABEL.remember
+          <h2 className={learn && subMode ? "sr-only" : undefined}>
+            {learn ? (
+              MODE_LABEL.learn
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -594,9 +594,9 @@ export function ChatPanel({
             )}
           </h2>
           {subMode}
-          {remember ? (
+          {learn ? (
             /* **Start over, and nothing else.** No close, because there is no
-               list to go back to; no new, because there is one Remember
+               list to go back to; no new, because there is one Learn
                conversation; no rename, which only the list offered. The same
                two-press delete chat has, relabelled for what it does here —
                the band first finishes Live, then begins the fresh conversation
@@ -676,14 +676,14 @@ export function ChatPanel({
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
-      ) : remember ? (
-        /* **Remember never draws a list, not even for a frame.** The band
+      ) : learn ? (
+        /* **Learn never draws a list, not even for a frame.** The band
            derives its one conversation during render (ConversationBand), so
            this is reached only before the first fetch lands, in the beat before
            an empty band begins its conversation, and while Start over's DELETE
            is out — and in none of them is there anywhere for a question to go.
            Plan 261001m, F1 and F6. */
-        <ChatListLoading what={`your ${MODE_LABEL.remember} conversation`} />
+        <ChatListLoading what={`your ${MODE_LABEL.learn} conversation`} />
       ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
@@ -729,7 +729,7 @@ export function ChatPanel({
             from={from ?? null}
             onFrom={onFrom}
             onOpen={onThread}
-            onOpenRemember={onOpenRemember}
+            onOpenLearn={onOpenLearn}
             onNew={onNew}
             onRename={onRename}
             onDelete={onDelete}
@@ -817,7 +817,7 @@ function ArmedDelete({
   armedTitle = "Press again to delete this conversation",
 }: {
   onDelete(): void;
-  /** What the button says at rest, and once armed. Remember calls it Start over. */
+  /** What the button says at rest, and once armed. Learn calls it Start over. */
   title?: string;
   armedTitle?: string;
 }) {
@@ -840,24 +840,24 @@ function ArmedDelete({
   );
 }
 
-/** Where Remember's composer turns compact — see `short` in `Composer`. */
+/** Where Learn's composer turns compact — see `short` in `Composer`. */
 const SHORT_VIEWPORT = "(max-height: 500px)";
 
 /**
  * **The composer's floor and roof**: the rows it rests at, and the height in
  * px it may grow to with what is typed or dictated.
  *
- * Chat is one row growing to 160px — a question is a sentence. Remember is six
- * rows growing to 360px: a spoken Remember turn is a paragraph or three, and a
+ * Chat is one row growing to 160px — a question is a sentence. Learn is six
+ * rows growing to 360px: a spoken Learn turn is a paragraph or three, and a
  * box that stops at 160px turns the reader's own words into a four-line
  * scrolling window they cannot read back before sending. On a short viewport
- * Remember rests at two rows and grows to 30% of the viewport, so the
+ * Learn rests at two rows and grows to 30% of the viewport, so the
  * transcript stays in view. 45% was the first figure, and at 844×390 a
  * six-line answer left one clipped line of transcript above the box (browser
  * check, 2026-10-01). Plan 261001m § 5.
  */
-function boxSize(remember: boolean, short: boolean): { rows: number; roof: () => number } {
-  if (!remember) return { rows: 1, roof: () => 160 };
+function boxSize(learn: boolean, short: boolean): { rows: number; roof: () => number } {
+  if (!learn) return { rows: 1, roof: () => 160 };
   if (!short) return { rows: 6, roof: () => 360 };
   return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
@@ -929,7 +929,7 @@ function ThreadList({
   from,
   onFrom,
   onOpen,
-  onOpenRemember,
+  onOpenLearn,
   onNew,
   onRename,
   onDelete,
@@ -938,7 +938,7 @@ function ThreadList({
   from: ChatFrom | null;
   onFrom?: ((next: ChatFrom | null) => void) | undefined;
   onOpen(id: string): void;
-  onOpenRemember?: ((view: RememberConversationView, id: string) => void) | undefined;
+  onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
@@ -976,8 +976,8 @@ function ThreadList({
   return (
     <>
       {sources.length > 1 && onFrom && (
-        /* No `role="group"`, as Remember's chips have none (QuizPanel.tsx §
-           `RememberSubModeToggle`): each button says what it is and whether
+        /* No `role="group"`, as Learn's chips have none (QuizPanel.tsx §
+           `LearnSubModeToggle`): each button says what it is and whether
            it is pressed. Words, so no card. */
         <div className="chat-from">
           {([null, ...sources] as const).map((word) => (
@@ -997,13 +997,13 @@ function ThreadList({
         {sorted.map((t) => {
           const last = lastSaid(t);
           const source = threadSource(t);
-          /* **A Remember row is a way back to Remember, not a conversation of
-             this band's.** It is named for its part of Remember (its stored
+          /* **A Learn row is a way back to Learn, not a conversation of
+             this band's.** It is named for its part of Learn (its stored
              title is the first sixty characters said, often "Um, so…"), a
-             press goes there, and it has no rename and no delete: Remember
+             press goes there, and it has no rename and no delete: Learn
              has one conversation per part and its delete is *Start over*,
              which lives there. Plan 261005i, D5. */
-          const view = source?.remember;
+          const view = source?.learn;
           return (
             <li key={t.id}>
               {renaming === t.id ? (
@@ -1031,19 +1031,19 @@ function ThreadList({
                        rather than the Tooltip component, because this one is plain
                        text over several lines and wants the browser's own delay:
                        a tooltip that appears the instant the pointer crosses a
-                       list is a list you cannot read. A Remember row says first
+                       list is a list you cannot read. A Learn row says first
                        where the press goes, since it leaves Chat. */
                     title={
                       view
-                        ? `Open in ${MODE_LABEL.remember} › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
+                        ? `Open in ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}\n${describe(t)}`
                         : describe(t)
                     }
-                    onClick={() => (view ? onOpenRemember?.(view, t.id) : onOpen(t.id))}
+                    onClick={() => (view ? onOpenLearn?.(view, t.id) : onOpen(t.id))}
                   >
                     {/* The first question in full where the stored title is only its
                         first sixty characters — chat-list-row.ts. */}
                     <span className="chat-thread-title">
-                      {view ? REMEMBER_SUB_MODES[view].label : rowTitle(t)}
+                      {view ? LEARN_SUB_MODES[view].label : rowTitle(t)}
                     </span>
                     {/* Usually the model's reply, but the reader's question when
                         that was the last thing said — so the row says whose. */}
@@ -1661,8 +1661,8 @@ export function Conversation({
             <TutorialInvitation />
           ) : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
-          ) : kind === "remember" ? (
-            <RememberInvitation />
+          ) : kind === "learn" ? (
+            <LearnInvitation />
           ) : (
             <Suggestions onAsk={(q) => onSend(q)} />
           ))}
@@ -1760,7 +1760,7 @@ export function Conversation({
 }
 
 /**
- * The opening state of a **Remember thread**, which is not a list of suggestions and
+ * The opening state of a **Learn thread**, which is not a list of suggestions and
  * must not become one.
  *
  * Chat's `Suggestions` are complete questions that send on click, and that
@@ -1773,7 +1773,7 @@ export function Conversation({
  * is a genuinely hard instruction to obey from a standing start, and naming
  * three ways in is the cheapest help that does not contaminate the answer.
  */
-function RememberInvitation() {
+function LearnInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
@@ -1825,10 +1825,10 @@ function TutorialInvitation() {
  * the transcript, and what `EXPLORE_SYSTEM` (src/converse.ts) answers.
  *
  * One per thing Greg asked Explore to do (2026-10-03, quoted in
- * docs/project/remember-mode.md § Explore): start from *"my comments, my
+ * docs/project/learn-mode.md § Explore): start from *"my comments, my
  * highlights, my chat threads"*; *"apply to interesting cases of my own"*; and
  * *"situate the article in terms of the wider world"*. Exported for
- * tests/remember-panel.test.tsx.
+ * tests/learn-panel.test.tsx.
  */
 export const EXPLORE_STARTERS: readonly string[] = [
   "Start from what I've marked and discussed",
@@ -1837,7 +1837,7 @@ export const EXPLORE_STARTERS: readonly string[] = [
   /* The fourth, 2026-10-05. Greg (spya-mvmpks): Explore is *"also about
      exploring potential problems and criticisms and concerns"*. A request,
      like the other three: it puts no view of the piece in the reader's mouth.
-     evals/remember-explore.ts sends these same words as its critic's turn 1. */
+     evals/learn-explore.ts sends these same words as its critic's turn 1. */
   "Where might this piece be wrong, or missing something?",
 ];
 
@@ -1925,7 +1925,7 @@ export function Turn({
 }: {
   message: ChatMessage;
   /**
-   * The conversation's kind. Only Recall (`remember`) keeps an answer's last
+   * The conversation's kind. Only Recall (`learn`) keeps an answer's last
    * `Hint:` paragraph behind a button; every other kind draws it as written.
    */
   kind: ThreadKind;
@@ -1982,9 +1982,9 @@ export function Turn({
      on every render, because the stored time can arrive after this turn is
      drawn (stream recovery, or the write's own answer). The press is keyed to
      the attempt: a retry puts a new answer in the same row, and its hint starts
-     closed. src/recall-hint.ts; docs/project/remember-mode.md. */
+     closed. src/recall-hint.ts; docs/project/learn-mode.md. */
   const { body, hint } =
-    kind === "remember" && message.role === "assistant"
+    kind === "learn" && message.role === "assistant"
       ? splitHint(message.text)
       : { body: message.text, hint: null };
   /* `createdAt` moves on retry, which is what makes it the attempt. */
@@ -2578,7 +2578,7 @@ function Answer({
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
   /* The executor a command chip presses through, where the reading view put
-     one round this panel — chat and the chat dialog, never Remember. `null`
+     one round this panel — chat and the chat dialog, never Learn. `null`
      everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
   const commands = useChatCommands() ?? undefined;
   return (
@@ -2646,12 +2646,12 @@ export function Composer({
    */
   placeholder?: string;
   /**
-   * Chat or Remember. **Everything that makes this box work is shared** — the
+   * Chat or Learn. **Everything that makes this box work is shared** — the
    * draft, the focus nonce, the auto-resize, Enter to send, the Escape ladder,
    * the key-propagation stop that keeps the article's ↑/↓ out of the caret, the
    * `readOnly` gate while a transcript is arriving, the dictation button and
    * strip. Those are the parts that are subtle and the parts where a second
-   * copy would drift; a Remember box that reimplemented the Escape ladder would
+   * copy would drift; a Learn box that reimplemented the Escape ladder would
    * be a bug nobody found for a month.
    *
    * What the kind changes is layout: a box six rows tall instead of one, and
@@ -2675,17 +2675,17 @@ export function Composer({
      transcript above. */
   const [value, setValue] = useState(draft);
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
-  const remember = isSingleThreadKind(kind);
+  const learn = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
    * is answering had 58px. So below 500px of viewport height (a landscape
-   * phone; no laptop window is that short) Remember's box rests at two rows and
+   * phone; no laptop window is that short) Learn's box rests at two rows and
    * grows to 30% of the viewport, still following what is typed or dictated.
    * Plan 261001m § 5. Chat's one-row box is unchanged.
    */
   const short = useMedia(SHORT_VIEWPORT);
-  const size = useMemo(() => boxSize(remember, short), [remember, short]);
+  const size = useMemo(() => boxSize(learn, short), [learn, short]);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -2850,7 +2850,7 @@ export function Composer({
               ? "What do you remember about it? It's fine if you haven't read it yet."
               : kind === "explore"
                 ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
-                : remember
+                : learn
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")
         }
@@ -2944,7 +2944,7 @@ export function Composer({
         </Tooltip>
       )}
       {dictate.dictation.supported &&
-        (remember ? (
+        (learn ? (
           /* **Labelled, and first in the row.** Greg asked for the microphone to
              be emphasised here because talking a paragraph is so much less
              annoying than typing one — and an unlabelled icon among three other
@@ -2974,7 +2974,7 @@ export function Composer({
           live={live}
           onStart={onStartLive}
           disabled={busy || dictate.readOnly}
-          labelled={remember}
+          labelled={learn}
           continues={continuesLive}
         />
       )}

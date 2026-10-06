@@ -3438,7 +3438,7 @@ export type StepName =
   /* When the things the piece narrates happened, and how sure it is —
      docs/project/timeline.md. */
   | "timeline"
-  /* The questions the piece can ask you back, the second sub-mode of Remember —
+  /* The questions the piece can ask you back, the second sub-mode of Learn —
      docs/plans/260831al-review-quiz-sub-mode.md. */
   | "quiz"
   /* The questions a careful reader would put to this piece while reading it,
@@ -3875,14 +3875,14 @@ export interface ChatMessage {
   editedAt?: string;
   /**
    * Which stance produced this answer — **legacy, read-only**. Assistant turns
-   * of Remember threads written before 2026-10-02 carry one; nothing writes it
+   * of Learn threads written before 2026-10-02 carry one; nothing writes it
    * since Recall became one voice, and nothing on screen shows it. It is kept
    * because the stored rows have values (the column and its CHECK stay, and an
    * export carries them) — dropping it would be destructive and buy nothing.
    * docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md;
    * the original rule is docs/plans/260827ah-review-mode.md.
    */
-  stance?: RememberStance;
+  stance?: LearnStance;
   /**
    * **The reader pressed the "?" beside a paragraph rather than typing this.**
    * User turns only.
@@ -3909,7 +3909,7 @@ export interface ChatMessage {
   help?: true;
   /**
    * **When the reader first pressed Hint under this answer.** Assistant turns
-   * of Recall (`remember`) threads only.
+   * of Recall (`learn`) threads only.
    *
    * The hint is the answer's own last paragraph (`splitHint` in
    * src/recall-hint.ts); this is the record that the reader opened it. Set once
@@ -3924,19 +3924,19 @@ export interface ChatMessage {
 }
 
 /**
- * How much the model should say in a Remember answer — the reader's choice, per
+ * How much the model should say in a Learn answer — the reader's choice, per
  * turn, **until 2026-10-02**. Greg named all four on 2026-08-27
  * (docs/plans/260827ah-review-mode.md § The stance) and asked for one adaptive
  * voice instead on 2026-10-01 (`spya-c8x66d`). Legacy now: the type of stored
  * rows, and of the one request field the route still validates and drops.
  */
-export type RememberStance = "balanced" | "respond" | "socratic" | "signposts";
+export type LearnStance = "balanced" | "respond" | "socratic" | "signposts";
 
 /**
  * The four, as a value — what the route accepts (and drops) from a tab still
  * running a client from before the picker went. `streamChat` in src/routes.ts.
  */
-export const REMEMBER_STANCES: readonly RememberStance[] = [
+export const LEARN_STANCES: readonly LearnStance[] = [
   "balanced",
   "respond",
   "socratic",
@@ -3949,7 +3949,7 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  *
  * **Required, not optional**, and normalised to `"chat"` when a stored thread
  * predates this field. An optional kind means a `?? "chat"` at every read site
- * and one of them will eventually be missed — which is a Remember thread answered
+ * and one of them will eventually be missed — which is a Learn thread answered
  * with chat's prompt, and nothing on screen disagreeing. GPT Sol's review of
  * docs/plans/260827ah-review-mode.md, 2026-08-27.
  *
@@ -3960,12 +3960,17 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * **This value is persisted, so renaming it was a migration and not an edit.**
  * The mode was called Review until 2026-09-01, and `chat_threads.kind` carried a
  * CHECK constraint `kind in ('chat','review')`. Narrowing a CHECK before the rows
- * move fails every Remember insert with `23514`, so the discriminant, the schema
+ * move fails every Learn insert with `23514`, so the discriminant, the schema
  * and the data moved in one step: drizzle/0048_rename_review_thread_kind.sql
  * drops the constraint, updates the rows, then re-adds it with `'remember'`.
  * Anything else that speaks this wire value — `src/routes.ts`'s validation, the
  * export/import shapes, the committed fixture corpus — moved with it.
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
+ *
+ * **And `remember` until 2026-10-06**, when the identifiers followed the
+ * reader's word, Learn. The same one step:
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql,
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
  *
  * **`candidates` is the third**, added 2026-09-01 — Referee mode's fourth
  * sub-mode, which Greg asked to be *"a special reuse of Chat mode, to get
@@ -3978,12 +3983,12 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial" | "explore";
+export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
  *
- * **One list**, for the reason `REMEMBER_STANCES` below gives about itself and
+ * **One list**, for the reason `LEARN_STANCES` below gives about itself and
  * for one more that is specific to this field: every reader of a stored kind
  * has to agree on the list. A kind added to the union and missed by one of
  * them used to be a thread that silently became a chat on its next read —
@@ -3996,22 +4001,22 @@ export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial" | "expl
  * refuses a kind that is not on this list. Only `normaliseKind` in src/chat.ts
  * still supplies `"chat"`, and it reads fixture files, never the database.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial", "explore"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore"];
 
 /**
- * **The kinds an article has at most one of** — Remember's Recall, Tutorial and
+ * **The kinds an article has at most one of** — Learn's Recall, Tutorial and
  * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
  * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
  * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md).
  * A partial unique index per kind holds it in the database
- * (`chat_threads_one_remember`, `chat_threads_one_tutorial`,
+ * (`chat_threads_one_learn`, `chat_threads_one_tutorial`,
  * `chat_threads_one_explore`); this is the list `targetOf` in src/chat.ts and
  * `ConversationBand` read, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
  * its empty box says, or whether it offers Live — those are decided per kind.
  */
-export const SINGLE_THREAD_KINDS = ["remember", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["learn", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
@@ -4243,13 +4248,13 @@ export interface ThreadSummary {
    */
   origin?: ThreadOrigin;
   /**
-   * Chat or Remember — which the reading view needs even though it draws no
-   * Remember marks.
+   * Chat or Learn — which the reading view needs even though it draws no
+   * Learn marks.
    *
    * `?thread=` opens the floating `ChatDialog` in every mode but the two
    * conversation modes, and that dialog is chat's UI and asks with chat's
-   * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
-   * continue a Remember conversation as a chat. The overlay is gated on this
+   * prompt. A pasted `?mode=toc&thread=<a Learn thread>` would therefore
+   * continue a Learn conversation as a chat. The overlay is gated on this
    * instead. See
    * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
@@ -5163,7 +5168,7 @@ export type CitationsFound = CitationsResponse;
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
-   second sub-mode of Remember. See docs/plans/260831al-review-quiz-sub-mode.md.
+   second sub-mode of Learn. See docs/plans/260831al-review-quiz-sub-mode.md.
 
    ## Why these are here and not in src/quiz.ts, where the stage lives
 

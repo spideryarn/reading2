@@ -19,7 +19,7 @@ Changed files:
 - [chat-lists-every-conversation.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/chat-lists-every-conversation.test.tsx)
 - [chat-list-sources.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/chat-list-sources.test.tsx)
 - [mode-icons.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/mode-icons.test.ts)
-- [remember-own-thread.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/remember-own-thread.test.tsx)
+- [remember-own-thread.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/learn-own-thread.test.tsx)
 - [chat-draft-survives-a-mode-change.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/chats-started-from-a-mode/tests/chat-draft-survives-a-mode-change.test.tsx)
 
 land

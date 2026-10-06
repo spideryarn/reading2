@@ -2,7 +2,7 @@
  * **The rollback keeps a conversation's kind** (plan 261002i, GPT Sol's plan
  * review, P1).
  *
- * `exportArticle` wrote `kind` as a Remember-or-chat ternary, so a Candidates
+ * `exportArticle` wrote `kind` as a Learn-or-chat ternary, so a Candidates
  * thread came back from a round trip as a chat, and so would a Tutorial one —
  * answered next time with chat's prompt, and listed in Chat, with nothing
  * failing. No fixture in `data/` has either kind, so
@@ -38,7 +38,7 @@ const EXPORTED_ARTICLE = path.join(DATA_ROOT, SLUG);
 /* The one message here: a Recall answer whose hint the reader opened. Export
    and the fixture restore each name a message's fields one by one, so
    `hintOpenedAt` is lost by whichever of them does not name it (plan 261004h). */
-const REMEMBER_THREAD = "spya-kndb23";
+const LEARN_THREAD = "spya-kndb23";
 const HINTED_ANSWER = "spya-kndm23";
 const HINT_OPENED_AT = "2026-10-04T09:30:00.000Z";
 
@@ -62,7 +62,7 @@ describe("db:export and a conversation's kind", () => {
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
     const at = new Date("2026-10-02T10:00:00.000Z");
     await db.insert(chatThreads).values(
-      (["chat", "remember", "candidates", "tutorial", "explore"] as const).map((kind, i) => ({
+      (["chat", "learn", "candidates", "tutorial", "explore"] as const).map((kind, i) => ({
         articleId: ARTICLE_ID,
         id: `spya-knd${"abcde"[i]}23`,
         ownerId: owner,
@@ -74,7 +74,7 @@ describe("db:export and a conversation's kind", () => {
     );
     await db.insert(chatMessages).values({
       articleId: ARTICLE_ID,
-      threadId: REMEMBER_THREAD,
+      threadId: LEARN_THREAD,
       id: HINTED_ANSWER,
       ordinal: 0,
       role: "assistant",
@@ -109,7 +109,7 @@ describe("db:export and a conversation's kind", () => {
     };
     expect(Object.fromEntries(file.threads.map((t) => [t.title, t.kind]))).toEqual({
       chat: "chat",
-      remember: "remember",
+      learn: "learn",
       candidates: "candidates",
       tutorial: "tutorial",
       explore: "explore",
@@ -129,7 +129,7 @@ describe("db:export and a conversation's kind", () => {
       { title: "candidates", kind: "candidates" },
       { title: "chat", kind: "chat" },
       { title: "explore", kind: "explore" },
-      { title: "remember", kind: "remember" },
+      { title: "learn", kind: "learn" },
       { title: "tutorial", kind: "tutorial" },
     ]);
   });
@@ -138,7 +138,7 @@ describe("db:export and a conversation's kind", () => {
     const file = JSON.parse(await readFile(path.join(EXPORTED_ARTICLE, "chat.json"), "utf8")) as {
       threads: ChatThread[];
     };
-    const exported = file.threads.find((t) => t.id === REMEMBER_THREAD)?.messages[0];
+    const exported = file.threads.find((t) => t.id === LEARN_THREAD)?.messages[0];
     expect(exported).toMatchObject({ id: HINTED_ANSWER, hintOpenedAt: HINT_OPENED_AT });
 
     /* The test above this one has already deleted the rows and restored them

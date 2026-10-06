@@ -19,11 +19,11 @@
  * Three transitions do **two things at once**, and each is one transition
  * because the pair is one decision:
  *
- * - `turn.refused` drops the turn the server said no to *and* registers the
- *   repair that goes and asks. Split apart, there is a moment where neither is
+ * - a withdrawn turn (refused, or a retry/edit lost before `begin`) retires
+ *   *and* registers the repair that goes and asks. Split apart, neither is
  *   true and the repair's answer arrives with nothing to admit it;
- * - `turn.disconnected` commits the row, retires the turn *and* hands the row
- *   to the recovery. Split apart, the live turn goes on projecting its pending
+ * - `turn.disconnected` after `begin` commits the row, retires the turn *and*
+ *   hands the row to the recovery. Split apart, the live turn projects its pending
  *   row over the answer the recovery finds, so the answer lands and is invisible;
  * - `turn.began` swaps all three of the turn's ids — thread, question and
  *   answer. Two of the three shipped once and surfaced weeks later as "That
@@ -257,7 +257,7 @@ function tombstoned(
 
 /**
  * **The tombstones once a DELETE is refused.** Unchanged for chat's delete,
- * which leaves the conversation off screen with the error above it. Remember's
+ * which leaves the conversation off screen with the error above it. Learn's
  * Start over asks for `restoreOnFailure`, and then its own tombstone comes off
  * and the conversation is back — see `DeleteOperation.restoreOnFailure`.
  *
@@ -488,8 +488,8 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
 function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcome {
   /* The conversation's own kind, from `base` — not the mode's, which differs
      whenever the reader has opened a thread of the other kind. A conversation
-     Remember began is in `base` from `thread.begun`, before anything is stored,
-     and this is what lets the first spoken exchange create it as Remember
+     Learn began is in `base` from `thread.begun`, before anything is stored,
+     and this is what lets the first spoken exchange create it as Learn
      rather than as a chat. A candidates thread has no Live control; if one ever
      got here, sending nothing keeps the server's default rather than a 400. */
   const kind = state.base.find((t) => t.id === op.threadId)?.kind;
@@ -513,7 +513,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
         ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
-        ...(kind === "chat" || kind === "remember" ? { kind } : {}),
+        ...(kind === "chat" || kind === "learn" ? { kind } : {}),
       },
     ],
   };
@@ -779,8 +779,16 @@ function renamed(state: ChatState, from: string, to: string): Outcome {
   /* And the conversation has a server name now, so nothing registered from here
      on has to wait for one. */
   const unnamed = knownAs(state, from);
+  let repairDrops = state.repairDrops;
+  const exclusions = repairDrops.get(from);
+  if (changing && exclusions) {
+    const next = new Map(repairDrops);
+    next.delete(from);
+    next.set(to, [...new Set([...(next.get(to) ?? []), ...exclusions])]);
+    repairDrops = next;
+  }
   if (!changing && commands.length === 0 && unnamed === state.unnamed) return unchanged(state);
-  return { state: { ...state, operations, tombstones, unnamed }, commands };
+  return { state: { ...state, operations, tombstones, unnamed, repairDrops }, commands };
 }
 
 /**
@@ -889,6 +897,89 @@ function startTurn(
       { type: "turn", opId: op.id, slug: state.slug, threadId: op.threadId, payload: event.payload },
     ],
   };
+}
+
+/** Replace a repair's read without forgetting unresolved merge exclusions. */
+function registerRepair(state: ChatState, repair: Registering<RepairOperation>): ChatState {
+  /* Replacing or failing a read does not establish whether an edit landed.
+     Keep its exclusions until a fresh copy is applied, even across failed reads.
+     Rows present in that copy always win over these exclusions. */
+  const drop = [...new Set([...(state.repairDrops.get(repair.threadId) ?? []), ...repair.drop])];
+  const repairDrops = new Map(state.repairDrops);
+  if (drop.length) repairDrops.set(repair.threadId, drop);
+  return register<RepairOperation>({ ...state, repairDrops }, { ...repair, drop },
+    (other) => other.kind === "repair" && other.threadId === repair.threadId);
+}
+
+function reconciled(state: ChatState, threadId: string): ChatState {
+  if (!state.repairDrops.has(threadId)) return state;
+  const repairDrops = new Map(state.repairDrops);
+  repairDrops.delete(threadId);
+  return { ...state, repairDrops };
+}
+
+/**
+ * Withdraw a turn's drawing and register its repair in one transition.
+ * Dropping the operation restores a retry's blanked row and an edit's discard;
+ * the read then establishes whether the server actually took the write.
+ */
+function withdrawn(state: ChatState, op: TurnOperation, error: string, repairId: OpId): Outcome {
+  const repair: Registering<RepairOperation> = {
+    id: repairId,
+    kind: "repair",
+    threadId: op.threadId,
+    /* **A send's own rows.** It wrote its question and its empty answer into
+       `base` at registration, because nothing withdraws the reader's own words
+       — except a 409, the one case where the server says the turn never
+       happened. A retry drew its row, and dropping the operation has already
+       put it back.
+       **An edit's are the turns it would discard.** They are back on screen the
+       same way, and they stay if the server still has them. But a failure
+       before `begin` does not prove the edit did not land, and if it did the
+       server's copy ends at the new answer: the merge would then keep these as
+       rows "this tab has and the server does not" and hang the discarded turns
+       under it. Named here, they are the server's to keep or not. */
+    drop:
+      op.shape === "send"
+        ? [op.replyId, ...(op.question ? [op.question.id] : [])]
+        : op.shape === "edit"
+          ? discardedBy(state, op)
+          : [],
+    /* The conversation as the reader is looking at it right now. If it is
+       not this same object when the answer comes back, something happened
+       here in the meantime and the answer is out of date — see `saw`. */
+    saw: state.base.find((t) => t.id === op.threadId) ?? null,
+  };
+  const cleared = stranded(state, op.id);
+  const dropped: ChatState = { ...cleared, operations: withoutOp(cleared, op.id), error };
+  return {
+    state: registerRepair(dropped, repair),
+    commands: [{ type: "repair", opId: repair.id, slug: state.slug, threadId: repair.threadId }],
+  };
+}
+
+/**
+ * The stored rows under an edit's question: what the server deletes if it
+ * takes the edit.
+ *
+ * **Not another send's provisional rows.** Before `begin`, its pair in `base`
+ * sits under the question too, and the server has not confirmed those rows yet;
+ * they are that send's to settle, and the merge keeps them for it. A retry
+ * names a stored row, and a send that began has confirmed its rows: either
+ * belongs to the edit's discard if the server no longer has it. A recovery
+ * watches stored rows; a spoken exchange draws its rows outside `base`.
+ */
+function discardedBy(state: ChatState, op: TurnOperation): string[] {
+  const messages = state.base.find((t) => t.id === op.threadId)?.messages ?? [];
+  const at = messages.findIndex((m) => m.id === op.editing);
+  if (at === -1) return [];
+  const inFlight = new Set<string>();
+  for (const other of state.operations.values()) {
+    if (other.kind !== "turn" || other.shape !== "send" || other.began || other.id === op.id) continue;
+    inFlight.add(other.replyId);
+    if (other.question) inFlight.add(other.question.id);
+  }
+  return messages.slice(at + 1).flatMap((m) => (inFlight.has(m.id) ? [] : [m.id]));
 }
 
 /** One frame's worth of change to the answer row, and nothing else moves. */
@@ -1008,6 +1099,22 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
       return { state: commit(state, { ...op, reply }), commands: NOTHING };
     }
     case "turn.failed": {
+      /* **Before `begin`, a retry or an edit has only been drawn**, and a
+         failure there is not the server's word on anything: a `[db-busy]` 500,
+         a request that never opened. Committing the drawing blanked an answer,
+         or took away every turn under an edited question, that Postgres still
+         held, until a reload. So it is withdrawn the way a 409 is, and the
+         server is asked, because a response can also be lost *after* the write
+         and the old answer would then be the false one.
+         A send is not: its rows are in `base` with nothing older underneath,
+         and the reader's words stay on screen with the failure under them. */
+      /* A failed initial send leaves a populated but unnamed draft. Retry/Edit
+         cannot create its conversation or name its provisional rows. Keep
+         that draft's prior failure behavior: repairing a missing thread would
+         erase the reader's question. */
+      if (!op.began && op.shape !== "send" && !state.unnamed.has(op.threadId)) {
+        return withdrawn(state, op, event.error, event.repair.id);
+      }
       // The partial answer is kept — the reader watched it appear, and taking
       // it away on failure is more confusing than leaving it there with the
       // failure attached. The server stores it too.
@@ -1020,13 +1127,16 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
       return { state: commit(state, { ...op, reply }), commands: NOTHING };
     }
     case "turn.disconnected": {
-      /* **Nothing to look for.** Until the `begin` frame, `replyId` is a name
-         this client invented and no amount of asking the server will find it —
-         so a stream lost before then is a plain failure rather than the
-         recovery's business. The watcher used to spend two and a half minutes
-         politely asking about an invented id and showing "connection lost,
-         checking…" the whole time. */
+      /* Before `begin`, a send's provisional row cannot be recovered by id.
+         A retry or edit instead asks for the whole conversation: the write
+         may have landed even though its naming frame never arrived. */
       if (!op.began) {
+        /* And for a retry or an edit, nothing to commit either — `turn.failed`
+           says why. The id the event brought is for whichever operation takes
+           the row over, and here that is the repair. */
+        if (op.shape !== "send" && !state.unnamed.has(op.threadId)) {
+          return withdrawn(state, op, event.error, event.recovery.id);
+        }
         const reply: ChatMessage = { ...op.reply, status: "error", error: event.error };
         return { state: commit(state, { ...op, reply }), commands: NOTHING };
       }
@@ -1052,52 +1162,8 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          scan started has already taken the row. */
       return startRecovery(committed, recovery);
     }
-    case "turn.refused": {
-      /* **The refusal and the repair are one decision**, so they are one
-         transition. Dropping the operation is the whole of putting the screen
-         back: a retry's blanked row un-blanks and an edit's discarded turns
-         return, because neither was ever taken away — they were drawn over.
-         The repair then goes and asks, because the server refused for a reason
-         and this tab does not know what it is. */
-      const repair: Registering<RepairOperation> = {
-        id: event.repair.id,
-        kind: "repair",
-        threadId: op.threadId,
-        /* **Only a send has rows to drop.** It wrote its question and its empty
-           answer into `base` at registration, because nothing withdraws the
-           reader's own words — except this, the one case where the server says
-           the turn never happened. A retry and an edit drew theirs, and dropping
-           the operation has already put those back. */
-        drop:
-          op.shape === "send"
-            ? [op.replyId, ...(op.question ? [op.question.id] : [])]
-            : [],
-        /* The conversation as the reader is looking at it right now. If it is
-           not this same object when the answer comes back, something happened
-           here in the meantime and the answer is out of date — see `saw`. */
-        saw: state.base.find((t) => t.id === op.threadId) ?? null,
-      };
-      const cleared = stranded(state, op.id);
-      const dropped: ChatState = {
-        ...cleared,
-        operations: withoutOp(cleared, op.id),
-        error: event.error,
-      };
-      return {
-        state: register<RepairOperation>(
-          dropped,
-          repair,
-          /* **Repairs supersede each other**, which they did not, so an older
-             snapshot could land over a newer one for the same conversation.
-             They are both answers to "what does the server have?" and only the
-             later question is worth an answer. */
-          (other) => other.kind === "repair" && other.threadId === op.threadId,
-        ),
-        commands: [
-          { type: "repair", opId: repair.id, slug: state.slug, threadId: repair.threadId },
-        ],
-      };
-    }
+    case "turn.refused":
+      return withdrawn(state, op, event.error, event.repair.id);
     default:
       return unchanged(state);
   }
@@ -1124,8 +1190,8 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
  *   an optimistic row of a send in flight, or one from a turn that started after
  *   the snapshot was taken; either way it is newer than the snapshot by
  *   construction. This is `mergedArrival`'s rule and it holds for the same
- *   reason — see its docstring. The exception is `drop`: the rows of the refused
- *   send itself, which the server has just said do not exist;
+ *   reason — see its docstring. The exception is `drop`: a refused send's rows,
+ *   or an edit's discard, which must not survive if absent from the server;
  * - **the title is never taken from the server.** A title is not withdrawn and
  *   the last writer to `base` wins, which is the reader's own order — a rename
  *   they made while the repair was out is that order, and the snapshot is not.
@@ -1141,8 +1207,8 @@ function merged(mine: ChatThread, fresh: ChatThread, op: RepairOperation): ChatT
   /* Rows this tab has and the server does not. Nothing here is *newer* than the
      snapshot — that case is refused outright now, above — so these are rows the
      server had not written down when it answered: a send's optimistic pair,
-     most often. `drop` is the exception: the refused turn's own rows, which the
-     server has just said never happened. */
+     most often. `drop` is the exception: a refused send's rows or an edit's
+     discarded rows, when the server no longer has them. */
   const extra = mine.messages.filter((m) => !known.has(m.id) && !op.drop.includes(m.id));
   return {
     ...fresh,
@@ -1163,17 +1229,17 @@ function merged(mine: ChatThread, fresh: ChatThread, op: RepairOperation): ChatT
  * - **a row this tab has and the server does not is kept**, appended. It is a
  *   send's optimistic pair, written into `base` at registration under ids the
  *   server has never heard of. `merged` keeps these for a repair for the same
- *   reason. There is no `drop` here: nothing about this write says any other
- *   row never happened;
+ *   reason. Any exclusions still unresolved by a previous repair apply here
+ *   too: a spoken write must not restore the rows an earlier edit deleted;
  * - **the title is the server's only if this write is what named the
  *   conversation.** `namesThread` on a turn is the same question, and the two
  *   times it has been answered wrongly were both a caller guessing at a fact
  *   about the state. So it is decided in `namesIt` below, from the state, and
  *   passed in.
  */
-function underneath(mine: ChatThread, fresh: ChatThread, takeTitle: boolean): ChatThread {
+function underneath(mine: ChatThread, fresh: ChatThread, takeTitle: boolean, drop: readonly string[] = []): ChatThread {
   const known = new Set(fresh.messages.map((m) => m.id));
-  const extra = mine.messages.filter((m) => !known.has(m.id));
+  const extra = mine.messages.filter((m) => !known.has(m.id) && !drop.includes(m.id));
   return {
     ...fresh,
     title: takeTitle ? fresh.title : mine.title,
@@ -1295,7 +1361,8 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          later append, retry and edit needs to name them by. */
       const fresh = event.thread;
       const mine = retired.base.find((t) => t.id === op.threadId);
-      const merged = mine ? underneath(mine, fresh, namesIt(retired, op.threadId)) : fresh;
+      const merged = mine ? underneath(mine, fresh, namesIt(retired, op.threadId),
+        retired.repairDrops.get(op.threadId)) : fresh;
       const base = mine
         ? retired.base.map((t) => (t.id === op.threadId ? merged : t))
         : /* The reader pressed Live on a conversation this tab does not have in
@@ -1305,7 +1372,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
           [...retired.base, fresh];
       return {
         state: {
-          ...retired,
+          ...reconciled(retired, op.threadId),
           base,
           /* The server has now written this conversation down, so a rename or a
              delete of it has something to name. The same transition
@@ -1347,11 +1414,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         operations: withoutOp(state, op.id),
       };
       return {
-        state: register<RepairOperation>(
-          dropped,
-          repair,
-          (other) => other.kind === "repair" && other.threadId === repair.threadId,
-        ),
+        state: registerRepair(dropped, repair),
         commands: [
           { type: "repair", opId: repair.id, slug: state.slug, threadId: repair.threadId },
         ],
@@ -1391,13 +1454,13 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       const spokenLanded = op.spoken && storedSpoken(fresh, op.spoken.operation);
       const base = fresh
         ? rewrite(retired.base, op.threadId, (t) => spokenLanded
-          ? underneath(t, fresh, namesIt(retired, op.threadId))
+          ? underneath(t, fresh, namesIt(retired, op.threadId), op.drop)
           : merged(t, fresh, op))
         : /* The server does not have it at all: it was deleted, or it was never
              written down. Either way it is not a conversation. */
           retired.base.filter((t) => t.id !== op.threadId);
       return {
-        state: { ...retired, base,
+        state: { ...reconciled(retired, op.threadId), base,
           ...(spokenLanded ? { unnamed: knownAs(retired, op.threadId) } : {}),
           ...(op.spoken && !spokenLanded ? { error: op.spoken.error } : {}),
         }, commands: NOTHING,

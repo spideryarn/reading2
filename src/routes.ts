@@ -296,6 +296,7 @@ import {
   processingOf,
 } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
+import { StillBeingAdded } from "./still-being-added.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -416,7 +417,7 @@ import type {
   LibraryTermsResponse,
   LibraryTagsResponse,
   ArticleTagsResponse,
-  RememberStance,
+  LearnStance,
   ThreadKind,
   ThreadResponse,
   ThreadSummary,
@@ -465,8 +466,8 @@ import {
 } from "./types.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
-   src/types.ts § REMEMBER_STANCES. */
-import { REMEMBER_STANCES } from "./types.js";
+   src/types.ts § LEARN_STANCES. */
+import { LEARN_STANCES } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
@@ -2863,17 +2864,17 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **A stance is a legacy field: validated, then dropped.** Until 2026-10-02
-     Recall had four stances and the client sent one on every new Remember
+     Recall had four stances and the client sent one on every new Learn
      turn. There is one voice now, and nothing reads a stance — but a tab left
      open across that deploy still sends one, and it is accepted on exactly the
-     request it used to be sent with (an ordinary Remember send, checked below)
+     request it used to be sent with (an ordinary Learn send, checked below)
      so that tab's next turn does not 400. An unknown value is still a 400: a
      client sending `stance: "socratik"` has a bug, and accepting it quietly is
      how the bug survives. Kept indefinitely — the check is cheap and a tab can
      stay open for weeks.
      docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
-  if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
-    throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
+  if (stance !== undefined && !LEARN_STANCES.includes(stance as LearnStance)) {
+    throw httpError(400, `stance must be one of: ${LEARN_STANCES.join(", ")}`);
   }
   /* The message names the wire values, because that is what a client has to
      send, and the list is `THREAD_KINDS` rather than a chain of `!==` written
@@ -2882,11 +2883,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refused by a route that had no opinion about it, with a sentence naming two
      kinds and offering no clue that a third existed.
 
-     `remember` was spelled `review` until 2026-09-01 and there is no alias: the
-     rename moved the wire value, the CHECK constraint and the rows in one step
-     (drizzle/0048_rename_review_thread_kind.sql), so an old client sending
-     `review` gets this 400 rather than a thread of the wrong kind.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
+     `learn` was spelled `review` until 2026-09-01 and `remember` until
+     2026-10-06, and there is no alias for either: each rename moved the wire
+     value, the CHECK constraint and the rows in one step
+     (drizzle/0048_rename_review_thread_kind.sql, then
+     drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql), so an old
+     client sending `review` or `remember` gets this 400 rather than a thread
+     of the wrong kind. A tab left open across the deploy fails its next
+     Recall turn until it reloads.
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages,
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
   }
@@ -2968,56 +2974,56 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
-  /* Two limits, chosen by what the box actually is — see `MAX_REMEMBER_CHARS`.
+  /* Two limits, chosen by what the box actually is — see `MAX_LEARN_CHARS`.
 
      **The request's kind is not enough**, and reading only it was a bug: an
      edit sends no kind at all (it is refused one, just above), so every edit
-     was measured against chat's 4,000 and a 4,001-character Remember turn could be
+     was measured against chat's 4,000 and a 4,001-character Learn turn could be
      created and then never rewritten. So the *thread's* kind decides whenever
      there is a thread, and the request's is the fallback for the turn that
      creates one. GPT Sol's review of the built code, finding 5.
 
      Cheap: `chatStore.load` is called a few lines down anyway. And a smuggled
-     `kind: "remember"` on a thread that is a chat buys nothing — the 409 below
+     `kind: "learn"` on a thread that is a chat buys nothing — the 409 below
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
-  const askingRemember = (storedKind ?? wantedKind) === "remember";
-  /* Tutorial and Explore are dictated too, so they share Remember's long cap
-     rather than chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to
+  const askingLearn = (storedKind ?? wantedKind) === "learn";
+  /* Tutorial and Explore are dictated too, so they share Learn's long cap
+     rather than chat's 4,000 — the same mistake `MAX_LEARN_CHARS` exists to
      avoid. */
   const effectiveKind = storedKind ?? wantedKind;
-  const longInput = askingRemember || effectiveKind === "tutorial" || effectiveKind === "explore";
-  /* **Chat only.** Remember's prompt tells the model not to guess how far the
+  const longInput = askingLearn || effectiveKind === "tutorial" || effectiveKind === "explore";
+  /* **Chat only.** Learn's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
   if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
     throw httpError(400, "visible only applies to a chat");
   }
   /* `storedKind` was read outside `inTurnOrder`. If two first turns carrying the
-     same optimistic id arrive together, the other one can create a Remember
+     same optimistic id arrive together, the other one can create a Learn
      thread after that read. Make chat explicit on the authoritative store write
      whenever `visible` is present, so `withTurn`'s transactional kind check
      refuses the collision before inserting either message. Without this, the
-     request could append a screenful to a Remember thread even though the fast
+     request could append a screenful to a Learn thread even though the fast
      check above had correctly seen no thread yet. */
   /* An origin is chat-only as well (checked below), so it makes chat explicit
      here for the same reason. */
   const beginKind = !wantsRetry && !wantsEdit
     ? (wantedKind ?? (visible !== undefined || origin !== undefined ? "chat" : undefined))
     : undefined;
-  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+  const cap = longInput ? MAX_LEARN_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
       longInput
-        ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
+        ? `What you wrote may be at most ${MAX_LEARN_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
   }
-  /* **A stance anywhere but a Remember send is refused**, as it always was:
+  /* **A stance anywhere but a Learn send is refused**, as it always was:
      the legacy acceptance above covers the one request old tabs sent it on and
      nothing wider. GPT Sol's review, finding 7. */
-  if (stance !== undefined && !askingRemember) {
+  if (stance !== undefined && !askingLearn) {
     throw httpError(400, "A stance only applies in Learn mode");
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
@@ -3042,7 +3048,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, "An anchor can only be sent with a new question");
   }
   /* **Only a chat may be anchored**, and the rule is stated that way round on
-     purpose. A Remember turn is about the whole piece and a Candidates turn is
+     purpose. A Learn turn is about the whole piece and a Candidates turn is
      about the whole paper; neither has a gesture that starts one from a
      selection, because the paragraph and selection buttons both open a chat. So
      an anchor arriving with either kind is a client that has confused them.
@@ -3077,7 +3083,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      wire; this is the contract, and it is one sentence — `ChatMessage.help` in
      src/types.ts: *the paragraph "?" button created this thread*. Without these
      three checks the flag was accepted on a later turn of an existing
-     conversation, on an unanchored one, on a selection chat, and on a Remember
+     conversation, on an unanchored one, on a selection chat, and on a Learn
      or Candidates thread. Every one of those stores a press nobody made **and**
      answers the request with the teaching prompt, so the row and the answer are
      both wrong and agree with each other.
@@ -3815,11 +3821,11 @@ async function spokenChat(
   if (expectedTailId !== null && typeof expectedTailId !== "string") {
     throw httpError(400, "expectedTailId is required, and is null for an empty conversation");
   }
-  /* **Absent, `chat` or `remember`.** The kind the tab began this conversation
+  /* **Absent, `chat` or `learn`.** The kind the tab began this conversation
      as, used only if this exchange is what creates it; a contradiction with a
      stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
   if (kind !== undefined && !isSpokenKind(kind)) {
-    throw httpError(400, "kind must be chat or remember");
+    throw httpError(400, "kind must be chat or learn");
   }
   /* **Which engine spoke, and so which model the row is marked with.** The
      browser names the engine, never the model: the model id is this server's
@@ -3882,7 +3888,7 @@ async function spokenChat(
  * How long either half of one spoken exchange may be.
  *
  * Its own number rather than `MAX_QUESTION_CHARS`, and for the same reason
- * `MAX_REMEMBER_CHARS` is: 4,000 is a considered cap on a sentence somebody
+ * `MAX_LEARN_CHARS` is: 4,000 is a considered cap on a sentence somebody
  * *typed*, and speech runs three or four times longer than the same thought
  * typed. It applies to the answer as well, which is the model's own speech and
  * bounded by one realtime turn.
@@ -4477,11 +4483,11 @@ function summarise(thread: ChatThread): ThreadSummary {
        conversation by. Like the anchor's quote, it travels in this response
        body and is never logged. */
     ...(thread.origin ? { origin: thread.origin } : {}),
-    /* The reading view draws no marks for Remember — a Remember thread cannot be
+    /* The reading view draws no marks for Learn — a Learn thread cannot be
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
-       `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
+       `?mode=hierarchy&thread=<a Learn thread>` would continue it as a chat. The
        overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
@@ -4493,9 +4499,9 @@ function summarise(thread: ChatThread): ThreadSummary {
 const MAX_QUESTION_CHARS = 4000;
 
 /**
- * How long a **Remember** turn may be — its own limit, and not the question's.
+ * How long a **Learn** turn may be — its own limit, and not the question's.
  *
- * A chat question is a sentence somebody typed; a Remember turn is a paragraph or two
+ * A chat question is a sentence somebody typed; a Learn turn is a paragraph or two
  * somebody *said*, and speech runs three or four times longer than the same
  * thought typed. 4,000 characters is a considered cap on the first and an
  * accident applied to the second: a reader who talks for four minutes hits it,
@@ -4507,7 +4513,7 @@ const MAX_QUESTION_CHARS = 4000;
  * Roughly fifteen minutes of continuous speech, because the cost of a long one
  * is tokens rather than risk.
  */
-const MAX_REMEMBER_CHARS = 20_000;
+const MAX_LEARN_CHARS = 20_000;
 
 /**
  * How long a selection may be, in characters.
@@ -7724,6 +7730,9 @@ function declaredFields(err: unknown): Record<string, unknown> {
   if (err instanceof DuplicateUpload) {
     return { code: err.code, ...(err.article ? { article: err.article } : {}) };
   }
+  /* The code and nothing else: this answer is given to a stranger, about an
+     article that is not published yet (src/still-being-added.ts). */
+  if (err instanceof StillBeingAdded) return { code: err.code };
   return {};
 }
 

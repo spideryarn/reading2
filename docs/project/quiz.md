@@ -2,7 +2,7 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-31 to 2026-09-01.** The second half of [Learn](remember-mode.md). Recall asks the
+**Built 2026-08-31 to 2026-09-01.** The second half of [Learn](learn-mode.md). Recall asks the
 reader what they took from the piece; Quiz walks them, one small question at a time, up to the
 piece's takeaways, and says how each answer sits against it.
 
@@ -38,7 +38,7 @@ Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation,
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx),
 [`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
-§ `RememberBand`, `QuizSubBand`.
+§ `LearnBand`, `QuizSubBand`.
 Types: [`src/types.ts`](../../src/types.ts) § `QuizQuestion`, `QuizEvidence`, `Quiz`, `QuizDropped`.
 Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-panel.test.tsx`](../../tests/quiz-panel.test.tsx),
@@ -162,7 +162,7 @@ comes back `right` — and its cost is one premise hidden that should have been 
 
 **What it does not do:** it does not end the quiz after a run of wrong answers. Ending someone's quiz
 because they are getting things wrong is a verdict about the reader delivered by a machine — the thing
-[remember-mode.md](remember-mode.md) and the marking rules refuse.
+[learn-mode.md](learn-mode.md) and the marking rules refuse.
 
 ## A reference answer is not an answer key
 
@@ -190,8 +190,8 @@ to set. [block-ids.md](block-ids.md) is the contract.
 **What you got, what's missing, where to look.** No score, no grade, no fraction, no "mostly right".
 The reply confirms claims and points at passages; it never says how the reader did.
 
-The line between the two is the same one [remember-mode.md § The prompt is the
-feature](remember-mode.md#the-prompt-is-the-feature) draws, and the marking prompt inherits that
+The line between the two is the same one [learn-mode.md § The prompt is the
+feature](learn-mode.md#the-prompt-is-the-feature) draws, and the marking prompt inherits that
 section's entitlement rules wholesale — a correction must be carried by a quoted sentence that
 contradicts the reader *by itself*, disagreeing with the author is not getting it wrong, and a
 shorter answer is not a worse one. What Quiz adds is the case Recall does not have: the question has
@@ -260,7 +260,7 @@ answer is kept though nobody receives the frame.)
 
 ## On screen
 
-`?remember=quiz`, and the Recall | Tutorial | Explore | Quiz toggle at the top of the band —
+`?learn=quiz`, and the Recall | Tutorial | Explore | Quiz toggle at the top of the band —
 [url-state.md](url-state.md) has the parameter and its defined collision with `?thread=`.
 
 **The step row is icons, their words in tooltips** (Greg, 2026-09-30, SPIDERYARN-READING2-71:
@@ -400,7 +400,7 @@ options), the choice and what was deferred are
 
 - **The question's words only, never its premise** — the list's rule, for the list's reason.
 - **Pressing it is a jump**, so the band shows the premise; it goes through
-  `?mode=remember&remember=quiz` with `thread` cleared, one pushed entry, and an in-memory
+  `?mode=learn&learn=quiz` with `thread` cleared, one pushed entry, and an in-memory
   `QuizArrival` that names its batch ([`QuizPanel.tsx`](../../src/web/QuizPanel.tsx)). Pressing the
   question already open does nothing, since `move` would abort its mark; if *Only what I've read*
   would hide it, the tick-box turns itself off. It arms nothing and buys nothing — a line exists only
@@ -591,7 +591,7 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 
 ## See also
 
-- [remember-mode.md](remember-mode.md) — the other half of the band, and the prompt faults this one
+- [learn-mode.md](learn-mode.md) — the other half of the band, and the prompt faults this one
   inherited the fixes for
 - [block-ids.md](block-ids.md) — the contract every `blockId` here is bound by
 - [ai-gateway.md](ai-gateway.md) · [prompt-caching.md](prompt-caching.md) — the wire, and the

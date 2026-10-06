@@ -1,7 +1,7 @@
 /**
  * **Recall's hint: the last paragraph of an answer, kept behind a button.**
  *
- * Recall (`kind === "remember"`) ends most replies with a question, and the
+ * Recall (`kind === "learn"`) ends most replies with a question, and the
  * model writes a hint for it in the same reply, as a last paragraph beginning
  * `Hint:`. The stored text is what the model wrote, hint and all; this file is
  * the one place that says which part is the hint. Shared by the server, the
@@ -17,7 +17,7 @@
 
 import type { ChatMessage, ThreadKind } from "./types.js";
 
-/** The marker the prompt asks for, exactly. `REMEMBER_SYSTEM` in src/converse.ts. */
+/** The marker the prompt asks for, exactly. `LEARN_SYSTEM` in src/converse.ts. */
 export const HINT_MARKER = "Hint:";
 
 export interface SplitHint {
@@ -82,7 +82,7 @@ export function answerAsSeen(
   message: Pick<ChatMessage, "role" | "text" | "hintOpenedAt">,
   kind: ThreadKind | undefined,
 ): string {
-  if (kind !== "remember" || message.role !== "assistant") return message.text;
+  if (kind !== "learn" || message.role !== "assistant") return message.text;
   if (message.hintOpenedAt !== undefined) return message.text;
   return splitHint(message.text).body;
 }

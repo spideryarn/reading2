@@ -2,7 +2,7 @@
  * **The same question as run.ts and answers.ts, for every other prompt that
  * writes words a reader reads**: arc, tweets, ideas, quotes' reasons,
  * citations' why, illustrated, quiz, FAQ, labels, sketch, timeline, quiz-mark,
- * search, Remember, chat's "?" help turn and the referee's claims.
+ * search, Learn, chat's "?" help turn and the referee's claims.
  * docs/plans/260926a-plainer-summaries-and-glossary.md § Stage 3, "Measuring
  * it, per kind". Debate and live are not here; the plan says why.
  *
@@ -40,8 +40,8 @@
  *   reader who paints after drawing gets. (With `--only illustrated` and no
  *   sketch in the arm yet, it uses that arm's stored sketch file if there is
  *   one and refuses otherwise.)
- * - **Remember and help are single first turns** (`converse`, no history):
- *   Remember with `kind: "remember"` on a reader's summary written once below,
+ * - **Learn and help are single first turns** (`converse`, no history):
+ *   Learn with `kind: "learn"` on a reader's summary written once below,
  *   help with `help: true`, `HELP_QUESTION` and the block as the thread's
  *   anchor, as `helpAboutBlock` in src/web/reader/Reader.tsx starts one. Tools
  *   on, as the route leaves them.
@@ -64,7 +64,7 @@
  * | labels | the block id |
  * | quiz-mark | the fixed case (`MARK_CASES`) |
  * | search | the fixed query and the block the hit is in |
- * | remember, help | the fixed input |
+ * | learn, help | the fixed input |
  * | everything else | **position**: the Nth idea of run A against the Nth of run B |
  *
  * A position pair is a comparison of **registers**, not of identical content:
@@ -80,6 +80,7 @@ import type { QuizEvidence } from "../../src/types.js";
 import { prose } from "./answers.js";
 import { blindCoin, hardShare, isCommon, wordsIn } from "./run.js";
 import { sourceFingerprint } from "./source-fingerprint.js";
+import { formerName, storedResult } from "../stored-result.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "plain-words", "artefacts");
 
@@ -100,7 +101,7 @@ const GENERATORS = [
   "timeline",
   "quiz-mark",
   "search",
-  "remember",
+  "learn",
   "help",
   "referee-claims",
 ] as const;
@@ -127,13 +128,13 @@ export const PROMPT_FILES: Record<Generator, string[]> = {
   timeline: ["timeline.ts"],
   "quiz-mark": ["quiz-mark.ts"],
   search: ["search.ts"],
-  remember: ["converse.ts"],
+  learn: ["converse.ts"],
   help: ["converse.ts"],
   "referee-claims": ["referee-claims-run.ts"],
 };
 
-/** Two readers' Remember summaries — one mostly right, one half wrong — the same in every arm. */
-const REMEMBER_CASES = [
+/** Two readers' Learn summaries — one mostly right, one half wrong — the same in every arm. */
+const LEARN_CASES = [
   {
     id: "mostly-right",
     text: "My takeaway: Seth thinks AI probably won't be conscious, because consciousness seems tied to being a living body and not just to running the right software. He also says we're easily fooled because the chatbots talk like us.",
@@ -241,7 +242,7 @@ interface ArmFile {
   sketchFrom?: string;
   /**
    * What the generator's own run says it used, where it says (the Anthropic-SDK
-   * stages do; quiz-mark, search, Remember, help and the referee do not). The
+   * stages do; quiz-mark, search, Learn, help and the referee do not). The
    * calls reach no spend ledger (see the header), so this is the only record of
    * what an arm cost. Absent on the first `before` files, which predate it.
    */
@@ -459,12 +460,12 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       }
       write("search", items);
     },
-    remember: async () => {
+    learn: async () => {
       const items: Item[] = [];
-      for (const c of REMEMBER_CASES) {
-        items.push({ key: c.id, field: "reply", text: await turn({ power: "standard", question: c.text, kind: "remember" }), context: `Reader's summary: ${c.text}` });
+      for (const c of LEARN_CASES) {
+        items.push({ key: c.id, field: "reply", text: await turn({ power: "standard", question: c.text, kind: "learn" }), context: `Reader's summary: ${c.text}` });
       }
-      write("remember", items);
+      write("learn", items);
     },
     help: async () => {
       const items: Item[] = [];
@@ -590,19 +591,22 @@ function sketchItems(
  * referee's claims overflowed twice on 2026-09-28) must not stop the other
  * sixteen being read, and must not quietly vanish from one side either.
  */
-function readArm(arm: string): { files: Map<Generator, ArmFile>; missing: Generator[] } {
+export function readArm(arm: string): { files: Map<Generator, ArmFile>; missing: Generator[] } {
   const files = new Map<Generator, ArmFile>();
   const missing: Generator[] = [];
   for (const g of GENERATORS) {
-    const f = path.join(OUT, arm, `${g}.json`);
+    /* An arm saved before 2026-10-06 has `remember.json`, which calls itself
+       `remember` inside: the generator now called `learn`. Read as that. */
+    const f = storedResult(path.join(OUT, arm, `${g}.json`));
     if (!fs.existsSync(f)) {
       missing.push(g);
       continue;
     }
-    const file = JSON.parse(fs.readFileSync(f, "utf-8")) as ArmFile;
-    if (file.generator !== g || file.slug !== SLUG || file.arm !== arm) throw new Error(`${f}: says it is ${file.arm}/${file.generator}/${file.slug}`);
-    if (file.items.length === 0) throw new Error(`${f}: no items`);
-    files.set(g, file);
+    const read = JSON.parse(fs.readFileSync(f, "utf-8")) as Omit<ArmFile, "generator"> & { generator: string };
+    const named = read.generator === g || read.generator === formerName(g);
+    if (!named || read.slug !== SLUG || read.arm !== arm) throw new Error(`${f}: says it is ${read.arm}/${read.generator}/${read.slug}`);
+    if (read.items.length === 0) throw new Error(`${f}: no items`);
+    files.set(g, { ...read, generator: g });
   }
   if (files.size === 0) throw new Error(`arm ${arm} has no generators`);
   const shas = new Set([...files.values()].map((f) => f.blocksSha256));

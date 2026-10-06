@@ -108,9 +108,11 @@ export function helpHref(anchor: HelpAnchor): string {
  * Every retired mode is here without anybody remembering to add it: a mode
  * leaving `MODES` goes into `RETIRED_MODES` (src/modes.ts) so that its old
  * `?mode=` links keep working, and the same entry keeps its old `#mode-…`
- * link working here. None of the three in it today was ever a Help anchor —
+ * link working here. Three of them were never a Help anchor —
  * they retired before the page existed — but a reader who guesses
- * `/help#mode-trajectory` from an old address should land on Skim.
+ * `/help#mode-trajectory` from an old address should land on Skim. Two did
+ * ship: `#mode-tweets`, and `#mode-remember`, which was Learn's anchor until
+ * its id followed its name on 2026-10-06.
  *
  * Hand-written entries go after the spread, each with the date and the
  * reason. Never remove one.

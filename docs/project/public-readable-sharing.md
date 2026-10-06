@@ -228,8 +228,45 @@ article becomes readable by others when the import publishes.
 - **The add page does not leave by itself while sharing is unsettled**: the confirmation open, or
   the request waiting, refused or unanswered. It shows *Open the article*.
 
-Not built: a private link from the add page, and anything for a visitor who arrives before the
-import has finished (they see what any unshared address shows).
+### Stage 2, 2026-10-06: one Sharing section, a private link, and a visitor who arrives early
+
+Greg's answers to the three questions stage 1 ended on, in his words, are in the plan
+([261005l § Greg's answers](../plans/261005l-permalink-and-share-while-an-article-is-importing.md)).
+
+- **Both controls sit in one *Sharing* section, shut by default**
+  ([`AddSharing.tsx`](../../src/web/AddSharing.tsx)): *"because most people won't want to use
+  it"*. It opens itself when a control is on, waiting, refused or unknown, cannot be shut over an
+  open question, and shut it names what is on (*Sharing: public*). Shut, neither control is
+  mounted, so a link's key is not in the page.
+- **Create a private link** ([`AddShareLink.tsx`](../../src/web/AddShareLink.tsx) drawing a
+  `LinkAtAdd`, [`add-share-link.ts`](../../src/web/add-share-link.ts)) sends the Metadata card's
+  own requests behind its own confirmation. Unlike the public switch **it can read its state
+  before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
+  reads on every attachment and keeps no mark. **A create that did not come back is never sent
+  again by itself**, because a second create replaces the first link: it shows *unknown* and a
+  *Check again* button. An older read that answers after a newer write is dropped
+  ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
+- **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
+  when the session changes, where the upload engine is fenced
+  ([`add-sharing-session.ts`](../../src/web/add-sharing-session.ts)); a reply for a retired
+  controller is drawn nowhere. A key in memory must not outlive the account it belongs to.
+- **A visitor before publication is told the article is still being added.** The public article
+  read answers **409 `still-being-added`** when the request may read the article (public, or the
+  right key), nothing is published, and its owner has a queued job or a running one with a live
+  lease (`publicPendingImportQuery`, [`src/store/public-reader.ts`](../../src/store/public-reader.ts)).
+  The body is a fixed sentence and the code. The head, assets, the shelf and every other read are
+  as they were, so no title goes out. A wrong key, a private article, a failed or abandoned
+  import are the same 404 as before. Greg accepted what it gives away, *"i'm not too worried
+  about the security tradeoff"*: somebody holding the address learns an unpublished article is
+  there. The page ([`StillBeingAddedVisitor.tsx`](../../src/web/article/StillBeingAddedVisitor.tsx))
+  asks again every ten seconds while the tab is visible. The owner of a shared import gets their
+  own import's card, as in stage 1.
+- **Console logs no longer print a response's query string** (`logFailure`,
+  [`src/web/lib/api.ts`](../../src/web/lib/api.ts)): the expected 409 on a private link was
+  logging `?key=…` ([postmortem 261006a](../postmortems/261006a-a-secret-bearing-response-url-escaped-through-a-diagnostic-sibling.md)).
+
+Not built, by Greg's decision: a read of the public switch before publication, so the second-tab
+limit above stands.
 
 ## Where the code is
 

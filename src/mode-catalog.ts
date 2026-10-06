@@ -91,7 +91,7 @@ export interface ModeCatalogEntry {
    * tests/mode-catalog.test.ts holds the convention so the fifteenth matches
    * the fourteen it will sit beside.
    *
-   * A blurb is sometimes doing more work than it looks. `remember`'s ends
+   * A blurb is sometimes doing more work than it looks. `learn`'s ends
    * *"not saved notes or flashcards"* because the mode's **name** promises two
    * things it does not do, and that denial is the named cost of the 2026-09-01
    * rename — if the line is ever shortened, the denial is the part to keep.
@@ -407,7 +407,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["premises", "propositions", "assumptions", "arguments", "key ideas", "main ideas", "theses", "beliefs"],
     experimental: false,
   },
-  remember: {
+  learn: {
     description:
       /* Rewritten 2026-10-05 with the name (plan 261005l). *Remember* wrongly
          suggested saved memories, and the sentence ended by denying them;
@@ -419,8 +419,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        110-word walk through Recall, Tutorial and Explore; Greg (spya-usyhwy):
        *"it's like one big paragraph. Prefer smaller paragraphs or bullet
        points"*, and *"each submode button should have its own tooltip"*. So
-       what each part does is on its chip (QuizPanel.tsx § `REMEMBER_VIEW_HOW`)
-       and listed in the band's (i) (RememberAbout.tsx).
+       what each part does is on its chip (QuizPanel.tsx § `LEARN_VIEW_HOW`)
+       and listed in the band's (i) (LearnAbout.tsx).
        Claims: no conversation turn runs before the reader's first message;
        Quiz's questions are one stored batch written from the article, and
        each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It
@@ -433,7 +433,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        rule these aliases follow. Quiz is one of Learn's *other* sub-modes, and
        opening the mode lands on Recall (`params.ts`), so `quiz` here would name
        a destination and then not go there. GPT Sol found this, 2026-09-07.
-       Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
+       Since 2026-10-01 a command *can* encode `{ mode: "learn", learn:
        "quiz" }` — the bar's *Learn › Quiz* row (src/web/sub-modes.ts, plan
        261001d) — and that row, not an alias here, is where `quiz` lands.
        `test me` is left out for the same reason, and `flashcards` because the
@@ -447,7 +447,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
        *"I think recall submode for sure. I think quiz mode as well. And then
        let's try tutorial too."* Explore, the fourth part, stays behind the
-       switch one level down (src/web/sub-modes.ts § `REMEMBER_SUB_MODES`).
+       switch one level down (src/web/sub-modes.ts § `LEARN_SUB_MODES`).
        docs/project/experimental-features.md. */
     experimental: false,
   },

@@ -10,7 +10,7 @@
  * to Recall replaces `?thread=` with Recall's own conversation and going to
  * Quiz clears it, so a test that only unmounts the band and mounts it again
  * with the address untouched passes over a reader who comes back to a list
- * (GPT Sol's plan review, F3). So the modes here are the real `RememberBand`
+ * (GPT Sol's plan review, F3). So the modes here are the real `LearnBand`
  * and nothing at all, switched the way `Reader` switches them: by rendering a
  * different band, never by editing `thread`.
  *
@@ -47,10 +47,10 @@ vi.mock("../src/web/ChatPanel.js", async () => {
 });
 
 /* The Quiz half fetches an artefact; what matters here is only what arriving
-   in it does to `?thread=`, which is `RememberBand`'s. */
+   in it does to `?thread=`, which is `LearnBand`'s. */
 vi.mock("../src/web/QuizPanel.js", () => ({
   QuizPanel: () => null,
-  RememberSubModeToggle: () => null,
+  LearnSubModeToggle: () => null,
 }));
 
 /** What the band told the live session it may use — `speak` is the one wanted. */
@@ -131,7 +131,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { ConversationBand, RememberBand } = await import(
+const { ConversationBand, LearnBand } = await import(
   "../src/web/modes/conversation/ConversationModes.js"
 );
 
@@ -153,7 +153,7 @@ function thread(id: string, kind: ChatThread["kind"], title: string): ChatThread
 }
 
 const A = thread("spya-mcha02", "chat", "The first conversation");
-const RECALL = thread("spya-mcre02", "remember", "What I took from it");
+const RECALL = thread("spya-mcre02", "learn", "What I took from it");
 
 const NO_QUIZ_SECTIONS: QuizSections = { sections: [], rowOf: new Map() };
 const QUIZ_READ: QuizRead = {
@@ -198,7 +198,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   /* nuqs writes the address on a 50 ms throttle; let it land while jsdom still
-     owns `location` (tests/remember-own-thread.test.tsx says why). */
+     owns `location` (tests/learn-own-thread.test.tsx says why). */
   await new Promise((resolve) => setTimeout(resolve, 60));
   host.remove();
 });
@@ -225,7 +225,7 @@ function param(key: string): string | null {
 }
 
 /** A mode the reader can be in. `structure` stands for every mode that is not a conversation. */
-type Mode = "chat" | "remember" | "structure";
+type Mode = "chat" | "learn" | "structure";
 
 /**
  * **Switch mode the way `Reader` does**: a different band in the same place,
@@ -259,9 +259,9 @@ async function go(mode: Mode, also: Record<string, string> = {}): Promise<void> 
                   handoff = null;
                 },
               })
-            : mode === "remember"
-              ? createElement(RememberBand, {
-                  key: "remember",
+            : mode === "learn"
+              ? createElement(LearnBand, {
+                  key: "learn",
                   slug: SLUG,
                   quizRead: QUIZ_READ,
                   blocks: new Map<string, string>(),
@@ -380,7 +380,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
     stored = [A, RECALL];
     await arrive("chat", `?thread=${A.id}`);
     await type("held while I check what I remember");
-    await go("remember");
+    await go("learn");
     expect(param("thread"), "Recall did not take the address; this test is not testing F3").toBe(RECALL.id);
     await go("chat");
     expect(open()).toBeNull();
@@ -403,7 +403,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
       origin: handoffOrigin,
     };
     await arrive("chat");
-    await go("remember");
+    await go("learn");
     await go("chat");
     expect(open()).toBeNull();
     expect(threads()).toHaveLength(1);
@@ -420,7 +420,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
     stored = [A, RECALL];
     await arrive("chat", `?thread=${A.id}`);
     await type("held while I take the quiz");
-    await go("remember", { remember: "quiz" });
+    await go("learn", { learn: "quiz" });
     expect(param("thread"), "Quiz did not clear the address; this test is not testing F3").toBeNull();
     await go("chat");
     expect(open()?.id).toBe(A.id);
@@ -442,20 +442,20 @@ describe("the reader is put back in the conversation the words belong to", () =>
   it("and with nothing unsent, Chat comes back on its list as it always has", async () => {
     stored = [A, RECALL];
     await arrive("chat", `?thread=${A.id}`);
-    await go("remember");
+    await go("learn");
     await go("chat");
     expect(open()).toBeNull();
   });
 });
 
-describe("Remember keeps its unsent words by kind", () => {
+describe("Learn keeps its unsent words by kind", () => {
   it("in Recall's box", async () => {
     stored = [RECALL];
-    await arrive("remember");
+    await arrive("learn");
     expect(open()?.id).toBe(RECALL.id);
     await type("um, so what I took was");
     await go("structure");
-    await go("remember");
+    await go("learn");
     expect(box().value).toBe("um, so what I took was");
   });
 
@@ -463,22 +463,22 @@ describe("Remember keeps its unsent words by kind", () => {
      and is gone; the band picks the stored one, and the words go to whichever
      it picks. */
   it("and hands them to a stored Recall conversation that has appeared meanwhile", async () => {
-    await arrive("remember");
+    await arrive("learn");
     expect(open()?.messages).toHaveLength(0);
     await type("typed before the other tab sent");
     await go("structure");
     stored = [RECALL];
-    await go("remember");
+    await go("learn");
     expect(open()?.id).toBe(RECALL.id);
     expect(threads()).toHaveLength(1);
     expect(box().value).toBe("typed before the other tab sent");
   });
 
   it("without Recall's words turning up in Tutorial's box", async () => {
-    await arrive("remember");
+    await arrive("learn");
     await type("Recall's words");
     await go("structure");
-    await go("remember", { remember: "tutorial" });
+    await go("learn", { learn: "tutorial" });
     expect(open()?.kind).toBe("tutorial");
     expect(box().value).toBe("");
   });
@@ -488,7 +488,7 @@ describe("Remember keeps its unsent words by kind", () => {
   it("and a refused Start over leaves the words in the box", async () => {
     stored = [RECALL];
     deleteStatus = 500;
-    await arrive("remember");
+    await arrive("learn");
     await type("a follow-up I had not sent");
     await act(async () => prop<(id: string) => void>("onDelete")(RECALL.id));
     await addressSettles();

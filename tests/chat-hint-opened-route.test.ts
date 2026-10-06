@@ -123,7 +123,7 @@ afterAll(async () => {
 
 describe("pressing Hint under a Recall answer", () => {
   it("records the press, answers with the time, and the next load carries it", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     expect(await stored(threadId, replyId)).not.toHaveProperty("hintOpenedAt");
 
     const out = await post(SLUG, threadId, { messageId: replyId, hint: HINT });
@@ -134,7 +134,7 @@ describe("pressing Hint under a Recall answer", () => {
   });
 
   it("answers a second press with the first time", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     const first = await post(SLUG, threadId, { messageId: replyId, hint: HINT });
     const second = await post(SLUG, threadId, { messageId: replyId, hint: HINT });
     expect(second.status).toBe(200);
@@ -144,14 +144,14 @@ describe("pressing Hint under a Recall answer", () => {
 
 describe("what it refuses", () => {
   it("a hint that is not the one the stored answer carries, with a 409 and nothing written", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     const out = await post(SLUG, threadId, { messageId: replyId, hint: "A hint from the answer before the retry." });
     expect(out.status).toBe(409);
     expect(await stored(threadId, replyId)).not.toHaveProperty("hintOpenedAt");
   });
 
   it("a press that arrives after a retry has emptied the same row", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     await asTestOwner(() => chatStore.retry(SLUG, threadId, replyId));
     const out = await post(SLUG, threadId, { messageId: replyId, hint: HINT });
     expect(out.status).toBe(409);
@@ -168,12 +168,12 @@ describe("what it refuses", () => {
   });
 
   it("the reader's own message in a Recall conversation", async () => {
-    const { threadId, userId } = await answered("remember");
+    const { threadId, userId } = await answered("learn");
     expect((await post(SLUG, threadId, { messageId: userId, hint: HINT })).status).toBe(400);
   });
 
   it("a message, a conversation or an article that is not there", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     expect((await post(SLUG, threadId, { messageId: mintId(), hint: HINT })).status).toBe(404);
     expect((await post(SLUG, mintId(), { messageId: replyId, hint: HINT })).status).toBe(404);
     expect((await post(`no-such-article-${RUN}`, threadId, { messageId: replyId, hint: HINT })).status).toBe(404);
@@ -181,14 +181,14 @@ describe("what it refuses", () => {
 
   it("somebody else's article, as if it were not there, and writes nothing to it", async () => {
     const asThem = <T>(body: () => Promise<T>) => runAsOwner(SOMEBODY_ELSE, body);
-    const { threadId, replyId } = await answered("remember", ANSWER, asThem, THEIR_SLUG);
+    const { threadId, replyId } = await answered("learn", ANSWER, asThem, THEIR_SLUG);
     const out = await post(THEIR_SLUG, threadId, { messageId: replyId, hint: HINT });
     expect(out.status).toBe(404);
     expect(await stored(threadId, replyId, THEIR_SLUG, asThem)).not.toHaveProperty("hintOpenedAt");
   });
 
   it("a body without a message id or a hint", async () => {
-    const { threadId, replyId } = await answered("remember");
+    const { threadId, replyId } = await answered("learn");
     for (const body of [{}, { messageId: replyId }, { hint: HINT }, { messageId: replyId, hint: "" }, { messageId: 7, hint: HINT }]) {
       expect((await post(SLUG, threadId, body)).status, JSON.stringify(body)).toBe(400);
     }

@@ -3,7 +3,7 @@
  *
  * It was `position: absolute; bottom: 3.6rem` against the band or the dialog —
  * a guess at the composer's height, which grows with the textarea, wraps, and
- * starts six rows tall in Remember. Measured 2026-10-01 it straddled the
+ * starts six rows tall in Learn. Measured 2026-10-01 it straddled the
  * transcript and the composer at every width and hid the conversation's last
  * line on a phone (docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md).
  * In normal flow, between the scroller and the composer, it covers nothing.
@@ -18,7 +18,7 @@ const CSS = readerCssNoComments();
 describe("the jump-to-latest pill", () => {
   const rules = [...CSS.matchAll(/\.chat-to-bottom\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
   /* The declarations have to live on the shared rule. Finding `flex` in a
-     Remember-only rule and `align-self` in a dialog-only rule would leave both
+     Learn-only rule and `align-self` in a dialog-only rule would leave both
      places half-fixed while a joined search stayed green. */
   const shared = [...CSS.matchAll(/(?:^|})\s*\.chat-to-bottom\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
 

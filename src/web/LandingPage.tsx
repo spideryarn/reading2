@@ -254,7 +254,7 @@ export function LandingPage() {
               of up to MAX_QUESTIONS = 20 that build on one another (src/quiz.ts,
               Greg 2026-09-29) rather than a dozen sorted easy-first,
               central-first; only that sentence changed. */}
-          <Tile name="Find out what you kept." mode="remember">
+          <Tile name="Find out what you kept." mode="learn">
             Say what you took from the piece and hear, plainly and concisely, where it diverges from
             the text. Or take up to twenty short questions, each building on the one before.
           </Tile>

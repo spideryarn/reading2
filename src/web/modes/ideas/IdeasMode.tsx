@@ -41,7 +41,7 @@ import { IdeasPanel } from "../../IdeasPanel.js";
  * `TimelineBand` and `CriteriaBand` side by side to pin the one contract all
  * three share — which since 2026-09-06 is a hook they all call rather than a
  * rule they each keep: [`usePassageLifecycle`](../../passage-lifecycle.ts).
- * `RememberBand` and `ConversationBand` are exported for the same reason.
+ * `LearnBand` and `ConversationBand` are exported for the same reason.
  */
 export function IdeasBand({
   slug,

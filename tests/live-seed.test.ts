@@ -74,11 +74,11 @@ describe("liveSeedItems and Recall's hint", () => {
   ];
 
   it("leaves out a hint the reader never opened", () => {
-    expect(liveSeedItems(hinted(), "remember")[1]?.text).toBe("Do you remember what researchers kept doing?");
+    expect(liveSeedItems(hinted(), "learn")[1]?.text).toBe("Do you remember what researchers kept doing?");
   });
 
   it("keeps a hint the reader opened, ids stripped like the rest", () => {
-    expect(liveSeedItems(hinted({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "remember")[1]?.text).toBe(
+    expect(liveSeedItems(hinted({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "learn")[1]?.text).toBe(
       "Do you remember what researchers kept doing?\n\nHint: He names two games.",
     );
   });

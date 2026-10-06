@@ -125,7 +125,7 @@ function paint(t: ChatThread): void {
     root.render(
       createElement(ChatPanel, {
         slug: "a-piece",
-        kind: t.kind === "remember" ? "remember" as const : "chat" as const,
+        kind: t.kind === "learn" ? "learn" as const : "chat" as const,
         loaded: true,
         loadFailed: false,
         threads: [t],
@@ -256,8 +256,8 @@ describe("an empty conversation on a short band", () => {
     expect(host.querySelector(".chat-to-bottom"), "and the pill says it runs on below").not.toBeNull();
   });
 
-  it("reads an empty Remember invitation from the top without offering Latest", () => {
-    paint(thread([], "spya-rem001", "remember"));
+  it("reads an empty Learn invitation from the top without offering Latest", () => {
+    paint(thread([], "spya-rem001", "learn"));
     expect(host.textContent).toContain("Say what you took from this article");
     const el = scroller();
     expect(el.scrollTop).toBe(0);

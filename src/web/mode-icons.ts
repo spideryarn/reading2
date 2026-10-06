@@ -52,6 +52,6 @@ export const MODE_ICON: Readonly<Record<Mode, LucideIcon>> = {
   debate: Globe,
   search: Search,
   chat: MessagesSquare,
-  remember: Brain,
+  learn: Brain,
   marginalia: PanelRight,
 };

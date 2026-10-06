@@ -150,13 +150,24 @@ function render(): void {
   });
 }
 
-/** Let requests answer and effects run, without moving the clock. */
+/**
+ * Let requests answer and effects run, without moving the clock.
+ *
+ * **And open the Sharing row if it is shut.** Since stage 2 the box lives in
+ * a section that starts shut (src/web/AddSharing.tsx; plan 261005l § 2b), and
+ * every case here is about the box inside it. That it starts shut, and what
+ * opens it, is tests/add-page-sharing-section.test.tsx. The private link
+ * beside the box is not drawn in this file: its read is not among the
+ * requests this file's `apiFetch` answers, so it offers nothing.
+ */
 async function settle(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
   }
+  const row = host.querySelector<HTMLButtonElement>("[data-add-sharing-toggle]");
+  if (row?.getAttribute("aria-expanded") === "false") act(() => row.click());
 }
 
 /** The page mid-import, the job running and the probe answered. */

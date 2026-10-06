@@ -339,7 +339,7 @@ describe("the sharing card, on the page that owns it", () => {
     );
     expect(under("Anyone who opens it gets these")).not.toContain("The arc");
     /* **`Search` moved out of this column on 2026-09-04**, so `Chat` and
-       `Remember` are what is left of the modes that cost a model call. The
+       `Learn` are what is left of the modes that cost a model call. The
        assertion is kept at two names rather than one for the reason it had two
        to begin with: a single label could be satisfied by a column drawing one
        chip and losing the rest.

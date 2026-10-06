@@ -73,10 +73,10 @@ import {
 const BEHIND_THE_SWITCH: readonly Mode[] = [
   "timeline",
   "referee",
-  /* Remember was here from 2026-09-03 until 2026-10-05, when Greg asked for
+  /* Learn was here from 2026-09-03 until 2026-10-05, when Greg asked for
      Recall, Quiz and Tutorial in the mainstream features (spya-cnqcjf). Its
      Explore chip stays behind the switch, one level down:
-     tests/remember-header-cards.test.tsx § "Explore is behind the switch". */
+     tests/learn-header-cards.test.tsx § "Explore is behind the switch". */
   "debate",
   /* 2026-09-11: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
@@ -277,8 +277,8 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    * metadata page knows which mode the reader came from.
    */
   it("the metadata page retains the mode its URL carries", () => {
-    loose("?mode=remember");
-    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff("remember")));
+    loose("?mode=learn");
+    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff("learn")));
     expect(linkModes()).not.toContain(MODE_LABEL.timeline);
   });
 
@@ -321,7 +321,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
 /**
  * **The fit key carries the identities, not the count.** GPT Sol, finding 4:
  * retaining the current mode keeps the count unmoved while `?mode=timeline`
- * becomes `?mode=remember`, and those two words are not the same width — so a
+ * becomes `?mode=learn`, and those two words are not the same width — so a
  * signature counting buttons would leave the bar overflowing, or its labels
  * dropped with room to spare, until the next resize.
  */

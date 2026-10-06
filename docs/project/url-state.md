@@ -56,7 +56,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10 (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
-| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `remember` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=remember` |
+| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
@@ -89,7 +89,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
-| `remember` | which part of Learn is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+| `learn` | which part of Learn is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [learn-mode.md](learn-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?learn=quiz` |
 
 **`key` is not in this table, because it is not view state.** `/read/<slug>?key=<key>` is a private
 link, and the key is a credential
@@ -100,16 +100,18 @@ to the Metadata page and back all carry it. It is read in one place
 ([`src/web/useShareKey.ts`](../../src/web/useShareKey.ts)), never remembered (`last-view.ts` writes
 an allowlist it is not on), and taken off the address a bug report records.
 
-**`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
+**The Learn words said `remember` until 2026-10-06** ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)). `?mode=remember` still opens Learn, as a retired mode word. `?remember=<sub-mode>` and `?chatfrom=remember` did not carry over: an old link opens Learn at Recall, and Chat's list shows All.
+
+**`referee` and `learn` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
-**A sub-mode parameter outlives its mode, deliberately.** `remember`, `diagram`, `referee`,
+**A sub-mode parameter outlives its mode, deliberately.** `learn`, `diagram`, `referee`,
 `summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
-buttons write `mode` alone. So `?mode=chat&remember=quiz` is not a leak: the parameter is read only
+buttons write `mode` alone. So `?mode=chat&learn=quiz` is not a leak: the parameter is read only
 by its own mode and does nothing under any other, and it is what makes pressing Learn again
 return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
-key: back to Learn with `remember=quiz` kept also clears `?thread=`, in the same pushed entry,
+key: back to Learn with `learn=quiz` kept also clears `?thread=`, in the same pushed entry,
 because Quiz and a selected conversation cannot both be shown
 ([`sub-modes.ts`](../../src/web/sub-modes.ts) § `returnToSubMode`;
 `tests/sub-mode-param-outlives-its-mode.test.tsx`;
@@ -268,7 +270,7 @@ already right — and leaving chat mode puts the panel back where the reader lef
 `?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
 `chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
 and shows the list. Going the other way is one navigation: a press on a Learn row in Chat's list
-sets `mode=remember`, `remember=<sub-mode>` and `thread=<id>` together, pushed.
+sets `mode=learn`, `learn=<sub-mode>` and `thread=<id>` together, pushed.
 
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
 nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
@@ -700,7 +702,7 @@ an open conversation and a search are things the reader **did**, not places they
 `?note=`, `?panel=`, `?thread=`, and search mode's whole matcher (`?match=`, `?find=`, `?run=`,
 `?runs=`, `?order=`, `?conf=`).
 
-**And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `remember`.** Each
+**And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `learn`.** Each
 of those starts something merely by being arrived in — Diagram POSTs `/api/similar` or
 `/api/projection` for three of its five pictures, which costs a model call; Learn and Chat both
 open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or

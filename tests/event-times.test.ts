@@ -572,7 +572,7 @@ describe("chat_messages.hint_opened_at", () => {
    * back off the turn: an article has one Recall conversation, so a second
    * `begin` lands in the first one's thread whatever id it proposed.
    */
-  async function answered(kind: "remember" | "chat", text = ANSWER) {
+  async function answered(kind: "learn" | "chat", text = ANSWER) {
     const turn = await mine(() =>
       pgChatStore.begin(SLUG, { threadId: mintId(), question: "What I took from it.", kind }),
     );
@@ -587,7 +587,7 @@ describe("chat_messages.hint_opened_at", () => {
     (await mine(() => pgChatStore.load(SLUG))).find((t) => t.id === threadId)?.messages.find((m) => m.id === id);
 
   it("is null until the first press, stamped by it, and comes back on the message", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     expect(await read(threadId, reply.id)).toBeNull();
     expect(await stored(threadId, reply.id)).not.toHaveProperty("hintOpenedAt");
 
@@ -599,7 +599,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("is set once: a second press answers with the first time and moves nothing", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     await mine(() => pgChatStore.markHintOpened(SLUG, threadId, reply.id, HINT));
     const first = await rowOf("chat_messages", message(threadId, reply.id));
 
@@ -610,7 +610,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("uses the database's clock, not this process's", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(EARLIER));
     try {
@@ -622,7 +622,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("refuses a hint the stored answer does not carry, and stamps nothing", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     const before = await rowOf("chat_messages", message(threadId, reply.id));
     expect(await mine(() => pgChatStore.markHintOpened(SLUG, threadId, reply.id, "Some other hint."))).toEqual({
       ok: false,
@@ -632,7 +632,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("is nulled by a retry, and a press still in flight for the old hint is then refused", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     await mine(() => pgChatStore.markHintOpened(SLUG, threadId, reply.id, HINT));
     expect(await read(threadId, reply.id)).not.toBeNull();
 
@@ -662,7 +662,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("is not carried onto the fresh answer an edit makes", async () => {
-    const { threadId, reply, user } = await answered("remember");
+    const { threadId, reply, user } = await answered("learn");
     await mine(() => pgChatStore.markHintOpened(SLUG, threadId, reply.id, HINT));
     const edited = await mine(() => pgChatStore.edit(SLUG, threadId, user.id, "What I took from it, again."));
     expect(edited.reply.id).not.toBe(reply.id);
@@ -670,7 +670,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("refuses the reader's own message, a chat thread's answer and a message that is not there", async () => {
-    const recall = await answered("remember");
+    const recall = await answered("learn");
     expect(await mine(() => pgChatStore.markHintOpened(SLUG, recall.threadId, recall.user.id, HINT))).toEqual({
       ok: false,
       reason: "not-a-recall-answer",
@@ -694,7 +694,7 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("refuses a Recall answer whose last paragraph is not a hint", async () => {
-    const { threadId, reply } = await answered("remember", `He says so plainly [${BLOCK}].\n\nHint: ${HINT}`);
+    const { threadId, reply } = await answered("learn", `He says so plainly [${BLOCK}].\n\nHint: ${HINT}`);
     expect(await mine(() => pgChatStore.markHintOpened(SLUG, threadId, reply.id, HINT))).toEqual({
       ok: false,
       reason: "hint-changed",
@@ -702,12 +702,12 @@ describe("chat_messages.hint_opened_at", () => {
   });
 
   it("cannot be written onto a reader's row at all", async () => {
-    const { threadId, user } = await answered("remember");
+    const { threadId, user } = await answered("learn");
     await expect(set("chat_messages", message(threadId, user.id), sql`hint_opened_at = now()`)).rejects.toThrow();
   });
 
   it("is another owner's to press only on their own article", async () => {
-    const { threadId, reply } = await answered("remember");
+    const { threadId, reply } = await answered("learn");
     await expect(
       runAsOwner(STRANGER, () => pgChatStore.markHintOpened(SLUG, threadId, reply.id, HINT)),
     ).rejects.toThrow();

@@ -123,12 +123,12 @@ describe("answerAsSeen", () => {
   const text = `${BODY}\n\nHint: ${HINT}`;
 
   it("is the body alone when the hint was never opened", () => {
-    expect(answerAsSeen({ role: "assistant", text }, "remember")).toBe(BODY);
+    expect(answerAsSeen({ role: "assistant", text }, "learn")).toBe(BODY);
   });
 
   it("is the body and the hint when it was opened", () => {
     expect(
-      answerAsSeen({ role: "assistant", text, hintOpenedAt: "2026-10-04T10:00:00.000Z" }, "remember"),
+      answerAsSeen({ role: "assistant", text, hintOpenedAt: "2026-10-04T10:00:00.000Z" }, "learn"),
     ).toBe(text);
   });
 
@@ -139,10 +139,10 @@ describe("answerAsSeen", () => {
   });
 
   it("leaves the reader's own message alone, even one that ends like a hint", () => {
-    expect(answerAsSeen({ role: "user", text }, "remember")).toBe(text);
+    expect(answerAsSeen({ role: "user", text }, "learn")).toBe(text);
   });
 
   it("leaves an answer with no recognised hint alone", () => {
-    expect(answerAsSeen({ role: "assistant", text: BODY }, "remember")).toBe(BODY);
+    expect(answerAsSeen({ role: "assistant", text: BODY }, "learn")).toBe(BODY);
   });
 });

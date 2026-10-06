@@ -508,18 +508,18 @@ describe("the seeded history", () => {
     const said = (seed: ReturnType<typeof gptLiveSeedInput>) => seed[1]?.content[0].text;
 
     it("is left out of the seed when the reader never opened it", () => {
-      expect(said(gptLiveSeedInput(recall(), "remember"))).toBe("Do you remember what researchers kept doing?");
+      expect(said(gptLiveSeedInput(recall(), "learn"))).toBe("Do you remember what researchers kept doing?");
     });
 
     it("is in the seed when they did", () => {
-      expect(said(gptLiveSeedInput(recall({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "remember"))).toContain(
+      expect(said(gptLiveSeedInput(recall({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "learn"))).toContain(
         "Hint: He names two games.",
       );
     });
 
     it("reaches the session through the thread's kind, opened or not", () => {
       const input = (history: ChatMessage[]) =>
-        (gptLiveSession({ meta, blocks, tree: tree(3, 2, 8), history, kind: "remember" }).input as ReturnType<
+        (gptLiveSession({ meta, blocks, tree: tree(3, 2, 8), history, kind: "learn" }).input as ReturnType<
           typeof gptLiveSeedInput
         >)[1]?.content[0].text;
       expect(input(recall())).not.toContain("Hint:");

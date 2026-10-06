@@ -32,7 +32,7 @@ export function media(query: string): boolean {
  * `false` when `matchMedia` is missing (jsdom, and the rule above), and a
  * `MediaQueryList` without `addEventListener` (older Safari has only
  * `addListener`) is read once rather than followed. One caller today: the
- * Remember composer's compact box on short bands (ChatPanel.tsx § Composer).
+ * Learn composer's compact box on short bands (ChatPanel.tsx § Composer).
  */
 export function useMedia(query: string): boolean {
   return useSyncExternalStore(

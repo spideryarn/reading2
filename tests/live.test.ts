@@ -83,7 +83,7 @@ describe("the tools, in the shape realtime actually takes", () => {
   });
 
   it("offers article_citations and lets the server run it — deliberately", () => {
-    /* `CHAT_TOOLS` is shared by typed Chat, Remember, Candidates and Live, and
+    /* `CHAT_TOOLS` is shared by typed Chat, Learn, Candidates and Live, and
        the citations tool reaches all four on purpose: read-only, article-local,
        the reader's own derived data. A per-kind tool list was weighed and was
        more machinery than that warrants. docs/plans/260913b-…-citations-list.md

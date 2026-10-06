@@ -240,7 +240,7 @@ describe("an Explore turn carries the reader's notes", () => {
 });
 
 describe("a turn of any other kind carries none", () => {
-  it.each(["chat", "remember", "tutorial", "candidates"] as const)("%s", async (kind) => {
+  it.each(["chat", "learn", "tutorial", "candidates"] as const)("%s", async (kind) => {
     expect(await post({ threadId: mintId(), question: "what about this", kind })).toBe(200);
     expect(sent).toHaveLength(1);
     const request = JSON.stringify(sent.at(-1));

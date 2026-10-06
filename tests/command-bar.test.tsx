@@ -594,7 +594,7 @@ const GENERATES: Record<Mode, boolean> = {
   search: false,
   chat: false,
   referee: false,
-  remember: false,
+  learn: false,
   glossary: true,
   ideas: true,
   quotes: true,

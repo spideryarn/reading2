@@ -260,7 +260,7 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   raise a keyboard rather than excluding the ones that do not** — the negative version reached the
   feedback dialog's visible `type="file"` picker, a control with no keyboard and nothing to zoom.
   And **it carries a `:root` for specificity**, said out loud rather than hidden: the fields are
-  styled by classes, `.remember .chat-input` is two of them, and a rule that loses is
+  styled by classes, `.learn .chat-input` is two of them, and a rule that loses is
   indistinguishable from one that wins anywhere but a rendered page. This rule shipped broken twice
   on exactly that, and a browser caught it both times while the suite stayed green.
 
