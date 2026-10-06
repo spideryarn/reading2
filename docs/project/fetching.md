@@ -507,7 +507,24 @@ has the measurement and the ranking, and
 [the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
 which sources were left out and why). NBER came a few hours after the other five, in
 [261006i § Stage 3](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-3-nber-and-osf-decided-by-the-probe),
-which also says why OSF is still not one.
+which also decided against OSF.
+
+**OSF Preprints, PsyArXiv and SocArXiv are not a source, and `asked_url` did not change that.** The
+landing page (`osf.io/preprints/<server>/<id>`) is an empty shell that JavaScript fills, and the PDF
+at `osf.io/download/<id>/` redirects through `files.osf.io` to
+`storage.googleapis.com/…/<content hash>` with a signed query that differed between two requests
+ten seconds apart
+([the probe](../plans/261006i-evidence/probe-nber-osf-redirects.txt), section B;
+[261005e § Address grammar](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md#address-grammar-for-the-sources-worth-code-now)).
+That signed address would be the article's `final_url`, which the source link and Refresh both read
+(`urlForSlug` in [`src/pipeline.ts`](../../src/pipeline.ts), asked by `enqueue` in
+[`src/jobs.ts`](../../src/jobs.ts)). `articles.asked_url` (`slugForUrlKey`,
+[`src/store/find-article.ts`](../../src/store/find-article.ts)) makes such an article findable by
+the pasted link again and fixes neither of those. The plan names the two ways out and builds
+neither: the paper's `canonicalUrl` (`ResolvedPaper`,
+[`src/paper-sources.ts`](../../src/paper-sources.ts)) stored as the article's address, or Refresh
+sent through `asked_url`. Not established: how long a signed address keeps answering (the probe
+repeated once, after ten seconds), and which of the two ways is wanted.
 
 | Source | What it recognises | What it fetches, in order |
 |---|---|---|

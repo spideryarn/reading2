@@ -85,6 +85,12 @@ and check its `cwd` is your own tree first.
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the
 landing page and very little else. This is the rest of it, and it needs no human:
 
+> Can we create/hardcode a dummy-dev user with a known password … so that you can sign in with
+> email & password (rather than needing Google SSO, which is a nuisance)? … The key thing is that
+> it shouldn't need human input to create/log in as this dev user.
+>
+> — Greg, 2026-09-01 ([the plan](../plans/260901j-a-signed-in-browser-on-the-box-with-no-human.md))
+
 ```js
 import { signedInBrowser } from "./scripts/browser-sign-in.ts";   // tsx, from the repo root
 

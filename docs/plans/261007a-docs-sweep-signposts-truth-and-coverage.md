@@ -178,6 +178,35 @@ A scan of `src/`, `tools/`, `scripts/`, `infra/` and `evals/` for files no doc n
   marked loud or silent. One is silent in the way that matters: `originFromColumns` in
   `src/thread-origin.ts` falls through to "no origin" for any mode it does not name.
 
+## S5 — GPT Sol's review
+
+[The prompt](261007a-docs-sweep-signposts-truth-and-coverage-review-prompt.md) and
+[the answer](261007a-docs-sweep-signposts-truth-and-coverage-review-sol.md). Candidate: the three
+commits `bb90fab92`, `a6c8b1079` and `e42f25600`. Verdict **ship**, no P0, and **31 findings, 30 of
+them P1, each fixed by the reviewer** in 25 docs (commit `f64676ebc`).
+
+That is the number to remember about this method: of roughly 330 corrections made by Sonnet
+subagents who were told to verify each against the code, about one in eleven was itself false or
+claimed too much. Some replaced a stale sentence with a confident wrong one — `library.md`'s date
+*"with no fallback"* (it falls back to `created_at`), `ingest-queue.md`'s new claim that fencing
+never takes an expired claim away (`settleExpired` does), `supabase-local.md`'s *"this database and
+nothing else"* (Storage holds the sources and images). Three were in the new `chat-from-a-mode.md`,
+written by Opus: a wrong component name, a wrong test helper and the compiler-failure sequence the
+wrong way round. **A truth sweep without a second family reading the result would have left about
+thirty fresh errors carrying today's date.**
+
+Six of the 31 were re-checked here against the source (R7, R13, R22, R23, R26, R28): all hold.
+
+What it cleared: no instruction was changed in any rule doc; `public-shelf.md`'s rewritten
+`robots.txt` paragraph is right; `feedback-reports.md`'s "fifth party" still means what it meant;
+and AGENTS.md's *"bar one declared exception"* is one product feature, Live.
+
+What it left: `security.md`'s sanitiser-stamp section *"would benefit from a larger historical
+cleanup"*; it now says at its entrance what Postgres does.
+
+A second, narrow round checked the reviewer's own 31 fixes and the two sections written after it
+(§ Log has its verdict).
+
 ## S6 — the re-measurement, on the three tasks nobody had read
 
 Six runs after the fixes, set against the six before. The before-reports were opened only once the
@@ -290,11 +319,12 @@ change or add a sentence that tells an agent what to do, so they do.
 - **4c. The fleet and the Overseer.** Proposed, as a fourth doc in the "worth reading before you
   touch the area" sentence: *"…and **fleet-and-overseer-overview.md** before anything under
   `tools/fleet/` or `tools/overseer/` — ten docs and 256 files, and it says which to open."*
-- **4d. One line that may now be false.** AGENTS.md describes `ai-gateway.md` as *"every paid call
-  goes through OpenRouter, bar one declared exception"*. The code declares five things outside the
-  gateway. GPT Sol was asked what "one" was meant to count; § S5 has its answer.
+- **4d. Withdrawn.** AGENTS.md describes `ai-gateway.md` as *"every paid call goes through
+  OpenRouter, bar one declared exception"*, and the code declares six things outside the gateway. I
+  suspected the line. GPT Sol checked: the one exception is one product feature, Live, and the other
+  entries are tools and evals, which the line is not counting. It stands.
 
-*Recommend:* 4a and 4b yes; 4c yes if the Overseer agrees the hub reads true; 4d once checked.
+*Recommend:* 4a and 4b yes; 4c yes if the Overseer agrees the hub reads true.
 
 ### 5. `vision.md` — "Where this goes after granularity zoom" lists built things as future
 

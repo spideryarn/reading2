@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ The words](#the-words-the-mode-puts-in-front-of-the-reader) — plain words, paperwork, JSON schema
 - [§ Its cost](#its-cost) — route table, `JOB_DISPOSITION`, cache group
 - [§ Retiring a mode](#retiring-a-mode) — `RETIRED_MODES`, aliases, the tests that list the rest
+- [§ Renaming a mode](#renaming-a-mode) — where the name is stored outside the unions, loud or silent, and the two precedents
 - [§ Before you call it finished](#before-you-call-it-finished) — what a new mode turns red, and what only the suite finds
 
 The one checklist for adding a mode to the reader — the client half and, if the mode shows a
@@ -571,6 +572,61 @@ band modes (`BandMode`). Marginalia's old word, `annotations`, has to land on th
 instead, so it is translated there by `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts),
 which the Reader, the Dock's links and the remembered last view all ask —
 [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md).
+
+## Renaming a mode
+
+A rename is [§ Retiring a mode](#retiring-a-mode) for the old word, plus renaming everything stored
+under it, in the same piece of work:
+[rename-or-move.md § A rename on screen is a rename all the way down](../reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)
+(Greg, 2026-10-06). The TypeScript unions (`MODES`, `StepName`, `Task`) and their total tables go
+red by themselves. These do not all, and `debate` is the specimen each was checked against on
+2026-10-07:
+
+**Where a mode's name is stored**
+
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `articleRevisions` — the jsonb column named for
+  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks rename-or-drop, and an
+  agent has no terminal to answer —
+  [database.md § That rename question needs a terminal](database.md#that-rename-question-needs-a-terminal-and-without-one-you-get-silence);
+  the migration itself is [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines).
+- Same file § `revision_step_runs_step` — the hand-kept CHECK listing every step name, and the rows
+  under it. *Loud:* [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts).
+  `jobs.steps[].name` holds the step name too, in jsonb. *Silent.*
+- Same file § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
+  `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
+  [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
+- [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler) and
+  § `RENAMED` — `ai_calls` is append-only and is **not** rewritten, so the old job name gets a row
+  in `RENAMED`. *Silent if forgotten.*
+- [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
+  (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
+- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
+  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`. *Silent:* an old link loses the parameter.
+- [`src/public-types.ts`](../../src/public-types.ts) § `PublicArtefactSet` — the visitor's key.
+  *Compiler.*
+- [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) § `REVISION_WRITTEN_ELSEWHERE`
+  and the `at("<name>.json")` lines — the file in the owner's zip. A mode with no file there
+  (Debate) ships as its column's key in `content/revision.json`. *A file name is a string.*
+- [`src/command-pick-catalogue.generated.json`](../../src/command-pick-catalogue.generated.json) —
+  *loud:* [`tests/command-pick-catalogue.test.ts`](../../tests/command-pick-catalogue.test.ts)
+  fails until `WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts`.
+- [`package.json`](../../package.json) § `eval:debate`, and `evals/debate/`. *Silent.*
+
+**The precedents**
+
+- **Trajectory → Skim**
+  ([261001r](../plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md)) is the
+  template for a mode with a pipeline step: one in-place migration for the column, the step CHECK
+  and `jobs.steps` (`drizzle/20261001224759_skim.sql`), and what deliberately **kept** the old
+  word — the prompt version tag, the input-hash namespace, `ai_calls`.
+- **Remember → Learn**
+  ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)) is the
+  template for a name stored as a value under a CHECK (`chat_threads.kind`), for which old URL words
+  get an alias and which are let go, and for the list of what keeps the old word on purpose.
+
+**Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
+quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:
+they keep their words and their file names.
 
 ## Before you call it finished
 
