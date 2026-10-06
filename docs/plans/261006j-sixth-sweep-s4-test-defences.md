@@ -112,7 +112,8 @@ Watched red with `dist/` and `api-dist/` moved aside: 4 failed, each naming the 
 - **"`worktrees.md` says these fail loudly; the code skips."** True of `no-secrets-in-bundle` only.
   The other two already failed loudly through a second case, so `worktrees.md` was already true
   and is not edited.
-- **"`runtimeImportsOf` is the AST helper."** It is a regex reader too, a better one: both quote
+- **"`runtimeImportsOf` is the AST helper."** It was not (it is since the review, below). It was a
+  regex reader too, a better one: both quote
   styles, multi-line clauses, side-effect and dynamic imports, type-only imports skipped. Only its
   refusal of a non-literal dynamic import parses.
 - **"`sanitize-client`'s own comment says an AST check would be the real thing."** That comment is
@@ -140,6 +141,33 @@ Watched red with `dist/` and `api-dist/` moved aside: 4 failed, each naming the 
 - **The real children's SIGKILL sweep still fires after their test ends**, through the real
   `process.kill`, at a group that is gone. It is harmless (`ESRCH`, caught) and it is production
   behaviour; no test hears it any more.
+
+## Review, round one
+
+[GPT Sol's code review](261006j-sixth-sweep-s4-code-review-sol.md)
+([prompt](261006j-sixth-sweep-s4-code-review-prompt.md)), verdict **do not ship**, on one finding.
+Both findings accepted.
+
+- **C1 (P2): moving `sanitize-client` onto `runtimeImportsOf` weakened it.** The reader lost an
+  import that follows a comment on the same line (`/* parser */ import { JSDOM } from "jsdom";`),
+  which the old pattern caught, and missed `import ("x")` with a space before the parenthesis. The
+  hole was in the shared reader, so every caller had it. Fixed there, red first:
+  `tests/import-graph-helper.test.ts` is new, 19 cases, and **9 were red** against the regex
+  reader: an import after a block comment or after another statement on the same line; a
+  side-effect import after a comment; `import (` with a space or a newline; a template-literal
+  specifier with no holes; a `.tsx` file whose JSX attribute contains the text of an import; the
+  text of an import inside a comment; inside a string; and a file that does not parse.
+  `runtimeImportsOf` now parses with `tests/helpers/ts-ast.ts` (already a dev dependency) and walks
+  import, export-from and dynamic-import nodes. A file that cannot be parsed is refused, like a
+  dynamic import that cannot be named. All seven callers pass (192 tests). The `sanitize-client`
+  conversion was re-proved against a temporary client file, one run each: the comment-prefixed
+  `jsdom` import, a comment-prefixed server-sanitiser import, and `import ("../sanitize.js")`. All
+  three fail the test.
+- **C2 (P3), fixed by the reviewer:** `pgReady` read `options.keepPool` after its awaits, so an
+  alias that changed the flag mid-probe got `{}` from a call typed to return a pool. It captures
+  the flag first; a mocked-pool regression is in `tests/pg-ready.test.ts`. Kept as written.
+- **Also:** a bare `npm test` in a fresh clone with no build fails three build-output files. That
+  is intended, and `docs/project/testing.md` and `docs/project/setup-dev.md` now say so.
 
 ## Gates
 

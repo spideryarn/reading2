@@ -286,9 +286,12 @@ describe("the ingress is wired up", () => {
          own. Until 2026-10-06 this was `/from\s+["'](…sanitize\.js)["']/`, which
          wants the word `from`: `await import("../sanitize.js")` and a bare
          `import "jsdom"` both load the module and neither has one, so both
-         passed. The shared reader follows static, side-effect and dynamic
-         imports, skips the ones that erase (`import type`), and refuses a
-         dynamic import it cannot name. */
+         passed. The shared reader parses the file, so it follows static,
+         side-effect and dynamic imports however they are spelled (after a
+         comment on the same line included, which the old pattern caught and
+         the reader's first, regex version did not — GPT Sol, 2026-10-06),
+         skips the ones that erase (`import type`), and refuses a dynamic
+         import it cannot name. */
       const specs = runtimeImportsOf(path.resolve(file));
       for (const spec of specs) {
         if (!spec.startsWith(".")) continue;

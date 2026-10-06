@@ -29,7 +29,12 @@ import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
-import { type MissingKind, pgReady, requiredFailureMessage } from "./helpers/pg-ready.js";
+import {
+  type MissingKind,
+  pgReady,
+  type PgReadyOptions,
+  requiredFailureMessage,
+} from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -45,6 +50,34 @@ const DEAD_URL = "postgresql://postgres:postgres@127.0.0.1:1/postgres";
 /** Restored per case, because every one of these stubs `DATABASE_URL`. */
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("pgReady, with a mocked pool", () => {
+  it("keeps the promised pool when an options alias changes during the probe", async () => {
+    const end = vi.fn().mockResolvedValue(undefined);
+    class MockPool {
+      query = vi.fn().mockResolvedValue({ rows: [] });
+      end = end;
+    }
+    vi.stubEnv("DATABASE_URL", "mocked-pool://no-connection");
+    vi.doMock("pg", () => ({ Pool: MockPool }));
+    try {
+      const options: PgReadyOptions & { keepPool: true } = {
+        suite: "tests/pg-ready.test.ts",
+        keepPool: true,
+      };
+      const mutableAlias: PgReadyOptions = options;
+      const pending = pgReady(options);
+      mutableAlias.keepPool = false;
+
+      const { pool } = await pending;
+      expect(pool).toBeInstanceOf(MockPool);
+      expect(end).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock("pg");
+      vi.resetModules();
+    }
+  });
 });
 
 describe("pgReady, when the database cannot answer", () => {

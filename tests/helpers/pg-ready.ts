@@ -190,6 +190,8 @@ export async function pgReady(
 ): Promise<PgReadyWithPool>;
 export async function pgReady(options: PgReadyOptions): Promise<PgReady>;
 export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
+  // The overload describes the options at call time, before an alias can mutate them.
+  const keepPool = options.keepPool;
   const url = process.env.DATABASE_URL;
   if (!url) refusePostgres(options.suite, "DATABASE_URL is not set", "no-url");
 
@@ -212,10 +214,10 @@ export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
   /* The pool is closed **before** the refusal, so neither road out of here leaks
      a connection — `refusePostgres` throws, and an earlier draft of this threw
      before the `end()`. */
-  if (missing || !options.keepPool) await pool.end();
+  if (missing || !keepPool) await pool.end();
   if (missing) refusePostgres(options.suite, missing.why, missing.kind);
 
-  return options.keepPool ? { pool } : {};
+  return keepPool ? { pool } : {};
 }
 
 /** The first thing the suite asked for that is not there, and which kind it is. */
