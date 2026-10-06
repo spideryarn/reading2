@@ -143,3 +143,10 @@ No schema change, no API shape change, no CSS change. The clip to one line stays
     Collapse control exists only for a chat opened beside a Marginalia note, which a mark never
     opens, and the 820 attempt found no control.
   - Screenshots: `261006f-shot-*.png`.
+- 2026-10-06 — **the full suite** (71 minutes on a busy box): 38,301 passed, 6 tests and 7 files
+  failed. **Two were this work's**, fixed: `src/answer-opening.ts` had to be named on the two
+  lists that guard what the browser may import (`tests/client-imports.test.ts`) and where a `$1`
+  may appear in the browser's closure (`tests/no-ai-cost-for-readers.test.ts`: it is a regex
+  replacement group that moved in with `withoutBlockIds`). The other five ask for
+  `npm run build` or `npm run build:fleet`, which this worktree has not run. The suite was not
+  re-run in full after the two list entries; the four touched files pass.

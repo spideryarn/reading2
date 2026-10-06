@@ -528,6 +528,13 @@ const SHARED = new Set([
      `[cmd:bookmark:spya-k3m9qt]` is counted as a citation nobody was shown.
      It imports nothing at all. See src/command-token.ts and plan 261003f. */
   "command-token.js",
+  /* How an answer begins, as one plain line: the cut the server makes for a
+     thread summary's `lastLine` and the collapsed chat card makes from the
+     live transcript. One function so the mark under a claim and the card
+     cannot disagree about the same answer. It imports `urls.js`, already
+     here, and the markdown parser `citable.js` uses. See
+     src/answer-opening.ts and plan 261006f. */
+  "answer-opening.js",
   /* What the command bar asks when a sentence matches no row, and how the
      answer is read: the request's shape and caps, the two prompts, `readPick`
      and the run-at-once cut. On the list because the browser builds the

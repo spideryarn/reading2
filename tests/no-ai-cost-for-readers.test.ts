@@ -109,6 +109,10 @@ const ALLOWED: Record<string, readonly string[]> = {
   "src/admin.ts": ["$", "$", "<$1", "$"],
   /* A regular-expression replacement group in reader-visible prose parsing. */
   "src/referee-candidates.ts": ["$1"],
+  /* The same: `withoutBlockIds` closing the space a stripped citation leaves
+     before a full stop. In the browser's closure since 2026-10-06, when it
+     moved here from src/live.ts. */
+  "src/answer-opening.ts": ["$1"],
   /* **The two admin surfaces need no entry**, though the plan expected them
      to: src/web/ArticleCost.tsx (the metadata page's *What it cost*, drawn only
      when `isAdmin`, from `/api/admin/articles/:slug/cost`) and
