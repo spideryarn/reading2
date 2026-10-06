@@ -305,8 +305,8 @@ describe("Brief's and Fuller's prompts", () => {
      and Brief's did not.
      `/12` (plan 261005b § Brief by band) asks Brief for about 80 words again:
      **Brief's hash is `/7` to `/9`'s once more** (it was `d31a28ec…` in `/10`
-     and `/11`) and Fuller's did not move. A book's Brief is the one that
-     differs, and tests/simple-length-bands.test.ts pins it. */
+     and `/11`) and Fuller's did not move. The book increase missed its
+     shipping rule; tests/simple-length-bands.test.ts pins 80 in every band. */
   it("are the bytes `simple-prompt/12` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
     expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/12");

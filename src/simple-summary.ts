@@ -218,11 +218,12 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * every stored summary becomes *outdated* and none is rewritten.
  *
  * `simple-prompt/12` (2026-10-06): Brief is asked for about 80 words and never
- * more than 130 again, `/9`'s Brief byte for byte, for every piece but a
- * book; a book's is asked for about 100 and told what its second paragraph is
- * for. Greg had wanted it longer for a book alone, not for every piece
- * (`BRIEF_LENGTH`; plan 261005b § Brief by band). Fuller is `/11` byte for
- * byte in every band. Outdated and not rewritten, as before.
+ * more than 130 again, `/9`'s Brief byte for byte, in every band. A book-only
+ * increase with a sentence about covering the whole book was measured and
+ * rejected: it missed both the preference and padding shipping conditions
+ * (plan 261005b § Brief by band). Greg's intent remains a slightly larger
+ * Brief for very long pieces, once supported by evidence. Fuller is `/11`
+ * byte for byte in every band. Outdated and not rewritten, as before.
  */
 export const SIMPLE_PROMPT_VERSION = "simple-prompt/12";
 
@@ -385,57 +386,33 @@ type Length = { shape: string; words: number; never: number; room?: string };
 
 const BRIEF_SHAPE = "Two short paragraphs, each two or three sentences; three only if the piece truly needs it";
 
-/** About 80 words: Brief for every piece that is not a book. */
+/** About 80 words: Brief for every piece, books included. */
 const BRIEF_USUAL: Length = { shape: BRIEF_SHAPE, words: 80, never: 130 };
 
 /**
- * **Brief is short for every piece, and slightly longer for a book.** Greg,
+ * **Brief stays short for every piece.** Greg,
  * 2026-10-06, of the `simple-prompt/10` that had asked every piece for about
  * 100 words:
  *
  * > Re longer Summary Brief - I wanted it to stay short for most articles, but
  * > allow it to go slightly larger for really long ones (e.g. books).
+ * > Is that what's been done?
  *
- * So `short`, `standard` and `long` are asked for about 80 words and never
+ * All four bands are asked for about 80 words and never
  * more than 130: **the Brief prompt `/7` to `/9` sent, byte for byte**
- * (tests/simple-two-levels.test.ts pins its hash). The ask is not the words
- * written: asked for 80 it writes 97 on average (88 to 113).
- *
- * **A book is asked for about 100, and told what the second paragraph is
- * for**: where the book goes after its opening, and where it ends up. A longer
- * Brief for a book had been tried twice with the number alone, and read as
- * more about the opening: asked for 140 it was judged padded both times, and
- * asked for 100 a blind judge preferred the 80-word Brief in four pairs of
- * four. With the sentence, on two books and two writes each, it wrote 101 to
- * 121 words against 90 to 113, and the judge split two pairs to two: for
- * the book that is a survey it preferred this in both, and in both more
- * against the plain 100; for the book that is a story collection it preferred
- * the 80-word Brief in both and called this the padded side. **So this is not
- * shown to be better. It is what Greg asked for, and not shown to be worse.**
- * Going back is `book: BRIEF_USUAL`.
- *
- * **The wording is the measured one, and the model is part of it.** Summary
- * is written on Opus. On Sonnet, which a press never uses, this sentence and
- * two earlier wordings ("cover the whole of the book") ran to 162 to 219 words
- * and failed six writes of ten.
- *
- * Banding Brief in every band was the first build of plan 261005b (60 words
- * for a short piece), and a blind judge preferred the unbanded Brief in six
- * pairs of eight. Plan 261005b § Ledger and § Brief by band;
+ * (tests/simple-length-bands.test.ts pins every band).
+ * A book-only ask of 100 with a sentence about its later parts won two of
+ * four blind test pairs, below the required three, and was called padded
+ * twice against zero for the old prompt. It therefore did not ship after
+ * review. Greg's intent is recorded above; the tested variant and the
+ * evidence are in plan 261005b § Brief by band and
  * docs/investigations/261005a § Round four.
  */
 export const BRIEF_LENGTH: Record<SimpleBand, Length> = {
   short: BRIEF_USUAL,
   standard: BRIEF_USUAL,
   long: BRIEF_USUAL,
-  book: {
-    shape: BRIEF_SHAPE,
-    words: 100,
-    never: 150,
-    room: `This piece is a whole
-book. Keep to two short paragraphs all the same. Let the second one say, in a
-sentence or two, where the book goes after its opening and where it ends up.`,
-  },
+  book: BRIEF_USUAL,
 };
 
 /**
@@ -612,7 +589,7 @@ paragraph wins.`,
  * The system prompt for one level, for a piece in one length band. Constant
  * per level and band — the reader goes in the user message, after the
  * breakpoint. The band changes three values in Fuller's LENGTH section and
- * nothing else; of Brief's it changes nothing but a book's LENGTH section.
+ * nothing else; Brief's is identical in every band.
  */
 export function simpleSystem(level: SimpleLevel, band: SimpleBand = "standard"): string {
   const p = { ...PITCH[level], ...lengthFor(level, band) };

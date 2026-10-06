@@ -85,16 +85,17 @@ type Arm = (typeof ARMS)[number];
 
 /**
  * Round four (Greg, 2026-10-06: short for most articles, slightly larger for a
- * book): the two books, Brief alone. `opusbook3a|b` is the Brief that shipped
- * for a book: about 100 words, and told what the second paragraph is for. The
+ * book): the two books, Brief alone. `opusbook3a|b` is the rejected book
+ * variant: about 100 words, and told what the second paragraph is for. The
  * second book was in no earlier round, so its "before" is `opusbook80a|b`,
  * written with Brief at about 80 words; the first book's is `len0a|b`, the
  * same Brief prompt byte for byte. All on Opus, which is what a press uses.
  *
  * **`book80*` and `bookwhole*` are a mistake kept as a record**: the same
- * question asked with the probe's default `--power standard`, which is Sonnet,
+ * question asked with the probe's then-default `--power standard`, which is Sonnet,
  * and Summary is never written on Sonnet (`ALWAYS_HIGH_POWER`, src/models.ts).
- * On Sonnet six writes of ten failed and the rest ran to 162 to 219 words.
+ * On Sonnet six of ten longer-variant writes failed; the four successes ran
+ * to 162 to 219 words. Both 80-word baselines succeeded, at 94 and 92 words.
  * `pairs booksonnet` and `score booksonnet` are that round.
  */
 const BOOKS = ["s3-gdl-45mb-spya-cc9kr8", "s3-doctorow-250p-spya-jg872v"] as const;

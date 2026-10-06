@@ -8,7 +8,7 @@ the piece, Brief's does not, because the measurement said a banded Brief was wor
 [§ What changed between the plan and what shipped](#what-changed-between-the-plan-and-what-shipped).
 **Later the same day Brief went from about 80 words to about 100**, still for every piece:
 [§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05). **That was not what Greg had
-meant, and on 2026-10-06 it went back to about 80 for every piece but a book**:
+meant, and after the 2026-10-06 review it went back to about 80 for every piece**:
 [§ Brief by band](#brief-by-band-2026-10-06).
 
 ## What it is for
@@ -198,6 +198,13 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
   [§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05).
   **Corrected by Greg, 2026-10-06**: short for most articles, slightly larger for a book.
   [§ Brief by band](#brief-by-band-2026-10-06).
+- **[Q-book-brief-not-yet]** a book's Brief is still about 80 words, which is not what Greg
+  asked for on 2026-10-06. The one wording measured on Opus wrote 101 to 121 words, and a blind
+  judge split two pairs to two: for it on a survey, against it on a story collection, where it
+  read as padded. Three ways on. Take it as it is on his say-so: one table row, and the wording
+  is in
+  [261005a](../investigations/261005a-summary-length-bands-measured.md#short-and-slightly-longer-for-a-book-round-four).
+  Or try another wording on more books, a few dollars a round. Or leave a book's Brief at 80.
 
 ## Ledger
 
@@ -298,7 +305,7 @@ and the evidence.
 | F14 (P3) | summaries.md still called `/9` the version | fixed by Sol |
 
 The second pass checked every number in the docs against the result files, that all twelve
-`brief100` files were written with the prompts now in the tree (and that the twelve `brief90`
+`brief100` files were written with the prompts then in the tree (and that the twelve `brief90`
 ones were not), that Fuller's bytes are unchanged in every band, the judge's instructions for a
 lean, five verdicts by hand, and that the seed replays to 6 and 16, then 11 and 11.
 
@@ -341,52 +348,70 @@ Greg, 2026-10-06, of what the section above built:
 >
 > — Greg, 2026-10-06
 
-It was not: `/10` raised Brief to about 100 words for every piece. **Built: `simple-prompt/12`.
-Brief is asked for about 80 words and never more than 130 in the `short`, `standard` and `long`
-bands, the prompt `/7` to `/9` sent byte for byte, and for about 100 and never more than 150 in
-the `book` band, with one sentence saying what the second paragraph is for.** `BRIEF_LENGTH` is
-a table by band, as `FULLER_LENGTH` is; a `Length` may carry a `room` sentence, and only a
-book's Brief has one. Fuller's prompts are `/11`'s bytes in every band.
+It was not: `/10` raised Brief to about 100 words for every piece. **After review,
+`simple-prompt/12` asks Brief for about 80 words and never more than 130 in all four bands,
+books included: the prompt `/7` to `/9` sent byte for byte.** Fuller's prompts are `/11`'s
+bytes in every band. No stored summary is rewritten; the version marks older prompts outdated.
 
-| band | before (`/11`): asked, written | after (`/12`): asked, written |
+The candidate in commit `1e7111452` asked the `book` band for about 100 and never more than
+150, with a sentence saying what the second paragraph is for. The comparison and its result
+files remain a record of that rejected candidate, not the prompts after review.
+
+| band | before (`/11`): asked, written | after review (`/12`): asked, baseline writes |
 |---|---|---|
-| `short`, `standard`, `long` | about 100; 110 on average (91 to 137) | about 80; 97 on average (88 to 113) |
-| `book` | about 100; 116 and 122 | about 100 and the sentence; 108 on average (101 to 121) |
+| `short`, `standard`, `long` | about 100; 108 on average (91 to 137), ten writes | about 80; 96 on average (88 to 105), nine writes |
+| `book` | about 100; 116 and 122, one book | about 80; 99 on average (90 to 113), two books, four writes |
+
+The rejected book variant wrote 108 words on average (101 to 121), four writes. These are
+historical measurements of the Brief prompts, not fresh runs of the final `/12` pair.
 
 **The rule set before the judge read anything**: ship the book band only if the judge prefers
 the new Brief in at least three of the four test pairs and does not call it padded more often
-than the old one. **It did not meet that rule, and it shipped.** The judge split two pairs to
-two, and called the new Brief the padded side in two pairs and the old in none.
+than the old one. **It missed both conditions.** The judge split two pairs to two, and called
+the new Brief the padded side in two pairs and the old in none. The review therefore restored
+`book: BRIEF_USUAL`, keeping Brief at 80 everywhere.
 
-- **Why it shipped anyway.** The brief for this work said to go back to 80 everywhere "if the
-  longer book Brief still loses". It did not lose: it won both pairs on one book and lost both
-  on the other, and the control pairs moved by as much. Greg had asked for it in so many words.
-  The rule was this session's own, and stricter than the instruction. It is recorded as missed
-  and not reworded afterwards.
+- **Why the original shipping argument was rejected.** The candidate claimed a two-to-two
+  preference split meant it "did not lose", and invoked Greg's wish for a longer book Brief.
+  That explained away the adverse padding result and replaced the declared gate after seeing
+  the result. Greg's intent is recorded above; it does not establish that this wording meets it.
 - **What the split was.** For the survey the judge preferred the new Brief in both pairs, and
   in both further pairs against round three's plain 100-word Brief, each time for saying what
-  the rest of the book does. For the story collection it preferred the 80-word Brief in both:
-  the new one spent a sentence reporting the introduction's praise, and a second paragraph
-  listing stories read as less clear than one saying what they share.
-- **The simpler option passed over** was 80 words for every piece, book included: one constant
-  and no table. It is what the declared rule pointed to. Going there is `book: BRIEF_USUAL`.
-- **A mistake in the measurement, kept in the record.** The first ten writes of this round ran
-  on Sonnet, the probe's default, and Summary is always written on Opus (`ALWAYS_HIGH_POWER`).
-  On Sonnet three wordings of the sentence failed six writes of ten and ran to 162 to 219
-  words, and for an hour this section said a longer Brief for a book could not be built. The
-  model in the result files gave it away. The arms are `book80*` and `bookwhole*`; nothing
-  rests on them.
-- **Cost**: $3.60 for the six Opus writes, $4.26 for the seven Sonnet writes the provider
-  priced, and five failed Sonnet writes it did not. The dev key had $30.08 left before and
-  $16.99 after, with other sessions spending from it too.
-- **Tests**: `tests/simple-length-bands.test.ts` § Brief pins both prompts' hashes, the book's
-  sentence, and that a book's LENGTH section is all that differs;
-  `tests/simple-two-levels.test.ts` and `tests/simple-summary.test.ts` pin the version and the
-  80.
+  the rest of the book does. For the story collection it preferred the 80-word Brief in both.
+  Two books cannot establish an effect by kind of book or rule out chance.
+- **The simpler option taken** is 80 words for every piece, book included. A larger book Brief
+  remains Greg's intent, but this variant did not clear its shipping conditions.
+- **A mistake in the measurement, kept in the record.** Ten longer-variant writes and two
+  80-word baseline writes ran on Sonnet, the probe's then-default; Summary is always written
+  on Opus (`ALWAYS_HIGH_POWER`). Three longer wordings failed six of ten writes, and the four
+  successful Briefs ran to 162 to 219 words. The two baseline writes succeeded at 94 and 92.
+  The arms are `book80*` and `bookwhole*`; the Sonnet round cannot establish a production benefit.
+- **Cost**: $3.60 recorded for the six Opus writes, $4.26 for the seven priced Sonnet writes,
+  and five failed Sonnet writes with unknown cost. Result files do not establish the total
+  spend including those failures, or the previously quoted account balances.
+- **Tests**: `tests/simple-length-bands.test.ts` § Brief pins the 80-word prompt's hash in
+  every band; `tests/simple-two-levels.test.ts` and `tests/simple-summary.test.ts` pin the
+  version and the 80. The regression assertions failed on the candidate's book increase
+  before it was removed.
 - **The write-up** is
   [261005a § Short, and slightly longer for a book](../investigations/261005a-summary-length-bands-measured.md#short-and-slightly-longer-for-a-book-round-four).
   The arms are `high-none-opusbook80a|b` and `high-none-opusbook3a|b`; the pairs, key, judge's
   instructions and answers are `*-book.*` in `evals/results/simple/length-bands-261005b/`, and
   the Sonnet round's are `*-booksonnet.*`.
 
-REVIEW_PLACEHOLDER
+**The review** (GPT Sol, write-capable, 2026-10-06; approve after its own fixes):
+[the prompt](261005b-brief-by-band-review-prompt.md),
+[its answer](261005b-brief-by-band-review-sol.md). The candidate was commit `1e7111452`, which
+shipped the book band. The prompt asked it to check the conclusion first.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F15 (P1) | the book band shipped though it won two pairs of four and was called padded twice against never: the declared rule was explained away | taken, fixed by Sol: `book: BRIEF_USUAL`, and the three docs and the source comment say why |
+| F16 (P3) | the non-book word counts included the books: 96 words at the 80 ask and 108 at the 100, over nine and ten writes | taken, fixed by Sol |
+| F17 (P3) | the plain 100 lost two book pairs, not four (four counted the 90 arm too) | taken, fixed by Sol |
+| F18 (P3) | "not shown to be worse", "the sentence is doing the work" and "not by chance alone" said more than two books show | taken, fixed by Sol |
+| F19 (P3) | the Sonnet count blurred ten candidate writes with two baselines; the key's balances are in no result file | taken, fixed by Sol |
+
+It also checked that the four `opusbook3` files carry the candidate's book prompts and Opus,
+that Brief is `/9`'s bytes in every band and Fuller the parent's, that seed 261011 replays the
+key, four verdicts by hand, and the recorded costs.

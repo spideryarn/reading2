@@ -91,8 +91,8 @@ failed took Brief and Fuller with it.
   [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05), and
   `simple-prompt/10` since later that day, for a Brief of about 100 words for every piece, which
   `simple-prompt/12` took back on 2026-10-06 for
-  [every piece but a book](#brief-is-short-and-slightly-longer-for-a-book-since-2026-10-06).
-  For a piece of ordinary length Brief's bytes are the pinned ones again.
+  [every piece, books included](#brief-is-short-the-longer-book-variant-was-rejected-since-2026-10-06).
+  Brief's bytes are the pinned ones again in every band.
 - **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
   when Summary is written:
 
@@ -399,9 +399,9 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
   the essay got 281 and 237, and the book 834 and 846. A blind judge preferred the banded Fuller
   in all eight pairs where its prompt differed
   ([261005a](../investigations/261005a-summary-length-bands-measured.md)).
-- **Brief is one length for every piece but a book**: about 80 words, byte for byte as it was,
-  and [about 100 for a book](#brief-is-short-and-slightly-longer-for-a-book-since-2026-10-06)
-  since 2026-10-06. It was banded in every band
+- **Brief is one length for every piece**: about 80 words, byte for byte as it was. The
+  [book-only increase](#brief-is-short-the-longer-book-variant-was-rejected-since-2026-10-06)
+  missed its shipping rule on 2026-10-06. It was banded in every band
   in the first build, 60 words for a short piece and up to 140 for a book, and the same judge
   preferred the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay
   turned on every time, and the book's longer one read as padded.
@@ -450,8 +450,8 @@ alone does not make the paper's own names familiar.
 **This did not alter Brief**: Greg finds it good, and its two terms and one phrase of method
 leave little to point at. Brief was `/9`'s, byte for byte, while this was measured; its own
 change the same day, about 100 words for every piece, is `/10`, and both are in `/11`;
-[`/12` took Brief's back](#brief-is-short-and-slightly-longer-for-a-book-since-2026-10-06) for
-every piece but a book.
+[`/12` took Brief's back](#brief-is-short-the-longer-book-variant-was-rejected-since-2026-10-06) for
+every piece, books included.
 
 - **A whole section was built first, measured, and not shipped**: a heading, an opening
   paragraph, eight bullets and a closing check. On five papers, set directly against the two
@@ -473,7 +473,7 @@ The plan, the section's text and GPT Sol's reviews are
 the research is
 [261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md).
 
-### Brief is short, and slightly longer for a book (since 2026-10-06)
+### Brief is short; the longer book variant was rejected (since 2026-10-06)
 
 > Re longer Summary Brief - I wanted it to stay short for most articles, but allow it to go
 > slightly larger for really long ones (e.g. books). Is that what's been done?
@@ -481,40 +481,32 @@ the research is
 > — Greg, 2026-10-06
 
 It was not what had been done: the day before, Brief had gone to about 100 words for *every*
-piece (`simple-prompt/10` and `/11`), on his *"maybe Brief could be ever so slightly longer but
-not much"*. `simple-prompt/12` is what he meant (`BRIEF_LENGTH` in
-[`simple-summary.ts`](../../src/simple-summary.ts)):
+piece (`simple-prompt/10` and `/11`), on his earlier request:
 
-| the piece | Brief is asked for | what it writes |
-|---|---|---|
-| under 40,000 words (`short`, `standard`, `long`) | about 80 words, never more than 130: the prompt `/7` to `/9` sent, byte for byte | 97 on average (88 to 113), eleven writes |
-| a book, 40,000 words and over | about 100, never more than 150, and one more sentence | 108 on average (101 to 121), four writes; the same two books at 80 wrote 99 (90 to 113) |
+> maybe Brief could be ever so slightly longer but not much
+>
+> — Greg, 2026-10-05 (answering [Q-brief-for-a-book], relayed by the Overseer)
 
-The sentence a book's Brief gets says what the extra is for: *"This piece is a whole book. Keep
-to two short paragraphs all the same. Let the second one say, in a sentence or two, where the
-book goes after its opening and where it ends up."*
+**After review, `simple-prompt/12` asks Brief for about 80 words and never more than 130 in
+every band**, books included (`BRIEF_LENGTH` in
+[`simple-summary.ts`](../../src/simple-summary.ts)). The prompt is `/7` to `/9`'s bytes again.
+Greg's intent remains a slightly larger Brief for very long pieces. The book-only variant
+measured here did not meet it well enough to ship under the rule set before judging: preference
+in at least three of four pairs, and no more padding flags than the old Brief. It won two
+pairs and was called padded twice, against zero for the old one. Keeping it because it
+"did not lose" would discard that rule after seeing the result.
 
-- **The number alone had failed twice for a book.** Asked for 140 it was judged padded both
-  times; asked for 100 a blind judge preferred the 80-word Brief in four pairs of four. More
-  words went on the opening.
-- **With the sentence the judge split, two pairs to two, and by the kind of book.** For the
-  survey (*Geometric Deep Learning*) it preferred the new Brief in both pairs, and in both more
-  against the plain 100-word one, each time because it says what the rest of the book does. For
-  the story collection (*With a Little Help*) it preferred the 80-word Brief in both and called
-  the new one the padded side.
-- **So it is not shown to be better.** It is what Greg asked for and it is not shown to be
-  worse. Two books, two writes each, one judge. Going back is one line, `book: BRIEF_USUAL`.
-- **The wording depends on the model.** Summary is always written on Opus. The same question
-  was first asked on Sonnet by mistake, where this sentence and two earlier wordings ran to 162
-  to 219 words and failed six writes of ten. If Summary ever moves model, measure this again.
-- **Brief's stored limit did not move**: 2 to 3 paragraphs and 240 words (`SIMPLE_LIMITS`).
-- **Nothing stored was rewritten.** A summary written by `/10` or `/11` is *outdated*, which is
-  silent; Metadata's Rerun writes the new Brief.
+The sample was two books, two writes each and one judge given headings, not the books. It
+cannot establish a general effect by kind of book, or that the variant is no worse. The
+measured prompts, word counts, model mistake and verdicts belong in
+[261005a § Short, and slightly longer for a book](../investigations/261005a-summary-length-bands-measured.md#short-and-slightly-longer-for-a-book-round-four).
+The decision and cost are in
+[261005b § Brief by band](../plans/261005b-summary-length-follows-the-length-of-the-piece.md#brief-by-band-2026-10-06).
 
-The measurement is
-[261005a § Short, and slightly longer for a book](../investigations/261005a-summary-length-bands-measured.md#short-and-slightly-longer-for-a-book-round-four),
-and the one for `/10` is
-[its round three](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
+**Brief's stored limit did not move**: 2 to 3 paragraphs and 240 words (`SIMPLE_LIMITS`).
+Nothing stored was rewritten. An older prompt is *outdated*, which is silent; Metadata's
+Rerun writes the current Brief. The measurement for `/10` is
+[round three](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
 
 ### Bold and bullets (since 2026-10-04)
 
