@@ -305,43 +305,48 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
 
   const queue = useStepJob(slug, "illustrated", refresh, "watches-queue");
 
+  /* A refused start has no job id. Count occurrences locally: identical words
+     are still new evidence, and `queue.failed` is rebuilt on every render. */
+  const [refusals, setRefusals] = useState(0);
+  const start = useCallback(async (run: Parameters<typeof queue.start>[0]) => {
+    if (await queue.start(run) === null) setRefusals((n) => n + 1);
+  }, [queue.start]);
+
   const ensure = useCallback(
     async (note?: string) => {
-      await queue.start(withNote(note));
+      await start(withNote(note));
     },
-    [queue],
+    [start],
   );
   const regenerate = useCallback(
     async (note?: string) => {
-      await queue.start({
+      await start({
         force: true,
         ...(profileChanged ? { precededBy: ["sketch"] as const } : {}),
         ...withNote(note),
       });
     },
-    [queue, profileChanged],
+    [start, profileChanged],
   );
   const drawThenPaint = useCallback(
     async (note?: string) => {
-      await queue.start({ precededBy: ["sketch"], ...withNote(note) });
+      await start({ precededBy: ["sketch"], ...withNote(note) });
     },
-    [queue],
+    [start],
   );
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is
      not what this hook last thought it was.
 
-     **The failure's message, not the failure**: `queue.failed` is a
-     `StepFailure` object, and interpolating it gave `[object Object]` for
-     every failure from 2026-09-03 to 2026-10-06, so a second refused start —
-     which makes no job, and so changes no id — did not re-ask. Two refusals in
-     the same words still do not; this is a trigger, not an event identity.
+     Refused starts use the occurrence count above; accepted jobs use their
+     active id and failure message. A message alone cannot identify a new
+     refused start.
      tests/illustrated-reasks-the-sketch-after-a-refusal.test.tsx. */
   const sketch = useSketchReadiness(
     slug,
     status === "none",
-    `${queue.failed?.message ?? ""}\u0000${queue.job?.id ?? ""}`,
+    `${refusals}\u0000${queue.failed?.message ?? ""}\u0000${queue.job?.id ?? ""}`,
   );
 
   /**

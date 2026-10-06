@@ -285,7 +285,7 @@ import { type ArchiveControl, useArchive } from "./useArchive.js";
 import { downloadExport } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
-import { ReaderFacingError } from "./lib/reader-facing.js";
+import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { ownLabel } from "./lib/own-label.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
@@ -453,9 +453,9 @@ function stageIcon(step: string): ComponentType<{ size?: number }> {
  *
  * Their loading rules, quoted in original-version/design-system.md#loading-states,
  * which are short and right: *"Under 1 second: No
- * loading indicator needed (distracting)"*. This request is a few database reads,
- * so on localhost it almost always beats the timer and the section simply appears
- * filled in. A spinner that flashes for 200ms is worse than nothing — the
+ * loading indicator needed (distracting)"*. When the database-backed request
+ * beats the timer the section simply appears filled in. A spinner that flashes
+ * for 200ms is worse than nothing — the
  * flicker reads as breakage.
  */
 // The same 600ms as everywhere else, and now literally the same number:
@@ -563,6 +563,11 @@ export function Metadata({
   const [slow, setSlow] = useState(false);
   /** Reads that have failed since this article was opened — `READ_AGAIN_AFTER_MS`. */
   const [failedReads, setFailedReads] = useState(0);
+  /* Reuse the description of consecutive identical failures for this article.
+     The first description reports an unauthored exception; its timed retries
+     should not report it four more times. Keep transport branding in the
+     comparison: a browser TypeError and a code TypeError can share words. */
+  const lastReadFailure = useRef<{ slug: string; error: Error; message: string } | null>(null);
   /**
    * **On `useOrderedRead`, because a dozen rows below can now ask for this again.**
    *
@@ -589,15 +594,25 @@ export function Metadata({
         const copy = res.headers.get("x-spideryarn-offline") === "copy";
         const answer = await readJson<ArticleMetadata>(res);
         if (!current()) return;
+        lastReadFailure.current = null;
         setProvenance(answer);
         setProvenanceOffline(copy);
         setProvenanceError(null);
       } catch (e) {
         if (!current()) return;
-        /* Never the caught message itself: a dropped connection's is the
-           browser's ("Load failed" in Safari) and anything else's was not
-           written for a reader. docs/project/copy.md. */
-        setProvenanceError(describeFetchFailure(e as Error));
+        /* Let the shared classifier choose: transport wording belongs to the
+           browser, unauthored exceptions get the page-fault sentence, and
+           ReaderFacingError keeps its authored words. docs/project/copy.md. */
+        const error = e instanceof Error ? e : new Error(String(e));
+        const last = lastReadFailure.current;
+        const message = last?.slug === slug
+          && last.error.constructor === error.constructor
+          && last.error.message === error.message
+          && isUnreachable(last.error) === isUnreachable(error)
+          ? last.message
+          : describeFetchFailure(error);
+        lastReadFailure.current = { slug, error, message };
+        setProvenanceError(message);
         setFailedReads((n) => n + 1);
       }
     },
@@ -608,6 +623,7 @@ export function Metadata({
      else — so "a different article" is said once, in the place `useOrderedRead`
      already has to be right about it, rather than a second time here. */
   useEffect(() => {
+    lastReadFailure.current = null;
     setProvenance(null);
     setProvenanceError(null);
     setProvenanceOffline(false);
@@ -1803,10 +1819,10 @@ function StageRecord({
 }) {
   return (
     <>
-      {/* Which stages have run, and the two that carry a model's name. A stage
-          counts as run only when *all* of its outputs are stored —
-          src/pipeline.ts owns that rule and this page borrows it rather than
-          restating it. */}
+      {/* Which stages have run, and the two that carry a model's name. The
+          metadata response supplies `done`: a completed run whose result is
+          current according to src/store/pg.ts. This page displays that verdict
+          rather than rechecking the pipeline's outputs. */}
       <SubHeading>What we did to it</SubHeading>
       {/* Named, not "Loading…", and only after the timer — their loading
           rules on both counts (original-version/design-system.md#loading-states). */}

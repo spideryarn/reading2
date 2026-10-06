@@ -11,9 +11,9 @@
  * refusals in a row left the key unchanged and the panel went on describing
  * the Sketch as it was before the first.
  *
- * The key carries the failure's message now. It is still not an identity for
- * "a failure happened": two refusals in the same words do not re-ask, and the
- * last case pins that as it is rather than leaving it to be assumed.
+ * Refused starts now count occurrences, including identical sentences. The
+ * last case changes the Sketch's readiness between identical refusals and
+ * checks the panel discovers it.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -24,6 +24,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const SLUG = "a-piece";
 const gets: string[] = [];
 let refusal = "";
+let sketchReady = false;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -33,6 +34,9 @@ vi.mock("../src/web/lib/api.js", async () => {
        is asked about at all, and the Sketch is `absent`. */
     apiFetch: async (url: string) => {
       gets.push(url);
+      if (url.startsWith("/api/sketch/") && sketchReady) {
+        return new Response(JSON.stringify({ stale: false, profileChanged: false }), { status: 200 });
+      }
       return new Response(null, { status: 404 });
     },
   };
@@ -94,6 +98,7 @@ async function refusedWith(words: string): Promise<void> {
 beforeEach(async () => {
   gets.length = 0;
   refusal = "";
+  sketchReady = false;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -116,8 +121,10 @@ it("asks again after a first refusal, and again after a second in different word
   expect(sketchAsks(), "a different refusal is new evidence about the Sketch").toBe(3);
 });
 
-it("does not ask again for a refusal in the same words (as it is, not as it should be)", async () => {
+it("asks again for an identical refusal and discovers the Sketch is now ready", async () => {
   await refusedWith("The sketch is out of date. Redraw it first.");
+  sketchReady = true;
   await refusedWith("The sketch is out of date. Redraw it first.");
-  expect(sketchAsks()).toBe(2);
+  expect(sketchAsks()).toBe(3);
+  expect(view.sketch.kind).toBe("ready");
 });

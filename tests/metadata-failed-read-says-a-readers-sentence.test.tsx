@@ -26,6 +26,9 @@ import type { Article } from "../src/types.js";
 import { PAGE_FAULT } from "../src/messages.js";
 import { couldNotReach } from "../src/web/lib/reader-facing.js";
 
+const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock("../src/web/monitoring.js", () => ({ captureClientFailure: capture }));
+
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
@@ -92,6 +95,7 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  capture.mockClear();
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/api/metadata/")) return metadataRead();
@@ -110,6 +114,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -127,7 +132,8 @@ async function open(): Promise<void> {
   });
   for (let i = 0; i < 5; i++) {
     await act(async () => {
-      await new Promise((go) => setTimeout(go, 0));
+      if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0);
+      else await new Promise((go) => setTimeout(go, 0));
     });
   }
 }
@@ -170,4 +176,34 @@ describe("the Metadata page's failed read", () => {
     await open();
     expect(failureSentence()).toBe("The database went away. [db-lost]");
   });
+});
+
+it("five identical failed opening reads report once while still retrying four times", async () => {
+  vi.useFakeTimers();
+  let reads = 0;
+  metadataRead = () => {
+    reads += 1;
+    return Promise.reject(new Error("ECONNRESET at socket 0x1f"));
+  };
+  await open();
+  for (const wait of [2_000, 5_000, 15_000, 30_000]) {
+    await act(async () => vi.advanceTimersByTimeAsync(wait));
+  }
+  expect(reads).toBe(5);
+  expect(failureSentence()).toBe(PAGE_FAULT.message);
+  expect(capture).toHaveBeenCalledTimes(1);
+});
+
+it("a different exception is reported and an authored failure with identical words is reclassified", async () => {
+  vi.useFakeTimers();
+  metadataRead = () => Promise.reject(new Error("ECONNRESET at socket 0x1f"));
+  await open();
+  metadataRead = () => Promise.reject(new Error("The database went away. [db-lost]"));
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  expect(capture).toHaveBeenCalledTimes(2);
+  expect(failureSentence()).toBe(PAGE_FAULT.message);
+  metadataRead = async () => new Response(JSON.stringify({ error: "The database went away. [db-lost]" }), { status: 500 });
+  await act(async () => vi.advanceTimersByTimeAsync(5_000));
+  expect(capture).toHaveBeenCalledTimes(2);
+  expect(failureSentence()).toBe("The database went away. [db-lost]");
 });

@@ -216,3 +216,82 @@ changed here; and `web-client.md`'s *"the seven files that use"* `describeFetchF
 - WCO8's other files (`useAutoRun.ts`, `useTimeline`, `useArc`, `useGlossary`, `useIdeas`,
   `useSketch`, `useQuotes`, `useOrderedRead.ts`) and `src/routes.ts`'s *"stat-ing every file"*.
 - No browser pass was made.
+
+
+## Write-capable review corrections
+
+The committed-stage review reproduced identical Illustrated refusals losing the Sketch re-ask
+and Metadata’s retries repeating reporting five times. The uncommitted review fixes count refused
+starts locally and reuse consecutive identical failure descriptions per article. The root causes,
+introducing commits and trade-offs are in
+[the review postmortem](../postmortems/261007a-repeated-reader-failures-need-occurrence-identity.md).
+These are reviewer corrections to the orchestrator/builder’s stage choices.
+
+U7 now has a small syntax-derived guard: every slug-taking hook inside `OwnedReader` must appear
+in the refresh harness or in a named exclusion with a reason. It catches a newly hoisted direct
+hook; aliases and wrappers hiding the slug remain outside its scope. The held `selectProse` path
+also has Debate changed-view and unchanged-view cases. Three misleading Metadata comments were
+corrected: unauthored exceptions versus server sentences, metadata’s actual completed/current
+verdict, and an unmeasured local latency claim.
+
+Wider, left unchanged: two completion listeners can send two GETs with a band open; the shared
+API cache preserves a previous artefact after a successful null/404 and can replay it offline.
+The latter can redraw deleted crossrefs. Neither originates in this stage’s failure-preservation
+branch. No network, database, browser, full suite or commit was used for the review.
+
+
+Review validation: the final explicit Vitest run passed **12 files, 337 tests** (the original
+stage suites, held selections, doc links, permanent deletion and step-job request shapes).
+`npx tsc -p src/web/tsconfig.json --noEmit` and the same command for `tests/tsconfig.json` both
+exited 0. Scoped Biome lint exited 0 with one existing complexity advisory in the selection test’s
+reply stub. No full-suite gate is claimed.
+
+Red evidence: identical-refusal and repeated-report tests together had **2 failures, 5 passes**
+before their fixes; after the companion case was added they had **8 passes**. Removing Quiz’s
+inventory row produced **1 failure, 14 skips**. Replacing the Debate snapshot value with a
+constant produced **1 failure, 1 pass, 50 skips** in the held-selection cases. Removing Debate
+from each of the snapshot, boundary parser and boundary policy produced `TS2741` three times.
+All mutations were restored by editing back. The offline replay test separately passed **1 test,
+69 skipped** against the existing shared cache policy; the hook redraw is a source inference.
+
+## Review status
+
+**GPT Sol's code review (2026-10-07): "ship with these fixes applied."** The
+[answer](261007a-seventh-sweep-client-tier-0-six-defects-code-review-sol.md) and the
+[prompt](261007a-seventh-sweep-client-tier-0-six-defects-code-review-prompt.md) are beside this
+file. Its fixes were read as a proposal by a second (Claude) pass before being committed; each of
+C1 to C3 was hand-reverted, its test watched go red, and the fix put back.
+
+- **C1, fixed.** Two Illustrated refusals in the same words did not re-ask the Sketch. A refusal
+  count local to `useIllustrated`, shared by its three start verbs, is now part of the re-ask key.
+  Red without it: `expected 2 to be 3`. Checked: the count only moves when a start is refused, and
+  a start comes only from a press or from the one automatic run, whose token `useAutoRun` consumes
+  before it fires — so the count can cause a `GET /api/sketch/…` and nothing else, never a paid
+  call and never a loop. It is not reset on a change of article and does not need to be: the slug
+  is its own dependency of the re-ask, and a stale count is only a number that differs.
+- **C2, fixed.** Metadata's four timed retries reported the same unauthored failure five times.
+  Consecutive failures with the same class, message and transport branding for the same article
+  now reuse the first one's sentence. Red without it: `called 1 times, but got 5 times`. Checked:
+  the remembered failure is cleared on a successful read and when the article changes, and the
+  slug is part of the comparison, so the first report of a new failure cannot be suppressed. What
+  it does give up, knowingly: two different defects throwing the same class and message back to
+  back, with no success between them, are reported once. **Tested**: the repeat, a different
+  exception, and an authored failure in the same words. **By inspection only**: the reset on
+  success and on a change of article.
+- **C3, fixed.** `tests/always-mounted-reads-refresh.test.tsx` now derives the slug-taking hooks
+  inside `OwnedReader` and requires each to have a row or a named exclusion. Red with Quiz's row
+  removed (2 failed, 13 passed). Aliased hooks and wrappers that hide the slug are outside it.
+- **C4, fixed.** Three Metadata comments that claimed more than the code does. No behaviour.
+- **C5, left — wider than the stage.** A deleted crossrefs artefact can be replayed from the
+  offline API cache after a transport failure: saved links, then a successful `200 null` clears
+  them, then a dropped connection serves the older cached copy. That is the shared cache's policy
+  for a null or 404 answer, not this stage's failure-preservation branch.
+- **C6, left — wider than the stage.** With the Quiz band open, the band and the always-mounted
+  read both hear a job complete, so two GETs go out when no read is outstanding (an outstanding
+  read coalesces them into one). It is the shared four-read pattern, the same for Citations,
+  Glossary and Quotes.
+
+Gates at commit, outside any sandbox: `npm run typecheck` clean on all four projects; `npx vitest
+run` by file, 60 files and 1,643 tests passed, none failed (10 touched files plus doc-links: 288;
+the 50 other suites naming the changed modules: 522 and 833); Biome on the six touched files, one
+existing complexity advisory. No full `npm test`, no browser pass.
