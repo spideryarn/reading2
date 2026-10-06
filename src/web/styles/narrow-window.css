@@ -32,14 +32,13 @@
    732px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (12)` — the exact width
    at which layout.ts could still fit one gist column beside the prose, while
    there were gist columns (they went on 2026-09-29; `NARROW_WINDOW_MAX` in
-   layout.ts keeps the sum). Below it **the prose column IS the window**,
-   and every horizontal luxury the reading view affords itself stops being free:
-   136px reserved for a wordmark and 83px reserved for a block id are 21% and 35%
-   of a 390px screen.
+   layout.ts keeps the sum). Plain gives the prose the available width below
+   it; a mode band can still share that width when `fitMode` finds room. At
+   the time, 136px reserved for a wordmark and 83px for a block id consumed 35%
+   and 21% of a 390px screen. Those reservations have since gone (shell.css).
 
    That is why one number governs all of it. If `GIST_MIN` or `PROSE_MIN` ever
-   moves, this query moves with it — tests/layout.test.ts pins the crossover at
-   732/731 so the pair cannot drift silently, and tests/spine-width.test.ts checks
+   moves, this query moves with it — tests/spine-width.test.ts checks
    that the query below is still that sum minus one.
 
    ## The other axis has its own query
@@ -1298,8 +1297,9 @@
 
    **The condition is "the prose is the table's only column", asked of the
    table itself.** That is exactly when this bar and the reading cell are the
-   same box — both start at `--spine-w + --mode-w` and both run to the right
-   edge — which is the fact the arithmetic below depends on. In Hierarchy the
+   same horizontal region when Marginalia reserves no room on the right:
+   both start at `--spine-w + --mode-w`. With Marginalia beside a band, the
+   calculation below subtracts `--marg-reserve` to follow the reading cell. In Hierarchy the
    gist columns were in front of the prose, the two boxes were not the same, and
    `:has` did not match; since those columns went on 2026-09-29 the prose is
    always the table's only column. `.text-alone` is excluded because

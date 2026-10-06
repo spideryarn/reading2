@@ -186,3 +186,49 @@ scroll listener, and is Structure's focus-row sampler. Only its rect measuring f
 
 Gates after the fixes: the strip-and-compare check against `3a8df257a~1` covers 102 `.ts`, `.tsx`
 and `.css` files, 0 different; `npm run typecheck` clean; `tests/doc-links.test.ts` passed.
+
+## Review, round two
+
+[GPT Sol's second review](261006j-sixth-sweep-s2-code-review-2-sol.md)
+([its prompt](261006j-sixth-sweep-s2-code-review-2-prompt.md)) rechecked every changed comment
+block rather than a sample. Verdict again **ship with these fixes (applied)**.
+
+**Sol's counts.** 172 behaviour blocks checked (163 TS/TSX, nine CSS): **64 false or overstated**.
+All 82 pointer rewrites plus round one's added pointer: two section names corrected. Twelve blocks
+holding 15 dead-path fixes: none wrong. Its findings are C9 to C51, fixed in comments only, in 51
+files. Many reach past the line this cluster changed into older claims in the same block.
+
+**The check of Sol's fixes.** Its 90 hunks were read one at a time against the code each describes.
+
+| | |
+|---|---|
+| Hunks checked | 90 |
+| Kept as Sol wrote them | 88 |
+| Corrected | 2 |
+
+Of the 88, about two thirds make a positive claim, and the code was opened for each (a symbol, a
+selector, a count, a call site). The rest only say less than before, or move a sentence into the
+past tense, and were accepted on reading.
+
+The two corrections:
+
+- **`scripts/deploy-checks.ts`, `GATE_FIXTURE_ROOT` (C10).** Sol wrote that the gate uses the
+  fixtures "in place rather than copying them to the worktree root". It copies them:
+  `scripts/deploy.ts` calls `materialiseCorpus(wt)`, and its own comment says "still copied rather
+  than linked". The comment now says so.
+- **`src/models.ts`, `labels` (C15).** Sol wrote "one nav label per structural prose block".
+  `src/labels.ts` says one per **gistable** block. Reworded.
+
+**And two misses of this cluster's own, found on the way.** `src/web/layout.ts` had two pointers
+written `` `styles.css` § … `` with backticks around the file name, which the cluster's grep
+(`styles\.css §`) does not match. Both now name `narrow-window.css`. A grep for that spelling finds
+no others in `src tests scripts tools`.
+
+**What this says about the method.** Three passes, and each found the one before it partly false:
+the first rewrite was wrong in about a third of its behaviour blocks, round one's fixes were wrong
+in two places, and round two's in two more. A comment rewritten from the comment beside it, rather
+than from the code, inherits that comment's mistakes, and only opening the code catches it. The
+last pass is itself unreviewed.
+
+Gates after round two: the strip-and-compare check against `3a8df257a~1`, 0 files different;
+`npm run typecheck` clean; the touched test files and `tests/doc-links.test.ts` passed.

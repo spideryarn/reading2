@@ -1053,14 +1053,12 @@ export type AiJob =
  * **Which tier each task is on — and the file's actual decision, rather than its
  * constants, which are only the vocabulary for it.**
  *
- * Everything is `capable` except `link-summary`, `quiz-verdict`, and
- * `simple-check`. The capable default is what Greg asked for ("default to
- * capable-model for now"). No task here has been *moved* to the quick tier: all
- * three exceptions were written for it, which is the difference between a
- * decision and an unmeasured migration.
+ * The capable default is what Greg asked for ("default to capable-model for
+ * now"). The quick rows and their reasons are recorded beside the table;
+ * changing a tier still needs evidence about the task, not just its price.
  *
  * **Flipping a row is not the whole of switching a task** — read the header's
- * list of what has to move with the model first. For the seven pipeline tasks it
+ * list of what has to move with the model first. For Messages-wire tasks it
  * is not even the start of one, and the check below the table says so out loud
  * rather than letting the edit look like it worked.
  *
@@ -1072,11 +1070,10 @@ export type AiJob =
  *   reads, so a weaker model shows up as worse *picks*, which
  *   evals/ can measure directly, rather than as flatter writing, which it
  *   cannot. It is also the one a reader waits on with nothing on screen.
- * - **`labels`** is the biggest bill in the app by a distance — one gist per
- *   gistable block, every article — so it is where the tenth-of-the-price would
- *   actually be felt. It is also close to the core of the product: the gists
- *   are what granularity zoom shows (in Structure today; in the gist columns
- *   until 2026-09-29). Cheapest to move, most expensive to get wrong.
+ * - **`labels`** writes one nav label per gistable block, in batches
+ *   (src/labels.ts), so its cost grows with article length. Those labels help
+ *   the reader find paragraphs in Structure. A cheaper tier would need an
+ *   evaluation of that navigation quality before a switch.
  * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `structure`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.

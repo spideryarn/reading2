@@ -3568,7 +3568,7 @@ export function Reader({
        BlockLinkCard.tsx. */
     <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
     <div
-      /* `text-alone` says the article is the only thing on the page, so the
+      /* `text-alone` says the prose has no mode band beside it, so the
          stylesheet can centre the reading column and put the masthead over it
          rather than leaving both against the left edge of a window neither
          fills. It is `fit.alone` and nothing computed here on purpose — the
@@ -4260,10 +4260,10 @@ export function Reader({
       {band()}
       {marginColumn()}
 
-      {/* **Over the top of the band, for three seconds after a press** —
+      {/* **At the foot of the band, for three seconds after a press** —
           ModeHerald.tsx. After the band in source order so it paints above it
           at the same z-index. Only while a band is open: Plain
-          has no *"top of the mode column"* to stand on. */}
+          has no band to stand on. */}
       <ModeHerald
         press={bandOpen && !bandAway && herald !== null && herald.mode === mode ? herald : null}
         onDone={() => setHerald(null)}

@@ -1476,7 +1476,8 @@ const MAX_BODY_CHARS = 4000;
  * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
  * criterion belonging to somebody else — or to another article, or to nothing —
  * is refused rather than stored. `comments_criterion_fk` refuses it a second
- * time, but a foreign-key error is a 500 with a Postgres message in it. (The
+ * time, but a foreign-key error becomes a generic store failure through
+ * src/store/db-errors.ts rather than this useful bad-request answer. (The
  * filesystem store, until 2026-09-05, had no constraint at all, and the two
  * stores agreed only because this check was above both of them.)
  *

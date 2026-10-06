@@ -10,11 +10,11 @@
  * The projection is `src/web/structure.ts`; this file draws it and decides
  * nothing about what is current.
  *
- * ## What is here and what is stage 2
+ * ## Fixed rungs, with measured row windows
  *
- * Both columns, from the real projection, at a **fixed rung**. The measured
- * ladders that let each column spend its leftover height, the reserved-height
- * wells, and the row window on a short viewport are stage 2 of
+ * Both columns use **fixed rungs**. Their row windows are measured from hidden
+ * copies of the full lists and the available height. The broader measured
+ * ladders and reserved-height wells were proposed in stage 2 of
  * docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md.
  * The mode is registered at stage 1 with two real columns rather than one,
  * because its Dock card describes two — a card that is false of the panel it

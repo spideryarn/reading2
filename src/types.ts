@@ -2067,7 +2067,7 @@ export interface Article {
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
    * so the masthead can say so without a request of its own.
    *
-   * The one field here that is not an artefact. It is on this payload rather
+   * A field about access, rather than an artefact. It is on this payload rather
    * than behind a route because it is a property of *the work* (src/routes.ts
    * § the sharing switch), because the Postgres store selects the `articles`
    * row anyway so it costs nothing, and because the alternative — a `GET`

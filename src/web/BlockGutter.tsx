@@ -93,14 +93,14 @@
  * argument is in the plan § Rejected, because anybody looking at four icons
  * will have it again.
  *
- * **A visitor's gutter is the permalink and nothing else** — one element at the
- * head of the column, not four with three of them blank, because none of these
- * is a placeholder, and no "…", because there is nothing behind it. The chat
+ * **A visitor's gutter has the permalink and any shared owner's mark.** When
+ * there is a mark, the disclosure can expose the permalink beneath it; without
+ * a mark there is only one control and no "…". The chat
  * button is absent rather than dead: opening a conversation costs a
  * model call, which is not theirs to spend, so `onChatAbout` is optional and the
  * button exists only where the callback does. The bookmark
- * never draws for them either, for a different reason — the marks in it are the
- * reader's own, and a visitor has none. The "?" is gated on the same callback
+ * never draws for them either: visitors cannot create marks, though shared
+ * owner's marks can be shown. The "?" is gated on the same callback
  * pattern as the chat button and for the same reason. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the

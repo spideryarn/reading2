@@ -1257,7 +1257,7 @@ function TableViewInner({
         ))}
       </colgroup>
       {/* **A head with no height**, kept for the screen reader's column
-          header and for the sticky offsets that measure it (table.css § the
+          header (table.css § the
           head with no row). The gist columns' headers went on 2026-09-29. */}
       <thead>
         <tr>

@@ -63,8 +63,8 @@ export function SettingsSection() {
         <label className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-foreground">
           <input
             type="checkbox"
-            /* The native box, tinted — the whole of what search.css § `.srch-saved-tick`
-               does, and for the reason written there: one
+            /* The native box, tinted — like the `accent-color` rule for
+               `.srch-saved-tick input` in search.css, and for the same reason: one
                property, and the browser keeps the tick, the focus ring and
                every keyboard behaviour. An arbitrary-value utility rather than
                a class, because this page is written in `tw:` throughout and a

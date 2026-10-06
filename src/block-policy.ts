@@ -65,9 +65,9 @@ import type { Block } from "./types.js";
  * carries a **null** column, and there is one read — `scalarInputsQuery` in
  * src/store/pg.ts — that hands the raw aggregate straight to
  * `articleWordCounts` without going through a `Block` projection to normalise
- * it. A predicate that only understood `undefined` would count every note on
- * the shelf and nowhere else, and the two numbers disagreeing is exactly the
- * failure docs/reusable/silent-success.md is about.
+ * it. A null treatment must mean body text just as an absent treatment does,
+ * so the shelf and reading view apply the same counting rule.
+ * docs/reusable/silent-success.md.
  */
 export type Treated = { treatment?: Block["treatment"] | null };
 export type Gistable = { gistable: boolean };

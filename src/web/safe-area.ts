@@ -24,10 +24,9 @@
  * `getComputedStyle(root).getPropertyValue("--safe-top")` returns the *token
  * stream* — the literal text `env(safe-area-inset-top, 0px)` — because an
  * unregistered custom property is never substituted for the CSSOM. Registering
- * it with `@property` would fix that and cannot be done here: Vite's CSS
- * transform drops `@property` and bakes the `initial-value` into every
- * reference, which is the accident written up at length beside `--bar-bottom`
- * in src/web/styles/tokens.css § tokens.
+ * it with `@property` could change that. The original Vite transform problem
+ * and its later successful retest are recorded beside `--bar-bottom` in
+ * src/web/styles/tokens.css § tokens; this probe avoids requiring registration.
  *
  * So the value is *measured*: one fixed, invisible element whose padding is the
  * four `env()`s, read back as resolved pixels. `getComputedStyle` returns

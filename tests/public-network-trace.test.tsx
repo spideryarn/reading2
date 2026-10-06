@@ -1737,9 +1737,10 @@ describe("a signed-out browser on a shared document", () => {
    * pattern it follows.
    *
    * Asked for by accessible name rather than by class, because the name is what
-   * decides whether a reader can reach it: `.block-chat` is hidden with
-   * `opacity` and never `display: none` (gutter.css § the gutter), so a button
-   * nobody can see is still in the tab order and still announced.
+   * decides whether a reader can reach it. Hover concealment uses `opacity`,
+   * leaving a fitted `.block-chat` in the tab order and accessibility tree;
+   * gutter capacity rules can also hide folded controls with `display: none`
+   * (gutter.css § the gutter).
    */
   it("draws no chat button beside a paragraph", async () => {
     await open();

@@ -8,7 +8,7 @@
  * ## Why this exists
  *
  * `SPIDERYARN_OWNER_ID` decides who owns rows written **outside** a request —
- * the CLI, the pipeline, `db:import` (src/owner.ts). Unset, that is the seeded
+ * the CLI and the pipeline (src/owner.ts). Unset, that is the seeded
  * row-owner `dev@spideryarn.local`, which nobody signs in as, so the library you
  * see after signing in is empty however much has been ingested. `.env.example`
  * and docs/project/supabase-local.md have recommended setting it to the

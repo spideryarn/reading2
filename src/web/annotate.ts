@@ -124,15 +124,15 @@ export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref";
  * the line underneath. Six is where the stripes hit 1px, which is the last
  * width that is still a mark rather than a suggestion.
  *
- * **What is lost past six, and why it is nearly unreachable.** This is the cap
+ * **What is lost past six.** This is the cap
  * on searches covering *the same phrase*, not on searches switched on — three
  * searches matching one article routinely touch different sentences and each
- * gets a full 2px rule. Seven searches whose model all quoted the same words is
- * not a case anybody has reached, and the palette only holds eight. When it
- * happens the reader loses the knowledge that a seventh search matched **here**;
+ * gets a full 2px rule. The palette has sixteen slots (`PALETTE_SLOTS` in
+ * hit-colours.ts), so this cap can be reached before palette slots run out.
+ * Past it the reader loses the knowledge that a seventh search matched **here**;
  * they do not lose the search. It is still in the results list in its own
- * colour, and — since `blockHues` is capped separately and far higher — still
- * a segment in the bar down the left of the paragraph.
+ * colour; the paragraph's separate bar can still show up to `BAR_HUES` distinct
+ * colours, which is a separate cap.
  */
 export const HUE_STRIPES = 6;
 

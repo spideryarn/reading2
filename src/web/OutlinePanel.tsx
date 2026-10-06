@@ -164,7 +164,7 @@ export function OutlinePanel({
    * draw paragraph rows over a hidden article.
    *
    * **That disagreement was fixed at the source on 2026-09-03** — the
-   * stylesheet keys off `.band-covers`, written by App.tsx from the same
+   * stylesheet keys off `.band-covers`, now written by Reader.tsx from the same
    * `fit.modeW`, so the two halves cannot part again (narrow-window.css § a band with
    * no room, tests/spine-width.test.ts). This measurement stays anyway, and not
    * out of inertia: rather than copy any breakpoint into a third place, it asks

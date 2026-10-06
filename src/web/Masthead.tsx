@@ -794,18 +794,18 @@ export function addressParts(url: string): { host: string; rest: string } | null
  *
  * "The profile" is this article's **Metadata** page: `AccessSharing` is the
  * only control in the app that changes an article's visibility, and it lives in
- * that page's *Access & sharing* section — the third of eight, because Greg
- * asked for it to be moved up (Metadata.tsx).
+ * that page's *Access & sharing* section, which Greg asked to be moved up
+ * (Metadata.tsx).
  *
  * **The link stops at the page and does not aim at the section**, which was the
  * first design and is the one thing here that was cut rather than forgotten.
- * Aiming needs a place in the address for "which section", and this app took
+ * At the time, aiming needed a place in the address for "which section", and this app took
  * the fragment out on purpose: docs/project/url-state.md § Why the query string
  * and not the hash — one query string, one listener. Adding either a `#` or a
  * `?focus=` back is a new piece of URL state, a row in that doc's table and a
  * scroll that has to wait for a page that renders after its own fetch, to save
- * a reader half a screen of scrolling on arrival. Worth doing if the landing
- * turns out to feel wrong; not worth doing first.
+ * a reader scrolling on arrival. Metadata now supports `?section=` for other
+ * links, but this link still goes to the page without choosing a section.
  *
  * ## Absence is the third state, and it draws nothing
  *

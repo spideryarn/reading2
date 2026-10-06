@@ -148,10 +148,10 @@ const SCHEDULE_UNREADABLE_CAUSE: PauseUnknownCause = "schedule-not-parseable";
  * above, and `rateLimitFrom` below is the one seam that converts it. This one
  * stays for the reason written there.
  *
- * **Both arms are positive claims.** `not-limited` means *somebody looked and
- * this session is not rate-limited*, and it is the only thing that lets a
- * session reach `none`. Not passing the argument at all is the third state, and
- * it is `rate-limits-not-collected`.
+ * **The limited and not-limited arms are positive claims.** `not-limited`
+ * means *somebody looked and this session is not rate-limited*, and it lets a
+ * session reach `none`. `cannot-tell` means the scan ran but could not answer;
+ * not passing an argument means `rate-limits-not-collected`.
  */
 export type RateLimitReading =
   | {

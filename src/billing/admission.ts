@@ -1,6 +1,6 @@
 /**
- * **The wall.** Whether this reader may add another article, asked at the two
- * routes that add one, and the slot given back when no job comes of it.
+ * **The wall.** Whether this reader may spend points on an ingest or upgrade,
+ * and the slot given back when no job comes of it.
  *
  * The ledger underneath is src/store/pg-billing.ts; this is the half that knows
  * about HTTP, about Stripe, and about which requests spend money.
@@ -15,8 +15,7 @@
  * away — a re-run's job carries a URL, filled in from the article's own metadata.
  * Only the route still knows whether the reader asked for a **new** ingest.
  *
- * So there are exactly three admitting call sites, and all three are in
- * src/routes.ts:
+ * For a full ingest, the admitting paths in src/routes.ts are:
  *
  * | | |
  * |---|---|
@@ -25,6 +24,9 @@
  * | `POST /api/jobs/:id/retry` of a job that **carried** a slot | reserves |
  * | `POST /api/jobs {slug, steps}` | free — a re-run |
  * | `POST /api/jobs/:id/retry` of a job that carried none | free |
+ *
+ * Minimal papers and upgrades use `withMinimalSlot` and `withUpgradeSlot`;
+ * `withRetrySlot` preserves the original reservation's kind when retrying.
  *
  * The retry route is a second front door: it goes straight to `retryJob` →
  * `enqueue()` and never passes through the `POST /api/jobs` handler, so a check

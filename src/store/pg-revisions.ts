@@ -1684,9 +1684,10 @@ export async function beginStepRun(
 /**
  * This step has ended, and only the attempt that started it may say so.
  *
- * One fenced `UPDATE`, which is what the filesystem adapter's own comment had
- * been asking for since it was written. Two conditions carry the whole
- * protocol, and they refuse different things:
+ * First the owning job and draft are fenced by `requireLiveJobOwnsDraft`.
+ * Then one conditional `UPDATE` finishes the step, which is what the
+ * filesystem adapter's comment had asked for. Its two row conditions refuse
+ * different things:
  *
  * - **`attempt_id`** — somebody else's claim. A lapsed claimant whose lease was
  *   swept still holds a token and would otherwise finish a step the new

@@ -13,8 +13,7 @@
  * a two-pixel band at the bottom of a fixed rail is precisely the case where the
  * hand-rolled version goes wrong: it needs collision handling (flip to the other
  * side, shift along the edge), hover intent so sweeping the rail doesn't strobe,
- * and dismissal on escape. Floating UI is the engine Radix, Mantine and Tippy
- * all sit on, it is headless — it positions and it handles interaction, and
+ * and dismissal on escape. Floating UI is headless — it positions and handles interaction, and
  * ships no styles, so the dark palette stays ours (tooltip.css § tooltip).
  *
  * Two things about the DOM shape below are load-bearing:

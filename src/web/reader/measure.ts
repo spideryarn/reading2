@@ -40,8 +40,8 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * stable`) that no longer happens where the property is supported, and this
  * is the fallback for where it is not. **It could flip**, which an earlier
  * version of this comment denied: a narrower page is not always a taller one,
- * because Structure's band jumps from its columns to 400px near 1175 and hands
- * the prose 200px more (GPT Sol). So it is coalesced to one read a frame, as
+ * because Structure's band can switch from its columns to a narrower list and
+ * hand space back to the prose (GPT Sol). So it is coalesced to one read a frame, as
  * dock-fit.ts's observer is, and the gutter is what actually stops the flip.
  */
 export function useWindowWidth(): number {

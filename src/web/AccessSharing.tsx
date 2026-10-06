@@ -32,9 +32,8 @@
  *
  * ## Why the confirmation is inline rather than a modal
  *
- * There is no dialog component in this app — `AnnotateDialog` and
- * `CommentDialog` are hand-built floating panels for the reading view — and a
- * modal is machinery (focus trap, restore, escape, scroll lock) for something
+ * Keeping this inline avoids modal machinery (focus trap, restore, escape,
+ * scroll lock) for something
  * that is not an interruption. This is a form: read three sentences, tick the
  * box, press the button. It appears in place, it cannot be skipped, and the
  * `PUT` behind it is refused by the server without `rightsConfirmed: true`

@@ -16,10 +16,10 @@
  *
  * ## Why this is a module rather than a function in src/store/pg-jobs.ts
  *
- * Because there are five call sites in two files — the three job transitions in
- * src/store/pg-jobs.ts and the three draft fences in src/store/pg-revisions.ts
- * — and the whole history of this fence is one copy of it drifting from
- * another. src/store/pg-revisions.ts cannot import src/store/pg-jobs.ts without
+ * Because job transitions in src/store/pg-jobs.ts and draft fences in
+ * src/store/pg-revisions.ts need the same predicate, and the whole history of
+ * this fence is one copy of it drifting from another.
+ * src/store/pg-revisions.ts cannot import src/store/pg-jobs.ts without
  * risking the cycle `npm run check` gates on, so the predicate lives on its own
  * with nothing but the schema behind it.
  *

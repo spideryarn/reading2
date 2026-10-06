@@ -1,5 +1,5 @@
 /**
- * The ingest queue: one article at a time, and a record of how it went.
+ * The ingest queue, and a record of how each job went.
  *
  * > There should be some kind of queue that processes things … and ideally a
  * > progress indicator.
@@ -23,8 +23,9 @@
  * to src/store/jobs-fs.ts unchanged; what replaced them here is a **claim**.
  *
  * The claim is the whole design and it is three lines of SQL: an attempt token,
- * a lease, and every write fenced on `id = $id and attempt_id = $attempt and
- * status = 'running'`. One claim covers a whole **job** — `walkClaim` runs
+ * a lease, and claimant writes fenced on `id = $id and attempt_id = $attempt
+ * and status = 'running' and lease_expires_at > clock_timestamp()`.
+ * One claim covers a whole **job** — `walkClaim` runs
  * every step on it, because on a serverless host the next request lands on a
  * different instance — and is then put down, because a claim held past its
  * claimant leaves the job `running` with a token nobody holds and the next
@@ -33,10 +34,11 @@
  * from inside one, and the finish. (This said *"one claim covers one step"*,
  * which was the shape until 2026-08-30.)
  *
- * **An expired lease is not a takeover.** The job is failed and Retry is the
- * reader's to press. Guessing that an owner is dead is how two runners end up
- * writing one article, and it only becomes safe when the artefact writes are
- * transactional — docs/plans/260827j-transactional-stage-runner.md, which is not built.
+ * **An expired lease revokes the claimant's writes.** Transactional artefact
+ * commits enforce that fence (src/store/pg-session.ts). The sweep can requeue
+ * an uncancelled job within `REQUEUE_BUDGET`; after that it ends the job and
+ * Retry is the reader's to press. The original design failed every expired
+ * claim until the transactional runner and bounded resumptions were built.
  *
  * See docs/project/ingest-queue.md for the design and the library choice, and
  * docs/plans/260827h-durable-queue-and-uploads.md for the review that took the first
@@ -418,8 +420,7 @@ class DeadlineReached extends CallDeadlineReached {
  * Since 2026-09-03 that last clause is true rather than aspirational — a retry
  * lands on the same article, so it really does pick up (`slugForRetry`). A
  * sentence that also said *how many times we tried* would be better and needs a
- * new `ReaderFacingFailure`; it is not written here because src/messages.ts is
- * being edited elsewhere.
+ * new `ReaderFacingFailure`; the current sentence does not include that count.
  */
 export const REQUEUE_BUDGET = 2;
 

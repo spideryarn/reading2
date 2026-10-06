@@ -721,12 +721,12 @@ export function readLogQuery(exitCode: number, stdout: string, deploymentId: str
 }
 
 /**
- * The tracked corpus the gate worktree copies `data/` and `output/` out of.
+ * The tracked fixture corpus, present in every gate worktree through Git.
  *
- * The interim coupling to the old store layout is deliberately visible in the
- * path: underneath this directory sit a `data/` and an `output/` shaped exactly
- * like the ones the filesystem store expected, so the gate can materialise
- * both by copying. docs/plans/260901b-committed-fixture-corpus.md.
+ * Its `data/` and `output/` retain the old filesystem store's layout for tests
+ * that still read file fixtures. The gate copies both to the worktree root
+ * (`materialiseCorpus`, scripts/corpus-materialise.ts), as `worktree:setup`
+ * does. docs/plans/260901b-committed-fixture-corpus.md.
  */
 export const GATE_FIXTURE_ROOT = "tests/fixtures/data-root";
 

@@ -345,9 +345,9 @@ function OwnedArticle({
    * failed after the server committed leaves `AccessSharing` unable to say what
    * is true (`WRITE_UNCERTAIN` there), and the honest thing for the masthead is
    * to stop claiming a state rather than keep the one from before the write. It
-   * *removes* the key, because an absent `Article.visibility` already means
-   * *nobody could tell us* — the same thing a visitor's payload, which
-   * carries none, means (src/types.ts).
+   * *removes* the owner-side key so the masthead draws no visibility claim
+   * (src/types.ts). Visitors also omit that key, but their `sharedBy` field
+   * separately identifies public access or a private link (src/public-types.ts).
    *
    * The slug travels beside it for the reason it travels beside the title: the
    * `PUT` behind it resolves after the reader may have moved on.

@@ -91,8 +91,8 @@
      NOT lifted: the article, the dock, the library, the landing page, and
      the SVG labels inside the diagrams, which are `px` and belong to the
      drawing. (Nor were the gist columns — `.ctx-*`, `.nav-label`,
-     `.outline td.gist` — which went on 2026-09-29; no rule by those names is
-     left.)
+     `.outline td.gist` — which went on 2026-09-29. The surviving
+     `.ctx-callout` rules mark prose, rather than gist columns.)
 
      There is no knob: the values are literal, as they were. What is written
      down instead is the formula, so the next lift can be the same shape rather

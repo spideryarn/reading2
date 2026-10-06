@@ -4,19 +4,20 @@
  * Until 2026-08-29 every ingest wrote an arc before the article could be opened
  * at all, so the reading view could take `article.arc` as a fact and this hook
  * had no reason to exist. `arc` is no longer in `DEFAULT_INGEST_STEPS` — the
- * article opens as soon as the tree is built — so a reader can now arrive at an
- * article that has none, and something has to ask for one.
+ * article can open before structure finishes, with arc generation held until
+ * the real tree arrives (`structureAwaited` below). A reader can arrive at an
+ * article with no arc, and something has to ask for one.
  *
  * ## Seeded from the payload, so the ordinary path is unchanged
  *
  * When `/api/article/:slug` already carried an arc, that is the arc, and this
- * hook makes no request and starts no job. It is *only* the missing case that
- * costs anything. That matters more than it looks: the alternative — always
+ * hook makes no opening request. A current payload starts no job; an older
+ * prompt version can regenerate (`outdated` below). The alternative — always
  * fetching `/api/arc/:slug` to learn the staleness the payload does not carry —
  * would put a second request on every article open for a question that is almost
  * always "it is fine".
  *
- * ## It starts the job itself, which no other `useStepJob` caller does
+ * ## It starts the job on an owner's arrival
  *
  * `useGlossary`, `useIdeas` and `useSummaries` all wait for a reader to press
  * something. Greg asked for this one to run on arrival:
@@ -32,12 +33,12 @@
  * **On the owner opening the article, not on entering the mode.** Hierarchy
  * stopped being the default on 2026-08-31, but the arc is also read by
  * Structure's narrow face. It remains article-level work, and the mode lives
- * below the capability seam in `App.tsx`, so keying the run off either view
+ * below the capability seam in `article/ArticlePage.tsx`, so keying the run off either view
  * would mean lifting `mode` above `OwnedReader` and would make the other wait.
  *
  * **The ref is not belt-and-braces.** `<StrictMode>` runs every effect twice in
  * development, so without it every article opened would POST two arc jobs. The
- * open-counter in `App.tsx` carries the same guard for the same reason, and its
+ * open-counter in `article/ArticlePage.tsx` carries the same guard for the same reason, and its
  * docstring records what happened when it did not.
  *
  * ## Who must not reach this
@@ -45,15 +46,14 @@
  * **Mount it in `OwnedReader`, never in `Reader`.** The acceptance test for
  * public reading is that a signed-out browser issues no POST whatever
  * (tests/visitor-gaps.test.ts), and starting a job is a POST that spends money.
- * A visitor therefore sees no arc on an article whose owner has not opened it
- * since this shipped — including every article in the library on the day it
- * shipped, because the freshness field is new and nothing on disk carries it.
+ * A visitor cannot request a missing arc on arrival; it must already be in
+ * their payload.
  *
  * That is a deliberate trade and not an oversight: Greg was offered a second,
  * non-blocking arc job after ingest — which would have closed it — and chose the
- * smaller change (2026-08-29). The fallback is good: `TableView` shows the root
- * gist where the arc column would be, which is why this needs writing down. It
- * looks like nothing is wrong.
+ * smaller change (2026-08-29). At the time `TableView` showed the root gist
+ * where a missing arc column would be. Those columns went on 2026-09-29;
+ * Structure's list face now reads the arc when available.
  *
  * See docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */

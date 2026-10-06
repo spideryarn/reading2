@@ -1455,9 +1455,9 @@ export function DiagramPanel({
    *
    * Preorder is exactly what a flattened tree widget wants, and `layout.nodes`
    * is already in it — so Up and Down are one step in an array rather than a
-   * traversal. Left and Right are the tree-specific half: on an open parent
-   * Left closes it, otherwise it goes *to* the parent; Right opens a closed
-   * parent, otherwise it steps into the first child.
+   * traversal. Left and Right are the tree-specific half: Left goes to the
+   * parent and Right steps into the first child. Folding was removed; neither
+   * key opens or closes nodes now.
    *
    * **↑ and ↓ move the article as well as the tabstop**, which is not what the
    * tree pattern says and is what Greg asked for: *"make sure the up/down
@@ -1472,9 +1472,8 @@ export function DiagramPanel({
    * variant, and the pattern the gist columns beside this panel used until
    * they went on 2026-09-29.
    *
-   * ← and → do **not** follow, on the two pictures where they mean open and
-   * close: folding a part away is a statement about the picture and should not
-   * move the reader out of the paragraph they are in. On the two scatters,
+   * ← and → do **not** follow on the two tree pictures: they move focus through
+   * the structure without moving the prose. On the two scatters,
    * where sideways is just another word for a step, they do.
    */
   const onKeyNav = (e: React.KeyboardEvent, node: DiagramNode) => {

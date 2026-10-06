@@ -41,8 +41,8 @@
  * page's chosen clearance, not a derived quantity. GPT Sol, T3.
  *
  * The history is worth keeping, because it is why this is a corner rather than
- * a row. `--spine-w` is not a constant: layout.ts drops the spine in outline
- * mode and whenever the reader hides the prose (`?text=0`, at any width), and
+ * a row. `--spine-w` was not a constant: layout.ts dropped the spine in outline
+ * mode and whenever the reader hid the prose (`?text=0`, at any width), and
  * `?spine=0` is the reader's own hand on the rail (docs/project/url-state.md).
  * At `--spine-w: 0` the corner belonged to the two bars again, so both of them
  * reserved it, with one expression written twice:

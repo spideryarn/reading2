@@ -2,14 +2,14 @@
  * Ingest jobs in Postgres — the record both invocations can see, and the fence
  * that stops the wrong one writing.
  *
- * ## Every transition is one conditional statement, bar one
+ * ## Conditional writes enforce transitions
  *
  * The precondition lives in the `WHERE`, so the database decides rather than
  * the order two requests happened to arrive in, and a loser learns it lost
- * instead of overwriting a winner — where the filesystem adapter had to read
- * first, this file does not.
+ * instead of overwriting a winner. Some operations also lock and read rows to
+ * decide their outcome; the write still checks its precondition.
  *
- * **`pauseForDeadline` is the exception and it is deliberate.** Its caller does
+ * **`pauseForDeadline` locks before classifying, deliberately.** Its caller does
  * not want to know *whether* it moved the row, it wants to know **why not** —
  * Stop, a spent budget, or a lost claim, which want three different things and
  * which one row count cannot tell apart. So it locks the row, decides, and

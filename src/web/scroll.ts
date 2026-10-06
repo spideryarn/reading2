@@ -440,9 +440,9 @@ export function stepBar(hidden: boolean, y: number, from: number): BarStep {
  * What that costs, stated rather than waved past, because performance.md argues
  * against a scroll listener on every machine: this one is `passive`, coalesced
  * into a `requestAnimationFrame`, and its body is `stepBar` — arithmetic on
- * three numbers with no DOM read in it. The page already installs a scroll
- * listener at every width (useColumnContext.ts — for the fisheye panels then,
- * for Structure's focus row since 2026-09-29), and that one measures rects.
+ * three numbers with no DOM read in it. When Structure or the headings crumbs
+ * are mounted, useColumnContext.ts also installs a scroll listener and measures
+ * rects; that sampler once served the fisheye panels too.
  *
  * **The bottom bar did not come with it.** `--dock-bottom` stays inside § a
  * small device: the Dock is 40px, it names the mode and it is the way out of

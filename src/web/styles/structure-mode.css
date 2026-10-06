@@ -26,8 +26,9 @@
    never `auto`. If the list overflows, the fit chose the wrong rung; the answer
    is a lower rung, never a scrollbar.
 
-   **Stage 1 draws both columns at a fixed rung.** The measured ladders, the
-   reserved-height wells and the row window on a short viewport are stage 2. */
+   **Both columns still use fixed rungs.** StructurePanel.tsx measures the
+   full lists and windows their rows to the available height; measured rung
+   ladders and reserved-height wells remain work for stage 2. */
 .mode-band.struct {
   /* **No `container-type` since 2026-09-10.** The band was the query container
      for the two-tracks-or-one switch below; that switch moved to JS

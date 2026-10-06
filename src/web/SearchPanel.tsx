@@ -831,8 +831,8 @@ const Box = forwardRef<
  * earned: *theirs vanished on reload, which quietly makes the feature a toy —
  * nothing you produce with it can be returned to*
  * (docs/project/original-version/highlighting.md). Ticking a row here repaints
- * the whole article with no model call and no wait, because the answer is on
- * disk.
+ * the whole article with no model call and no wait, because the saved answer
+ * has already been fetched.
  *
  * ## Four targets on a row, and the two that look alike do different things
  *
@@ -864,7 +864,7 @@ const Box = forwardRef<
  * the same hue; the swatch and the edge are at full strength whether or not
  * the row is ticked (2026-10-03, `spya-fwcwun`). One is easy to
  * miss at 11px, and colour discrimination in a small field is exactly where
- * this fails first — the same reason the granularity columns' tints run down
+ * this fails first — the same reason the former granularity columns' tints ran down
  * lightness as well as chroma (src/web/styles/tokens.css § --depth-0). Neither is load-bearing
  * on its own: the criterion is printed in full beside them, so a reader who
  * cannot tell two hues apart has still lost nothing but a shortcut.

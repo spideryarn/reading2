@@ -133,7 +133,7 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * there is nothing: the article had the whole window and sat hard against the
  * left of it, with 800px of empty page to its right on a 1600px screen. Greg,
  * 2026-09-03: *"In Plain mode, can you centre the text on the page?"* Capping
- * the column is what leaves a margin for `styles.css` § plain, centred to
+ * the column is what leaves a margin for narrow-window.css § `.reader.text-alone` to
  * divide between the two sides.
  *
  * **The condition is "no band", not "Plain"** — the mode is not what makes the
@@ -402,8 +402,8 @@ export interface Fit {
    */
   modeW: number;
   /**
-   * **The article is the only thing on this page** — no band, just the prose
-   * across the whole window. It is where `PROSE_ALONE_MAX_REM` and the auto
+   * **No mode band beside the prose.** Marginalia may still be
+   * beside it (`fitMargin`). It is where `PROSE_ALONE_MAX_REM` and the auto
    * margins in narrow-window.css § `.reader.text-alone` come in.
    */
   alone: boolean;
@@ -472,7 +472,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * rail was on would miss a phone by twelve pixels, and one that guessed it was
  * off would warn a reader whose band fits perfectly well. Getting that wrong
  * from a hand-copied breakpoint is the accident this codebase has already had
- * once — see `App.tsx` § `band-covers`.
+ * once — see `Reader.tsx` § `band-covers`.
  *
  * **It answers a hypothetical when no band is open**, and that is the point:
  * `SmallScreenHint` is the other caller, and its whole job is to say what will
@@ -829,7 +829,7 @@ function fitMode(
    * that era's, deliberately, because it is a reproduction and not a
    * description.
    *
-   * `styles.css` § a band with no room used to be a plain
+   * narrow-window.css § a band with no room used to be a plain
    * `@media (max-width: 843px)`, which knows nothing about `?spine=0`, and
    * between **832 and 843 with the rail off** the two disagreed: this function
    * handed the band 288–299px and squeezed the table to make room, while the

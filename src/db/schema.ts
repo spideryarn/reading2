@@ -2687,14 +2687,14 @@ export const jobs = spideryarn.table(
 
     /**
      * **How many times this job has been given back to the queue after its
-     * claimant stopped answering.** The budget's counter, and nothing else reads
-     * it.
+     * claimant stopped answering or cooperatively paused at its deadline.**
+     * The budget's counter; it also crosses the wire as `Job.requeues`.
      *
      * `settleExpired` (src/store/pg-jobs.ts) used to end every lapsed claim
      * `error`, so a deploy landing during an ingest — or a step that overran its
      * lease — cost the reader their job and sent them to the Retry button. It
-     * now puts the job back to `queued` on **this same row** instead, which is
-     * what the filesystem store's `sweepStopped` had always done on restart, and
+     * now requeues an uncancelled job with budget left on **this same row**,
+     * which is what the filesystem store's `sweepStopped` had done on restart, and
      * what keeps the slug, the article and therefore the article's checkpoints —
      * and, since 2026-09-04, the **draft** as well, without which the block ids
      * those checkpoints are keyed on move and reaching them is not the same as

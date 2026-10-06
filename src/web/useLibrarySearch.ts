@@ -30,9 +30,10 @@ const DEBOUNCE_MS = 250;
 /**
  * Below this we do not ask the server.
  *
- * One or two characters match nearly every article and rank nothing
- * (`MIN_TERM` in src/library-search.ts makes the same call for chat's search).
- * The filesystem adapter, which went on 2026-09-05, dropped such terms outright.
+ * Three characters is this box's threshold, to avoid broad requests while the
+ * reader starts typing. Chat's parser in src/library-search.ts uses a different
+ * threshold: `MIN_TERM` admits two-character terms. The former filesystem
+ * adapter used that parser too; it went on 2026-09-05.
  */
 export const MIN_QUERY = 3;
 
