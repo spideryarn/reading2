@@ -13,7 +13,8 @@
  *   call. Sent as it is. The server keeps a high-water mark and bills only the
  *   difference, so a repeat or an out-of-order report adds nothing.
  * - **Backend tokens.** The text model behind the voice reports its tokens on
- *   each nested `response.completed`. One report per response id.
+ *   nested `response.completed`, `response.failed` or `response.incomplete`
+ *   events with usable usage. One report per response id.
  *
  * As with Realtime: no dollar amount, no model, no owner and no article ever
  * leave this file. The server prices from the session row it wrote.
@@ -38,6 +39,11 @@ export type GptLiveUsageReport =
       kind: "backend";
       /** The backend response's id. The server's idempotency key. */
       responseId: string;
+      /**
+       * How the response ended. This file always sends one; `null` exists only
+       * because the server reads a report from a tab that predates the field.
+       */
+      status: "completed" | "failed" | "incomplete" | null;
       /** The whole prompt, cached part included. */
       inputTokens: number;
       /** The part of `inputTokens` that was cached. */
@@ -86,7 +92,8 @@ export function voiceReport(event: Record<string, unknown>): GptLiveUsageReport 
 /**
  * **One backend response's tokens**, from the `usage` on a nested
  * `response.completed` (or on a failed or incomplete one, which is billed for
- * what it used). `null` when the totals are missing.
+ * what it used, and is reported with the status it ended on, so the ledger
+ * does not count it as finished). `null` when the totals are missing.
  *
  * `cached_tokens` is the one count allowed to be absent, and reads as none. The
  * argument is the one ../meter.ts makes for Realtime: an absent cached count
@@ -94,7 +101,11 @@ export function voiceReport(event: Record<string, unknown>): GptLiveUsageReport 
  * spent. A cached count larger than the input is capped at the input for the
  * same reason, and because the server refuses it outright otherwise.
  */
-export function backendReport(responseId: string, usage: Record<string, unknown>): GptLiveUsageReport | null {
+export function backendReport(
+  responseId: string,
+  usage: Record<string, unknown>,
+  status: "completed" | "failed" | "incomplete",
+): GptLiveUsageReport | null {
   const inputTokens = whole(usage.input_tokens);
   const outputTokens = whole(usage.output_tokens);
   if (responseId === "" || responseId.length > 200 || inputTokens === null || outputTokens === null) return null;
@@ -102,6 +113,7 @@ export function backendReport(responseId: string, usage: Record<string, unknown>
   return {
     kind: "backend",
     responseId,
+    status,
     inputTokens,
     cachedInputTokens: Math.min(cached, inputTokens),
     outputTokens,

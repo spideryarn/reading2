@@ -83,10 +83,11 @@ describe("voice seconds", () => {
 
 describe("backend tokens", () => {
   it("reads input, cached input and output, and the server takes it as built", () => {
-    const built = backendReport("resp_023cf341", backendUsage);
+    const built = backendReport("resp_023cf341", backendUsage, "completed");
     expect(built).toEqual({
       kind: "backend",
       responseId: "resp_023cf341",
+      status: "completed",
       inputTokens: 31_204,
       cachedInputTokens: 30_720,
       outputTokens: 58,
@@ -94,8 +95,16 @@ describe("backend tokens", () => {
     expect(parseLiveUsage(built)).toEqual(built);
   });
 
+  it("carries how the response ended, and the server takes each ending as built (qi-p78m9ch9)", () => {
+    for (const status of ["failed", "incomplete"] as const) {
+      const built = backendReport("resp_1", backendUsage, status);
+      expect(built).toMatchObject({ kind: "backend", status });
+      expect(parseLiveUsage(built)).toEqual(built);
+    }
+  });
+
   it("reads an absent cached count as none, which can only overstate the cost", () => {
-    const built = backendReport("resp_1", { input_tokens: 900, output_tokens: 20 });
+    const built = backendReport("resp_1", { input_tokens: 900, output_tokens: 20 }, "completed");
     expect(built).toMatchObject({ inputTokens: 900, cachedInputTokens: 0 });
     expect(parseLiveUsage(built)).toEqual(built);
   });
@@ -105,15 +114,15 @@ describe("backend tokens", () => {
       input_tokens: 100,
       input_tokens_details: { cached_tokens: 400 },
       output_tokens: 5,
-    });
+    }, "completed");
     expect(built).toMatchObject({ cachedInputTokens: 100 });
     expect(parseLiveUsage(built)).toEqual(built);
   });
 
   it("builds nothing when a total is missing, rather than a row priced at nothing", () => {
-    expect(backendReport("resp_1", { output_tokens: 5 })).toBeNull();
-    expect(backendReport("resp_1", { input_tokens: 5 })).toBeNull();
-    expect(backendReport("", backendUsage)).toBeNull();
+    expect(backendReport("resp_1", { output_tokens: 5 }, "completed")).toBeNull();
+    expect(backendReport("resp_1", { input_tokens: 5 }, "completed")).toBeNull();
+    expect(backendReport("", backendUsage, "completed")).toBeNull();
   });
 });
 
@@ -172,7 +181,7 @@ describe("the queue carries GPT-Live's reports", () => {
     });
     meter.connected();
     const voice = voiceReport(usageUpdated);
-    const backend = backendReport("resp_1", backendUsage);
+    const backend = backendReport("resp_1", backendUsage, "completed");
     if (!voice || !backend) throw new Error("the fixtures did not build");
     meter.report(voice);
     meter.report(backend);

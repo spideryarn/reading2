@@ -11,6 +11,7 @@
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
+import { backendReport } from "../src/web/live/gpt-live/meter.js";
 
 import {
   DelegationLoop,
@@ -98,6 +99,7 @@ describe("a real trace: one question, one tool, one answer", () => {
       ["gpt-6-luna", 873],
     ]);
     expect(new Set(of(effects, "usage").map((u) => u.responseId)).size).toBe(2);
+    expect(of(effects, "usage").map((u) => u.status)).toEqual(["completed", "completed"]);
   });
 });
 
@@ -292,6 +294,8 @@ describe("a backend response that does not finish", () => {
     loop.toolSettled("c1", "found");
     const effects = loop.push(failed("d1", "r1"), 2_000);
     expect(kinds(effects)).toEqual(["usage", "failed"]);
+    /* The usage of a failed response is billed, and says it failed (qi-p78m9ch9). */
+    expect(of(effects, "usage")[0]).toMatchObject({ responseId: "r1", status: "failed" });
     expect(of(effects, "failed")[0]).toMatchObject({ delegationId: "d1", at: 2_000, callIds: ["c2"] });
     expect(of(effects, "failed")[0]?.message).toContain("server_error");
     /* The tool that was still running comes back to a response that is gone. */
@@ -305,9 +309,15 @@ describe("a backend response that does not finish", () => {
     const cut = feed(incomplete, [
       nested("d1", {
         type: "response.incomplete",
-        response: { id: "r1", status: "incomplete", incomplete_details: { reason: "max_output_tokens" } },
+        response: {
+          id: "r1",
+          status: "incomplete",
+          incomplete_details: { reason: "max_output_tokens" },
+          usage: USAGE,
+        },
       }),
     ]);
+    expect(of(cut, "usage")[0]).toMatchObject({ responseId: "r1", status: "incomplete" });
     expect(of(cut, "failed")[0]).toMatchObject({ callIds: ["c1"] });
     expect(of(cut, "failed")[0]?.message).toContain("max_output_tokens");
 
@@ -318,6 +328,76 @@ describe("a backend response that does not finish", () => {
     expect(of(err, "failed")[0]).toMatchObject({ callIds: ["c1"] });
     expect(of(err, "failed")[0]?.message).toContain("backend unavailable");
     expect(errored.toolSettled("c1", "found late")).toEqual([]);
+  });
+
+  /* Sol's G1, G2 and G4 on the plan for qi-p78m9ch9. One response is billed
+     once, by the first terminal event that carries usage, and says how that
+     event ended it. */
+  it("bills a response whose error came first and whose usage came after, without reviving it", () => {
+    const loop = new DelegationLoop();
+    feed(loop, [created("d1", "r1"), call("d1", "c1")]);
+    feed(loop, [nested("d1", { type: "error", message: "backend unavailable" })]);
+    const late = feed(loop, [failed("d1", "r1")]);
+    expect(kinds(late)).toEqual(["usage"]);
+    expect(of(late, "usage")[0]).toMatchObject({ responseId: "r1", status: "failed" });
+    expect(feed(loop, [failed("d1", "r1")])).toEqual([]);
+    expect(loop.toolSettled("c1", "found late")).toEqual([]);
+  });
+
+  it("bills a response once when it completed and then failed while its tools ran", () => {
+    const loop = new DelegationLoop();
+    const first = feed(loop, [created("d1", "r1"), call("d1", "c1"), completed("d1", "r1")]);
+    expect(of(first, "usage").map((u) => u.status)).toEqual(["completed"]);
+    const second = feed(loop, [failed("d1", "r1")]);
+    expect(kinds(second)).toEqual(["failed"]);
+  });
+
+  it("does not consume billing when an early error carries unusable usage", () => {
+    for (const usage of [{}, { input_tokens: 811 }, { input_tokens: -1, output_tokens: 20 }]) {
+      const loop = new DelegationLoop();
+      const early = feed(loop, [
+        created("d1", "r1"),
+        call("d1", "c1"),
+        nested("d1", { type: "error", response: { id: "r1", usage } }),
+      ]);
+      expect(of(early, "usage").flatMap((u) => backendReport(u.responseId, u.usage, u.status) ?? [])).toEqual([]);
+      const late = feed(loop, [failed("d1", "r1")]);
+      expect(of(late, "usage").map((u) => backendReport(u.responseId, u.usage, u.status))).toEqual([
+        { kind: "backend", responseId: "r1", status: "failed", inputTokens: 811, cachedInputTokens: 0, outputTokens: 20 },
+      ]);
+      expect(of(late, "failed")).toEqual([]);
+      expect(loop.toolSettled("c1", "found late")).toEqual([]);
+      expect(feed(loop, [failed("d1", "r1")])).toEqual([]);
+    }
+  });
+
+  it.each(["final", "waiting", "continued"] as const)(
+    "reports late completed usage once after the response became %s",
+    (state) => {
+      const loop = new DelegationLoop();
+      feed(loop, [created("d1", "r1")]);
+      if (state !== "final") feed(loop, [call("d1", "c1")]);
+      feed(loop, [nested("d1", { type: "response.completed", response: { id: "r1" } })]);
+      if (state === "continued") loop.toolSettled("c1", "found");
+      const late = feed(loop, [completed("d1", "r1")]);
+      expect(kinds(late)).toEqual(["usage"]);
+      expect(of(late, "usage")[0]).toMatchObject({ responseId: "r1", status: "completed", usage: USAGE });
+      expect(feed(loop, [completed("d1", "r1")])).toEqual([]);
+    },
+  );
+
+  it("reads the ending off the event, whatever the response inside it says, and a nested error with usage is failed", () => {
+    const disagreeing = feed(new DelegationLoop(), [
+      created("d1", "r1"),
+      nested("d1", { type: "response.failed", response: { id: "r1", status: "completed", usage: USAGE } }),
+    ]);
+    expect(of(disagreeing, "usage")[0]?.status).toBe("failed");
+
+    const errored = feed(new DelegationLoop(), [
+      created("d1", "r1"),
+      nested("d1", { type: "error", message: "backend unavailable", response: { id: "r1", usage: USAGE } }),
+    ]);
+    expect(of(errored, "usage")[0]).toMatchObject({ responseId: "r1", status: "failed" });
   });
 
   it("does not stop a later response under the same delegation from working", () => {
