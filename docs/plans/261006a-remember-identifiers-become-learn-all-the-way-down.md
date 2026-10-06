@@ -333,3 +333,14 @@ The docs half was done beside it by another agent.
   38 phrases run twice, $0.02. 36 right before and after; all six Learn phrases right; one pick
   moved, between two accepted Learn rows at about 0.5 confidence. Not an A/B on the ids alone,
   and the suggester was not run. Taken as enough.
+- **The migration's file name changed before it landed**: `20261006035355_…`, regenerated on top
+  of `20261006014116_ai_calls_attempt_and_failure`, which another session had already applied to
+  the shared local database with a later stamp than this one's first. Same SQL.
+- **Browser check** (Sonnet, Playwright, 2026-10-06, after `db:migrate` on the local database):
+  desktop 1440, iPad 820 and phone 390. Learn opens as `?mode=learn`; the chips are styled and
+  write `?learn=tutorial|explore|quiz`; a Recall turn is sent, answered and still there after a
+  reload; Chat's filter writes `?chatfrom=learn` and its Learn row leads back; the command bar
+  finds Learn from "learn" and from "remember"; `/help#mode-remember` lands on Learn; a bare link
+  does not reopen Learn but pressing it returns to Quiz. No console error, no 400 from
+  `/api/chat`. `?mode=remember` opens Learn and the address keeps the old word, as
+  `?mode=trajectory` does; `?mode=remember&remember=quiz` opens Learn at Recall, as planned.
