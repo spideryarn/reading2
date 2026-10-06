@@ -454,6 +454,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      rule that made two codes compulsory once the sentences differed. */
   "jb-file-no-article": "blocked",
   "jb-file-too-little-text": "blocked",
+  /* **The third stage-2 refusal, 2026-10-06: the document is a site's bot
+     check.** `blocked` like the four above, and for their reason — Retry reads
+     the copy stage 1 stored, which is the same check. A code per origin because
+     the sentences differ. See `documentIsABotCheck`. */
+  "jb-bot-check": "blocked",
+  "jb-file-bot-check": "blocked",
   /* Stage 3's own, and the one the first sweep missed: it is reachable from an
      uploaded *scan*, where a PDF's only text is a publisher record that
      `renderHtml` withholds. ⟨GPT Sol, F24⟩ See `articleHadNoText`. */
@@ -1417,6 +1423,50 @@ export function documentHadTooLittleText(
       "page, or a page whose words only appear once its own scripts have run, though a genuinely " +
       "very short page ends the same way — and this step would be handed the same page again, so " +
       "it is the address it came from that needs looking at. [jb-too-little-text]",
+  };
+}
+
+/**
+ * **The document is a site's check that its visitor is not a bot** —
+ * `ChallengePage`'s sentence (src/challenge-page.ts), for the two framings the
+ * reader can be in.
+ *
+ * **Its own sentence rather than `documentHasNoArticle`'s**, which would have
+ * been one factory cheaper. That one says *"usually a login wall, an error
+ * page, or…"* and sends the reader to look at the address, because the rule
+ * behind it does not know what the page is. This rule does: the page said so
+ * in its own markup. So the sentence does not hedge, and it names the move
+ * that works — the reader's own browser can pass the check, and this app can
+ * read what that browser saves.
+ * docs/plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md.
+ *
+ * **Plain words.** Not the product's name and not how the check works; *"a
+ * check that its visitor is not a bot"* is what the page itself tells a person.
+ * The provider is on the error and in the log's diagnostic.
+ *
+ * **"an HTML file", not "a web page"**, which could be heard as a browser's
+ * archive format this app does not take. And the futility of another go is
+ * tied to the stored copy, because that is the true reason: Retry never
+ * re-runs the fetch. GPT Sol, 2026-10-06.
+ */
+export function documentIsABotCheck(origin: DocumentOrigin): ReaderFacingFailure {
+  if (origin === "upload") {
+    return {
+      kind: "blocked",
+      message:
+        "The file you uploaded is a site's check that its visitor is not a bot, saved before " +
+        "the page behind it had loaded. Sending the same file again cannot change that. If you " +
+        "can still open the original page in a browser, wait for it to load and save it again " +
+        "from there. [jb-file-bot-check]",
+    };
+  }
+  return {
+    kind: "blocked",
+    message:
+      "The site answered with a check that its visitor is not a bot, instead of the page " +
+      "itself, and this app cannot pass that check. Another go here would read the same stored " +
+      "copy of that check. If the page opens in your own browser, save it from there as a PDF " +
+      "or an HTML file and upload that file. [jb-bot-check]",
   };
 }
 

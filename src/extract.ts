@@ -30,6 +30,7 @@ import { Readability } from "@mozilla/readability";
 import { escapeHtml, plainTitle } from "./html.js";
 import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
+import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { prepareLatexml } from "./latexml.js";
 import { canonicaliseMaths } from "./maths-import.js";
@@ -392,6 +393,13 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  * means *this is too little text to build anything from*, `article` is whatever
  * Readability handed back anyway, and it is the caller's business what to do
  * about it.
+ *
+ * **Since 2026-10-06 `refusal` can also be a `ChallengePage`** — the document is
+ * a site's bot check (src/challenge-page.ts) — and it **wins over both older
+ * findings**: a bot check that is also short is reported as a bot check, and
+ * so is one Readability declines. So `article: null` can now arrive beside a
+ * non-null `refusal`, and a caller that wants the most specific answer asks
+ * about `refusal` first, as `runExtract` does. See `refusalFor`.
  */
 export function readArticle(
   html: string,
@@ -407,7 +415,7 @@ export function readArticle(
   authors: Author[] | null;
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
-  refusal: TooLittleTextToRead | null;
+  refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
@@ -425,7 +433,7 @@ export function readArticle(
     article: shipped.article,
     authors: shipped.authors,
     ownIds: shipped.ownIds,
-    refusal: capabilityFloor(shipped.article),
+    refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
     removed: shipped.removed,
@@ -448,6 +456,8 @@ function readingArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
+  /** What the source said it was, before anything rewrote it — `refusalFor`. */
+  challenge: ChallengePage | null;
   authors: Author[] | null;
   ownIds: WorkId[];
   notes: NoteStats;
@@ -472,6 +482,10 @@ function readingArm(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
+  /* On the document as it arrived, and it has to be: `prepareDocument` rewrites
+     it and Readability deletes every `<script>`. `provenanceArm` has the same
+     line in the same place. */
+  const challenge = challengeIn(dom.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
   /* Before the parse, and it has to be: Readability mutates the document it is
      given, and `keepClasses: false` takes the `noprint` class off whatever
@@ -485,6 +499,7 @@ function readingArm(
   const article = new Readability(dom.window.document).parse();
   return {
     article,
+    challenge,
     authors,
     ownIds,
     notes,
@@ -634,8 +649,9 @@ function visibleLength(text: string | null | undefined): number {
  * equally true of a genuine 300-character page, and that is the point. Fable,
  * 2026-09-06, quoted in the plan.
  *
- * **Not a bot-wall detector.** That is C1, a registry of conclusive markup, and
- * this knows nothing about *what* the page is.
+ * **Not a bot-wall detector.** That is C1, a registry of conclusive markup
+ * (src/challenge-page.ts, since 2026-10-06), and this knows nothing about
+ * *what* the page is. `refusalFor` below asks that question first.
  */
 function capabilityFloor(
   article: { textContent: string | null | undefined } | null,
@@ -646,6 +662,34 @@ function capabilityFloor(
   if (!article) return null;
   const chars = visibleLength(article.textContent);
   return chars < MIN_ARTICLE_CHARS ? new TooLittleTextToRead(chars) : null;
+}
+
+/**
+ * **Stage 2's verdict on one arm, and the order is the decision**: what the
+ * page *is* before how much of it there is.
+ *
+ * One helper for both read paths, for the reason `capabilityFloor`'s header
+ * gives — `readArticle` and `readArticleWithProvenance` do not call each other,
+ * and a verdict written into one of them leaves production and the eval
+ * harness disagreeing with nothing to show it.
+ *
+ * **The bot check wins** over the floor here and over `ReadabilityRefused` in
+ * `runExtract`, because it is the more specific finding and the more useful
+ * sentence: *"this is a bot check, open it in your own browser"* tells the
+ * reader what to do, where *"too little text"* and *"no article"* send them to
+ * look at an address that is fine.
+ *
+ * The verdict is taken by `readingArm` and `provenanceArm` on the pristine
+ * source and carried here, rather than thrown from `sourceDom`, which also
+ * parses Readability's output and the provenance copy (GPT Sol, 2026-10-06).
+ * Both arms of the prose-retention fallback read the same bytes, so whichever
+ * one ships carries the same answer.
+ */
+function refusalFor(arm: {
+  challenge: ChallengePage | null;
+  article: { textContent: string | null | undefined } | null;
+}): TooLittleTextToRead | ChallengePage | null {
+  return arm.challenge ?? capabilityFloor(arm.article);
 }
 
 /**
@@ -911,8 +955,10 @@ export function readArticleWithProvenance(
    * are separate entry points and neither calls the other. Without this the
    * harness's `Candidate.refused` is permanently false on the very pages the
    * floor exists for, and `notAnArticle` scores a refusal that never happens.
+   *
+   * And the bot-check verdict, which wins over it — `refusalFor`.
    */
-  refusal: TooLittleTextToRead | null;
+  refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   /**
@@ -970,7 +1016,7 @@ export function readArticleWithProvenance(
   const shipped = armThatKeptTheProse(provenanceArm(html, url, {}), (opts) => provenanceArm(html, url, opts));
   return {
     article: shipped.article,
-    refusal: capabilityFloor(shipped.article),
+    refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
     removed: shipped.removed,
@@ -997,6 +1043,8 @@ function provenanceArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability<Element>["parse"]>;
+  /** The same verdict `readingArm` takes, at the same point — `refusalFor`. */
+  challenge: ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -1005,6 +1053,8 @@ function provenanceArm(
   stampedElements: number;
 } {
   const prepared = sourceDom(html, url);
+  /* Before the document is prepared, as on the shipping path. */
+  const challenge = challengeIn(prepared.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(prepared.window.document, protect);
   /* Before Readability, for the reason `readingArm` gives. `stampSourceIds`
      below only adds an attribute, so either side of it would do; before it is
@@ -1018,6 +1068,7 @@ function provenanceArm(
   }).parse();
   return {
     article,
+    challenge,
     notes,
     callouts,
     removed,
@@ -1110,6 +1161,13 @@ export function publicationDate(raw: Maybe): string | undefined {
  * says none of this — and which is a *pair* of sentences, because a reader who
  * uploaded the file has no address to be sent back to.
  */
+/**
+ * Re-exported so the three refusals stage 2 can throw are importable from the
+ * stage that throws them. It is defined beside its registry, in
+ * src/challenge-page.ts.
+ */
+export { ChallengePage };
+
 export class ReadabilityRefused extends Error {
   constructor() {
     super("Readability could not parse this page.");
@@ -1220,6 +1278,12 @@ export async function runExtract(opts: {
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const { article, authors, ownIds, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  /* **Before the `!article` check, so it wins over `ReadabilityRefused` too.**
+     A bot check Readability happens to decline is still a bot check, and that
+     is the sentence with a move in it. src/challenge-page.ts. */
+  if (refusal instanceof ChallengePage) {
+    throw refusal;
+  }
   if (!article) {
     throw new ReadabilityRefused();
   }
