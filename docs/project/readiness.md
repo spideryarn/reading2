@@ -22,7 +22,7 @@ page is the short version: what an agent has to do, and what the tab will and wi
 
 `scripts/readiness-run.ts` runs one check (`test`, `typecheck`, `check`, `lint`, `build`) and writes
 a record to `~/.fleet-readiness/runs/` carrying the commit it ran on, the tree state at **both** ends
-of the run, how it ended and what it counted. Wrapping it in `tmux-job.ts` is the usual reason —
+of the run, how it ended, what it counted and — for a failure — which test files failed. Wrapping it in `tmux-job.ts` is the usual reason —
 the run survives a disconnect and its output is kept.
 
 **A plain `npm test` leaves no record.** It will still appear in the tab's 24-hour history,
@@ -50,6 +50,33 @@ And "on dev" means **this box's cached `origin/dev`**. When that was last checke
 is not knowable from the ref — `git pack-refs` touches it without fetching, and a fetch that changes
 nothing does not touch it — so a green verdict is never a claim about what is on GitHub now.
 
+## Which test files failed
+
+A failed run's record names the test files that failed, and the tab has a **Failing test files**
+card: each file, how many failed runs with recorded names listed it, and when it was first and last listed. That
+is the difference between a test that has been red since this morning and one that failed once.
+The wrapper also prints the names as its last line, and the loop puts them on its `outcome:` line.
+The design is [261006m](../plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md).
+
+Three things it will not say:
+
+- **That no file failed.** The field is a non-empty list or it is absent. Absent means *not known* —
+  a record from before 2026-10-06, a failure that was not a test's (typecheck, a killed run), or a
+  failure summary the scanner would not vouch for. The card counts those runs rather than dropping
+  them.
+- **That it is about dev.** The card pools every failed wrapper run in the window, on any commit.
+  The headline's five clauses do not apply to it, and it never feeds the headline.
+- **More than it kept.** A record lists at most twenty files, sorted, with the true total beside
+  them; when a list was cut, the card's counts read "at least".
+
+The names come from vitest's own failure summary — the ` FAIL  <project>  tests/x.test.ts > …`
+lines under its `Failed Suites` / `Failed Tests` headings — read as the output streams past, because
+in a full `npm run check` that summary is in the middle of a 14 MB log and in neither end the
+wrapper keeps. The scanner requires a completed summary and agreement with the streamed file tally,
+counting a path run under two projects as two executions. Ambiguous summaries, including a
+`FAIL` line quoted inside diagnostic text, leave the names unknown. A run reconstructed from a tmux log never has names: it holds two ends of the log
+and could not tell how many failures it had missed.
+
 ## What the graphs show
 
 A mark per run, at the instant it finished. **Not spans**: extending a pass rightwards to the next
@@ -65,7 +92,7 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness.ts` | the record's shape and its parser |
 | `tools/fleet/readiness-store.ts` | one atomic file per run; no lock, no rotation |
 | `tools/fleet/readiness-git.ts` | the tree stamps and the dev snapshot, bounded and off the request path |
-| `tools/fleet/readiness-parse.ts` | reading a check's own output back |
+| `tools/fleet/readiness-parse.ts` | reading a check's own output back, and the two things caught as it streams past: an admission refusal and the failing test files |
 | `tools/fleet/readiness-backfill.ts` | the tmux-log scan, recomputed per collection and never stored |
 | `tools/fleet/build-files.ts` | the fleet bundle's manifest, and the check that the bundle on disk is the one a build wrote |
 | `tools/fleet/readiness-verdict.ts` | the conjunction above, as one pure function |

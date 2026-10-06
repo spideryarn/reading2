@@ -62,6 +62,7 @@ function reading(over: Partial<ReadingView> = {}): ReadingView {
     logPath: null,
     why: null,
     counts: null,
+    failedTestFiles: null,
     ...over,
   };
 }
