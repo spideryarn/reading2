@@ -337,6 +337,12 @@
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
+/* What a quote is, under the label, and the way to Help's section on Quotes
+   (plan 261006j). The link wears the colour the band's (i) gives the same words. */
+.prose-card-quote-what { margin: 0 0 0.4rem; line-height: 1.4; }
+.prose-card-quote-help { color: var(--highlight-ink); text-decoration: none; white-space: nowrap; }
+.prose-card-quote-help:hover,
+.prose-card-quote-help:focus-visible { text-decoration: underline; }
 .prose-card-scores {
   display: grid;
   gap: 0.2rem;

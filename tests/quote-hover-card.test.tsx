@@ -20,6 +20,7 @@ import { quoteStroke } from "../src/web/QuotesPanel.js";
 import { hitMarks, quoteMarkKey, resolveQuotes } from "../src/web/search-hits.js";
 import { HOVER_DELAY } from "../src/web/useHoverCard.js";
 import { exactly } from "../src/web/relative-time.js";
+import { helpHref, modeAnchor } from "../src/web/help/help-anchors.js";
 import type { Block, BlockId, Quote } from "../src/types.js";
 
 class FakeResizeObserver {
@@ -210,6 +211,69 @@ describe("resting on a quote", () => {
       `Chosen by the AI · on or before ${exactly(LIST_WRITTEN)}`,
     );
   });
+
+  /* Greg, 2026-10-06 (spya-tpmde9): *"Add a tooltip for Quotes, so readers
+     know what they are (and any further information about them)"*. The fills
+     are in the prose in every mode, so this card is where a reader who has
+     never opened Quotes meets one. Plan 261006j. Both fixtures, because the
+     unscored branch is a different arm of the card. */
+  it.each([
+    ["a scored quote", 0],
+    ["an unscored quote", 1],
+  ])("says what a quote is, first, on %s, and links to Help's section on Quotes", (_name, n) => {
+    paint();
+    rest(quoteMark(n), QUOTE_OPEN_MS + 10);
+    const what = card()?.querySelector(".prose-card-quote-card .prose-card-quote-what");
+    expect(what, "no sentence saying what a quote is").not.toBeNull();
+    /* The claims, not the whole sentence: who chose it, that it is a passage
+       (src/quotes.ts § SYSTEM: "a passage, not a line"), whose words they are,
+       and what the strength of the purple means. */
+    const text = what?.textContent ?? "";
+    expect(text).toMatch(/passage the AI picked out/);
+    expect(text).toMatch(/article’s own words/);
+    /* What the purple means is said only where there is a score to mean it:
+       beside *Not scored.* it would be a sentence about some other quote
+       (GPT Sol's F8, and the shorter of the two ways to close it). */
+    if (n === 0) expect(text).toMatch(/Stronger purple means a higher Importance or Striking score\./);
+    else expect(text).not.toMatch(/purple|scor/i);
+    expect(text).not.toMatch(/\byou\b/i);
+    expect(what?.previousElementSibling?.classList.contains("prose-card-label"), "not first under the label").toBe(
+      true,
+    );
+    const help = card()?.querySelector<HTMLAnchorElement>(".prose-card-quote-card a.prose-card-quote-help");
+    expect(help?.getAttribute("href")).toBe(helpHref(modeAnchor("quotes")));
+  });
+
+  it("stays open while the pointer is inside it, and closes when Help is followed", () => {
+    paint();
+    rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+    const help = card()?.querySelector<HTMLAnchorElement>("a.prose-card-quote-help");
+    expect(help).not.toBeNull();
+    act(() => pointer("pointerover", help!));
+    act(() => {
+      vi.advanceTimersByTime(HOVER_DELAY.close + 500);
+    });
+    expect(card(), "the card closed under the pointer").not.toBe(null);
+    act(() => help!.click());
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(card(), "the card stayed open over the Help page").toBe(null);
+  });
+
+  it.each(["metaKey", "ctrlKey", "shiftKey", "altKey"] as const)(
+    "leaves a %s Help click to the browser without closing the article's card",
+    (modifier) => {
+      paint();
+      rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+      const help = card()?.querySelector<HTMLAnchorElement>("a.prose-card-quote-help");
+      expect(help).not.toBeNull();
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, [modifier]: true });
+      act(() => help!.dispatchEvent(click));
+      expect(click.defaultPrevented, "the app took over a modified click").toBe(false);
+      expect(card(), "opening Help in another tab closed the card in this one").not.toBe(null);
+    },
+  );
 
   it("waits longer than a word does before opening, because a reader rests in a passage", () => {
     paint();

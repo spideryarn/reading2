@@ -54,11 +54,6 @@
     // count would have to account for these two live configs.
     // docs/plans/261004d § A5.
 
-    // A string handed to a spawned `vitest run --config` in
-    // scripts/store-migration-witness.ts, which knip cannot follow. It is in
-    // use, and both modes reported it as an unused file.
-    "vitest.witness.config.ts",
-
     // Operational scripts and evals, each behind its own npm script.
     //
     // `evals/**` rather than `evals/*`, because `project` below is already

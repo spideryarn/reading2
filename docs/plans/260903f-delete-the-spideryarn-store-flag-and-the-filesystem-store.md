@@ -445,7 +445,7 @@ with the bug. So the manifest gets **two independent witnesses**:
 classification is the per-suite mutation evidence from B and the assertion inventory in G. Do not
 let a green manifest test stand in for either.
 
-#### Witness 2 is measured: [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
+#### Witness 2 is measured: `tests/store-migration-witness.json`
 
 The whole suite run with the eight condemned modules instrumented at method level, default store.
 **The number that matters is 88, and it is neither of the two we had.**
@@ -628,7 +628,7 @@ are listed in `tsconfig.json` beside 260903e's spike config and are **not** wire
 the tree keeps moving — it counted 588 test files and the walk saw 597 ninety minutes later. Whoever
 re-takes it needs this. It dies with the filesystem store in G.
 
-#### Witness 1 is built: [`scripts/store-migration-candidates.ts`](../../scripts/store-migration-candidates.ts)
+#### Witness 1 is built: `scripts/store-migration-candidates.ts`
 
 A real import-graph walk over 1,160 first-party files — `.js`→`.ts` specifiers, the `@/` alias,
 `await import()`, and `import type` tracked as an **erased** edge rather than a real one.
@@ -2016,7 +2016,7 @@ the correct action but claims a mechanism that is gone.
 
 **The resolution is that the map should shrink, and cannot yet.** Membership is one-directional —
 `tests/store-migration-registry.test.ts` demands an entry for every file
-[`tests/store-migration-witness.json`](../../tests/store-migration-witness.json) saw touching the
+`tests/store-migration-witness.json` saw touching the
 filesystem store, and nothing demands a listed file still touch it. So a converted file may leave the
 map **only once the witness is re-run**, and the witness is dated 2026-09-03. So:
 
@@ -2093,7 +2093,7 @@ Four design corrections taken with it:
 `vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts` were kept, but the thing that ran
 them and assembled the JSON was not, so the step above was unrunnable — a number recorded without its
 derivation, which is the failure this plan spends a section on.
-[`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts) is that missing half:
+`scripts/store-migration-witness.ts` is that missing half:
 
     npx tsx scripts/store-migration-witness.ts --self-check                                  # ~1 min, 12 control files
     npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json
@@ -2798,7 +2798,7 @@ They are left here named rather than quietly swapped, because the mistake is mor
 work it prompted.
 
 - *"The script that produced the JSON is not in the repo."* Wrong. The instrument —
-  [`vitest.witness.config.ts`](../../vitest.witness.config.ts) and `tests/setup/fs-store-witness*.ts`
+  `vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts`
   — landed in `4900c89e` on 2026-09-03, in stage A's own commit.
 - *"Nothing recorded the command."* Also wrong. [`tsconfig.json`](../../tsconfig.json) carried it, in
   a comment above the config's own entry, along with the reason the file is kept and the note that
@@ -2818,7 +2818,7 @@ still hooks anything. So *"re-run the witness at the end of stage B"* would have
 the first attempt, with nothing saying whether it meant anything** — which is worse than producing
 nothing.
 
-##### Built: [`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts)
+##### Built: `scripts/store-migration-witness.ts`
 
 `--self-check`, `--files <paths…>` and `--full [--out FILE]`. It hooks the eight modules with a Vite
 `resolveId`/`load` plugin that re-exports each one through a proxy — a call trap for functions and a

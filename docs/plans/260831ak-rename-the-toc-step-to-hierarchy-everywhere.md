@@ -383,7 +383,7 @@ filesystem store's copies are unreachable from SQL:
   It moves `revision_step_runs.step_name`, `ai_calls.step_name` **and** `ai_calls.purpose`,
   `checkpoints.namespace`, and `jobs.steps`, and it ends with a `RAISE` postcondition over the two
   that have no constraint to catch them — because "matched nothing" and "worked" print the same tick.
-- **[`scripts/migrate-fs-toc-to-hierarchy.ts`](../../scripts/migrate-fs-toc-to-hierarchy.ts)** —
+- **`scripts/migrate-fs-toc-to-hierarchy.ts`** —
   idempotent, `--dry-run`-able, and **run**: it moved the two `steps/toc.running` markers, eight
   `data/_jobs/*.json` step lists and 61 rows of `data/_ai-calls.jsonl`. Proved with the markers
   present rather than on a clean tree: `interrupted("hierarchy")` was **false** for both articles

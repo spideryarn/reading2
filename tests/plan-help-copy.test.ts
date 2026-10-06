@@ -143,7 +143,7 @@ describe("a paid plan", () => {
 
 describe("the states with no allowance to explain", () => {
   it("say nothing", () => {
-    for (const plan of [{ kind: "exempt" }, { kind: "off" }, { kind: "unknown" }] as const) {
+    for (const plan of [{ kind: "exempt" }, { kind: "unknown" }] as const) {
       expect(planTip(plan)).toBeNull();
       expect(planExplainer(plan)).toEqual([]);
     }

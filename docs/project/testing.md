@@ -612,9 +612,10 @@ this; nothing yet catches the email half, which is why it is written down here.
 
 ## What a brand-new test file owes the two registries
 
-Three gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
+Two gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
 all, and each one reads as something else when it does. Written down on 2026-09-08 after a new
-route test tripped two of them inside twenty minutes of being committed.
+route test tripped two of them inside twenty minutes of being committed. There were three until
+2026-10-06; the third is kept below, struck, because the entries it asked for are still in the file.
 
 1. **A lane, or the database looks broken.** A file absent from `TEST_LANES` defaults to `unit`,
    whose `DATABASE_URL` is poisoned on purpose. A Postgres suite then fails on
@@ -627,15 +628,14 @@ route test tripped two of them inside twenty minutes of being committed.
    conversion — anything written after the filesystem store went on 2026-09-05 is not — **do not add
    the entry to silence the gate**; that records a history that did not happen. Say the same thing
    in different words: *Outside this oracle* was the phrasing used the first time this came up.
-3. **A verdict in `STORE_MIGRATION`, if the import graph can reach a condemned module through your
-   file** — which it can as soon as you use `scratchArticleInPg`. Without one, § *leaves no file that
-   the import graph can reach and nothing accounts for* names your file as a hole. And set
-   **`evidence: "static-only"`**: the field defaults to `"dynamic"`, which claims the instrumented
-   witness watched your file execute, and that witness is a dated measurement from 2026-09-03. A
-   file written since cannot have been watched, and § *keeps `evidence` honest about which witness
-   backs each verdict* is what says so.
+3. **Gone since 2026-10-06: a verdict in `STORE_MIGRATION`.** It was asked of any file the import
+   graph could reach a condemned module through, which meant any file using `scratchArticleInPg`,
+   with `evidence: "static-only"` because the instrumented witness was a measurement from
+   2026-09-03. The import walk and the witness were deleted with the last of the filesystem store's
+   leftovers ([261006j S1](../plans/261006j-sixth-sweep-s1-filesystem-store-leftovers.md)), so
+   **a new test file adds nothing to `STORE_MIGRATION`**. That map is a closed record.
 
-The shape all three share: **the registry is a record of a migration, and a new file is not part of
+The shape they share: **the registry is a record of a migration, and a new file is not part of
 it** — so every one of these is a gate asking you to say what your file *is*, and each has a wrong
 answer that is easier than the right one.
 

@@ -22,8 +22,8 @@
  *   field when there are none, so a reader without one meets neither word.
  *
  * Drawn for `free` and `lapsed` only. A subscriber has the renewal on
- * `/profile`; an administrator has no count; `unknown` and `off` are not a
- * free allowance at all.
+ * `/profile`; an administrator has no count; `unknown` is not a free
+ * allowance at all.
  *
  * ## The notice
  *

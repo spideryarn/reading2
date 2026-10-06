@@ -26,13 +26,14 @@
  *
  * **Nothing here may import `src/structure.ts`**, and that is a rule rather than
  * an accident: this file is imported by `tests/deepen-eval.test.ts`, and
- * `src/structure.ts` imports the app, which reaches the filesystem ledger
+ * `src/structure.ts` imports the app, which reached the filesystem ledger
  * adapter — so a value import of `buildTree` here put a suite that touches no
  * store at all into `tests/store-migration-registry.ts` needing an entry to
  * excuse one. `proveTheSeam` lives in `run.ts` for that reason;
  * `assertSeamProof`, the half with the assertions in it, stays here.
- * `scripts/store-migration-candidates.ts` is what says whether this is still
- * true — the bucket for this file's dependents should be `type-only`.
+ * That adapter went on 2026-09-05 and the import walk that policed this on
+ * 2026-10-06, so nothing checks the rule now; what it still buys is a test
+ * that does not load the whole app.
  */
 
 import { createHash, randomUUID } from "node:crypto";
