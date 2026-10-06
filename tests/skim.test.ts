@@ -321,6 +321,19 @@ describe("validating the model's route", () => {
     expect(d.badCue).toBe(6);
   });
 
+  it("keeps a 150-character cue and nulls a 201-character one: the cap is 200 since skim/10 (plan 261006e)", () => {
+    /* Literals, not the constant: a cue that sets the scene runs past the old
+       140, and an over-long cue is nulled, which is worse than a long one. */
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [stop(0, 1, "a".repeat(150)), stop(1, 1, "b".repeat(200)), stop(2, 2, "c".repeat(201))],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => s.cue?.length ?? null)).toEqual([150, 200, null]);
+    expect(d.badCue).toBe(1);
+  });
+
   it("no longer asks for a role, so a missing one is null and is not counted as badRole", () => {
     const d = emptyDrops();
     const stops = validateRoute(
@@ -706,15 +719,43 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("skim/9");
+    expect(PROMPT_VERSION).toBe("skim/10");
+    expect(MAX_CUE_CHARS).toBe(200);
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
     expect(SKIM_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
-    /* The two halves of the rule: what to look for, never what it found; and
-       no reference to another stop, because a reader arrives from anywhere. */
-    expect(SKIM_SYSTEM).toMatch(/LOOK FOR/);
-    expect(SKIM_SYSTEM).toMatch(/NEVER what it found/);
+    /* No reference to another stop, because a reader arrives from anywhere. */
     expect(SKIM_SYSTEM).toMatch(/Never refer to another stop/);
+  });
+
+  it("asks the cue to set the scene the quote assumes, then point, and never give the finding away (skim/10, plan 261006e)", () => {
+    /* Greg's report spya-jghnva: a cue that leans on the quote's own
+       unexplained "the latter interpretation" tells the reader to look for
+       something without saying what the choice is. */
+    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE/);
+    expect(SKIM_SYSTEM).toMatch(/THEN POINT/);
+    expect(SKIM_SYSTEM).toMatch(/NEVER say what the passage found/);
+    /* The second wording (round two of the eval): a scene only where the quote
+       leans on something unsaid, as a question or a naming of the options;
+       otherwise the pointer alone; nothing added; whole sentences. */
+    expect(SKIM_SYSTEM).toMatch(/MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS/);
+    expect(SKIM_SYSTEM).toMatch(/This is the common\s+case/);
+    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE as a question,\s+or as a bare naming of the options/);
+    expect(SKIM_SYSTEM).toMatch(/never a statement\s+of what the passage says/);
+    expect(SKIM_SYSTEM).toMatch(/ONLY WHAT THE RECORDS SAY/);
+    expect(SKIM_SYSTEM).toMatch(/WRITE WHOLE SENTENCES/);
+    expect(SKIM_SYSTEM).toMatch(/one or two complete sentences/);
+    /* Both kinds of BAD example: his own cue, and one that states the finding. */
+    expect(SKIM_SYSTEM).toMatch(/"Which interpretation\s+does their evidence favour\?"/);
+    expect(SKIM_SYSTEM).toMatch(/BAD, it leans on the quote's own unexplained words/);
+    expect(SKIM_SYSTEM).toMatch(/BAD, it gives the finding away/);
+    /* A referent the model cannot see is not to be guessed at. */
+    expect(SKIM_SYSTEM).toMatch(/do not\s+guess/);
+    expect(SKIM_SYSTEM).toMatch(/A wrong scene is worse than\s+none/);
+    /* The shared "ask" paragraph says not to explain a term inside a question;
+       the cue's own rule says which of the two wins, so they do not fight. */
+    expect(SKIM_SYSTEM).toMatch(/Do not explain the term inside the question/);
+    expect(SKIM_SYSTEM).toMatch(/for a cue,? this section wins/);
   });
 
   it("asks for `again` on every stop, and no longer says the passes nest (skim/9, plan 261003l)", () => {
@@ -769,12 +810,27 @@ describe("freshness", () => {
     expect(hash(reworded)).not.toBe(base);
   });
 
-  it("did not move the input hash at skim/9: `again` is in the answer, not the input (plan 261003l)", () => {
+  it("did not move the input hash at skim/9 or skim/10: `again` and the cue are in the answer, not the input (plans 261003l, 261006e)", () => {
     /* A literal, recorded from this fixture while `skimInput` and
        `skimInputHash` were still byte-for-byte `skim/8`'s (the stage's diff
        touches neither). The version alone stales a stored route; if the hash
        moved as well, nobody could tell which of the two had changed. */
     expect(skimInputHash(inputOf(quotesOf(10)))).toBe("85a84fc58c7c372f");
+  });
+
+  it("still gives the prompt no paragraph: the words around a quote are neither sent nor hashed (plan 261006e, arm C removed)", () => {
+    /* Handing the prompt each quote's own paragraph was built and measured at
+       skim/10 and taken out (commit c943494a9). So a paragraph that changes
+       outside its quote's words changes nothing the route is planned from. */
+    const changed = blocks.map((b, k) =>
+      k === 5 ? { ...b, text: `${b.text} And a sentence the quote does not hold.` } : b,
+    );
+    const prompt = renderPrompt({ input: inputOf([quote(5)]), profile: null });
+    expect(prompt).not.toContain("which says something distinct number 5");
+    expect(renderPrompt({ input: inputOf([quote(5)], null, { blocks: changed }), profile: null })).toBe(prompt);
+    expect(skimInputHash(inputOf(quotesOf(10), null, { blocks: changed }))).toBe(
+      skimInputHash(inputOf(quotesOf(10))),
+    );
   });
 
   it("does not move the input hash for score precision the prompt does not render", () => {

@@ -1,0 +1,712 @@
+{
+  "set": "s6",
+  "first": "B",
+  "second": "B2",
+  "seed": 26100606,
+  "key": [
+    {
+      "pair": 1,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-nv073m",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 2,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-suzmjd",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 3,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-meyjye",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 4,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-d6v43d",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 5,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-rjm5ef",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 6,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-h4p2k0",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 7,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-m45yqv",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 8,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-jnwxwp",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 9,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-uucbqb",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 10,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-gs7srt",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 11,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-z2tgym",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 12,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-meqteq",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 13,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-f9jtmx",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 14,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-ra9sej",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 15,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-cbtpn5",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 16,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-fwea42",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 17,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-ueq60u",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 18,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-jtnv9m",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 19,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-pwtvqw",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 20,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-rk0mna",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 21,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-an0yqq",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 22,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-kvgagg",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 23,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-n03axr",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 24,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-xdf3up",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 25,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-cfa9t4",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 26,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-ekrxb4",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 27,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-xqudqf",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 28,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-dakvm6",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 29,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-dp566v",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 30,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-sf0e3t",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 31,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-epgykg",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 32,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-qq44zu",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 33,
+      "slug": "2608-13566v1-spya-yurten",
+      "quoteId": "spya-n7ntq2",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 34,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-v025zn",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 35,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-rf5knz",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 36,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-vw0zh2",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 37,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-ba5p3n",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 38,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-n8r3m7",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 39,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-nfrxa9",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 40,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-pghzsz",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 41,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-bd0msy",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 42,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-skhc7m",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 43,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-j49b36",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 44,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-y4cdmx",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 45,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-sa6kvs",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 46,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-s6mdbh",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 47,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-f9950a",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 48,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-f9uk98",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 49,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-hx0qes",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 50,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-pgxy5r",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 51,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-ysau24",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 52,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-pa40p4",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 53,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "quoteId": "spya-rwuyy2",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 54,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-uyucc0",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 55,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-r026vz",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 56,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-u8e7gf",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 57,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-ur90mw",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 58,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-knxj5e",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 59,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-gspp08",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 60,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-qe8vxc",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 61,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-dz3qz0",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 62,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-p5ysre",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 63,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-atfq79",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 64,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-mamcdp",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 65,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-t8duv0",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 66,
+      "slug": "source-spya-furjgs",
+      "quoteId": "spya-smgpkx",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 67,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-ahg3nk",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 68,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-q3qdwd",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 69,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-zq0utk",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 70,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-c743zr",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 71,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-tywrk8",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 72,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-epj785",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 73,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-n02336",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 74,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-r5phhp",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 75,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-mj3bmt",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 76,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-jux4za",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 77,
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "quoteId": "spya-kax8bt",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 78,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-zat4mm",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 79,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-zz5jad",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 80,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-zwbtkt",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 81,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-y38mpq",
+      "dangling": true,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 82,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-hz6mw5",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 83,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-z6r8uh",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 84,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-zhmerc",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 85,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-jw75b8",
+      "dangling": true,
+      "A": "B",
+      "B": "B2"
+    },
+    {
+      "pair": 86,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-qz4f53",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 87,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-gk7rfh",
+      "dangling": false,
+      "A": "B2",
+      "B": "B"
+    },
+    {
+      "pair": 88,
+      "slug": "cargocult-spya-rz663q",
+      "quoteId": "spya-mn57wu",
+      "dangling": false,
+      "A": "B",
+      "B": "B2"
+    }
+  ]
+}

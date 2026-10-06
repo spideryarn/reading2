@@ -18,22 +18,26 @@ does.
 > your thinking around the piece, whereas tutorial submode is more about understanding and
 > internalizing what the piece says and making sure you've got a firm grasp of the author's intent.
 
-**Ending: Shipped**, for this entry. It is on `dev` and not deployed. **The report is in three
-parts, and the other two are queued and not built**, so the report as a whole is not finished:
+**Ending: Shipped**, for this entry (part 1 of 3), in `7c6029641` and `616606382`.
 
-- `qi-qg6ydbp7`: the two Features-page screenshots still show the old headings, and the browser
-  pass was not done. Both need the worktree's app to sign in, which it cannot while the shared
-  local database is behind `dev`'s newest migration.
-- `qi-dabpymjd` (needs Greg): renaming the code's identifiers, the URL words and perhaps the
-  stored thread kind from `remember`.
+**All three parts have ended, as of 2026-10-06, so the report is finished.** Each has its own note,
+which is what `scripts/feedback-endings.ts` counts:
+
+- Part 2, `qi-dabpymjd`: the code's identifiers, the URL words and the stored thread kind renamed
+  from `remember` to `learn`. Shipped in `8c36c5caa`.
+  [The note](261005_0748-remember-identifiers-become-learn-part-2.md).
+- Part 3, `qi-qg6ydbp7`: the two Features-page screenshots retaken, and the browser pass this
+  entry could not run. Shipped in `03c95f935`.
+  [The note](261005_0748-learn-features-screenshots-and-browser-pass-part-3.md).
 
 What we did. The plan, GPT Sol's three reviews and what landed are
 [261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md); the mode is
-[remember-mode.md](../project/learn-mode.md).
+[learn-mode.md](../project/learn-mode.md).
 
 - **Learn.** Every word a reader or a model sees says Learn: the bar, the tab title, the command
   bar, Help, Features, the prompts. Typing *remember*, or *remember quiz*, in the command bar still
-  finds it. Links do not change: the address still says `?mode=remember`.
+  finds it. When this part landed the address still said `?mode=remember`; since part 2 it says
+  `?mode=learn`, and the old word still opens the mode.
 - **Explore.** A fifth move, a possible problem with the piece, with rules to keep it fair: the
   reader's own doubt first, the author's own answer looked for before objecting, an absence said of
   a passage and never of the whole piece, a missing source checked with the article's links before

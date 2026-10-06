@@ -105,6 +105,7 @@ export function PrivateLink({
   sharing,
   isPublic,
   onLink,
+  checking = false,
 }: {
   slug: string;
   title: string;
@@ -115,6 +116,8 @@ export function PrivateLink({
    * offered, as no publish is. Turning one off needs neither.
    */
   sharing: ArticleSharing | undefined;
+  /** The page's read of `sharing` is still out — neither landed nor failed. */
+  checking?: boolean;
   /**
    * Whether the article is public **now**, as far as the card knows: `null`
    * when it does not (a write is out, or failed). Only `true` draws the
@@ -275,9 +278,11 @@ export function PrivateLink({
                 Create a link
               </Button>
             </Tooltip>
-          ) : (
+          ) : checking ? null : (
             /* No offer while we cannot say what a link would carry, as with
-               the public switch. */
+               the public switch. Nothing at all while the page is still asking:
+               "we could not work out" is false until the read has failed, and
+               the public switch below says that it is checking. */
             <p className="tw:m-0 tw:text-ink-faint">{SHARING_INVENTORY_UNKNOWN}</p>
           )}
         </>

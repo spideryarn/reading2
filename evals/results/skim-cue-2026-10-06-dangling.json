@@ -1,0 +1,226 @@
+{
+  "rules": [
+    {
+      "name": "opens on a pronoun",
+      "re": "^[\"'“‘(\\s]*(it|they|this|these|those|such|its|their|both|neither|he|she)\\b"
+    },
+    {
+      "name": "the latter / the former",
+      "re": "\\b(the (latter|former|above)|aforementioned)\\b"
+    },
+    {
+      "name": "this/these/such + noun",
+      "re": "\\b(this|these|those|such)\\s+(?!(?:paper|study|work|article|essay|section|chapter|review|book|report|talk|lecture|thesis|survey|year|time|day|way|is|was|has|can|will|would|may|means|and|or|in|to|of|as)\\b)[a-z-]+"
+    }
+  ],
+  "quotes": 88,
+  "dangling": [
+    {
+      "key": "2608-13566v1-spya-yurten/spya-nv073m",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "We argue that optimization for these benchmarks leads to measuring task-specific performance, creating a meaning gap between measured scores and claims of general coding ability."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-rjm5ef",
+      "why": [
+        "the latter / the former"
+      ],
+      "quote": "Our evidence supports the latter interpretation: post-training gains on SWE-bench do not consistently transfer to other code tasks, even within the same repository."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-gs7srt",
+      "why": [
+        "the latter / the former",
+        "this/these/such + noun"
+      ],
+      "quote": "However, when a model achieves a high score on SWE-bench Verified, there is no standard way to determine whether the improvement reflects (a) genuine SE capability that transfers to other coding tasks, (b) limited SE capability on this family of tasks, (c) inadvertent optimization for SWE-bench’s specific format, tasks, workflow, or agentic scaffolding, (d) accidental contamination of training dataset, or (e) some mixture of all of the above."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-ueq60u",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "The practical problem arises precisely where users most need guidance: choosing between models that are close in headline benchmark scores (e.g., selecting the ”best 8B model”) or, more importantly, checkpoints that are fine-tuned for a specific task. In this regime, a model that edges ahead on SWE-bench can lag behind on completion or repair, so single-leaderboard rankings become unreliable guides for practitioners’ and researchers’ decisions."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-z2tgym",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This choice enables a simple and testable prediction: if SWE-bench-optimized checkpoints truly improve transferable repository-level SE ability (rather than specializing to SWE-bench’s workflow and distribution), then they should also improve on Django-centric tasks within the same codebase."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-ra9sej",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "These results support our claim: reasonable fine-tuning with within-task evaluation (practical from an effort standpoint) may mislead practitioners into perceiving a ”capability jump” that largely reflects task-specific specialization rather than transferable coding ability."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-d6v43d",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "For example, if post-training on SWE-bench trajectories reliably improves general coding capabilities, this approach provides a path towards model improvement. But if it just produces models skilled at SWE-bench-like tasks, the field risks optimizing for the benchmark itself rather than addressing the underlying capability or other coding tasks, severely limiting the impact of this post-training approach."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-h4p2k0",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "High performance may indicate strong coding ability, but may equally reflect proficiency at the particular format and workflow developed under benchmark optimization pressure. Without evaluation across diverse task modalities, we cannot distinguish among these hypotheses, understand the strengths and weaknesses of our post-training approaches, or even assess the foundation models with sufficient granularity."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-an0yqq",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "Developing such a taxonomy is substantial research, but other areas of science (e.g., psychometrics) suggest it is feasible: latent constructs are estimated through batteries of partially correlated tests, not single measurement."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-sf0e3t",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "In this setup, SWE-agent-LM-32B scores \\(63.51\\), so it takes 75 steps in an agentic scaffolding for a particular SWE-agent checkpoint to match a non-agentic setup for either SWE-agent checkpoint or raw model."
+    },
+    {
+      "key": "2608-13566v1-spya-yurten/spya-epgykg",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "We stress that creators of SWE-agent checkpoints could not have checked this without creating additional benchmarks (a significant research and technical effort), so this reflects a failure of the evaluation ecosystem, not of the researchers themselves."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-n8r3m7",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "It is known, however, that such processes are distributed over integrative interactions in neural circuits throughout the brain and involve large numbers of interacting neurons. We refer to this collective activity as neural information processing."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-v025zn",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs considered jointly (this is also sometimes referred to as “information modification” in the literature [19]). Conversely, if the whole is less than the sum of its parts, then there must be redundant information about Y instantiated multiple times over the parent neurons that is “double counted” when summing the marginals."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-vw0zh2",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts)."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-f9950a",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is marked by the vertical dotted line in Figure 4E)."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-f9uk98",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-pgxy5r",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex."
+    },
+    {
+      "key": "entropy-24-00930-spya-pywwkq/spya-pa40p4",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret."
+    },
+    {
+      "key": "source-spya-furjgs/spya-knxj5e",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented."
+    },
+    {
+      "key": "arxiv-2010-spya-tkm7nm/spya-kax8bt",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This simple, yet scalable, strategy works surprisingly well when coupled with pre-training on large datasets."
+    },
+    {
+      "key": "arxiv-2010-spya-tkm7nm/spya-q3qdwd",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "When trained on mid-sized datasets such as ImageNet without strong regularization, these models yield modest accuracies of a few percentage points below ResNets of comparable size."
+    },
+    {
+      "key": "arxiv-2010-spya-tkm7nm/spya-tywrk8",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "This result reinforces the intuition that the convolutional inductive bias is useful for smaller datasets, but for larger ones, learning the relevant patterns directly from data is sufficient, even beneficial."
+    },
+    {
+      "key": "arxiv-2010-spya-tkm7nm/spya-c743zr",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "Most related to ours is the model of Cordonnier et al. (2020), which extracts patches of size 2 × 2 from the input image and applies full self-attention on top. This model is very similar to ViT, but our work goes further to demonstrate that large scale pre-training makes vanilla transformers competitive with (or even better than) state-of-the-art CNNs."
+    },
+    {
+      "key": "cargocult-spya-rz663q/spya-zat4mm",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they’re missing something essential, because the planes don’t land."
+    },
+    {
+      "key": "cargocult-spya-rz663q/spya-zz5jad",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it."
+    },
+    {
+      "key": "cargocult-spya-rz663q/spya-y38mpq",
+      "why": [
+        "this/these/such + noun"
+      ],
+      "quote": "Why didn’t they discover that the new number was higher right away? It’s a thing that scientists are ashamed of—this history—because it’s apparent that people did things like this: When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan’s value they didn’t look so hard. And so they eliminated the numbers that were too far off, and did other things like that."
+    },
+    {
+      "key": "cargocult-spya-rz663q/spya-jw75b8",
+      "why": [
+        "opens on a pronoun"
+      ],
+      "quote": "They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the things you have to do to discover something about rats. But not paying attention to experiments like that is a characteristic of Cargo Cult Science."
+    },
+    {
+      "key": "cargocult-spya-rz663q/spya-z6r8uh",
+      "why": [
+        "opens on a pronoun",
+        "this/these/such + noun"
+      ],
+      "quote": "It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity."
+    }
+  ]
+}

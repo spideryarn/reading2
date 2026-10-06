@@ -82,6 +82,18 @@ drawn at, then `pngquant --quality 65-92 --speed 1`. **PNG rather than JPEG**: s
 near-black ground rings around every glyph as a JPEG, and a UI screenshot has few enough flat colours
 that a quantised PNG is smaller anyway.
 
+**A band-only portrait is the exception to 1440×900**, since 2026-10-06. The pages draw a portrait
+about 350px wide, and the band is as wide as the window lets it be
+([`layout.ts`](../../src/web/layout.ts) § `bandWidth`): 544px for Learn at 1440, so its text would
+draw at two thirds of its size. Narrow the window until the band is close to 360px (916 wide, for
+Learn), capture at 2×, and the file is 720 wide with nothing resampled. Stay above the width where
+the band becomes a phone's cover sheet, and write the window you used in `shots.ts`.
+
+**And 65-92 is where to start, not a limit.** A shot that is mostly flat background can come out
+under the 20KB floor in `tests/landing-assets.test.ts`, which is there to catch a placeholder. If
+the picture is right, raise the quality until it clears, and say so in `shots.ts`; `quiz.png` is
+the one that needed it.
+
 Assets are imported by `shots.ts` rather than dropped in `public/`, so Vite hashes them and a
 redeploy cannot serve a stale one.
 

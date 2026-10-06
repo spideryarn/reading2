@@ -4543,6 +4543,16 @@ export function sharingPersonalisedList(kinds: StepName[]): string {
 }
 
 /**
+ * **We are still finding out.** The metadata request is out and has neither
+ * landed nor failed.
+ *
+ * Its own sentence since 2026-10-06 (qi-jpqg6r3b): the card drew
+ * `SHARING_UNKNOWN` for this, so every load said *"We could not check"* about a
+ * check that was still running.
+ */
+export const SHARING_CHECKING = "Checking who can read this…";
+
+/**
  * **We never found out**, and no write was attempted.
  *
  * The filesystem store has no column, or the page's metadata fetch failed. The
