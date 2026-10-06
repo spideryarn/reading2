@@ -132,5 +132,17 @@ hook-free by contract, for the static renderer), so `StackedDayChart` takes the 
   the shade. So the shelf and `/admin/users` are covered.
 - `AdminVouchersPage` uses the shared box instead of its hand-written copy.
 - `StackedDayChart` takes `box`; `OverTime` supplies it.
-- Tests: nine new, all seen red first. Mutations: `any = right` failed two tests; dropping
+- **GPT Sol's code review**
+  ([answer](261006h-focusable-sideways-scroll-boxes-code-review-sol.md)) accepted commit
+  `3f8446a87`, with one prose finding (F4, the test count below).
+- **Browser check, 2026-10-06** (Sonnet subagent; system Chrome through Playwright at 1440, 820 and
+  390, light and dark; Playwright WebKit at 390, light). On the shelf, `/admin/users`,
+  `/admin/costs` (ranking, pivot, per-day chart) and `/admin/vouchers`, every box had the three
+  attributes exactly when `scrollWidth > clientWidth`; Tab reached each overflowing box and skipped
+  each fitting one; the arrow keys moved `scrollLeft`; the browser's own focus ring was visible and
+  unclipped in both themes and in WebKit, so no ring of ours was added; no page scrolled sideways;
+  the shelf's search box and sort headers behaved as before. The shelf table fits at 1440 and
+  overflows at 820 and 390. Not checked: real iOS Safari, and WebKit in the dark theme.
+- Tests: twelve new. Nine were seen red first; the other three are the "fits, so not a tab stop"
+  cases, which pass without the fix and are held by the mutations instead. Mutations: `any = right` failed two tests; dropping
   `tabIndex` failed eight.
