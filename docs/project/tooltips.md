@@ -694,6 +694,13 @@ of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The pr
 (`ProseHoverCard`) was interactive long before this, through its own machinery — § The second
 implementation says why it is separate — and is not a customer.
 
+The second, since 2026-10-06, is **Skim's term chips**: each opens the glossary's own entry card
+(`TermCard`, the one the prose card draws) with its *Dig deeper · Hide · Open glossary* row
+(`TermChip` in `SkimPanel.tsx`; [skim.md](skim.md)). It is the first to combine `interactive` with
+a controlled `open`, so that a finger's tap keeps it up. Its content scrolls inside a height tied to
+the window. That cap is on a wrapper inside the panel, not on `.tooltip`, where `overflow` would
+clip the arrow.
+
 ## Checking it in a browser
 
 [browser-testing.md](browser-testing.md) is the general how, and its warnings all apply — in

@@ -58,15 +58,34 @@ function autoModesIn(body: unknown): boolean {
   return on;
 }
 
-function save(on: boolean, signal: AbortSignal): Promise<boolean> {
-  return apiFetch("/api/reader", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ autoModes: on }),
-    signal,
-  })
+function save(on: boolean, session: Session): Promise<boolean> {
+  return apiFetch(
+    "/api/reader",
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoModes: on }),
+      signal: session.signal,
+    },
+    session.reader,
+  )
     .then((r) => readJson<unknown>(r))
     .then(autoModesIn);
+}
+
+/**
+ * **Whose setting this is, with the signal that ends their session.** The
+ * signal stops a request once the reader has gone, but it is aborted from an
+ * effect, and a write queued behind another can be sent after the session has
+ * already become somebody else's. So each request also names its reader, and
+ * is not sent as anybody else (`NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md
+ * § 2). `reader` is `null` before `useJobSession` has bound one, and in a
+ * test.
+ */
+interface Session {
+  signal: AbortSignal;
+  reader: string | null;
 }
 
 /**
@@ -75,6 +94,7 @@ function save(on: boolean, signal: AbortSignal): Promise<boolean> {
  * `useJobSession` supplies the signal even when there is no legacy choice.
  */
 let sessionSignal = new AbortController().signal;
+let sessionReader: string | null = null;
 let epoch = 0;
 let writes: Promise<void> = Promise.resolve();
 let latest = 0;
@@ -103,8 +123,10 @@ function live(mine: number): boolean {
   return mine === epoch && !sessionSignal.aborted;
 }
 
-function read(signal: AbortSignal): Promise<boolean> {
-  return apiFetch("/api/reader", { signal }).then(readJson<unknown>).then(autoModesIn);
+function read(session: Session): Promise<boolean> {
+  return apiFetch("/api/reader", { signal: session.signal }, session.reader)
+    .then(readJson<unknown>)
+    .then(autoModesIn);
 }
 
 /** A read cannot replace a choice pressed while that read was in flight. */
@@ -113,11 +135,11 @@ function load(): void {
   const mine = epoch;
   const version = latest;
   const ticket = ++readVersion;
-  const signal = sessionSignal;
+  const session: Session = { signal: sessionSignal, reader: sessionReader };
   void writes.then(async () => {
     if (!live(mine)) return;
     try {
-      const on = await read(signal);
+      const on = await read(session);
       if (!live(mine) || latest !== version || ticket !== readVersion || pending) return;
       confirmed = on;
       put({ on, loadError: false });
@@ -134,13 +156,13 @@ function load(): void {
 function write(next: boolean): Promise<void> {
   const mine = epoch;
   const version = ++latest;
-  const signal = sessionSignal;
+  const session: Session = { signal: sessionSignal, reader: sessionReader };
   pending++;
   put({ on: next, error: false, saving: true });
   writes = writes.then(async () => {
     if (!live(mine)) return;
     try {
-      const on = await save(next, signal);
+      const on = await save(next, session);
       if (!live(mine)) return;
       confirmed = on;
       forgetLegacyChoice();
@@ -148,7 +170,7 @@ function write(next: boolean): Promise<void> {
     } catch {
       if (!live(mine)) return;
       if (version === latest) {
-        await recoverChoice(mine, version, signal);
+        await recoverChoice(mine, version, session);
       }
     } finally {
       if (live(mine)) {
@@ -161,9 +183,9 @@ function write(next: boolean): Promise<void> {
 }
 
 /** A rejected response can follow a committed PATCH; reconcile with the row. */
-async function recoverChoice(mine: number, version: number, signal: AbortSignal): Promise<void> {
+async function recoverChoice(mine: number, version: number, session: Session): Promise<void> {
   try {
-    const on = await read(signal);
+    const on = await read(session);
     if (live(mine)) confirmed = on;
   } catch {
     // Retain the last confirmed answer if the read failed too, never !next.
@@ -180,10 +202,14 @@ function set(next: boolean): void {
  * A failed hand-over retains the key, reports the failure, and reads the actual
  * server choice. A successful explicit press also retires the old key.
  */
-export function handOverAutoModesChoice(signal: AbortSignal): Promise<void> {
+export function handOverAutoModesChoice(
+  signal: AbortSignal,
+  reader: string | null = null,
+): Promise<void> {
   if (sessionSignal !== signal) {
     epoch++;
     sessionSignal = signal;
+    sessionReader = reader;
     writes = Promise.resolve();
     latest = 0;
     pending = 0;
@@ -212,6 +238,7 @@ function subscribe(listener: () => void): () => void {
 export function resetAutoModesSettingForTests(): void {
   epoch++;
   sessionSignal = new AbortController().signal;
+  sessionReader = null;
   writes = Promise.resolve();
   latest = 0;
   pending = 0;

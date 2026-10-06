@@ -45,7 +45,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/auth.ts`](../../src/auth.ts) | **the gate.** `requireUser(req, verify?)`, called once at the top of `handleApi`'s `try` |
 | [`src/routes.ts`](../../src/routes.ts) | that one call, and the comment saying why it is *inside* the `try` |
 | [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
-| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
+| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for every call site — and `leavingFetch` for `pagehide`. Both can be told which reader a request is for: [§ below](#a-request-made-for-one-reader-is-never-sent-as-another) |
 | [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
 | [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, the screenshots, and links to `/login` carrying where you were |
 | [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Sign in / Create account switch, the Google button and the email form, and every line of auth logic in them. One page renders it |
@@ -91,6 +91,27 @@ step agreeing with every other one.
 4. **`/auth/callback` is exempt from every rewrite in `main.tsx`.** `canonicalAddHref` folds
    `location.search` into an article's address — its whole job — so a return landing on `/add/…`
    would put our one-time auth code in a stranger's access log.
+
+## A request made for one reader is never sent as another
+
+Another tab can sign in as somebody else while this one is open, and the token is looked up when a
+request is sent, not when it was asked for. So a write that waits (a debounce, a retry, a flush as
+the page leaves, a call still waiting for its token) could go out as the next reader. Since
+2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md)):
+
+- **A caller can name its reader**: `apiFetch(input, init, madeFor)`, and the same third argument
+  on `apiFetchOwned` and `leavingFetch`. If the token about to be used is known to be another
+  reader's, nothing is sent and the caller gets `NotThisReader`, which has no HTTP status. It
+  refuses only when both readers are known and differ. Leave `madeFor` out and nothing is checked.
+- **The retry after a 401 is never sent as a different reader**, for every caller. A refresh that
+  comes back as somebody else is a change of account, and the first 401 is the answer.
+
+**Anything that sends after its page may have gone should pass `madeFor`**, and anything that holds
+a reader's words should be keyed on the reader. The add page, the job and upload engines and the
+main-modes setting do. **Most callers do not**: a plain `apiFetch` begun under one reader whose
+token lookup straddles the change is still sent as the next. What closing that for everybody would
+take, and the other places this class has turned up, are in
+[the postmortem](../postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md).
 
 ## The signed-out page is the landing page
 

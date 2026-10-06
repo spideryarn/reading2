@@ -33,6 +33,7 @@ import type {
 import type { GlossaryEntry } from "../src/types.js";
 import type { GlossaryRead } from "../src/web/useGlossary.js";
 import type { CardTarget, StopCard } from "../src/web/stop-card.js";
+import type { TermActions } from "../src/web/ProseHoverCard.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { UseSkim } from "../src/web/useSkim.js";
 import type { QuotesRead } from "../src/web/useQuotes.js";
@@ -422,6 +423,22 @@ function view(over: Partial<SkimView> = {}): SkimView {
     onStep: (dir) => void calls.push(`step ${dir}`),
     onOpen: (target) => void calls.push(`open ${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
     canOpen: () => true,
+    termActions: null,
+    ...over,
+  };
+}
+
+/** The owner's two verbs on a term, as the Skim band hands them to the card. */
+function termActions(over: Partial<TermActions> = {}): TermActions {
+  return {
+    look: async (id) => {
+      calls.push(`look ${id}`);
+      return true;
+    },
+    looking: null,
+    stale: false,
+    setHidden: async (id) => void calls.push(`hide ${id}`),
+    hiding: new Set<string>(),
     ...over,
   };
 }
@@ -432,12 +449,13 @@ const TERM: GlossaryEntry = {
   kind: "concept",
   aliases: [],
   senseHere: "How much a source's past says about a target's future.",
-  blocks: [],
+  /* A recorded passage, so Dig deeper has something to anchor to (`unquoted`). */
+  blocks: [B[0]!],
 };
 const CARD: StopCard = {
   terms: [
-    { entry: TERM, alsoAt: 1 },
-    { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." }, alsoAt: null },
+    { entry: TERM },
+    { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." } },
   ],
   ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy", statement: "The pair carries information neither does alone." }],
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
@@ -776,7 +794,8 @@ describe("the panel", () => {
     expect(cards[0]!.closest("button")).toBeNull();
     const chips = [...host.querySelectorAll<HTMLButtonElement>(".skim-chip")];
     expect(chips.map((c) => c.textContent)).toEqual([
-      "transfer entropyalso at stop 1",
+      /* The name alone: no word about other stops since 2026-10-06 (Greg, spya-se0e4v). */
+      "transfer entropy",
       "synergy",
       "Synergy is not redundancy",
     ]);
@@ -784,24 +803,207 @@ describe("the panel", () => {
     expect(text(".skim-card")).not.toContain(TERM.senseHere!);
   });
 
-  it("opens a term chip to its one-line sense, and Glossary by an icon, not the words (5C)", async () => {
-    await draw(owner(), view({ card: CARD }));
-    const chip = host.querySelector<HTMLButtonElement>(".skim-chip")!;
-    expect(chip.getAttribute("aria-expanded")).toBe("false");
-    await act(async () => chip.click());
-    expect(chip.getAttribute("aria-expanded")).toBe("true");
-    expect(text(".skim-sense")).toContain(TERM.senseHere!);
-    expect(text(".skim-sense")).not.toMatch(/in the glossary/i);
-    const open = host.querySelector<HTMLButtonElement>('.skim-sense [aria-label="Open in Glossary"]')!;
-    expect(open.textContent).toBe("");
-    await act(async () => open.click());
+  /* **A term chip opens the glossary's own card** — plan 261006e, Greg
+     (spya-se0e4v): "they should provide/reuse the usual 'go to glossary' etc
+     in rich tooltips". The card is portalled, so it is found on `document`. */
+  const termCard = () => document.querySelector<HTMLElement>('[role="dialog"]');
+  const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+  const cardButton = (label: string) =>
+    [...termCard()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label)!;
+  const termChip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
+
+  it("opens a term chip to the glossary's own card on focus, with the owner's three actions (261006e)", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    expect(termCard()).toBeNull();
+    expect(termChip().getAttribute("aria-expanded")).toBe("false");
+    await act(async () => termChip().focus());
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    expect(termCard()?.textContent).toContain(TERM.senseHere!);
+    expect(cardButtons()).toEqual(["Dig deeper", "Hide", "Open glossary"]);
+    /* The sense is in the card and nowhere in the band: one surface, not two. */
+    expect(host.querySelector(".skim-sense")).toBeNull();
+    expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
+    await act(async () => cardButton("Open glossary").click());
     expect(calls).toEqual([`open term ${TERM.id}`]);
+    expect(termChip().getAttribute("aria-expanded"), "leaving for Glossary closes it").toBe("false");
+  });
+
+  it("digs deeper from the card: starts the look and opens Glossary on the term", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await act(async () => termChip().focus());
+    await act(async () => cardButton("Dig deeper").click());
+    expect(calls).toEqual([`look ${TERM.id}`, `open term ${TERM.id}`]);
+  });
+
+  it("opens a term's card on a tap and keeps it until a tap elsewhere", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    /* The click-only activation also works without a preceding focus. The
+       pointerdown/focus/click ordering is exercised separately below. */
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    expect(cardButtons()).toContain("Open glossary");
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
+    await act(async () => termChip().click());
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(termChip().getAttribute("aria-expanded"), "a press elsewhere closes it").toBe("false");
+  });
+
+  it("gives a visitor's card Open glossary and neither of the owner's verbs", async () => {
+    calls.length = 0;
+    await act(async () =>
+      root.render(
+        createElement(SkimPanel, {
+          access: { kind: "visitor", route: ROUTE },
+          view: view({ card: CARD, termActions: null }),
+          away: false,
+        }),
+      ),
+    );
+    await act(async () => termChip().focus());
+    expect(termCard()?.textContent).toContain(TERM.senseHere!);
+    expect(cardButtons()).toEqual(["Open glossary"]);
+  });
+
+  it("does not pull focus back from another term when a slow Hide completes", async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    function Hiding() {
+      const [card, setCard] = useState(CARD);
+      return createElement(SkimPanel, {
+        access: { kind: "owner", owner: owner() },
+        view: view({ card, termActions: termActions({ setHidden: async () => {
+          await pending;
+          setCard({ ...CARD, terms: CARD.terms.slice(1) });
+        } }) }),
+        away: false,
+      });
+    }
+    await act(async () => root.render(createElement(Hiding)));
+    await act(async () => termChip().focus());
+    await act(async () => cardButton("Hide").focus());
+    await act(async () => cardButton("Hide").click());
+    const next = host.querySelectorAll<HTMLButtonElement>(".skim-chip")[1]!;
+    await act(async () => next.focus());
+    expect(document.activeElement).toBe(next);
+    await act(async () => finish());
+    expect(document.activeElement, "the reader already moved on").toBe(next);
+    expect(next.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it.each(["touch", "pen"])("pins a %s tap even when focus opens the card before click, and a second tap closes it", async (pointerType) => {
+    await draw(owner(), view({ card: CARD }));
+    const touchDown = () => {
+      const event = new Event("pointerdown", { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      termChip().dispatchEvent(event);
+    };
+    await act(async () => touchDown());
+    await act(async () => termChip().focus());
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    await act(async () => touchDown());
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded"), "focus must not hold a dismissed tap open").toBe("false");
+  });
+
+  it("preserves unrelated keyboard focus when Hide is pressed from a hovered card", async () => {
+    vi.useFakeTimers();
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    const input = document.createElement("input");
+    host.append(input);
+    await act(async () => input.focus());
+    await act(async () => {
+      termChip().dispatchEvent(new MouseEvent("mouseenter"));
+      vi.advanceTimersByTime(500);
+    });
+    expect(cardButtons()).toContain("Hide");
+    /* A mouse click need not change focus (e.g. Safari). */
+    await act(async () => cardButton("Hide").click());
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("tabs into a term card, closes it with Escape, and reopens it with keyboard activation", async () => {
+    vi.useFakeTimers();
+    const settle = async () => {
+      for (const _ of [0, 1, 2]) await act(async () => { vi.advanceTimersByTime(500); });
+    };
+    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await act(async () => termChip().focus());
+    await settle();
+    /* jsdom does not implement Tab's default action; use the same portal
+       focus guard a browser's Tab reaches (tooltip-interactive.test.tsx). */
+    const guard = host.querySelector<HTMLElement>('.skim-chip ~ [data-type="outside"]')!;
+    expect(guard.getAttribute("data-type")).toBe("outside");
+    await act(async () => guard.focus());
+    await settle();
+    expect(document.activeElement).toBe(cardButton("Dig deeper"));
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await settle();
+    expect(termCard()).toBeNull();
+    expect(document.activeElement).toBe(termChip());
+    await act(async () => {
+      termChip().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      termChip().click();
+    });
+    await settle();
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    expect(cardButtons()).toContain("Open glossary");
+  });
+
+  it("draws a card with no way out when Glossary cannot be opened: no Open glossary, and no Dig deeper", async () => {
+    const closed = (target: CardTarget) => target.kind !== "term";
+    await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions() }));
+    await act(async () => termChip().focus());
+    expect(termCard()?.textContent).toContain(TERM.senseHere!);
+    /* Dig deeper lands in Glossary, so it goes with the way there. Hide does not. */
+    expect(cardButtons()).toEqual(["Hide"]);
+  });
+
+  it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {
+    await act(async () =>
+      root.render(
+        createElement(SkimPanel, {
+          access: { kind: "visitor", route: ROUTE },
+          view: view({ card: CARD, canOpen: (target) => target.kind !== "term", termActions: null }),
+          away: false,
+        }),
+      ),
+    );
+    await act(async () => termChip().focus());
+    expect(termCard()?.textContent).toContain(TERM.senseHere!);
+    expect(cardButtons()).toEqual([]);
+  });
+
+  it("moves focus to the stop's row when Hide removes the last term (Sol, plan review F4)", async () => {
+    const only: StopCard = { ...CARD, terms: [{ entry: TERM }] };
+    function Hiding() {
+      const [card, setCard] = useState(only);
+      const actions = termActions({
+        /* As `useGlossary` § `setHidden`: the list is re-read before it resolves. */
+        setHidden: async () => {
+          await act(async () => setCard({ ...only, terms: [] }));
+        },
+      });
+      return createElement(SkimPanel, {
+        access: { kind: "owner", owner: owner() },
+        view: view({ card, termActions: actions }),
+        away: false,
+      });
+    }
+    await act(async () => root.render(createElement(Hiding)));
+    await act(async () => termChip().focus());
+    await act(async () => cardButton("Hide").click());
+    expect(host.querySelectorAll(".skim-cluster[aria-label='Terms it uses'] .skim-chip")).toHaveLength(0);
+    const row = host.querySelector<HTMLButtonElement>(".skim-row.current .skim-go")!;
+    expect(document.activeElement, "not left on <body>").toBe(row);
   });
 
   it("opens an idea in place to its statement, one snippet at a time (59)", async () => {
     await draw(owner(), view({ card: CARD }));
     const chips = () => [...host.querySelectorAll<HTMLButtonElement>(".skim-chip")];
     await act(async () => chips()[0]!.click());
+    expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["true", "false", "false"]);
     await act(async () => chips()[2]!.click());
     /* The idea's opening closed the term's. */
     expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["false", "false", "true"]);
@@ -822,11 +1024,12 @@ describe("the panel", () => {
       return { ...v, rows: v.rows.map((row, j) => ({ ...row, current: i === j })) };
     };
     await draw(owner(), at(1));
-    await act(async () => host.querySelector<HTMLButtonElement>(".skim-chip")!.click());
-    expect(host.querySelector(".skim-card .skim-sense")).not.toBeNull();
+    const chip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
+    await act(async () => chip().click());
+    expect(chip().getAttribute("aria-expanded")).toBe("true");
     await draw(owner(), at(0));
     await draw(owner(), at(1));
-    expect(host.querySelector(".skim-card .skim-sense")).toBeNull();
+    expect(chip().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("gives each row's position mark a where-am-I card, as its own button beside the row (5C)", async () => {

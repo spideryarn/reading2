@@ -45,7 +45,6 @@
  */
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  BookA,
   ChevronLeft,
   ChevronRight,
   Lightbulb,
@@ -57,7 +56,6 @@ import type { PublicSkim } from "../public-types.js";
 import type { SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
-import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -68,6 +66,8 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
+import { TermCard, type TermActions } from "./ProseHoverCard.js";
+import type { GlossaryEntry } from "../types.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
@@ -137,10 +137,14 @@ export interface SkimRow {
 
 /**
  * **Which snippet is open on the current stop** — one at a time across the
- * card (Sol, plan 260929f F4): a term's sense or an idea's statement. Held by
+ * card (Sol, plan 260929f F4): a term's card or an idea's statement. Held by
  * the panel, not the card, because the list's follow-scroll has to re-measure
- * when one opens. `stop` ties it to the stop it was opened on, so it is hidden
- * during a step before the cleanup effect forgets it permanently.
+ * when an idea opens. `stop` ties it to the stop it was opened on, so it is
+ * hidden during a step before the cleanup effect forgets it permanently.
+ *
+ * **For a term it is the card a press opened** (a finger's tap, or Enter), and
+ * not one that hover or focus is holding open: that is `TermChip`'s own, so
+ * pointing at a term does not shut an idea the reader opened.
  */
 interface OpenSnippet {
   stop: string;
@@ -534,6 +538,27 @@ export function SkimPanel({ access, view, away }: Props) {
         ? null
         : { stop: currentId, kind, id },
     );
+  /* Close, and only that: a card's own dismissal (Escape, a press elsewhere)
+     can arrive after something else took the slot, and must not reopen it. */
+  const closeTerm = (id: string) =>
+    setSnippet((was) => (was?.kind === "term" && was.id === id ? null : was));
+  /**
+   * **After a Hide, the keyboard goes to the stop's row.** The chip that held
+   * focus, or the card's own button, has just been removed with the term, and
+   * focus would fall to `<body>` (GPT Sol, plan review of 261006e, F4). Only
+   * when focus is still where the press left it: a slow answer must not pull
+   * a reader back from wherever they went meanwhile.
+   */
+  const focusCurrentRow = (from: Element | null) => {
+    const active = document.activeElement;
+    const lost =
+      from !== null &&
+      (active === from || (active === document.body && !from.isConnected));
+    if (!lost) return;
+    scroller.current
+      ?.querySelector<HTMLButtonElement>('.skim-go[aria-current="step"]')
+      ?.focus({ preventScroll: true });
+  };
   useFollow(scroller, currentId, [view.depth, view.card, away, snippet?.kind, snippet?.id]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
@@ -788,6 +813,9 @@ export function SkimPanel({ access, view, away }: Props) {
                             card={view.card}
                             open={snippet}
                             onToggle={toggle}
+                            onCloseTerm={closeTerm}
+                            termActions={view.termActions}
+                            onHidden={focusCurrentRow}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
                           />
@@ -810,58 +838,58 @@ export function SkimPanel({ access, view, away }: Props) {
  * something for this paragraph, in a fixed order: the words first (they are
  * what trips a skimmer), then the ideas and the study.
  *
- * **Terms and ideas are chips that open in place** — the sense of a term, the
- * statement of an idea — so the reader can stay in Skim (Greg,
+ * **Terms and ideas are chips**, so the reader can stay in Skim (Greg,
  * SPIDERYARN-READING2-59: *"can we make them be expandable as well, like the
- * glossary"*). The way to the full mode is an icon inside what opened.
+ * glossary"*). An idea opens in place to its statement, with an icon into
+ * Ideas. A term opens the glossary's own card (`TermChip`): it opened in place
+ * to one line of its sense until 2026-10-06.
  */
 function StopCardView({
   card,
   open,
   onToggle,
+  onCloseTerm,
+  termActions,
+  onHidden,
   onOpen,
   canOpen,
 }: {
   card: StopCard;
   open: OpenSnippet | null;
   onToggle(kind: OpenSnippet["kind"], id: string): void;
+  onCloseTerm(id: string): void;
+  /** `null` for a visitor. */
+  termActions: TermActions | null;
+  /** A term was hidden from its card, and its chip is gone or going. */
+  onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
 }) {
-  const term = open?.kind === "term" ? (card.terms.find((t) => t.entry.id === open.id) ?? null) : null;
+  const pinned = open?.kind === "term" ? open.id : null;
   const idea = open?.kind === "idea" ? (card.ideas.find((i) => i.id === open.id) ?? null) : null;
-  const lead = term ? entryProse(term.entry).lead : "";
   return (
     <div className="skim-card">
       {card.terms.length > 0 && (
         <section className="skim-cluster" aria-label="Terms it uses">
           <p className="skim-cluster-h">Terms it uses</p>
           <div className="skim-chips">
-            {card.terms.map(({ entry, alsoAt }) => (
-              <button
+            {card.terms.map(({ entry }) => (
+              <TermChip
                 key={entry.id}
-                type="button"
-                className={`skim-chip${entry.id === term?.entry.id ? " on" : ""}`}
-                aria-expanded={entry.id === term?.entry.id}
-                onClick={() => onToggle("term", entry.id)}
-              >
-                <span className="skim-chip-name">{entry.name}</span>
-                {alsoAt !== null && <span className="skim-also">also at stop {alsoAt}</span>}
-              </button>
+                entry={entry}
+                pinned={pinned === entry.id}
+                onPress={() => onToggle("term", entry.id)}
+                onUnpin={() => onCloseTerm(entry.id)}
+                actions={termActions}
+                onHidden={onHidden}
+                onOpen={
+                  canOpen({ kind: "term", id: entry.id })
+                    ? () => onOpen({ kind: "term", id: entry.id })
+                    : null
+                }
+              />
             ))}
           </div>
-          {term && (
-            <div className="skim-sense">
-              {lead && <p className="skim-sense-text">{lead}</p>}
-              {canOpen({ kind: "term", id: term.entry.id }) && (
-                <OpenIn
-                  label="Open in Glossary"
-                  icon={<BookA size={16} />}
-                  onOpen={() => onOpen({ kind: "term", id: term.entry.id })}
-                />
-              )}
-            </div>
-          )}
         </section>
       )}
       {card.ideas.length > 0 && (
@@ -913,6 +941,126 @@ function StopCardView({
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * **A term chip, and the glossary's own card on it** — `TermCard`, the card
+ * the prose draws for the same term, inside the shared `Tooltip`. Greg,
+ * 2026-10-06 (spya-se0e4v): *"they should provide/reuse the usual 'go to
+ * glossary' etc in rich tooltips"*. Plan 261006e.
+ *
+ * **Two things can hold it open, and they are kept apart.** Hover or focus
+ * (`held`, here) is a mouse's and a keyboard's way in, and ends when they
+ * leave. A press (`pinned`, the panel's one open snippet) is a finger's: a tap
+ * opens the card and it stays until a tap elsewhere, because `Tooltip` does not
+ * let hover close a controlled card a finger opened (Tooltip.tsx § `byTouch`).
+ * A mouse click does not pin: the card is already up under the pointer, and
+ * goes when the pointer does (GPT Sol, plan review F2).
+ *
+ * `onOpen` is the way into Glossary, or `null` when this reader has no
+ * Glossary control. Then the card has no *Open glossary*, and no *Dig deeper*
+ * either, since that is where a dig's answer is drawn.
+ */
+function TermChip({
+  entry,
+  pinned,
+  onPress,
+  onUnpin,
+  actions,
+  onHidden,
+  onOpen,
+}: {
+  entry: GlossaryEntry;
+  pinned: boolean;
+  onPress(): void;
+  onUnpin(): void;
+  actions: TermActions | null;
+  onHidden(from: Element | null): void;
+  onOpen: (() => void) | null;
+}) {
+  const [held, setHeld] = useState(false);
+  const pointerType = useRef<string | null>(null);
+  const chip = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const open = held || pinned;
+  const close = () => {
+    setHeld(false);
+    onUnpin();
+  };
+  /* Hide, and then put the keyboard somewhere: the chip is about to go. */
+  const acts: TermActions | null = actions && {
+    look: actions.look,
+    looking: actions.looking,
+    stale: actions.stale,
+    hiding: actions.hiding,
+    setHidden: async (id, hidden) => {
+      /* Keep our actual focus owner, not the whole cluster: another term can
+         have focus by the time this write finishes. A mouse's Hide press may
+         also leave unrelated keyboard focus untouched. */
+      const active = document.activeElement;
+      const from = active === chip.current || card.current?.contains(active) ? active : null;
+      await actions.setHidden(id, hidden);
+      onHidden(from);
+    },
+  };
+  return (
+    <Tooltip
+      content={
+        /* Its own scroller, with a height tied to the window, so the row of
+           buttons under a long entry can be reached on a short screen
+           (skim.css § .skim-term-card; plan review F3). */
+        <div className="skim-term-card" ref={card}>
+          <TermCard
+            entry={entry}
+            actions={acts}
+            onClose={close}
+            onOpen={
+              onOpen
+                ? () => {
+                    close();
+                    onOpen();
+                  }
+                : undefined
+            }
+            onOpenTerm={onOpen ?? undefined}
+          />
+        </div>
+      }
+      /* Under the chip and kept there: a card thrown sideways would sit on
+         the chips beside this one (Tooltip.tsx § `keepSide`). */
+      placement="bottom"
+      keepSide
+      className="prose-card skim-term-tip"
+      interactive={{ label: `${entry.name}, in the glossary` }}
+      open={open}
+      onOpenChange={(next) => (next ? setHeld(true) : close())}
+    >
+      <button
+        ref={chip}
+        type="button"
+        className={`skim-chip${open ? " on" : ""}`}
+        onPointerDown={(event) => { pointerType.current = event.pointerType; }}
+        onPointerCancel={() => { pointerType.current = null; }}
+        onKeyDown={() => { pointerType.current = null; }}
+        onClick={() => {
+          const touch = pointerType.current === "touch" || pointerType.current === "pen";
+          pointerType.current = null;
+          /* Focus can precede a tap's click. A finger still owns its pin and
+             dismissal, even if focus has already held the card open. */
+          if (touch) {
+            setHeld(false);
+            onPress();
+            return;
+          }
+          /* Already up by hover or focus: a mouse click does not pin it. */
+          if (held && !pinned) return;
+          onPress();
+        }}
+      >
+        <span className="skim-chip-name">{entry.name}</span>
+      </button>
+    </Tooltip>
   );
 }
 

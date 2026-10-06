@@ -267,11 +267,16 @@ beforeEach(() => {
   /* The switch's store is a module singleton and keeps the last case's session,
      so an event is not news unless it is reset first. */
   resetExperimental();
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     if (url.startsWith(`/api/article/${SLUG}`)) return ownedReply();
     if (url.startsWith("/api/public/article/")) return publicReply();
     if (url.startsWith("/api/library")) return json([]);
+    /* The add page's own POST is refused. It was answered with the list, and
+       since plan 261005l § 2a the page draws its card from the POST's answer,
+       so a list read as a job threw on `job.steps`. Nothing here is about the
+       import: a refused add leaves the corner as it is. */
+    if (url === "/api/jobs" && init?.method === "POST") return json({ error: "refused" }, 503);
     if (url === "/api/jobs") return json({ jobs: [] });
     /* The three endpoints whose *shape* the pages below read into rather than
        merely test for, so a bare `{}` throws where a real answer would not.

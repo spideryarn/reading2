@@ -109,9 +109,20 @@ export interface Advanced {
  * The two lines every job request makes. Exported because `useJobs` fires the
  * *actions* — an add, a cancel, a retry — and an action is a fetch that belongs
  * beside the card that fires it, not inside the engine.
+ *
+ * **Sent as the reader the engine is bound to, or not at all.** The session
+ * key is read here, when the call is made, and travels with the request to
+ * where the token goes on. An add POST, a Retry or an `/advance` begun under
+ * reader A can still be waiting for its token when the session becomes reader
+ * B's, and `stop()` runs from an effect, which is later still. The epoch
+ * fences what the *answer* may touch; it cannot stop the request leaving, and
+ * an add POST that leaves as B spends one of B's slots on an import B never
+ * asked for. `NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md
+ * § 2 (GPT Sol's F1). With no session bound there is nobody to compare with.
  */
 export async function send<T>(url: string, init?: RequestInit): Promise<T> {
-  return readJson<T>(await apiFetch(url, init));
+  return readJson<T>(await apiFetch(url, init, jobEngine.reader()));
 }
 
 function isBusy(jobs: Job[]): boolean {
@@ -225,6 +236,11 @@ export interface JobEngine {
    * knows. A different key tears everything down first.
    */
   start(sessionKey: string): void;
+  /**
+   * The reader the engine is bound to right now: `start`'s key, or `null`
+   * when it is stopped. For `send`, which names them on every request.
+   */
+  reader(): string | null;
   /**
    * Stop scheduling, fence anything in flight, and drop this reader's snapshot.
    *
@@ -920,6 +936,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       reconciliationRequested += 1;
       void poll();
     },
+    reader: () => sessionKey,
     stop() {
       if (!started && snapshot === EMPTY) return;
       started = false;

@@ -120,6 +120,7 @@ const VIEW: SkimView = {
   ],
   position: 1,
   card: null,
+  termActions: null,
   onDepth: () => {},
   onRow: () => {},
   onStep: () => {},

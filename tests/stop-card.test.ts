@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **The stop card's gathering** — src/web/stop-card.ts: from the artefacts the
- * reading view already has, plus the stop's block and the route, to the
+ * reading view already has, plus the stop's block, to the
  * clusters drawn under the current row.
  *
  * jsdom because the terms are found in `renderedText(block.html)`, the
@@ -57,7 +57,6 @@ function termsIn(html: string, entries: GlossaryEntry[], stale = false): string[
   const card = gatherStopCard({
     blockId: B[0]!,
     blocks: [block(B[0]!, html)],
-    route: [B[0]!],
     sources: { ...NONE, glossary: { value: glossaryOf(entries), stale } },
   });
   return card.terms.map((t) => t.entry.id);
@@ -117,34 +116,13 @@ describe("terms: the direct scan over every entry, in the rendered prose", () =>
   });
 });
 
-describe("also at stop k (F20)", () => {
-  const blocks = [
-    block(B[0]!, "<p>Synergy is defined here.</p>"),
-    block(B[1]!, "<p>Nothing relevant.</p>"),
-    block(B[2]!, "<p>Synergy and redundancy together.</p>"),
-    block(B[3]!, "<p>Redundancy, later.</p>"),
-  ];
-  const sources: CardSources = {
-    ...NONE,
-    glossary: { value: glossaryOf([entry("t-syn", "synergy"), entry("t-red", "redundancy")]), stale: false },
-  };
-
-  it("names the first earlier stop on this pass that also uses the term, and nothing for a later one", () => {
-    /* Route order is not document order: B2 is the second stop, B0 the third. */
-    const card = gatherStopCard({ blockId: B[0]!, blocks, route: [B[3]!, B[2]!, B[0]!, B[1]!], sources });
-    expect(card.terms.map((t) => [t.entry.id, t.alsoAt])).toEqual([["t-syn", 2]]);
-
-    const at2 = gatherStopCard({ blockId: B[2]!, blocks, route: [B[3]!, B[2]!, B[0]!, B[1]!], sources });
-    /* Synergy is at stop 3, which is later: no marker. Redundancy is at stop 1. */
-    expect(at2.terms.map((t) => [t.entry.id, t.alsoAt])).toEqual([
-      ["t-syn", null],
-      ["t-red", 1],
-    ]);
-  });
-
-  it("skips a stop whose quote has gone", () => {
-    const card = gatherStopCard({ blockId: B[2]!, blocks, route: [null, B[2]!], sources });
-    expect(card.terms.map((t) => t.alsoAt)).toEqual([null, null]);
+describe("a term says nothing about other stops (261006e)", () => {
+  it("carries the entry and no stop number, and needs no route to be gathered", () => {
+    const blocks = [block(B[0]!, "<p>Synergy is defined here.</p>"), block(B[2]!, "<p>Synergy again.</p>")];
+    const syn = entry("t-syn", "synergy");
+    const sources: CardSources = { ...NONE, glossary: { value: glossaryOf([syn]), stale: false } };
+    /* The earlier-stop marker went on 2026-10-06 (Greg, spya-se0e4v). */
+    expect(gatherStopCard({ blockId: B[2]!, blocks, sources }).terms).toEqual([{ entry: syn }]);
   });
 });
 
@@ -177,7 +155,7 @@ describe("ideas and the timeline, by block id", () => {
   };
 
   it("gathers each once, and only what touches this block", () => {
-    const card = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: fresh });
+    const card = gatherStopCard({ blockId: B[1]!, blocks, sources: fresh });
     expect(card.ideas.map(({ id, name }) => ({ id, name }))).toEqual([{ id: "spya-id2abc", name: "Synergy is not redundancy" }]);
     expect(card.ideas[0]!.statement).toBe("The pair carries information neither does alone.");
     expect(card.events).toEqual([{ id: "spya-ev2abc", label: "Recordings made" }]);
@@ -190,14 +168,14 @@ describe("ideas and the timeline, by block id", () => {
       ideas: { value: ideas, stale: true },
       timeline: { value: timeline, stale: true },
     };
-    const card = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: stale });
+    const card = gatherStopCard({ blockId: B[1]!, blocks, sources: stale });
     expect([card.ideas, card.events]).toEqual([[], []]);
     expect(cardIsEmpty(card)).toBe(true);
   });
 
   it("is empty when nothing exists, and for a block no artefact touches", () => {
-    expect(cardIsEmpty(gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: NONE }))).toBe(true);
-    expect(cardIsEmpty(gatherStopCard({ blockId: B[2]!, blocks, route: [B[2]!], sources: fresh }))).toBe(true);
+    expect(cardIsEmpty(gatherStopCard({ blockId: B[1]!, blocks, sources: NONE }))).toBe(true);
+    expect(cardIsEmpty(gatherStopCard({ blockId: B[2]!, blocks, sources: fresh }))).toBe(true);
   });
 });
 

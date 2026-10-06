@@ -1,15 +1,25 @@
-**P3 — recovery test did not prove the switch returned.** [metadata-sharing-card.test.tsx:558](/var/tmp/spideryarn-worktrees/qi-kynm6gzc-access-sharing-after-import/tests/metadata-sharing-card.test.tsx:558) omitted `available` and asserted only the private-state sentence. Adding a real-button assertion failed (`expected false to be true`); fixed with `ALL_BUILT` and that assertion. Also strengthened checking, slug-change, late-failure, and `acted` coverage.
+The committed candidate fails its contract. I fixed three **established P1 findings**, each reproduced red first:
 
-No P1/P2 findings. The app’s slug key prevents stale-error renders; `current()` rejects late failures. Retries stop after success or five failed reads. A failed refresh with null provenance uses the remaining budget; existing provenance suppresses retries. Delete/Archive and pipeline rows recover on success; purpose seeds once.
+- **F7 — Boot POST is unfenced.**  
+  **(a)** Mount `/add/` as A, hold token lookup, sign in as B, then release it. The test observed A’s import POST carrying `TOKEN-B`: the child effect posted before the parent bound the engine.  
+  **(b)** Fixed by binding the session in a layout effect, before child passive effects.
 
-All four original tests failed under relevant mutations. Removing cleanup made the unmount test count **2 reads instead of 1**. All mutations were restored; production code is unchanged.
+- **F8 — Late grant cleanup uses B’s identity.**  
+  **(a)** Hold A’s batch grant, stop/rebind the batch, then resolve the grant. Cleanup sent `DELETE /api/uploads/upload-A as TOKEN-B`, including while the engine was unbound.  
+  **(b)** Fixed by passing the operation’s captured reader into cancellation.
 
-Left as planned: malformed `sharing` on a 200 and the private link’s separate read.
+- **F9 — Batch queueing survives teardown.**  
+  **(a)** Complete A’s PUT and switch to B in the microtask between `sendIt` returning and `run` resuming. The test observed `POST /api/jobs as TOKEN-B`.  
+  **(b)** Fixed by checking `live()` immediately after awaiting `sendIt`.
 
-Validation:
+No remaining established blocker found. Matching-reader controls pass, including refresh, offline cache and deadline fallback. **110 focused tests and typechecking pass.** Lint has no errors and two complexity advisories. The full suite was not run here. Nothing committed.
 
-- Requested Vitest command: **2 files passed, 77 tests passed**.
-- `npm run typecheck`: blocked by sandbox IPC `listen EPERM`. The same checker via `node --import tsx scripts/typecheck.ts` **passed**, covering all 3,287 source files.
-- Scoped lint passed.
+Files I changed:
 
-**Verdict: approve with the test correction applied.** No commit made.
+- [src/web/useJobs.ts](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/useJobs.ts)
+- [src/web/batchUpload.ts](/var/tmp/spideryarn-worktrees/add-page-reader-change/src/web/batchUpload.ts)
+- [tests/add-page-reader-change.test.tsx](/var/tmp/spideryarn-worktrees/add-page-reader-change/tests/add-page-reader-change.test.tsx)
+- [tests/engines-send-as-their-reader.test.ts](/var/tmp/spideryarn-worktrees/add-page-reader-change/tests/engines-send-as-their-reader.test.ts)
+- [tests/api-fetch.test.ts](/var/tmp/spideryarn-worktrees/add-page-reader-change/tests/api-fetch.test.ts)
+- [docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md](/var/tmp/spideryarn-worktrees/add-page-reader-change/docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md)
+- [docs/postmortems/261006h-a-current-service-reader-is-not-an-operations-reader.md](/var/tmp/spideryarn-worktrees/add-page-reader-change/docs/postmortems/261006h-a-current-service-reader-is-not-an-operations-reader.md)

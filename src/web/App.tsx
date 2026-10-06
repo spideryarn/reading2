@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { SignedInShell } from "./BackLink.js";
@@ -19,6 +19,8 @@ import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
+import { AddStopped } from "./AddStopped.js";
+import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
@@ -162,6 +164,26 @@ export function App() {
    * the real one rather than a copy of it.
    */
   useJobSession(user?.id ?? null, session?.access_token ?? null);
+
+  /**
+   * **Whose add visit this is**, when the address is an `/add/` one — the
+   * rule, and why there is one, is src/web/add-visit.ts.
+   *
+   * **Here, above the signed-out branch below**, because that branch unmounts
+   * every signed-in page: reader A signing out and reader B signing in at the
+   * same address has to be seen as a change of reader, and anything kept
+   * further down would have forgotten A by then.
+   *
+   * **A ref written during render, on purpose.** The answer has to be right in
+   * the very render that first sees the new reader, so that A's page is gone
+   * from that commit and not one effect later. `nextAddVisit` gives the same
+   * visit back when asked twice with the same answers, so StrictMode's second
+   * render changes nothing.
+   * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 1.
+   */
+  const addVisitRef = useRef<AddVisit | null>(null);
+  const addVisit = nextAddVisit(addVisitRef.current, addAddress(route), user?.id ?? null);
+  addVisitRef.current = addVisit;
 
   /**
    * **Nothing here tells the experimental-features store who is reading.** It
@@ -361,7 +383,7 @@ export function App() {
       {/* What tells a page's `HomeLink` that the corner logo is beside it, so
           it draws no second way home — BackLink.tsx § `SignedInShell`. */}
       <SignedInShell.Provider value={true}>
-        <SignedIn route={route} user={user} />
+        <SignedIn route={route} user={user} addVisit={addVisit} />
       </SignedInShell.Provider>
       {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
@@ -394,6 +416,7 @@ function LeaveLogin() {
 function SignedIn({
   route,
   user,
+  addVisit,
 }: {
   /* **Not `Route`, and the compiler is the reason.** `App` answers `callback`
      before the gate above — it has to, because the reader coming back from an
@@ -403,6 +426,8 @@ function SignedIn({
      arm that nothing can ever run. */
   route: Exclude<Route, { kind: "callback" }>;
   user: User;
+  /** `App`'s add visit: who an `/add/` address is running for, or that it has been stopped. */
+  addVisit: AddVisit | null;
 }) {
   /* **The administrator's pages, refused before the branch chain rather than
      inside it — and this is a courtesy, not a gate.**
@@ -455,16 +480,33 @@ function SignedIn({
   /* The shelf proper. `drawsShelf` above has already answered the sideways way
      in, so this is the address itself. */
   if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
+  /* **An add address another reader was already adding at is stopped**, and
+     stays stopped until it is left (add-visit.ts, AddStopped.tsx). Anything
+     but a running visit draws the page that posts nothing: `App` always has a
+     visit for a signed-in reader at one of these addresses, and if it ever
+     did not, starting an import is the wrong way to be wrong. */
+  if ((route.kind === "add" || route.kind === "add-upload") && addVisit?.kind !== "running")
+    return (
+      <>
+        <HomeLogo />
+        <AddStopped />
+      </>
+    );
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.
   if (route.kind === "add")
     return (
       <>
         <HomeLogo />
-        {/* `readerId`: the held job and the sharing controllers on this page
-            are one reader's, and a direct change of account can leave it
-            mounted (AddPage.tsx § `readerId`). */}
-        <AddPage source={{ kind: "url", url: route.url }} readerId={user.id} />
+        {/* **`key`, for the reason the shelf above carries one**: the page
+            holds one reader's typed purpose, their High-powered tick and the
+            job they are watching, and removing the instance is what removes
+            all of it. A visit is stopped before another reader can reach this
+            line, so the key is the second lock and not the first.
+
+            `readerId`: every request the page makes names the reader it was
+            made for (AddPage.tsx § `readerId`). */}
+        <AddPage key={user.id} source={{ kind: "url", url: route.url }} readerId={user.id} />
       </>
     );
   /* The same page, given a file that is already in the object store rather than
@@ -474,7 +516,11 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <AddPage source={{ kind: "upload", uploadId: route.uploadId }} readerId={user.id} />
+        <AddPage
+          key={user.id}
+          source={{ kind: "upload", uploadId: route.uploadId }}
+          readerId={user.id}
+        />
       </>
     );
   if (route.kind === "design")

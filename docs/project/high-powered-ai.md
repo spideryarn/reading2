@@ -73,6 +73,11 @@ above are unchanged; only the moment is earlier. The build is
   sends nothing, and the article imports on Sonnet. (*Generate the main modes* was one too until
   2026-10-04; it is the reader's setting now.) An import that fails after the switch keeps the
   charge on its article row, under the never-refunded rule; its *Retry* does not charge again.
+- **It is one reader's intent.** The retry is not sent with another reader's token, so a change of
+  account on an open add page cannot charge whoever signed in
+  ([ingest-queue.md § The add page](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
+  If the first reader comes back within the retry second, their own tick can still reach their own
+  article.
 
 Deferred, and a billing change if built: the charge riding the job itself (admitted at
 `POST /api/jobs`, switched server-side at the first capable-tier step), which would survive a closed

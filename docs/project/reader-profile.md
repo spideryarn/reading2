@@ -51,7 +51,9 @@ clears it. The saving is a small class of its own, bound to one article's slug
 ([`src/web/add-purpose.ts`](../../src/web/add-purpose.ts)), because one add page can change which
 article it is about (a new address, a Retry) and `useAutosavedText` cannot be re-pointed;
 [plan 261004l](../plans/261004l-the-add-page-purpose-box-saves-as-you-type.md) has why, and what
-is still best effort.
+is still best effort. Its saves name the reader they were typed by, and are not sent if the account
+has changed by the time they leave
+([ingest-queue.md § The add page](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
 
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.

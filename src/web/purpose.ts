@@ -22,14 +22,29 @@ import { profileSaved } from "./profile-saved.js";
  * is not a request to erase a sentence the reader cannot see.
  *
  * Rejects with the server's sentence on failure.
+ *
+ * `madeFor` is the reader these words are for, when the caller can outlive a
+ * change of reader: the add page's session sends its last words after the
+ * page has gone. Sent as anybody else, the write is not sent and this rejects
+ * (`NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2).
+ * The other callers name nobody.
  */
-export async function savePurpose(slug: string, purpose: string | null): Promise<string | null> {
+export async function savePurpose(
+  slug: string,
+  purpose: string | null,
+  madeFor: string | null = null,
+): Promise<string | null> {
   const body = await readJson<{ purpose: string | null }>(
-    await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ purpose }),
-    }),
+    await apiFetch(
+      `/api/library/${encodeURIComponent(slug)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose }),
+      },
+      madeFor,
+    ),
   );
   /* **The link cards' summaries were written from the old sentence.** They are
      cached per tab in front of a server that would have noticed
@@ -54,14 +69,21 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
  *
  * Forgets the link summaries as it sends and again when the write settles —
  * useProfile.ts § `leaveProfile` says why it takes both.
+ *
+ * `madeFor` as `savePurpose` has it: nothing is sent unless that reader is
+ * the one this tab last saw.
  */
-export function leavePurpose(slug: string, text: string): void {
+export function leavePurpose(slug: string, text: string, madeFor: string | null = null): void {
   profileSaved();
-  void leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purpose: text === "" ? null : text }),
-  }).then(profileSaved);
+  void leavingFetch(
+    `/api/library/${encodeURIComponent(slug)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: text === "" ? null : text }),
+    },
+    madeFor,
+  ).then(profileSaved);
 }
 
 /**

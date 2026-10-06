@@ -83,7 +83,7 @@ review of the code.
 ## What the plan review changed
 
 GPT Sol, 2026-10-06, approve with changes
-([261006e-plan-review-sol.md](261006e-plan-review-sol.md)):
+([261006e-access-and-sharing-checking-plan-review-sol.md](261006e-access-and-sharing-checking-plan-review-sol.md)):
 
 - **Retry progression.** Two failures set the same error string, so an effect keyed on the error
   would stop after one retry. Taken: the page counts failed reads and keys the timer on the count;
@@ -110,7 +110,7 @@ GPT Sol, 2026-10-06, approve with changes
 
 ## The code review, and the browser check
 
-**GPT Sol, 2026-10-06** ([261006e-code-review-sol.md](261006e-code-review-sol.md)): approve, no P1
+**GPT Sol, 2026-10-06** ([261006e-access-and-sharing-checking-code-review-sol.md](261006e-access-and-sharing-checking-code-review-sol.md)): approve, no P1
 or P2, production code unchanged. One P3, fixed by the reviewer: the recovery test said the switch
 came back and asserted only the sentence beside it, over a fixture that correctly withholds the
 button. It now asserts the button. It also added tests for a slug change, a late failure and

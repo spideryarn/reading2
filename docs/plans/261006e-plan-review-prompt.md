@@ -1,31 +1,63 @@
-# Plan review: Access & sharing says "checking" while it asks, and asks again after a failed read
+# Review: a plan to make the add page forget everything when the signed-in reader changes
 
-Read-only review. Do not edit files.
+Repo: this worktree (branch `worktree-add-page-reader-change`, based on `origin/dev` at 7ad98b97f).
+TypeScript + ESM, React client under `src/web/`, vitest + jsdom tests under `tests/`.
 
-Read `docs/plans/261006e-access-and-sharing-says-checking-while-it-asks-and-asks-again-after-a-failed-read.md`
-and check it against the code it names:
+## The candidate
 
-- `src/web/Metadata.tsx` § `readProvenance`, the `useEffect` keyed on `reload`, `SharingSection`,
-  `SharingCard`, and every other reader of `provenance` / `provenanceError` on that page
-- `src/web/useOrderedRead.ts` (`reload`, `refresh`, the generation counter)
-- `src/web/AccessSharing.tsx` § `Learned`, `CardState`, `card`, the `report` effect, the render
-- `src/web/lib/api.ts` (`apiFetch`: the offline copy answer, the one auth retry)
-- `src/messages.ts` § `SHARING_UNKNOWN`
-- `tests/metadata-sharing-card.test.tsx`
+Live pre-commit: base 7ad98b97f; the plan is the one untracked file
+`docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md`. No code has changed.
 
-Questions:
+Start with: that plan, then `src/web/AddPage.tsx` (the `AddPage` component from line ~483, and
+`purposeFor`, `purposeIo`, `putHighPower`, `retirePurpose` above it), `src/web/add-purpose.ts`,
+`src/web/add-high-power.ts`, `src/web/lib/api.ts` (`apiFetchOwned`, `sendOwned`, `accessToken`,
+`leavingFetch`, the `onAuthStateChange` handler at the bottom), `src/web/purpose.ts`,
+`src/web/App.tsx` (where `AddPage` is mounted, and `useJobSession` in `src/web/useJobs.ts`).
+That is where to begin, not the limit.
 
-1. Is the root cause stated correctly, and is there a third path to the stuck sentence the plan
-   misses (for example a 200 whose `sharing` does not parse, or `apiFetch` answering from the saved
-   offline copy)?
-2. Does a timed `reload()` after a failed first read break anything else on the Metadata page that
-   reads `provenanceError` or `provenance === null` (Delete, the pipeline rows, `hasShelfRow`, the
-   purpose seed)? Does it race `useOrderedRead`'s generation logic or a slug change?
-3. Is the retry schedule (2 s, 5 s, 15 s, 30 s, then stop; plus tab-visible) sensible, or is
-   something simpler as good?
-4. Does a `checking` kind on the card contradict anything the card promises (the `report` effect,
-   the private-link control beside it)?
-5. Is there a simpler design?
+## What it is meant to do
 
-Answer with findings ranked P1/P2/P3, each with the file and line that shows it, and a verdict:
-approve, approve with changes, or rethink. Be brief.
+The plan's own "Done looks like": after a direct change of account on an open add page, reader B
+sees none of reader A's words or choices, no request about A's article leaves with B's token, and
+no import starts for B until B presses a button. The design decisions in the plan are mine (the
+implementing agent's), not the user's; the user's only instruction is the queue item, which says:
+"on a reader change, reset that page to a fresh, empty state for B and do NOT start or continue
+the import as B (no spend without B's own gesture). Red test first."
+
+## What you can and cannot run
+
+The tree is read-only. /tmp and the node_modules caches are writable. You can run one test file
+(`npx vitest run tests/<one>.test.ts`) and a script (`node --import tsx <script>`). No network, not
+even loopback, so anything needing Postgres skips.
+
+## Attack it
+
+Independently, before you read my questions. The statement to test is the plan's "Done looks like"
+sentence: **is it accurate for the design as written?** Find a concrete sequence (A does X, the
+session changes at moment T, timer or promise Y lands) in which B sees something of A's, a request
+about A's article leaves with B's credential, or a paid import starts as B with no press. Check
+the plan's claims about the code against the code (it names functions and behaviours; some may be
+wrong). Say if a simpler design gets the same guarantee.
+
+For each finding give:
+  - an ID (F1, F2, …), a severity (P0 data loss / exploitable security / incorrect charging;
+    P1 user-visible wrong behaviour or a contract violated; P2 design risk with no wrong behaviour
+    today; P3 prose), and whether it is established or reasoned
+  - (a) the concrete scenario it does not handle, or the code it contradicts (file and line)
+  - (b) the smallest change to the plan that closes it, as replacement wording
+A finding with no (a) goes last. Refuse only on an established P0 or P1.
+
+## My own suspicions — read last
+
+These are already my doubts, so confirming them is worth less than anything you find yourself.
+
+- Whether `accessToken()`'s `owner` and `lastKnownUser()` are trustworthy enough to fence on, in
+  particular the `fromCache` fallback and the moment between the SDK changing session and its
+  `onAuthStateChange` listener running.
+- Whether the upload engine (`mine`) can still hold A's transfer for B's first render.
+- Whether there are other writers on the add page I have not listed (the auto-modes setting, the
+  sharing io, `markAskPurpose`, `openArticle`).
+- Whether the gate's "reader changed" detection is safe under StrictMode and under a `null`
+  reader in between (App unmounts the page while signed out, I believe).
+
+Do not change any file.
