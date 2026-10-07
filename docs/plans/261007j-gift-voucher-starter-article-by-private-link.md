@@ -1,6 +1,8 @@
 # Gift voucher: a starter article, by private link
 
-**Status as of 2026-10-07: planned, not built.** Queue item `qi-zqkjnadh`, the deferred half of
+**Status as of 2026-10-07: built, both stages, on `dev`, not deployed.** The migration is
+`drizzle/20261007134629_billing_voucher_starter_article.sql` (additive). Not checked in a
+browser: a create with a starter end to end (§ Log). Queue item `qi-zqkjnadh`, the deferred half of
 report `spya-vc6pnm`. The question and its four options are
 [261007f § Q-starter](261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-starter-may-the-voucher-email-carry-a-private-link);
 this is option A, built.
