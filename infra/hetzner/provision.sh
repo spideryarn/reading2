@@ -1440,14 +1440,24 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 After=network-online.target
 Wants=network-online.target
 
-# The rate limit lives in [Unit], not [Service] -- systemd moved it here in v229
-# and a StartLimitBurst= under [Service] is silently ignored.
+# NEVER GIVE UP, and retry slowly instead. The start limit lives in [Unit], not
+# [Service] -- systemd moved it here in v229 and a StartLimitBurst= under
+# [Service] is silently ignored.
 #
-# Ten tries five seconds apart, then systemd gives up and the unit sits in
-# `failed`. A genuinely broken build therefore crash-loops VISIBLY in the
-# journal for about a minute and then stops, rather than restarting for ever on
-# a box that has reached load average 391 once already.
-StartLimitIntervalSec=300
+# Until 2026-10-07 this was ten tries in 300s and then `failed` for good. The
+# daemon died of ENOSPC on 2026-10-05 and stayed down 46 hours; under that limit
+# a disk full for an hour leaves the unit failed after the space comes back,
+# so Restart=always alone would not have saved it (GPT Sol,
+# docs/plans/261006m-box-disk-hygiene-plan-review-sol.md, finding 13). An
+# interval of 0 turns the limit off, so StartLimitBurst= below is inert and
+# kept only so a later interval is not unlimited by accident.
+#
+# What the limit was for -- a broken build not restarting every five seconds on
+# a box that has reached load average 391 once already -- is done by the
+# thirty-second RestartSec= under [Service]. infra/hetzner/test-overseer-restart.sh
+# fills a disk and checks both: the old values end `start-limit-hit`, these
+# come back.
+StartLimitIntervalSec=0
 StartLimitBurst=10
 
 [Service]
@@ -1490,6 +1500,20 @@ Environment=OVERSEER_FLEET_URL=http://127.0.0.1:8787
 # `systemctl show overseer -p Environment` and `overseer status` both report it.
 EnvironmentFile=/etc/overseer.env
 
+# THE KEY, and a different file from the arming on purpose: that one is a
+# decision and 0644, this one is a secret. OPENROUTER_API_KEY, for the attention
+# pass. Root-owned, mode 0600: systemd reads it as root before dropping to
+# User=, so the daemon gets the key and no agent on the box can read the file.
+# Greg approved this place for a secret on 2026-10-07
+# (docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md).
+#
+# No leading `-`, for the same reason as above and the same refusal
+# scripts/overseer-tools/daemon-launch.sh makes: a missing key would otherwise
+# be a daemon running with attention silently off. Provisioning never writes it;
+# infra/hetzner/README.md's rebuild sequence says how, and
+# scripts/overseer-activate.ts refuses without it.
+EnvironmentFile=/etc/overseer-secrets.env
+
 # The checkout's own tsx, not `npx tsx`. npx with no local install goes to the
 # network and fetches SOME tsx; this path either exists or fails loudly, which
 # is the difference between a service that is wrong and one that says so.
@@ -1503,7 +1527,13 @@ ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/overseer.t
 # moment nobody is watching, and this one's absence is invisible: there is no
 # page to tell you the page is down.
 Restart=always
-RestartSec=5
+# Thirty seconds, fixed. A daemon that cannot start costs two journal lines a
+# minute, and one that can is back within thirty seconds of the cause going
+# away. Passed over: a growing delay (RestartSteps=, RestartMaxDelaySec=). In
+# systemd 255 its counter survives a healthy run and resets only on a stop and
+# start by hand, so after a few crashes spread over weeks every later crash
+# would wait the longest delay (GPT Sol, 261007j plan review, finding 6).
+RestartSec=30s
 
 # scripts/overseer.ts traps SIGTERM, writes its stopping note and releases the
 # lock. Give it room to do that -- a SIGKILL here leaves a lock file the next
@@ -2270,6 +2300,74 @@ WantedBy=timers.target
 BOX_TIDY_TIMER_UNIT
 # <<< box-tidy
 
+# /tmp AGES OUT AFTER 7 DAYS, not systemd's 30. The file's own comments say what
+# is kept longer and why; infra/hetzner/tmpfiles.d/tmp.conf is the readable copy
+# and tests/systemd-units.test.ts holds the two equal. Same name as the packaged
+# /usr/lib/tmpfiles.d/tmp.conf, so it replaces that rule rather than adding to
+# it. Not run here: systemd-tmpfiles-clean.timer applies it within a day, and the
+# first pass over a full /tmp is heavy enough to be a person's decision
+# (hetzner-remote-server-box.md, "Keeping the disks from filling").
+tmpfiles_tmp=$(mktemp)
+cat > "$tmpfiles_tmp" <<'TMPFILES_TMP_CONF'
+# /etc/tmpfiles.d/tmp.conf: /tmp ages out after 7 days rather than systemd's 30.
+# Installed by infra/hetzner/provision.sh; tests/systemd-units.test.ts holds this
+# file equal to the heredoc there.
+#
+# Greg approved 7 days on 2026-10-07. The plan, and what was checked before it
+# was switched on, is
+# docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md.
+#
+# Same name as /usr/lib/tmpfiles.d/tmp.conf, so it REPLACES that file rather than
+# adding to it (tmpfiles.d(5)): the packaged `D /tmp 1777 root root 30d` is no
+# longer read. systemd-tmpfiles-clean.timer runs it daily; /tmp is also emptied
+# at every boot, as before.
+#
+# Why /tmp fills: tests leave about fifty thousand mkdtemp directories a day and
+# remove none (150 GB on 2026-10-07). This shortens the wait; tests that clean up
+# after themselves are the real fix.
+#
+# An entry survives if its mtime, atime or (for a file) ctime is younger than the
+# age, and a directory holding one young file keeps it and the directories above
+# it. So these are only for what must outlive a WEEK WITH NOTHING TOUCHING IT:
+D /tmp 1777 root root 7d
+
+# Claude Code's per-session scratchpads. Live tmux loops run scripts out of
+# them, and a stopped session may be resumed. Left at the 30 days they had
+# before, by a line of its own (a path with its own line is aged by that line,
+# not its parent's); not excluded altogether, which would leave 8 GB for the
+# next reboot. A glob rather than claude-1000, so it does not depend on the uid;
+# it also catches Claude Code's small claude-<hex>-cwd files, which is harmless.
+e /tmp/claude-* - - - 30d
+
+# Browser profiles and singleton directories. The Playwright and Chrome MCP
+# servers launch Chrome with a temporary profile here; Chrome writes its
+# SingletonLock symlink once, at start, so a browser left open for a week would
+# lose it, and a fresh file elsewhere in the profile does not save an old
+# sibling. Left at 30 days, as before (GPT Sol, 261007j plan review, finding 1).
+# None was live on 2026-10-07; 969 leaked ones came to 102 MB.
+e /tmp/playwright_chromiumdev_profile-* - - - 30d
+e /tmp/com.google.Chrome.* - - - 30d
+e /tmp/.org.chromium.Chromium.* - - - 30d
+
+# tmux's socket directory. The socket is created once, when the server starts
+# (2026-08-31 here), and never touched again; delete it and every running
+# session is unreachable until the server is sent SIGUSR1.
+x /tmp/tmux-*
+
+# Codex's sandbox mount points and its daemon's directory: its own runtime
+# state, small, and not a leak.
+x /tmp/codex-bwrap-synthetic-mount-targets-*
+x /tmp/codex-daemon-*
+
+# Checked and left at 7 days: tsx's IPC pipes (/tmp/tsx-1000, 75,000 of them; a
+# child connects once at start and ignores a missing one), feedback-sweep scratch
+# (/tmp/fbsweep*, each run under three hours), and the mkdtemp directories of
+# tests, which are what this is for. Worktrees are under /var/tmp, which has no
+# ageing rule at all.
+TMPFILES_TMP_CONF
+install -o root -g root -m 0644 "$tmpfiles_tmp" /etc/tmpfiles.d/tmp.conf
+rm -f "$tmpfiles_tmp"
+
 # THE OVERSEER'S ARMING FILE. Created ONCE, disarmed, and never overwritten.
 #
 # overseer.service reads it with EnvironmentFile= and no `-`, so it has to exist
@@ -2757,6 +2855,10 @@ check "box-tidy timer running"    'systemctl is-active box-tidy.timer | grep -qx
 check "box-tidy runs as $USER_NAME" 'systemctl show -p User --value box-tidy.service | grep -qx '"$USER_NAME"''
 check "gh installed from GitHub's repo" 'gh --version && apt-cache policy gh | grep -q "cli.github.com"'
 check "pngquant installed"        'command -v pngquant'
+check "/tmp ages out after 7 days" 'systemd-tmpfiles --cat-config 2>/dev/null | grep -qx "D /tmp 1777 root root 7d" && ! systemd-tmpfiles --cat-config 2>/dev/null | grep -qx "D /tmp 1777 root root 30d"'
+# The Overseer's key file is a person's step, not provisioning's, so its absence
+# is not a failure here; a copy anybody can read is.
+check "overseer key file, if present, is root 0600" '! test -e /etc/overseer-secrets.env || test "$(stat -c %u:%a /etc/overseer-secrets.env)" = 0:600'
 # The dashboard's unit is installed and NOT enabled -- see the comment where it
 # is written. So there is no boot-symlink check here, deliberately: it would be
 # red on a correctly-provisioned box, and a red check nobody expects to be green

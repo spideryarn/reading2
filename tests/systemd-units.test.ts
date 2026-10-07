@@ -26,7 +26,8 @@
  * docs/plans/260908b-overseer-store-and-clock.md § S5.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -308,6 +309,21 @@ describe("the overseer unit", () => {
     // reads and not the paragraph above it explaining the choice.
     expect(section(unit, "Service")).toContain("EnvironmentFile=/etc/overseer.env");
     expect(section(unit, "Service")).not.toContain("EnvironmentFile=-/etc/overseer.env");
+  });
+
+  it("never gives up restarting, and retries every thirty seconds", () => {
+    // A disk full for an hour used to leave the unit `failed` for good: ten
+    // starts in 300s and systemd stops trying (Sol, 261006m finding 13).
+    // infra/hetzner/test-overseer-restart.sh is the end-to-end check of these.
+    expect(section(unit, "Unit")).toContain("StartLimitIntervalSec=0");
+    expect(section(unit, "Service")).toContain("RestartSec=30s");
+  });
+
+  it("REQUIRES its key file, which is not the arming file", () => {
+    expect(section(unit, "Service")).toContain("EnvironmentFile=/etc/overseer-secrets.env");
+    expect(section(unit, "Service")).not.toContain("EnvironmentFile=-/etc/overseer-secrets.env");
+    // The key never appears in the unit, in any form.
+    expect(unit).not.toMatch(/OPENROUTER_API_KEY=/);
   });
 
   it("never hardcodes the arming, so an ordinary restart is not a re-arm", () => {
@@ -604,4 +620,63 @@ describe("box-tidy test overrides", () => {
       expect(unset).toContain(`BOX_TIDY_${name}`);
     }
   });
+});
+
+// ─── /etc/tmpfiles.d/tmp.conf: /tmp ages out after 7 days, and what is kept longer.
+// docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md
+const TMPFILES_CONF = readFileSync(`${REPO}infra/hetzner/tmpfiles.d/tmp.conf`, "utf8");
+const tmpfilesRules = TMPFILES_CONF.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
+
+describe("infra/hetzner/tmpfiles.d/tmp.conf", () => {
+  it("is byte-for-byte what provision.sh installs", () => {
+    expect(heredocBody(PROVISION, "TMPFILES_TMP_CONF")).toBe(TMPFILES_CONF);
+  });
+
+  it("ages /tmp at 7 days, keeps scratchpads at 30, and never ages tmux's socket", () => {
+    expect(tmpfilesRules).toEqual([
+      "D /tmp 1777 root root 7d",
+      "e /tmp/claude-* - - - 30d",
+      "e /tmp/playwright_chromiumdev_profile-* - - - 30d",
+      "e /tmp/com.google.Chrome.* - - - 30d",
+      "e /tmp/.org.chromium.Chromium.* - - - 30d",
+      "x /tmp/tmux-*",
+      "x /tmp/codex-bwrap-synthetic-mount-targets-*",
+      "x /tmp/codex-daemon-*",
+    ]);
+  });
+});
+
+const hasTmpfiles = spawnSync("systemd-tmpfiles", ["--version"]).status === 0;
+
+describe.skipIf(!hasTmpfiles)("the rules, run by systemd-tmpfiles itself", () => {
+  // The real file with its paths moved under a scratch root and its ages
+  // shrunk (7d to 2s, 30d to 1h), so a test can wait them out. ctime cannot be
+  // backdated, so waiting is the only honest way to make a file old.
+  it("removes what is idle, keeps a fresh file deep inside an old tree, a scratchpad and the tmux socket", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "tmpfiles-conf-"));
+    const conf = tmpfilesRules
+      .map((line) => line.replace(" /tmp", ` ${root}`).replace(/ 7d$/, " 2s").replace(/ 30d$/, " 1h"))
+      .map((line) => (line.startsWith("D ") ? line.replace("1777 root root", "0700 - -") : line))
+      .join("\n");
+    writeFileSync(path.join(root, "test.conf"), `${conf}\n`);
+    const p = (...parts: string[]) => path.join(root, ...parts);
+    for (const dir of ["fake-codex-Ab12Cd", "old-tree/deep", "claude-1000/proj/scratchpad", "tmux-1000"]) mkdirSync(p(dir), { recursive: true });
+    writeFileSync(p("fake-codex-Ab12Cd", "out.json"), "{}");
+    writeFileSync(p("claude-1000", "proj", "scratchpad", "loop.sh"), "while :; do sleep 60; done\n");
+    const socket = createServer();
+    await new Promise<void>((resolve) => socket.listen(p("tmux-1000", "default"), resolve));
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      writeFileSync(p("old-tree", "deep", "fresh.txt"), "written just now");
+      const ran = spawnSync("systemd-tmpfiles", ["--clean", p("test.conf")], { encoding: "utf8" });
+      expect(ran.status, ran.stderr).toBe(0);
+      expect(existsSync(p("fake-codex-Ab12Cd"))).toBe(false);
+      expect(existsSync(p("old-tree", "deep", "fresh.txt"))).toBe(true);
+      expect(existsSync(p("claude-1000", "proj", "scratchpad", "loop.sh"))).toBe(true);
+      expect(existsSync(p("tmux-1000", "default"))).toBe(true);
+    } finally {
+      socket.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
