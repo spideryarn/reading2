@@ -60,6 +60,8 @@ describe("which addresses are our own reading pages", () => {
   const OURS = [
     "https://www.spideryarn.com/read/why-trees-spya-k3m9qt",
     "http://www.spideryarn.com/read/why-trees-spya-k3m9qt",
+    "https://www.spideryarn.com:443/read/why-trees-spya-k3m9qt",
+    "http://www.spideryarn.com:80/read/why-trees-spya-k3m9qt",
     "https://spideryarn.com/read/why-trees-spya-k3m9qt",
     "http://spideryarn.com/read/why-trees-spya-k3m9qt",
     "https://WWW.Spideryarn.com/read/why-trees-spya-k3m9qt",
@@ -68,6 +70,9 @@ describe("which addresses are our own reading pages", () => {
     "https://www.spideryarn.com/read/why-trees-spya-k3m9qt?mode=glossary#spya-aaaaaa",
     "https://www.spideryarn.com/read/why-trees-spya-k3m9qt/",
     "https://www.spideryarn.com/read/public",
+    /* URL preserves escapes in `pathname`; an unreserved character may be
+       escaped without changing which HTTP path this names. */
+    "https://www.spideryarn.com/%72ead/why-trees-spya-k3m9qt",
   ];
   for (const address of OURS) {
     it(`refuses our reading page: ${address}`, () => {
@@ -88,6 +93,11 @@ describe("which addresses are our own reading pages", () => {
     "https://notspideryarn.com/read/why-trees",
     "https://spideryarn.com.example.org/read/why-trees",
     "https://blog.spideryarn.com/read/why-trees",
+    /* A non-default port is a different origin, even on the same hostname. */
+    "https://www.spideryarn.com:8443/read/why-trees-spya-k3m9qt",
+    /* Reserved slashes and path case are significant to the app router. */
+    "https://www.spideryarn.com/read%2Fwhy-trees-spya-k3m9qt",
+    "https://www.spideryarn.com/READ/why-trees-spya-k3m9qt",
     "",
     "not an address",
   ];
@@ -139,6 +149,11 @@ describe("POST /api/jobs with one of our own reading pages", () => {
     const got = await post({ url: "www.spideryarn.com/read/why-trees-spya-k3m9qt?key=abc" });
     expect(got.status).toBe(400);
     expect(got.body.error).toBe(OWN_READING_PAGE.message);
+    expect(got.body.error).toBe(
+      "That link opens an article already in Spideryarn, rather than the original article, so " +
+        "adding the same link will not help. Open the link to read it, or paste the article's " +
+        "original address to add your own copy. [jb-own-page]",
+    );
     /* The code is what the Add page reads to leave *Try again* off. */
     expect(got.body.error).toMatch(/\[jb-own-page\]$/);
     expect(slot.asked).toBe(0);

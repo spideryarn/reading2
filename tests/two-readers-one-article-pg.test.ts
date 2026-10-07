@@ -20,8 +20,9 @@
  * public ones.
  *
  * The fakes are the network (`fetch` on an address), Readability (`extract`),
- * the publisher's images (`assets`), the model under `structure` (a counted
- * fake at `streamMessage`) and the bucket, which is a `Map` in this process.
+ * the publisher's images (`assets`), the model under `structure` (a
+ * slug-marked fake at `streamMessage`) and the bucket, which is a `Map` in this
+ * process.
  *
  * **A queued job is finished by driving that job**, never by
  * `loadArticleIntoPg` or `scratchArticleInPg`: those open a job of their own,
@@ -69,23 +70,31 @@ import { pgReady } from "./helpers/pg-ready.js";
 import type { HeldRunLock } from "./helpers/run-lock.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
-/** What the structure call "returns". A root alone is a sound answer at any size. */
-const MODEL_ANSWER = JSON.stringify({
-  root: { title: "Why trees", gist: "A fixture that says things.", question: "What follows?" },
-});
-
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
-    streamMessage: () => ({
-      onText: () => {},
-      finalMessage: async () => ({
-        content: [{ type: "text", text: MODEL_ANSWER }],
-        stop_reason: "end_turn",
-        usage: { input_tokens: 7, output_tokens: 11 },
-      }),
-    }),
+    streamMessage: (_task: unknown, body: unknown) => {
+      /* The extracted prose carries its job's slug. Make the model answer carry
+         it too, so publication cannot swap or share the two model products and
+         still pass merely because both fake answers were byte-identical. */
+      const slug = JSON.stringify(body).match(/canary-of-([a-z0-9-]+)/)?.[1] ?? "fixture";
+      const answer = JSON.stringify({
+        root: {
+          title: "Why trees",
+          gist: `A model structure for ${slug}.`,
+          question: "What follows?",
+        },
+      });
+      return {
+        onText: () => {},
+        finalMessage: async () => ({
+          content: [{ type: "text", text: answer }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 7, output_tokens: 11 },
+        }),
+      };
+    },
   };
 });
 
@@ -577,6 +586,10 @@ describe("two readers and one article", () => {
         prose.some((block) => block.text.includes(canary(job.slug))),
         `the article at ${job.slug} was not published by the job enqueued for it`,
       ).toBe(true);
+      const root = revision.tree?.nodes[revision.tree.rootId];
+      expect(root?.gist, `the article at ${job.slug} holds another job's model answer`).toBe(
+        `A model structure for ${job.slug}.`,
+      );
     }
     pair = { a, b };
 

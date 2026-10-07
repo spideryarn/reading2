@@ -2577,15 +2577,15 @@ export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
  *
  * `blocked`, so the Add page offers no *Try again* under it
  * (src/web/AddPage.tsx § `worthRetrying`): the link is the request, and it
- * will be refused the same way. The reader still has two moves and the
- * sentence names both. Plan 261007f, E8.
+ * cannot be added. The reader still has two moves and the sentence names both.
+ * Plan 261007f, E8.
  */
 export const OWN_READING_PAGE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That link is an article already in Spideryarn, and adding the link again will be refused " +
-    "the same way. Open the link to read it, or paste the article's original address to add " +
-    "your own copy. [jb-own-page]",
+    "That link opens an article already in Spideryarn, rather than the original article, so " +
+    "adding the same link will not help. Open the link to read it, or paste the article's " +
+    "original address to add your own copy. [jb-own-page]",
 };
 
 export const UPLOAD_MISSING: ReaderFacingFailure = {

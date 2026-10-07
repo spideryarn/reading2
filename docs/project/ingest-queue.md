@@ -898,8 +898,9 @@ mints again if so. All three places `enqueue` mints go through it. Before that, 
 where its article row is created and Retry, which keeps the name, failed again.
 
 **Known and left open:** asking is not reserving. Two imports in flight that mint the same id at the
-same moment both hear "free", and the database refuses the second row. That is about 1 in 100
-million per import and does not grow with the library. No model has been paid at that point, because
+same moment both hear "free", and the database refuses the second row. For exactly two imports in
+that window, the chance is about 1 in 772 million; unlike collision with the existing library, it
+does not grow with the library's size. No model has been paid at that point, because
 the row is created when the job's draft opens, before any step. `lockOrCreateArticle`
 ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) turns the violation into a refusal
 in plain words, but **the reader does not see them**: a refusal thrown while a claim opens its draft
@@ -909,7 +910,8 @@ works at once. That gap belongs to every refusal thrown at draft open, the older
 belongs to another reader" included, and closing it is queued separately
 ([261007f](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
 Closing the window itself would take a unique index on the queue and a migration; passed over as
-machinery for a one-in-a-hundred-million event. `tests/short-id-collision.test.ts`.
+machinery for a roughly one-in-772-million collision between a particular pair of simultaneous
+imports. `tests/short-id-collision.test.ts`.
 
 ### What the short id changed about adoption, and it is not nothing
 

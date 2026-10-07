@@ -134,11 +134,12 @@ none has both copies public; none deletes one and checks the other still serves.
   - [x] **E1** both enqueue the same address through `enqueue` (`src/jobs.ts`): two jobs, two
         different slugs, each owned by its asker; publish both; `slugForUrlKey` as A returns A's
         slug and as B returns B's; a third paste by A adopts A's and never B's.
-  - [x] **E1, AI is separate**: write the same checkpoint namespace and key for both article ids
-        with different marker values; each read through its own article returns its own marker.
-        Separately, B cannot resolve A's article id through an owner lookup. (Not "write A, read
-        through B's slug": the store's own request check rejects that before it asks Postgres, so
-        it would pass for the wrong reason. Sol F4.)
+  - [x] **E1, AI is separate**: the fake structure model returns the job's slug in its answer and
+        each published tree contains its own job's answer. The same checkpoint namespace and key
+        are also written for both article ids with different marker values; each read through its
+        own article returns its own marker. Separately, B cannot resolve A's article id through an
+        owner lookup. (Not "write A, read through B's slug": the store's own request check rejects
+        that before it asks Postgres, so it would pass for the wrong reason. Sol F4.)
   - [x] **E13** A and B `Promise.all`-enqueue the same address: two active jobs, two slugs. A's
         fails and is retried: the retry keeps A's name and never touches B's. One forced case of
         two requests wanting the same full slug, to exercise `jobs_reserved_slug`, which random
@@ -207,7 +208,8 @@ none has both copies public; none deletes one and checks the other still serves.
     against Postgres, an article holding id X and a draft opened for `other-base-X` gets the plain
     refusal.
   - **What is left open, on purpose:** two imports in flight that mint the same id at the same
-    moment (about 1 in 100 million per import, and it does not grow with the library). It fails
+    moment (about 1 in 772 million for a particular pair; unlike collision with existing articles,
+    it does not grow with the library). It fails
     before any model is paid, and a fresh paste fixes it. Closing it needs a unique index on the
     queue and a migration. **Sol still asks for that; overruled because** Opus, reading the code,
     found no paid work is at risk (the article row is created when the job's draft opens, before
@@ -341,10 +343,11 @@ is refused with a sentence that says what to do instead (E8).
   - **E8** built as planned: `isOwnReadingPage` (`src/own-reading-page.ts`), checked in
     `POST /api/jobs` before a slot. The sentence is `OWN_READING_PAGE` in `src/messages.ts`,
     registered as one Retry cannot help, so the Add page shows it with no *Try again* under it:
-    *"That link is an article already in Spideryarn, and adding the link again will be refused the
-    same way. Open the link to read it, or paste the article's original address to add your own
-    copy."* (Reworded from the plan's draft because the message registry requires a sentence with
-    no Retry to say that retrying comes back the same.) The probe: `/read/public` on production is
+    *"That link opens an article already in Spideryarn, rather than the original article, so
+    adding the same link will not help. Open the link to read it, or paste the article's original
+    address to add your own copy."* (Reworded from the plan's draft because the message registry
+    requires a sentence with no Retry to say why the same request cannot work.) The probe:
+    `/read/public` on production is
     the app shell, a default head and an empty `<div id="root">`, so there was never prose to
     import. Not caught, on purpose: a short link that redirects to one of our pages, and preview
     hosts.

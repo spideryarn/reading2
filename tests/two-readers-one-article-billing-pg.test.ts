@@ -127,7 +127,7 @@ await pgReady({
   ],
 });
 
-/** The two readers. Minted randomly: tests/fixture-ids.test.ts refuses a uuid two files share. */
+/** Fixed reader ids unique to this file; tests/fixture-ids.test.ts refuses reuse elsewhere. */
 const A = "dbd38869-cc97-475e-b4d5-0d690338daad" as OwnerId;
 const B = "0ee81fe4-6630-450f-9d3a-97750838f812" as OwnerId;
 

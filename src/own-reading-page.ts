@@ -24,6 +24,18 @@ import { PUBLIC_ORIGIN } from "./urls.js";
 const WWW_HOST = new URL(PUBLIC_ORIGIN).hostname;
 const OUR_HOSTS: ReadonlySet<string> = new Set([WWW_HOST, WWW_HOST.replace(/^www\./, "")]);
 
+/**
+ * URL leaves escapes in `pathname`. Decode only characters whose escaped and
+ * literal forms are equivalent in a URL path; decoding `%2F`, for example,
+ * would turn one path segment into two and classify a different route.
+ */
+function decodeUnreserved(pathname: string): string {
+  return pathname.replace(/%([0-9a-f]{2})/gi, (encoded, hex: string) => {
+    const character = String.fromCharCode(Number.parseInt(hex, 16));
+    return /^[A-Za-z0-9._~-]$/.test(character) ? character : encoded;
+  });
+}
+
 export function isOwnReadingPage(address: string): boolean {
   let parsed: URL;
   try {
@@ -35,5 +47,11 @@ export function isOwnReadingPage(address: string): boolean {
   /* `new URL` lower-cases the host; a trailing dot is the same host spelled in
      full, and it keeps that. */
   const host = parsed.hostname.replace(/\.$/, "");
-  return OUR_HOSTS.has(host) && /^\/read\/[^/]/.test(parsed.pathname);
+  /* The default port has already become an empty string. A non-default port is
+     a different origin, even when its hostname spells ours. */
+  return (
+    parsed.port === "" &&
+    OUR_HOSTS.has(host) &&
+    /^\/read\/[^/]/.test(decodeUnreserved(parsed.pathname))
+  );
 }

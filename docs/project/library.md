@@ -1395,12 +1395,17 @@ That is what happens, and this section is the one place that says so.
   own**, when theirs was matched by DOI or arXiv id and yours only by title
   ([citations.md](citations.md)). Between equally sure matches, yours wins.
 
-Two test files run all of this with two accounts against Postgres, and each case was watched going
-red with its guard removed:
+The two-reader import, sharing, deletion, upload, billing, private-link and per-reader-state cases
+run with two accounts against Postgres:
 [`tests/two-readers-one-article-pg.test.ts`](../../tests/two-readers-one-article-pg.test.ts)
 (import, sharing, deleting, uploads, a name from before short ids) and
 [`tests/two-readers-one-article-billing-pg.test.ts`](../../tests/two-readers-one-article-billing-pg.test.ts)
-(charging, the cheap bulk import and *Read this*, private links).
+(charging, the cheap bulk import and *Read this*, private links). Their owner-scoping guards for
+article lookup, deletion, public resolution, usage, cheap-import duplicates, share links and AI
+cost attribution were each watched going red when removed
+([261007f § Progress](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
+The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Citations ordering is pinned
+in `tests/cited-in-spideryarn.test.ts`.
 
 ## When this becomes Postgres
 
