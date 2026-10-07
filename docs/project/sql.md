@@ -28,6 +28,13 @@ The pattern to copy is `revision_step_runs_step`, the CHECK that lists the pipel
 has caught three separate omissions ([database.md](database.md), `drizzle/0031_sketch.sql`), each
 time at the insert rather than in a job dying somewhere far away.
 
+**Except a size limit.** A CHECK on how long a text column may be is not worth its keep, or if it
+stays, it sits far above anything the app allows, so that it only ever catches a runaway bug and
+never needs a migration when the product limit moves. Greg, 2026-10-07, after raising Feedback's
+limit took one: *"I don't see the point of including a character/size limit on fields. or if we're
+going to, make it very high"*. The product's limit lives in the code (the dialog, the route); the
+shape CHECKs (an id's format, an allowed value, empty or not) stay as they are.
+
 ## Referential integrity, on purpose and by name
 
 A row that points at another row gets a foreign key. Every `owner_id` references `auth.users(id)`;

@@ -40,14 +40,14 @@
  * never split by account, and never given one.
  */
 import { mergeIncidents, type IncidentSighting } from "../../usage-incident-merge.js";
-import type { UsageHistorySample, UsageHistoryView } from "./usage-history-client";
+import { isGeneralCodexBucket } from "./codex-buckets";
+import type { CodexRecordedObservationView, UsageHistorySample, UsageHistoryView } from "./usage-history-client";
 
 export type Span = { fromMs: number; toMs: number };
 export type Point = { atMs: number; value: number };
 
-/** One window's line for one account. Breaks are where the line must not join. */
-export type WindowSeries = {
-  window: string;
+/** One drawable line. Breaks are where the line must not join. */
+export type Line = {
   points: Point[];
   /** Where the line is cut, and why — rendered as a gap, never interpolated. */
   breaks: (Span & { why: string })[];
@@ -63,6 +63,47 @@ export type WindowSeries = {
    * that already describe when a line must break.
    */
   runs: Point[][];
+};
+
+/** One Claude window's line for one account. */
+export type WindowSeries = Line & { window: string };
+
+/**
+ * One Codex window's line: one account, one bucket, one window **duration**.
+ *
+ * Keyed by duration and not by `slot`, because `primary` and `secondary` are
+ * positions in the provider's payload, and the same position can carry five
+ * hours in one bucket and seven days in another (usage-history.md § The Codex
+ * subscription reading).
+ */
+export type CodexSeries = Line & {
+  family: "codex";
+  accountId: string;
+  limitId: string;
+  limitName: string | null;
+  /** The bucket about the whole subscription rather than one model. */
+  general: boolean;
+  windowMinutes: number;
+};
+
+export type CodexUnknownWindow = {
+  limitId: string;
+  limitName: string | null;
+  windowMinutes: number | null;
+  slot: "primary" | "secondary" | null;
+  why: string;
+};
+
+/**
+ * The Codex observation each record carries beside its Claude pass — of the one
+ * login the daemon reads, not of every registered account.
+ */
+export type CodexPlot = {
+  series: CodexSeries[];
+  /** Windows that could not be drawn, named with the reason. Never zero. */
+  unknownWindows: CodexUnknownWindow[];
+  /** Records whose Codex arm carried no drawable, attributed window. */
+  notObserved: number;
 };
 
 export type AccountSeries = {
@@ -110,6 +151,7 @@ export type UsagePlot = {
   fromMs: number;
   toMs: number;
   accounts: AccountSeries[];
+  codex: CodexPlot;
   incidents: PlacedIncident[];
   /** Windows the producer could not read, with its own reason. Named, never dropped, never zero. */
   unknownWindows: { window: string; why: string }[];
@@ -160,7 +202,10 @@ export function plotUsageHistory(view: Extract<UsageHistoryView, { kind: "histor
      used the same byte, and `no-raw-nul-bytes.test.ts` was the only thing that
      could see it. `seriesFor` already caches one object per pair, so identity
      is the key and there is nothing to parse. */
-  let live = new Set<WindowSeries>();
+  let live = new Set<Line>();
+  const codexSeries = new Map<string, CodexSeries>();
+  const codexUnknown = new Map<string, CodexUnknownWindow>();
+  let codexNotObserved = 0;
 
   for (const sample of view.samples) {
     const atMs = sourceMs(sample);
@@ -212,17 +257,28 @@ export function plotUsageHistory(view: Extract<UsageHistoryView, { kind: "histor
     }
 
     const pass = sample.line.pass;
+    const nowLive = new Set<Line>();
+
+    /* THE CODEX READING RIDES IN THE SAME RECORD, so every record-level cut
+       above has already cut its lines. What it does NOT share is the Claude
+       pass's fate: a Claude collector failure says nothing about the Codex
+       fetch made beside it, and that record still carries its own observation. */
+    if (!codexInto(sample.line.codex, atMs, codexSeries, codexUnknown, nowLive)) codexNotObserved += 1;
+
     if (pass.kind !== "pass") {
-      /* A collector failure is a real event and breaks the line: we did not
-         observe the account during it. */
-      for (const series of live) cut(series, previousAtMs, atMs, "the usage pass failed");
-      live = new Set();
+      /* A collector failure is a real event and breaks the Claude lines: we did
+         not observe the account during it. */
+      for (const series of live) {
+        if (!nowLive.has(series)) {
+          cut(series, previousAtMs, atMs, isCodex(series) ? "no Codex reading for this window" : "the usage pass failed");
+        }
+      }
+      live = nowLive;
       previousAtMs = atMs;
       previousDue = dueWithinMs(sample);
       continue;
     }
 
-    const nowLive = new Set<WindowSeries>();
     if (pass.cache.kind === "attributed") {
       for (const window of pass.cache.windows) {
         if (window.kind === "unknown") {
@@ -241,7 +297,9 @@ export function plotUsageHistory(view: Extract<UsageHistoryView, { kind: "histor
     /* An `unattributed` or `unknown` cache carries no windows at all, so every
        live line simply stops — a break, never a zero. */
     for (const series of live) {
-      if (!nowLive.has(series)) cut(series, previousAtMs, atMs, "no reading for this window");
+      if (!nowLive.has(series)) {
+        cut(series, previousAtMs, atMs, isCodex(series) ? "no Codex reading for this window" : "no reading for this window");
+      }
     }
     live = nowLive;
 
@@ -264,6 +322,7 @@ export function plotUsageHistory(view: Extract<UsageHistoryView, { kind: "histor
       accountUuid,
       windows: [...windows.values()],
     })),
+    codex: { series: [...codexSeries.values()], unknownWindows: [...codexUnknown.values()], notObserved: codexNotObserved },
     incidents: placeIncidents(mergeIncidents(sightings), view.fromMs, view.toMs),
     unknownWindows: [...unknownWindows.entries()].map(([window, why]) => ({ window, why })),
     recorderGaps,
@@ -297,7 +356,136 @@ function seriesFor(
   return series;
 }
 
-function cut(series: WindowSeries, fromMs: number | null, toMs: number | null, why: string): void {
+function isCodex(line: Line): line is CodexSeries {
+  return "family" in line && line.family === "codex";
+}
+
+/**
+ * Add one record's Codex observation to its lines. Returns false when the record
+ * said nothing drawable about Codex at all.
+ *
+ * - **unknown, or a legacy line with none**, draws nothing, so every live Codex
+ *   line stops there — a break, never a zero.
+ * - **No account named** forms no series, as an unattributed Claude cache forms
+ *   none: a line keyed on "some account" would join across a login swap.
+ * - **An unknown window** is a named row, never a point.
+ * - **Ambiguity draws nothing**, as the live card refuses to choose: two buckets
+ *   with one id, two windows in one slot, or two windows of one duration.
+ * - **The general bucket under a spend control** is withheld, as the live card
+ *   withholds it: its percentage is not the headroom while that control holds.
+ *
+ * Anything withheld is simply not in `nowLive`, so a line it would have
+ * continued is cut there by the caller.
+ *
+ * The point sits at the RECORD's source instant — the pass time, the same
+ * instant the Claude points and every cut use — not the observation's
+ * `readAt`, which is when the Codex reply arrived. A point on a second clock
+ * could land on the far side of a cut computed on the first. Validity is not
+ * re-decided against either: the stored arm is drawn as it stands.
+ */
+function codexInto(
+  observation: CodexRecordedObservationView | undefined,
+  atMs: number,
+  seriesByKey: Map<string, CodexSeries>,
+  unknown: Map<string, CodexUnknownWindow>,
+  nowLive: Set<Line>,
+): boolean {
+  if (observation === undefined || observation.kind !== "value" || observation.accountId === null) return false;
+  const accountId = observation.accountId;
+  const name = (
+    bucket: { limitId: string; limitName: string | null },
+    window: { windowMinutes: number | null; slot: "primary" | "secondary" | null },
+    why: string,
+  ): void => {
+    unknown.set(JSON.stringify([bucket.limitId, window.slot, window.windowMinutes, why]), {
+      limitId: bucket.limitId,
+      limitName: bucket.limitName,
+      windowMinutes: window.windowMinutes,
+      slot: window.slot,
+      why,
+    });
+  };
+  const bucketCount = new Map<string, number>();
+  for (const bucket of observation.buckets) bucketCount.set(bucket.limitId, (bucketCount.get(bucket.limitId) ?? 0) + 1);
+  let drewAny = false;
+
+  for (const bucket of observation.buckets) {
+    if ((bucketCount.get(bucket.limitId) ?? 0) > 1) {
+      name(bucket, { windowMinutes: null, slot: null }, `the reading carried duplicate ${bucket.limitId} buckets, so neither was drawn`);
+      continue;
+    }
+    if (isGeneralCodexBucket(bucket.limitId) && (bucket.spendControlReached !== false || bucket.individualLimit !== null)) {
+      name(
+        bucket,
+        { windowMinutes: null, slot: null },
+        bucket.spendControlReached !== false
+          ? "general usage is not drawn while spend-control state was reached or unavailable"
+          : "general usage is not drawn while an individual spend limit was reported",
+      );
+      continue;
+    }
+    const slotCount = new Map<string, number>();
+    const durationCount = new Map<number, number>();
+    for (const window of bucket.windows) {
+      slotCount.set(window.slot, (slotCount.get(window.slot) ?? 0) + 1);
+      /* An unknown arm can still name its duration. It makes a value arm of
+         that duration ambiguous too; counting only values would draw across it. */
+      if (window.windowMinutes !== null) {
+        durationCount.set(window.windowMinutes, (durationCount.get(window.windowMinutes) ?? 0) + 1);
+      }
+    }
+    const valuesByMinutes = new Map<number, number[]>();
+    for (const window of bucket.windows) {
+      if ((slotCount.get(window.slot) ?? 0) > 1) {
+        name(bucket, { windowMinutes: null, slot: window.slot }, `this record carried duplicate ${window.slot} windows, so neither was drawn`);
+        continue;
+      }
+      if (window.kind === "unknown") {
+        name(bucket, window, window.why);
+        continue;
+      }
+      const values = valuesByMinutes.get(window.windowMinutes) ?? [];
+      values.push(window.usedPercent);
+      valuesByMinutes.set(window.windowMinutes, values);
+    }
+    for (const [windowMinutes, values] of valuesByMinutes) {
+      const value = values[0];
+      if (durationCount.get(windowMinutes) !== 1 || values.length !== 1 || value === undefined) {
+        name(
+          bucket,
+          { windowMinutes, slot: null },
+          `this record carried two ${windowMinutes}-minute windows for this bucket, so neither was drawn`,
+        );
+        continue;
+      }
+      /* A JSON tuple as the key, so no separator byte can collide with an id. */
+      const key = JSON.stringify([accountId, bucket.limitId, windowMinutes]);
+      let series = seriesByKey.get(key);
+      if (series === undefined) {
+        series = {
+          family: "codex",
+          accountId,
+          limitId: bucket.limitId,
+          limitName: bucket.limitName,
+          general: isGeneralCodexBucket(bucket.limitId),
+          windowMinutes,
+          points: [],
+          breaks: [],
+          runs: [[]],
+        };
+        seriesByKey.set(key, series);
+      }
+      const point = { atMs, value };
+      series.points.push(point);
+      (series.runs.at(-1) ?? series.runs[series.runs.push([]) - 1])?.push(point);
+      nowLive.add(series);
+      drewAny = true;
+    }
+  }
+  return drewAny;
+}
+
+function cut(series: Line, fromMs: number | null, toMs: number | null, why: string): void {
   if (fromMs === null) return;
   series.breaks.push({ fromMs, toMs: toMs ?? fromMs, why });
   /* And start a fresh run, so the renderer cannot rejoin what this just cut. */

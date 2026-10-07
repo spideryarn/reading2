@@ -158,7 +158,7 @@ Reports say that pool still does not let a hosted third-party app use subscripti
 There is no "Sign in with Claude" for billing. **A pasted Anthropic API key is the supported way
 in**, but it
 bills at API rates, and it is a direct-to-Anthropic wire that
-[ai-gateway.md § The three calls allowed round the outside](../project/ai-gateway.md#the-three-calls-allowed-round-the-outside-and-the-test-that-keeps-them-to-three)
+[ai-gateway.md § The calls allowed round the outside](../project/ai-gateway.md#the-calls-allowed-round-the-outside-and-the-test-that-keeps-them-declared)
 allows for one eval and nothing else.
 
 ### 5. Google AI Pro or Ultra: forbidden, according to news reports

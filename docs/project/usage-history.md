@@ -94,6 +94,19 @@ full point. A threshold therefore flaps without hysteresis, and a one-point drop
 refund. The measurements and source details are in
 [plan 260909d](../plans/260909d-read-the-codex-subscription-usage-limits-and-show-them-beside-claude-s.md#stage-1-research-where-the-number-lives-done).
 
+### The Codex chart
+
+Each record carries that Codex observation beside its Claude pass, and the tab draws it as a second
+chart under its own heading — the general bucket's windows drawn, the model-specific buckets in a
+closed `<details>`, as the live sections above them are
+([261007n](../plans/261007n-usage-limits-tab-codex-24-hour-graph-beside-claude.md)). The rules below
+hold for it too, with three of its own: a line is one account, one bucket and one window
+**duration**; a failed Claude pass does not cut a Codex line, because the record still carries its
+own Codex reading; and anything the live card refuses to choose between — two buckets with one id,
+two windows in one slot or of one duration, a general bucket under a spend control — is a named
+row, not a point. Points sit at the record's pass time, not the Codex `readAt`, so that every cut
+is on one clock.
+
 ## What the chart may not claim
 
 Each of these is a way a usage chart is confidently wrong, and each has a test.

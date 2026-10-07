@@ -47,7 +47,7 @@
      their own (docked chat, the Ask chip, the revealed gutter, the dock
      drawer, the mode herald, chat's latest pill): each writes its dark alpha
      times this, so dark is the number it always was and light is softened
-     by the same ratio as the three tokens (plan 261007m S4). One number, not
+     by roughly the same ratio as the three tokens (plan 261007m S4). One number, not
      a token per silhouette. tests/elevation-shadows-soften-in-light.test.ts
      holds every outer black shadow to one or the other. */
   --shadow-strength: 1;

@@ -40,7 +40,7 @@ import {
  *
  * | project | what it gets | where it runs |
  * |---|---|---|
- * | `private-postgres` | every file the scan finds, bar the four below, plus the four it cannot see (`LANES_BEYOND_THE_SCAN`, all of them Storage) | a database minted for this run alone, dropped afterwards. **The bucket is shared** — docs/project/testing.md § Storage is not isolated |
+ * | `private-postgres` | every file the scan finds, bar the four below, plus the five it cannot see (`LANES_BEYOND_THE_SCAN`, all of them Storage) | a database minted for this run alone, dropped afterwards. **The bucket is shared** — docs/project/testing.md § Storage is not isolated |
  * | `shared-services` | the four bound to a Supabase service that reads `postgres` | the stack's own `postgres`, as before |
  * | `unit` | everything else | nowhere: `DATABASE_URL` **and** `SUPABASE_URL` are **poisoned**, so neither Postgres nor Storage answers |
  *
