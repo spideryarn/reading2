@@ -550,17 +550,22 @@ describe("the schema keeps the promises the plan makes", () => {
           unique: c.unique,
           partial: c.where !== undefined,
           method: c.method ?? "btree",
-          keys: c.columns.map((col) =>
-            is(col, SQL)
-              ? { column: null, desc: false, nullsFirst: false }
-              : {
-                  column: col.name,
-                  desc: col.indexConfig.order === "desc",
-                  /* Drizzle's default, and the trap: absent means LAST, for
-                     both directions (drizzle-kit's serializer, `nulls ?? "last"`). */
-                  nullsFirst: (col.indexConfig.nulls ?? "last") === "first",
-                },
-          ),
+          keys: c.columns.map((col) => {
+            if (is(col, SQL)) return { column: null, desc: false, nullsFirst: false };
+            // Drizzle types these as partial SQL or column objects. Reject an
+            // incomplete column instead of casting past that type or silently
+            // comparing undefined names/order with the catalog.
+            if (!("name" in col) || typeof col.name !== "string" || !("indexConfig" in col) || !col.indexConfig) {
+              throw new Error(`an index key on ${config.name} has no column configuration`);
+            }
+            return {
+              column: col.name,
+              desc: col.indexConfig.order === "desc",
+              /* Drizzle's default, and the trap: absent means LAST, for
+                 both directions (drizzle-kit's serializer, `nulls ?? "last"`). */
+              nullsFirst: (col.indexConfig.nulls ?? "last") === "first",
+            };
+          }),
         });
       }
     }
@@ -708,12 +713,24 @@ describe("the schema keeps the promises the plan makes", () => {
 
       await expectViolation(c, /ai_calls_provider_account_known/, () => insert({ provider_account: "azure" }));
       await expectViolation(c, /ai_calls_cost_source_known/, () => insert({ cost_source: "guessed" }));
-      // Both numbers; a provider row with neither; an unpriced row with one.
-      await expectViolation(c, /ai_calls_one_cost_source/, () =>
-        insert({ cost_source: "provider", credits_used_nanos: 5, computed_cost_nanos: 5 }),
-      );
-      await expectViolation(c, /ai_calls_one_cost_source/, () => insert({ cost_source: "provider" }));
-      await expectViolation(c, /ai_calls_one_cost_source/, () => insert({ credits_used_nanos: 5 }));
+      // All three sources against all four money-presence shapes. Keep the
+      // price-version rule satisfied so it cannot mask this rule's refusal.
+      for (const source of ["provider", "computed", "none"] as const) {
+        for (const credits of [false, true]) {
+          for (const computed of [false, true]) {
+            const allowed = credits === (source === "provider") && computed === (source === "computed");
+            const write = () =>
+              insert({
+                cost_source: source,
+                credits_used_nanos: credits ? 5 : null,
+                computed_cost_nanos: computed ? 5 : null,
+                price_version: source === "computed" ? "2026-10-01" : null,
+              });
+            if (allowed) await write();
+            else await expectViolation(c, /ai_calls_one_cost_source/, write);
+          }
+        }
+      }
       // A computed figure with no version, and a version on a figure that was not computed.
       await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
         insert({ cost_source: "computed", computed_cost_nanos: 5 }),
@@ -721,7 +738,8 @@ describe("the schema keeps the promises the plan makes", () => {
       await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
         insert({ cost_source: "provider", credits_used_nanos: 5, price_version: "2026-10-01" }),
       );
-      // An upstream figure off the BYOK pocket: not BYOK, and not OpenRouter.
+      // An upstream figure off the BYOK pocket: not BYOK, not OpenRouter,
+      // or not provider-priced. Each predicate must independently refuse it.
       await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
         insert({ cost_source: "provider", credits_used_nanos: 5, byok_upstream_nanos: 7 }),
       );
@@ -730,6 +748,18 @@ describe("the schema keeps the promises the plan makes", () => {
           provider_account: "anthropic",
           cost_source: "provider",
           credits_used_nanos: 5,
+          is_byok: true,
+          byok_upstream_nanos: 7,
+        }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({ is_byok: true, byok_upstream_nanos: 7 }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({
+          cost_source: "computed",
+          computed_cost_nanos: 5,
+          price_version: "2026-10-01",
           is_byok: true,
           byok_upstream_nanos: 7,
         }),

@@ -3,11 +3,12 @@
 Cluster **C7** of the [seventh sweep](261006m-seventh-codebase-sweep-depth-umbrella.md). Its
 § What the review changed is binding here (U3, U11, U13, U16, U22).
 
-**Status, 2026-10-07:** stages 1 to 6, an unplanned 6b, and 8 are built, one commit each, in a
-worktree. **Stage 7 is not built**: its constraint breaks 35 test files, two of which exist to test
-the very rows it forbids ([§ Stage 7](#stage-7-not-built-and-why)). Not pushed and **not applied to
-production**: a GPT Sol review comes first, and production is the Overseer's.
-[§ Waiting to be applied to production](#waiting-to-be-applied-to-production) is the list.
+**Status, 2026-10-07:** stages 1 to 6, an unplanned 6b, and 8 are built, one commit each, reviewed
+by GPT Sol ([§ Review status](#review-status)) and on `dev`. **Stage 7 is not built**: its
+constraint breaks 35 test files, two of which exist to test the very rows it forbids
+([§ Stage 7](#stage-7-not-built-and-why)). **Not applied to production**, which is the Overseer's:
+[§ Waiting to be applied to production](#waiting-to-be-applied-to-production) is the list, and
+[§ Before applying to production](#before-applying-to-production) is what to do first.
 
 ## Goal
 
@@ -370,21 +371,20 @@ Three reasons this is past a mechanical sweep, which is where the brief said to 
 1. **Two of them test the rows the constraint forbids.** `tests/library-log-volume.test.ts` is
    about how much `scalarsForShelf` logs when published revisions have no scalars, and
    `tests/store-shelf-reads.test.ts` has *"recomputes the scalars, loudly, when a published
-   revision has none"*. The shelf reads only current published revisions, so once the CHECK exists
-   that fallback cannot be reached by any row, and those tests cannot be re-pointed at a
-   non-published status and still mean anything. Keeping the fallback (the brief says to) and
-   keeping its tests honest (the brief says to) cannot both be done with the constraint in place.
-   That is a choice: drop the fallback and its tests with the constraint, or keep all three as they
-   are.
+   revision has none"*. A validated CHECK would prevent those published fixtures in a database
+   built from the current chain. Re-pointing them at a non-published status would lose what they
+   test. The defensive fallback can stay alongside the CHECK, but testing it would then need
+   controlled legacy-schema fixtures or another test boundary. Designing that is beyond this
+   stage; removing the fallback is not a prerequisite for adding the CHECK.
 2. **It collides.** U13 puts cluster C5 before this stage for `tests/store-parity-referee.test.ts`,
-   and C5 has not landed on `dev`.
+   and C5 had not landed on `dev` when this stage's fixture run was made.
 3. **Thirty-five files, most of them other clusters' subjects**, each needing four numbers that are
    true of its fixture rather than four zeros.
 
-**What it would take:** one decision (reason 1), then a shared fixture helper so a direct insert
-of a published revision cannot forget the numbers, then the migration, which is one generated
-statement. The `pg.ts` comment that says this *"needs a migration"* is left as it is, because it
-is still true.
+**What it would take:** separate work on the fallback's test boundary (reason 1), a shared fixture
+helper so a direct insert of a published revision cannot forget the numbers, then the migration,
+which is one generated statement. The `pg.ts` comment that says this *"needs a migration"* is
+left as it is, because it is still true.
 
 ## Stage 8: comments that had stopped being true
 
@@ -398,15 +398,57 @@ code before and after rewriting. `src/db/schema.ts` unless noted:
 | `article_revisions.quiz` | *"No attempts table beside it"* | `quiz_attempts`, since 2026-10-05. |
 | `article_revisions_nav_label_status` and `revision_step_runs_step` | `generate` *"knows nothing about a CHECK expression"* | It diffs the expression and writes the DROP and ADD (stage 2's migration is one). What it cannot see is the TypeScript union, so the literal is still a second copy. |
 | `queue_state` | *"The singleton row is the guarantee"* of concurrency one | A lock every claim takes; `claim` counts running jobs inside it against `maxRunning`. `running_job_id` and `updated_at` are written by nothing. |
-| `revision_step_runs` header | `stepIsDone` *"is an `access()` existence check"* | Interruption, then presence, then the stamp. `hashBlocks` lives in `src/source-hash.ts`. |
+| `revision_step_runs` header | `stepIsDone` *"is an `access()` existence check"* | Interruption, then presence, then the stamp. Each step fingerprints its own inputs; the block hash includes classification and frames ambiguous delimiters (`src/source-hash.ts`). |
 | `ai_calls` header | *"No `attempt` column"* | There is one, since 2026-10-06. |
 | `ai_calls.wire` | *"`messages`, `chat` or `embeddings`"* | Seven members; the comment points at `Wire` in `src/models.ts` and no longer lists them. |
-| `referee_claims.claims_omitted` | the route *"writes `claims` and `model` and nothing else today"* | It writes `claimsOmitted` on every finished run. |
+| `referee_claims.claims_omitted` | the route *"writes `claims` and `model` and nothing else today"* | It writes `claimsOmitted` on every successful run. |
 | `feedback.screenshot` | *"400,000"* | 2,000,000, in the constant and in `feedback_screenshot_size`. |
 | `src/store/article-rows.ts` § `queue_state`, both entries | *"One row saying which job is running"* | A lock row that records nothing. |
 | `referee_claims`, the withheld CHECK | the filesystem store could not refuse it | Rewritten in stage 3, with the CHECK. |
 
 The `comments.thread_id` note is history that says it is history, and stays.
+
+## Review status
+
+**GPT Sol's verdict on the built code:** *"ship with these fixes applied, after production
+preflight and with bounded migration lock waits. No P0 defect found."* Its
+[answer](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies-code-review-sol.md)
+and the [prompt](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies-code-review-prompt.md)
+are beside this file. It changed no migration SQL, snapshot or journal.
+
+| | Finding | What happened |
+|---|---|---|
+| C1 | P1, conditional. The index build takes `SHARE` on `revision_blocks` and holds it until all seven commit; a long transaction on a later table prolongs that; the runner sets no lock timeout. | **Not fixed in code.** Written into [§ Before applying to production](#before-applying-to-production) as a condition on whoever applies. Production duration is still unmeasured. |
+| C2 | P2. The new index inventory in `tests/db-schema.test.ts` did not typecheck (three errors). | Fixed with a guard that throws on an index key with no column configuration. `npm run typecheck` is green. |
+| C3 | P2. The money-CHECK tests admitted a wrong CHECK: `ai_calls_byok_upstream_only` without its `cost_source = 'provider'` predicate passed them. | Fixed: two more BYOK refusals and the whole source by money-presence matrix. **Reasoned, not watched failing**: the test writes rows against the real constraint, and the constraint was not altered to see it go red. The two added rows (`is_byok` with `cost_source` `none`, and with `computed`) are refused by that predicate and by no other; the two older ones are refused by `is_byok` and by `provider_account`. |
+| C4 | P3. Four comments were inaccurate. | Fixed, each checked against the code: `hashBlocks` hashes role and treatment and frames ambiguous delimiters (`src/source-hash.ts`); `claimsOmitted` is written on the `done` patch only (`src/routes.ts` § `runRefereeClaims`). |
+| C5 | P3. `database.md` said all three schema checks derive from the declarations. | Fixed: the money tests name their five rules. |
+| C6 | P3. This plan implied stage 7 needs the defensive fallback removed. | Fixed in § Stage 7: both can coexist; what is missing is a test boundary for legacy rows. |
+
+**Run against Postgres after the review, 2026-10-07** (Sol had no database, so its test changes
+were unrun until then). Each test run mints a private database and applies the whole chain to it:
+
+- `tests/db-schema.test.ts`, `migration-reconciliations`, `action-tables-have-created-at`,
+  `created-at-on-action-tables`, `db-referee-criteria`: 5 files, 111 tests, all pass.
+- The referee criteria and claims stores and routes, the chat store, the upload and source-guess
+  suites, `store-migration-registry`: 15 files, 224 tests, all pass.
+- `npm run db:check` against the shared local database: no drift (49 tables, 663 columns).
+  `npm run db:chain`: fine. `npm run db:generate -- --allow-empty`: no schema changes.
+
+**Left:**
+
+- **Stage 7, the published-scalars CHECK, was stopped and stays stopped.** 35 of 124 test files
+  insert published revisions without the four numbers, and two tests exist to cover exactly the
+  rows it forbids ([§ Stage 7](#stage-7-not-built-and-why)). Sol: stopping is right, and a weaker
+  CHECK would enforce a different invariant.
+- **Stage 6b was outside the original plan and was kept.** Sol: sound as its own migration.
+- **NEW1**, the ordering bug in `scripts/db-reown.ts`: held by the
+  [umbrella](261006m-seventh-codebase-sweep-depth-umbrella.md) (U4), not touched here.
+- **The questions for the owner**, in the umbrella's § For Greg and the investigations' § For the
+  owner: not answered here.
+- **Unmeasured:** five drizzle-generated indexes are `DESC NULLS LAST`
+  ([§ Stage 6b](#stage-6b-two-declared-indexes-that-were-not-the-ones-in-the-database)). Whether
+  the queries that order by those columns can walk them was not checked.
 
 ## Waiting to be applied to production
 
@@ -415,7 +457,17 @@ In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
 **They will run as one transaction**: drizzle's migrator wraps every pending file in one
 (`scripts/deploy-checks.ts` says so, from the installed source), so either all of these land or
 none does. The first holds a lock that blocks writes to `revision_blocks` until that transaction
-commits; the others are metadata changes on tables of 4 to 200 rows.
+commits. `CREATE INDEX` takes `SHARE` on `revision_blocks`; the CHECK changes take
+`ACCESS EXCLUSIVE` and scan their small tables, and the column change takes `ACCESS EXCLUSIVE`
+without rewriting old rows. The ordinary index drop also takes `ACCESS EXCLUSIVE` on
+`chat_messages`. Those locks last until commit. The criterion's DROP then ADD has no visible
+unenforced window: other sessions cannot access the table between them.
+
+The few-second local run is not a production duration guarantee. A long transaction on any later
+table can leave this run waiting while it already blocks block writes. The runner supplies no
+lock timeout of its own; inspect production's active transactions and locks immediately before
+applying, and bound lock waits on the migration connection. This review did not measure production
+lock waits or index-build time.
 
 1. `20261007005448_revision_blocks_article_block_index`
 2. `20261007010230_referee_criteria_shape_all_or_none`
@@ -425,3 +477,61 @@ commits; the others are metadata changes on tables of 4 to 200 rows.
 6. `20261007012654_declare_migration_only_indexes_and_checks` (comment-only: it records a ledger
    row and runs nothing)
 7. `20261007013835_ledger_indexes_declared_as_made` (comment-only, the same)
+
+## Before applying to production
+
+**What is waiting.** The seven migrations listed above, in that order: an index on
+`revision_blocks (article_id, block_id)`; the criterion-shape CHECK dropped and re-added as
+all-or-none; a new CHECK that a claims run holds no claims unless it is done; a nullable
+`created_at` column on `upload_source_guesses`; the duplicate chat-message index dropped; and two
+comment-only files that record a ledger row and run nothing.
+
+**They land together or not at all.** Drizzle applies every pending file in one transaction.
+
+**The caution (review finding C1).** The index build takes a `SHARE` lock on `revision_blocks`
+(105,774 rows, 144 MB) and blocks writes to it until the whole transaction commits. The later
+statements need `ACCESS EXCLUSIVE` on four other tables, so a long-running transaction on any of
+those keeps the migration waiting while it already blocks block writes. So:
+
+1. Set a finite `lock_timeout` and `statement_timeout` on the migration connection. The runner
+   sets neither. At the 02:31 read the connection's own were `lock_timeout` 0 (wait for ever) and
+   `statement_timeout` 2min.
+2. Run the pre-flight's long-transaction check immediately before applying, as the migration role.
+3. Every query labelled `VIOLATIONS` in the pre-flight must return zero rows.
+
+**Applying is the Overseer's, with Greg's knowledge** (`npm run deploy`).
+
+**The pre-flight:**
+[261007c-seventh-sweep-schema-production-preflight.sql](261007c-seventh-sweep-schema-production-preflight.sql),
+written by GPT Sol. It only reads: `SELECT`s over counts and the catalog inside
+`BEGIN READ ONLY; … ROLLBACK;`, no prose column, no statement text from `pg_stat_activity`. Its
+ledger literal expects exactly 153 applied rows followed by these seven; rebuild it if another
+migration lands first. Run the whole file in one `psql` invocation so the transaction wraps it.
+
+### The pre-flight's result, 2026-10-07 02:31 UTC
+
+Run once, as **`spideryarn_app`** (the read-only route the investigation used: `DATABASE_URL` from
+`.env.prod`, `psql` inside the local Supabase container, `-v ON_ERROR_ROLLBACK=on`). Sol wrote it
+for the migration credential, and two checks mean less as the application role; both are marked.
+
+| Check | Result |
+|---|---|
+| Ledger | 153 rows, watermark `1791297828720`, as expected |
+| VIOLATIONS: every earlier migration's stamp and hash, and no extra row | zero rows |
+| The seven pending | all seven listed, each clears the watermark, none has a ledger row |
+| VIOLATIONS: new objects already present | zero rows |
+| `referee_criteria`: invalid shapes | **0** of 10 rows |
+| `referee_claims`: claims not an array | 0 of 4 rows |
+| `referee_claims`: claims on a run that is not done | **0** of 4 rows |
+| `upload_source_guesses` rows that will keep a null `created_at` | 5 |
+| `revision_blocks` | 105,774 rows, 144 MB heap |
+| VIOLATIONS: the nine existing indexes, exact definition and valid | zero rows |
+| VIOLATIONS: the six CHECKs and the UNIQUE constraint, exact text and validated | zero rows |
+| The duplicate index is interchangeable with the unique one | true, and the constraint is validated |
+| Ownership of the five tables | all owned by `postgres`. `can_act_as_owner` is false, **as it must be for the application role; it says nothing about the migration role** |
+| Locks held by other sessions on the five tables | zero rows |
+| Transactions older than five seconds | zero rows. **Weak as this role**: Postgres hides other roles' transaction start times from a role without `pg_read_all_stats`, and whether `spideryarn_app` has it was not checked, so this may have seen only the application's own |
+| Prepared transactions | zero rows |
+
+Nothing here stops the migrations. It is a reading from 02:31, not a guarantee for the moment of
+applying: items 1 and 2 above still stand.

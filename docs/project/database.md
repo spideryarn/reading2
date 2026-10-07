@@ -839,7 +839,8 @@ fault and nobody had compared them: `ai_calls_owner_started` and `ai_calls_scope
 [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) now compares **every** declared index
 with the catalog (table, uniqueness, partial or not, method, and each key column's direction and
 null placement), every declared CHECK by name and table in both directions, and the ledger's five
-by what they refuse. All three read the declarations, so there is no list to keep. What that still
+by what they refuse. The general index and CHECK inventories read the declarations; the money
+tests name the five rules and exercise their legal and forbidden rows. What that still
 leaves uncompared: a predicate's or a CHECK's expression text, and foreign keys beyond the ones
 that file names.
 

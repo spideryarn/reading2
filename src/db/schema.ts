@@ -2058,9 +2058,10 @@ export const refereeCriteria = spideryarn.table(
        **Counted, not compared.** Until 2026-10-07 this was `(kind =
        'diverging') = (all three are not null)`, which says the first half and
        not the second: on a kind with no ends both sides are false as soon as
-       ONE of the three is null, so one or two stray fields passed. No row ever
-       had any (0 of 10 in production, 0 of 11 locally) because `configToRow`
-       nulls all three, and `configFromRow` would have dropped them unread. */
+       ONE of the three is null, so one or two stray fields passed. No row had
+       any at the 2026-10-07 check (0 of 10 in production, 0 of 11 locally);
+       `configToRow` nulls all three, and `configFromRow` would have dropped
+       them unread. */
     check(
       "referee_criteria_diverging_shape",
       sql`num_nonnulls(${t.poleAgainst}, ${t.poleFavour}, ${t.scale}) = case when ${t.kind} = 'diverging' then 3 else 0 end`,
@@ -2146,7 +2147,7 @@ export const refereeClaims = spideryarn.table(
      *
      * Nullable, and null means *not recorded* rather than *none omitted*. Those
      * are genuinely different, and the panel's fallback copy depends on telling
-     * one from a truthful zero. The route writes it on every finished run
+     * one from a truthful zero. The route writes it on every successful run
      * (src/routes.ts § `runRefereeClaims`, from `outcome.dropped.truncated`), so
      * null now means a run stored before it did, a run that failed, or one
      * still pending; `begin` nulls it.
@@ -3112,10 +3113,12 @@ export const queueState = spideryarn.table(
  * non-null" would have carried the bug across too. The filesystem went on
  * 2026-09-05.
  *
- * `inputHash` is computed the way `hashBlocks` in src/source-hash.ts does it —
- * over `id \t text` per block, joined. Deliberately NOT the bytes of the
- * artefact, because those change when an unread field is recomputed and do NOT
- * change when two blocks swap ids. That choice is the transferable part.
+ * `inputHash` fingerprints what that step consumes: see each step's `stamp`
+ * in src/pipeline.ts. Article-reading steps include the blocks, tree and
+ * metadata; assets and other steps have their own inputs. `hashBlocks` in
+ * src/source-hash.ts includes ids and text, and role/treatment where present,
+ * with framing for ambiguous delimiters. Fingerprinting inputs rather than
+ * output bytes is what lets the stamp detect an output that has gone stale.
  */
 export const revisionStepRuns = spideryarn.table(
   "revision_step_runs",
@@ -5010,7 +5013,7 @@ export const uploadSourceGuesses = spideryarn.table(
      * **When this row was first written** — the first claim on this article.
      * Filled by the database default; no store names it, so the upsert in
      * `claim` and the `release` that zeroes `claimed_at` cannot move it.
-     * **Null means before 2026-10-07, when we started keeping it** — nullable
+     * **Null means the row predates the column's installation** — nullable
      * on purpose, since no row is given an invented time, and not backfilled
      * from `claimed_at`, which may be a later claim or the epoch. AGENTS.md
      * § Writing code, "Store when it happened".

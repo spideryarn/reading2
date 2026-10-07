@@ -150,9 +150,10 @@ function toRun(row: typeof refereeClaims.$inferSelect): ClaimsRun {
     createdAt: row.createdAt.toISOString(),
     claims: row.claims as Claim[],
     ...(row.model === null ? {} : { model: row.model }),
-    /* Absent, not zero. Null means *not recorded* — the route does not write it
-       yet — and a zero here would tell the panel that nothing was cut off, which
-       is a different sentence from the one it prints when it does not know. */
+    /* Absent, not zero. Null means *not recorded*: an older run, a pending one,
+       or a failed one. The route records it on success. A zero here would tell
+       the panel that nothing was cut off, which is a different sentence from
+       the one it prints when it does not know. */
     ...(row.claimsOmitted === null ? {} : { claimsOmitted: row.claimsOmitted }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
