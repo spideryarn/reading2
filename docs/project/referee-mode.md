@@ -401,7 +401,7 @@ deleted, and the key is what it was.
 | The referee | Gets | Sentence |
 |---|---|---|
 | deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
-| adds a criterion when the list is full and the one the trim would remove has comments on it | 409, before any stream opens | `CRITERIA_FULL_OLDEST_HAS_COMMENTS` |
+| adds a criterion when the list is full and the one the trim would remove has comments on it | 409, before any stream opens | `CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS` |
 | places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
 
 The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts); the key
@@ -412,9 +412,9 @@ cannot. The delete is optimistic in the browser, so `useCriteria` § `forget` re
 409 and on nothing else — a 500 does not say whether the row went.
 
 **The second row is a wedge, and it is still one.** Finished rows past the cap are trimmed, and
-pending rows are skipped. If a trim candidate has comments, that add rolls back. The builder's
-sentence says "the oldest one", which can misidentify the blocker when an older row is pending;
-the code review leaves that wording for the owner to veto. Whether the trim should skip such a
+pending rows are skipped. If a trim candidate has comments, that add rolls back. The sentence says
+"the one that would be dropped to make room" rather than "the oldest one", because the oldest can
+be a pending row the trim skips while a younger finished one is what blocks. Whether the trim should skip such a
 criterion instead, letting a list run past twenty, is a retention decision waiting on Greg (question 3a in
 [the seventh sweep's umbrella](../plans/261006m-seventh-codebase-sweep-depth-umbrella.md)), as is
 what Delete should do with the comments (question 3).

@@ -161,10 +161,17 @@ export const CRITERION_HAS_COMMENTS =
  * rolls back. Whether a list may
  * instead grow past the cap to protect them is question 3a in the same plan;
  * this is only the sentence for today's behaviour.
+ *
+ * It says "the one that would be dropped", not "the oldest one": the oldest
+ * criterion can be a pending one the trim skips, with nothing placed on it,
+ * while a younger finished one is what the key refuses to delete. The
+ * sentence said "the oldest one" as first built, on 2026-10-07, which pointed the
+ * referee at the wrong row in exactly that case; it was changed before it shipped.
  */
-export const CRITERIA_FULL_OLDEST_HAS_COMMENTS =
-  "The list of criteria is full and the oldest one has your comments placed on it, so a new " +
-  "criterion cannot be added until you clear those placements or delete those comments.";
+export const CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS =
+  "The list of criteria is full and the one that would be dropped to make room has your comments " +
+  "placed on it, so a new criterion cannot be added until you clear those placements or delete " +
+  "those comments.";
 
 /**
  * **What a placement is told when its criterion is not there** — a 400, and

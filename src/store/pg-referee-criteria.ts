@@ -48,7 +48,7 @@ import {
 } from "../referee-criteria.js";
 import {
   COMMENTS_CRITERION_FK,
-  CRITERIA_FULL_OLDEST_HAS_COMMENTS,
+  CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS,
   CRITERION_HAS_COMMENTS,
   CRITERION_SWEPT,
   criterionRefusal,
@@ -300,7 +300,7 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
                Sentry and is now an answer nobody will: how often a list is
                wedged is the evidence question 3a is waiting for. */
             logger.info({ slug, past: past.length }, "criterion not added: the trim would delete one with comments on it");
-            throw criterionRefusal(409, CRITERIA_FULL_OLDEST_HAS_COMMENTS);
+            throw criterionRefusal(409, CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
           }
           throw err;
         }

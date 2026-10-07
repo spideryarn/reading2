@@ -71,7 +71,7 @@ import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
 import {
-  CRITERIA_FULL_OLDEST_HAS_COMMENTS,
+  CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS,
   CRITERION_HAS_COMMENTS,
   CRITERION_NOT_ON_ARTICLE,
 } from "../src/referee-criteria-store.js";
@@ -614,7 +614,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
         const refused = await add();
         expect(refused.status, `${attempt}: ${refused.text.slice(0, 300)}`).toBe(409);
         expect(refused.streamed, "a refusal must be JSON, before any header").toBe(false);
-        expect(refused.body.error).toBe(CRITERIA_FULL_OLDEST_HAS_COMMENTS);
+        expect(refused.body.error).toBe(CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
         // Rolled back whole: nothing trimmed, nothing added.
         expect(await criteriaIds()).toEqual(ids);
         expect(await criteriaRows()).toEqual(before);
@@ -745,14 +745,19 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       });
       expect(refused.status).toBe(409);
       expect(refused.streamed).toBe(false);
-      expect(refused.body.error).toBe(CRITERIA_FULL_OLDEST_HAS_COMMENTS);
+      expect(refused.body.error).toBe(CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
       // Compare full rows, not ids alone: reset/overwrite mutations must fail too.
       expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual(before);
       expect(await criteriaRows()).toEqual(beforeRows);
       expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
         .toEqual([[comment.id, blocked]]);
-      // The sentence says "oldest one", but the oldest is pending and has no comments.
+      /* The sentence names "the one that would be dropped to make room", and
+         here that is not the oldest: the oldest is pending, is skipped by the
+         trim, and has nothing placed on it. So the one claim pinned about the
+         wording is the false one it used to make; the rest stays rewritable
+         (docs/project/copy.md § tests match on the code, not the prose). */
       expect(pending.row.id).not.toBe(blocked);
+      expect(refused.body.error).not.toMatch(/oldest/i);
 
       // Clearing the blocker resumes today's trim without deleting the pending row.
       const cleared = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
