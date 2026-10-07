@@ -41,7 +41,7 @@
  *
  * docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md,
  * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md,
- * docs/plans/261007c-seventh-sweep-small-server-request-path-defects-and-dead-branches.md.
+ * docs/plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md.
  */
 export class ArtefactNotMadeYet extends Error {
   readonly status = 404;

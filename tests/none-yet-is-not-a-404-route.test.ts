@@ -193,7 +193,7 @@ describe("an article with none of the ten", () => {
  * server alone: a route that answers the header needs its name in the offline
  * cache's `NONE_YET_AS_NULL` (src/web/lib/api.ts) in the same change, and
  * tests/api-fetch-offline.test.ts fails when the two differ
- * (docs/plans/261007c-seventh-sweep-small-server-request-path-defects-and-dead-branches.md § 7).
+ * (docs/plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md § 7).
  *
  * What did land is the loader's half: each of the six now throws
  * `ArtefactNotMadeYet`, the type `orNullWhenNotMadeYet` looks for, in place of

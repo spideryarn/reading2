@@ -201,4 +201,18 @@ not a collision* cases; item 8, which is comments.
 
 ## Gates
 
-Run after merging `origin/dev`; the counts are in the commit that follows this one.
+Run on 2026-10-07 after merging `origin/dev`, by file, never the full suite:
+
+- `npm run typecheck`: clean, all three projects.
+- 32 files, 1,381 tests, all passed: every test that reads `src/routes.ts`, `src/store/pg.ts` or
+  another touched source file as text, `doc-links`, `store-migration-registry`,
+  `api-fetch-offline`, `serve-api-after-headers`, the two other `none-yet` suites.
+- 13 files, 355 tests, all passed: `routes`, the live-session and live-GPT route suites,
+  `store-realtime-sessions`, `store-comments` and the comment route suites.
+- 17 files, 353 tests, all passed: `minimal-paper`, the upload suites, `none-yet-is-not-a-404-route`,
+  the artefact-read suites, `store-parity`, `public-visibility-pg`, the referee Postgres suites.
+- Biome on the touched files: no errors (seven pre-existing complexity notes in `routes.ts` and
+  `pg.ts`).
+
+This plan was `261007c` in the first commits of the branch, and their messages still say so; the
+schema cluster's plan took that letter on `dev` while this one was being built.
