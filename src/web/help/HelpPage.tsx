@@ -68,6 +68,7 @@
  * the sake of an effect dependency.
  */
 import {
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -82,6 +83,7 @@ import { DocumentPage } from "../DocumentPage.js";
 import { scrollToAndFlash } from "../flash.js";
 import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
+import { SignedInReader } from "../lib/made-for.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
 import { searchSections, type SearchableSection } from "../page-search.js";
 import { FEATURES_HREF, HELP_HREF, navigate, useRoute } from "../router.js";
@@ -170,7 +172,18 @@ function titleOf(shown: Shown): string | undefined {
   }
 }
 
+/**
+ * Help keeps its search and answer while a reader moves between Help pages,
+ * but never while the signed-in reader changes. The keyed child removes A's
+ * words before B's first paint and unmounts `useHelpAsk`, whose cleanup aborts
+ * A's paid request. `null` is the one signed-out reader.
+ */
 export function HelpPage() {
+  const readerId = useContext(SignedInReader);
+  return <HelpPageForReader key={readerId ?? "signed-out"} />;
+}
+
+function HelpPageForReader() {
   const route = useRoute();
   /* Mounted only for the `help` route (App.tsx); anything else is a frame of
      leaving, and the contents are as good a thing to draw in it as any. */

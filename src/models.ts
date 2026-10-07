@@ -523,13 +523,14 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * about a second to the first word, and a prefix cache that reads across
  * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as
  * well but three to four times slower, on whichever small upstream OpenRouter
- * picked, with a cache that hit about half the time. Its own constant, though the string is
- * `QUICK_MODEL_OPENROUTER`'s, so moving one job does not move the other; and
+ * picked, with a cache that hit about half the time. Its own literal, though the
+ * string is currently the same as `QUICK_MODEL_OPENROUTER`'s, so moving one job
+ * does not move the other; and
  * not a `Task`, so no environment override can unpin it from what the eval
  * measured. Moving it to a non-OpenAI model is also a decision about caching:
  * `help-chat` in src/ai-call.ts says why.
  */
-export const HELP_CHAT_MODEL = QUICK_MODEL_OPENROUTER;
+export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";
 
 /**
  * **What turns a dictation into text.** Not on a tier, for the same reason the

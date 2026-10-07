@@ -119,10 +119,11 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
   he picks, a stranger sees *Sign in to ask a question about Spideryarn* in the same place.
 - **Free, with its own allowance**: no article slot, nothing off the reader's articles. Each reader
   may ask 30 an hour and 100 a day, one at a time, and a fuse across everybody stops it for the day
-  at 1,500 questions (`HELP_CHAT_RATE_POLICY` in `help-chat-call.ts`), sized from the cost of a
+  at 1,300 questions (`HELP_CHAT_RATE_POLICY` in `help-chat-call.ts`), sized from the cost of a
   question with nothing cached.
-- The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx); `HelpPage.tsx` holds its state, so an
-  answer on `/help` survives following one of its links to a page.
+- The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx); `HelpPage.tsx` holds its state, keyed
+  to the signed-in reader, so an answer on `/help` survives following one of its links to a page but
+  a reader switch clears it and aborts an answer still arriving.
 
 ## Anchors are a promise
 

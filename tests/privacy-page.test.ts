@@ -263,7 +263,7 @@ describe("the privacy page", () => {
     expect(prose).toContain("the question is not kept, and is not written to our logs");
     const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
     expect(models).toContain('{ job: "help-chat", id: HELP_CHAT_MODEL');
-    expect(models).toMatch(/export const HELP_CHAT_MODEL = QUICK_MODEL_OPENROUTER/);
+    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";');
   });
 
   it("gives the one contact address rather than spelling one of its own", () => {

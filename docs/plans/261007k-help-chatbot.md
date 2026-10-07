@@ -8,7 +8,7 @@ as Markdown pages, [261007e](261007e-help-back-in-the-bar-and-help-as-markdown-p
 is on `dev`; part 3 (the guide, `qi-gjvvvc6n`, plan 261007j in `worktree-fbtddvg2-guide-agent`) is
 being built in parallel and is the superset of this one.
 
-**Status: planned; GPT Sol's plan review said *build with changes*, F1–F10 accepted (§ After the plan review, which overrides the design where they differ).**
+**Status: built on `dev` for signed-in readers (stages 1–3, GPT Sol's code review: ship, four fixes made by the reviewer — [review](261007k-help-chatbot-code-review-sol.md)); the signed-out door awaits Greg (question q-vvhb55, queue qi-dk83dfn8). Earlier: GPT Sol's plan review said *build with changes*, F1–F10 accepted (§ After the plan review, which overrides the design where they differ).**
 
 ## What Greg asked for
 
@@ -182,7 +182,7 @@ makes is only about the door.
 
 **What the decision is for.** v1 answers signed-in readers only. Greg asked for it to work signed
 out too, and that needs an anonymous request that spends money, which nothing on the site does
-today. The cost of a question is measured in stage 3 (*figure goes here*).
+today. Measured in stage 3 ([investigation 261007a](../investigations/261007a-help-chat-model-and-refusals.md)): a question costs about **$0.007 cold** and **$0.0006 when the cache is warm**, which it was on every question after the first, whoever asked; answers start in about a second. Every off-topic and jailbreak question in the eval was declined.
 
 **A. Leave it signed in.** Strangers see "Sign in to ask". No defence changes. Costs: the people
 most likely to need Help before signing up — someone deciding whether to try it — cannot ask.

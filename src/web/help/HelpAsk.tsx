@@ -198,7 +198,10 @@ export function HelpAsk({ state, className }: { state: HelpAskState; className?:
         <p className={NOTE_CLASS}>
           {/* Back here afterwards: loginHref's `next`, which the sign-in page
               only uses once somebody actually signs in (auth-return.ts). */}
-          <Link href={loginHref({ next: location.pathname })} className={HELP_LINK_CLASS}>
+          <Link
+            href={loginHref({ next: location.pathname + location.search + location.hash })}
+            className={HELP_LINK_CLASS}
+          >
             Sign in
           </Link>{" "}
           to ask a question about Spideryarn.

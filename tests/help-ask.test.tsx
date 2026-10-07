@@ -24,13 +24,20 @@ import { HelpAsk, useHelpAsk } from "../src/web/help/HelpAsk.js";
 /** The frames the next request streams, and what it was sent. */
 let frames: [string, unknown][] = [];
 let posted: { input: string; body: unknown }[] = [];
+let held = false;
+let signals: AbortSignal[] = [];
 
 vi.mock("../src/web/lib/api.js", () => ({
-  apiFetch: async (input: string, init?: { body?: string }) => {
+  apiFetch: async (input: string, init?: { body?: string; signal?: AbortSignal }) => {
     posted.push({ input, body: init?.body === undefined ? undefined : JSON.parse(init.body) });
+    if (init?.signal) signals.push(init.signal);
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
+        if (held) {
+          init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+          return;
+        }
         for (const [event, data] of frames) {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         }
@@ -48,6 +55,8 @@ let root: Root;
 beforeEach(() => {
   frames = [];
   posted = [];
+  held = false;
+  signals = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -87,13 +96,15 @@ const answerOf = () => host.querySelector(".voice-ai");
 
 describe("Ask about Spideryarn", () => {
   it("tells a stranger to sign in, and has no box", () => {
-    history.replaceState(null, "", "/help/spine");
+    history.replaceState(null, "", "/help/questions#faq-older-profile");
     draw(false);
     expect(host.querySelector("textarea")).toBeNull();
     expect(host.textContent).toContain("Sign in to ask a question about Spideryarn.");
     const link = host.querySelector("a");
     /* Back to this page once signed in. */
-    expect(link?.getAttribute("href")).toBe("/login?next=%2Fhelp%2Fspine");
+    expect(link?.getAttribute("href")).toBe(
+      "/login?next=%2Fhelp%2Fquestions%23faq-older-profile",
+    );
   });
 
   it("posts the question alone and draws the answer, with a link only to a Help page", async () => {
@@ -150,5 +161,16 @@ describe("Ask about Spideryarn", () => {
     await ask("Two");
     expect(answerOf()?.textContent).toBe("Second answer");
     expect(host.textContent).not.toContain("First answer");
+  });
+
+  it("aborts the browser request when the Help box leaves", async () => {
+    held = true;
+    draw(true);
+    await ask("What is the spine?");
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(false);
+
+    draw(true, null);
+    expect(signals[0]?.aborted).toBe(true);
   });
 });

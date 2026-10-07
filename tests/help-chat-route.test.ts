@@ -73,6 +73,7 @@ vi.mock("../src/ai-call.js", async (importOriginal) => ({
 
 const { handleApi } = await import("../src/routes.js");
 const { HELP_CHAT_SYSTEM, HELP_CHAT_RATE_POLICY } = await import("../src/help-chat-call.js");
+const { ProviderRefused } = await import("../src/ai-call.js");
 
 /** A finished answer, in two pieces, as OpenRouter streams one. */
 const answers =
@@ -265,6 +266,54 @@ describe("POST /api/help-chat", () => {
     const call = post({ question: "What is the spine?" });
     await call.done;
     expect(frames(call.text()).at(-1)).toEqual({ name: "done", data: { answer: "The spine is the strip", complete: false } });
+  });
+
+  it.each([
+    ["content_filter", "done", false],
+    ["end_turn", "done", false],
+    ["tool_calls", "error", null],
+    ["error", "error", null],
+  ] as const)(
+    "maps a provider ending of %s to one terminal %s frame",
+    async (reason, terminal, complete) => {
+      seen.script = async function* ({ end }) {
+        yield { choices: [{ delta: { content: "Part of an answer" } }] };
+        yield { choices: [{ delta: {}, finish_reason: reason }] };
+        end.finishReason = reason;
+        end.terminated = true;
+      };
+      const call = post({ question: "What is the spine?" });
+      await call.done;
+      const got = frames(call.text());
+      expect(got.map((f) => f.name)).toEqual(["delta", terminal]);
+      if (terminal === "done") expect(got.at(-1)?.data.complete).toBe(complete);
+      expect(seen.finished).toEqual(["lease-1"]);
+    },
+  );
+
+  it("ends an unterminated provider stream with one error and frees its slot", async () => {
+    seen.script = async function* () {
+      yield { choices: [{ delta: { content: "Part of an answer" } }] };
+    };
+    const call = post({ question: "What is the spine?" });
+    await call.done;
+    expect(frames(call.text()).map((f) => f.name)).toEqual(["delta", "error"]);
+    expect(seen.finished).toEqual(["lease-1"]);
+  });
+
+  it("turns a provider refusal before its first word into one safe error frame and frees its slot", async () => {
+    const echoed = "SENTINEL QUESTION THE PROVIDER ECHOED";
+    seen.script = async function* () {
+      /* Keep the mock's async-generator shape without sending a chunk. */
+      if (echoed.length === 0) yield { choices: [] };
+      throw new ProviderRefused(429, echoed, new Headers(), false);
+    };
+    const call = post({ question: "What is the spine?" });
+    await call.done;
+    const got = frames(call.text());
+    expect(got.map((f) => f.name)).toEqual(["error"]);
+    expect(call.text()).not.toContain(echoed);
+    expect(seen.finished).toEqual(["lease-1"]);
   });
 
   it("ends a stream that breaks mid-answer with an error frame carrying a reader's sentence, and frees its slot", async () => {

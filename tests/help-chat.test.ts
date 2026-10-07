@@ -4,6 +4,7 @@
  * its lifetime are tests/help-chat-route.test.ts; the corpus is
  * tests/help-corpus.test.ts.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { AI_JOB_ROUTE, CHAT_REASONING } from "../src/ai-call.js";
@@ -18,7 +19,7 @@ import {
   helpChatRequest,
 } from "../src/help-chat-call.js";
 import corpus from "../src/help-corpus.generated.json" with { type: "json" };
-import { AI_JOB_WIRE, HELP_CHAT_MODEL, NON_TASK_MODELS, QUICK_MODEL_OPENROUTER } from "../src/models.js";
+import { AI_JOB_WIRE, HELP_CHAT_MODEL, NON_TASK_MODELS } from "../src/models.js";
 import { plainWords } from "../src/plain-words.js";
 
 describe("the body of POST /api/help-chat", () => {
@@ -58,7 +59,17 @@ describe("what the model is sent", () => {
   const pages = corpus as readonly HelpCorpusPage[];
 
   it("is the whole Help, with every page's address, first", () => {
-    for (const page of pages) expect(HELP_CHAT_SYSTEM, page.anchor).toContain(`Address: ${page.href}`);
+    for (const [i, page] of pages.entries()) {
+      const marker = `=== ${page.title} ===\nAddress: ${page.href}`;
+      const start = HELP_CHAT_SYSTEM.indexOf(marker);
+      expect(start, page.anchor).toBeGreaterThanOrEqual(0);
+      const next = pages[i + 1];
+      const end =
+        next === undefined
+          ? HELP_CHAT_SYSTEM.indexOf("=== End of the Help pages ===")
+          : HELP_CHAT_SYSTEM.indexOf(`=== ${next.title} ===`, start + marker.length);
+      expect(HELP_CHAT_SYSTEM.slice(start, end), page.anchor).toContain(page.body);
+    }
     expect(HELP_CHAT_SYSTEM.indexOf("THE HELP PAGES")).toBeLessThan(HELP_CHAT_SYSTEM.indexOf("WHAT YOU DO"));
   });
 
@@ -94,6 +105,7 @@ describe("what the model is sent", () => {
   it("asks the Help model for at most the ceiling, with no tools", () => {
     const body = helpChatRequest("What is the spine?");
     expect(body.model).toBe(HELP_CHAT_MODEL);
+    expect(HELP_CHAT_MAX_TOKENS).toBe(800);
     expect(body.max_completion_tokens).toBe(HELP_CHAT_MAX_TOKENS);
     expect(body).not.toHaveProperty("tools");
     expect(body).not.toHaveProperty("plugins");
@@ -102,8 +114,10 @@ describe("what the model is sent", () => {
 });
 
 describe("the help-chat job, registered everywhere a job must be", () => {
-  it("is on the quick tier's model until the eval says otherwise", () => {
-    expect(HELP_CHAT_MODEL).toBe(QUICK_MODEL_OPENROUTER);
+  it("pins the model the eval chose, independently of the general quick tier", () => {
+    expect(HELP_CHAT_MODEL).toBe("openai/gpt-5.6-luna");
+    const models = readFileSync(new URL("../src/models.ts", import.meta.url), "utf8");
+    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";');
     expect(NON_TASK_MODELS).toContainEqual({ job: "help-chat", id: HELP_CHAT_MODEL, provider: "openrouter" });
   });
 
