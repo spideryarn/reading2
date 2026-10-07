@@ -22,7 +22,8 @@ Five parts, chosen by the chips at the top:
 - **Candidates**: the expertise a reviewer would need, then names if you ask. No
   conflict-of-interest check is run, and it may send words from the paper to a search engine.
 - **Hidden text**: the check of the original web page for words a reader would not see but an AI
-  would read. Its chip carries a mark when it found something.
+  would read. Its chip carries a mark when it found something. You can ask Opus what it makes of
+  each thing found.
 
 Referee is only for whoever added the article.
 
@@ -34,6 +35,12 @@ a model. It reports and blocks nothing. “Nothing found” is not a clean bill:
 a page are not checked, and it says which. Each finding says in plain words what the trick is;
 identical ones are listed once, with a count. A filled dot on the chip means something without an
 everyday explanation was found, a ring that everything found has one — such as a page’s own menus.
+
+When something was found, **Ask Opus about these** sends only the flagged bits — never the rest of
+the article — to Opus, which says of each one whether it is probably harmless or worth a look, and
+why. It is an opinion, not a filter: every row stays listed in the same order, and the chip’s mark
+does not change. The hidden text may have been written to fool a model, so read the rows yourself
+too. The answer is not saved: reloading the page forgets it, and asking again runs it again.
 
 Colour means two different things:
 

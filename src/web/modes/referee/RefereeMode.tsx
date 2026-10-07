@@ -35,6 +35,7 @@ import { useRevealChosen } from "../../useRevealChosen.js";
    model. */
 import { type SourceScanMark, SourceScanNotice, sourceScanMark } from "../../SourceScanNotice.js";
 import { type SourceScanState, useSourceScan } from "../../useSourceScan.js";
+import { type HiddenCheckApi, useHiddenCheck } from "../../useHiddenCheck.js";
 import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../CriteriaPanel.js";
 import { ClaimsBand } from "../../ClaimsPanel.js";
 import { MIRROR_IS_NOT_GIVEN_THE_PAPER, MirrorBand } from "../../MirrorPanel.js";
@@ -48,7 +49,8 @@ import { ModeSurface } from "../../ModeSurface.js";
  * stage 1 — the confidentiality notice, the original four buttons, and a line
  * per panel saying what that panel will do — and it still calls no model. Those
  * four model-facing panels are Criteria, Claims, Mirror and Candidates; Hidden
- * text is the fifth panel and calls no model.
+ * text is the fifth panel, and its scan calls no model — only its *Ask Opus
+ * about these* button does, when pressed (plan 261007l).
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -162,6 +164,11 @@ export function RefereeBand({
      not about a sub-mode, and a hook inside `RefereeSubMode` would re-run the
      scan every time the referee pressed a different chip. */
   const scan = useSourceScan(slug);
+  /* Hidden text's *Ask Opus about these*, held here beside the scan for the
+     same reason: an answer kept for the life of the band, not of the chip
+     (plan 261007l). It never reaches `RefereeFrame`, whose chip mark is the
+     scan's alone. */
+  const check = useHiddenCheck(slug);
 
   return (
     <RefereeFrame slug={slug} view={view} onView={(next) => void setView(next)} scan={scan}>
@@ -176,6 +183,7 @@ export function RefereeBand({
         openKey={openKey}
         onOpenKey={onOpenKey}
         scan={scan}
+        check={check}
       />
     </RefereeFrame>
   );
@@ -526,8 +534,9 @@ export function RefereeViews({
  * - **Candidates** searches the web, which is a third party at a moment none of
  *   the other three reaches one, and checks no conflicts of interest
  *   (`COI_NOT_CHECKED`).
- * - **Hidden text** calls no model, does not check PDFs and reports without
- *   blocking anything.
+ * - **Hidden text**'s scan calls no model, does not check PDFs and reports
+ *   without blocking anything; Opus is asked only on the referee's press, and
+ *   its answer is a line under a row, never a filter (plan 261007l).
  *
  * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a sixth
  * sub-mode is a red compile here rather than a chip that silently explains
@@ -552,7 +561,7 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
   },
   hidden: {
     what: "Text in this document's source that a reader would not see but a model would read — white on white, too small to read, invisible characters, instructions written to a model.",
-    how: "No model is involved: it reads the original web page, before any call. It reports and blocks nothing, a PDF is not checked, and the chip carries a dot when something was found that has no everyday explanation.",
+    how: "The check itself uses no model: it reads the original web page, before any call. It reports and blocks nothing, a PDF is not checked, and the chip carries a dot when something was found that has no everyday explanation. Inside, you can ask Opus for its opinion of each row.",
   },
 };
 
@@ -586,6 +595,7 @@ function RefereeSubMode({
   openKey,
   onOpenKey,
   scan,
+  check,
 }: {
   view: RefereeView;
   slug: string;
@@ -593,6 +603,8 @@ function RefereeSubMode({
   byline?: string | undefined;
   /** The source scan, held by `RefereeBand`; read only by the Hidden text panel. */
   scan: SourceScanState;
+  /** Hidden text's Opus check, held by `RefereeBand` beside the scan. Optional for tests. */
+  check?: HiddenCheckApi;
   /** The referee's own placements. See `RefereeBand`, which says why. */
   comments: readonly Comment[];
   onJump(blockId: BlockId): void;
@@ -649,7 +661,7 @@ function RefereeSubMode({
          chip runs nothing; it only shows the answer. Rule 5's five rules are
          the component's, and moving it here changed none of them
          (docs/project/referee-mode.md § rule 5). */
-      return <SourceScanNotice state={scan} />;
+      return <SourceScanNotice state={scan} {...(check ? { check } : {})} />;
     default: {
       const unknown: never = view;
       throw new Error(`unknown referee view: ${String(unknown)}`);

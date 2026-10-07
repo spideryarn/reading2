@@ -140,6 +140,8 @@ import { scanArticleSource } from "./source-scan.js";
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
 import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
+import { hiddenCheckStream, isReaderLeft as isHiddenCheckReaderLeft } from "./referee-hidden-check.js";
+import { grouped, ordered } from "./scan-groups.js";
 /* A pure predicate. It was imported this way so as not to drag the
    filesystem store (gone 2026-09-05) into a file that had to work with either
    one — the same rule the `withEdit` / `withRetry` import above states. The
@@ -1365,8 +1367,8 @@ function sse(res: ServerResponse): {
    * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, `runMirror`, and `search` for a
-   *                           quick run
+   *                           `markOneAnswer`, `runMirror`, `runHiddenCheck`,
+   *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
    *                           `runRefereeCriterion`, `runRefereeClaims`, and
@@ -5680,6 +5682,67 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
        confident-looking claim about a sentence nobody wrote that this whole
        module is arranged against. */
     frame("error", { error: sayToReader(err, { route: "referee-mirror", slug }) });
+  } finally {
+    res.end();
+  }
+}
+
+/* ------------------------------------- referee hidden text: the Opus check --
+   The Hidden text sub-mode's *Ask Opus about these*: the scan's flagged rows,
+   never the article, one opinion per row, nothing stored.
+   docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md,
+   and src/referee-hidden-check.ts, which is the thinking. */
+
+/**
+ * `POST /api/referee/hidden-check/:slug`, **no body**, SSE out — Mirror's
+ * shape (`runMirror` above), and its frames: zero or more `delta` carrying
+ * only `{ chars }`, then `done` with the validated result or `error` with a
+ * reader sentence.
+ *
+ * **The server chooses what is sent.** No body is read: the rows are
+ * re-derived from `scanArticleSource(slug)` — cached in process, so not a
+ * second nine-second parse — after the same `shelfStore.read(slug)` ownership
+ * question the scan route asks first. A body naming fragments would let a
+ * tampered client put words in front of Opus that the scan never found.
+ *
+ * **Nothing to check spends nothing**: no source, a PDF, or no findings is a
+ * 409 with a sentence, before any header. The panel does not draw the button
+ * in those states, so only a stale tab gets here.
+ */
+async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> {
+  /* Ownership first, before a byte of the manuscript is read — the scan
+     route's order, and `sendSource`'s. */
+  await shelfStore.read(slug);
+  const { scan } = await scanArticleSource(slug);
+  /* The panel's rows, numbered the panel's way: src/scan-groups.ts is the one
+     definition both sides use. */
+  const groups = scan !== null && scan.examined === "html-source-only" ? grouped(ordered(scan.findings)) : [];
+  if (groups.length === 0) {
+    throw httpError(409, "The source check flagged nothing in this document, so there is nothing to ask Opus about.");
+  }
+  /* For the article's High-powered AI setting, which `powerFor` then
+     overrides for this job: it is Opus on every article. */
+  const article = await loadArticle(slug);
+
+  /* `gone` goes to the model call: nothing is stored, so an answer that
+     finishes after the referee has left has nowhere to go. Mirror's decision,
+     for Mirror's reason. */
+  const { frame, gone } = sse(res);
+  let chars = 0;
+  try {
+    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug, signal: gone })) {
+      if (event.type === "delta") {
+        chars += event.text.length;
+        frame("delta", { chars });
+        continue;
+      }
+      const { type: _type, ...result } = event;
+      frame("done", result);
+    }
+  } catch (err) {
+    if (!isHiddenCheckReaderLeft(err)) captureFailure(err, { route: "referee-hidden-check", slug });
+    /* No partial text: nothing in half an object has been validated. */
+    frame("error", { error: sayToReader(err, { route: "referee-hidden-check", slug }) });
   } finally {
     res.end();
   }
@@ -11345,6 +11408,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
       await runMirror(slugPart(captures, 1), res);
+    },
+  },
+
+  /* Hidden text's Opus check. POST only, for Mirror's reason: a run is a model
+     call the referee asks for and nothing is stored. `article: "first-capture"`
+     because it pays, and the cost report has to say which paper it was about. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/referee\/hidden-check\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await runHiddenCheck(slugPart(captures, 1), res);
     },
   },
 

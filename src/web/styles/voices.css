@@ -146,6 +146,8 @@
     .clm-why:not(.clm-why-withheld),
     .crit-why,
     .mir-note,
+    /* Hidden text: Opus's reason under a row; the verdict before it is ours */
+    .ref-scan-opinion-reason,
     .dbt-ai,
     /* not the fixed "Key sources" thread */
     .dbt-thread:not(.dbt-thread-key) .dbt-thread-name,

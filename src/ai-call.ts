@@ -471,6 +471,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Hidden text's Opus check** (src/referee-hidden-check.ts): Mirror's policy
+     for Mirror's reasons — no article, no cache, so the pin is about keeping
+     the upstream the evidence was gathered on, and `require_parameters` so the
+     schema and the reasoning setting are not quietly dropped. */
+  "referee-hidden-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **Criteria — the referee's own questions run over the paper**
      (src/referee-criteria-run.ts). Search's policy exactly, and for both of
      search's reasons rather than one:
@@ -1027,6 +1036,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Not measured. It reads the referee's own comments and their passages, never the " +
       "whole paper, so its input does not grow with the article.",
   },
+  /* Not measured. `medium` rather than Opus's default `high`: one short
+     judgment per row needs some thought about a fragment that may be trying
+     to fool it, not an essay of it, and src/referee-hidden-check.ts §
+     `outputTokensFor` sizes its ceiling as twice the answer for that share. */
+  "referee-hidden-check": { effort: "medium" },
   /* Measured 2026-09-28 on an 8,290-word essay: unleashed, a `single` criterion
      thought for 1,349–1,558 tokens and used 85–94% of its 4,000; at `medium` it
      thought for none, answered in 19s against 35–39s, and returned as many
