@@ -30,8 +30,9 @@
  * - **it is the first such chip in the answer.** Two moves would undo each
  *   other, and the reader could not follow what happened.
  *
- * The act *is* the chip's own press (CommandChip.tsx § `press`), so it is
- * checked by `chipFor` again at that moment, exactly as a press is.
+ * The act uses the chip's `press` handler (CommandChip.tsx), with an unarmed
+ * mode opener in place of the reader's armed runner. `chipFor` checks it again
+ * at that moment, exactly as it checks a reader's press.
  *
  * `GuideAct` is one object per finished answer, owned above the keyed
  * conversation and handed to that answer's chips through `GuideActContext`. The
@@ -105,7 +106,7 @@ const MAY_BE_MADE: ReadonlySet<string> = new Set(Object.values(OPENS_FREE_ONCE_M
 const NOTHING_MADE: ReadonlySet<string> = new Set();
 
 /**
- * **Would pressing this chip only move the reader?** A jump to the first place
+ * **Would acting on this chip unarmed only move the reader?** A jump to the first place
  * the article has some words, a mode `modeActsAlone` allows, or one of the
  * generating modes src/acts-alone.ts § `OPENS_FREE_ONCE_MADE` names whose key
  * is in `made`. Everything else — including a glossary look-up that happens to

@@ -12,10 +12,11 @@
  * press, because the guide's context holds the article and an article can
  * carry a planted instruction.
  *
- * - **A mode that generates is a press.** `generates` is the catalogue's bit,
+ * - **A mode that generates is normally a press.** `generates` is the catalogue's bit,
  *   which is `modeGenerates` / `subModeGenerates` (src/web/activation.ts;
  *   tests/command-pick-catalogue.test.ts pins the two together): opening it
- *   arms a paid run.
+ *   arms a paid run. `OPENS_FREE_ONCE_MADE` below names the exceptions the
+ *   guide may open unarmed when the server found their artefact stored.
  * - **Search is a press too, though it generates nothing** (GPT Sol's F1 on
  *   the plan): opening it tidies the reader's remembered quick and thorough
  *   searches, and its swap deletes a superseded quick result
@@ -25,7 +26,7 @@
 /** Search and every one of its sub-modes, by catalogue key (`mode:search`, `submode:search:…`). */
 const SEARCH = /^(?:mode:search|submode:search:[a-z-]+)$/;
 
-/** May the guide open the mode with this catalogue key without a press? */
+/** May the guide open this catalogue key without needing a stored artefact? */
 export function modeActsAlone(key: string, generates: boolean): boolean {
   return !generates && !SEARCH.test(key);
 }
@@ -33,18 +34,19 @@ export function modeActsAlone(key: string, generates: boolean): boolean {
 /**
  * **The generating modes that open free once their artefact is stored** —
  * plan docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md
- * (qi-ztp3w9az). A press on one of these keys arms a run, but the band claims
- * the press, waits for its own read, and retires it without a run when the read
- * answers with something stored (src/web/useAutoRun.ts, step 2); neither band
- * spends on mount otherwise. So when the artefact exists, opening the key only
- * moves the reader, and the guide may do it. When it does not, the key stays
- * the *Button* `modeActsAlone` says it is.
+ * (qi-ztp3w9az). A reader's press on one of these keys arms a run. The guide's
+ * act instead opens it unarmed (`CommandExecutor.openModeUnarmed`); neither
+ * band spends on mount without an activation (src/web/useAutoRun.ts). The
+ * server's stored-artefact snapshot allows the act, but does not guarantee the
+ * artefact will still exist when the band reads: if it vanished, the band
+ * shows its empty state without buying a run. Without that snapshot the key
+ * stays the *Button* `modeActsAlone` says it is.
  *
  * By the artefact each key's band reads. Not the bare `mode:summary`: it lands
  * on whatever `?summary=` says, and the Thread view writes on arrival. Not
  * Diagram or Marginalia: they spend on mount whatever is stored. A new row
- * needs the store read on the server (src/routes.ts § `guideMade`) and the
- * band's read on the page (Reader.tsx § `madeNow`).
+ * needs the store read on the server (src/routes.ts § `MADE_READS`,
+ * `guideMade`) and a band whose unarmed opening spends and writes nothing.
  */
 export const OPENS_FREE_ONCE_MADE = {
   glossary: ["mode:glossary"],

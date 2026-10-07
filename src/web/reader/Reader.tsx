@@ -3732,10 +3732,11 @@ export function Reader({
    * below; plan 261007j, GPT Sol's F3).
    */
   const onDockMode = (next: Mode, sub?: SubMode, toggle = false): void => {
-    /* The callback itself is proof of a press. Arm before `setMode`:
-       nuqs updates React now but may leave `location.href` on the old
-       entry for ~50ms, so inferring intent from the address races. Back
-       and Forward never call this callback and therefore never arm. */
+    /* Dock's activators arm a reader's press before this navigation; the
+       guide's unarmed activators call it without arming. nuqs updates React
+       now but may leave `location.href` on the old entry for ~50ms, so the
+       activators use React state to choose what to arm. Back and Forward
+       call neither activator and never arm. */
     /* **Marginalia is a switch, not a band** (`BandMode`): its press
        turns the column on or off and leaves the band, the herald and a
        stepped-aside band exactly as they were — unless the two do not
@@ -3793,8 +3794,8 @@ export function Reader({
       openQuickSearch();
       return;
     }
-    /* A sub-mode row has already armed its chip's press (Dock.tsx §
-       `useActivateSubMode`); this only moves the band, sub-mode and all. */
+    /* A reader's sub-mode press was armed by `useActivateSubMode` in Dock.tsx;
+       a guide act was not. This only moves the band, sub-mode and all. */
     /* A command naming the mode already open, or the bar bringing a
        stepped-aside band back, changes no URL state. Avoid a same-value
        `nuqs` write: it still pushes a history entry even though the

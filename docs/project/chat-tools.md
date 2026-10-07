@@ -972,8 +972,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   nothing is bought. Everything else stays a press: a quick search, a find, a look-up, a tag, a
   bookmark (it writes into the reader's comments), any other generating mode, and Summary by its
   bare name or its Thread (the Thread writes on arrival). The prompt marks each mode *Opens at once*
-  or *Button* from the same rule, and tells the guide to say *"I've opened…"* for the first kind
-  only. A transcript loaded, recovered or put back never acts, nor does a stopped or cut-off
+  or *Button* from the same rule, and tells the guide to say *"I've opened…"* for an opening at
+  once, including a *Button* named on the already-made line. A transcript loaded, recovered or put
+  back never acts, nor does a stopped or cut-off
   answer, nor a band stepped aside on a phone
   ([`src/web/guide-acts.ts`](../../src/web/guide-acts.ts)). Chat itself never acts: its context
   can hold fetched pages, and nobody asked.

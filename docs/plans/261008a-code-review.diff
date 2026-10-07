@@ -1,0 +1,1256 @@
+diff --git a/docs/project/chat-tools.md b/docs/project/chat-tools.md
+index 0a47e2a83..0337676e3 100644
+--- a/docs/project/chat-tools.md
++++ b/docs/project/chat-tools.md
+@@ -961,8 +961,17 @@ from the pinned row above the list. What makes it a guide rather than a chat:
+   on screen, the first of its buttons that only moves the reader runs as if pressed: a jump, or a
+   mode that makes nothing and writes nothing (`modeActsAlone` in
+   [`src/acts-alone.ts`](../../src/acts-alone.ts) — not one that generates, and not Search, whose
+-  opening tidies the reader's saved searches). Everything else stays a press: a quick search, a
+-  find, a look-up, a tag, a bookmark, a generating mode. The prompt marks each mode *Opens at once*
++  opening tidies the reader's saved searches). **Since 2026-10-08 Glossary and Summary's Brief and
++  Fuller act too, when what they show is already stored**
++  ([261008a](../plans/261008a-guide-opens-glossary-and-summary-when-already-made.md),
++  `OPENS_FREE_ONCE_MADE`): the route reads the same stores the bands' GETs read, once per guide
++  turn (`guideMade`), tells the model in the last message (`madeLine`, *ALREADY MADE FOR THIS
++  ARTICLE*) and the page on the `done` frame (`opensFree`, never stored), so the sentence and the
++  act come from one snapshot. And every mode the guide opens by itself is opened **unarmed**
++  (`openModeUnarmed`), so if the artefact went in between, the band shows its own *Write it* and
++  nothing is bought. Everything else stays a press: a quick search, a find, a look-up, a tag, a
++  bookmark (it writes into the reader's comments), any other generating mode, and Summary by its
++  bare name or its Thread (the Thread writes on arrival). The prompt marks each mode *Opens at once*
+   or *Button* from the same rule, and tells the guide to say *"I've opened…"* for the first kind
+   only. A transcript loaded, recovered or put back never acts, nor does a stopped or cut-off
+   answer, nor a band stepped aside on a phone
+diff --git a/src/acts-alone.ts b/src/acts-alone.ts
+index 220152d2b..b286f6515 100644
+--- a/src/acts-alone.ts
++++ b/src/acts-alone.ts
+@@ -29,3 +29,34 @@ const SEARCH = /^(?:mode:search|submode:search:[a-z-]+)$/;
+ export function modeActsAlone(key: string, generates: boolean): boolean {
+   return !generates && !SEARCH.test(key);
+ }
++
++/**
++ * **The generating modes that open free once their artefact is stored** —
++ * plan docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md
++ * (qi-ztp3w9az). A press on one of these keys arms a run, but the band claims
++ * the press, waits for its own read, and retires it without a run when the read
++ * answers with something stored (src/web/useAutoRun.ts, step 2); neither band
++ * spends on mount otherwise. So when the artefact exists, opening the key only
++ * moves the reader, and the guide may do it. When it does not, the key stays
++ * the *Button* `modeActsAlone` says it is.
++ *
++ * By the artefact each key's band reads. Not the bare `mode:summary`: it lands
++ * on whatever `?summary=` says, and the Thread view writes on arrival. Not
++ * Diagram or Marginalia: they spend on mount whatever is stored. A new row
++ * needs the store read on the server (src/routes.ts § `guideMade`) and the
++ * band's read on the page (Reader.tsx § `madeNow`).
++ */
++export const OPENS_FREE_ONCE_MADE = {
++  glossary: ["mode:glossary"],
++  simple: ["submode:summary:brief", "submode:summary:fuller"],
++} as const satisfies Readonly<Record<string, readonly string[]>>;
++
++/** An artefact whose being stored lets some generating mode open free. */
++export type MadeArtefact = keyof typeof OPENS_FREE_ONCE_MADE;
++
++/** The catalogue keys that open free, given which artefacts are stored. */
++export function keysOpenFree(made: Iterable<MadeArtefact>): ReadonlySet<string> {
++  const keys = new Set<string>();
++  for (const artefact of made) for (const key of OPENS_FREE_ONCE_MADE[artefact]) keys.add(key);
++  return keys;
++}
+diff --git a/src/converse.ts b/src/converse.ts
+index bdb9127ae..ee9d1fcaa 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -112,7 +112,8 @@ import { settledExchanges } from "./reader-notes.js";
+ import { blockRefLeaks } from "./block-ref-leak.js";
+ import { citableText } from "./citable.js";
+ import { PROFILE_RULES, profileSection } from "./profile.js";
+-import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
++import type { MadeArtefact } from "./acts-alone.js";
++import { type GuideExperience, experienceLine, madeLine, modeWordsSection } from "./guide.js";
+ import { plainWords } from "./plain-words.js";
+ import {
+   type OpenRouterMessage,
+@@ -1893,6 +1894,12 @@ export interface ConverseRequest {
+    * message, like `profile`, and only when `kind` is `guide`.
+    */
+   experience?: GuideExperience | null;
++  /**
++   * **Guide only**: which artefacts are already stored, so the modes that read
++   * them open at once — `madeLine` in src/guide.ts. The route resolves it per
++   * turn (`guideMade` in src/routes.ts); `null` when it could not read.
++   */
++  made?: readonly MadeArtefact[] | null;
+   /**
+    * Which capable model answers — the article's High-powered AI setting
+    * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+@@ -2134,6 +2141,12 @@ export function buildConverseMessages(opts: {
+    * as in the route, as `notes` is for Explore.
+    */
+   experience?: GuideExperience | null;
++  /**
++   * **Which *Button* modes are already made**, for a guide turn — `madeLine`
++   * in src/guide.ts. Beside `experience`, below the breakpoint, for the same
++   * reason: it changes per article and over time. Guide only.
++   */
++  made?: readonly MadeArtefact[] | null;
+ }): OpenRouterMessage[] {
+   const kind = opts.kind ?? "chat";
+   const position =
+@@ -2147,6 +2160,8 @@ export function buildConverseMessages(opts: {
+   /* After the profile: the reader is who they say, then how much of the app
+      they have seen. The guide's only. */
+   const used = kind === "guide" ? experienceLine(opts.experience) : "";
++  /* Then which of the modes it may suggest are made already, so open at once. */
++  const ready = kind === "guide" ? madeLine(opts.made) : "";
+   const about = anchorSection(opts.anchor ?? null, opts.blocks);
+   /* After the anchor: the reader is told *which* passage first, then how to
+      explain it. Both are below the breakpoint, so the order is about how the
+@@ -2180,7 +2195,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
+          reading it, and a question buried above three lines of framing is a
+          question the model answers less well. */
+       role: "user",
+-      content: [position, who, used, about, teach, own, marked, brief, opts.question]
++      content: [position, who, used, ready, about, teach, own, marked, brief, opts.question]
+         .filter(Boolean)
+         .join("\n\n"),
+     },
+@@ -2439,6 +2454,7 @@ export async function* converse({
+   profile = null,
+   notes = null,
+   experience = null,
++  made = null,
+   useTools = true,
+   kind = "chat",
+   anchor = null,
+@@ -2485,6 +2501,7 @@ export async function* converse({
+     notes,
+     /* Only a guide turn carries it; `buildConverseMessages` drops it for any other. */
+     experience,
++    made,
+     kind,
+     /* Unconditional, and `null` rather than absent when there is none: the
+        option's type admits null and `anchorSection` returns "" for it, so an
+diff --git a/src/guide.ts b/src/guide.ts
+index cffe648ce..1579848e3 100644
+--- a/src/guide.ts
++++ b/src/guide.ts
+@@ -1,6 +1,7 @@
+ /**
+- * **The guide's two pieces of context that no other conversation gets**: our
+- * words for the modes, and how much the reader has used Spideryarn before.
++ * **The guide's pieces of context that no other conversation gets**: our
++ * words for the modes, how much the reader has used Spideryarn before, and
++ * (since plan 261008a) which of its *Button* modes are already made.
+  *
+  * The guide is the conversation about how to read this piece with Spideryarn
+  * (`GUIDE_SYSTEM` in src/converse.ts,
+@@ -16,9 +17,10 @@
+  *   (docs/project/prompt-caching.md).
+  * - **The experience line changes per reader and over time**, so it rides in
+  *   the final user message beside the profile, below the breakpoint, and never
+- *   in the system prompt (GPT Sol's F7 on the plan above).
++ *   in the system prompt (GPT Sol's F7 on the plan above). So does the
++ *   already-made line, which changes per article and over time.
+  */
+-import { modeActsAlone } from "./acts-alone.js";
++import { keysOpenFree, type MadeArtefact, modeActsAlone } from "./acts-alone.js";
+ import catalogue from "./command-pick-catalogue.generated.json" with { type: "json" };
+ 
+ /* ------------------------------------------------------- the mode words -- */
+@@ -102,7 +104,10 @@ you, so you can see how the parts fit"; "I've taken you to where the method
+ starts"). Everything else stays an offer the reader presses — a mode marked
+ "Button:", which makes something new or changes their saved searches, a quick
+ search, a find, and the rest above — so for those, do not ask "Want me to open
+-it?" and do not say you have done it.
++it?" and do not say you have done it. The one exception: a mode marked
++"Button:" that the line ALREADY MADE FOR THIS ARTICLE, beside their message,
++names is already made, so opening it makes nothing, and in that answer it opens
++at once like a mode marked "Opens at once:".
+ 
+ ${lines.join("\n")}`;
+ }
+@@ -136,6 +141,34 @@ function experimental(row: CatalogueRow): string {
+   return row.contexts.includes(EXPERIMENTAL_OFF) ? "" : " (experimental)";
+ }
+ 
++/* ----------------------------------------------------- the already-made line -- */
++
++/**
++ * **Which of the *Button* modes are already made for this article**, as the
++ * line beside the reader's message, or `""` when none is (or the read failed:
++ * the model then treats them as buttons, the safe direction). Plan
++ * docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md.
++ *
++ * Below the cache breakpoint like `experienceLine`, because it changes per
++ * article and over time; the system prompt's sentence about it is static.
++ * Each key is named as `modeWordsSection` names its row, so the model can find
++ * the token printed beside it. The page decides the act from its own read
++ * (src/web/guide-acts.ts); this only keeps the model's sentence in step.
++ */
++export function madeLine(made: readonly MadeArtefact[] | null | undefined, rows: readonly CatalogueRow[] = catalogue): string {
++  if (made === null || made === undefined) return "";
++  const names: string[] = [];
++  for (const key of keysOpenFree(made)) {
++    const row = rows.find((r) => r.id === key && r.contexts.includes(OWNER_ARTICLE));
++    if (row === undefined) continue;
++    if (row.kind === "submode") {
++      const parent = rows.find((r) => r.kind === "mode" && key.startsWith(`submode:${r.id.slice("mode:".length)}:`));
++      names.push(parent === undefined ? row.label : `${parent.label} › ${row.label}`);
++    } else names.push(row.label);
++  }
++  return names.length === 0 ? "" : `ALREADY MADE FOR THIS ARTICLE: ${names.join("; ")}.`;
++}
++
+ /* --------------------------------------------------- the experience line -- */
+ 
+ /**
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index fd562cefa..6d6d3a531 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -177,7 +177,7 @@
+   "summary": "Ask about this article — answers point back at the paragraphs they came from.",
+   "keywords": "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore ask question talk discuss conversation assistant chat",
+   "experimental": false,
+-  "body": "Ask about this article — answers point back at the paragraphs they came from.\n\nNothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.\n\n## When to use it\n\nWhen you have a question of your own: what a sentence means, whether a claim follows, how two\npassages fit together. It is the wrong tool for “summarise this” — Summary and Structure already do\nthat, and Chat has no summarising tool on purpose.\n\nQuicker ways in than the Chat button:\n\n- **The speech-bubble in a paragraph’s margin** opens a chat about just that paragraph. Nothing is\n  asked until you send.\n- **The ? in a paragraph’s margin** asks “Help me understand” straight away.\n- **Select some words**: they are highlighted, and the box that opens has an **Ask the AI about\n  this…** field.\n\nChat is only for whoever added the article; on someone else’s shared article its button is dimmed.\n\n## Reading it\n\n(Picture: A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on. Caption: Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.)\n\nThe short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or\npoint at it to read the start first. A dimmed code is a paragraph the article no longer has. Check\nthe passage before you trust the claim — that is what the codes are for.\n\nThe lines above an answer say where else Chat looked:\n\n- **searched the web**: the pages it used are listed under the answer as **From the web**.\n- **searched your library for …**: it searched your other saved articles. This matches words, not\n  meaning, so if it finds nothing, try other words before you conclude you never read about it.\n- **read** and a site name: it fetched that page.\n\nAn answer with none of these came from the article alone. Chat decides when it needs them.\n\nEach article keeps its own conversations under **All conversations**. That list holds every\nconversation you have had about the article, not only the ones started in Chat. A row from somewhere\nelse has a small icon in front of it: point at it, or tap it, to see where it came from, for example\na claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that\nconversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from\nmore than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow\nit.\n\n<kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer\nstill arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.\n\n**Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or\nremove a tag, look a term up in the glossary, or show where the article first says something.\nNothing happens until you press the button; Chat cannot do any of these itself.\n\n**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read\nthis article with Spideryarn, rather than about what it says. A new article opens on it when there\nis room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI\nuntil you send something. The guide can do one thing per answer by itself, if it only moves you:\ntake you to a passage, or open a mode that has nothing to write, such as Structure or Learn. It\nsays so when it does, and **Back** undoes it. Anything that costs money or changes your things, such\nas a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.\n\n**Talking instead of typing.** The microphone turns your speech into text in the box, to edit before\nyou send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice\nquickly and it sends by itself once the words arrive; this works here, in Feedback, in a comment\nfollow-up, in a quiz answer and when you annotate a passage. In the command bar it presses Enter for\nyou instead. **Live**, beside it, is a spoken conversation you can interrupt. Your audio goes\ndirectly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,\nand press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all."
++  "body": "Ask about this article — answers point back at the paragraphs they came from.\n\nNothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.\n\n## When to use it\n\nWhen you have a question of your own: what a sentence means, whether a claim follows, how two\npassages fit together. It is the wrong tool for “summarise this” — Summary and Structure already do\nthat, and Chat has no summarising tool on purpose.\n\nQuicker ways in than the Chat button:\n\n- **The speech-bubble in a paragraph’s margin** opens a chat about just that paragraph. Nothing is\n  asked until you send.\n- **The ? in a paragraph’s margin** asks “Help me understand” straight away.\n- **Select some words**: they are highlighted, and the box that opens has an **Ask the AI about\n  this…** field.\n\nChat is only for whoever added the article; on someone else’s shared article its button is dimmed.\n\n## Reading it\n\n(Picture: A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on. Caption: Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.)\n\nThe short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or\npoint at it to read the start first. A dimmed code is a paragraph the article no longer has. Check\nthe passage before you trust the claim — that is what the codes are for.\n\nThe lines above an answer say where else Chat looked:\n\n- **searched the web**: the pages it used are listed under the answer as **From the web**.\n- **searched your library for …**: it searched your other saved articles. This matches words, not\n  meaning, so if it finds nothing, try other words before you conclude you never read about it.\n- **read** and a site name: it fetched that page.\n\nAn answer with none of these came from the article alone. Chat decides when it needs them.\n\nEach article keeps its own conversations under **All conversations**. That list holds every\nconversation you have had about the article, not only the ones started in Chat. A row from somewhere\nelse has a small icon in front of it: point at it, or tap it, to see where it came from, for example\na claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that\nconversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from\nmore than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow\nit.\n\n<kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer\nstill arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.\n\n**Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or\nremove a tag, look a term up in the glossary, or show where the article first says something.\nNothing happens until you press the button; Chat cannot do any of these itself.\n\n**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read\nthis article with Spideryarn, rather than about what it says. A new article opens on it when there\nis room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI\nuntil you send something. The guide can do one thing per answer by itself, if it only moves you:\ntake you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the\nGlossary or Summary's Brief or Fuller once they have already been written for this article. It\nsays so when it does, and **Back** undoes it. Anything that costs money or changes your things, such\nas a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.\n\n**Talking instead of typing.** The microphone turns your speech into text in the box, to edit before\nyou send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice\nquickly and it sends by itself once the words arrive; this works here, in Feedback, in a comment\nfollow-up, in a quiz answer and when you annotate a passage. In the command bar it presses Enter for\nyou instead. **Live**, beside it, is a spoken conversation you can interrupt. Your audio goes\ndirectly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,\nand press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all."
+  },
+  {
+   "anchor": "mode-glossary",
+diff --git a/src/routes.ts b/src/routes.ts
+index 983325f3a..0dbfc0660 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -391,6 +391,7 @@ import { processSingleton } from "./process-state.js";
+ import { captureFailure, setMonitoringUser } from "./monitoring.js";
+ import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
+ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
++import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
+ import { type GuideExperience, experienceOf } from "./guide.js";
+ import { panelRunKind } from "./glossary.js";
+ import { routeProfileIsStale } from "./skim.js";
+@@ -2965,6 +2966,55 @@ async function exploreNotes(
+   }
+ }
+ 
++/** The store read behind each band's GET — total, so a new row cannot go unread. */
++const MADE_READS: Record<MadeArtefact, (slug: string) => Promise<unknown>> = {
++  glossary: loadGlossary,
++  simple: loadSimpleSummary,
++};
++
++/**
++ * **Which artefacts behind the guide's *Button* modes are stored, for a guide
++ * turn**, or `null` — src/acts-alone.ts § `OPENS_FREE_ONCE_MADE`, plan
++ * docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md.
++ *
++ * The same store reads the bands' GETs make (`loadGlossary` behind
++ * `GET /api/glossary/:slug`, `loadSimpleSummary` behind `/api/simple/:slug`),
++ * where `ArtefactNotMadeYet` is "none". **Any other failure costs the line,
++ * not the turn**, as `guideExperience` below: with no line the model treats
++ * them as buttons, which is the direction that spends nothing.
++ */
++async function guideMade(slug: string, thread: Pick<ChatThread, "kind">): Promise<MadeArtefact[] | null> {
++  if (thread.kind !== "guide") return null;
++  const stored = async (load: () => Promise<unknown>): Promise<boolean> => {
++    try {
++      await load();
++      return true;
++    } catch (err) {
++      if (err instanceof ArtefactNotMadeYet) return false;
++      throw err;
++    }
++  };
++  try {
++    const answers = await Promise.all(
++      (Object.keys(MADE_READS) as MadeArtefact[]).map(async (artefact) =>
++        (await stored(() => MADE_READS[artefact](slug))) ? [artefact] : [],
++      ),
++    );
++    return answers.flat();
++  } catch (err) {
++    const status = (err as { status?: unknown } | null)?.status;
++    log("model").warn(
++      {
++        slug,
++        errType: err instanceof Error ? err.name : typeof err,
++        ...(typeof status === "number" ? { status } : {}),
++      },
++      "guide: could not read which modes are already made; answering without it",
++    );
++    return null;
++  }
++}
++
+ /**
+  * **How much the reader has used Spideryarn, for a guide turn**, or `null`.
+  *
+@@ -3591,6 +3641,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
+       attempt,
+     });
+ 
++    const made = await guideMade(slug, thread);
+     for await (const event of converse({
+       power: powerOf(article),
+       meta: article.meta,
+@@ -3624,6 +3675,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
+          the stored thread's kind like `notes` above. `null` for every other
+          kind, and for a guide turn whose count could not be read. */
+       experience: await guideExperience(slug, thread),
++      /* **Which of its *Button* modes are already made, on every guide turn**:
++         one snapshot, told to the model here and to the page on the `done`
++         frame below, so the model says "I've opened it" exactly when the page
++         will (GPT Sol's F3 on plan 261008a). `null` for every other kind, and
++         for a turn whose reads failed. */
++      made,
+       /* **From the THREAD the store just wrote, never from the request body.**
+          Those two agree only when the request was right, and the request comes
+          from a tab that may be several navigations out of date. A retry and an
+@@ -3703,7 +3760,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
+         ...(event.stopped ? { stopped: true } : {}),
+       };
+       await chatStore.finish(slug, thread.id, reply.id, finished, { attempt: storeAttempt });
+-      frame("done", finished);
++      /* `opensFree` rides on the frame and is never stored: it is a fact about
++         the moment this answer finished, and only an answer this tab watched
++         finish may act on it (src/web/guide-acts.ts). A guide turn's alone. */
++      frame("done", made === null ? finished : { ...finished, opensFree: [...keysOpenFree(made)] });
+     }
+   } catch (err) {
+     /* **Nothing in here may throw**, and that is why it is wrapped again.
+diff --git a/src/web/CommandChip.tsx b/src/web/CommandChip.tsx
+index 4af31fe39..328ac5bb8 100644
+--- a/src/web/CommandChip.tsx
++++ b/src/web/CommandChip.tsx
+@@ -101,16 +101,18 @@ export function CommandChip({
+   const act = useContext(GuideActContext);
+   /* Assigned on every render below; the effect runs after the render that
+      assigned it, so it presses with this render's executor and blocks. */
+-  const pressRef = useRef<(() => void) | null>(null);
++  const pressRef = useRef<((how?: "unarmed") => void) | null>(null);
+   useEffect(() => {
+     if (act === null || act.used) return;
+     const now = chipFor(raw, commands, blocks);
+-    if (now === null || !now.enabled || !actsAlone(now)) return;
++    if (now === null || !now.enabled || !actsAlone(now, act.made)) return;
++    /* A mode the guide opens is opened unarmed, or not at all (plan 261008a). */
++    if (now.proposal.id === "mode" && commands.openModeUnarmed === undefined) return;
+     /* Spent whether or not it runs: a chip the reader cannot see now must not
+        act when the band comes back (GPT Sol's F3 on plan 261007p). */
+     act.used = true;
+     if (button.current === null || !isShown(button.current)) return;
+-    pressRef.current?.();
++    pressRef.current?.("unarmed");
+   }, [act, raw, commands, blocks]);
+   const chip = chipFor(raw, commands, blocks);
+   // Cited.tsx only mounts this for a token that is a chip; if it stopped being
+@@ -134,7 +136,8 @@ export function CommandChip({
+     }
+   };
+ 
+-  const press = () => {
++  /** `"unarmed"` is the guide's act alone: a mode opens with no run armed. */
++  const press = (how?: "unarmed") => {
+     if (inFlight.current) return;
+     /* Asked again now, not remembered from the draw: the owner, the runner and
+        the block are all facts about this moment. */
+@@ -146,7 +149,10 @@ export function CommandChip({
+     const done = doneWords(now.proposal.id);
+     let outcome: ReturnType<typeof runProposal>;
+     try {
+-      outcome = runProposal(commands.runners, now.proposal);
++      outcome =
++        how === "unarmed" && now.proposal.id === "mode"
++          ? (commands.openModeUnarmed?.(now.proposal) ?? null)
++          : runProposal(commands.runners, now.proposal);
+     } catch {
+       outcome = { kind: "stay", message: RUN_FAILED };
+     }
+@@ -180,7 +186,7 @@ export function CommandChip({
+         title={description}
+         disabled={!chip.enabled}
+         aria-busy={pending}
+-        onClick={press}
++        onClick={() => press()}
+       >
+         <span className="cmd-chip-name">{voiced(label)}</span>
+         {generates && <span className="cmd-chip-generates">{GENERATES_MARKER}</span>}
+diff --git a/src/web/chat/controller.ts b/src/web/chat/controller.ts
+index 91a6affe3..84f8e5719 100644
+--- a/src/web/chat/controller.ts
++++ b/src/web/chat/controller.ts
+@@ -191,6 +191,17 @@ export interface Answered {
+   /** The name at Send, before `begin` corrected it; a mounted panel may still hold that name. */
+   readonly startedThreadId: string;
+   readonly message: ChatMessage;
++  /**
++   * The generating modes the server found already made for this turn
++   * (`TurnDone.opensFree`): the one snapshot the guide's prompt was also told,
++   * so its act and its sentence agree (plan 261008a). Empty for anything else.
++   */
++  readonly opensFree: ReadonlySet<string>;
++}
++
++/** `TurnDone.opensFree` off the wire: strings only, anything else is nothing. */
++function opensFreeOf(value: unknown): ReadonlySet<string> {
++  return new Set(Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []);
+ }
+ 
+ /** What React reads: the state, and the two things derived from it. */
+@@ -397,7 +408,8 @@ export class ChatController {
+         .find((t) => t.id === operation.threadId)
+         ?.messages.find((m) => m.id === operation.replyId);
+       if (message?.status === "done") {
+-        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message });
++        const opensFree = opensFreeOf(event.done.opensFree);
++        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message, opensFree });
+       }
+     }
+     for (const command of commands) this.#perform(command);
+diff --git a/src/web/chat/model.ts b/src/web/chat/model.ts
+index b56fdc423..ed9c5c4dc 100644
+--- a/src/web/chat/model.ts
++++ b/src/web/chat/model.ts
+@@ -793,6 +793,13 @@ export interface TurnDone {
+   truncated?: boolean;
+   model?: string;
+   stopped?: boolean;
++  /**
++   * **A guide turn's only**: the catalogue keys of generating modes whose
++   * artefact the server found stored for this turn, so the guide may open them
++   * by itself (src/acts-alone.ts § `OPENS_FREE_ONCE_MADE`, plan 261008a). Never
++   * stored and never on the message: `Answered` carries it to the guide.
++   */
++  opensFree?: string[];
+ }
+ 
+ /**
+diff --git a/src/web/chat/reduce.ts b/src/web/chat/reduce.ts
+index 5e22c8379..8765883b8 100644
+--- a/src/web/chat/reduce.ts
++++ b/src/web/chat/reduce.ts
+@@ -1088,12 +1088,15 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
+          a spread alone cannot clear a stale one. This row may be a retry of one
+          that *was* stopped, and a complete answer wearing "Stopped" underneath
+          it is what leaving the field off looks like. */
++      /* `opensFree` is the guide's, for this moment (`Answered`), and not a
++         field of the message. */
++      const { opensFree: _opensFree, ...done } = event.done;
+       const reply: ChatMessage = {
+         ...op.reply,
+         stopped: false,
+         truncated: false,
+         tools: [],
+-        ...event.done,
++        ...done,
+         status: "done",
+       };
+       return { state: commit(state, { ...op, reply }), commands: NOTHING };
+diff --git a/src/web/command-proposal.ts b/src/web/command-proposal.ts
+index dcf5fd7d3..051e99594 100644
+--- a/src/web/command-proposal.ts
++++ b/src/web/command-proposal.ts
+@@ -505,6 +505,18 @@ export function canRun(runners: ProposalRunners, id: ProposalId): boolean {
+ export interface CommandExecutor {
+   readonly runners: ProposalRunners;
+   readonly sources: ArgumentSources;
++  /**
++   * **Open the mode a `mode` proposal names without arming a run** — what the
++   * guide's own act uses in place of `runners.mode`, never a press (plan
++   * 261008a, GPT Sol's F1; src/web/guide-acts.ts). A press arms the band's run
++   * and the band retires it unspent when its read finds the artefact; the
++   * guide's act does not lean on that, so an artefact that vanished between the
++   * server's read and the band's costs nothing.
++   *
++   * **Absent means the guide opens no mode by itself**: the reading view hands
++   * it over for the owner alone, as it does `runners.mode`.
++   */
++  readonly openModeUnarmed?: ProposalRunners["mode"];
+   /**
+    * **The bands whose *Find more* the bar may press, each with its press** —
+    * since 2026-10-04, plan 261004k. Not a proposal: it takes no argument, so
+diff --git a/src/web/command-runners.ts b/src/web/command-runners.ts
+index 87b6ae292..2f5b31a94 100644
+--- a/src/web/command-runners.ts
++++ b/src/web/command-runners.ts
+@@ -214,6 +214,8 @@ export type ModeCommand = Extract<Command, { kind: "mode" | "submode" }>;
+ export interface ModeDoor {
+   readonly targets: ReadonlyMap<string, ModeTarget>;
+   open(key: string): void;
++  /** The same move with nothing armed — the guide's own act (plan 261008a). */
++  openUnarmed(key: string): void;
+ }
+ 
+ /**
+@@ -230,13 +232,15 @@ export interface ModeDoor {
+  * press arms and moves the band the way it does, so the chip's `generates`
+  * marker (`modeGenerates`, `subModeGenerates`) is a statement about what the
+  * press will do, not a guess beside it.
++ *
++ * `unarmed` is the same pair built with `arms` false, for the guide's act
++ * (`CommandExecutor.openModeUnarmed`): the band moves exactly as a press moves
++ * it, and no run is armed.
+  */
+ export function modeDoor(
+   commands: readonly ModeCommand[],
+-  activate: {
+-    mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
+-    sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
+-  },
++  activate: ModeActivators,
++  unarmed: ModeActivators,
+ ): ModeDoor {
+   const byKey = new Map<string, ModeCommand>();
+   const targets = new Map<string, ModeTarget>();
+@@ -253,25 +257,30 @@ export function modeDoor(
+       generates: command.kind === "mode" ? modeGenerates(command.mode) : subModeGenerates(command.sub),
+     });
+   }
+-  return {
+-    targets,
+-    open(key) {
+-      const command = byKey.get(key);
+-      if (command === undefined) return;
+-      if (command.kind === "mode") activate.mode(command);
+-      else activate.sub(command);
+-    },
++  const through = (pair: ModeActivators) => (key: string) => {
++    const command = byKey.get(key);
++    if (command === undefined) return;
++    if (command.kind === "mode") pair.mode(command);
++    else pair.sub(command);
+   };
++  return { targets, open: through(activate), openUnarmed: through(unarmed) };
++}
++
++/** The Dock's two activators, as `modeDoor` takes them. */
++export interface ModeActivators {
++  mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
++  sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
+ }
+ 
+ /**
+  * **Open the mode a chip names** — refused, in a sentence, if the door no
+  * longer offers it (it went behind the switch between draw and press).
+  */
+-export function modeRunner(door: ModeDoor): Runner<"mode"> {
++export function modeRunner(door: ModeDoor, armed: "armed" | "unarmed" = "armed"): Runner<"mode"> {
+   return ({ key }) => {
+     if (!door.targets.has(key)) return { kind: "stay", message: "That mode isn't available here any more." };
+-    door.open(key);
++    if (armed === "armed") door.open(key);
++    else door.openUnarmed(key);
+     return CLOSE;
+   };
+ }
+@@ -346,6 +355,7 @@ export function readingExecutor({
+       ...(glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } }),
+       ...(modes === undefined ? {} : { modes: modes.targets }),
+     },
++    ...(modes === undefined ? {} : { openModeUnarmed: modeRunner(modes, "unarmed") }),
+     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
+     ...(quickSearch === undefined ? {} : { quickSearch }),
+     ...(askThroughLens === undefined
+@@ -413,5 +423,7 @@ export function chatExecutor({
+       },
+     },
+     sources: reading.sources,
++    /* The guide's act, which is chat's alone. */
++    ...(reading.openModeUnarmed === undefined ? {} : { openModeUnarmed: reading.openModeUnarmed }),
+   };
+ }
+diff --git a/src/web/guide-acts.ts b/src/web/guide-acts.ts
+index 6a8466fa9..3c1c9f3b8 100644
+--- a/src/web/guide-acts.ts
++++ b/src/web/guide-acts.ts
+@@ -15,11 +15,18 @@
+  *   (GPT Sol's F2). A stopped or cut-off answer does not act;
+  * - **the chip is drawn and actually visible** at that moment (`isShown`): a
+  *   band stepped aside on a phone is still mounted (F3);
+- * - **it only moves the reader** (`actsAlone`): a jump, or a mode that makes
+- *   nothing and writes nothing (src/acts-alone.ts). A quick search, a look-up,
+- *   a find, a tag, a bookmark, and every mode that generates stay presses, so a
+- *   planted instruction in the article can at worst move the reader, which
+- *   Back undoes;
++ * - **it only moves the reader** (`actsAlone`): a jump, a mode that makes
++ *   nothing and writes nothing (src/acts-alone.ts), or — since 2026-10-08 —
++ *   Glossary or Summary's Brief or Fuller when the server found what they show
++ *   already stored for this turn (`made`, plan
++ *   docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md).
++ *   A quick search, a look-up, a find, a tag, a bookmark, and every other mode
++ *   that generates stay presses, so a planted instruction in the article can at
++ *   worst move the reader, which Back undoes;
++ * - **and a mode it opens is never armed** (CommandChip.tsx,
++ *   `CommandExecutor.openModeUnarmed`): if a stored artefact vanished between
++ *   the server's read and the band's, the band shows its empty state and its
++ *   own *Write it*, and nothing is bought (GPT Sol's F1 on plan 261008a);
+  * - **it is the first such chip in the answer.** Two moves would undo each
+  *   other, and the reader could not follow what happened.
+  *
+@@ -34,7 +41,7 @@
+  * rather than acting late. StrictMode's second effect run finds it spent.
+  */
+ import { createContext, useEffect, useState } from "react";
+-import { modeActsAlone } from "../acts-alone.js";
++import { modeActsAlone, OPENS_FREE_ONCE_MADE } from "../acts-alone.js";
+ import type { ChatMessage, ThreadKind } from "../types.js";
+ import type { ChatChip } from "./chat-commands.js";
+ import type { Answered } from "./chat/controller.js";
+@@ -43,6 +50,12 @@ import type { Answered } from "./chat/controller.js";
+ export interface GuideAct {
+   readonly messageId: string;
+   used: boolean;
++  /**
++   * The generating modes the server found already made for this turn
++   * (`Answered.opensFree`) — the snapshot the model was told too, so the
++   * sentence it wrote and what opens agree.
++   */
++  readonly made: ReadonlySet<string>;
+ }
+ 
+ /** The act for the answer a chip is drawn in, or `null`: every chip outside a guide's just-finished answer. */
+@@ -65,7 +78,7 @@ export function useGuideAct(
+     return onAnswered((answered) => {
+       if (answered.threadId !== threadId && answered.startedThreadId !== threadId) return;
+       if (!answerMayAct(answered.message)) return;
+-      setFinished({ answered, act: { messageId: answered.message.id, used: false } });
++      setFinished({ answered, act: { messageId: answered.message.id, used: false, made: answered.opensFree } });
+     });
+   }, [kind, onAnswered, visible, threadId]);
+   useEffect(() => {
+@@ -86,19 +99,28 @@ export function answerMayAct(message: ChatMessage): boolean {
+   return message.role === "assistant" && message.status === "done" && message.stopped !== true && message.truncated !== true;
+ }
+ 
++/** Every key `OPENS_FREE_ONCE_MADE` names: `made` can widen the act to these and no others. */
++const MAY_BE_MADE: ReadonlySet<string> = new Set(Object.values(OPENS_FREE_ONCE_MADE).flat());
++
++const NOTHING_MADE: ReadonlySet<string> = new Set();
++
+ /**
+  * **Would pressing this chip only move the reader?** A jump to the first place
+- * the article has some words, or a mode `modeActsAlone` allows. Everything
+- * else — including a glossary look-up that happens to resolve to an entry, so
+- * that what the model told the reader (*"the button will look it up"*) stays
+- * true — is a press.
++ * the article has some words, a mode `modeActsAlone` allows, or one of the
++ * generating modes src/acts-alone.ts § `OPENS_FREE_ONCE_MADE` names whose key
++ * is in `made`. Everything else — including a glossary look-up that happens to
++ * resolve to an entry, so that what the model told the reader (*"the button
++ * will look it up"*) stays true — is a press.
+  */
+-export function actsAlone(chip: ChatChip): boolean {
++export function actsAlone(chip: ChatChip, made: ReadonlySet<string> = NOTHING_MADE): boolean {
+   switch (chip.proposal.id) {
+     case "jump-first":
+       return true;
+-    case "mode":
+-      return chip.target !== undefined && modeActsAlone(chip.target.key, chip.target.generates);
++    case "mode": {
++      const target = chip.target;
++      if (target === undefined) return false;
++      return modeActsAlone(target.key, target.generates) || (MAY_BE_MADE.has(target.key) && made.has(target.key));
++    }
+     case "find":
+     case "glossary-open":
+     case "glossary-ask":
+diff --git a/src/web/help/pages/modes/chat.md b/src/web/help/pages/modes/chat.md
+index 8f81f5731..cd99a61ef 100644
+--- a/src/web/help/pages/modes/chat.md
++++ b/src/web/help/pages/modes/chat.md
+@@ -54,7 +54,8 @@ Nothing happens until you press the button; Chat cannot do any of these itself.
+ this article with Spideryarn, rather than about what it says. A new article opens on it when there
+ is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
+ until you send something. The guide can do one thing per answer by itself, if it only moves you:
+-take you to a passage, or open a mode that has nothing to write, such as Structure or Learn. It
++take you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the
++Glossary or Summary's Brief or Fuller once they have already been written for this article. It
+ says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
+ as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
+ 
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 14d546634..7df55590c 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -2716,7 +2716,12 @@ export function Reader({
+    * the switch is off. The press is the Dock's own pair of activators, through
+    * `modeActivators` (set below, beside `onDockMode`).
+    */
+-  const modeActivators = useRef<{ mode(next: Mode): void; sub(sub: SubMode): void } | null>(null);
++  const modeActivators = useRef<{
++    mode(next: Mode): void;
++    sub(sub: SubMode): void;
++    modeUnarmed(next: Mode): void;
++    subUnarmed(sub: SubMode): void;
++  } | null>(null);
+   const chipModes = useMemo(() => {
+     if (!isOwner) return undefined;
+     const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
+@@ -2733,10 +2738,17 @@ export function Reader({
+           experimental.on ||
+           (c.kind === "mode" ? !MODE_CATALOG[c.mode].experimental : !subModeWords(c.sub).experimental),
+       );
+-    return modeDoor(rows, {
+-      mode: (c) => modeActivators.current?.mode(c.mode),
+-      sub: (c) => modeActivators.current?.sub(c.sub),
+-    });
++    return modeDoor(
++      rows,
++      {
++        mode: (c) => modeActivators.current?.mode(c.mode),
++        sub: (c) => modeActivators.current?.sub(c.sub),
++      },
++      {
++        mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
++        sub: (c) => modeActivators.current?.subUnarmed(c.sub),
++      },
++    );
+   }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
+   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
+   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
+@@ -3861,7 +3873,28 @@ export function Reader({
+     marginOpen,
+   );
+   const activateSubModeHere = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, isOwner);
+-  modeActivators.current = { mode: activateModeHere, sub: activateSubModeHere };
++  /* **The same two with `arms` false, for the guide's own act** (plan 261008a,
++     GPT Sol's F1): it moves the band exactly as a chip's press does and arms
++     nothing, so a stored Glossary or Summary it opens cannot buy a run even if
++     the artefact went between the server's read and the band's. */
++  const activateModeUnarmed = useActivateMode(
++    slug,
++    carriedSearch(location.search),
++    subNav.diagram,
++    summaryView,
++    onDockMode,
++    false,
++    mode,
++    false,
++    marginOpen,
++  );
++  const activateSubModeUnarmed = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, false);
++  modeActivators.current = {
++    mode: activateModeHere,
++    sub: activateSubModeHere,
++    modeUnarmed: activateModeUnarmed,
++    subUnarmed: activateSubModeUnarmed,
++  };
+ 
+   return (
+     /* Every block link inside — panels, chips, the chat dialog through its
+diff --git a/tests/command-runners.test.ts b/tests/command-runners.test.ts
+index b1ccc9966..3b9d738da 100644
+--- a/tests/command-runners.test.ts
++++ b/tests/command-runners.test.ts
+@@ -310,7 +310,7 @@ describe("the mode door", () => {
+   ];
+ 
+   it("offers exactly the rows it is handed, each with the mode's own marker", () => {
+-    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() });
++    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() }, { mode: vi.fn(), sub: vi.fn() });
+     expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:tutorial"]);
+     expect(door.targets.get("mode:summary")?.generates).toBe(true);
+     expect(door.targets.get("mode:structure")?.generates).toBe(false);
+@@ -321,7 +321,8 @@ describe("the mode door", () => {
+   it("opens a mode or a sub-mode through the activator it was handed, once", () => {
+     const mode = vi.fn();
+     const sub = vi.fn();
+-    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }) });
++    const unarmed = { mode: vi.fn(), sub: vi.fn() };
++    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }, unarmed) });
+     expect(executor.sources.modes?.has("mode:summary")).toBe(true);
+     expect(executor.runners.mode?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
+     expect(mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
+@@ -329,11 +330,30 @@ describe("the mode door", () => {
+     expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
+     expect(mode).toHaveBeenCalledTimes(1);
+     expect(sub).toHaveBeenCalledTimes(1);
++    expect(unarmed.mode, "a press never goes through the unarmed pair").not.toHaveBeenCalled();
++    expect(unarmed.sub).not.toHaveBeenCalled();
++  });
++
++  /* Plan 261008a, GPT Sol's F1: the guide's own act opens a mode through the
++     pair built with `arms` false, and never through the press's. */
++  it("opens through the unarmed pair for the guide's act, and offers it to chat", () => {
++    const armed = { mode: vi.fn(), sub: vi.fn() };
++    const unarmed = { mode: vi.fn(), sub: vi.fn() };
++    const reading = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, armed, unarmed) });
++    expect(reading.openModeUnarmed?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
++    expect(unarmed.mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
++    expect(reading.openModeUnarmed?.({ id: "mode", key: "submode:learn:tutorial" })).toEqual({ kind: "close" });
++    expect(unarmed.sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
++    expect(armed.mode).not.toHaveBeenCalled();
++    expect(armed.sub).not.toHaveBeenCalled();
++    const chat = chatExecutor({ reading, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
++    expect(chat.openModeUnarmed).toBe(reading.openModeUnarmed);
++    expect(readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() }).openModeUnarmed).toBeUndefined();
+   });
+ 
+   it("refuses a key it does not offer, and opens nothing", () => {
+     const mode = vi.fn();
+-    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }));
++    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }, { mode, sub: vi.fn() }));
+     expect(runner({ id: "mode", key: "mode:debate" })).toEqual({
+       kind: "stay",
+       message: "That mode isn't available here any more.",
+diff --git a/tests/guide-acts-chips.test.tsx b/tests/guide-acts-chips.test.tsx
+index d3f60638f..49a228845 100644
+--- a/tests/guide-acts-chips.test.tsx
++++ b/tests/guide-acts-chips.test.tsx
+@@ -11,6 +11,11 @@
+  * spent runs nothing; a chip the reader cannot see spends the act without
+  * running; and with no act, nothing runs on render, as before.
+  *
++ * Since plan 261008a: a mode the act opens goes through `openModeUnarmed`, never
++ * the press's armed `runners.mode` — here `mode` is the unarmed opener and
++ * `armed` the press's runner — and a generating mode the server found made for
++ * the turn (`GuideAct.made`) acts like a free one.
++ *
+  * jsdom has no `Element.prototype.checkVisibility` (checked below), so `isShown`
+  * falls back to the ancestors' computed `display`, which inline style answers.
+  */
+@@ -48,12 +53,18 @@ const MODES = new Map<string, ModeTarget>([
+   ["mode:quotes", target("mode:quotes", false)],
+   ["mode:glossary", target("mode:glossary", true)],
+   ["mode:search", target("mode:search", false)],
++  ["mode:ideas", target("mode:ideas", true)],
++  ["submode:summary:brief", target("submode:summary:brief", true)],
++  ["submode:summary:thread", target("submode:summary:thread", true)],
+ ]);
+ 
+ const STRUCTURE = "[cmd:mode:mode%3Astructure]";
+ const QUOTES = "[cmd:mode:mode%3Aquotes]";
+ const GLOSSARY = "[cmd:mode:mode%3Aglossary]";
+ const SEARCH = "[cmd:mode:mode%3Asearch]";
++const IDEAS = "[cmd:mode:mode%3Aideas]";
++const BRIEF = "[cmd:mode:submode%3Asummary%3Abrief]";
++const THREAD = "[cmd:mode:submode%3Asummary%3Athread]";
+ const JUMP = "[cmd:jump-first:the%20method]";
+ const QUICK = "[cmd:quick-search:imaging%20method]";
+ const FIND = "[cmd:find:imaging]";
+@@ -61,7 +72,10 @@ const BOOKMARK = `[cmd:bookmark:${BLOCK}]`;
+ 
+ function spies() {
+   return {
++    /** The unarmed opener the act uses (`openModeUnarmed`). */
+     mode: vi.fn((_p: { key: string }) => CLOSE),
++    /** The press's own `runners.mode`, which arms a run: an act never calls it. */
++    armed: vi.fn((_p: { key: string }) => CLOSE),
+     "jump-first": vi.fn(() => CLOSE),
+     "quick-search": vi.fn(() => CLOSE),
+     find: vi.fn(() => CLOSE),
+@@ -69,8 +83,8 @@ function spies() {
+   };
+ }
+ 
+-function executor(runners: ReturnType<typeof spies>): CommandExecutor {
+-  return { runners, sources: { modes: MODES } };
++function executor(r: ReturnType<typeof spies>): CommandExecutor {
++  return { runners: { ...r, mode: r.armed }, sources: { modes: MODES }, openModeUnarmed: r.mode };
+ }
+ 
+ /** An answer whose tokens are each on a line of their own. */
+@@ -85,7 +99,7 @@ function paint(text: string, commands: CommandExecutor, guide: GuideAct | null,
+ }
+ 
+ const chips = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>("button.cmd-chip")];
+-const fresh = (): GuideAct => ({ messageId: "spya-ans001", used: false });
++const fresh = (made: readonly string[] = []): GuideAct => ({ messageId: "spya-ans001", used: false, made: new Set(made) });
+ 
+ it("runs in a DOM with no checkVisibility, so isShown reads computed display (the premise of the hidden case)", () => {
+   expect(typeof (Element.prototype as { checkVisibility?: unknown }).checkVisibility).toBe("undefined");
+@@ -171,7 +185,7 @@ describe("when the act must not happen", () => {
+ 
+   it("runs nothing when the act is already used", () => {
+     const r = spies();
+-    paint(answer(STRUCTURE, JUMP), executor(r), { messageId: "spya-ans001", used: true });
++    paint(answer(STRUCTURE, JUMP), executor(r), { messageId: "spya-ans001", used: true, made: new Set() });
+     expect(r.mode).not.toHaveBeenCalled();
+     expect(r["jump-first"]).not.toHaveBeenCalled();
+   });
+@@ -224,3 +238,53 @@ describe("when the act must not happen", () => {
+     expect(r["jump-first"], "the next eligible, enabled chip acts").toHaveBeenCalledTimes(1);
+   });
+ });
++
++/* Plan 261008a (qi-ztp3w9az): Glossary and Summary's Brief and Fuller open by
++   themselves when the server found them made for this turn, and never armed. */
++describe("a generating mode that is already made", () => {
++  it("opens a made Glossary by itself, unarmed", () => {
++    const r = spies();
++    const guide = fresh(["mode:glossary"]);
++    paint(answer(GLOSSARY), executor(r), guide);
++    expect(r.mode).toHaveBeenCalledTimes(1);
++    expect(r.mode.mock.calls[0]?.[0].key).toBe("mode:glossary");
++    expect(r.armed, "the act never arms a run").not.toHaveBeenCalled();
++    expect(guide.used).toBe(true);
++  });
++
++  it("opens a made Summary › Brief by itself", () => {
++    const r = spies();
++    paint(answer(BRIEF), executor(r), fresh(["submode:summary:brief"]));
++    expect(r.mode.mock.calls[0]?.[0].key).toBe("submode:summary:brief");
++  });
++
++  it("leaves a Glossary that is not made a button, and lets the Structure after it act", () => {
++    const r = spies();
++    paint(answer(GLOSSARY, STRUCTURE), executor(r), fresh(["submode:summary:brief"]));
++    expect(r.mode).toHaveBeenCalledTimes(1);
++    expect(r.mode.mock.calls[0]?.[0].key).toBe("mode:structure");
++  });
++
++  it("does not let `made` widen the act to a key outside the table, even if the server named it", () => {
++    const r = spies();
++    paint(answer(IDEAS, THREAD), executor(r), fresh(["mode:ideas", "submode:summary:thread"]));
++    expect(r.mode).not.toHaveBeenCalled();
++  });
++
++  it("opens no mode by itself where there is no unarmed door, and leaves the act for a jump", () => {
++    const r = spies();
++    const guide = fresh(["mode:glossary"]);
++    paint(answer(GLOSSARY, STRUCTURE, JUMP), { ...executor(r), openModeUnarmed: undefined }, guide);
++    expect(r.mode).not.toHaveBeenCalled();
++    expect(r.armed).not.toHaveBeenCalled();
++    expect(r["jump-first"]).toHaveBeenCalledTimes(1);
++  });
++
++  it("still arms through the press when the reader presses the same chip", () => {
++    const r = spies();
++    paint(answer(GLOSSARY), executor(r), null);
++    act(() => chips()[0]?.click());
++    expect(r.armed).toHaveBeenCalledTimes(1);
++    expect(r.mode).not.toHaveBeenCalled();
++  });
++});
+diff --git a/tests/guide-acts-controller.test.ts b/tests/guide-acts-controller.test.ts
+index 23101d220..d92d5a905 100644
+--- a/tests/guide-acts-controller.test.ts
++++ b/tests/guide-acts-controller.test.ts
+@@ -124,6 +124,27 @@ describe("the controller's Answered event", () => {
+     expect(heard).toHaveLength(1);
+   });
+ 
++  /* Plan 261008a: the server's snapshot of what is already made rides on the
++     `done` frame to the guide, and never onto the message. */
++  it("carries the done frame's opensFree to the listener, and keeps it off the message", async () => {
++    const { c, sink } = await opened();
++    const heard: Answered[] = [];
++    c.onAnswered((a) => heard.push(a));
++    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m", opensFree: ["mode:glossary", 7 as unknown as string] });
++    expect([...(heard[0]?.opensFree ?? [])]).toEqual(["mode:glossary"]);
++    expect(heard[0]?.message).not.toHaveProperty("opensFree");
++    const row = c.threads.find((t) => t.id === SERVER_THREAD)?.messages.find((m) => m.id === SERVER_REPLY);
++    expect(row).not.toHaveProperty("opensFree");
++  });
++
++  it("carries an empty opensFree when the done frame has none", async () => {
++    const { c, sink } = await opened();
++    const heard: Answered[] = [];
++    c.onAnswered((a) => heard.push(a));
++    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
++    expect(heard[0]?.opensFree.size).toBe(0);
++  });
++
+   it("tells every listener, each once", async () => {
+     const { c, sink } = await opened();
+     const one = vi.fn();
+diff --git a/tests/guide-acts-conversation.test.tsx b/tests/guide-acts-conversation.test.tsx
+index a50b95e50..c18ae32b2 100644
+--- a/tests/guide-acts-conversation.test.tsx
++++ b/tests/guide-acts-conversation.test.tsx
+@@ -45,6 +45,7 @@ const CLOSE: ActionOutcome = { kind: "close" };
+ 
+ const MODES = new Map<string, ModeTarget>([
+   ["mode:structure", { key: "mode:structure", label: "Structure", description: "Its shape.", generates: false }],
++  ["mode:glossary", { key: "mode:glossary", label: "Glossary", description: "Its terms.", generates: true }],
+ ]);
+ 
+ function reply(over: Partial<ChatMessage> = {}): ChatMessage {
+@@ -72,9 +73,9 @@ function answeredHub() {
+         listeners.delete(listener);
+       };
+     },
+-    fire(a: Omit<Answered, "startedThreadId">) {
++    fire(a: Omit<Answered, "startedThreadId" | "opensFree"> & { opensFree?: ReadonlySet<string> }) {
+       act(() => {
+-        for (const l of [...listeners]) l({ ...a, startedThreadId: a.threadId });
++        for (const l of [...listeners]) l({ opensFree: new Set(), ...a, startedThreadId: a.threadId });
+       });
+     },
+     get size() {
+@@ -118,7 +119,7 @@ const chips = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonEle
+ beforeEach(() => {
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+   mode = vi.fn((_p: { key: string }) => CLOSE);
+-  executor = { runners: { mode }, sources: { modes: MODES } };
++  executor = { runners: { mode }, sources: { modes: MODES }, openModeUnarmed: mode };
+   host = document.createElement("div");
+   document.body.append(host);
+   root = createRoot(host);
+@@ -207,3 +208,24 @@ describe("any other conversation", () => {
+     expect(mode).not.toHaveBeenCalled();
+   });
+ });
++
++/* Plan 261008a: the server's snapshot reaches the act through `Answered`. */
++describe("a guide answer that opens a mode already made", () => {
++  const glossaryReply = reply({ text: "I've opened the Glossary for you.\n\n[cmd:mode:mode%3Aglossary]" });
++
++  it("opens the Glossary when the server said it was made for this turn", () => {
++    const hub = answeredHub();
++    paint(thread("guide", glossaryReply), hub);
++    hub.fire({ threadId: THREAD, message: glossaryReply, opensFree: new Set(["mode:glossary"]) });
++    expect(mode).toHaveBeenCalledTimes(1);
++    expect(mode.mock.calls[0]?.[0].key).toBe("mode:glossary");
++  });
++
++  it("leaves it a button when the server did not", () => {
++    const hub = answeredHub();
++    paint(thread("guide", glossaryReply), hub);
++    hub.fire({ threadId: THREAD, message: glossaryReply });
++    expect(chips()).toHaveLength(1);
++    expect(mode).not.toHaveBeenCalled();
++  });
++});
+diff --git a/tests/guide-acts-live-stream.test.tsx b/tests/guide-acts-live-stream.test.tsx
+index cc468404e..fbf383393 100644
+--- a/tests/guide-acts-live-stream.test.tsx
++++ b/tests/guide-acts-live-stream.test.tsx
+@@ -89,7 +89,7 @@ function setUp(panel = false) {
+   };
+   const c = new ChatController(SLUG, effects);
+   const mode = vi.fn((_p: { key: string }) => CLOSE);
+-  const executor = { runners: { mode }, sources: { modes: MODES } };
++  const executor = { runners: { mode }, sources: { modes: MODES }, openModeUnarmed: mode };
+   let select: (id: string | null) => void = () => {};
+ 
+   function Band() {
+diff --git a/tests/guide-kind.test.ts b/tests/guide-kind.test.ts
+index 003380cd9..0ba65c3ef 100644
+--- a/tests/guide-kind.test.ts
++++ b/tests/guide-kind.test.ts
+@@ -15,7 +15,7 @@ import { withTurn } from "../src/chat.js";
+ import { CHAT_TOOLS, GUIDE_TOOLS, toolsFor } from "../src/chat-tools.js";
+ import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
+ import { cachedText } from "../src/article-prompt.js";
+-import { A_FEW_ARTICLES, experienceLine, experienceOf, modeWordsSection } from "../src/guide.js";
++import { A_FEW_ARTICLES, experienceLine, experienceOf, madeLine, modeWordsSection } from "../src/guide.js";
+ import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
+ import type { Block, ChatMessage, Meta, ThreadKind } from "../src/types.js";
+ import {
+@@ -236,6 +236,43 @@ describe("how much the reader has used Spideryarn", () => {
+   });
+ });
+ 
++/* Plan 261008a (qi-ztp3w9az): which *Button* modes are already made, so open at
++   once — one per-turn line, read from the same snapshot the page acts on. */
++describe("which modes are already made", () => {
++  it("names each mode that opens free by the name the mode words give it", () => {
++    expect(madeLine(["glossary"])).toBe("ALREADY MADE FOR THIS ARTICLE: Glossary.");
++    expect(madeLine(["glossary", "simple"])).toBe(
++      "ALREADY MADE FOR THIS ARTICLE: Glossary; Summary › Brief; Summary › Fuller.",
++    );
++    /* Each name is one the mode words list, with the token beside it. */
++    const section = modeWordsSection();
++    expect(section).toContain("- Glossary: ");
++    expect(section).toContain("  - Summary › Brief: ");
++    expect(section).toContain("  - Summary › Fuller: ");
++  });
++
++  it("says nothing when nothing is made, or the read failed", () => {
++    expect(madeLine([])).toBe("");
++    expect(madeLine(null)).toBe("");
++  });
++
++  it("is told, in the cached system prompt, what the line means", () => {
++    expect(systemOf("guide")).toContain("ALREADY MADE FOR THIS ARTICLE");
++  });
++
++  it("rides in the final user message for the guide only, and never above the breakpoint", () => {
++    const messages = build("guide", { made: ["glossary"] });
++    const last = lastOf(messages);
++    expect(last).toContain("ALREADY MADE FOR THIS ARTICLE: Glossary.");
++    expect(last.indexOf("ALREADY MADE")).toBeLessThan(last.indexOf(base.question));
++    expect(build("guide", { made: null }).slice(0, 3)).toEqual(messages.slice(0, 3));
++    expect(cachedText(messages)).not.toContain("ALREADY MADE FOR THIS ARTICLE:");
++    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
++      expect(lastOf(build(kind, { made: ["glossary"] }))).not.toContain("ALREADY MADE");
++    }
++  });
++});
++
+ describe("the guide's tools", () => {
+   it("are the article's own five, in chat's order", () => {
+     expect(toolsFor("guide")).toBe(GUIDE_TOOLS);
+diff --git a/tests/guide-route.test.ts b/tests/guide-route.test.ts
+index 54425c3af..261b09355 100644
+--- a/tests/guide-route.test.ts
++++ b/tests/guide-route.test.ts
+@@ -12,19 +12,39 @@
+  * line and not the turn, and says so in the log without a count; a guide turn
+  * is offered no web search and no tool that leaves the article; and a guide
+  * refuses `visible`, as every non-chat kind does.
++ *
++ * And since plan 261008a: which *Button* modes are already made is read per
++ * guide turn from the stores behind the bands' GETs, told to the model in the
++ * final message, and sent to the page on the `done` frame — never stored.
++ * `loadGlossary` and `loadSimpleSummary` are the real ones unless a test sets
++ * `storedReads`.
+  */
+ import type { IncomingMessage, ServerResponse } from "node:http";
+ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+-vi.hoisted(() => {
++const storedReads = vi.hoisted(() => {
+   /* Raised before src/log.ts loads, or the failed-count line is never written.
+      tests/helpers/log-capture.ts. */
+   process.env.LOG_LEVEL = "warn";
++  return {
++    glossary: null as null | (() => Promise<unknown>),
++    simple: null as null | (() => Promise<unknown>),
++  };
++});
++
++vi.mock("../src/store/index.js", async (importOriginal) => {
++  const real = await importOriginal<typeof import("../src/store/index.js")>();
++  return {
++    ...real,
++    loadGlossary: (slug: string) => (storedReads.glossary ? storedReads.glossary() : real.loadGlossary(slug)),
++    loadSimpleSummary: (slug: string) => (storedReads.simple ? storedReads.simple() : real.loadSimpleSummary(slug)),
++  };
+ });
+ 
+ import { closeDb } from "../src/db/client.js";
+ import { loadEnvLocal } from "../src/env.js";
+ import { mintId } from "../src/ids.js";
++import { ArtefactNotMadeYet } from "../src/store/artefact-not-made-yet.js";
+ import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+ import { logLinesWhile } from "./helpers/log-capture.js";
+ import { pgReady } from "./helpers/pg-ready.js";
+@@ -51,6 +71,10 @@ beforeAll(async () => {
+ 
+ beforeEach(async () => {
+   sent.length = 0;
++  written.length = 0;
++  answerWith = null;
++  storedReads.glossary = null;
++  storedReads.simple = null;
+   vi.restoreAllMocks();
+   await asTestOwner(async () => {
+     for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+@@ -68,6 +92,19 @@ interface Sent {
+   tool_choice?: unknown;
+ }
+ const sent: Sent[] = [];
++/** What the route wrote back, for the `done` frame. */
++const written: string[] = [];
++/** When set, the model answers with these words and finishes, instead of failing. */
++let answerWith: string | null = null;
++
++function finishedBody(words: string): Response {
++  const chunk = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
++  const body =
++    chunk({ model: "test/model", choices: [{ delta: { content: words } }] }) +
++    chunk({ model: "test/model", choices: [{ delta: {}, finish_reason: "stop" }] }) +
++    "data: [DONE]\n\n";
++  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
++}
+ 
+ const realFetch = globalThis.fetch;
+ beforeAll(() => {
+@@ -78,6 +115,7 @@ beforeAll(() => {
+     } catch {
+       /* not a model request */
+     }
++    if (answerWith !== null) return Promise.resolve(finishedBody(answerWith));
+     return Promise.reject(new Error("no model in tests"));
+   }) as unknown as typeof fetch;
+ });
+@@ -100,7 +138,8 @@ async function post(body: unknown): Promise<number> {
+     setHeader() {},
+     flushHeaders() {},
+     on() {},
+-    write() {
++    write(chunk: unknown) {
++      written.push(String(chunk));
+       return true;
+     },
+     end() {
+@@ -205,3 +244,72 @@ describe("a turn of any other kind", () => {
+     },
+   );
+ });
++
++/* Plan 261008a (qi-ztp3w9az). */
++describe("which modes are already made, on a guide turn", () => {
++  const MADE = "ALREADY MADE FOR THIS ARTICLE:";
++  const doneFrame = (): Record<string, unknown> => {
++    const frame = written.find((w) => w.startsWith("event: done\n"));
++    if (frame === undefined) throw new Error(`no done frame in ${written.length} writes`);
++    return JSON.parse(frame.slice(frame.indexOf("data: ") + 6)) as Record<string, unknown>;
++  };
++
++  it("tells the model and the page the same snapshot, and stores neither", async () => {
++    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
++    storedReads.glossary = async () => ({ glossary: { entries: [] } });
++    storedReads.simple = async () => {
++      throw new ArtefactNotMadeYet("none yet");
++    };
++    answerWith = "I've opened the Glossary.";
++    expect(await post({ threadId: "spya-gdrtm2", question: "Which terms matter?", kind: "guide" })).toBe(200);
++    const { head, final } = lastRequest();
++    expect(final).toContain(`${MADE} Glossary.`);
++    expect(final).not.toContain("Summary › Brief");
++    expect(head).not.toContain(MADE + " ");
++    expect(doneFrame().opensFree).toEqual(["mode:glossary"]);
++    const stored = await asTestOwner(() => chatStore.load(SLUG));
++    const answer = stored.flatMap((t) => t.messages).find((m) => m.role === "assistant");
++    expect(answer?.status, "the control: the answer was stored").toBe("done");
++    expect(answer).not.toHaveProperty("opensFree");
++  });
++
++  it("names nothing, and sends an empty list, when nothing is made", async () => {
++    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
++    const none = async () => {
++      throw new ArtefactNotMadeYet("none yet");
++    };
++    storedReads.glossary = none;
++    storedReads.simple = none;
++    answerWith = "Start with the introduction.";
++    expect(await post({ threadId: "spya-gdrtn2", question: "Where do I start?", kind: "guide" })).toBe(200);
++    expect(lastRequest().final).not.toContain(MADE);
++    expect(doneFrame().opensFree).toEqual([]);
++  });
++
++  it("costs the line and not the turn when a read fails, and sends no list", async () => {
++    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
++    storedReads.simple = async () => {
++      throw Object.assign(new Error("connection dropped"), { status: 503 });
++    };
++    answerWith = "Start with the introduction.";
++    let status = 0;
++    const lines = await logLinesWhile(async () => {
++      status = await post({ threadId: "spya-gdrto2", question: "carry on", kind: "guide" });
++    });
++    expect(status).toBe(200);
++    expect(lastRequest().final).not.toContain(MADE);
++    expect(doneFrame()).not.toHaveProperty("opensFree");
++    expect(lines).toContain("guide: could not read which modes are already made");
++    expect(lines).not.toContain("connection dropped");
++  });
++
++  it("is neither read nor sent on a chat turn", async () => {
++    const glossary = vi.fn(async () => ({ glossary: { entries: [] } }));
++    storedReads.glossary = glossary;
++    answerWith = "An answer.";
++    expect(await post({ threadId: "spya-gdrtp2", question: "What does it say?", kind: "chat" })).toBe(200);
++    expect(glossary).not.toHaveBeenCalled();
++    expect(lastRequest().final).not.toContain(MADE);
++    expect(doneFrame()).not.toHaveProperty("opensFree");
++  });
++});

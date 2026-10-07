@@ -190,6 +190,7 @@ describe("the controller's Answered event", () => {
     const row = c.threads.find((t) => t.id === SERVER_THREAD)?.messages.find((m) => m.id === SERVER_REPLY);
     expect(row?.text).toBe(ANSWER);
     expect(row?.status).toBe("done");
+    expect(row).not.toHaveProperty("opensFree");
     expect(heard).not.toHaveBeenCalled();
   });
 
@@ -222,10 +223,12 @@ describe("the controller's Answered event", () => {
     const replyId = replaceAnswer(c, shape);
     const next = latestSink();
     next.began({ threadId: SERVER_THREAD, title: "Guide", messageId: replyId });
-    next.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    next.done({ text: ANSWER, citations: [], searches: 0, model: "m", opensFree: ["submode:summary:brief"] });
     expect(heard).toHaveLength(1);
     expect(heard[0]?.startedThreadId).toBe(SERVER_THREAD);
     expect(heard[0]?.message).toBe(c.threads[0]?.messages.at(-1));
+    expect([...(heard[0]?.opensFree ?? [])]).toEqual(["submode:summary:brief"]);
+    expect(heard[0]?.message).not.toHaveProperty("opensFree");
   });
 
   it.each(["retry", "edit"] as const)("does not announce an old answer restored by a refused %s", async (shape) => {

@@ -7,8 +7,9 @@
  * (docs/project/chat-llm-help-commands-vision.md § Decided): the model never
  * causes a run, **with one exception since 2026-10-07: in the guide, the first
  * chip of an answer that has just finished on screen presses itself if it only
- * moves the reader** (guide-acts.ts, plan 261007p). Nothing else here runs on
- * render; a press runs the proposal
+ * moves the reader** (guide-acts.ts, plan 261007p). A mode opened by that act
+ * uses the executor's unarmed opener (plan 261008a). Nothing else here runs on
+ * render; a reader's press runs the proposal
  * through the executor the reading view built for the bar
  * (command-runners.ts § `chatExecutor`), so the bookmark is Reader's memoised
  * one (GPT Sol's F6) and the tags are the shelf row's controller (F4).

@@ -152,8 +152,9 @@ function experimental(row: CatalogueRow): string {
  * Below the cache breakpoint like `experienceLine`, because it changes per
  * article and over time; the system prompt's sentence about it is static.
  * Each key is named as `modeWordsSection` names its row, so the model can find
- * the token printed beside it. The page decides the act from its own read
- * (src/web/guide-acts.ts); this only keeps the model's sentence in step.
+ * the token printed beside it. The route sends the same snapshot to the page
+ * on the `done` frame (`opensFree`, src/web/guide-acts.ts), so its act and the
+ * model's sentence use one decision.
  */
 export function madeLine(made: readonly MadeArtefact[] | null | undefined, rows: readonly CatalogueRow[] = catalogue): string {
   if (made === null || made === undefined) return "";
