@@ -378,6 +378,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback"],
   },
   {
+    /* An admin's own earlier reports, 261007d. One segment, so the pair route below cannot take it. */
+    match: { kind: "literal", path: "/api/admin/feedback/earlier" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/feedback/earlier"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
     /* PATCH since 261003j: mark one report ignored, or take the mark back. */
     methods: ["GET", "PATCH"],
@@ -937,10 +943,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 
 /** Loud failure controls. Never the oracle — see the header. */
 /* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
-   the command bar's suggestions (plan 261005k). */
-const EXPECTED_MATCHER_COUNT = 94;
-/* 115 since its three verbs, each a guard; 116 with the suggestions' one. */
-const EXPECTED_GUARD_COUNT = 116;
+   the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
+   feedback (plan 261007d). */
+const EXPECTED_MATCHER_COUNT = 95;
+/* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
+   with the admin's earlier feedback. */
+const EXPECTED_GUARD_COUNT = 117;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2097,6 +2105,8 @@ describe("the authenticated API's route contract", () => {
         // voucher email Retry, 261001p — beside the voucher routes
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
+        // an admin's own earlier reports, 261007d — beside the list across owners
+        "GET literal /api/admin/feedback/earlier",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",

@@ -1,6 +1,7 @@
 ---
 reports: spya-ar65p3
 ending: shipped
+comment: Shipped: a sideways iPhone no longer enlarges a band's text. Still waiting on you: should the same kind of line be the same size in every mode? Three choices, from lining up the five or six kinds that recur to leaving it.
 ---
 # Skim's text is bigger than the article's, and a quick review of fonts and sizes
 

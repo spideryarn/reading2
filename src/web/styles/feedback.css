@@ -251,6 +251,35 @@ a.fb-earlier-page:focus-visible {
 .fb-earlier-unshipped {
   color: var(--ink-soft);
 }
+/* An admin's rows (261007d). The number is how the report is said out loud, so
+   it is ink rather than the meta line's faint, in figures that line up down the
+   list; it never breaks from its `#`. */
+.fb-earlier-number {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* "Needs a decision" is the one status that asks something of the reader: full
+   ink and the same weight Shipped has, with no colour of its own. */
+.fb-earlier-waiting {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* The one line a note says about the report, under the reader's own words. A
+   model wrote it: styles/voices.css gives it the model's face, and the rule to
+   its left sets it apart from what the reader wrote. `anywhere` for the same
+   reason as the body: one long word must not push the panel sideways. */
+.fb-earlier-comment,
+.fb-earlier-note {
+  margin: 0.35rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
 .fb-earlier:focus-visible {
   outline: 1px solid var(--highlight-text);
   outline-offset: -1px;

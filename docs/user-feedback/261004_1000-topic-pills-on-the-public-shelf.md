@@ -1,6 +1,7 @@
 ---
 reports: spya-mdp0em
 ending: awaiting
+comment: Waiting on you: not built. Every way of showing pills on the public shelf edits a security defence, and that shelf has 6 articles where pills need 8. Four options, or did you mean Include public on your own shelf?
 ---
 # Topic pills on the public shelf
 

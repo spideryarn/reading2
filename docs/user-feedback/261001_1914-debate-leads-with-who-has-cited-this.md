@@ -1,6 +1,7 @@
 ---
 reports: spya-zuk4f7
 ending: shipped
+comment: Stage 1 shipped: Debate asks for, and keeps, the work that cites the piece. Still waiting on you for stage 2: may Debate send an article's DOI to a citation index, to list every work that cites it?
 ---
 
 # Debate leads with who has cited this article

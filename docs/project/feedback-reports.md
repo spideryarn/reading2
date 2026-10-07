@@ -75,7 +75,11 @@ many were. It needs no note and no queue entry: the mark is the ending. Undo on 
 report is listed again unless a note or a queue entry already names it ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).
 `--show <id>` still prints an ignored report, with `ignored by an admin` and the time on its line.
 Read each one's words with `--show <id>`, or, for an admin's report,
-`feedback-reporter.ts --report-id <id>`, which proves provenance. Then classify it and queue it
+`feedback-reporter.ts --report-id <id>`, which proves provenance. **Both also take the report's
+number**, `212` or `'#212'` (quote the `#` in a shell), and both print it beside the id. The number
+is what an admin's Earlier tab shows ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07));
+unlike the id it is unique across owners. Until the deploy that adds the column has run, a lookup
+by number says *numbering is not deployed* (exit 2) and a lookup by id works as before. Then classify it and queue it
 under its report id. **Always put the report id in a queue entry's `--source`**, next to the Sentry
 short id when there is one. That is what the script matches on, so it is the difference between a
 report covered and a report listed again.
@@ -474,13 +478,27 @@ shipped:
 ---
 reports: spya-bfcvxg
 ending: shipped
+comment: Shipped as stage 1. Still waiting on you for stage 2: may Debate use a citation index?
 ---
 ```
 
 `reports` is the `report_id` tag on the Sentry issue (the feedback row id — not the article's
 `spya-` id), comma-separated for several, or `none`; `ending` is `shipped`, `declined` or
 `awaiting`, and is edited when the ending changes; `parts: N` goes on each note of a report split
-into N entries. Then run `npx tsx scripts/feedback-endings.ts` and commit what it changes with
+into N entries.
+
+**`comment:` is one line for the person who filed the report**, at most 240 characters, plain
+text, in words they can follow without the plan open: why it was set aside, what the open question
+is, or which half is still queued. An admin's Earlier tab shows it under the report
+([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+**Write one on every `declined` and `awaiting` note** (`tests/feedback-endings.test.ts` goes red
+without it), and on a `shipped` note when part of the report is still waiting. Say only what the
+note already says. A report with several notes shows one comment: the newest awaiting note's;
+otherwise, for a split report with a part not yet written up, the newest note with the largest
+`parts`; otherwise the newest shipped note's; otherwise the newest declined note's
+(`chooseComment` in [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts)).
+
+Then run `npx tsx scripts/feedback-endings.ts` and commit what it changes with
 the note. `feedback.md` § Shipped or not.
 
 ## What a report is not

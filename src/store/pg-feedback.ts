@@ -52,17 +52,22 @@ import { feedback as feedbackTable } from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type {
-  FeedbackDiagnosticsPayload,
-  FeedbackEnvironment,
-  FeedbackKind,
+import {
+  EARLIER_FEEDBACK_STATUSES,
+  type EarlierFeedbackStatus,
+  type FeedbackDiagnosticsPayload,
+  type FeedbackEnvironment,
+  type FeedbackKind,
 } from "../types.js";
 import {
   FEEDBACK_WINDOW_MS,
   feedbackHourlyCap,
+  type FeedbackEndingIds,
   type FeedbackIdFilter,
   type FeedbackReport,
+  type MyFeedback,
   type MyFeedbackPage,
+  type MyFeedbackStatusPage,
   type FeedbackStore,
   type FeedbackSubmission,
   type NewFeedback,
@@ -92,6 +97,60 @@ const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } 
 function idMember(ids: readonly string[]): SQL {
   const literal = `{${ids.map((id) => `"${id.replace(/["\\]/g, "\\$&")}"`).join(",")}}`;
   return sql`${feedbackTable.id} = any(${literal}::text[])`;
+}
+
+/** A status as a SQL literal: typed, so a word the union does not have cannot be written into the query. */
+const statusLiteral = (status: EarlierFeedbackStatus): SQL => sql.raw(`'${status}'`);
+
+/**
+ * **A report's status, as one SQL expression** — selected for the row, compared
+ * for the filter and grouped for the counts, so the three cannot disagree.
+ * The order of the `when`s is the rule (`EarlierFeedbackStatus` in
+ * src/types.ts): shipped first; then set aside, by an admin's Ignore or a
+ * declined note; then waiting; and a report with no note is open.
+ */
+function statusOf(endings: FeedbackEndingIds): SQL<string> {
+  return sql<string>`(case
+    when ${idMember(endings.shipped)} then ${statusLiteral("shipped")}
+    when ${feedbackTable.ignoredAt} is not null or ${idMember(endings.declined)} then ${statusLiteral("aside")}
+    when ${idMember(endings.awaiting)} then ${statusLiteral("waiting")}
+    else ${statusLiteral("open")}
+  end)`;
+}
+
+/** The database's word as the union's, or a throw: never a cast over a value this file did not check. */
+function toStatus(value: string): EarlierFeedbackStatus {
+  const status = EARLIER_FEEDBACK_STATUSES.find((known) => known === value);
+  if (status === undefined) throw new Error("feedback status outside the four the query can produce");
+  return status;
+}
+
+/**
+ * **The five columns an Earlier list reads, named here**, not `REPORT_COLUMNS`
+ * narrowed afterwards: what is never selected cannot be handed on by a later
+ * spread. `url` is the fifth, and it is selected only to be turned into `page`
+ * and `at` by `toMine` — the address itself goes no further than this file
+ * (src/feedback-page.ts).
+ */
+const MINE_COLUMNS = {
+  id: feedbackTable.id,
+  createdAt: feedbackTable.createdAt,
+  kind: feedbackTable.kind,
+  body: feedbackTable.body,
+  url: feedbackTable.url,
+};
+
+/** One row of `MINE_COLUMNS` as the six fields an Earlier list hands on. */
+function toMine(row: { id: string; createdAt: Date; kind: string | null; body: string; url: string | null }): MyFeedback {
+  return {
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
+    kind: row.kind === null ? null : (row.kind as FeedbackKind),
+    body: row.body,
+    page: feedbackPageLabel(row.url),
+    at: feedbackPageAt(row.url),
+  };
 }
 
 /**
@@ -365,22 +424,12 @@ const rawPgFeedbackStore: FeedbackStore = {
        "50 most recent of 50". Sequential, not `Promise.all`, inside it —
        src/store/article-rows.ts § `walk` says why. */
     return getDb().transaction(async (tx) => {
-      /* **Five columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
-         what is never selected cannot be handed on by a later spread. `url` is
-         the fifth, and it is selected only to be turned into `page` below — the
-         address itself goes no further than this function
-         (src/feedback-page.ts). One row past
+      /* `MINE_COLUMNS`, and no more. One row past
          the limit is how `more` is known; the `(owner_id, created_at)` index the
          cap uses serves this too, and `id` breaks a tie between two reports filed
          in the same instant so the order is stable across reads. */
       const rows = await tx
-        .select({
-          id: feedbackTable.id,
-          createdAt: feedbackTable.createdAt,
-          kind: feedbackTable.kind,
-          body: feedbackTable.body,
-          url: feedbackTable.url,
-        })
+        .select(MINE_COLUMNS)
         .from(feedbackTable)
         .where(and(eq(feedbackTable.ownerId, owner), idFilter(filter)))
         .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
@@ -396,17 +445,53 @@ const rawPgFeedbackStore: FeedbackStore = {
         .from(feedbackTable)
         .where(eq(feedbackTable.ownerId, owner));
       return {
-        reports: rows.slice(0, limit).map((row) => ({
-          id: row.id,
-          createdAt: row.createdAt.toISOString(),
-          /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
-          kind: row.kind === null ? null : (row.kind as FeedbackKind),
-          body: row.body,
-          page: feedbackPageLabel(row.url),
-          at: feedbackPageAt(row.url),
-        })),
+        reports: rows.slice(0, limit).map(toMine),
         more: rows.length > limit,
         counts: { all: counted?.all ?? 0, in: counted?.in ?? 0 },
+      };
+    }, SNAPSHOT);
+  },
+
+  async listMineByStatus(
+    limit: number,
+    endings: FeedbackEndingIds,
+    show: EarlierFeedbackStatus | "all",
+  ): Promise<MyFeedbackStatusPage> {
+    const owner = currentOwnerId();
+    const status = statusOf(endings);
+    /* One snapshot for the list and its counts, sequentially, as `listMine`. */
+    return getDb().transaction(async (tx) => {
+      /* The owner predicate is always there; the status one is `and`-ed
+         beside it, never instead of it. */
+      const rows = await tx
+        .select({ ...MINE_COLUMNS, number: feedbackTable.number, ignoredAt: feedbackTable.ignoredAt, status })
+        .from(feedbackTable)
+        .where(
+          and(
+            eq(feedbackTable.ownerId, owner),
+            show === "all" ? undefined : sql`${status} = ${statusLiteral(show)}`,
+          ),
+        )
+        .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
+        .limit(limit + 1);
+      /* `group by 1`: the expression binds its arrays afresh each time it is
+         written, and Postgres would not take a second copy for the same one. */
+      const counted = await tx
+        .select({ status, reports: sql<number>`count(*)::int` })
+        .from(feedbackTable)
+        .where(eq(feedbackTable.ownerId, owner))
+        .groupBy(sql`1`);
+      const counts: Record<EarlierFeedbackStatus, number> = { open: 0, waiting: 0, aside: 0, shipped: 0 };
+      for (const row of counted) counts[toStatus(row.status)] = row.reports;
+      return {
+        reports: rows.slice(0, limit).map((row) => ({
+          ...toMine(row),
+          number: row.number,
+          status: toStatus(row.status),
+          ignoredAt: row.ignoredAt === null ? null : row.ignoredAt.toISOString(),
+        })),
+        more: rows.length > limit,
+        counts,
       };
     }, SNAPSHOT);
   },

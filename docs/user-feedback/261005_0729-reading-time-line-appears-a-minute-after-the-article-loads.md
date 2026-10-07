@@ -1,6 +1,7 @@
 ---
 reports: spya-dxufdw
 ending: awaiting
+comment: Waiting on you: no delay was found. Most likely Experimental features was off when the article loaded. The question is whether reading time should come out from behind that switch. Four options, A to D.
 ---
 # The reading-time line appears about a minute after the article loads
 

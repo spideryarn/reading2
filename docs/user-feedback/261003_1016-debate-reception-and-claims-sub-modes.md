@@ -1,6 +1,7 @@
 ---
 reports: spya-caue42
 ending: shipped
+comment: Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?
 ---
 
 # Debate: Reception and Claims sub-modes, and a tidier panel

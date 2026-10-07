@@ -5492,13 +5492,33 @@ export const feedback = spideryarn.table(
      * or at least mark it as to be ignored."* A mark rather than a delete, so
      * it can be taken back and the report itself is never changed.
      * `scripts/feedback-unswept.ts` leaves a marked row out of the agents'
-     * queue; nothing a reader sees reads it.
+     * queue. Nothing a reader sees reads it, bar one: an admin's own Earlier
+     * tab shows their ignored report as *Set aside* (261007d).
      * docs/plans/261003j-mark-a-feedback-report-as-ignored-from-the-admin-page.md.
      */
     ignoredAt: timestamp("ignored_at", { withTimezone: true }),
+    /**
+     * **The report's number, as people say it: `#212`, "feedback 212".** One
+     * sequence across every owner, so a number names one report — which the
+     * `spya-` id, minted by a browser and unique only per owner, does not.
+     * Greg, 2026-10-06 (`spya-cnbv8f`): *"give every single feedback report
+     * its own ID somehow, so that it would be easy for us to refer to them in
+     * conversation."*
+     *
+     * Stored, not a rank computed on read: a number said in conversation has
+     * to mean the same report next month, whatever is deleted in between.
+     * An identity column, so the database hands the next one to any insert
+     * that does not name it — including code deployed before the column was.
+     * Rows from before the column were numbered in the order they were filed
+     * (the migration). Shown only to an admin today; nothing else reads it.
+     * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+     */
+    number: integer("number").notNull().generatedByDefaultAsIdentity({ name: "feedback_number_seq" }),
     createdAt: createdAt(),
   },
   (t) => [
+    /** A number names exactly one report, whoever filed it. */
+    uniqueIndex("feedback_number_unique").on(t.number),
     /**
      * **The composite key IS the idempotency key**, the same shape
      * `comments` uses for the same reason: the id is minted by a browser, so it

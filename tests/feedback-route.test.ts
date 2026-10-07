@@ -71,6 +71,10 @@ let listAnswer: unknown = { reports: [], more: false };
 let counted: { ids: readonly string[]; owner: string }[] = [];
 /** The counts the fake `listMine` adds to its answer. */
 let countAnswer: unknown = { all: 0, in: 0 };
+/** Each `listMineByStatus` the admin route made: its limit, the endings it bound, the filter, the owner. */
+let statusListed: { limit: number; endings: unknown; show: string; owner: string }[] = [];
+/** What the fake `listMineByStatus` answers with, or an Error to throw. */
+let statusAnswer: unknown = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -124,6 +128,12 @@ vi.mock("../src/feedback-endings.generated.js", () => ({
     "spya-wa1t00": "awaiting",
     "spya-sh1pd2": "shipped",
   },
+  FEEDBACK_NOTE_COMMENTS: {
+    "spya-dec1ne": "Set aside: the browser gives us no way to do this.",
+    "spya-wa1t00": "Waiting on you: one switch or two?",
+    /* A comment for a report this reader never filed: it must go nowhere. */
+    "spya-n0tm1n": "about somebody else's report",
+  },
 }));
 
 vi.mock("../src/store/index.js", async (importActual) => {
@@ -146,6 +156,11 @@ vi.mock("../src/store/index.js", async (importActual) => {
         counted.push({ ids: countIds, owner: currentOwnerId() });
         if (listAnswer instanceof Error) throw listAnswer;
         return { counts: countAnswer, ...(listAnswer as object) };
+      },
+      listMineByStatus: async (limit: number, endings: unknown, show: string) => {
+        statusListed.push({ limit, endings, show, owner: currentOwnerId() });
+        if (statusAnswer instanceof Error) throw statusAnswer;
+        return statusAnswer;
       },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
@@ -373,6 +388,8 @@ beforeEach(() => {
   listAnswer = { reports: [], more: false };
   counted = [];
   countAnswer = { all: 0, in: 0 };
+  statusListed = [];
+  statusAnswer = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
@@ -522,6 +539,153 @@ describe("GET /api/feedback", () => {
        alone would pass with no route at all. Signed in, the same request reads. */
     expect((await call(undefined, { method: "GET" })).status).toBe(200);
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
+});
+
+/**
+ * `GET /api/admin/feedback/earlier` — an admin's own list, with what became of
+ * each report. docs/plans/261007d-…. `acceptAny` signs in as the local
+ * administrator, which is why every test above this one already passes the
+ * namespace gate without knowing it.
+ */
+describe("GET /api/admin/feedback/earlier", () => {
+  const PATH = "/api/admin/feedback/earlier";
+  const get = (path = PATH, verify?: Parameters<typeof handleApi>[2]) =>
+    call(undefined, { method: "GET", path, ...(verify ? { verify } : {}) });
+  const acceptSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    claims: {
+      sub: "0000f5e1-0000-4000-8000-00000000beef",
+      email: "somebody-else@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+  const row = (id: string, number: number, status: string, over: object = {}) => ({
+    id,
+    createdAt: "2026-09-12T10:45:00.000Z",
+    kind: null,
+    body: "x",
+    page: null,
+    at: null,
+    number,
+    status,
+    ignoredAt: null,
+    ...over,
+  });
+
+  it("answers the admin's own list: ten fields a report, the comment from the note, never cached", async () => {
+    statusAnswer = {
+      reports: [
+        {
+          ...row("spya-dec1ne", 212, "aside", { kind: "suggestion", body: "Could it do this?", page: "/add", at: "spya-tgnssb" }),
+          /* What a store that one day hands back more must not get through. */
+          reporterEmail: "someone@example.invalid",
+          url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
+        },
+        row("spya-k3m9qt", 211, "shipped"),
+        row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }),
+      ],
+      more: true,
+      counts: { open: 3, waiting: 2, aside: 5, shipped: 60 },
+    };
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({
+      reports: [
+        {
+          id: "spya-dec1ne",
+          createdAt: "2026-09-12T10:45:00.000Z",
+          kind: "suggestion",
+          body: "Could it do this?",
+          page: "/add",
+          at: "spya-tgnssb",
+          number: 212,
+          status: "aside",
+          comment: "Set aside: the browser gives us no way to do this.",
+          ignoredAt: null,
+        },
+        { ...row("spya-k3m9qt", 211, "shipped"), comment: null },
+        { ...row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }), comment: null },
+      ],
+      more: true,
+      /* Report counts, and the four sum to All. */
+      counts: { all: 70, open: 3, waiting: 2, aside: 5, shipped: 60 },
+    });
+    expect(JSON.stringify(reply.body)).not.toContain("somebody else's report");
+    expect(statusListed).toEqual([
+      {
+        limit: EARLIER_FEEDBACK_LIMIT,
+        endings: {
+          shipped: ["spya-k3m9qt", "spya-sh1pd2"],
+          declined: ["spya-dec1ne"],
+          awaiting: ["spya-wa1t00"],
+        },
+        show: "all",
+        owner: TEST_OWNER,
+      },
+    ]);
+    expect(listed, "the plain list is not read as well").toEqual([]);
+  });
+
+  it("hands each ?show= to the store, so the cap applies after the filter", async () => {
+    for (const show of ["all", "open", "waiting", "aside", "shipped"]) {
+      expect((await get(`${PATH}?show=${show}`)).status, show).toBe(200);
+    }
+    expect(statusListed.map((one) => one.show)).toEqual(["all", "open", "waiting", "aside", "shipped"]);
+    expect(statusListed.every((one) => one.limit === EARLIER_FEEDBACK_LIMIT && one.owner === TEST_OWNER)).toBe(true);
+  });
+
+  it("refuses a show it does not know, the plain tab's `unshipped` included, and a limit changes nothing", async () => {
+    expect((await get(`${PATH}?show=unshipped`)).status).toBe(400);
+    expect((await get(`${PATH}?show=done`)).status).toBe(400);
+    expect(statusListed).toEqual([]);
+    await get(`${PATH}?limit=100000`);
+    expect(statusListed.map((one) => one.limit)).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
+
+  it("is a 403 for a signed-in reader who is not an admin, and reaches no store", async () => {
+    const reply = await get(PATH, acceptSomebodyElse);
+    expect(reply.status).toBe(403);
+    expect(statusListed).toEqual([]);
+    expect(listed).toEqual([]);
+    /* The positive control: the same request as the admin reads. */
+    expect((await get()).status).toBe(200);
+    expect(statusListed).toHaveLength(1);
+  });
+
+  it("is a 401 signed out, and private when the read fails", async () => {
+    expect((await call(undefined, { method: "GET", path: PATH, headers: {} })).status).toBe(401);
+    expect(statusListed).toEqual([]);
+    statusAnswer = new Error("the feedback read failed");
+    const reply = await get();
+    expect(reply.status).toBe(500);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+  });
+
+  it("is not the one-report route: `earlier` alone is one segment, and that route takes two", async () => {
+    /* `/api/admin/feedback/<owner>/<id>` would answer 400 "ownerId must be a uuid". */
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect(reply.body).toHaveProperty("counts");
+  });
+
+  it("leaves the plain route as it was for the same admin: seven fields, three counts", async () => {
+    listAnswer = {
+      reports: [{ id: "spya-dec1ne", createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null }],
+      more: false,
+    };
+    countAnswer = { all: 1, in: 0 };
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.body).toEqual({
+      reports: [
+        { id: "spya-dec1ne", createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null, shipped: false },
+      ],
+      more: false,
+      counts: { all: 1, shipped: 0, unshipped: 1 },
+    });
+    expect(statusListed).toEqual([]);
   });
 });
 

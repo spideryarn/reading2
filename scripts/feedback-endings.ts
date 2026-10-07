@@ -17,7 +17,11 @@
  * `reports` is the feedback row id (the Sentry issue's `report_id` tag),
  * comma-separated for a note recording several, or `none` for a report that
  * never had one. `ending` is the note's *current* ending. `parts: N` goes on
- * each note of a report split into N queue entries.
+ * each note of a report split into N queue entries. `comment:` is one line of
+ * plain text, at most 240 characters, for the person who filed it: why it was
+ * set aside, what the open question is, or which half is still queued. An
+ * admin's Earlier tab shows it under the report
+ * (docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md).
  *
  * This reads those headers and writes one line per report. The server imports
  * the result, so a report counts as shipped **in the build that carries its
@@ -36,7 +40,12 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FEEDBACK_ENDINGS, type FeedbackEnding } from "../src/feedback-ending-values.js";
+import {
+  FEEDBACK_ENDINGS,
+  MAX_FEEDBACK_COMMENT_CHARS,
+  type FeedbackEnding,
+} from "../src/feedback-ending-values.js";
+import { isSpideryarnId } from "../src/ids.js";
 import { isMain } from "../src/is-main.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -46,10 +55,7 @@ export const GENERATED_PATH = path.join(ROOT, "src/feedback-endings.generated.ts
 /** Files in docs/user-feedback/ that are not one report's note. */
 const NOT_A_NOTE = new Set(["awaiting-approval.md"]);
 
-/** The feedback row id's shape: `spya-` and six base-36 characters. */
-const REPORT_ID = /^spya-[a-z0-9]{6}$/;
-
-const HEADER_FIELDS = new Set(["reports", "ending", "parts"]);
+const HEADER_FIELDS = new Set(["reports", "ending", "parts", "comment"]);
 
 export interface NoteHeader {
   /** Empty for `reports: none` — a report that never had a row id. */
@@ -57,6 +63,8 @@ export interface NoteHeader {
   ending: FeedbackEnding;
   /** How many queue entries (so notes) a split report became; absent when it was not split. */
   parts?: number;
+  /** One line of plain text for the report's own row in the Earlier tab; absent when the note has none. */
+  comment?: string;
 }
 
 /**
@@ -94,7 +102,8 @@ export function parseNoteHeader(text: string): NoteHeader | null | string {
   if (named !== "none" && reports.length === 0) {
     return "reports: names no report id (write `none` if the report never had one)";
   }
-  const bad = reports.filter((id) => !REPORT_ID.test(id));
+  /* The one id rule, src/ids.ts: what the database's CHECK holds a row to. */
+  const bad = reports.filter((id) => !isSpideryarnId(id));
   if (bad.length > 0) return `not a report id: ${bad.join(", ")}`;
   const repeated = reports.filter((id, index) => reports.indexOf(id) !== index);
   if (repeated.length > 0) return `report id named more than once: ${[...new Set(repeated)].join(", ")}`;
@@ -110,7 +119,22 @@ export function parseNoteHeader(text: string): NoteHeader | null | string {
     }
     header.parts = Number(parts);
   }
+  const comment = fields.get("comment");
+  if (comment !== undefined) {
+    const problem = commentProblem(comment);
+    if (problem !== null) return problem;
+    header.comment = comment;
+  }
   return header;
+}
+
+/** What is wrong with a `comment:` value, or null. One line is the header's own rule; this is the rest. */
+function commentProblem(comment: string): string | null {
+  if (comment === "") return "comment: says nothing (leave the line out instead)";
+  if (comment.length > MAX_FEEDBACK_COMMENT_CHARS) {
+    return `comment must be at most ${MAX_FEEDBACK_COMMENT_CHARS} characters, not ${comment.length}`;
+  }
+  return null;
 }
 
 /**
@@ -131,6 +155,29 @@ export function combineEndings(
   return "declined";
 }
 
+/**
+ * **Which note speaks for a report with several**, mirroring `combineEndings`
+ * case by case so the comment is about the status the row shows. `notes` is
+ * oldest first (file names sort by the day the work started), so "newest" is
+ * last. The newest note that says awaiting; otherwise, for a split report with
+ * a part not yet written up, the newest note declaring the most parts;
+ * otherwise the newest shipped note of a shipped report; otherwise the newest
+ * declined one. **That note's comment or none**: another note's words are
+ * about a different part, so they are not borrowed.
+ */
+export function chooseComment(
+  notes: readonly { ending: FeedbackEnding; parts?: number; comment?: string }[],
+): string | undefined {
+  const newest = (keep: (note: (typeof notes)[number]) => boolean) => notes.filter(keep).at(-1);
+  const expected = Math.max(1, ...notes.map((note) => note.parts ?? 1));
+  const chosen =
+    newest((note) => note.ending === "awaiting") ??
+    (notes.length < expected
+      ? newest((note) => (note.parts ?? 1) === expected)
+      : (newest((note) => note.ending === "shipped") ?? newest((note) => note.ending === "declined")));
+  return chosen?.comment;
+}
+
 export interface NoteFile {
   name: string;
   text: string;
@@ -145,6 +192,8 @@ export function readNotes(dir: string = NOTES_DIR): NoteFile[] {
 
 export interface CompiledEndings {
   endings: Map<string, FeedbackEnding>;
+  /** The one comment each report shows (`chooseComment`); a report with none is not a key. */
+  comments: Map<string, string>;
   /** `file: problem`, one per note whose header does not parse. A note with no header is not one. */
   problems: string[];
 }
@@ -164,15 +213,29 @@ export function compileEndings(notes: readonly NoteFile[]): CompiledEndings {
     }
   }
   const endings = new Map<string, FeedbackEnding>();
+  const comments = new Map<string, string>();
   for (const id of [...byReport.keys()].sort()) {
-    endings.set(id, combineEndings(byReport.get(id) ?? []));
+    const notesOfIt = byReport.get(id) ?? [];
+    endings.set(id, combineEndings(notesOfIt));
+    const comment = chooseComment(notesOfIt);
+    if (comment !== undefined) comments.set(id, comment);
   }
-  return { endings, problems };
+  return { endings, comments, problems };
 }
 
-/** The generated module's text: sorted, one report per line, so merges rarely touch. */
-export function renderModule(endings: ReadonlyMap<string, FeedbackEnding>): string {
+/**
+ * The generated module's text: sorted, one report per line, so merges rarely
+ * touch. **Two maps, and the first is unchanged since 260930e**: the deploy's
+ * shipped-email step reads this file as it was at a commit
+ * (scripts/feedback-shipped-emails.ts § `shippedIdsIn`), so the endings keep
+ * their shape and the comments sit beside them, each one JSON string.
+ */
+export function renderModule(
+  endings: ReadonlyMap<string, FeedbackEnding>,
+  comments: ReadonlyMap<string, string> = new Map(),
+): string {
   const lines = [...endings].map(([id, ending]) => `  "${id}": "${ending}",`);
+  const commentLines = [...comments].map(([id, comment]) => `  "${id}": ${JSON.stringify(comment)},`);
   return [
     "/**",
     " * GENERATED by scripts/feedback-endings.ts from the headers of the notes in",
@@ -184,6 +247,11 @@ export function renderModule(endings: ReadonlyMap<string, FeedbackEnding>): stri
     "",
     "export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {",
     ...lines,
+    "};",
+    "",
+    "/** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */",
+    "export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {",
+    ...commentLines,
     "};",
     "",
   ].join("\n");
@@ -207,12 +275,12 @@ export function syncGenerated(
 }
 
 function main(): void {
-  const { endings, problems } = compileEndings(readNotes());
+  const { endings, comments, problems } = compileEndings(readNotes());
   if (problems.length > 0) {
     console.error(`${problems.length} note header(s) do not parse:\n  ${problems.join("\n  ")}`);
     process.exit(1);
   }
-  const text = renderModule(endings);
+  const text = renderModule(endings, comments);
   const checking = process.argv.includes("--check");
   const outcome = syncGenerated(text, GENERATED_PATH, checking);
   if (outcome === "stale") {

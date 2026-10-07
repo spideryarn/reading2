@@ -1,6 +1,7 @@
 ---
 reports: spya-c2qmbg
 ending: shipped
+comment: Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?
 ---
 
 # A citation's card offers Dig deeper; folding Citations into Debate awaits Greg

@@ -27,6 +27,9 @@
  * Skips loudly when there is no database — tests/helpers/pg-ready.ts.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -930,6 +933,198 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       reports: [],
       more: false,
       counts: { all: 0, in: 0 },
+    });
+  });
+
+  describe("with a status and a number — an admin's Earlier tab (261007d)", () => {
+    const NONE = { shipped: [], declined: [], awaiting: [] };
+    async function file(owner: OwnerId, body: string, id = mintId()): Promise<string> {
+      await runAsOwner(owner, () => pgFeedbackStore.submit(report({ id, body })));
+      return id;
+    }
+    async function ignore(owner: OwnerId, id: string): Promise<void> {
+      await getDb()
+        .update(feedbackTable)
+        .set({ ignoredAt: new Date("2026-10-05T09:00:00Z") })
+        .where(and(eq(feedbackTable.ownerId, owner), eq(feedbackTable.id, id)));
+    }
+
+    it("derives one of four statuses in SQL, and an ignored report no longer waits", async () => {
+      const shipped = await file(ALICE, "shipped");
+      const declined = await file(ALICE, "declined");
+      const awaiting = await file(ALICE, "awaiting");
+      const open = await file(ALICE, "no note yet");
+      const ignored = await file(ALICE, "ignored, no note");
+      const ignoredAwaiting = await file(ALICE, "ignored while it waited");
+      const ignoredShipped = await file(ALICE, "ignored, and then shipped anyway");
+      for (const id of [ignored, ignoredAwaiting, ignoredShipped]) await ignore(ALICE, id);
+      const endings = {
+        shipped: [shipped, ignoredShipped],
+        declined: [declined],
+        awaiting: [awaiting, ignoredAwaiting],
+      };
+
+      const all = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, endings, "all"));
+      expect(Object.fromEntries(all.reports.map((r) => [r.body, r.status]))).toEqual({
+        shipped: "shipped",
+        declined: "aside",
+        awaiting: "waiting",
+        "no note yet": "open",
+        "ignored, no note": "aside",
+        /* Ignored outranks awaiting (the plan review's F5): nobody is asked to decide it. */
+        "ignored while it waited": "aside",
+        /* Shipped outranks ignored: a change went out, and the row says so. */
+        "ignored, and then shipped anyway": "shipped",
+      });
+      expect(all.counts).toEqual({ open: 1, waiting: 1, aside: 3, shipped: 2 });
+      expect(all.reports.find((r) => r.id === ignored)?.ignoredAt).toBe("2026-10-05T09:00:00.000Z");
+      expect(all.reports.find((r) => r.id === open)?.ignoredAt).toBeNull();
+
+      /* Each filter lists exactly the rows of its status, and as many as its count. */
+      for (const status of ["open", "waiting", "aside", "shipped"] as const) {
+        const page = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, endings, status));
+        expect(page.reports.map((r) => r.status), status).toEqual(Array(all.counts[status]).fill(status));
+        expect(page.counts, "the counts never depend on the filter").toEqual(all.counts);
+        expect(page.more).toBe(false);
+      }
+    });
+
+    it("is the reader's own rows only, under every filter, whatever ids are named", async () => {
+      const shared = mintId();
+      await file(ALICE, "Alice's", shared);
+      await file(ALICE, "Alice's other");
+      /* The same browser-minted id under another owner, legal because the key is (owner_id, id). */
+      await file(BOB, "Bob's", shared);
+      const endings = { shipped: [shared], declined: [], awaiting: [] };
+
+      for (const show of ["all", "open", "waiting", "aside", "shipped"] as const) {
+        const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMineByStatus(10, endings, show));
+        expect(bobs.reports.every((r) => r.body === "Bob's"), `${show}: never a row of Alice's`).toBe(true);
+        expect(bobs.counts, show).toEqual({ open: 0, waiting: 0, aside: 0, shipped: 1 });
+      }
+      const alices = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, endings, "all"));
+      expect(alices.reports.map((r) => r.body).sort()).toEqual(["Alice's", "Alice's other"]);
+      expect(alices.counts).toEqual({ open: 1, waiting: 0, aside: 0, shipped: 1 });
+    });
+
+    it("filters before the cap: the newest matching reports, however old", async () => {
+      const old = await file(ALICE, "the old one that waits");
+      await getDb()
+        .update(feedbackTable)
+        .set({ createdAt: sql`now() - interval '1 day'` })
+        .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, old)));
+      for (let i = 0; i < 3; i++) await file(ALICE, `newer ${i}`);
+      const endings = { shipped: [], declined: [], awaiting: [old] };
+
+      const waiting = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(2, endings, "waiting"));
+      expect(waiting.reports.map((r) => r.id)).toEqual([old]);
+      expect(waiting.more).toBe(false);
+      const open = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(2, endings, "open"));
+      expect(open.reports).toHaveLength(2);
+      expect(open.more).toBe(true);
+      expect(open.counts).toEqual({ open: 3, waiting: 1, aside: 0, shipped: 0 });
+    });
+
+    it("hands back the six fields, the number, the status and the mark, and nothing else", async () => {
+      const id = await file(ALICE, "what I said");
+      const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"));
+      expect(Object.keys(reports[0] ?? {}).sort()).toEqual(
+        ["at", "body", "createdAt", "id", "ignoredAt", "kind", "number", "page", "status"].sort(),
+      );
+      expect(reports[0]?.id).toBe(id);
+      expect(JSON.stringify(reports)).not.toContain("reporter@example.invalid");
+    });
+
+    it("answers nothing, and four zeros, for a reader who has filed nothing", async () => {
+      expect(await runAsOwner(BOB, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"))).toEqual({
+        reports: [],
+        more: false,
+        counts: { open: 0, waiting: 0, aside: 0, shipped: 0 },
+      });
+    });
+
+    it("numbers every report from one sequence: unique across owners, rising in filing order", async () => {
+      const first = await file(ALICE, "first");
+      const second = await file(BOB, "second");
+      const third = await file(ALICE, "third");
+      const numberOf = async (owner: OwnerId, id: string) =>
+        (await runAsOwner(owner, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"))).reports.find(
+          (r) => r.id === id,
+        )?.number as number;
+      const numbers = [await numberOf(ALICE, first), await numberOf(BOB, second), await numberOf(ALICE, third)];
+      expect(numbers.every((n) => Number.isSafeInteger(n) && n > 0)).toBe(true);
+      expect(numbers[1]).toBe((numbers[0] as number) + 1);
+      expect(numbers[2]).toBe((numbers[0] as number) + 2);
+
+      /* The same number twice is refused by the database, not by convention. */
+      await expect(
+        getDb()
+          .update(feedbackTable)
+          .set({ number: numbers[0] as number })
+          .where(and(eq(feedbackTable.ownerId, BOB), eq(feedbackTable.id, second))),
+      ).rejects.toThrow();
+    });
+
+    it("the migration numbers the old rows in the order they were filed, and the next insert follows on", async () => {
+      /* The migration's own text, run on a copy of the table as it was before:
+         a scratch schema inside a transaction that is rolled back. */
+      const dir = path.resolve(import.meta.dirname, "../drizzle");
+      const name = readdirSync(dir).find((file) => file.endsWith("_feedback_number.sql"));
+      expect(name, "the feedback_number migration").toBeDefined();
+      const text = readFileSync(path.join(dir, name as string), "utf8");
+      expect(text).toContain('"spideryarn"."feedback"');
+      const statements = text.replaceAll('"spideryarn".', '"fb_number_scratch".').split("--> statement-breakpoint");
+      expect(statements.length).toBeGreaterThan(3);
+
+      const ROLLBACK = new Error("rolled back on purpose");
+      const run = async (seed: string) => {
+        let numbered: { id: string; number: number }[] = [];
+        await getDb()
+          .transaction(async (tx) => {
+            await tx.execute(sql.raw("create schema fb_number_scratch"));
+            /* Only what the migration reads: the key and when it was filed. */
+            await tx.execute(
+              sql.raw(`create table fb_number_scratch.feedback (
+                 owner_id uuid not null, id text not null,
+                 created_at timestamptz not null default now(), primary key (owner_id, id))`),
+            );
+            if (seed !== "") await tx.execute(sql.raw(seed));
+            for (const statement of statements) await tx.execute(sql.raw(statement));
+            /* What code deployed before the column does: an insert that names no number. */
+            await tx.execute(
+              sql.raw(`insert into fb_number_scratch.feedback (owner_id, id) values ('${ALICE}', 'after')`),
+            );
+            const read = (await tx.execute(
+              sql.raw("select id, number from fb_number_scratch.feedback order by number"),
+            )) as unknown as { rows: { id: string; number: number }[] };
+            numbered = read.rows;
+            throw ROLLBACK;
+          })
+          .catch((error: unknown) => {
+            if (error !== ROLLBACK) throw error;
+          });
+        return numbered;
+      };
+
+      /* Inserted out of order, with a tie on the instant that only (owner_id, id) can break. */
+      const numbered = await run(`insert into fb_number_scratch.feedback (owner_id, id, created_at) values
+        ('${BOB}', 'third-b', '2026-09-03T00:00:00Z'),
+        ('${ALICE}', 'fourth', '2026-09-04T00:00:00Z'),
+        ('${ALICE}', 'first', '2026-09-01T00:00:00Z'),
+        ('${ALICE}', 'third-a2', '2026-09-03T00:00:00Z'),
+        ('${ALICE}', 'third-a1', '2026-09-03T00:00:00Z'),
+        ('${BOB}', 'second', '2026-09-02T00:00:00Z')`);
+      expect(numbered).toEqual([
+        { id: "first", number: 1 },
+        { id: "second", number: 2 },
+        { id: "third-a1", number: 3 },
+        { id: "third-a2", number: 4 },
+        { id: "third-b", number: 5 },
+        { id: "fourth", number: 6 },
+        { id: "after", number: 7 },
+      ]);
+      /* An empty table: nothing to backfill, and the first report is 1. */
+      expect(await run("")).toEqual([{ id: "after", number: 1 }]);
     });
   });
 

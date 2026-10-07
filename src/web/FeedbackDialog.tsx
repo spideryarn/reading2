@@ -181,6 +181,12 @@ interface Props {
   where: FeedbackWhere;
   /** The latest request to fill the box, if anything has asked. */
   prefill?: FeedbackPrefill | null;
+  /**
+   * Whether the reader is an admin, by the client's cosmetic flag
+   * (src/admin.ts § `isAdmin`): the Earlier tab then asks the admin route,
+   * which says what became of each report. Not a gate; the server's is.
+   */
+  admin?: boolean;
 }
 
 /**
@@ -360,7 +366,7 @@ function reportBody(input: {
   };
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) {
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -761,7 +767,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, counts, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
+  const { earlier, choice, setShow, retry } = useEarlierFeedback(open, view === "earlier", admin);
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -1319,8 +1325,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter show={show} counts={counts} onShow={setShow} />
-          <EarlierList earlier={earlier} show={show} retry={retry} />
+          <EarlierFilter choice={choice} onShow={setShow} />
+          <EarlierList earlier={earlier} choice={choice} retry={retry} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

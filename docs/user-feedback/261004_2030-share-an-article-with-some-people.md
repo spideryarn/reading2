@@ -1,6 +1,7 @@
 ---
 reports: spya-hwdefp, spya-v322fd
 ending: awaiting
+comment: Waiting on you: not built, because you asked to discuss first and every version changes who may read an article. Three stages, three questions. Recommended: a private link first.
 ---
 # Share an article with some people
 

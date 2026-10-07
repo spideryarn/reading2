@@ -1,6 +1,7 @@
 ---
 reports: spya-n8cuqq
 ending: shipped
+comment: Shipped: dictation runs fifteen minutes and warns before it stops. Still waiting on you: should Feedback take fifteen minutes of non-stop speech? It takes 12,000 characters now; 20,000 means raising the database's own cap.
 ---
 # Dictation cut off at five minutes, with no sign
 

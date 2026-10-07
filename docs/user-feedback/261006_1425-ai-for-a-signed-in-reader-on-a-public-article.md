@@ -1,6 +1,7 @@
 ---
 reports: spya-uc0asn
 ending: awaiting
+comment: Waiting on you: not built. AI for a signed-in reader on someone else's public article means we pay, not the owner, and running it in place edits a security defence. Five options, A to E, and two questions.
 ---
 # AI for a signed-in reader on a public article
 

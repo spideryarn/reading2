@@ -469,3 +469,28 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
 };
+
+/** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
+export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+  "spya-a5gzb9": "Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.",
+  "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text. Still waiting on you: should the same kind of line be the same size in every mode? Three choices, from lining up the five or six kinds that recur to leaving it.",
+  "spya-c2qmbg": "Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?",
+  "spya-caue42": "Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?",
+  "spya-ddpn5x": "Set aside: researched and planned, not built. It would take about 6 to 9 weeks and needs OpenAI to let us in first. You said it is out of scope for now (2026-10-01).",
+  "spya-dxufdw": "Waiting on you: no delay was found. Most likely Experimental features was off when the article loaded. The question is whether reading time should come out from behind that switch. Four options, A to D.",
+  "spya-hbqezu": "Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.",
+  "spya-hwdefp": "Waiting on you: not built, because you asked to discuss first and every version changes who may read an article. Three stages, three questions. Recommended: a private link first.",
+  "spya-j5f7yv": "Set aside as someday-maybe: a design was written, but it would have cost the owner the tailoring of their own summaries, and you chose to keep everything personalised (2026-10-01).",
+  "spya-jghnva": "Shipped as skim/10: the cue sets a scene when the quote leans on words it does not explain. Still waiting on you: should it set one more often? A middle wording is not written or measured yet.",
+  "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
+  "spya-mdp0em": "Waiting on you: not built. Every way of showing pills on the public shelf edits a security defence, and that shelf has 6 articles where pills need 8. Four options, or did you mean Include public on your own shelf?",
+  "spya-n8cuqq": "Shipped: dictation runs fifteen minutes and warns before it stops. Still waiting on you: should Feedback take fifteen minutes of non-stop speech? It takes 12,000 characters now; 20,000 means raising the database's own cap.",
+  "spya-nnr8ha": "Waiting on you: body text alone can follow one setting, but headings stay fixed. Three options: about ten CSS rules redone as one scale (about a day), body text only (not recommended), or not now and use browser zoom.",
+  "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
+  "spya-thpsnd": "Part 1 of 3 shipped: Tweets is now Summary's Thread. Two questions from it are queued for you: one bar button that opens a menu of the list modes, and whether to stop writing the Simple level.",
+  "spya-uc0asn": "Waiting on you: not built. AI for a signed-in reader on someone else's public article means we pay, not the owner, and running it in place edits a security defence. Five options, A to E, and two questions.",
+  "spya-us5kzc": "Set aside: this was a test of the Feedback button on the day it shipped, so there was nothing to build.",
+  "spya-v322fd": "Waiting on you: not built, because you asked to discuss first and every version changes who may read an article. Three stages, three questions. Recommended: a private link first.",
+  "spya-vgwt4z": "No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).",
+  "spya-zuk4f7": "Stage 1 shipped: Debate asks for, and keeps, the work that cites the piece. Still waiting on you for stage 2: may Debate send an article's DOI to a citation index, to list every work that cites it?",
+};

@@ -214,7 +214,10 @@
     .chat-turn.model :is(.fmt-code, .fmt-pre code),
     .cnd-answer :is(.fmt-code, .fmt-pre code),
     /* Candidates: only the affiliation, not our "said to be at" */
-    .cnd-affil-name
+    .cnd-affil-name,
+    /* Feedback's Earlier tab, for an admin: the line a report's note says
+       about it, which an agent wrote (261007d) */
+    .fb-earlier-comment
 ) {
     font-family: var(--font-ai);
 }

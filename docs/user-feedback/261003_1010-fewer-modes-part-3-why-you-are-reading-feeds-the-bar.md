@@ -2,6 +2,7 @@
 reports: spya-thpsnd
 ending: shipped
 parts: 3
+comment: Part 3 of 3 shipped: the bar offers Suggest what to do here, and Debate takes an angle. Still a question for you: confirming several suggestions with one press.
 ---
 
 # Fewer modes, part 3 of 3: why you are reading, feeding the command bar

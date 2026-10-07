@@ -1,6 +1,7 @@
 ---
 reports: spya-qxufp9
 ending: declined
+comment: Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.
 ---
 # Parts & Sections stay at import
 

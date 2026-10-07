@@ -2310,7 +2310,8 @@ export type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
-import type { EarlierFeedback } from "../types.js";
+import type { FeedbackEnding } from "../feedback-ending-values.js";
+import type { EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
 export type MyFeedback = Omit<EarlierFeedback, "shipped">;
@@ -2326,6 +2327,24 @@ export interface MyFeedbackPage {
 export interface FeedbackIdFilter {
   ids: readonly string[];
   keep: "in" | "out";
+}
+
+/** The report ids this build has a note for, under the ending each has (src/feedback-ending.ts). */
+export type FeedbackEndingIds = Readonly<Record<FeedbackEnding, readonly string[]>>;
+
+/** One earlier report with what only an admin's list carries from the row: its number, status and mark. */
+export interface MyFeedbackWithStatus extends MyFeedback {
+  number: number;
+  status: EarlierFeedbackStatus;
+  /** ISO, or null. */
+  ignoredAt: string | null;
+}
+
+export interface MyFeedbackStatusPage {
+  reports: MyFeedbackWithStatus[];
+  more: boolean;
+  /** Uncapped, unfiltered, of the same snapshot as `reports`; the four sum to every report the reader filed. */
+  counts: Record<EarlierFeedbackStatus, number>;
 }
 
 /** How many reports this reader has filed, and how many of them are among `countIds`. */
@@ -2619,6 +2638,28 @@ export interface FeedbackStore {
    * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
    */
   listMine(limit: number, countIds: readonly string[], filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
+  /**
+   * **`listMine` with a status and a number on each report** — an admin's
+   * Earlier tab, `GET /api/admin/feedback/earlier`.
+   * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+   *
+   * **Owner-scoped exactly as `listMine` is**, and the owner is never an
+   * argument: this is the caller's own list, not a view across owners. That
+   * the caller is an admin is the route's namespace's business, not this
+   * method's.
+   *
+   * `endings` is which report ids have a note and how it ended; with the row's
+   * `ignored_at` that decides each report's status (`EarlierFeedbackStatus` in
+   * src/types.ts has the rule). The status is one SQL expression, used for the
+   * row, the filter and the counts, so the three cannot disagree. `show`
+   * narrows **before** the cap: the newest `limit` reports of that status.
+   * `counts` is per status, uncapped, in the same snapshot as the list.
+   */
+  listMineByStatus(
+    limit: number,
+    endings: FeedbackEndingIds,
+    show: EarlierFeedbackStatus | "all",
+  ): Promise<MyFeedbackStatusPage>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.

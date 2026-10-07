@@ -1,6 +1,7 @@
 ---
 reports: spya-nnr8ha
 ending: awaiting
+comment: Waiting on you: body text alone can follow one setting, but headings stay fixed. Three options: about ten CSS rules redone as one scale (about a day), body text only (not recommended), or not now and use browser zoom.
 ---
 # A reading text size setting on /profile
 

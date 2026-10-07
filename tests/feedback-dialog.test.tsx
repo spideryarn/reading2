@@ -28,7 +28,9 @@ const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
 /** Every `GET /api/feedback` — the Earlier tab's reads, kept apart from `posts`. */
 const lists: string[] = [];
-let listAnswer: () => Promise<Response>;
+let listAnswer: (input: string) => Promise<Response>;
+/** Whether the dialog is mounted for an admin: the cosmetic flag FeedbackHost passes (261007d). */
+let asAdmin = false;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: RequestInit) => {
@@ -36,7 +38,7 @@ vi.mock("../src/web/lib/api.js", () => ({
        its own list so that `posts` still means "what was filed". */
     if ((init?.method ?? "GET") === "GET") {
       lists.push(input);
-      return listAnswer();
+      return listAnswer(input);
     }
     posts.push({ input, init: init ?? {} });
     return answer();
@@ -149,6 +151,7 @@ function show(open: boolean) {
         open,
         onClose: () => {},
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
+        admin: asAdmin,
       }),
     );
   });
@@ -303,6 +306,7 @@ beforeEach(() => {
   answer = ok(201);
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
+  asAdmin = false;
   carried = null;
   finishShot = null;
 });
@@ -1464,6 +1468,199 @@ describe("the Earlier tab", () => {
     if (!found) throw new Error(`no ${name} filter`);
     return found;
   }
+
+  /* docs/plans/261007d-…: for an admin the tab says what became of each report,
+     numbers them, and carries the note's one-line comment. */
+  describe("for an admin", () => {
+    const ADMIN_PATH = "/api/admin/feedback/earlier";
+    const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
+    const base = { createdAt: "2026-09-12T10:45:00.000Z", kind: null, page: null, at: null, comment: null, ignoredAt: null };
+    const ADMIN_REPORTS = {
+      reports: [
+        { ...base, id: "spya-k3m9qt", number: 215, status: "shipped", body: "A tab of what I sent before." },
+        {
+          ...base,
+          id: "spya-a2b2c3",
+          number: 214,
+          status: "waiting",
+          body: "One switch or two?",
+          comment: "Waiting on you: <b>one</b> switch for both, or one each?",
+        },
+        {
+          ...base,
+          id: "spya-a3b2c3",
+          number: 213,
+          status: "aside",
+          body: "Could it read my mind?",
+          comment: "Set aside: the browser gives us no way to do this.",
+        },
+        { ...base, id: "spya-a4b2c3", number: 212, status: "aside", body: "Ignore me.", ignoredAt: "2026-10-05T09:00:00.000Z" },
+        { ...base, id: "spya-a5b2c3", number: 211, status: "open", body: "The shelf is slow." },
+      ],
+      more: false,
+      counts: ADMIN_COUNTS,
+    };
+    const pills = () =>
+      [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].map((b) =>
+        (b.textContent ?? "").replace(/\s+/g, " ").trim(),
+      );
+    const pill = (name: string) => {
+      const found = [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].find(
+        (b) => (b.firstChild?.textContent ?? "").trim() === name,
+      );
+      if (!found) throw new Error(`no ${name} filter`);
+      return found;
+    };
+    async function openEarlier() {
+      mount();
+      click(tab("Earlier"));
+      await act(async () => {});
+    }
+
+    it("reads the admin route, and shows five pills with report counts", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+      expect(pill("All").getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("gives each row its number, its status word and its comment", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      const items = [...panelOf("Earlier").querySelectorAll("li")];
+      expect(items.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual([
+        "#215",
+        "#214",
+        "#213",
+        "#212",
+        "#211",
+      ]);
+      /* The number starts the meta line, so it is the first thing said. */
+      expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent?.startsWith("#215 · ")).toBe(true);
+      expect(items.map((li) => li.querySelector("[data-status]")?.textContent)).toEqual([
+        "Shipped",
+        "Needs a decision",
+        "Set aside",
+        "Set aside",
+        "Open",
+      ]);
+      expect(items.map((li) => li.querySelector("[data-status]")?.getAttribute("data-status"))).toEqual([
+        "shipped",
+        "waiting",
+        "aside",
+        "aside",
+        "open",
+      ]);
+      expect(items.map((li) => li.querySelector(".fb-earlier-comment")?.textContent ?? null)).toEqual([
+        null,
+        "Waiting on you: <b>one</b> switch for both, or one each?",
+        "Set aside: the browser gives us no way to do this.",
+        null,
+        null,
+      ]);
+      /* Text, never markup: the angle brackets are characters on the page. */
+      expect(panelOf("Earlier").querySelector(".fb-earlier-comment b")).toBeNull();
+      /* An ignored report with no comment says where it was set aside, and when: ours, not the model's. */
+      expect(items[3]?.querySelector(".fb-earlier-note")?.textContent).toMatch(/^Set aside on \/admin\/feedback, .*2026/);
+      expect(items[2]?.querySelector(".fb-earlier-note")).toBeNull();
+      expect(items[4]?.querySelector(".fb-earlier-note")).toBeNull();
+    });
+
+    it("asks the server for a status, and lists only what it answered", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      listAnswer = page({ reports: [ADMIN_REPORTS.reports[1]], more: false, counts: ADMIN_COUNTS });
+      click(pill("Needs a decision"));
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH, `${ADMIN_PATH}?show=waiting`]);
+      expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(1);
+
+      listAnswer = page({ reports: [], more: false, counts: { all: 1, open: 0, waiting: 1, aside: 0, shipped: 0 } });
+      click(pill("Set aside"));
+      await act(async () => {});
+      expect(lists.at(-1)).toBe(`${ADMIN_PATH}?show=aside`);
+      expect(panelOf("Earlier").textContent).toContain("None of your reports has been set aside.");
+    });
+
+    it("falls back to the plain list and three pills when the server has no such route (a 404)", async () => {
+      /* New client, old server: after a rollback, or in the minutes of a deploy. */
+      asAdmin = true;
+      listAnswer = (input) => (input.startsWith(ADMIN_PATH) ? page({ error: "Not found" }, 404)() : page(REPORTS)());
+      await openEarlier();
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH, "/api/feedback"]);
+      expect(pills()).toEqual(["All 2", "Shipped 1", "Not shipped 1"]);
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
+      expect(panelOf("Earlier").querySelector(".fb-earlier-number")).toBeNull();
+      /* And it stays on the plain route for the rest of this opening. */
+      click(showButton("Shipped"));
+      await act(async () => {});
+      expect(lists.at(-1)).toBe("/api/feedback?show=shipped");
+      /* The next opening asks the admin route again: the deploy may have finished. */
+      const before = lists.length;
+      reopen();
+      click(tab("Earlier"));
+      await act(async () => {});
+      await act(async () => {});
+      expect(lists.slice(before)).toEqual([ADMIN_PATH, "/api/feedback"]);
+    });
+
+    it.each([403, 500])("does not fall back on a %s: it says the list would not load", async (status) => {
+      asAdmin = true;
+      listAnswer = page({ error: "no" }, status);
+      await openEarlier();
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+    });
+
+    it.each([
+      ["the plain route's shape", REPORTS],
+      ["counts that do not sum to All", { ...ADMIN_REPORTS, counts: { ...ADMIN_COUNTS, all: 6 } }],
+      ["a status it does not know", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], status: "deferred" }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a number that is not a positive integer", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], number: 0 }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["the same number twice", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], number: 214 }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a comment that is not text", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], comment: { html: "x" } }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a comment over the cap", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], comment: "x".repeat(241) }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["more rows of a status than its count", { ...ADMIN_REPORTS, counts: { all: 5, open: 2, waiting: 1, aside: 1, shipped: 1 } }],
+      ["a mark that is not a time", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], ignoredAt: "yesterday" }, ...ADMIN_REPORTS.reports.slice(1)] }],
+    ])("refuses an admin answer with %s: the failure sentence and Try again, no rows", async (_case, body) => {
+      asAdmin = true;
+      listAnswer = page(body);
+      await openEarlier();
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+      expect([...panelOf("Earlier").querySelectorAll("button")].map((b) => b.textContent)).toContain("Try again");
+    });
+
+    it("refuses a row of another status in a filtered answer", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      listAnswer = page({ reports: [ADMIN_REPORTS.reports[0]], more: false, counts: ADMIN_COUNTS });
+      click(pill("Open"));
+      await act(async () => {});
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    });
+
+    it("changes nothing for a reader who is not an admin: the plain route, three pills, no number", async () => {
+      asAdmin = false;
+      listAnswer = page(REPORTS);
+      await openEarlier();
+      expect(lists).toEqual(["/api/feedback"]);
+      expect(pills()).toEqual(["All 2", "Shipped 1", "Not shipped 1"]);
+      expect(panelOf("Earlier").querySelector(".fb-earlier-number")).toBeNull();
+      expect(panelOf("Earlier").querySelector(".fb-earlier-comment")).toBeNull();
+      expect(panelOf("Earlier").querySelector("[data-status]")).toBeNull();
+      /* And a 404 there is a failure, as it always was: there is nothing to fall back to. */
+    });
+  });
 
   it("marks a shipped report, and only that one", async () => {
     listAnswer = page(REPORTS);

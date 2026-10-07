@@ -8,7 +8,7 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 ## In this doc
 
 - [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history)
-- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, and [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark)
+- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), and [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment)
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
 - [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
@@ -187,9 +187,10 @@ The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in rea
 newest first — the date, problem or suggestion, the page it was filed from (and the paragraph, for
 its link), and what they wrote —
 read by `GET /api/feedback`, which is owner-scoped in the store like every other read and sends
-**those fields, whether it shipped, and nothing else**: not the email, the address, the diagnostics
-or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why). Fifty at
-most, and the list says so when there were more.
+**seven fields a report and nothing else**: the report's id, those five (the date, the kind, the
+page, the paragraph, the words), and whether it shipped. Not the email, the address, the
+diagnostics or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why).
+Fifty at most, and the list says so when there were more.
 
 **The page is a label, not the address**, since 2026-10-03. Greg asked that a report carry the page
 he was on (`spya-y4upzw`); it had since 2026-09-02, to the row, Sentry, `/admin/feedback` and the
@@ -225,7 +226,7 @@ which also records the check that one reader cannot see another's reports here.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-63)
 
-Each report now carries a fifth field, **`shipped`**, shown as a word in its meta line, and the tab
+Each report also carries **`shipped`**, shown as a word in its meta line, and the tab
 filters **All · Shipped · Not shipped** — on the server (`?show=shipped|unshipped`), so the fifty
 are the newest *matching* ones, not a filter over the newest fifty.
 
@@ -236,7 +237,8 @@ header naming its report row id and its ending (`reports: spya-…` / `ending: s
 shipped **only once the commit carrying its note has been deployed** — that is the "deployed" half,
 for free — and nobody writes to the production database. A report with no note, or a note with no
 header, reads as not shipped: the label is never claimed without a note saying so. What this cannot
-say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped*. The header format,
+say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped* (to every reader
+but an admin: [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07)). The header format,
 split reports (`parts:`), the accepted limits, and why this beat a status column are in
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
 
@@ -256,6 +258,47 @@ reader cannot see; each has a guard and a test. And `.fb-scroll[hidden]` needs i
 that one. A send already in flight is allowed to finish: success shuts the dialog and shows the
 ordinary thank-you toast, and failure returns to Write so its recovery panel cannot land hidden.
 [260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
+
+### What became of each report, for an admin, since 2026-10-07
+
+> When I look in feedback earlier, not shipped, there's still quite a few listed. […] let's give
+> you another category for deferred or ignored, or maybe even both. […] write some kind of comment
+> that would indicate why you deferred them, or what the question was […] And maybe you could give
+> every single feedback report its own ID somehow, so that it would be easy for us to refer to them
+> in conversation.
+>
+> — Greg, 2026-10-06 (`spya-cnbv8f`)
+
+**For an admin only.** Every other reader's tab, and `GET /api/feedback`, are exactly as above. An
+admin's tab reads `GET /api/admin/feedback/earlier` instead: still their **own** reports,
+owner-scoped in the store as `listMine` is, but behind the `/api/admin/` gate
+([admin.md](admin.md)) because it says three things no other reader is told. Whether to tell
+everyone is a question for Greg, in the plan.
+
+- **One of four statuses**, with five pills, **All · Open · Needs a decision · Set aside ·
+  Shipped**, each with its count of reports. *Shipped*: the notes combine to shipped. Otherwise
+  *Set aside*: an admin pressed Ignore, or the notes say declined. Otherwise *Needs a decision*:
+  the notes say awaiting. Otherwise *Open*: no note yet. The order is the rule, so an ignored
+  report never asks for a decision. It is one SQL expression (`statusOf` in
+  [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts)), used for the row, the filter and
+  the counts. No new ending was added to the notes.
+- **A number, `#212`**, at the start of the row; say "feedback 212". It is `feedback.number`: one
+  sequence across all owners, stored, so it names one report and keeps naming it. Reports from
+  before the column were numbered in the order they were filed.
+- **One line from the note**, under the reader's words, in the model's face
+  ([fonts.md](fonts.md)): the note header's `comment:`
+  ([feedback-reports.md § The note](feedback-reports.md#the-note-in-docsuser-feedback)). An ignored
+  report with no comment says *Set aside on /admin/feedback* and the date.
+
+**The browser's `isAdmin` only picks which route to ask**; the server decides who is answered. If
+the admin route answers 404 (a server from before it, during a deploy or after a rollback) the tab
+falls back to the plain list and three pills for that opening. Any other failure, or an answer
+that fails the browser's check of it, is the ordinary "would not load" sentence with Try again.
+
+Nothing here writes to production: a status or a comment changes when a note changes and the
+commit carrying it is deployed. Questions for Greg shown in the tab, with a reply box, are stage 2
+of the same plan and are not built yet.
+[261007d](../plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md).
 
 ## The thank-you, and getting out of it
 
@@ -447,6 +490,7 @@ which *is* the verified account id.
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
+| an admin's Earlier tab: status, number, comment | `GET /api/admin/feedback/earlier` in [`src/routes.ts`](../../src/routes.ts); `listMineByStatus` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); the same `FeedbackEarlier.tsx` |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |
@@ -689,7 +733,9 @@ gate as the reads).
 **What it does is take the report out of the agents' queue**: `scripts/feedback-unswept.ts` drops a
 marked row and says how many it dropped ([feedback-reports.md § Where the queue lives](feedback-reports.md#where-the-queue-lives)).
 Nothing a reader sees changes. The Earlier tab's shipped status comes from the notes, as before,
-and Sentry's copy is untouched.
+and Sentry's copy is untouched. An admin's own Earlier tab is the one exception, since 2026-10-07:
+it shows their ignored report as *Set aside*
+([§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07)).
 
 The list and the write take turns in the browser. A Refresh that read the old row and landed after
 the write would draw *Ignore* again on a report already ignored, so neither starts while the other

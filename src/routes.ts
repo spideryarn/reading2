@@ -197,7 +197,12 @@ import {
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
 import { noticeFeedback } from "./feedback-notice.js";
-import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
+import {
+  feedbackComment,
+  feedbackIdsByEnding,
+  isFeedbackShipped,
+  shippedFeedbackIds,
+} from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -465,6 +470,8 @@ import {
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
 import {
+  ADMIN_EARLIER_FEEDBACK_SHOWS,
+  type AdminEarlierFeedbackPage,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
@@ -8622,6 +8629,56 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           from,
         ),
       );
+    },
+  },
+
+  /* **The admin's own earlier reports, with what became of each** — the
+     Feedback dialog's Earlier tab, for an admin.
+     docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+
+     Under `/api/admin/`, so the namespace gate has refused everybody else
+     before this runs; nothing here asks who the caller is. **Their own list,
+     not a view across owners**: `feedbackStore`, owner-scoped like
+     `GET /api/feedback`, never `adminStore`. What the namespace buys is not
+     other people's rows but three things no other reader is sent: that a
+     report was ignored, whether its note says declined or awaiting, and the
+     sentence an agent wrote about it.
+
+     One segment after `feedback/`; the one-report routes below take two, so
+     neither can answer for the other. Picked field by field, as the plain
+     route is, and the comment is looked up only for the ids the store handed
+     back, so a comment on somebody else's report has nowhere to go. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/feedback/earlier",
+    article: "none",
+    handler: async ({ request: { res, query } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const asked = query.get("show") ?? "all";
+      const show = ADMIN_EARLIER_FEEDBACK_SHOWS.find((known) => known === asked);
+      if (show === undefined) {
+        throw httpError(400, `show must be one of ${ADMIN_EARLIER_FEEDBACK_SHOWS.join(", ")}`);
+      }
+      const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
+      const { open, waiting, aside, shipped } = page.counts;
+      const answer: AdminEarlierFeedbackPage = {
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
+          id,
+          createdAt,
+          kind,
+          body,
+          page: filedFrom,
+          at,
+          number,
+          status,
+          comment: feedbackComment(id),
+          ignoredAt,
+        })),
+        more: page.more,
+        counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
+      };
+      send(res, 200, answer);
     },
   },
 
