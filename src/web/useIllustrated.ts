@@ -26,7 +26,7 @@
  * established server-side against the real Sketch at the time it was written,
  * so **for a stored artefact its own plate order is the Sketch's order**. What
  * that costs is the unknown-scene check, which has nothing left to say about
- * our own file; what it keeps is the check the browser is actually here to make
+ * our own stored artefact; what it keeps is the check the browser is here to make
  * — every vignette's block id against *this* article's ids, and every quote
  * against that block's own text, so no row in the *what it depicts* list can
  * jump somewhere that does not contain what the reader just read.
