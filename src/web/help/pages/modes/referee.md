@@ -29,6 +29,8 @@ Referee is only for whoever added the article.
 
 ## Reading it
 
+![A Strength of evidence criterion on a paper: four passages, each with a line on why, three marked counts for in green and one counts against in red](../images/mode-referee.png "A For / against criterion: each passage the AI found, which way it cuts, and why. The list numbers 1–4 are its ordering, not a score.")
+
 **Hidden text** checks the original web page for text a person would not see but an AI would read —
 text the colour of its background, too small to read, invisible characters, instructions written to
 a model. It reports and blocks nothing. “Nothing found” is not a clean bill: PDFs and some parts of

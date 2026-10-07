@@ -1,0 +1,5 @@
+**Ship**, with two small clarifications. All eight subjects fit their Help page’s text. Corpus regeneration, image tests and compression are covered. These are still screenshots, so the GIF still rule does not apply.
+
+1. [Plan:29](/var/tmp/spideryarn-worktrees/help-pictures-eight-modes/docs/plans/261007o-help-pictures-for-the-eight-modes-without-one.md:29) — Say the Illustrated image goes **after the list, as an unindented paragraph**. “Under its bullet” could mean nesting it inside the list, which the renderer rejects.
+
+2. [Plan:36](/var/tmp/spideryarn-worktrees/help-pictures-eight-modes/docs/plans/261007o-help-pictures-for-the-eight-modes-without-one.md:36) — Add a check of the server’s effective database/auth targets before generating output, and explicitly set `SPIDERYARN_BASE_URL` to this worktree’s printed port. Localhost alone does not prove the backend is local. With the stated local seeded account and public articles, I see no inherent real-data or privacy issue.

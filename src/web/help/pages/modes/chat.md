@@ -20,6 +20,8 @@ Chat is only for whoever added the article; on someone else’s shared article i
 
 ## Reading it
 
+![A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on](../images/mode-chat.png "Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.")
+
 The short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or
 point at it to read the start first. A dimmed code is a paragraph the article no longer has. Check
 the passage before you trust the claim — that is what the codes are for.
