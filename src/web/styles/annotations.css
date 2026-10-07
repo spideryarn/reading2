@@ -1439,7 +1439,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  box-shadow: 0 6px 18px rgb(0 0 0 / calc(0.35 * var(--shadow-strength)));
   font-family: var(--font-ui);
   font-size: 0.9rem;
   font-weight: 500;

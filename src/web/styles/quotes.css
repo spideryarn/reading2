@@ -242,8 +242,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-h-lg);
-  height: var(--control-h-lg);
+  /* A 44px floor: 2.75rem is 33px at a 12px root (plan 261007m, GPT Sol's C2). */
+  width: max(44px, var(--control-h-lg));
+  height: max(44px, var(--control-h-lg));
   padding: 0;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);

@@ -674,7 +674,7 @@
   flex-direction: column;
   background: var(--surface-raised);
   border-top: 1px solid var(--rule-strong);
-  box-shadow: 0 -12px 32px -12px rgb(0 0 0 / 0.6);
+  box-shadow: 0 -12px 32px -12px rgb(0 0 0 / calc(0.6 * var(--shadow-strength)));
   animation: dock-rise 140ms ease-out;
 }
 

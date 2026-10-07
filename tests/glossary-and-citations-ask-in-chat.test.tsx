@@ -531,6 +531,11 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
     expect(digDeeper(), "beside Dig deeper, which is still there").toBeDefined();
+    /* One size for the pair (plan 261007m S2): both the shared outline/sm
+       Button, so neither is a 28px button beside a 32px one. */
+    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(digDeeper()?.dataset.size);
+    expect(button.dataset.variant).toBe(digDeeper()?.dataset.variant);
+    expect(button.dataset.size).toBe("sm");
     expect(marks(), "no chat was started from it yet").toHaveLength(0);
 
     /* 1. The press, which is the Send. */
@@ -666,6 +671,11 @@ describe("Ask in chat on a cited work", () => {
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
     expect(workRow(WORK)?.querySelector(".cite-investigate"), "beside Dig deeper, which is still there").not.toBeNull();
+    const dig = workRow(WORK)?.querySelector<HTMLButtonElement>(".cite-investigate");
+    /* The same pair, the same size as Glossary's (plan 261007m S2). */
+    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(dig?.dataset.size);
+    expect(button.dataset.variant).toBe(dig?.dataset.variant);
+    expect(button.dataset.size).toBe("sm");
     expect(marks()).toHaveLength(0);
 
     /* 1. The press, which is the Send. */

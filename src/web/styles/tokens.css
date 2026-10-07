@@ -42,7 +42,15 @@
      - `--shadow-dialog`: a panel over the prose — the chat, annotate and
        comment panels, the command bar, the return chip, the toast.
      - `--shadow-sheet`: a large modal surface — the purpose prompt on
-       /profile, the feedback dialog, the lightbox. */
+       /profile, the feedback dialog, the lightbox.
+     And `--shadow-strength`, for the elevation shadows whose silhouette is
+     their own (docked chat, the Ask chip, the revealed gutter, the dock
+     drawer, the mode herald, chat's latest pill): each writes its dark alpha
+     times this, so dark is the number it always was and light is softened
+     by the same ratio as the three tokens (plan 261007m S4). One number, not
+     a token per silhouette. tests/elevation-shadows-soften-in-light.test.ts
+     holds every outer black shadow to one or the other. */
+  --shadow-strength: 1;
   --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -6px rgb(0 0 0 / 0.65);
   --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.55);
   --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.8);
@@ -469,6 +477,7 @@
   --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -6px rgb(0 0 0 / 0.24);
   --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.2);
   --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.3);
+  --shadow-strength: 0.38;
   /* Orange as text, darkened rather than lifted: #DB8A45 on white is ~2.6:1. */
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 72%, black);
   --highlight-text: var(--highlight-ink);
