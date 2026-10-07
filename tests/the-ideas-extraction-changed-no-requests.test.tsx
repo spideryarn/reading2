@@ -36,6 +36,7 @@ import type { PublicArticle, PublicSketch } from "../src/public-types.js";
 /* The word on each button, so a press can be aimed at a named mode without a
    second copy of the mode-to-label mapping here. src/title-text.ts. */
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
@@ -873,10 +874,10 @@ describe("the request trace of a mode is the whole of it, in order", () => {
        is what arms an activation token — the same gesture
        tests/modes-that-start-themselves.test.tsx and the owner cases in
        tests/public-network-trace.test.tsx make. */
-    const ideas = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === MODE_LABEL.ideas,
-    );
-    expect(ideas, "the bar must draw Ideas").toBeDefined();
+    /* Ideas is under More since 2026-10-07 (plan 261007c); a pick there arms
+       exactly as the bar button did. */
+    const ideas = modeDoor(host, MODE_LABEL.ideas);
+    expect(ideas, "the bar must offer Ideas").toBeDefined();
     await act(async () => ideas?.click());
     await settle();
 

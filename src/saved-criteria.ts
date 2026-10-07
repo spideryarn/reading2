@@ -67,12 +67,18 @@ export interface SavedCriterion {
 }
 
 /**
- * How many criteria one article keeps.
+ * **How many criteria one article can hold: a ceiling, not a trim.** At this
+ * many, adding another is refused with `CRITERIA_AT_CEILING`
+ * (src/referee-criteria-store.ts); nothing is ever dropped to make room.
  *
- * A cap for the reason `MAX_RUNS` in src/searches.ts is one: nothing in the
- * feature deletes anything and a list that only grows is a slow leak. Smaller
- * than search's thirty, because a referee form has a dozen questions on it and
- * a hundred saved criteria is not a referee's list, it is a leak with prose in
- * it. Oldest go first.
+ * It was 20, with the oldest finished criterion deleted to make room: chosen
+ * by an agent on 2026-09-01 (b9f1d2a53) by analogy with `MAX_RUNS` in
+ * src/searches.ts, not asked for. That threw away a referee's own words
+ * without saying so, and could not add at all when the one to drop had
+ * comments on it. Greg chose a ceiling of 200 that refuses, on 2026-10-07;
+ * his words are in docs/project/referee-mode.md § a criterion with comments on it.
+ *
+ * 200 is far past any referee form (a dozen questions) and still a bound on a
+ * table a script could otherwise fill.
  */
-export const MAX_CRITERIA = 20;
+export const MAX_CRITERIA = 200;

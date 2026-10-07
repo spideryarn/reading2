@@ -167,7 +167,8 @@ and close-cross reports
 **A small device, either way up**
 
 - **The bars leave while you read forwards and come back when you scroll back.** The top bar does
-  it at every width, and stays put while it holds the breadcrumb; the bottom bar does it only here.
+  it at every width, and stays put while it holds the breadcrumb; the bottom bar does it only here,
+  and stays put while its drawer or its More menu is open.
   `styles/shell.css` § the bar that leaves owns the top bar; `styles/narrow-window.css` § a small
   device owns the bottom bar. [touch.md](touch.md) owns the finger-facing intent.
 - **Short mode bands:** the order controls' press and overflow rules, and Quotes' head-row decision.

@@ -116,8 +116,8 @@ function reading(props: Record<string, unknown> = {}): void {
 }
 
 /** The bar off the reading view: links in the same frames, rather than buttons. */
-function loose(props: Record<string, unknown> = {}): void {
-  history.replaceState(null, "", "/read/a-piece/metadata");
+function loose(props: Record<string, unknown> = {}, search = ""): void {
+  history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
     root.render(
       // biome-ignore lint/suspicious/noExplicitAny: as above
@@ -319,10 +319,21 @@ describe("the catalog's two sentences per mode", () => {
   });
 });
 
+/**
+ * **The five modes under More have a bar button only while they are the open
+ * mode** (plan 261007c, D3) — so that is the bar each is drawn in here, and
+ * every mode still has its card checked. A mode that is not gathered is drawn
+ * whatever is open; Plain stands in. What a gathered mode says while it is
+ * *not* open is its item in the menu, which carries the card's first
+ * paragraph: tests/dock-more.test.tsx § what an item under More says.
+ */
+const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const openFor = (mode: Mode): Mode => (UNDER_MORE.includes(mode) ? mode : "plain");
+
 describe("the mode segment on the reading view", () => {
   it("gives every mode a card of its own, with both paragraphs in it", async () => {
-    reading();
     for (const mode of MODES) {
+      reading({ mode: openFor(mode) });
       const { head, paras } = await cardFor(controlFor(mode));
       expect(head, `${mode}'s card is headed with somebody else's name`).toBe(MODE_LABEL[mode]);
       expect(paras.length, `${mode}'s card is not two paragraphs`).toBe(2);
@@ -357,8 +368,9 @@ describe("the framed mode links, off the reading view", () => {
    * metadata page.
    */
   it("give every mode the same card the segment does", async () => {
-    loose();
     for (const mode of MODES) {
+      /* The carried `?mode=` is what draws a gathered mode's link here. */
+      loose({}, UNDER_MORE.includes(mode) ? `?mode=${mode}` : "");
       const { head, paras } = await cardFor(controlFor(mode));
       expect(head, `${mode}'s card is headed with somebody else's name`).toBe(MODE_LABEL[mode]);
       expect(paras.length, `${mode}'s card is not two paragraphs`).toBe(2);
@@ -413,8 +425,12 @@ describe("a mode a visitor cannot have", () => {
     const gapped = [...marked.keys()];
     expect(gapped.length, "no mode is marked, so this test asserts nothing").toBeGreaterThan(0);
 
-    reading({ marked });
+    /* Most of the gapped modes are the five under More, so a vacuity guard:
+       at least one of each kind is exercised. */
+    expect(gapped.some((m) => UNDER_MORE.includes(m))).toBe(true);
+    expect(gapped.some((m) => !UNDER_MORE.includes(m))).toBe(true);
     for (const mode of gapped) {
+      reading({ marked, mode: openFor(mode) });
       const { paras } = await cardFor(controlFor(mode));
       expect(paras.length, `${mode}'s card is not three paragraphs`).toBe(3);
       expect(paras[0], `${mode}: the visitor's sentence is not first`).toBe(

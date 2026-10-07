@@ -1595,12 +1595,12 @@ function ConfSlider({
   const note = confNote(hiddenCount, all.length);
 
   return (
-    <div className="srch-gate">
-      <div className="srch-gate-row">
-        <label className="srch-gate-label" htmlFor="srch-gate">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="srch-gate">
           confidence
         </label>
-        <span className="srch-gate-value">
+        <span className="gloss-gate-value">
           {gate} · {count}
         </span>
         {/* Only once there is something to undo — the same call the glossary's
@@ -1608,7 +1608,7 @@ function ConfSlider({
         {moved && (
           <button
             type="button"
-            className="srch-gate-reset"
+            className="gloss-gate-reset"
             title={`Back to ${PRIORITY_CONF}`}
             aria-label={`Reset the threshold to ${PRIORITY_CONF}`}
             onClick={() => onGate(null)}
@@ -1619,7 +1619,7 @@ function ConfSlider({
       </div>
       <input
         id="srch-gate"
-        className="srch-gate-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         /* A fixed 0–100, deliberately unlike the glossary's `gateMax`. Ending
@@ -1646,7 +1646,7 @@ function ConfSlider({
           sentence stays, because it is what tells "Nothing matched" from "you
           hid it all" and names the way back. The other thresholds still print
           theirs in every state (threshold.ts § hiddenNote). */}
-      {hiddenCount > 0 && <p className="srch-gate-note">{note}</p>}
+      {hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}
     </div>
   );
 }

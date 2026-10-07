@@ -158,6 +158,8 @@ is the Overseer's to run, weekly or when a disk is tight.
   re-run would change; the stale token backup and two stale credential copies in `~`, which are
   Greg's to delete.
 
+**Decided 2026-10-07, Greg ("yes to all"):** `/tmp` ages out after 7 days rather than 30; the daemon moves under `overseer.service` with its key in a root-readable `EnvironmentFile` at `/etc/overseer-secrets.env` (a new place for a secret, approved); screenshots are compressed; the local database is accepted as lost on a rebuild. He also said *"yes delete"* to the three stale copies, and the Overseer deleted them that morning (`/etc/github-tokens/spideryarn.token~`, `~/env-local-backup-cost-all-modes-260903`, `~/code/spideryarn2/.env.local~`; the live originals untouched).
+
 ## What done looks like
 
 `npm test` and `npm run typecheck` green; `systemctl list-timers` shows `box-tidy.timer` and

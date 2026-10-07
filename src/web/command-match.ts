@@ -162,8 +162,8 @@ export type ActionOutcome =
  *
  * It also **retires product call 4** as stated (*the bar lists exactly what the
  * Dock lists*), and the replacement is narrower rather than looser: the bar's
- * **mode** rows are exactly what the Dock lists, and everything else comes
- * after them. tests/command-bar.test.tsx holds both halves.
+ * **mode** rows are exactly what the Dock offers — as a button, or since
+ * 2026-10-07 under its More button — and everything else comes after them. tests/command-bar.test.tsx holds both halves.
  */
 export type Command =
   | { readonly kind: "mode"; readonly mode: Mode }
@@ -502,8 +502,8 @@ function tierFor(query: string, command: Command): number {
  * `commands` is the list to search and its **order is part of the answer**: two
  * commands on the same tier come back in the order they were handed in, so the
  * result is total and a test can state it. The caller hands in the modes the
- * Dock is drawing followed by everything else, which is what makes "the bar's
- * mode rows are exactly what the Dock lists" true by construction rather than
+ * Dock is offering followed by everything else, which is what makes "the bar's
+ * mode rows are exactly what the Dock offers" true by construction rather than
  * by a second copy of the experimental-switch rule (`visibleModes` in Dock.tsx
  * is the only copy).
  *

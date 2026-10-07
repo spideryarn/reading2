@@ -248,6 +248,67 @@
 }
 .install-hint-close:hover { color: var(--highlight-text); border-color: var(--highlight); }
 
+/* ------------------------------------------------------------ the entrance --
+   **The bar is absent for a second, then fades and rises into place** — once,
+   on the first reading view of a page load. Greg, 2026-10-06 (spya-dest8x):
+   *"perhaps it appears, maybe it fades in or slowly rises to the top when the
+   page, the article first loads after a second, so that the page can load and
+   then it draws their eye to it."* Which mount gets the class is
+   reader/dock-entrance.ts; this is only what the class does.
+   docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md § D7.
+
+   **`opacity` and the separate `translate` property, never `transform`.**
+   `transform` on both of these elements is the phone's hide-on-scroll rule's
+   (`.dock` above, `--install-hint-transform`), and an animation that named it
+   would override that rule for as long as `forwards` holds its last frame,
+   which is for ever. `translate` composes with `transform` instead of
+   replacing it, so a bar told to hide mid-entrance still ends up hidden.
+
+   **Hidden outright during the delay, not merely transparent.** A static
+   `visibility: hidden` is what applies until the animation starts, so for
+   that second the bar cannot be pressed or focused; Tab skips it, which is
+   accepted. Both keyframes then say `visible`, because `visibility` is
+   discrete and a `hidden` first frame would hold for half the fade. `forwards`
+   keeps the last frame, and with it `visible`, once the animation is over
+   (GPT Sol, PR-8).
+
+   **The install hint enters with the bar it sits on**, or it would float over
+   an empty strip (PR-5). The same distance for both, the bar's own height, so
+   they rise as one piece; the hint starts behind the bar (46 under 96).
+
+   Nothing is measured against any of this: opacity, visibility and translate
+   leave `scrollWidth` and `clientWidth` alone, so the fit ladder reads the
+   same row either way (dock-fit.ts).
+
+   tests/dock-entrance.test.tsx reads these rules as text. */
+.dock.dock-enter,
+.install-hint.dock-enter {
+  visibility: hidden;
+  animation: dock-enter 0.6s ease 1s forwards;
+}
+@keyframes dock-enter {
+  from {
+    visibility: visible;
+    opacity: 0;
+    translate: 0 var(--dock-space);
+  }
+  to {
+    visibility: visible;
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+/* A reader who asked for less motion gets the bar, at once. `animation: none`
+   also drops the delay, so the static `hidden` above has to be undone here or
+   the bar would never arrive. */
+@media (prefers-reduced-motion: reduce) {
+  .dock.dock-enter,
+  .install-hint.dock-enter {
+    animation: none;
+    visibility: visible;
+  }
+}
+
 /* -------------------------------------------------------- the return chip --
    "↩ back to <section>", above the bar, after a jump — ReturnChip.tsx, which
    carries the words and the rule for when it is there at all.
@@ -407,6 +468,11 @@
   transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
 }
 .dock-btn:hover { color: var(--highlight-text); background: var(--panel); }
+/* **The More button while its menu is open** (Dock.tsx § `DockMore`): the
+   hover wash, held, so the list reads as coming out of this button once the
+   pointer has moved up into it. Not `.on` — that says *this mode is open*,
+   and More is never a mode. Radix writes `data-state` on the trigger. */
+.dock-more-trigger[data-state="open"] { color: var(--highlight-text); background: var(--panel); }
 .dock-btn:focus-visible {
   outline: 1px solid var(--highlight-text);
   outline-offset: -2px;

@@ -245,7 +245,7 @@ function json(body: unknown, status = 200): Response {
    this line, so the mocks are already in place.
    tests/public-network-trace.test.tsx says the same about its own two. */
 const { App } = await import("../src/web/App.js");
-const { Dock, fitSignature, visibleModes } = await import("../src/web/Dock.js");
+const { Dock, fitSignature, splitForMore, visibleModes } = await import("../src/web/Dock.js");
 const { FeedbackHost, FEEDBACK_TRIGGER_SELECTOR } = await import("../src/web/FeedbackButton.js");
 /* The shelf's masthead case asks whether the Feedback trigger joined the row
    `Profile` is in, and this is that link's address rather than a second copy of
@@ -587,10 +587,15 @@ describe("the route walk: one branded home control, never two triggers", () => {
     const group = document.querySelector('[role="radiogroup"]');
     expect(group).not.toBeNull();
     /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
-       drawn after the group, never a radio in it (plan 261005d). */
-    expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(
-      visibleModes(false, "plain").filter((m) => m.mode !== "marginalia").length,
-    );
+       drawn after the group, never a radio in it (plan 261005d). And the
+       drawn modes only, since 2026-10-07: five are under the More button,
+       which is outside the group too (plan 261007c). */
+    const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
+    expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
+    expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
+    /* More would move that number by one if it were drawn inside the group. */
+    expect(group?.querySelector(".dock-more-trigger")).toBeNull();
+    expect(document.querySelector(".dock-modes .dock-more-trigger")).not.toBeNull();
   });
 
   /**
@@ -766,7 +771,7 @@ describe("the bar's Feedback trigger is gated on its own", () => {
 describe("the fit signature", () => {
   const noop = () => {};
   const sig = (feedback: boolean) =>
-    fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null, "ready", feedback);
+    fitSignature(splitForMore(visibleModes(false, "plain"), "plain"), "plain", noop, undefined, null, "ready", feedback);
 
   it("changes when the Feedback trigger appears", () => {
     expect(sig(true)).not.toBe(sig(false));

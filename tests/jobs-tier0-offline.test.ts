@@ -17,7 +17,7 @@ let pauses = 0;
 let commits: StepName[] = [];
 let ran: StepName[] = [];
 let pauseAnswer: "requeued" | "cancelled" | "stale" | "budget-spent" = "requeued";
-const OWNER = "51ce5e0e-0000-4000-8000-0000000000e1" as OwnerId;
+const OWNER = "e12df81d-7f2c-4fc2-9b2f-0c27bb2e3462" as OwnerId;
 
 vi.mock("../src/store/pg-jobs.js", () => ({ pgJobStore: {
   settleExpired: async () => [],

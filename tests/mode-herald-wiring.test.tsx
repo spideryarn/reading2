@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type { Article } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
@@ -251,10 +252,9 @@ const modeInUrl = (): string => new URLSearchParams(location.search).get("mode")
 
 async function press(label: string): Promise<void> {
   const before = modeInUrl();
-  const button = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(button, `the bar must draw ${label}`).toBeDefined();
+  /* The bar's button, or the item under More (plan 261007c). */
+  const button = modeDoor(host, label);
+  expect(button, `the bar must offer ${label}`).toBeDefined();
   await act(async () => button?.click());
   // `?mode=` is written behind nuqs' throttle, so one read is a race.
   for (let i = 0; i < 40 && modeInUrl() === before; i++) {

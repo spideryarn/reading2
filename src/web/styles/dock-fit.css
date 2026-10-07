@@ -12,8 +12,9 @@
    toggles you could turn on together. A hairline box around them
    says "one of these", which is what the markup already promises a screen
    reader via `role="radiogroup"` — this is the sighted half of the same claim.
-   Since 2026-10-02 there are up to three non-empty boxes (`.dock-frame` below),
-   and this element is the unframed row that holds them.
+   Since 2026-10-02 there are several boxes (`.dock-frame` below) — four since
+   the More button got one on 2026-10-07 — and this element is the unframed
+   row that holds them.
 
    **On the metadata page the same row holds links, and none is on**
    (`DockModeLinks`, since 2026-10-04): no mode is open there, so the frames
@@ -51,9 +52,18 @@
    2026-10-02: *"move the Plain and Marginalia modes into their own
    icon-groups"* (spya-ba8kqp). Each hairline box says what the one box said
    before, for its own part: Plain or one of the bands is on (one
-   radiogroup, two frames), and the notes are a switch of their own. Marginalia's
-   frame is absent when Experimental is off and the notes are closed.
+   radiogroup, two frames), and the notes are a switch of their own. (Marginalia's
+   frame was absent with Experimental off and the notes closed until
+   2026-10-05, when the mode left the switch.)
    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+
+   **A fourth since 2026-10-07: the More button's**, between the bands and
+   Marginalia and outside the radiogroup as Marginalia's is — a menu button is
+   not one of the things the middle column shows (Dock.tsx § `DockMore`). It
+   needs no rule of its own here: it is a `.dock-btn` with a `.dock-btn-label`
+   inside `.dock-modes`, so every rung of the ladder below drops its word and
+   tightens its padding with its neighbours', and it is never `.on`, so rung
+   2 never gives the word back.
 
    **Never shrink, for the reason `.dock-modes` gives above**: this clips its
    own overflow. On a coarse pointer the row may grow, and each frame takes

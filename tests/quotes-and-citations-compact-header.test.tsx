@@ -135,22 +135,22 @@ const THREE = [quote(1, 0.9, 0.2), quote(2, 0.5, 0.8), quote(3, 0.2, 0.3)];
 describe("the Quotes band's top", () => {
   it("has no head row while the rank row is drawn, and no 'order' word in front of it", async () => {
     await mountQuotes(quotesOwner(quotes(THREE)), "document");
-    expect(host.querySelector(".quotes-rank"), "no rank row to fold into").not.toBeNull();
+    expect(host.querySelector(".gloss-sort"), "no rank row to fold into").not.toBeNull();
     expect(head()).toBeNull();
-    expect(host.querySelector(".quotes-rank")?.textContent).not.toMatch(/^order/);
+    expect(host.querySelector(".gloss-sort")?.textContent).not.toMatch(/^order/);
   });
 
   /* The count went to the band's (i) on 2026-10-01 — Greg (spya-ucu35y):
      *"how many X (of y)"* in the (i); plan 261001m. */
   it("says the count in the band's (i), not on the rank row; prioritised keeps its n of m", async () => {
     await mountQuotes(quotesOwner(quotes(THREE)), "document");
-    expect(host.querySelector(".quotes-rank")?.textContent).not.toContain("3 quotes");
+    expect(host.querySelector(".gloss-sort")?.textContent).not.toContain("3 quotes");
     expect(await quotesAbout()).toContain("3 quotes.");
 
     /* In prioritised the bar row already says "n of 3". */
     await mountQuotes(quotesOwner(quotes(THREE)), "prioritised");
     expect(host.textContent).not.toContain("3 quotes");
-    expect(host.querySelector(".quotes-bar-value")?.textContent).toContain("of 3");
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("of 3");
   });
 
   /* At the rank row's end from 2026-10-01; in the band's corner beside the (i)
@@ -159,14 +159,14 @@ describe("the Quotes band's top", () => {
     await mountQuotes(quotesOwner(quotes(THREE, "p"), true), "prioritised");
     const badge = host.querySelector(".mode-band > .prof-badge");
     expect(badge, "no profile badge in the band's corner").not.toBeNull();
-    expect(host.querySelector(".quotes-rank .prof-badge")).toBeNull();
+    expect(host.querySelector(".gloss-sort .prof-badge")).toBeNull();
     expect(host.querySelector('[role="group"] .prof-badge')).toBeNull();
     expect(badge?.textContent?.trim()).toBe("");
   });
 
   it("keeps the head row when there is no rank row, with the count in the (i)", async () => {
     await mountQuotes(quotesOwner(quotes([quote(1, 0.9, 0.2)])), "document");
-    expect(host.querySelector(".quotes-rank")).toBeNull();
+    expect(host.querySelector(".gloss-sort")).toBeNull();
     expect(head()).not.toBeNull();
     expect(head()?.textContent).not.toContain("1 quote");
     expect(await quotesAbout()).toContain("One quote.");
@@ -332,7 +332,7 @@ describe("the states the fold depends on", () => {
   it("keeps Quotes' head row, its count in the (i), for several unscored quotes that offer one order", async () => {
     const legacy = [1, 2, 3].map((i) => ({ id: `spya-q000${i}`, blockId: BLOCK, text: `Line ${i}.` }));
     await mountQuotes(quotesOwner(quotes(legacy)), "document");
-    expect(host.querySelector(".quotes-rank")).toBeNull();
+    expect(host.querySelector(".gloss-sort")).toBeNull();
     expect(head()).not.toBeNull();
     expect(await quotesAbout()).toContain("3 quotes.");
   });

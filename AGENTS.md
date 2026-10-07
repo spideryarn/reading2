@@ -145,13 +145,15 @@ listed here; the names under each are files in `docs/project/`.
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
-Three are worth reading before you touch the area they cover, because a mistake there is silent:
+Four are worth reading before you touch the area they cover, because a mistake there is silent:
 **[block-ids.md](docs/project/block-ids.md)** before anything that resolves an id — the contract
 everything else depends on, see below; **[security-map.md](docs/project/security-map.md)** before
 anything that renders a stranger's article, takes a path from the URL, or acts on a model's output
-— the untrusted parties are not the ones you would guess; and
+— the untrusted parties are not the ones you would guess;
 **[mode.md](docs/project/mode.md)** before adding or changing a mode — the shapes a mode can
-take, and the other places that have to hear about it.
+take, and the other places that have to hear about it; and
+**[fleet-and-overseer-overview.md](docs/project/fleet-and-overseer-overview.md)** before anything
+under `tools/fleet/` or `tools/overseer/` — it says which of ten docs to open.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.
 That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enforces it.
@@ -394,6 +396,8 @@ nothing else has a copy of.
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`. The point is
   never the incident, it is **the class it belongs to, named** —
   [write-postmortem.md](docs/reusable/write-postmortem.md) is the five things one has to say.
+- **Handed a reader's report from the Feedback button?** [feedback-reports.md](docs/project/feedback-reports.md)
+  is the whole run.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
@@ -420,15 +424,16 @@ nothing else has a copy of.
   Claude with [`scripts/run-claude.ts`](scripts/run-claude.ts) rather than `claude -p`:
   [claude-cli-as-subagent.md](docs/reusable/claude-cli-as-subagent.md). Inside a session, an
   ordinary subagent is cheaper and better, because it inherits the harness.
+
+### Writing code
+
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and
   its `kebab-case` twin don't match the same pattern. Decide each hit yourself.
   [rename-or-move.md](docs/reusable/rename-or-move.md) — but ignore its advice to branch, which
-  isn't allowed here.
-
-### Writing code
-
+  isn't allowed here. A name a reader sees is renamed all the way down, stored values included
+  ([§ A rename on screen…](docs/reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)).
 - **The store is Postgres and Supabase Storage, and there is only one.** The filesystem store and
   `SPIDERYARN_STORE` are gone — the store on 2026-09-05, the flag on 2026-09-06. **That includes
   your laptop**: the suite needs a database rather than a flag. A feature exercised only on files

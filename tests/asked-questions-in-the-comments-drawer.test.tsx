@@ -238,7 +238,8 @@ describe("the Comments drawer lists the questions the reader asked", () => {
   });
 
   it("changes the fit signature when a question takes the visible count from 9 to 10", () => {
-    const rest = [[], undefined, undefined, undefined] as const;
+    /* No modes drawn and none under More: this is about the chip. */
+    const rest = [{ drawn: [], menu: [] }, undefined, undefined, undefined] as const;
     const nine = fitSignature(...rest, { comments: [], count: 9 }, null, false);
     const ten = fitSignature(...rest, { comments: [], count: 10 }, null, false);
     expect(nine).toContain("|9|");

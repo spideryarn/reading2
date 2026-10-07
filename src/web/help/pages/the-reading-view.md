@@ -15,8 +15,10 @@ related: spine, gutter, modes, keyboard
 - **Marginalia** is a column of notes on the right of the article, which can stay open beside any
   panel.
 - **The bottom bar** starts with the way home (the Spideryarn wordmark). On your own article, that
-  is followed by the **Commands** button. Next come the mode buttons, then **Comments** and
-  **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
+  is followed by the **Commands** button. Next come the mode buttons, ending with **More** and
+  **Marginalia**: **More** opens a short list of the modes you will want less often (Quotes,
+  Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come **Comments**
+  and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
   Every bar has a **Help** link near its right-hand end, which opens Help at the page about the mode
   you are in. On your own article you can also press **Commands** and type *help*, and wherever
   a mode has an (i), its card ends in **More in Help**.

@@ -80,6 +80,7 @@ import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
 /* The word on each button, so a press can be aimed at a named mode without a
    second copy of the mode-to-label mapping here. src/title-text.ts. */
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor, moreLabels } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
@@ -783,6 +784,35 @@ const helpButtons = () =>
 const modeRadios = () => [
   ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]'),
 ];
+
+/**
+ * **Every band mode this reader's bar offers, by label: its radios, then what
+ * is under More.**
+ *
+ * The sweeps below looped over `modeRadios()` until 2026-10-07, which was
+ * every mode while every mode was a radio. Quotes, Glossary, FAQ, Ideas and
+ * Timeline are items of the More menu now (plan 261007c), and a loop over the
+ * radios alone presses none of them through the door a reader uses — the
+ * signed-out sweep even stayed green, because its second pass reaches the
+ * missing modes by URL (GPT Sol, PR-10). So a sweep walks this list, presses
+ * each through `pressOffered`, and asserts which went through More.
+ */
+const offeredBandLabels = (): string[] => [
+  ...modeRadios().map((b) => b.getAttribute("aria-label") ?? ""),
+  ...moreLabels(host),
+];
+
+/** Press a mode through whichever door the bar gives it, and say which. */
+async function pressOffered(label: string): Promise<"bar" | "more"> {
+  const inBar = modeRadios().some((b) => b.getAttribute("aria-label") === label);
+  const door = modeDoor(host, label);
+  expect(door, `the bar must offer ${label}`).toBeDefined();
+  await act(async () => door?.click());
+  return inBar ? "bar" : "more";
+}
+
+/** The radio the bar draws for `label` now — a gathered mode has one once it is open. */
+const radioFor = (label: string) => modeRadios().find((b) => b.getAttribute("aria-label") === label);
 
 /** Which mode the page is in, read the way a reader's URL bar would show it. */
 const modeInUrl = (): string =>
@@ -2006,14 +2036,15 @@ describe("a signed-out browser on a shared document", () => {
     await open();
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
 
     const pressed: string[] = [];
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
+    /** The labels whose press went through the More menu rather than a bar button. */
+    const viaMore: string[] = [];
+    for (const label of offered) {
       const before = modeInUrl();
-      await act(async () => button.click());
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
       expect(outsidePublic(), `after pressing ${label}`).toEqual([]);
       /* And no POST — the other half of this file's acceptance rule, which
@@ -2023,7 +2054,7 @@ describe("a signed-out browser on a shared document", () => {
       /* **The bar's own answer first**, because it is React state and lands with
          the click. This is the assertion that a button is live; everything below
          is about *which* mode it opened. */
-      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+      expect(radioFor(label)?.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
         "true",
       );
 
@@ -2035,6 +2066,14 @@ describe("a signed-out browser on a shared document", () => {
       pressed.push(mode);
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
+
+    /* **Three of those presses went through More**, and exactly these three:
+       the gathered modes a stranger has (FAQ and Timeline are behind the
+       switch as well, and are reached by address below). An empty list here
+       is the sweep having gone back to pressing radios only. */
+    expect([...viaMore].sort()).toEqual(
+      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.ideas].sort(),
+    );
 
     /* **The bar drew what a default reader sees, and not one button more.** The
        modes behind the switch are absent from a stranger's bar by construction;
@@ -2830,14 +2869,34 @@ describe("a signed-in reader who does not own it", () => {
     await open();
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
-      await act(async () => button.click());
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
+    const viaMore: string[] = [];
+    for (const label of offered) {
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
       expect(trace.filter((r) => r.method !== "GET"), `after pressing ${label}`).toEqual([]);
     }
+    /* **Every mode, by name** — it was *every radio*, which since 2026-10-07
+       leaves out the three under More, and those are three of the modes that
+       can start paid work for an owner (plan 261007c, PR-10). The switch is
+       off for this reader, so the set is the default bar's, less Marginalia's
+       toggle, which is not a band. */
+    expect([...offered].sort()).toEqual(
+      [
+        MODE_LABEL.plain,
+        MODE_LABEL.structure,
+        MODE_LABEL.summary,
+        MODE_LABEL.skim,
+        MODE_LABEL.quotes,
+        MODE_LABEL.glossary,
+        MODE_LABEL.ideas,
+        MODE_LABEL.search,
+        MODE_LABEL.chat,
+        MODE_LABEL.learn,
+      ].sort(),
+    );
+    expect([...viaMore].sort()).toEqual([MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.ideas].sort());
   });
 
   /**
@@ -2905,14 +2964,15 @@ describe("a signed-in reader who does not own it", () => {
        before anything is pressed. */
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
 
     const pressed: string[] = [];
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
+    /** The labels whose press went through the More menu rather than a bar button. */
+    const viaMore: string[] = [];
+    for (const label of offered) {
       const before = modeInUrl();
-      await act(async () => button.click());
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
 
       /* **`/api/jobs` filtered rather than forbidden**, and only here. The
@@ -2933,7 +2993,7 @@ describe("a signed-in reader who does not own it", () => {
         `after pressing ${label}`,
       ).toEqual([]);
 
-      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+      expect(radioFor(label)?.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
         "true",
       );
       const mode = await modeAfterPress(before);
@@ -2945,6 +3005,12 @@ describe("a signed-in reader who does not own it", () => {
          covers. */
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
+
+    /* **Five of those presses went through More**: with the switch on, every
+       gathered mode is offered there and nowhere else until it is open. */
+    expect([...viaMore].sort()).toEqual(
+      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.faq, MODE_LABEL.ideas, MODE_LABEL.timeline].sort(),
+    );
 
     /* **And Marginalia's toggle after the radios** (261001i): the notes on and
        off again, both presses inside the public namespace. */
@@ -3434,10 +3500,11 @@ describe("the same address, as the owner", () => {
     await open();
     trace.length = 0;
 
-    const ideas = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === "Ideas",
-    );
-    expect(ideas, "the bar must draw Ideas").toBeDefined();
+    /* Ideas is under More since 2026-10-07 (plan 261007c): this is the
+       owner's press through the menu, and it arms as the bar button did. */
+    expect(radioFor("Ideas"), "Ideas is under More, not in the bar").toBeUndefined();
+    const ideas = modeDoor(host, "Ideas");
+    expect(ideas, "the bar must offer Ideas").toBeDefined();
     await act(async () => ideas?.click());
     await settle();
 

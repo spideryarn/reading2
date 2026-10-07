@@ -57,10 +57,14 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Dock, visibleModes } from "../src/web/Dock.js";
+import { Dock, splitForMore, visibleModes } from "../src/web/Dock.js";
 import { MODES } from "../src/modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 import { readerCss } from "./helpers/stylesheets.js";
+import { moreItems, moreLabels, openMore } from "./helpers/dock-more.js";
+
+/** Quotes, Glossary, FAQ, Ideas and Timeline: a literal, on purpose (plan 261007c, D2). */
+const GATHERED_UNDER_MORE = 5;
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
 /**
@@ -540,16 +544,22 @@ describe("Dock gives the ladder something to work with", () => {
    * `.dock-frame`s, so one set of selectors styles both.
    * docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md.
    *
-   * **The count is the visible set**, asserted against `visibleModes` so the
-   * number moves with the rule; tests/dock-experimental-modes.test.tsx owns
-   * what that set is. **Links, not radios**: a press here leaves the page, and
+   * **The count is the drawn set**, asserted against `visibleModes` through
+   * `splitForMore` so the number moves with the rules;
+   * tests/dock-experimental-modes.test.tsx owns what that set is, and
+   * tests/dock-more.test.tsx which of it is under More instead (plan 261007c).
+   * **Links, not radios**: a press here leaves the page, and
    * no mode is open on it, so nothing may claim to be the selected one.
    */
   it("the metadata page: links, in the same frames as the reading view", () => {
     render({ view: "metadata" });
     const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
-    expect(links).toHaveLength(visibleModes(false, undefined).length);
+    const bar = splitForMore(visibleModes(false, undefined), undefined);
+    expect(links).toHaveLength(bar.drawn.length);
     expect(links.length).toBeGreaterThan(1);
+    /* And the rest of the visible set is under More, not lost. */
+    expect(moreLabels(host)).toHaveLength(bar.menu.length);
+    expect(bar.menu.length).toBeGreaterThanOrEqual(3);
     expect(
       host.querySelector('.dock-modes [role="radiogroup"], .dock-modes [role="radio"]'),
     ).toBeNull();
@@ -615,10 +625,14 @@ describe("Dock gives the ladder something to work with", () => {
    */
   it("the reading view with the switch on: every mode, one segment", () => {
     render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
-    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i). */
-    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
-      visibleModes(true, undefined).length,
-    );
+    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i).
+       Five modes are under More since 2026-10-07 (plan 261007c), so the bar's
+       buttons and the menu's items together are every mode. */
+    const buttons = host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]');
+    const listed = moreLabels(host);
+    expect(listed).toHaveLength(GATHERED_UNDER_MORE);
+    expect(buttons).toHaveLength(visibleModes(true, undefined).length - GATHERED_UNDER_MORE);
+    expect(buttons.length + listed.length).toBe(MODES.length);
   });
 
   /**
@@ -634,11 +648,19 @@ describe("Dock gives the ladder something to work with", () => {
    * So this one counts against `MODES`, which is the vocabulary rather than the
    * rule — an independent number the filter cannot move. It is the only
    * assertion in this file that would notice the two arms disagreeing.
+   *
+   * **In two places since 2026-10-07**: links in the bar, and the five under
+   * More, which are links too. Both counted, against a literal rather than
+   * against `splitForMore`, for the same reason `MODES` is used.
    */
   it("the metadata page with the switch on: every mode, as links", () => {
     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
     expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
-      MODES.length,
+      MODES.length - GATHERED_UNDER_MORE,
     );
+    openMore(host);
+    const items = moreItems();
+    expect(items).toHaveLength(GATHERED_UNDER_MORE);
+    expect(items.every((el) => el.tagName === "A" && el.hasAttribute("href"))).toBe(true);
   });
 });

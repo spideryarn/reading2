@@ -17,7 +17,16 @@ import { useState } from "react";
 import { Share, X } from "lucide-react";
 import { readEnvironment, rememberDismissed, shouldOfferInstall } from "./install-hint.js";
 
-export function InstallHint() {
+export function InstallHint({
+  entering = false,
+}: {
+  /**
+   * The bar below is playing its entrance, and this strip arrives with it —
+   * `dock-enter`, styles/dock.css § the entrance. Without it the hint would
+   * sit over an empty bar-sized gap for the bar's first second.
+   */
+  entering?: boolean;
+}) {
   /* Lazy initialiser rather than an effect: `readEnvironment` touches
      `localStorage` and `matchMedia`, and running it in render on every update
      would ask the same unchanging questions of the browser dozens of times a
@@ -30,7 +39,7 @@ export function InstallHint() {
        live region would interrupt a screen-reader user mid-sentence to tell
        them about a visual affordance they are not using. It is announced when
        they reach it, like any other text. */
-    <div className="install-hint" role="note">
+    <div className={`install-hint${entering ? " dock-enter" : ""}`} role="note">
       <p className="install-hint-text">
         {/* The icon is named in the sentence as well as drawn, because the
             reader has to find the real one in a toolbar we do not control and
