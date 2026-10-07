@@ -86,6 +86,19 @@ export const SCRIPT_FOR_KIND: Record<Exclude<CheckKind, "other">, string> = {
 export const REQUIRED_CHECKS: readonly CheckKind[] = ["test", "typecheck"];
 
 /**
+ * The periodic runner's own checkout, relative to the primary. Here rather than
+ * in `scripts/readiness-loop.ts` because the deploy reads it too: a reused test
+ * gate must come from a run in this directory (`scripts/deploy-evidence.ts`),
+ * and two spellings of one path would drift apart silently.
+ */
+export const READINESS_RUNNER_WORKTREE = ".claude/worktrees/readiness-checks";
+
+/** The readiness runner's checkout, given the primary's. */
+export function readinessRunnerPath(primary: string): string {
+  return `${primary.replace(/\/+$/, "")}/${READINESS_RUNNER_WORKTREE}`;
+}
+
+/**
  * Did the run cover everything that check normally covers?
  *
  * **`npm test -- tests/one-file.test.ts` is not "the tests passed"**, and it is
@@ -363,7 +376,68 @@ type RunCommon = {
   commandLine: string | null;
   treeAtStart: TreeStamp;
   source: RecordSource;
+  /**
+   * **What the readiness loop did to the checkout before this run**, or null
+   * when nothing vouches for it — a hand-run wrapper, a log reconstruction, a
+   * record from before 2026-10-07.
+   *
+   * The deploy reuses a passing run in place of its own test gate only when
+   * this is present, current and about the same sha
+   * (`scripts/deploy-evidence.ts`): the runner's directory alone does not
+   * prove its `.env.local` and corpus were refreshed, because anybody can run
+   * the wrapper there by hand (GPT Sol on 261007k, P1-1).
+   *
+   * Optional on the type, unlike `failedTestFiles`, because the many record
+   * builders in the tests predate it and none of them is a loop run. Absent,
+   * null and malformed all mean the same thing — no stamp — and the parser
+   * leaves the key out for all three.
+   */
+  preparation?: Preparation | null;
 };
+
+/**
+ * The loop's statement about one run, handed to the wrapper in
+ * {@link READINESS_PREPARATION_ENV} and written into its record.
+ */
+export type Preparation = {
+  by: "readiness-loop";
+  /** {@link PREPARATION_VERSION} when it was written. An older one does not count. */
+  version: number;
+  /** The commit the checkout was prepared at. Must equal the run's own. */
+  sha: string;
+  /**
+   * sha256 of the `.env.local` the run read, hex. The runner's is a symlink to
+   * the primary's, so the deploy compares this with the primary's file now.
+   */
+  envLocalSha256: string;
+};
+
+/**
+ * Bump when what the loop does before a run changes in a way that matters to
+ * whoever reuses the result — so records made the old way stop counting.
+ *
+ * 1 (2026-10-07): preparation latched at the sha, `.env.local` a symlink to the
+ * primary's, `data/` and `output/` deleted and re-copied from the commit's
+ * corpus immediately before the run.
+ */
+export const PREPARATION_VERSION = 1;
+
+/** The variable the loop sets on `readiness-run.ts` to carry a {@link Preparation}. */
+export const READINESS_PREPARATION_ENV = "SPIDERYARN_READINESS_PREPARATION";
+
+/**
+ * A {@link Preparation} from JSON, or null for anything else. Strict: a
+ * malformed statement is no statement.
+ */
+export function asPreparation(v: unknown): Preparation | null {
+  if (!isRecord(v)) return null;
+  const { by, version, sha, envLocalSha256 } = v;
+  if (by !== "readiness-loop") return null;
+  if (typeof version !== "number" || !Number.isInteger(version)) return null;
+  if (typeof sha !== "string" || !/^[0-9a-f]{40}$/.test(sha)) return null;
+  if (typeof envLocalSha256 !== "string" || !/^[0-9a-f]{64}$/.test(envLocalSha256)) return null;
+  return { by, version, sha, envLocalSha256 };
+}
 
 /**
  * **The pending record, written BEFORE the child is spawned.**
@@ -789,6 +863,10 @@ export function parseRunRecord(text: string): RunRecord | null {
     treeAtStart,
     source,
   };
+  /* Only when there is a valid one, so a record without one reads back as it
+     was written. Absent and null mean the same: nothing vouches for the run. */
+  const preparation = asPreparation(parsed["preparation"]);
+  if (preparation !== null) common.preparation = preparation;
 
   if (parsed["state"] === "started") return { ...common, state: "started" };
   if (parsed["state"] !== "finished") return null;

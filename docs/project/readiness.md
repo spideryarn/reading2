@@ -57,6 +57,31 @@ And "on dev" means **this box's cached `origin/dev`**. When that was last checke
 is not knowable from the ref — `git pack-refs` touches it without fetching, and a fetch that changes
 nothing does not touch it — so a green verdict is never a claim about what is on GitHub now.
 
+## The deploy reads it too
+
+Since 2026-10-07 `npm run deploy` takes its `test` gate from this store when a record proves the
+exact commit, and `--ready` deploys the newest commit that has one —
+[deployment.md § Deploying a commit already known green](deployment.md#deploying-a-commit-already-known-green),
+design in [261007k](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md). That
+is a stricter reader than the tab, and it changed three things here:
+
+- **The runner's `.env.local` is a symlink to the primary's**, re-made every tick. It was a copy
+  from 2026-09-09 and had fallen two keys behind the file the deploy links.
+- **`data/` and `output/` are deleted and copied fresh from the commit's corpus immediately before
+  each check**, as the deploy's empty worktree has them. They were copied once, when the runner was
+  created.
+- **A loop run carries a preparation stamp** (`preparation` in the record: `by`, `version`, `sha`,
+  and the sha256 of the `.env.local` it read), handed to the wrapper in
+  `SPIDERYARN_READINESS_PREPARATION` and kept only when it names the commit the run started on. A
+  hand-run wrapper has none, and neither does any record from before the change; the deploy reuses
+  only stamped runs, at the current `PREPARATION_VERSION` in
+  [`tools/fleet/readiness.ts`](../../tools/fleet/readiness.ts). **Bump that number** whenever what
+  the loop does before a run changes in a way a reader of the result would care about. The tab
+  ignores the stamp.
+
+**The loop has to be restarted to pick this up**: it loads its code once, at start, from the runner
+checkout. Restart it between checks, when the runner's log says it is idle.
+
 ## Which test files failed
 
 A failed run's record names the test files that failed, and the tab has a **Failing test files**
@@ -106,6 +131,7 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
 | `tools/fleet/web/src/readiness-client.ts` | the browser's parser of `/api/readiness`, and its types (the `durationMs` the panel draws) |
+| `scripts/deploy-evidence.ts` | the deploy's reader: whether a run proves a commit's `test` gate, and which green commit `--ready` picks |
 | `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
 
 Tests, in `tests/`: [`fleet-readiness.test.ts`](../../tests/fleet-readiness.test.ts) (records, verdict,
@@ -116,7 +142,10 @@ parsing), [`fleet-readiness-route.test.ts`](../../tests/fleet-readiness-route.te
 [`fleet-readiness-failing-files.test.tsx`](../../tests/fleet-readiness-failing-files.test.tsx),
 [`readiness-failed-files-review.test.ts`](../../tests/readiness-failed-files-review.test.ts) and
 [`readiness-loop.test.ts`](../../tests/readiness-loop.test.ts) (the periodic runner,
-[`scripts/readiness-loop.ts`](../../scripts/readiness-loop.ts)).
+[`scripts/readiness-loop.ts`](../../scripts/readiness-loop.ts)),
+[`readiness-preparation.test.ts`](../../tests/readiness-preparation.test.ts) (the link, the corpus
+refresh and the stamp) and [`deploy-ready.test.ts`](../../tests/deploy-ready.test.ts) (the deploy's
+reading of all this).
 
 ## Three ways it nearly lied, caught in review
 

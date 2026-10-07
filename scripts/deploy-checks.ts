@@ -1442,8 +1442,8 @@ export function postApplyProblems(
  */
 export type DeployMode =
   | { op: "verify"; host: string | null }
-  | { op: "dry-run"; skipMigrations: boolean; forcedGates: ReadonlySet<string> }
-  | { op: "deploy"; skipMigrations: boolean; forcedGates: ReadonlySet<string> };
+  | { op: "dry-run"; skipMigrations: boolean; forcedGates: ReadonlySet<string>; ready: boolean }
+  | { op: "deploy"; skipMigrations: boolean; forcedGates: ReadonlySet<string>; ready: boolean };
 
 export type ParsedDeployArgs = { ok: true; mode: DeployMode } | { ok: false; problem: string[] };
 
@@ -1537,7 +1537,7 @@ export function parseDeployArgs(
 ): ParsedDeployArgs {
   const usage = [
     "usage: npm run deploy [-- --dry-run | --verify-only [--host <url>]]",
-    "                      [-- --skip-migrations] [-- --force-gate=<name>]",
+    "                      [-- --ready] [-- --skip-migrations] [-- --force-gate=<name>]",
     "Nothing was run.",
   ];
   const refuse = (...lines: string[]): ParsedDeployArgs => ({ ok: false, problem: [...lines, ...usage] });
@@ -1570,6 +1570,7 @@ export function parseDeployArgs(
   let dryRun = false;
   let verifyOnly = false;
   let skipMigrations = false;
+  let ready = false;
   let host: string | null = null;
   const forcedGates = new Set<string>();
 
@@ -1578,6 +1579,7 @@ export function parseDeployArgs(
     if (arg === "--dry-run") dryRun = true;
     else if (arg === "--verify-only") verifyOnly = true;
     else if (arg === "--skip-migrations") skipMigrations = true;
+    else if (arg === "--ready") ready = true;
     else if (arg.startsWith("--force-gate=")) {
       const name = arg.slice("--force-gate=".length);
       if (name === "") return refuse("--force-gate= names no gate.");
@@ -1599,6 +1601,7 @@ export function parseDeployArgs(
     const extra = [
       dryRun ? "--dry-run" : null,
       skipMigrations ? "--skip-migrations" : null,
+      ready ? "--ready" : null,
       forcedGates.size > 0 ? "--force-gate" : null,
     ].filter((f): f is string => f !== null);
     if (extra.length > 0) {
@@ -1612,5 +1615,5 @@ export function parseDeployArgs(
       `To look at that host and deploy nothing: npm run deploy -- --verify-only --host ${host}`,
     );
   }
-  return { ok: true, mode: { op: dryRun ? "dry-run" : "deploy", skipMigrations, forcedGates } };
+  return { ok: true, mode: { op: dryRun ? "dry-run" : "deploy", skipMigrations, forcedGates, ready } };
 }

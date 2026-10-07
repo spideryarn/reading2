@@ -205,7 +205,7 @@ describe("what npm really hands the script", () => {
 
   it("a plain `npm run deploy` is a deploy: npm's own keys are all on the ordinary list", () => {
     const { parsed } = npmRunDeploy();
-    expect(parsed).toEqual({ ok: true, mode: { op: "deploy", skipMigrations: false, forcedGates: new Set() } });
+    expect(parsed).toEqual({ ok: true, mode: { op: "deploy", skipMigrations: false, forcedGates: new Set(), ready: false } });
   });
 
   it("with the `--`, the flag arrives and is obeyed", () => {
