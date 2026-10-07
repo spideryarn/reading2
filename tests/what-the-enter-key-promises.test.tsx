@@ -62,10 +62,12 @@ const PROMISES: Record<string, string> = {
   /* Enter creates the voucher — the form's one button (plan 261001m). */
   "AdminVouchersPage.tsx › voucher-new-email": "go",
   "AdminVouchersPage.tsx › voucher-new-articles": "go",
+  "AdminVouchersPage.tsx › voucher-new-recipient-name": "go",
   "AdminVouchersPage.tsx › voucher-new-note": "go",
   /* Enter commits an edit in place. */
   "AdminVouchersPage.tsx › Email address": "done",
   "AdminVouchersPage.tsx › Articles": "done",
+  "AdminVouchersPage.tsx › Their name": "done",
   "AdminVouchersPage.tsx › Private note": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",

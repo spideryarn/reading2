@@ -33,12 +33,15 @@ export interface NewVoucherInput {
   readonly note: string | null;
   /** The note to the recipient, put in their email. Plan 261002b. */
   readonly recipientNote: string | null;
+  /** Their name: the email opens *Dear <name>,*. Plan 261007f. */
+  readonly recipientName: string | null;
 }
 
 export interface VoucherPatchInput {
   readonly articles?: number;
   readonly note?: string | null;
   readonly recipientNote?: string | null;
+  readonly recipientName?: string | null;
   readonly email?: string;
   readonly revoked?: boolean;
 }
@@ -87,7 +90,9 @@ export function useAdminVouchers(): UseAdminVouchers {
      after a lost answer is the same create, which the server answers with the
      original rather than a second voucher (261001p, Sol F2). Kept with the
      exact input it was minted for: the same form sent again reuses it, a
-     changed form or a success lets it go. */
+     changed form or a success lets it go. **Every field of the input is in
+     `key` below, by hand**: one left out would reuse the id for a different
+     body, which the server refuses with a 409 (261007f, Sol's F5). */
   const pendingCreate = useRef<{ readonly key: string; readonly id: string } | null>(null);
   const laterReads = useRef(new Set<ReturnType<typeof setTimeout>>());
   const mounted = useRef(true);
@@ -157,7 +162,13 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   const create = useCallback(
     async (input: NewVoucherInput): Promise<CreateAnswer> => {
-      const key = JSON.stringify([input.email, input.articles, input.note, input.recipientNote]);
+      const key = JSON.stringify([
+        input.email,
+        input.articles,
+        input.note,
+        input.recipientNote,
+        input.recipientName,
+      ]);
       const pending =
         pendingCreate.current?.key === key ? pendingCreate.current : { key, id: crypto.randomUUID() };
       pendingCreate.current = pending;

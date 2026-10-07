@@ -3,8 +3,8 @@
  * `GET /api/admin/vouchers` (src/store/pg-vouchers.ts builds it) and
  * src/web/AdminVouchersPage.tsx (draws it).
  *
- * A flat module with no imports — types, and the three small functions at the
- * bottom that say the gift email's subject and heading — for the reason src/admin.ts and
+ * A flat module with no imports — types, and the four small functions at the
+ * bottom that say the gift email's subject, heading and greeting — for the reason src/admin.ts and
  * src/billing-plan.ts are: the browser may not import from src/store/, even a
  * type (tests/client-imports.test.ts), and two hand-kept copies of one shape
  * are two places to disagree. Admin-only: it carries the private note.
@@ -80,6 +80,8 @@ export interface AdminVoucher {
   readonly note: string | null;
   /** The note to the recipient, put in their email. Plan 261002b. */
   readonly recipientNote: string | null;
+  /** Their name: the email opens *Dear <name>,*. Null is no greeting. Plan 261007f. */
+  readonly recipientName: string | null;
   readonly createdAt: string;
   readonly createdBy: string;
   readonly updatedAt: string;
@@ -112,7 +114,17 @@ export function giftEmailHeading(articles: number): string {
   return `A gift of ${freeArticles(articles)}`;
 }
 
-/** The gift email's subject, for both audiences. Never carries the note. */
+/** The gift email's subject, for both audiences. Never carries the note or the name. */
 export function giftEmailSubject(articles: number): string {
   return `${giftEmailHeading(articles)} on Spideryarn`;
+}
+
+/**
+ * **`Dear Ada,`** — the line the gift email opens with when its voucher has a
+ * name, under the heading and above the note. `name` is somebody else's text:
+ * the caller cleans it to one line first, and escapes the result where it meets
+ * HTML. Plan 261007f.
+ */
+export function giftEmailGreeting(name: string): string {
+  return `Dear ${name},`;
 }

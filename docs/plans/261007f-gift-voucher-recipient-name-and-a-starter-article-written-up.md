@@ -1,6 +1,7 @@
 # Gift vouchers: the recipient's name, and a starter article written up for Greg
 
-**Status as of 2026-10-07: planned, not built.** Report `spya-vc6pnm` (SPIDERYARN-READING2-ED),
+**Status as of 2026-10-07: stage 1 (the name) is built and on `dev`, not deployed. The starter
+article and the list of people are questions for Greg, not built.** Report `spya-vc6pnm` (SPIDERYARN-READING2-ED),
 Greg's (admin, proved by `feedback-reporter.ts` exit 0). Queue item `qi-kx4twdnb`.
 
 ## What Greg asked for
@@ -120,8 +121,8 @@ You have been given 20 free articles on Spideryarn…   <- as today
 - **The no-name email is pinned before the renderer changes** (Sol's F8). No existing test holds
   the whole text and HTML, so the first step of the build records today's exact output for both
   audiences, with and without a note, as golden assertions, and they must still pass afterwards.
-- **The privacy page says so** (Sol's F6). `/privacy` lists what a gift email carries and what we
-  keep about a recipient; a name is one more piece of personal data, sent through Resend. So
+- **The privacy page says so** (Sol's F6). `/privacy` has one sentence on what a gift email
+  carries through Resend; a name is one more piece of personal data, sent through Resend. So
   `src/web/PrivacyPage.tsx`, its `LAST_UPDATED`, `tests/privacy-page.test.ts` and
   `docs/project/privacy.md` change with it.
 
@@ -304,3 +305,22 @@ code and accepted:
   session as its only claim. The private link is built (261005e stage 1), so the brief's *"if it
   does not exist"* branch does not apply; the starter half is written up for the narrower reason
   given in § The short answer.
+- 2026-10-07: stage 1 built by an Opus subagent, as planned. What the plan had wrong or did not
+  know:
+  - **The migration is not applied to the shared local database.** `npm run db:migrate` (target
+    `127.0.0.1:54362`, local) refused: two rows in that database's ledger belong to no migration
+    in this tree's journal, which is peers' unlanded work. Nothing was applied by hand
+    ([database.md](../project/database.md)). The suites build a private database from this tree's
+    `drizzle/`, so the column and its CHECK were exercised there, including an 81-character
+    insert the constraint rejects. Migration: `drizzle/20261007053304_billing_voucher_recipient_name.sql`.
+  - `oneLine` turns each control character into one space and does not collapse runs, so a CRLF
+    inside a name is two spaces. A test pins it.
+  - Trailing spaces count toward the 80, as they do for the note.
+  - The hint beside the box is static (*their email then opens "Dear <name>,"*); the sketch beside
+    the form shows the greeting live.
+  - No schema-registry test names voucher columns; `tests/what-the-enter-key-promises.test.tsx`
+    did need the two new inputs.
+  - Red first: eight golden snapshots of the email (text and HTML, both audiences, with and
+    without a note) were recorded against the untouched renderer and still pass unedited. Four
+    deliberate breaks (name out of the browser fingerprint, out of the replay comparison, the old
+    name on a readdress, greeting after the note) each failed exactly their test.
