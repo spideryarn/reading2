@@ -24,7 +24,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 
-import { is } from "drizzle-orm";
+import { SQL, is } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 
 import * as schema from "../src/db/schema.js";
@@ -507,6 +507,126 @@ describe("the schema keeps the promises the plan makes", () => {
       "CREATE INDEX jobs_queued_idx ON spideryarn.jobs USING btree (created_at) WHERE (status = 'queued'::text)",
       "CREATE INDEX search_runs_article_created_idx ON spideryarn.search_runs USING btree (article_id, created_at DESC)",
     ]);
+  });
+
+  /**
+   * **Every index src/db/schema.ts declares is in the database, and is the
+   * index it declares.**
+   *
+   * `npm run db:check` compares columns and defaults and nothing else
+   * (src/db/schema-drift.ts says so), so until 2026-10-07 nothing asked whether
+   * a declared index existed, or was the index declared. This reads the
+   * declarations rather than a list of names, so the next one is covered when
+   * it is written; the case above holds five by their full text.
+   *
+   * By shape, not by name: the table, uniqueness, whether it is partial, the
+   * method, and for a btree each key column with its direction and where its
+   * nulls sort. **That last one is the reason this is not a name check.**
+   * Drizzle's `.desc()` means `DESC NULLS LAST`; a bare `DESC` in hand-written
+   * SQL means `NULLS FIRST`. `ai_calls_owner_started` and
+   * `ai_calls_scope_started` were made by hand as `DESC` (drizzle/0021, 0023)
+   * and declared with a plain `.desc()`, so the file described
+   * two indexes that are not the ones in the database, and a table rebuilt
+   * from it would have got ones a plain `order by … desc` cannot walk.
+   * **Watched failing on exactly those two**, before they were declared
+   * `.desc().nullsFirst()`.
+   *
+   * A predicate's text is not compared: Postgres rewrites it on the way in, so
+   * that would be a test of the deparser. Partial or not is.
+   */
+  it("every declared index exists, on the declared columns in the declared order", async () => {
+    type Key = { column: string | null; desc: boolean; nullsFirst: boolean };
+    type Shape = { table: string; unique: boolean; partial: boolean; method: string; keys: Key[] };
+
+    const declared = new Map<string, Shape>();
+    for (const value of Object.values(schema)) {
+      if (!is(value, PgTable)) continue;
+      const config = getTableConfig(value);
+      for (const index of config.indexes) {
+        const c = index.config;
+        if (!c.name) throw new Error(`an index on ${config.name} has no name`);
+        declared.set(c.name, {
+          table: config.name,
+          unique: c.unique,
+          partial: c.where !== undefined,
+          method: c.method ?? "btree",
+          keys: c.columns.map((col) =>
+            is(col, SQL)
+              ? { column: null, desc: false, nullsFirst: false }
+              : {
+                  column: col.name,
+                  desc: col.indexConfig.order === "desc",
+                  /* Drizzle's default, and the trap: absent means LAST, for
+                     both directions (drizzle-kit's serializer, `nulls ?? "last"`). */
+                  nullsFirst: (col.indexConfig.nulls ?? "last") === "first",
+                },
+          ),
+        });
+      }
+    }
+    // An empty discovery would pass everything below.
+    expect(declared.size).toBeGreaterThan(40);
+    expect([...declared.keys()]).toContain("jobs_lease_idx");
+
+    const { rows } = await pool.query<{
+      name: string;
+      on_table: string;
+      uniq: boolean;
+      partial: boolean;
+      method: string;
+      columns: (string | null)[];
+      options: number[];
+    }>(
+      `select c.relname::text as name, t.relname::text as on_table, i.indisunique as uniq,
+              i.indpred is not null as partial, am.amname::text as method,
+              (select array_agg(a.attname::text order by k.ord)
+                 from unnest(i.indkey::int2[]) with ordinality as k(attnum, ord)
+                 left join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum and k.attnum <> 0
+              ) as columns,
+              (select array_agg(o.opt::int order by o.ord)
+                 from unnest(i.indoption::int2[]) with ordinality as o(opt, ord)) as options
+         from pg_index i
+         join pg_class c on c.oid = i.indexrelid
+         join pg_class t on t.oid = i.indrelid
+         join pg_am am on am.oid = c.relam
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'spideryarn' and i.indisvalid`,
+    );
+    const actual = new Map<string, Shape>();
+    for (const r of rows) {
+      actual.set(r.name, {
+        table: r.on_table,
+        unique: r.uniq,
+        partial: r.partial,
+        method: r.method,
+        // `indoption`: bit 1 is DESC, bit 2 is NULLS FIRST. Only a btree has them.
+        keys: r.columns.map((column, i) => ({
+          column,
+          desc: ((r.options[i] ?? 0) & 1) === 1,
+          nullsFirst: ((r.options[i] ?? 0) & 2) === 2,
+        })),
+      });
+    }
+
+    const wrong: Record<string, { declared: Shape; actual: Shape | "not in the database" }> = {};
+    for (const [name, want] of declared) {
+      const got = actual.get(name);
+      if (!got) {
+        wrong[name] = { declared: want, actual: "not in the database" };
+        continue;
+      }
+      /* Direction and null placement mean something to a btree and to nothing
+         else here; an expression key has no column name to compare. */
+      const comparable = (s: Shape): Shape =>
+        s.method === "btree" ? s : { ...s, keys: s.keys.map((k) => ({ ...k, desc: false, nullsFirst: false })) };
+      const a = comparable(want);
+      const b = comparable({
+        ...got,
+        keys: got.keys.map((k, i) => (want.keys[i]?.column === null ? { ...k, column: null } : k)),
+      });
+      if (JSON.stringify(a) !== JSON.stringify(b)) wrong[name] = { declared: a, actual: b };
+    }
+    expect(wrong).toEqual({});
   });
 
   /**

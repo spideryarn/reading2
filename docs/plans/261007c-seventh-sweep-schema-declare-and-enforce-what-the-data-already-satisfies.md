@@ -300,6 +300,42 @@ what they refuse, one forbidden row each after one row of every legal kind.
 nothing about a CHECK expression"*; it generated all five here. That comment is stage 8's.
 `database.md` said `--custom` *"writes the snapshot"* without saying whose contents; it now does.
 
+## Stage 6b: two declared indexes that were not the ones in the database
+
+**Not in the brief. Found by stage 6's own check, and built because it is the same defect and runs
+no SQL.** With the three new DESC declarations corrected, the obvious question was whether any
+index *already* declared had the same fault. A test comparing every declared index with the
+catalog, direction and null placement included, went red on two and only two:
+
+| Index | Made by hand as | Declared as | In both catalogs (01:39 UTC) |
+|---|---|---|---|
+| `ai_calls_owner_started` | `("owner_id", "started_at" DESC)`, `0021` | `.desc()`, i.e. `NULLS LAST` | `DESC`, `indoption 0 3` (`NULLS FIRST`) |
+| `ai_calls_scope_started` | `("scope_kind", "started_at" DESC)`, `0023` | `.desc()`, i.e. `NULLS LAST` | `DESC`, `indoption 0 3` (`NULLS FIRST`) |
+
+Nothing is wrong in any database: both have the index as it was made. What was wrong is the file,
+and so any table regenerated from it. Declared `.desc().nullsFirst()`.
+
+`drizzle/20261007013835_ledger_indexes_declared_as_made.sql` is comment-only, like stage 6's. The
+generator wrote `DROP INDEX` and `CREATE INDEX` for each, which would rebuild two indexes into what
+they already are (checked in a scratch database: `pg_get_indexdef` and `indoption` identical
+before and after); deleted, snapshot kept as generated. It differs from stage 6's in two fields.
+
+**Why its own migration, when it could have been folded into stage 6's snapshot:** stage 6's
+`.sql` had already been applied to the shared local database, and its header says its snapshot is
+exactly as generated. Folding would have made that sentence false, and correcting it would change
+the file's hash, which means restamping a ledger row by hand in a database every tree shares. A
+second empty migration costs a file.
+
+**Tested:** *every declared index exists, on the declared columns in the declared order*, in
+`tests/db-schema.test.ts`. Red on exactly these two before the fix.
+
+**Noticed, not acted on (H, unmeasured):** the five indexes drizzle generated itself from a
+`.desc()` (`uploads_owner_minted`, `realtime_sessions_owner_issued`, `ingest_events_owner_reserved`,
+`quiz_attempts_latest`, `articles_public_listing`) really are `DESC NULLS LAST` in both databases,
+and match their declarations. Whether each query that orders by such a column says `nulls last`
+too, and so can walk the index rather than sort, was not looked at; every one of those tables is
+small. GPT Sol's audit says `articles_public_listing`'s query does.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
@@ -316,3 +352,4 @@ commits; the others are metadata changes on tables of 4 to 200 rows.
 5. `20261007012047_drop_duplicate_chat_messages_index`
 6. `20261007012654_declare_migration_only_indexes_and_checks` (comment-only: it records a ledger
    row and runs nothing)
+7. `20261007013835_ledger_indexes_declared_as_made` (comment-only, the same)

@@ -1114,6 +1114,13 @@
       "when": 1791336414855,
       "tag": "20261007012654_declare_migration_only_indexes_and_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1791337115199,
+      "tag": "20261007013835_ledger_indexes_declared_as_made",
+      "breakpoints": true
     }
   ]
 }

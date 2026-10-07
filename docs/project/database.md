@@ -781,9 +781,15 @@ have made objects it never heard of. Five indexes and five CHECKs were like that
 Step 3 found something. **Drizzle's `.desc()` means `DESC NULLS LAST`; a bare `DESC` in hand-written
 SQL means `NULLS FIRST`.** They are different indexes (a plain `order by x desc` cannot walk the
 first), and a declaration with a plain `.desc()` over a hand-made `DESC` index describes one that
-is not in the database. Write `.desc().nullsFirst()`. [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts)
-holds the five indexes by definition, every declared CHECK by name and table in both directions,
-and the ledger's five by what they refuse.
+is not in the database. Write `.desc().nullsFirst()`. Two indexes declared long before had the same
+fault and nobody had compared them: `ai_calls_owner_started` and `ai_calls_scope_started`.
+
+[`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) now compares **every** declared index
+with the catalog (table, uniqueness, partial or not, method, and each key column's direction and
+null placement), every declared CHECK by name and table in both directions, and the ledger's five
+by what they refuse. All three read the declarations, so there is no list to keep. What that still
+leaves uncompared: a predicate's or a CHECK's expression text, and foreign keys beyond the ones
+that file names.
 
 ### Two facts about a fork repair, both learned the hard way on 2026-09-02
 

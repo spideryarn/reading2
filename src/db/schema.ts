@@ -3719,8 +3719,17 @@ export const aiCalls = spideryarn.table(
     createdAt: createdAt(),
   },
   (t) => [
-    /** "What did this owner spend in August" — the query a spend limit would need. */
-    index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc()),
+    /**
+     * "What did this owner spend in August" — the query a spend limit would need.
+     *
+     * `.nullsFirst()` here and on `ai_calls_scope_started` below, since
+     * 2026-10-07: both were made by hand as a bare `DESC` (drizzle/0021, 0023),
+     * which is `NULLS FIRST`, and declared with a plain `.desc()`, which drizzle
+     * reads as `NULLS LAST`. See `jobs_owner_created_idx`; the declaration
+     * changed and the indexes did not
+     * (drizzle/20261007013835_ledger_indexes_declared_as_made.sql runs nothing).
+     */
+    index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc().nullsFirst()),
     /** "What did this ingest cost", asked once per job at the end of it. */
     index("ai_calls_job").on(t.jobId),
     /**
@@ -3735,7 +3744,7 @@ export const aiCalls = spideryarn.table(
      * landing in the number Greg sets a price against is how a price gets set
      * wrong.
      */
-    index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc()),
+    index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc().nullsFirst()),
     /**
      * **The same report must not become two rows.**
      *
