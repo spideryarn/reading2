@@ -189,8 +189,10 @@ these, each to be judged against the principles above:
   (Greg, [notes](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md)).
 - **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why
   those ids are random rather than sequential
-  ([block-ids.md](block-ids.md#why-random-and-not-sequential)).
+  ([block-ids.md](block-ids.md#why-random-and-not-sequential)). **Built**: Comments,
+  [comments.md](comments.md).
 - **Recall** — a few durable questions generated from what the reader actually dwelt on.
+  **Built**: Learn and Quiz, [learn-mode.md](learn-mode.md) and [quiz.md](quiz.md).
 - **A model of the reader** — where they are and what they know, built passively where possible
   (time on a paragraph, what they select, what they open in the glossary) and only crudely from the
   profile boxes ([reader-profile.md](reader-profile.md)). Every mode above becomes a consumer of it.

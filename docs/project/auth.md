@@ -287,6 +287,9 @@ the portraits avoid filling the column.
 
 ## The button on the live site does not work yet
 
+**Resolved: this section is history.** Google sign-in works in production — Greg, 2026-10-07:
+*"yes it does"*.
+
 **2026-08-27.** Greg pressed *Continue with Google* on `spideryarn.com` and got a page of JSON on
 `supabase.co`:
 
