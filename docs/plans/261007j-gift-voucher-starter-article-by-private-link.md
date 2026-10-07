@@ -1,7 +1,7 @@
 # Gift voucher: a starter article, by private link
 
 **Status as of 2026-10-07: built, both stages, on `dev`, not deployed.** The migration is
-`drizzle/20261007134629_billing_voucher_starter_article.sql` (additive). Not checked in a
+`drizzle/20261007151327_billing_voucher_starter_article.sql` (additive). Not checked in a
 browser: a create with a starter end to end (§ Log). Queue item `qi-zqkjnadh`, the deferred half of
 report `spya-vc6pnm`. The question and its four options are
 [261007f § Q-starter](261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-starter-may-the-voucher-email-carry-a-private-link);
@@ -196,7 +196,7 @@ on 2026-10-07.
   import chains would copy delicate client code: taken further than asked, by linking out to the
   add page and the article's card, which is Sol's own simpler version.
 - 2026-10-07: **Stage 1 built** by an Opus subagent, not committed. Migration
-  `drizzle/20261007134629_billing_voucher_starter_article.sql` (two nullable columns, the FK
+  `drizzle/20261007151327_billing_voucher_starter_article.sql` (two nullable columns, the FK
   `on delete set null`, and a CHECK `billing_vouchers_starter_has_slug`: an id without its slug
   would make a replay look starter-less). Not applied to the shared local database; the suites
   build their own from this tree's `drizzle/`.
@@ -291,7 +291,7 @@ on 2026-10-07.
   there. That path is covered by the database suites and `tests/admin-vouchers-page.test.tsx`.
 - 2026-10-07: merged `origin/dev`. The journal conflicted with `20261007094018_feedback_body_twenty_thousand`;
   ours was unpublished and generated, so it was rebuilt on top (same SQL, now
-  `20261007134629_billing_voucher_starter_article`), `db:chain` clean. Full `npm test` after the
+  `20261007151327_billing_voucher_starter_article`), `db:chain` clean. Full `npm test` after the
   merge: 1811 files passed, 2 failed, both from the merge meeting this work and both fixed: the
   shelf-error line moved to `tw:text-danger` (dev's 261007h), and the race test's fixture uuids
   were made its own. Typecheck green.

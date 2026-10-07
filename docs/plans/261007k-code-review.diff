@@ -1,0 +1,679 @@
+diff --git a/docs/project/billing.md b/docs/project/billing.md
+index 5471e9919..358a72582 100644
+--- a/docs/project/billing.md
++++ b/docs/project/billing.md
+@@ -662,10 +662,18 @@ Four things to know before touching any of it.
+   term is a deleted article's frozen price; see below.) Said out loud rather than discovered:
+   *an article you shared last week does not become cheaper; the discount applies to what you add from
+   now on.* Articles added before billing launched have no ledger row at all and already cost nothing.
+-- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article
+-  — a re-added URL adopts the shelf's article and charges again — so sharing that article halves
+-  *both* rows. Defensible, since they did pay for two ingests, and the copy must not promise
+-  otherwise.
++- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article,
++  so sharing that article halves *all* its rows, and the copy must not promise otherwise. Until
++  2026-10-07 a re-added URL adopted the shelf's article and charged again, which is where most such
++  rows came from. Greg, 2026-10-06:
++
++  > yes repeat pastes should be free (and signal they're a repeat in the UI)
++
++  So a plain `POST /api/jobs { url }` that finds one of the reader's own articles now answers
++  `{ article, repeat: true }` before any slot is reserved, and no job runs
++  ([261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md)). Rows charged before that stay, and
++  N : 1 is still reachable — an article published between the route's look and the locked admission
++  is charged as before, and a retry reserves on its own terms.
+ - **The period is filtered twice, once per counted column**, and only the full-price copy had a
+   behavioural test until 2026-09-05. Reversing the paid bounds in the *public* copy alone keeps the
+   generated SQL's parameter count and values identical, so the shape test stays green — and with no
+@@ -807,7 +815,8 @@ as "2 of them are public". `/admin/users` does the same split. GPT Sol found thi
+ 
+ - An article with no charged ingest still pays one article's worth. That covers articles added
+   before billing, charged before `article_id` existed, or added by the admin.
+-- A re-added URL has N ingest rows and gets one upgrade, not N.
++- An article with N ingest rows (re-added before 2026-10-07, when that still charged) gets one
++  upgrade, not N.
+ - Re-runs stay free, so on a high-powered article each re-run costs us about twice what it would.
+ 
+ ### A minimal paper costs a hundredth
+@@ -930,6 +939,7 @@ the route still knows what was asked for.
+ | | |
+ |---|---|
+ | `POST /api/jobs {url}` | reserves |
++| `POST /api/jobs {url}` for an article the reader already has, with no `steps` or `force` | free: answers `{ article, repeat: true }` and queues nothing |
+ | `POST /api/jobs {uploadId}` | reserves |
+ | `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
+ | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index eedb103be..3b30f2fd1 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -619,8 +619,8 @@ reader's profile as it stood at publication.
+ It happens for every way an import starts: the add page, *add to Spideryarn* on a link's hover card,
+ Retry on the shelf's job card, *Read this*, and an import whose add page was closed before it
+ finished. It does not happen for a Rebuild, a Start again (which has its own list), a paper added
+-with only its title and abstract, or a re-add of something already on the shelf, which publishes
+-nothing. **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
++with only its title and abstract, or a re-add of something already on the shelf, which queues no
++job at all (above). **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
+ from any page, as it drives `labels`; with every tab closed the modes wait.
+ 
+ The page's tick box, on by default, is the reader's setting rather than the page's:
+@@ -722,9 +722,22 @@ rewrite being a pure `canonicalAddHref` that main.tsx calls rather than four lin
+   being read as proof the segment was raw. The query is now always put back, whichever spelling the
+   segment is in — which is what the first of these three needed anyway.
+ 
+-An article already on the shelf takes about a second — every step finds its artefact and skips — so
+-adding the same URL twice is a blink and then the article, rather than an error telling you that you
+-already have it.
++**Adding an article you already have is free, and says so** (since 2026-10-07). Greg, 2026-10-06:
++
++> yes repeat pastes should be free (and signal they're a repeat in the UI)
++
++`POST /api/jobs { url }` asks the shelf first (`slugForUrlKey`), before any slot, and an address the
++reader already has is answered `200 { article, repeat: true }` with nothing reserved and no job.
++The add page stops on *"This article is already on your shelf, so adding it again cost nothing."*
++with an **Open the article** button, a link's hover card says so and links to it, and the MCP tool
++answers the article with its link. Until then the paste adopted the article, ran a job whose steps
++all skipped, and charged a slot. Only a plain add: `{ url, steps }` or `{ url, force }` asks for work
++and keeps the ordinary path.
++
++What that gives up: a repeat paste no longer re-runs a step that has gone stale or rebuilds a
++stand-in tree. Neither was ever how a reader was meant to do it — the reading view has **Build it**
++for a tree that never arrived, and step re-runs are free —
++[261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md).
+ 
+ **The add box stopped being an `<input type="url">` for this.** The browser will not submit one
+ without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose
+diff --git a/src/mcp/tools.ts b/src/mcp/tools.ts
+index 2e572d099..e6eb22bf4 100644
+--- a/src/mcp/tools.ts
++++ b/src/mcp/tools.ts
+@@ -269,10 +269,19 @@ export const TOOLS: readonly Tool[] = [
+     description:
+       "Adds the article at a web address to your shelf. It runs in the background: this answers the import job, " +
+       "and get_import_status says when it is done. On a free plan it uses one of your free articles; when they " +
+-      "are gone Spideryarn refuses.",
++      "are gone Spideryarn refuses. An address you already have answers that article instead " +
++      "({ article, repeat: true }), and costs nothing.",
+     input: z.strictObject({ url: z.string().url() }),
+     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+-    handler: async (api, { url }) => withLink(api, await api.call("POST", "/api/jobs", { url })),
++    /* A job, or — for an address the reader already has — `{ article, repeat: true }`,
++       free and with nothing queued (plan 261007k). The link is the article's in both. */
++    handler: async (api, { url }) => {
++      const answer = await api.call("POST", "/api/jobs", { url });
++      if (answer && typeof answer === "object" && typeof (answer as { article?: unknown }).article === "string") {
++        return { ...answer, link: articleLink(api, (answer as { article: string }).article) };
++      }
++      return withLink(api, answer);
++    },
+   }),
+ 
+   tool({
+diff --git a/src/messages.ts b/src/messages.ts
+index 4cea9e7ba..ebead90e4 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4667,6 +4667,20 @@ export const SHARE_AT_ADD_WHAT =
+ export const SHARE_AT_ADD_ALREADY_AN_ARTICLE =
+   "This article is already on your shelf. Share it from Access & sharing on its Metadata page.";
+ 
++/**
++ * **A repeat paste**: the address is an article the reader already has, so
++ * nothing was imported and no slot was spent. Greg, 2026-10-06: *"yes repeat
++ * pastes should be free (and signal they're a repeat in the UI)"*. The add
++ * page stops on this with an *Open the article* button rather than opening by
++ * itself, because opening at once would show the reader nothing to notice.
++ * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
++ */
++export const REPEAT_PASTE_ON_THE_SHELF =
++  "This article is already on your shelf, so adding it again cost nothing.";
++
++/** The same, on a link's hover card, in the card's own lower-case voice. */
++export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
++
+ /** Confirmed, and not sent yet: the import has not made the article's row. */
+ export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 3e1e27889..9b7eabb96 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -256,7 +256,8 @@ import type { CitersResult } from "./types.js";
+    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
+ import { linkSummaryStream } from "./link-summary.js";
+ import { liveKeys } from "./live-keys.js";
+-import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
++import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
++import { slugForUrlKey } from "./store/find-article.js";
+ import { isOwnReadingPage } from "./own-reading-page.js";
+ import {
+   advanceJob,
+@@ -11423,6 +11424,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+         send(res, 202, publicJob(await queueReadThis(request.slug)));
+         return;
+       }
++      /* **A repeat paste is free, and says it is one** — Greg, 2026-10-06:
++         *"yes repeat pastes should be free (and signal they're a repeat in the
++         UI)"*. A plain add whose address finds an article the reader already
++         has used to adopt it, run a job whose every step skipped, and charge a
++         slot. Now it is answered with the article and nothing else: no slot, no
++         job. The upload path's `{ article }` answer is the same shape, so the
++         add page already treats it as a completion; `repeat` is what lets it
++         say why.
++
++         **Outside the billing lock, and safe there in both directions.** A hit
++         spends nothing and starts nothing, so there is nothing to race for; a
++         miss falls through to the locked admission below, and an article that
++         publishes in between is charged exactly as before.
++
++         Only a *plain* add: `steps` or `force` beside a URL asks for work on
++         the article, and swallowing it here would drop that work and report
++         success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
++      if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
++        const have = await slugForUrlKey(urlKey(request.url));
++        if (have !== undefined) {
++          send(res, 200, { article: have, repeat: true });
++          return;
++        }
++      }
+       const profile =
+         request.url !== undefined || request.useProfile === false
+           ? null
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index 1eaafe848..d716b227e 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -59,6 +59,7 @@ import {
+   DIRECT_ADD_SENT_TEXT_AWAY,
+   UPLOAD_STILL_ARRIVING,
+   ADD_IMPORT_LOST,
++  REPEAT_PASTE_ON_THE_SHELF,
+   worthRetrying,
+ } from "../messages.js";
+ import { pageTitle, useDocumentTitle } from "./page-title.js";
+@@ -142,6 +143,13 @@ interface Completion {
+   slug: string;
+   /** Which `/add/` address produced it, so an older address cannot finish this one. */
+   source: string;
++  /**
++   * **A repeat paste**: the address was an article the reader already has, and
++   * the server answered with it, free and with nothing queued. The page stops
++   * at `repeat` to say so rather than opening by itself.
++   * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
++   */
++  repeat?: true;
+ }
+ 
+ /**
+@@ -167,6 +175,8 @@ interface Completion {
+ type Phase =
+   | { kind: "running" }
+   | { kind: "ready"; completion: Completion; opening: boolean }
++  /** The article was already on the shelf: one sentence and one button. See `Completion.repeat`. */
++  | { kind: "repeat"; completion: Completion }
+   | { kind: "opened" };
+ 
+ /**
+@@ -743,7 +753,11 @@ export function AddPage({
+   const claimed = useRef<string | null>(null);
+   /* The retention-path `{article}` answer to this page's own POST, recorded
+      rather than acted on — see `completion` below. */
+-  const [articleAnswer, setArticleAnswer] = useState<{ slug: string; source: string } | null>(null);
++  const [articleAnswer, setArticleAnswer] = useState<{
++    slug: string;
++    source: string;
++    repeat: boolean;
++  } | null>(null);
+ 
+   /* The component is reused when the address after `/add/` changes. What the
+      reader did in the old article's box must not follow it to the new one, and
+@@ -830,8 +844,11 @@ export function AddPage({
+          with a job — `queueAnUpload` in src/routes.ts. There is no card to
+          show and nothing to wait for, so this is a completion arriving a step
+          earlier — recorded, and decided with the other two below. */
++      /* **Or the address was already one of the reader's articles** — a repeat
++         paste, answered `{ article, repeat: true }` with nothing spent and
++         nothing queued. The same completion, marked, so the page says so. */
+       if ("article" in queued) {
+-        setArticleAnswer({ slug: queued.article, source: wanted });
++        setArticleAnswer({ slug: queued.article, source: wanted, repeat: queued.repeat === true });
+         return;
+       }
+       /* The job itself is kept, and not only its id: it is what the page
+@@ -1018,10 +1035,12 @@ export function AddPage({
+               key: `article:${wanted}:${articleAnswer.slug}`,
+               slug: articleAnswer.slug,
+               source: wanted,
++              ...(articleAnswer.repeat ? { repeat: true as const } : {}),
+             }
+           : null;
+   const completionKey = completion?.key ?? null;
+   const completionSlug = completion?.slug ?? null;
++  const completionRepeat = completion?.repeat === true;
+   /* Published with the committed screen. A prospective completion in a
+      suspended render must not disable the old screen's Open button. */
+   const activeCompletionKey = useRef<string | null>(completionKey);
+@@ -1183,7 +1202,12 @@ export function AddPage({
+   useEffect(() => {
+     if (completionKey === null || completionSlug === null) return;
+     if (claimed.current === completionKey) return;
+-    const finished = { key: completionKey, slug: completionSlug, source: wanted };
++    const finished: Completion = {
++      key: completionKey,
++      slug: completionSlug,
++      source: wanted,
++      ...(completionRepeat ? { repeat: true as const } : {}),
++    };
+     /* A different completion supersedes a press still waiting on the old one.
+        The waiting effect below checks this guard before doing anything. */
+     claimed.current = null;
+@@ -1206,6 +1230,13 @@ export function AddPage({
+     const sharingUnsettled =
+       (sharing !== null && shareUnsettled(sharing.get())) ||
+       (linking !== null && linkUnsettled(linking.get()));
++    /* **A repeat paste never leaves by itself**: nothing was imported, and
++       opening at once would show the reader nothing they could notice. Greg
++       asked for the repeat to be signalled (plan 261007k). */
++    if (completionRepeat) {
++      setPhase({ kind: "repeat", completion: finished });
++      return;
++    }
+     /* **Nothing to wait for**: the box is not focused, and it holds nothing
+        the server does not have. Never typed in, or typed and saved with no
+        write in flight. Read from the session in this tick, not from a render. */
+@@ -1228,7 +1259,7 @@ export function AddPage({
+     }
+     /* Otherwise wait, indefinitely. A blur saves; it is not a decision to leave. */
+     setPhase({ kind: "ready", completion: finished, opening: false });
+-  }, [completionKey, completionSlug, wanted, highPower]);
++  }, [completionKey, completionSlug, completionRepeat, wanted, highPower]);
+ 
+   const mayOpen = (done: Completion): boolean =>
+     claimed.current !== done.key &&
+@@ -1268,6 +1299,12 @@ export function AddPage({
+     if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
+   }, [phase, purposeNow]);
+ 
++  /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
++  const openTheRepeat = (): void => {
++    if (phase.kind !== "repeat" || !mayOpen(phase.completion)) return;
++    finish(phase.completion);
++  };
++
+   /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
+   const openWithoutSaving = (): void => {
+     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+@@ -1290,7 +1327,11 @@ export function AddPage({
+      moving in this tab or still arriving in another one. The choice matters in
+      all of those states, especially the minutes-long file transfer; showing it
+      only once a job row appeared made the upload path needlessly different. */
+-  const showAutoModes = offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
++  /* Nothing is offered over a repeat: no import ran, so there is nothing for
++     the boxes to apply to. */
++  const repeated = phase.kind === "repeat";
++  const showAutoModes =
++    !repeated && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
+   /* Waiting on the reader, with the add finished. The tick box stays up
+      through this too: it is the reader's setting and can still be changed. */
+   const deciding = phase.kind === "ready";
+@@ -1430,7 +1471,9 @@ export function AddPage({
+           above is already describing at length. "Queueing it…" over a progress
+           bar would be naming a request that has not been made and will not be
+           for another two minutes. */}
+-      {ok && !job && !failed && !mine && (
++      {/* And not once the POST has answered with an article, which is a
++          completion with no job: the upload retention path, or a repeat. */}
++      {ok && !job && !failed && !mine && !completion && (
+         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
+       )}
+ 
+@@ -1644,6 +1687,15 @@ export function AddPage({
+         </div>
+       )}
+ 
++      {phase.kind === "repeat" && (
++        <div data-add-repeat className="tw:mt-3">
++          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
++          <Button type="button" size="sm" onClick={openTheRepeat}>
++            Open the article
++          </Button>
++        </div>
++      )}
++
+       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
+ 
+       <p className="tw:mt-6 tw:mb-0 tw:text-sm">
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index 3bcdc0cf2..f99f4236b 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -97,7 +97,7 @@ import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
+ export const QUOTE_OPEN_MS = 900;
+ import { TermJump } from "./TermJump.js";
+ import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
+-import { worthRetrying } from "../messages.js";
++import { REPEAT_PASTE_ON_THE_CARD, worthRetrying } from "../messages.js";
+ import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+ import { leavesTheApp } from "./external-links.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+@@ -919,6 +919,15 @@ type AddToShelf =
+   | { kind: "working"; line: string }
+   /** It finished, and the shelf has not caught up. See `describeAdd`. */
+   | { kind: "added" }
++  /**
++   * **The reader already had it**, so nothing was added and nothing spent:
++   * the server answered a repeat paste with the article
++   * (docs/plans/261007k-repeat-paste-is-free-and-says-so.md). The slug comes
++   * from that answer, not from the shelf, because the shelf this card reads
++   * does not find every article the server does (a paper by the link it was
++   * asked for, an archived one) — waiting for it could wait for ever.
++   */
++  | { kind: "have"; slug: string }
+   /**
+    * It went wrong and **another press would not help**, so this arm has no
+    * action in it at all. `message` is the server's own sentence and may be a
+@@ -980,6 +989,7 @@ const NO_ADD_TO_SHELF: AddToShelf = { kind: "none" };
+ type Asked =
+   | { kind: "sending"; wait: Promise<void> }
+   | { kind: "queued"; jobId: string }
++  | { kind: "have"; slug: string }
+   | { kind: "refused"; message: string };
+ 
+ const asked = new Map<string, Asked>();
+@@ -1091,7 +1101,8 @@ function WithAddToShelf({
+          `lastFailure()` is the durable one, and three surfaces got this wrong
+          before it existed. useJobs.ts § lastFailure. */
+       const why = started ? null : queue.lastFailure();
+-      if (started) asked.set(key, { kind: "queued", jobId: started.id });
++      if (started && "article" in started) asked.set(key, { kind: "have", slug: started.article });
++      else if (started) asked.set(key, { kind: "queued", jobId: started.id });
+       else if (why) asked.set(key, { kind: "refused", message: why });
+       /* Refused with nothing to say — which should not happen, since every
+          refusal carries the server's sentence. Put the button back rather than
+@@ -1117,6 +1128,8 @@ export function describeAdd(state: Asked | undefined, job: Job | null, add: () =
+   switch (state.kind) {
+     case "sending":
+       return { kind: "working", line: ADDING };
++    case "have":
++      return { kind: "have", slug: state.slug };
+     case "refused":
+       /* **`worthRetrying` decides whether there is a button at all**, and it is
+          the same question `AddArticle.tsx` asks of a failed job. A `[pay-free]`
+@@ -1556,6 +1569,12 @@ function ExternalBody({
+           added to your shelf
+         </p>
+       )}
++      {adding.kind === "have" && (
++        <p className="prose-card-text prose-card-waiting">
++          <BookCheck size={11} />
++          {REPEAT_PASTE_ON_THE_CARD}
++        </p>
++      )}
+       {/* **Why it did not go through** — the refusal that ends it, and the one
+           the reader may press past, drawn identically because they read
+           identically to whoever is looking.
+@@ -1627,6 +1646,14 @@ function ExternalBody({
+             only refusal that reaches `offer` is one worth pressing — a reader
+             at their quota gets the sentence and the link to the page that
+             answers it, and nothing to spend the next attempt on. */}
++        {/* The repeat's own way there: `library` did not find it, or this
++            arm would be `none`, so the link above is not drawn. */}
++        {adding.kind === "have" && (
++          <Link className="prose-card-open" href={readHref(adding.slug)}>
++            <BookOpen size={10} />
++            read it here
++          </Link>
++        )}
+         {adding.kind === "offer" && (
+           <button type="button" className="prose-card-open" onClick={adding.add}>
+             <Plus size={10} />
+diff --git a/src/web/useJobs.ts b/src/web/useJobs.ts
+index d31cf5aab..f45468551 100644
+--- a/src/web/useJobs.ts
++++ b/src/web/useJobs.ts
+@@ -39,6 +39,13 @@ import { describeFetchFailure } from "./lib/describe-failure.js";
+  */
+ export interface AlreadyAnArticle {
+   article: string;
++  /**
++   * **A pasted address the reader already has** (`POST /api/jobs { url }`),
++   * answered free and with nothing queued — Greg, 2026-10-06. Absent on the
++   * upload path's answer, which is a reload rather than a second paste.
++   * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
++   */
++  repeat?: true;
+ }
+ 
+ export interface UseJobs {
+@@ -107,8 +114,12 @@ export interface UseJobs {
+    * hands back the first job rather than making a new one (`enqueue` in
+    * src/jobs.ts). Null on failure, with the reason in `error`, the same as
+    * `run` below.
++   *
++   * **Or the article itself**, when the address is one the reader already
++   * has: a repeat paste is answered `{ article, repeat: true }`, free and with
++   * no job (`AlreadyAnArticle`).
+    */
+-  add(url: string): Promise<Job | null>;
++  add(url: string): Promise<Job | AlreadyAnArticle | null>;
+   /**
+    * Queue a file that has **already been sent to the object store**, by its
+    * upload id.
+@@ -421,7 +432,7 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
+     error: snapshot.error,
+     driverFailures: snapshot.driverFailures,
+     lastFailure: () => lastFailure.current,
+-    add: (url) => act(() => post({ url })),
++    add: (url) => act(() => post<Job | AlreadyAnArticle>({ url })),
+     addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
+     run: (request) => act(() => post(request)),
+     reset: (slug, regenerate) =>
+diff --git a/tests/add-page-purpose.test.tsx b/tests/add-page-purpose.test.tsx
+index f9c1625a4..87893778f 100644
+--- a/tests/add-page-purpose.test.tsx
++++ b/tests/add-page-purpose.test.tsx
+@@ -79,7 +79,7 @@ const leaves = () => events.filter((e) => e.startsWith("leave:"));
+ const patch = (purpose: string | null, slug = SLUG) => `patch:${slug}:${JSON.stringify({ purpose })}`;
+ 
+ let jobs: Job[] = [];
+-let addResult: Job | null = null;
++let addResult: Job | { article: string; repeat?: true } | null = null;
+ let addUploadResult: Promise<Job | { article: string } | null> = Promise.resolve(null);
+ let retryResult: (() => Job | null) | null = null;
+ const queue: UseJobs = {
+@@ -1395,3 +1395,31 @@ describe("same-slug retirement across page lifetimes (F9)", () => {
+     expect(leaving()).toBe(false);
+   });
+ });
++
++/**
++ * **A repeat paste stops to say so** — Greg, 2026-10-06: *"yes repeat pastes
++ * should be free (and signal they're a repeat in the UI)"*. The server answers
++ * `{ article, repeat: true }` with nothing spent and nothing queued, so the
++ * page must not open by itself (the reader would see nothing to notice), must
++ * not offer boxes that apply to an import that never ran, and must not go on
++ * saying "Queueing it…". docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
++ */
++describe("a repeat paste of an article already on the shelf", () => {
++  it("says it was already there, offers nothing to tick, and opens on the button", async () => {
++    const { REPEAT_PASTE_ON_THE_SHELF } = await import("../src/messages.js");
++    addResult = { article: SLUG, repeat: true };
++    render(URL_SOURCE);
++    await settle();
++
++    expect(navigations, "opened by itself over the repeat").toEqual([]);
++    expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
++    expect(host.textContent).not.toContain("Queueing it");
++    expect(host.querySelector("textarea"), "the purpose box over a repeat").toBeNull();
++    expect(host.querySelector("input[type=checkbox]"), "a box to tick over a repeat").toBeNull();
++
++    press(OPEN);
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(patches()).toEqual([]);
++    expect(runs()).toEqual(NO_RUNS);
++  });
++});
+diff --git a/tests/add-to-shelf-from-the-card.test.tsx b/tests/add-to-shelf-from-the-card.test.tsx
+index 2289f1cb7..ccc22120d 100644
+--- a/tests/add-to-shelf-from-the-card.test.tsx
++++ b/tests/add-to-shelf-from-the-card.test.tsx
+@@ -106,7 +106,7 @@ let useJobsCalls = 0;
+ /** The queue as the engine would report it — replaced by the test, not polled. */
+ let jobs: Job[] = [];
+ /** What the next `add()` resolves to. Null is a refusal, with `failure` its reason. */
+-let added: Job | null = null;
++let added: Job | { article: string; repeat?: true } | null = null;
+ let failure: string | null = null;
+ /** Every URL `add()` was asked for. Two entries is a second slot spent. */
+ const posted: string[] = [];
+@@ -387,6 +387,28 @@ describe("who is offered it", () => {
+ });
+ 
+ describe("pressing it", () => {
++  /**
++   * **A repeat: the server answers with the article, not a job** — free, and
++   * nothing queued (docs/plans/261007k-repeat-paste-is-free-and-says-so.md).
++   * The card's shelf did not know it (a paper found by the link it was asked
++   * for, or an archived article), so the slug has to come from the answer: a
++   * card that read `id` off it sat on "adding" for ever.
++   */
++  it("says the reader already has it, and links to it, when the answer is the article", async () => {
++    const url = "https://example.org/repeat";
++    added = { article: "slug-already", repeat: true };
++    await render(url, true);
++    await hover();
++    await press();
++    await settle();
++
++    expect(posted).toEqual([url]);
++    expect(text()).toContain("already on your shelf");
++    const link = [...(card()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes("read it here"));
++    expect(link?.getAttribute("href")).toBe("/read/slug-already");
++    expect(addButton()).toBe(null);
++  });
++
+   it("posts the link's own address and shows the step that is running", async () => {
+     const url = "https://example.org/three";
+     added = job("job-3", url);
+diff --git a/tests/billing-admission.test.ts b/tests/billing-admission.test.ts
+index 98e59479c..e295cb4b3 100644
+--- a/tests/billing-admission.test.ts
++++ b/tests/billing-admission.test.ts
+@@ -457,6 +457,75 @@ describe("adding an article spends a slot", () => {
+   });
+ });
+ 
++/**
++ * **Pasting an article you already have is free, and says it is a repeat.**
++ * Greg, 2026-10-06: *"yes repeat pastes should be free (and signal they're a
++ * repeat in the UI)"*. Until then the paste adopted the shelf's article, ran a
++ * job whose every step skipped, and charged a slot for it.
++ * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
++ *
++ * **At the ceiling**, so the old behaviour is a 402 rather than a quiet extra
++ * row: a reader with nothing left must still be able to paste a link to an
++ * article they own and be taken to it.
++ */
++describe("a repeat paste of an article on the shelf", () => {
++  /** A published article whose bytes came from `HOST/<name>`, as an import leaves it. */
++  async function publishedAt(name: string): Promise<string> {
++    const slug = `test-admission-${name}`;
++    const url = `${HOST}/${name}`;
++    const { rows } = await pool.query<{ id: string }>(
++      `insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id`,
++      [OWNER, slug],
++    );
++    const articleId = rows[0]?.id;
++    const revision = await pool.query<{ id: string }>(
++      `insert into spideryarn.article_revisions
++         (article_id, status, title, requested_url, final_url, fetched_at)
++       values ($1, 'published', 'An article already on the shelf', $2, $2, now())
++       returning id`,
++      [articleId, url],
++    );
++    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [
++      articleId,
++      revision.rows[0]?.id,
++    ]);
++    return slug;
++  }
++
++  async function jobCount(): Promise<number> {
++    const { rows } = await pool.query<{ n: string }>(
++      "select count(*) as n from spideryarn.jobs where owner_id = $1",
++      [OWNER],
++    );
++    return Number(rows[0]?.n);
++  }
++
++  it("answers with the article, spends nothing and queues nothing", async () => {
++    const slug = await publishedAt("repeat");
++    await alreadySpent(FREE_LIMIT);
++
++    /* Another spelling of the same address, so the answer is the shelf's
++       lookup and not a string comparison. */
++    const reply = await post("/api/jobs", { url: `${HOST}/repeat/` });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
++    expect(reply.body).toEqual({ article: slug, repeat: true });
++    expect(await ledger()).toEqual({ taken: FREE_LIMIT, inFlight: 0 });
++    expect(await jobCount()).toBe(0);
++  });
++
++  /**
++   * `{ url, force }` asks for work on the article, so it is not a repeat and
++   * keeps the ordinary path. No client sends it today; a short-circuit that
++   * swallowed it would drop the work and report success.
++   */
++  it("still treats an add that asks for forced steps as work", async () => {
++    await publishedAt("forced");
++    const reply = await post("/api/jobs", { url: `${HOST}/forced`, force: ["fetch"] });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
++    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
++  });
++});
++
+ /**
+  * An upload whose bytes have landed, which is the only kind that may be queued.
+  *
+diff --git a/tests/billing-points.test.ts b/tests/billing-points.test.ts
+index bd1695446..529245f60 100644
+--- a/tests/billing-points.test.ts
++++ b/tests/billing-points.test.ts
+@@ -589,14 +589,14 @@ describe("the half-article overdraft, which is accepted rather than absent", ()
+ 
+ describe("the offer counts articles rather than ledger rows", () => {
+   /**
+-   * **A re-added URL adopts the shelf's article and charges again**, so one
+-   * article can own several charged rows. Sharing it frees all of them at once —
++   * **One article can own several charged rows** — a re-added URL charged
++   * again until 2026-10-07 (plan 261007k). Sharing it frees all of them at once —
+    * which means *"share three articles"* would be false for somebody who needs
+    * to share one.
+    */
+   it("says one article when three rows' worth of points come from one article", async () => {
+     /* One article added three times — the same URL pasted back after being
+-       archived, which adopts the shelf's article and charges again — plus one
++       archived, which charged again until 2026-10-07 — plus one
+        ordinary article. 800 points against a budget of 600, so 300 have to be
+        freed — three rows' worth — to get back under the wall.
+ 
+diff --git a/tests/mcp-tools.test.ts b/tests/mcp-tools.test.ts
+index 07d2a104a..fd97693d4 100644
+--- a/tests/mcp-tools.test.ts
++++ b/tests/mcp-tools.test.ts
+@@ -221,6 +221,14 @@ describe("each tool calls the route it claims", () => {
+     expect(Object.keys(articles[0] ?? {})).not.toContain("opens");
+   });
+ 
++  /* A repeat paste is answered with the article, free and with nothing queued
++     (plan 261007k), and the agent still gets the link to it. */
++  it("import_article of an article already on the shelf answers it, with its link", async () => {
++    const h = await harness({ "POST /api/jobs": { status: 200, body: { article: "on-tools", repeat: true } } });
++    const result = await h.call("import_article", { url: "https://example.com/p" });
++    expect(result.json()).toEqual({ article: "on-tools", repeat: true, link: `${SITE}/read/on-tools` });
++  });
++
+   it("there is no get_allowance, list_users or private-link tool (Sol F17; plan § Not in V1)", () => {
+     const names = TOOLS.map((t) => t.name);
+     expect(names).not.toContain("get_allowance");

@@ -29,10 +29,10 @@
  *     Two of those are pages about *this* article and one is not a place at
  *     all, so `besideTheModes` below is a function of where the bar was opened
  *     rather than the constant it used to be, and `Command` in command-match.ts
- *     grew a third arm to hold the one that opens a dialog. **What the original
- *     call refused is still refused**, and for the reason it gave: a passage
- *     jump and an "ask this article" would each need the bar to grow an
- *     *argument*, and it has one text box and it is the filter.
+ *     grew a third arm to hold the one that opens a dialog. The two things the
+ *     original call refused have since arrived once the bar learned
+ *     *arguments*: a typed passage jump, and, after the fast pick says no row
+ *     fits, a fresh press on *Ask the guide: “…”* (plan 261007j F6).
  *
  *     **And on 2026-10-01, sub-modes** (SPIDERYARN-READING2-77): *"In the
  *     Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram,
@@ -871,6 +871,8 @@ interface ShownRow {
   /** `suggest`: the one row whose press is the bar's own request. */
   readonly press: "activate" | "suggest";
   readonly suggested?: { readonly why: string; readonly said?: string };
+  /** The reader's own words inside the label (the guide row), set in the reader's face. */
+  readonly typed?: string;
 }
 
 /**
@@ -878,13 +880,13 @@ interface ShownRow {
  * face** (docs/project/fonts.md): *Quick search “…”* is ours, what is between
  * the quotes is not. `said` is absent on every row a model did not word.
  */
-function RowLabel({ label, said }: { label: string; said: string | undefined }) {
+function RowLabel({ label, said, voice = "ai" }: { label: string; said: string | undefined; voice?: "ai" | "reader" }) {
   const at = said === undefined ? -1 : label.indexOf(said);
   if (said === undefined || at < 0) return <>{label}</>;
   return (
     <>
       {label.slice(0, at)}
-      <span className={voiceClass("ai")}>{said}</span>
+      <span className={voiceClass(voice)}>{said}</span>
       {label.slice(at + said.length)}
     </>
   );
@@ -1441,6 +1443,16 @@ export const ASK_TOO_LONG = "That sentence is too long. Shorten it and try again
 /** The line under the box while the sentence is with the model. */
 const ASKING = "Working out what you meant…";
 
+/**
+ * **The row a sentence the pick could not place becomes** (plan 261007j F6):
+ * the reader's own words, sent to the article's guide in Chat. Offered only
+ * under `COULD_NOT_TELL`, so the first Enter is always the fast pick's, and
+ * pressed only by a fresh press of its own.
+ */
+export const guideLabel = (sentence: string): string => `Ask the guide: “${sentence}”`;
+/** Says that it sends: the press is the consent, as an *Ask in chat* button's is. */
+export const GUIDE_DESCRIPTION = "Sends it to this article's guide, in Chat.";
+
 /** The one-line heading over rows a model suggested, so they are not mistaken for a match on what was typed. */
 const SUGGESTED_HEADING = "Did you mean";
 
@@ -1536,7 +1548,7 @@ export function CommandBar({
    * out: that opening exists to show the sentence.
    */
   const [said, setSaid] = useState<
-    { kind: "pending" } | { kind: "asking" } | { kind: "message"; text: string } | null
+    { kind: "pending" } | { kind: "asking" } | { kind: "message"; text: string; guide?: boolean } | null
   >(null);
   /**
    * **One action at a time, held before the first render can show it.** Two
@@ -1788,7 +1800,14 @@ export function CommandBar({
     if (previousSignature.current === signature) return;
     previousSignature.current = signature;
     dropAsk();
-    setSaid((was) => (was?.kind === "asking" ? null : was));
+    /* A guide offer, like suggested rows, is an answer about the exact row
+       catalogue sent to the pick. If that catalogue changes after `none`
+       landed, a fresh press must ask over today's rows rather than send the
+       old sentence to a paid guide turn. Other messages are action outcomes
+       and do not belong to the catalogue. */
+    setSaid((was) =>
+      was?.kind === "asking" || (was?.kind === "message" && was.guide === true) ? null : was,
+    );
   }, [signature, dropAsk]);
   /* What an answer needs when it lands, a render or several later. Refs, for
      `jobsRef`'s reason: the `.then` below must read today's, not the ones its
@@ -1856,6 +1875,47 @@ export function CommandBar({
         : [],
     [emptyBox, keptList, commands, article, chatReachable],
   );
+  /**
+   * **The door to the guide** (plan 261007j F6): only after the pick's real
+   * `none` answer, not after a request failure. Both say `COULD_NOT_TELL`, but
+   * a failure keeps the one-press *Try again* path rather than turning Enter
+   * into a paid guide send. Every edit clears the answer, so the row is always
+   * about the sentence the pick could not place, and goes when it changes.
+   * Where the page hands over (`askGuide`: the owner's reading view) and the
+   * Dock draws Chat. A pick that offered rows offers no guide (v1).
+   *
+   * **One handoff per press** — `guideSent` is the revision a press was made
+   * at, so a second click in the same tick, before the bar has shut and the
+   * draft cleared, sends nothing. A held Enter's repeat never reaches here
+   * (the key handler refuses it; postmortem 261005o).
+   */
+  const askGuide = article?.executor?.askGuide;
+  const guideSentence =
+    said?.kind === "message" && said.guide === true && canAsk && chatReachable && askGuide !== undefined
+      ? draft.trim()
+      : null;
+  const guideSent = useRef(-1);
+  const guideRow = useMemo<ShownRow | null>(() => {
+    if (guideSentence === null || askGuide === undefined) return null;
+    const command: Command = {
+      kind: "action",
+      id: "ask-the-guide",
+      label: guideLabel(guideSentence),
+      description: GUIDE_DESCRIPTION,
+      aliases: [],
+      /* The press sends and stores a paid guide turn, so it carries the same
+         marker as every other row that starts work on the article. */
+      generates: true,
+      typedOnly: true,
+      opensOnly: false,
+      run: () => {
+        if (guideSent.current === revision.current) return { kind: "close" };
+        guideSent.current = revision.current;
+        return askGuide(guideSentence);
+      },
+    };
+    return { command, rowId: commandId(command), press: "activate", typed: guideSentence };
+  }, [guideSentence, askGuide]);
   const offerSuggest =
     emptyBox &&
     suggestSlug !== undefined &&
@@ -1867,11 +1927,12 @@ export function CommandBar({
       ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
       ...suggestedNow,
       ...results.map(ordinaryRow),
+      ...(guideRow === null ? [] : [guideRow]),
     ],
-    [offerSuggest, suggestedNow, results],
+    [offerSuggest, suggestedNow, results, guideRow],
   );
   /** Where the ordinary rows start, for the rule drawn between the list and them. */
-  const firstOrdinary = shown.length - results.length;
+  const firstOrdinary = shown.length - results.length - (guideRow === null ? 0 : 1);
   const index = Math.min(selected, Math.max(0, shown.length - 1));
   const active = shown[index];
   /* A profile read may insert or remove rows while the reader is choosing.
@@ -2214,7 +2275,7 @@ export function CommandBar({
       const rows = answer === null ? [] : suggestedRows(answer, today.commands, today.article);
       const [first] = rows;
       if (answer === null || first === undefined) {
-        setSaid({ kind: "message", text: COULD_NOT_TELL });
+        setSaid({ kind: "message", text: COULD_NOT_TELL, guide: answer?.kind === "none" });
         return;
       }
       setSaid(null);
@@ -2602,7 +2663,11 @@ export function CommandBar({
                     row.suggested !== undefined ? "tw:min-w-0 tw:max-w-full tw:break-words" : ""
                   }`}
                 >
-                  <RowLabel label={commandText(command).label} said={row.suggested?.said} />
+                  <RowLabel
+                    label={commandText(command).label}
+                    said={row.typed ?? row.suggested?.said}
+                    voice={row.typed === undefined ? "ai" : "reader"}
+                  />
                 </span>
                 {/* A suggested row's sentence is never cut: it takes a line of its
                     own and wraps, at every width. Beside a long label it was cut

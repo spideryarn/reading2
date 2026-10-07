@@ -116,16 +116,17 @@ import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-h
 import type { CommentsApi } from "../useComments.js";
 import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
-import { Dock } from "../Dock.js";
+import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
-import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { modeCommand } from "../command-match.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
-import { findHref } from "../CommandBar.js";
+import { findHref, subModeRows } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -157,7 +158,13 @@ import {
   type BandMode,
   type Mode,
 } from "../params.js";
-import { type ModeWithSubModes, returnToSubMode, subModeParams } from "../sub-modes.js";
+import {
+  type ModeWithSubModes,
+  returnToSubMode,
+  type SubMode,
+  subModeParams,
+  subModeWords,
+} from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
@@ -970,6 +977,9 @@ export function Reader({
     ) => {
       setChatHandoff({
         slug,
+        /* Every *Ask in chat* starts a fresh chat, whatever is open there — the
+           guide included (`ChatHandoff`, plan 261007j). */
+        target: "chat",
         question,
         send: then === "send",
         ...(origin ? { origin } : {}),
@@ -1044,6 +1054,20 @@ export function Reader({
   );
   const debateThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
   const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  /* **The command bar's *Ask the guide: “…”* row** (plan 261007j F6): the
+     reader's own typed sentence, sent to this article's one guide — opened if
+     it exists, begun if not (`ChatHandoffToGuide`). It sends, because the row
+     is a press on the reader's own words and says that it sends; the bar
+     offers it only once the fast pick answered that no row fits. */
+  const askTheGuide = useCallback(
+    (sentence: string) => {
+      const question = sentence.trim();
+      if (question === "") return;
+      setChatHandoff({ slug, target: "guide", question, send: true });
+      showBand("chat");
+    },
+    [slug, showBand],
+  );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
      and on a Citations row**, beside Dig deeper, which is unchanged. Each
@@ -1072,7 +1096,7 @@ export function Reader({
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   const handoffThread = useCallback(
     (taken: ChatHandoff, id: string) => {
-      if (taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
+      if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
     },
     [owner],
   );
@@ -2680,6 +2704,40 @@ export function Reader({
       on: experimental.on,
       current: mode === target,
     });
+  /**
+   * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
+   * the command bar's mode and sub-mode rows, from the same two functions the
+   * Dock and the bar call — `visibleModes` with this page's switch, mode and
+   * margin, then `subModeRows`. One deliberate subtraction: those functions
+   * keep an experimental mode already open (or a retained experimental
+   * sub-mode) visible as the reader's way out after the switch is turned off.
+   * That escape hatch must not make a model-written token a way *into* the
+   * hidden feature, so the proposal rows remove every experimental target while
+   * the switch is off. The press is the Dock's own pair of activators, through
+   * `modeActivators` (set below, beside `onDockMode`).
+   */
+  const modeActivators = useRef<{ mode(next: Mode): void; sub(sub: SubMode): void } | null>(null);
+  const chipModes = useMemo(() => {
+    if (!isOwner) return undefined;
+    const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
+    const rows = [
+      ...reachable.map(modeCommand),
+      ...subModeRows(reachable, experimental.on, {
+        diagram: subNav.diagram,
+        learn: mode === "learn" ? subNav.learn : undefined,
+      }),
+    ]
+      .filter((c): c is ModeCommand => c.kind === "mode" || c.kind === "submode")
+      .filter(
+        (c) =>
+          experimental.on ||
+          (c.kind === "mode" ? !MODE_CATALOG[c.mode].experimental : !subModeWords(c.sub).experimental),
+      );
+    return modeDoor(rows, {
+      mode: (c) => modeActivators.current?.mode(c.mode),
+      sub: (c) => modeActivators.current?.sub(c.sub),
+    });
+  }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
   const executor = useMemo(
@@ -2707,6 +2765,10 @@ export function Reader({
         /* The bar's suggested lens row: Debate's own handoff, so the question
            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
+        /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
+        askGuide: isOwner ? askTheGuide : undefined,
+        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
+        modes: chipModes,
       }),
     [
       slug,
@@ -2723,6 +2785,8 @@ export function Reader({
       moreQuotes,
       openQuickSearch,
       suggestedLensInChat,
+      askTheGuide,
+      chipModes,
     ],
   );
   /**
@@ -3638,6 +3702,158 @@ export function Reader({
     );
   }
 
+  /**
+   * **The Dock's `onMode`**: what a press on a mode button, a command-bar mode
+   * row or a sub-mode row does to the reading view. Named, rather than written
+   * inline in the `<Dock>` below, since 2026-10-07, because a second caller
+   * needs the very same function: a chat chip's `mode` proposal opens a mode
+   * through the Dock's own activators wrapped round this (`modeActivators`
+   * below; plan 261007j, GPT Sol's F3).
+   */
+  const onDockMode = (next: Mode, sub?: SubMode, toggle = false): void => {
+    /* The callback itself is proof of a press. Arm before `setMode`:
+       nuqs updates React now but may leave `location.href` on the old
+       entry for ~50ms, so inferring intent from the address races. Back
+       and Forward never call this callback and therefore never arm. */
+    /* **Marginalia is a switch, not a band** (`BandMode`): its press
+       turns the column on or off and leaves the band, the herald and a
+       stepped-aside band exactly as they were — unless the two do not
+       fit together, when the notes, pressed last, swap the band out
+       (`marginaliaPress`, Greg's 7P). */
+    if (next === "marginalia") {
+      const press = marginaliaPress({
+        margin: marginOpen,
+        bandOpen,
+        bothFit: wouldFit.both,
+        aloneFit: wouldFit.alone,
+      });
+      /* The bar's own Marginalia button is a toggle; the command bar
+         names a destination, as it does for every band. If the notes
+         are already on and there is no useful swap to make, choosing
+         them there is therefore idempotent. Keep the narrow-window
+         swap, though: `closeBand` means `?margin=1` is on but hidden
+         behind the band, and naming Marginalia should bring that
+         destination on screen.
+         docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+      if (!toggle && marginOpen && !press.closeBand) return;
+      if (press.closeBand) {
+        void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
+        setBandAway(false);
+      } else {
+        void setMargin(press.margin ? true : null);
+      }
+      return;
+    }
+    /* **Plain closes both columns, and a second press closes the band**
+       (`modePress`, Greg's 96). Both are one push, so one Back puts it
+       all back; neither is a press on a band, so neither names one in
+       the herald. A sub-mode row always moves to its sub-mode. */
+    if (sub === undefined) {
+      const press = modePress({ next, current: mode, bandBack, toggle });
+      if (press === "plain") {
+        /* Already at the destination, with nothing left for Plain to
+           close. `nuqs` does not elide a same-value push, so calling the
+           setter here would add an invisible history entry and make the
+           reader press Back twice to leave the article. */
+        if (mode === "plain" && !marginOpen) return;
+        void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
+        setBandAway(false);
+        return;
+      }
+      if (press === "close") {
+        void setMode("plain");
+        return;
+      }
+    }
+    armSkimOpening(skimArrival.current, mode, next);
+    /* One Search arrival for its Dock button, quick box and command row.
+       The toggle-to-close above has already handled a second mode press. */
+    if (next === "search" && sub === undefined) {
+      openQuickSearch();
+      return;
+    }
+    /* A sub-mode row has already armed its chip's press (Dock.tsx §
+       `useActivateSubMode`); this only moves the band, sub-mode and all. */
+    /* A command naming the mode already open, or the bar bringing a
+       stepped-aside band back, changes no URL state. Avoid a same-value
+       `nuqs` write: it still pushes a history entry even though the
+       address and the rendered mode do not move. The activation and
+       recovery paths do not depend on that write — the token minted in
+       Dock is their signal. */
+    if (sub === undefined) {
+      if (next !== mode) {
+        /* **`mode` alone, with one exception**: returning to Learn
+           while `learn=quiz` is still in the address is a navigation
+           to Quiz, so it clears `thread` in the same pushed entry rather
+           than mounting the Quiz over Chat's conversation for
+           `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
+        const back = returnToSubMode(next, { learn: subNav.learn });
+        if (back === null) void setMode(next);
+        else void setSubNav(back, { history: "push" });
+      }
+    } else void setSubNav(subModeParams(sub), { history: "push" });
+    /* Pressing the mode you are in brings its band back if it had stepped
+       aside — `bandAway` above. */
+    setBandAway(false);
+    /* A new nonce every press, so pressing the mode you are in while it
+       has stepped aside names it again as it comes back. */
+    setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
+    /* Search draws its results down the rail, so entering search mode
+       brings the rail back if the reader had put it away — Greg,
+       2026-08-26: *"show the Spine by default when Search mode is
+       active"*.
+
+       `null`, not `true`: the rail goes back to following the window and
+       the mode, which in a mode means on. Writing `true` would pin it,
+       and the reader would find it still there in outline mode later
+       with no memory of having asked for that.
+
+       On the transition and **not** as a standing effect, which is the
+       part worth getting right. A rule that re-asserted the rail whenever
+       search mode was open would make the `Spine` pill dead in exactly
+       the mode this is about: press it off, and it comes straight back.
+       "By default" is a fact about arriving, not a fact about staying —
+       hence `mode !== "search"` as well, since the dock calls this for a
+       press on the mode you are already in.
+
+       **The cost, stated because it is real**: the reader's `?spine=0`
+       was a choice about the page, and this throws it away rather than
+       suspending it — come back to reading mode afterwards and the rail
+       is there. Suspending it would mean `?spine=` growing a per-mode
+       shape, which is a lot of machinery for one bit; and the alternative
+       of leaving it alone means a reader who has hidden the rail opens
+       search and finds half the feature drawn somewhere they cannot see.
+       The pill is one press away. docs/project/search.md § The rail. */
+    /* Ideas paints one lane down the rail for the selected idea, and
+       the rail is the only place that can show an idea's *shape* — is
+       this threaded through the piece, or concentrated in one section?
+       So it earns the same arrival rule search has, for the same reason
+       and with the same `null` rather than `true`. */
+    if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
+      void setShowSpine(null);
+    }
+  };
+  /* **The Dock's own two activators, called again here for the chips.** The
+     same hooks the Dock calls (Dock.tsx § `useActivateMode`,
+     `useActivateSubMode`), with the same inputs it is handed below — so a chip
+     arms what the bar's row arms and moves the band the way it does. The
+     owner's alone (`arms`), since chat is. The command bar's choice: naming the
+     mode you are in leaves you there (`toggles` false). Kept in a ref so the
+     executor above is not rebuilt on every render for them. */
+  const activateModeHere = useActivateMode(
+    slug,
+    carriedSearch(location.search),
+    subNav.diagram,
+    summaryView,
+    onDockMode,
+    isOwner,
+    mode,
+    false,
+    marginOpen,
+  );
+  const activateSubModeHere = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, isOwner);
+  modeActivators.current = { mode: activateModeHere, sub: activateSubModeHere };
+
   return (
     /* Every block link inside — panels, chips, the chat dialog through its
        portal — reads its card and its "is this block real" answer from here.
@@ -4404,129 +4620,7 @@ export function Reader({
         /* The same state the Diagram band's chips read (`diagramParam`), not
            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
         diagram={subNav.diagram}
-        onMode={(next, sub, toggle = false) => {
-          /* The callback itself is proof of a press. Arm before `setMode`:
-             nuqs updates React now but may leave `location.href` on the old
-             entry for ~50ms, so inferring intent from the address races. Back
-             and Forward never call this callback and therefore never arm. */
-          /* **Marginalia is a switch, not a band** (`BandMode`): its press
-             turns the column on or off and leaves the band, the herald and a
-             stepped-aside band exactly as they were — unless the two do not
-             fit together, when the notes, pressed last, swap the band out
-             (`marginaliaPress`, Greg's 7P). */
-          if (next === "marginalia") {
-            const press = marginaliaPress({
-              margin: marginOpen,
-              bandOpen,
-              bothFit: wouldFit.both,
-              aloneFit: wouldFit.alone,
-            });
-            /* The bar's own Marginalia button is a toggle; the command bar
-               names a destination, as it does for every band. If the notes
-               are already on and there is no useful swap to make, choosing
-               them there is therefore idempotent. Keep the narrow-window
-               swap, though: `closeBand` means `?margin=1` is on but hidden
-               behind the band, and naming Marginalia should bring that
-               destination on screen.
-               docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
-            if (!toggle && marginOpen && !press.closeBand) return;
-            if (press.closeBand) {
-              void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
-              setBandAway(false);
-            } else {
-              void setMargin(press.margin ? true : null);
-            }
-            return;
-          }
-          /* **Plain closes both columns, and a second press closes the band**
-             (`modePress`, Greg's 96). Both are one push, so one Back puts it
-             all back; neither is a press on a band, so neither names one in
-             the herald. A sub-mode row always moves to its sub-mode. */
-          if (sub === undefined) {
-            const press = modePress({ next, current: mode, bandBack, toggle });
-            if (press === "plain") {
-              /* Already at the destination, with nothing left for Plain to
-                 close. `nuqs` does not elide a same-value push, so calling the
-                 setter here would add an invisible history entry and make the
-                 reader press Back twice to leave the article. */
-              if (mode === "plain" && !marginOpen) return;
-              void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
-              setBandAway(false);
-              return;
-            }
-            if (press === "close") {
-              void setMode("plain");
-              return;
-            }
-          }
-          armSkimOpening(skimArrival.current, mode, next);
-          /* One Search arrival for its Dock button, quick box and command row.
-             The toggle-to-close above has already handled a second mode press. */
-          if (next === "search" && sub === undefined) {
-            openQuickSearch();
-            return;
-          }
-          /* A sub-mode row has already armed its chip's press (Dock.tsx §
-             `useActivateSubMode`); this only moves the band, sub-mode and all. */
-          /* A command naming the mode already open, or the bar bringing a
-             stepped-aside band back, changes no URL state. Avoid a same-value
-             `nuqs` write: it still pushes a history entry even though the
-             address and the rendered mode do not move. The activation and
-             recovery paths do not depend on that write — the token minted in
-             Dock is their signal. */
-          if (sub === undefined) {
-            if (next !== mode) {
-              /* **`mode` alone, with one exception**: returning to Learn
-                 while `learn=quiz` is still in the address is a navigation
-                 to Quiz, so it clears `thread` in the same pushed entry rather
-                 than mounting the Quiz over Chat's conversation for
-                 `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
-              const back = returnToSubMode(next, { learn: subNav.learn });
-              if (back === null) void setMode(next);
-              else void setSubNav(back, { history: "push" });
-            }
-          } else void setSubNav(subModeParams(sub), { history: "push" });
-          /* Pressing the mode you are in brings its band back if it had stepped
-             aside — `bandAway` above. */
-          setBandAway(false);
-          /* A new nonce every press, so pressing the mode you are in while it
-             has stepped aside names it again as it comes back. */
-          setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
-          /* Search draws its results down the rail, so entering search mode
-             brings the rail back if the reader had put it away — Greg,
-             2026-08-26: *"show the Spine by default when Search mode is
-             active"*.
-
-             `null`, not `true`: the rail goes back to following the window and
-             the mode, which in a mode means on. Writing `true` would pin it,
-             and the reader would find it still there in outline mode later
-             with no memory of having asked for that.
-
-             On the transition and **not** as a standing effect, which is the
-             part worth getting right. A rule that re-asserted the rail whenever
-             search mode was open would make the `Spine` pill dead in exactly
-             the mode this is about: press it off, and it comes straight back.
-             "By default" is a fact about arriving, not a fact about staying —
-             hence `mode !== "search"` as well, since the dock calls this for a
-             press on the mode you are already in.
-
-             **The cost, stated because it is real**: the reader's `?spine=0`
-             was a choice about the page, and this throws it away rather than
-             suspending it — come back to reading mode afterwards and the rail
-             is there. Suspending it would mean `?spine=` growing a per-mode
-             shape, which is a lot of machinery for one bit; and the alternative
-             of leaving it alone means a reader who has hidden the rail opens
-             search and finds half the feature drawn somewhere they cannot see.
-             The pill is one press away. docs/project/search.md § The rail. */
-          /* Ideas paints one lane down the rail for the selected idea, and
-             the rail is the only place that can show an idea's *shape* — is
-             this threaded through the piece, or concentrated in one section?
-             So it earns the same arrival rule search has, for the same reason
-             and with the same `null` rather than `true`. */
-          if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
-            void setShowSpine(null);
-          }
-        }}
+        onMode={onDockMode}
         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
            is exactly what it was; derived from `MODES` for a visitor, so a mode
            added later is marked whether or not whoever adds it remembers.

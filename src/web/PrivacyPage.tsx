@@ -483,7 +483,8 @@ export function PrivacyPage() {
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
-          aids, chat and search, and Opus or a similar frontier model in its place on an article
+          aids, chat and search, and for the guide in Chat, which is also told roughly how many other
+          articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
           switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our

@@ -39,6 +39,13 @@ import { describeFetchFailure } from "./lib/describe-failure.js";
  */
 export interface AlreadyAnArticle {
   article: string;
+  /**
+   * **A pasted address the reader already has** (`POST /api/jobs { url }`),
+   * answered free and with nothing queued — Greg, 2026-10-06. Absent on the
+   * upload path's answer, which is a reload rather than a second paste.
+   * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
+   */
+  repeat?: true;
 }
 
 export interface UseJobs {
@@ -107,8 +114,12 @@ export interface UseJobs {
    * hands back the first job rather than making a new one (`enqueue` in
    * src/jobs.ts). Null on failure, with the reason in `error`, the same as
    * `run` below.
+   *
+   * **Or the article itself**, when the address is one the reader already
+   * has: a repeat paste is answered `{ article, repeat: true }`, free and with
+   * no job (`AlreadyAnArticle`).
    */
-  add(url: string): Promise<Job | null>;
+  add(url: string): Promise<Job | AlreadyAnArticle | null>;
   /**
    * Queue a file that has **already been sent to the object store**, by its
    * upload id.
@@ -421,7 +432,7 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
     error: snapshot.error,
     driverFailures: snapshot.driverFailures,
     lastFailure: () => lastFailure.current,
-    add: (url) => act(() => post({ url })),
+    add: (url) => act(() => post<Job | AlreadyAnArticle>({ url })),
     addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
     run: (request) => act(() => post(request)),
     reset: (slug, regenerate) =>

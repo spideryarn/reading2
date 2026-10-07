@@ -96,6 +96,7 @@ beforeEach(() => {
 
 const { PurposePrompt } = await import("../src/web/PurposePrompt.js");
 const { AUTOSAVE_IDLE_MS } = await import("../src/web/ProfileBox.js");
+const { holdFirstOpen, releaseWhenDecided } = await import("../src/web/first-open-purpose.js");
 
 /* ------------------------------------------------------------- the harness -- */
 
@@ -357,6 +358,50 @@ describe("PurposePrompt", () => {
     expect(isOpen()).toBe(true);
     expect(showModals).toBe(1);
     expect(session.has(MARK)).toBe(false);
+  });
+});
+
+/* Plan 261007j F4: on a first open `useLastView` held for the mark, the guide
+   asks instead where a band fits. tests/first-open-purpose.test.tsx has the
+   addresses; this is the modal's half. */
+describe("PurposePrompt on a held first open", () => {
+  const applied: string[] = [];
+  function holdWith(ordinary: string): void {
+    applied.length = 0;
+    holdFirstOpen({ slug: SLUG, readerId: null, ordinary });
+    releaseWhenDecided(SLUG, null, (search) => applied.push(search));
+  }
+  afterEach(() => holdFirstOpen(null));
+
+  it("no reason, a band fits: no modal, the mark cleared, the guide opened", async () => {
+    session.set(MARK, SLUG);
+    holdWith("?mode=summary&margin=1");
+    render(true);
+    await settle();
+    expect(isOpen(), "the modal was shown over the guide").toBe(false);
+    expect(showModals).toBe(0);
+    expect(session.has(MARK)).toBe(false);
+    expect(applied).toEqual(["?mode=chat&guide=1&margin=1"]);
+  });
+
+  it("no reason, no room for a band: the modal, as before", async () => {
+    session.set(MARK, SLUG);
+    holdWith("");
+    render();
+    await settle();
+    expect(isOpen()).toBe(true);
+    expect(applied).toEqual([""]);
+  });
+
+  it("a failed read: the ordinary default, and the mark kept for the next load", async () => {
+    session.set(MARK, SLUG);
+    readerBody = "fail";
+    holdWith("?mode=summary&margin=1");
+    render();
+    await settle();
+    expect(isOpen()).toBe(false);
+    expect(session.get(MARK)).toBe(SLUG);
+    expect(applied).toEqual(["?mode=summary&margin=1"]);
   });
 });
 

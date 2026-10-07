@@ -99,6 +99,15 @@ describe("the other three things it holds", () => {
     d.setDestination(A);
     expect(d.destination()).toBe(A);
   });
+
+  it("moves and drops the optimistic guide identity with its conversation", () => {
+    const d = createChatDrafts();
+    d.setGuide(A);
+    d.moveThread(A, B);
+    expect(d.guide()).toBe(B);
+    d.dropThread(B);
+    expect(d.guide()).toBeUndefined();
+  });
 });
 
 /**

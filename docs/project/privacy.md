@@ -654,6 +654,18 @@ What the code has to keep true for the page to stay honest:
 `tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
 there.
 
+## The guide is told how many other articles you have opened
+
+**Since 2026-10-07** ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md),
+reports `spya-tddvg2` and `spya-kfjrzv`). The guide, Chat's conversation about how to read this
+piece, is pitched to how much the reader has used Spideryarn — Greg asked for *"how many articles
+they've already read"*. What it is sent is a **bucket, not a number**: none, a few (1–5) or many, of
+the other articles on their shelf they have opened at least once (`articlesOpenedBefore` in
+`src/store/pg-shelf.ts`, `experienceLine` in [`src/guide.ts`](../../src/guide.ts)). No titles, no
+dates. It goes in the turn's last message, below the cache breakpoint, and only to a guide turn.
+The page's model clause says so and `LAST_UPDATED` is 7 October 2026;
+`tests/privacy-page.test.ts` holds the sentence.
+
 ## A private link
 
 Since 2026-10-05 an owner can make a private link to an article

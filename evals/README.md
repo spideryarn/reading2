@@ -218,6 +218,18 @@ as two prompts did. Write-up:
 [261003b](../docs/investigations/261003b-chat-proposes-commands-as-chips.md);
 [chat-tools.md § Command buttons](../docs/project/chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
+## `guide/` — does the guide guide, and are its buttons ones the page draws?
+
+```
+npx tsx evals/guide/run.ts --label <name>     # paid: 32 guide turns, about $0.55
+npx tsx evals/guide/run.ts --rescore <name>   # free: re-score a saved run
+```
+
+`converse`, kind `guide`, tools off, over two articles from the committed fixture corpus: a
+first-timer, an expert, a frequent reader, "summarise this", two planted instructions, and modes
+that are experimental or do not exist. Buttons scored by `chipFor` against the experimental-off mode
+set. Write-up: [261007a](../docs/investigations/261007a-the-guide-prompt-first-measurement.md).
+
 ## `command-pick/` — which fast model turns a sentence into a command?
 
 Behind the command bar's *Ask what you meant*. Two runs: **2026-10-02**, whether Jev

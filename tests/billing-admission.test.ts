@@ -458,6 +458,75 @@ describe("adding an article spends a slot", () => {
 });
 
 /**
+ * **Pasting an article you already have is free, and says it is a repeat.**
+ * Greg, 2026-10-06: *"yes repeat pastes should be free (and signal they're a
+ * repeat in the UI)"*. Until then the paste adopted the shelf's article, ran a
+ * job whose every step skipped, and charged a slot for it.
+ * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
+ *
+ * **At the ceiling**, so the old behaviour is a 402 rather than a quiet extra
+ * row: a reader with nothing left must still be able to paste a link to an
+ * article they own and be taken to it.
+ */
+describe("a repeat paste of an article on the shelf", () => {
+  /** A published article whose bytes came from `HOST/<name>`, as an import leaves it. */
+  async function publishedAt(name: string): Promise<string> {
+    const slug = `test-admission-${name}`;
+    const url = `${HOST}/${name}`;
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id`,
+      [OWNER, slug],
+    );
+    const articleId = rows[0]?.id;
+    const revision = await pool.query<{ id: string }>(
+      `insert into spideryarn.article_revisions
+         (article_id, status, title, requested_url, final_url, fetched_at)
+       values ($1, 'published', 'An article already on the shelf', $2, $2, now())
+       returning id`,
+      [articleId, url],
+    );
+    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [
+      articleId,
+      revision.rows[0]?.id,
+    ]);
+    return slug;
+  }
+
+  async function jobCount(): Promise<number> {
+    const { rows } = await pool.query<{ n: string }>(
+      "select count(*) as n from spideryarn.jobs where owner_id = $1",
+      [OWNER],
+    );
+    return Number(rows[0]?.n);
+  }
+
+  it("answers with the article, spends nothing and queues nothing", async () => {
+    const slug = await publishedAt("repeat");
+    await alreadySpent(FREE_LIMIT);
+
+    /* Another spelling of the same address, so the answer is the shelf's
+       lookup and not a string comparison. */
+    const reply = await post("/api/jobs", { url: `${HOST}/repeat/` });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
+    expect(reply.body).toEqual({ article: slug, repeat: true });
+    expect(await ledger()).toEqual({ taken: FREE_LIMIT, inFlight: 0 });
+    expect(await jobCount()).toBe(0);
+  });
+
+  /**
+   * `{ url, force }` asks for work on the article, so it is not a repeat and
+   * keeps the ordinary path. No client sends it today; a short-circuit that
+   * swallowed it would drop the work and report success.
+   */
+  it.each([{ force: ["fetch"] }, { steps: ["fetch"] }])("still treats an add that asks for work as work: %j", async (work) => {
+    await publishedAt("forced");
+    const reply = await post("/api/jobs", { url: `${HOST}/forced`, ...work });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
+  });
+});
+
+/**
  * An upload whose bytes have landed, which is the only kind that may be queued.
  *
  * Two halves, and the second is new on 2026-09-03: `mintUpload` writes the

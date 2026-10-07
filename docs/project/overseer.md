@@ -572,15 +572,27 @@ Every few hours, as a tmux loop like the feedback sweep's:
    commits against the docs that own what they changed, fixing what is now false or missing a
    signpost. Greg, 2026-10-06: *"ideally we update them periodically (e.g. when pushing, or
    deploying)"* — [documentation-policy.md § Keeping it true](../reusable/documentation-policy.md#keeping-it-true).
-5. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
+5. **Deploy a commit the readiness loop already saw green**: `npm run deploy -- --ready` under
+   `scripts/tmux-job.ts`, logging to a file
+   ([deployment.md § Deploying a commit already known green](deployment.md#deploying-a-commit-already-known-green);
+   since 2026-10-07). It picks the newest commit on `origin/dev` whose full check the loop ran
+   green and stamped, reuses that run for the `test` gate instead of an hour of suite, and leaves
+   later `dev` commits for the next deploy. The notes from step 3 have to be **inside** that
+   commit, so after `prepare` wait for the loop to pass a commit after the notes commit — the
+   Readiness tab shows when; the `changelog` gate says so if you go early. If `--ready` finds no
+   green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red) rather than
+   forcing. Plain `npm run deploy` still deploys the tip and runs the suite itself — use it when a
+   fix cannot wait for the loop. Either way the summary's `test:` line says whether the suite ran
+   or a readiness run stood in for it; quote it in the report. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
-   for the notes; say so in the report. If it fails only because `dev` moved during the run
-   (*"level with origin/dev"*), pull and deploy once more — valid pending notes still pass. If
+   for the notes; say so in the report. If a plain deploy fails only because `dev` moved during the
+   run (*"level with origin/dev"*), pull and deploy once more — valid pending notes still pass. If
    `changelog` refuses missing, invalid or stale notes, read its reason and recover through step 3.
 6. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
-   HEAD and `origin/main`. The success line alone is not evidence —
+   the one the deploy named on its `deploying <sha>` line and `origin/main` — under `--ready` that
+   is not HEAD. The success line alone is not evidence —
    [deployment.md](deployment.md).
 7. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
    to Greg.

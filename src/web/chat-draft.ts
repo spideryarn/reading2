@@ -43,7 +43,7 @@
  * revokes on the first typed or spoken submission, not something worked out
  * from the words or from a missing row, and once revoked it stays revoked.
  */
-import type { SingleThreadKind, ThreadOrigin } from "../types.js";
+import type { LearnKind, ThreadOrigin } from "../types.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 
 export interface ChatDrafts {
@@ -70,7 +70,7 @@ export interface ChatDrafts {
   setThread(id: string, text: string): void;
   /** The conversation is gone — closed unused, or deleted: forget everything under its id. */
   dropThread(id: string): void;
-  /** Carry a conversation's words to the one begun in its place. */
+  /** Carry a conversation's words and local identity to the one begun in its place. */
   moveThread(from: string, to: string): void;
 
   /** This tab has just begun `id`, and nothing has been submitted to it. */
@@ -84,8 +84,8 @@ export interface ChatDrafts {
   setList(text: string): void;
 
   /** Recall's, Tutorial's or Explore's unsent words. */
-  learn(kind: SingleThreadKind): string;
-  setLearn(kind: SingleThreadKind, text: string): void;
+  learn(kind: LearnKind): string;
+  setLearn(kind: LearnKind, text: string): void;
 
   /**
    * Where Chat was: a conversation's id, `null` for the list, or `undefined`
@@ -93,6 +93,18 @@ export interface ChatDrafts {
    */
   destination(): string | null | undefined;
   setDestination(id: string | null): void;
+
+  /**
+   * **The guide this tab began**, by id, or `undefined` (plan 261007j). The
+   * guide is one conversation per article, opened in Chat's band; one this tab
+   * began and nothing has been sent to goes with the band on a mode change, as
+   * an unsent chat does. Kept here so the band can begin it again **under the
+   * same id**, words and all, rather than mistake its words for a chat's —
+   * and so two quick opens (StrictMode's second run, a pinned-row press racing
+   * `?guide=1`) are one guide, not two.
+   */
+  guide(): string | undefined;
+  setGuide(id: string): void;
 
   /** Whether any of the three boxes holds words — more than spaces — right now. */
   holdsWords(): boolean;
@@ -107,9 +119,14 @@ export function createChatDrafts(): ChatDrafts {
      order wrong must not be able to undo it. */
   const spent = new Set<string>();
   let list = "";
-  const learnDrafts = new Map<SingleThreadKind, string>();
+  const learnDrafts = new Map<LearnKind, string>();
   let destination: string | null | undefined;
+  let guide: string | undefined;
   return {
+    guide: () => guide,
+    setGuide(id) {
+      guide = id;
+    },
     thread: (id) => threads.get(id),
     setThread(id, text) {
       threads.set(id, text);
@@ -118,6 +135,7 @@ export function createChatDrafts(): ChatDrafts {
       threads.delete(id);
       fresh.delete(id);
       origins.delete(id);
+      if (guide === id) guide = undefined;
     },
     moveThread(from, to) {
       const text = threads.get(from);
@@ -127,6 +145,7 @@ export function createChatDrafts(): ChatDrafts {
       const origin = origins.get(from);
       if (origin !== undefined) origins.set(to, origin);
       origins.delete(from);
+      if (guide === from) guide = to;
     },
     origin: (id) => origins.get(id),
     setOrigin(id, origin) {

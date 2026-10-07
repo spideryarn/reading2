@@ -1,5 +1,5 @@
 {
-  "id": "c6f8ce4d-a275-46c3-8807-f4d6d2eb0fb0",
+  "id": "630d2d07-94a8-48fc-a19e-e41f4a3ae30c",
   "prevId": "56ca72e0-9d52-46d1-91a3-9b9aed6fe238",
   "version": "7",
   "dialect": "postgresql",
@@ -2283,18 +2283,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "starter_article_id": {
-          "name": "starter_article_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "starter_slug": {
-          "name": "starter_slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2368,20 +2356,6 @@
         }
       },
       "foreignKeys": {
-        "billing_vouchers_starter_article_id_articles_id_fk": {
-          "name": "billing_vouchers_starter_article_id_articles_id_fk",
-          "tableFrom": "billing_vouchers",
-          "tableTo": "articles",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "starter_article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "billing_vouchers_claimed_by_billing_accounts_owner_id_fk": {
           "name": "billing_vouchers_claimed_by_billing_accounts_owner_id_fk",
           "tableFrom": "billing_vouchers",
@@ -2420,10 +2394,6 @@
         "billing_vouchers_recipient_name_length": {
           "name": "billing_vouchers_recipient_name_length",
           "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_name\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_name\") <= 80"
-        },
-        "billing_vouchers_starter_has_slug": {
-          "name": "billing_vouchers_starter_has_slug",
-          "value": "\"spideryarn\".\"billing_vouchers\".\"starter_article_id\" is null or \"spideryarn\".\"billing_vouchers\".\"starter_slug\" is not null"
         },
         "billing_vouchers_claimed_together": {
           "name": "billing_vouchers_claimed_together",
@@ -2869,6 +2839,22 @@
           "method": "btree",
           "with": {}
         },
+        "chat_threads_one_guide": {
+          "name": "chat_threads_one_guide",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'guide'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "chat_threads_article_updated_idx": {
           "name": "chat_threads_article_updated_idx",
           "columns": [
@@ -2969,7 +2955,7 @@
         },
         "chat_threads_kind": {
           "name": "chat_threads_kind",
-          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','learn','candidates','tutorial','explore')"
+          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','learn','candidates','tutorial','explore','guide')"
         },
         "chat_threads_origin_mode": {
           "name": "chat_threads_origin_mode",
