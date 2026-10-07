@@ -1,6 +1,9 @@
 # An MCP server for Spideryarn, so an agent can drive it as you
 
-**Status as of 2026-10-07: planned and reviewed (Sol round 1: rethink; every finding taken, § Review); building stage 1.** Report `spya-bkkjzy` (SPIDERYARN-READING2-EE),
+**Status as of 2026-10-07: the local MCP server is built, reviewed and on `dev` (not deployed; it
+needs no deploy, since it changes nothing on the server). Signing in to production is Greg's to
+try first; the remote version, the private link and `list_users` wait on his answers (question
+`q-arfr76`; queue items `qi-n9ntngfq`, `qi-2a8nh33e`).** Report `spya-bkkjzy` (SPIDERYARN-READING2-EE),
 Greg's (admin, proved by `feedback-reporter.ts` exit 0 on the production row). Queue item
 `qi-8nzqtx7h`.
 
