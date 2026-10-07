@@ -1,7 +1,7 @@
 ---
 id: q-avh98t
 report: spya-vc6pnm
-status: open
+status: answered
 asked: 2026-10-06
 title: Where should the big list of people to contact live?
 refs: SPIDERYARN-READING2-ED · qi-dajb32q7 · docs/plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md § Q-list: where does the "big list of people" live? · docs/user-feedback/261006_2222-gift-voucher-name-note-and-a-starter-article.md
@@ -19,3 +19,9 @@ C. A voucher that can be saved unsent. It sounds smaller than B and is not: a sa
 What would decide it: whether you would actually keep the list here rather than in a document or a spreadsheet. If you would, B.
 
 Recommended: A.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> A
+
+Settled: no list in the app for now. qi-dajb32q7 dropped.

@@ -73,6 +73,7 @@
  * another agent in this worktree is mid-edit on. This script's job here is
  * only to get the verdict right; where it goes is a separate piece of work.
  */
+import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -228,6 +229,44 @@ export function formatVerdict(verdict: WatchdogVerdict): string {
   return `✗ overseer ${verdict.state} -- ${verdict.detail}`;
 }
 
+/** What `systemctl show overseer` is asked for. */
+export const UNIT_PROPERTIES = ["ActiveState", "SubState", "NRestarts", "UnitFileState"] as const;
+
+/**
+ * One line on `overseer.service`, beside the heartbeat verdict and not part of
+ * it. Since 2026-10-07 the unit never gives up restarting
+ * (docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md),
+ * so a daemon that cannot start shows here as `activating (auto-restart)` with
+ * a climbing restart count, which says WHY the heartbeat is stale. The exit code
+ * stays the heartbeat's: a fresh heartbeat with the unit inactive is the daemon
+ * running some other way (tmux), which is a fact, not a failure.
+ *
+ * `null` when systemctl could not be asked (no systemd: a laptop, a container).
+ */
+export function describeUnit(shown: Readonly<Record<string, string>> | null): string {
+  if (shown === null) return "unit: overseer.service could not be read (no systemctl here)";
+  const active = shown["ActiveState"] ?? "?";
+  const sub = shown["SubState"] ?? "?";
+  const restarts = shown["NRestarts"] ?? "?";
+  const enabled = shown["UnitFileState"] ?? "?";
+  return `unit: overseer.service ${active} (${sub}), ${restarts} automatic restart(s), ${enabled}`;
+}
+
+/** `systemctl show` parsed into key=value, or null when it cannot run. No root needed. */
+function showUnit(): Record<string, string> | null {
+  const ran = spawnSync("systemctl", ["show", "overseer.service", ...UNIT_PROPERTIES.map((one) => `--property=${one}`)], {
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  if (ran.error !== undefined || ran.status !== 0) return null;
+  const shown: Record<string, string> = {};
+  for (const line of ran.stdout.split("\n")) {
+    const at = line.indexOf("=");
+    if (at > 0) shown[line.slice(0, at)] = line.slice(at + 1);
+  }
+  return shown;
+}
+
 const HELP = `overseer-watchdog -- checks the Overseer daemon's heartbeat AND its snapshot clock, and exits 0 (healthy) or 1 (not)
 
   npx tsx scripts/overseer-watchdog.ts [--max-tick-age-ms N] [--max-snapshot-age-ms N]
@@ -284,6 +323,7 @@ export function main(argv: readonly string[]): number {
   // is the drift C6 was about.
   const verdict = assessWatchdog(read, Date.now(), tick.value ?? DEFAULT_MAX_TICK_AGE_MS, snapshot.value ?? null);
   console.log(formatVerdict(verdict));
+  console.log(describeUnit(showUnit()));
   return verdict.healthy ? 0 : 1;
 }
 

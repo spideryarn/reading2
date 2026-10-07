@@ -939,8 +939,11 @@ Promising the data is still on the server is a claim only the last of those thre
 supports.
 
 The house shape is `LoaderCircle` from lucide with `.cmt-spinner`, in a flex row
-beside a sentence — [`ChatListLoading`](../../src/web/ChatPanel.tsx),
-[`CommentDialog.tsx`](../../src/web/CommentDialog.tsx),
+beside a sentence. A band waiting for what it has asked for draws exactly that with
+[`BandWaiting`](../../src/web/BandWaiting.tsx), which does all of the above — the
+600ms, the role, the held height — so a new band's wait is one element, not a
+pattern to copy ([loading-spinner.md § The band's wait line](loading-spinner.md#the-bands-wait-line)).
+Elsewhere: [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx),
 [`JobProgress.tsx`](../../src/web/JobProgress.tsx). It is on `/design` under
 "Icons and the spinner".
 

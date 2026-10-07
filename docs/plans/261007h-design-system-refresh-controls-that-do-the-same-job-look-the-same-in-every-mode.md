@@ -308,4 +308,49 @@ Two builders at a time at most (the box is busy), never two on one file:
 
 ## What landed
 
-(Per family, as each lands.)
+Builders shared this worktree two at a time on disjoint files; the orchestrator committed each
+family by pathspec.
+
+- **F4b + F5c — signed-out bar, fade-ins** (`143fdb199`, Sol's fixes `32be0fb09`;
+  [review](261007h-f4b-f5c-code-review-sol.md), ready with these fixes). The five document pages
+  go through one `DocumentPage` shell: signed out, `SiteNav` (outside `<main>`, in a
+  `display: contents` `.site` scope, `/privacy` dropping its own link); signed in, unchanged. The
+  fade-ins are `reveal-once.ts`: a section below the window waits, rises once on entering, and is
+  never watched again; print, reduced motion, no observer or a failed start show everything.
+  Measured: scrolling `/features` back up, every section stayed at opacity 1. **Sol found two
+  P1s:** the new bar sat inside a phone's notch (fixed: the inset is padded, subtracted from the
+  floor and added to anchor offsets; a browser check with a 47px inset put the wordmark at 63px);
+  and the `-8%` bottom root margin resolves against the viewport's *width*, so a wide short window
+  could leave a section hidden for good (fixed: the whole viewport). Postmortems
+  [261007h](../postmortems/261007h-a-shell-substitution-kept-the-links-and-lost-their-geometry.md),
+  [261007i](../postmortems/261007i-an-observer-double-discarded-the-options-that-controlled-visibility.md).
+  **What the plan had wrong:** a single root flag hiding every section would have hidden a late
+  section forever; each waiting section is marked instead.
+- **F5b + F6 — skip link, grey, shadows** (`6f357c3e5`, Sol's fixes `aa75c4947`;
+  [review](261007h-f5b-f6-code-review-sol.md), ready with these fixes). "Skip to modes" is the
+  first Tab stop and lands on the checked mode (or the first, when the open mode lives under
+  More). Dark `--muted-foreground` 0.63 → 0.64: 4.44:1 → 4.62:1 on a raised surface, the palette
+  test's new pair seen red. `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet` in
+  `src/web/styles/tokens.css`: dark byte-identical to the old literals, light ~0.35–0.4 of the
+  alpha; the command bar moved from `tw:shadow-lg` to `--shadow-dialog`, a visible change in dark.
+  **Sol found one P1:** pressing the link during the dock's one-second entrance did nothing
+  (fixed; a browser check with animations slowed confirmed focus lands and the dock shows).
+  Postmortem [261007j](../postmortems/261007j-navigation-tests-replaced-the-destinations-lifecycle.md).
+  **Left (D5):** six more elevation shadows (docked chat, the Ask chip, the gutter, the dock
+  drawer, the mode herald, chat's latest pill) have their own silhouettes and keep their literals.
+- **F1 — the loading line** (`cd1db5533`, fixes `5fb8b4783`;
+  [review](261007h-f1-code-review-sol.md), **not ready** on E1, fixed by the orchestrator).
+  `BandWaiting` is the one wait: an empty `role="status"` box at once, then after 600ms an
+  `aria-hidden` 13px spinner and the sentence. About twenty waits moved onto it. Not-made-yet
+  sentences stay immediate; so do lines that answer a press (Referee's "Reading the paper…",
+  Search's first answer), which pass `delayMs={0}` — the house exception for a turn already sent.
+  **Sol's P1s:** Search's first answer was gated though it answers a press (E2); Illustrated
+  mixed a known empty state with a wait (E3); an image plate inherited the previous fetch's timer
+  (E4); and **E1**, the empty box was only its padding tall, so the band grew by a line when the
+  words arrived. Sol wrote a Chrome test (eleven callers, 280 and 360px) but could not run Chrome
+  in its sandbox, so left E1 unfixed; red here at 32 vs 56px. Fixed by laying out the same
+  spinner and sentence unseen before the threshold, the words as CSS `content` so the live region
+  has nothing to announce early; green for every caller. Postmortem
+  [261007k](../postmortems/261007k-a-shared-wait-still-belongs-to-one-request.md). **Left (E7,
+  pre-existing):** Learn's Start over shows "Fetching your Learn conversation…" while the old one
+  is being deleted.

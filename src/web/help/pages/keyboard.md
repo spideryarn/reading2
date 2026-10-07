@@ -1,7 +1,7 @@
 ---
 title: Keyboard shortcuts
 summary: The command bar and what you can type or say into it, and the keys for moving around an article.
-keywords: keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list
+keywords: keys hotkeys arrow up down left right command k ctrl enter escape tab skip to modes g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list
 related: touch, jumping-around
 ---
 
@@ -41,6 +41,9 @@ related: touch, jumping-around
 - <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
   Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
   normally does.
+- In an article, the first <kbd>Tab</kbd> shows **Skip to modes**. Press <kbd>Enter</kbd> to reach
+  the mode switch in the bottom bar. Focus lands on the open mode, or the first mode button if the
+  open mode lives under **More**.
 - <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for the next
   term. <kbd>Esc</kbd> takes you back.
 - <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it takes you

@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_MAX_SNAPSHOT_AGE_MS, DEFAULT_MAX_TICK_AGE_MS, assessWatchdog, formatVerdict, main } from "../scripts/overseer-watchdog.js";
+import { DEFAULT_MAX_SNAPSHOT_AGE_MS, DEFAULT_MAX_TICK_AGE_MS, assessWatchdog, describeUnit, formatVerdict, main } from "../scripts/overseer-watchdog.js";
 import { MEASURED_CADENCE_MS, TICK_MS, runOverseer, staleAfterMs } from "../tools/overseer/daemon.js";
 import {
   CHECKPOINT_FILE,
@@ -303,6 +303,18 @@ describe("formatVerdict", () => {
   it("marks a healthy verdict distinctly from every unhealthy one", () => {
     expect(formatVerdict({ healthy: true, detail: "x" })).toMatch(/^✓/);
     expect(formatVerdict({ healthy: false, state: "deaf", detail: "x" })).toMatch(/^✗/);
+  });
+});
+
+describe("describeUnit", () => {
+  it("says a unit that cannot start is restarting, and how often", () => {
+    expect(describeUnit({ ActiveState: "activating", SubState: "auto-restart", NRestarts: "14", UnitFileState: "enabled" })).toBe(
+      "unit: overseer.service activating (auto-restart), 14 automatic restart(s), enabled",
+    );
+  });
+
+  it("says so when systemctl could not be asked, rather than guessing a state", () => {
+    expect(describeUnit(null)).toMatch(/could not be read/);
   });
 });
 

@@ -1,6 +1,6 @@
 /* quiz.css — the Quiz sub-mode of Learn (QuizPanel.tsx), and the
-   Recall | Tutorial | Explore | Quiz switch that sits in the band's head beside
-   the title.
+   Recall | Tutorial | Explore | Quiz switch that sits at the left of the
+   band's head.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
@@ -18,54 +18,26 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Explore | Quiz, in the band's head beside the title.
-   Toggle buttons, and the pressed one is filled — a set where one is always
-   on, so an outline-only treatment would leave a reader guessing which part
-   they are looking at.
+/* Recall | Tutorial | Explore | Quiz, at the left of the band's head: the
+   part-switcher every mode shares, `.summ-views` / `.summ-view-btn`
+   (mode-band.css § the part-switcher; plan 261007h § F2), so its look is not
+   here. Toggle buttons with `aria-pressed`, and the pressed one is filled. It
+   sat right-aligned with its own 4px corners and a `--rule` fill until
+   2026-10-07; it moved left because every other mode's switcher is at the left.
 
-   **It may shrink, and then its chips wrap** (four since 2026-10-03). The
-   heading beside it is `flex: 1`, whose basis is zero, so the heading gives up
-   its width first and the chips keep theirs on one row for as long as the row
-   has room; only on a phone too narrow for all four does the set go to two
-   rows, each chip whole. `flex: none` was right for two chips and would push
-   a fourth off the edge. docs/project/narrow-windows.md. */
-.learn-submode {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
-  margin-left: auto;
-  flex: 0 1 auto;
-  min-width: 0;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.learn-submode-btn {
-  /* Grows to fill a wrapped row, and never breaks inside its own word. */
-  flex: 1 0 auto;
-  white-space: nowrap;
-  border: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.81rem;
-  padding: 0.15rem 0.5rem;
-  cursor: pointer;
-}
+   **It may shrink, and then it scrolls sideways inside its outline** rather
+   than wrap, as every part-switcher does: the bin and the Written-for-you
+   badge after it are pushed to the row's right end, and give up nothing. */
+.band-head > .learn-submode { margin-right: auto; }
 /* **Four chips (the Experimental switch on) tighten their side padding**; three keep
-   0.5rem. On an iPad the band is 288px, so the head row has 234px of content (the
-   (i) keeps the right 41.6px). Four chips are 220px, and the bin Recall, Tutorial and
-   Explore add beside them is 22px plus a 7px gap: 250px, 16px too much, so Quiz
-   wrapped. At 0.25rem the chips total 188px and chips plus bin 218px, which leaves
-   16px. A touch screen has 226px of row content, not 234px, and keeps 8px there.
-   Measured 2026-10-05, plan 261005h item B. */
+   the bar's 0.6rem. On an iPad the band is 288px, so the head row has 234px of
+   content (the (i) keeps the right 41.6px; 226px on a touch screen). Four
+   chips in the bar are 196px at 0.25rem and about 241px at 0.6rem, and the bin
+   Recall, Tutorial and Explore add beside them is 22px plus a 7px gap: 225px
+   fits, 270px would scroll. Measured 2026-10-07 (plan 261007h § F2); plan
+   261005h item B measured the first version. */
 .learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
   padding-inline: 0.25rem;
-}
-.learn-submode-btn:hover { color: var(--ink); }
-.learn-submode-btn.on {
-  background: var(--rule);
-  color: var(--ink);
 }
 
 /* The scrolling child every `.mode-band` needs. Without one the panel's own

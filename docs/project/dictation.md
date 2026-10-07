@@ -617,10 +617,10 @@ chime that would arrive more than five seconds late is dropped, and the cap's ch
 the track is off, so it is not on the tape. A press on Stop within a second and a half of the cap is
 ignored: the countdown invites it, and it used to start a new dictation and abort the uploads of the
 one just recorded. A screen reader is told once, not each second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
-too. Feedback's limit went from 4,000 to 12,000 characters the same day
-([feedback.md](feedback.md)). **That is about thirteen minutes of speech without a pause, not
-fifteen**: 12,072 is what the database admits, and raising that is a question put to Greg in the
-plan. Past it the words stay in the box and Send is off until they are trimmed. The other boxes keep
+too. Feedback's limit went from 4,000 to 12,000 characters the same day, about thirteen minutes of
+speech without a pause, and then to 20,000 once Greg said yes to widening the database's own cap
+to match ([261007j](../plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md)):
+fifteen minutes at 200 words a minute ([feedback.md](feedback.md)). Past it the words stay in the box and Send is off until they are trimmed. The other boxes keep
 their own limits: a long dictation into a small one overflows it, as it did before. A cap is still there because a microphone left on
 by mistake records, uploads and is billed for as long as it runs.
 [261007b](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md).

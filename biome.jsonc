@@ -35,6 +35,12 @@
       // are trimmed or written by hand as test inputs, and are still linted.
       "!tests/fixtures/data-root/data",
       "!tests/fixtures/data-root/output",
+      // The arXiv author fixtures (261007d) are pages captured from arxiv.org/html,
+      // trimmed but still the converter's markup: Biome's HTML parser rejects some of
+      // it ("Text expressions aren't supported"), and a file that does not parse makes
+      // tests/biome-config-is-live.test.ts unable to say it checked the whole tree.
+      // Captured input, the same reasoning as the two exclusions above.
+      "!tests/fixtures/latexml/authors-*.html",
       "scripts/**",
       "evals/**",
       // The extraction fixtures are whole saved web pages, and one of them —

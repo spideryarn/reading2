@@ -128,28 +128,22 @@
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
-.srch-matchers { display: flex; align-items: center; gap: 0.25rem; }
-.srch-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: none;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.83rem;
-  cursor: pointer;
-}
-.srch-mode:hover { color: var(--ink); }
-/* The selected matcher, in the search hue rather than the brand orange — so the
-   control that says which colour the page is about to go is that colour. */
-.srch-mode.on {
-  border-color: rgb(var(--hit-rgb) / 0.5);
-  background: rgb(var(--hit-rgb) / 0.14);
-  color: var(--ink);
-}
+/* **The matchers** — words | quick | meaning — are the part-switcher every
+   mode shares, `.summ-views` / `.summ-view-btn` (mode-band.css § the
+   part-switcher; plan 261007h § F2), so their look is not here and
+   `.srch-mode` stays on each as a hook. The chosen one was drawn in the search
+   hue until 2026-10-07; it is marked neutrally now, because **orange marks the
+   mode and a part within it is marked neutrally**, and the hue keeps its one
+   meaning, a search result: the hits and the spinner.
+
+   **Their side padding stays this row's own 0.4rem**, not the bar's 0.6,
+   because the row also holds `find`. On the 288px band an iPad gives this
+   mode, `find` leaves the bar 188px: at 0.6rem the bar is 234px and scrolls
+   by 46, hiding most of *words*; at 0.4rem it is 215px and scrolls by 27, the
+   chosen matcher kept in view. Before the bar, the same row was 221px of
+   matchers that did not shrink, and pushed `find` past the band's edge
+   (measured 2026-10-07, plan 261007h § F2). */
+.srch-mode { padding-inline: 0.4rem; }
 .srch-go {
   margin-left: auto;
   padding: 0.15rem 0.55rem;
@@ -377,9 +371,7 @@
   background: var(--surface-raised);
   /* The tooltip's shadow, because it is the same kind of object: a small panel
      lifted off the page near the thing it belongs to. */
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
 }
 .srch-picker-grid {

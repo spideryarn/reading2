@@ -743,7 +743,8 @@ td.text.kind-heading .blk-gutter {
    land on.** These are icon-only controls, so WCAG 2.2's 1.4.11 applies to them
    whether they are permanent or revealed on selection, and 0.35 — what this file
    carried for a day — was **1.65:1**. The arithmetic, from the tokens rather
-   than from a screenshot: `--ink-faint` is `oklch(0.63 0 0)` and the grounds are
+   than from a screenshot: `--ink-faint` was `oklch(0.63 0 0)` (0.64 since
+   2026-10-07, plan 261007h; the figures below are 0.63's and only improve) and the grounds are
    `--page` `oklch(0.145 0 0)`, `--panel` `oklch(0.19 0 0)` (what
    `tr.row-active td.text` paints, prose.css) and `--muted` `oklch(0.245 0 0)`
    (what `td.text.opaque` paints, and it wins over `row-active` — same

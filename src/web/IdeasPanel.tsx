@@ -52,6 +52,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job finding the
@@ -256,7 +257,7 @@ export function IdeasPanel({
 
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the ideas…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the ideas…</BandWaiting>}
 
       {/* A piece with no ideas never mounts this panel for a visitor —
           `visitorGap` answers *not-built* and the band says so instead. What is

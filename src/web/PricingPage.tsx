@@ -122,6 +122,7 @@ import { SiteFooter } from "./SiteFooter.js";
 import { buyIntentIsFresh, rememberBuyIntent, takeBuyIntent } from "./buy-intent.js";
 import type { BuyIntent } from "./buy-intent.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { useBilling } from "./useBilling.js";
 import { PRICING_HREF, loginHref, navigate } from "./router.js";
 import type { UseBilling } from "./useBilling.js";
@@ -129,6 +130,8 @@ import type { UseBilling } from "./useBilling.js";
 
 export function PricingPage({ readerId }: { readerId: string | null }) {
   useDocumentTitle(pageTitle({ kind: "pricing" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
@@ -202,7 +205,8 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
             caller does.
 
             **No `site-reveal` around the cards**, unlike the plans block on the
-            other two pages. A scroll-driven reveal on the first thing below the
+            other two pages. A reveal (scroll-driven until 2026-10-07, once-only
+            since — reveal-once.ts) on the first thing below the
             hero is a page that opens empty for a reader who does not scroll, on
             the one page whose entire purpose is above the fold — and it is also
             what makes a full-page screenshot of this page come back blank

@@ -33,44 +33,9 @@
    top one, so it gives the corner's room back. */
 .mode-band.has-about > .summ-controls ~ .band-head { padding-right: 0.7rem; }
 
-/* **Brief | Fuller | Thread** — Greg, 2026-10-03 (spya-thpsnd): *"Not buttons,
-   like group buttons. Not radio buttons exactly, but like, you know, a sense
-   that you can have one of those three."* So the three are drawn joined, one
-   outline around the group and a rule between neighbours, with the chosen one
-   raised. A radiogroup of buttons, as Structure's and Referee's toggles are
-   (structure-mode.css § `.struct-views`); it replaced the plain-words slider
-   (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
-.summ-views {
-  display: inline-flex;
-  min-width: 0;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-}
-.summ-view-btn {
-  padding: 0.15rem 0.6rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.84rem;
-  cursor: pointer;
-}
-.summ-view-btn + .summ-view-btn { border-left: 1px solid var(--rule); }
-.summ-view-btn:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
-.summ-view-btn:last-child { border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
-.summ-view-btn:hover { color: var(--ink); }
-.summ-view-btn.on {
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-weight: 600;
-}
-/* Inside the group's outline, so the ring is not clipped by a neighbour. */
-.summ-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
-/* A finger gets the house's large target. */
-@media (any-pointer: coarse) {
-  .summ-view-btn { min-height: var(--control-h-lg); padding-inline: 0.8rem; }
-}
+/* **Brief | Fuller | Thread** is the part-switcher, `.summ-views` /
+   `.summ-view-btn` — Greg's joined bar of 2026-10-03, which every mode's
+   part-switcher now shares. Its rules are mode-band.css § the part-switcher. */
 
 
 /* ---- the paragraphs' scroller ---- */

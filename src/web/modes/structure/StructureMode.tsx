@@ -30,7 +30,7 @@
  */
 
 import { useQueryState } from "nuqs";
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, NodeId, TreeNode } from "../../../types.js";
 import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
@@ -44,6 +44,7 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
+import { useRevealChosen } from "../../useRevealChosen.js";
 import type { Section } from "../../position.js";
 
 /**
@@ -93,7 +94,8 @@ const VIEW_HOW: Readonly<Record<StructureView, string>> = {
  * **Fisheye / Expanded** — Greg, 2026-10-01 (spya-gxyhcc). Referee's chips are
  * the pattern (RefereeMode.tsx § `RefereeViews`): a radiogroup of buttons, each
  * its own tab stop, a card on each. Neither arms anything — there is nothing
- * to generate — so the click is only the URL write.
+ * to generate — so the click is only the URL write. Drawn as the part-switcher
+ * every mode shares (mode-band.css § the part-switcher, plan 261007h § F2).
  */
 export function StructureViewToggle({
   view,
@@ -102,8 +104,10 @@ export function StructureViewToggle({
   view: StructureView;
   onView(next: StructureView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, view);
   return (
-    <div className="struct-views" role="radiogroup" aria-label="How Structure is drawn">
+    <div ref={group} className="struct-views summ-views" role="radiogroup" aria-label="How Structure is drawn">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {STRUCTURE_VIEWS.map((v) => (
           <Tooltip
@@ -125,7 +129,7 @@ export function StructureViewToggle({
               role="radio"
               aria-checked={v === view}
               tabIndex={0}
-              className={`struct-view-btn${v === view ? " on" : ""}`}
+              className={`struct-view-btn summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
                 /* Writing the value already open would push a history entry
                    that goes nowhere. */

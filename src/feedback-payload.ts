@@ -458,9 +458,9 @@ function instant(value: unknown): string | null {
  * **What this does not claim.** A caller could still spell a paragraph as
  * `/four/score/and/seven`, eight words per call and fifty calls in a blob. That
  * is not the risk this is for, and it is worth being plain about why: the
- * reader's own three answers are 12,000 characters of free text that this
+ * reader's own box is 20,000 characters of free text that this
  * feature forwards to Sentry **on purpose**, so somebody who wants prose in
- * Sentry types it into the boxes. What a shape check is actually for is *our own
+ * Sentry types it into the box. What a shape check is actually for is *our own
  * client* putting reader or article data into a named slot by accident and
  * nobody noticing because the slot was merely length-capped — and a path that
  * has stopped being a path is exactly what that looks like.

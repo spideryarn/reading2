@@ -1,7 +1,7 @@
 ---
 id: q-qre346
 report: spya-y6590g
-status: open
+status: answered
 asked: 2026-10-07
 title: Should the hidden-text check treat a lone zero-width character inside maths as ordinary?
 refs: SPIDERYARN-READING2-EH · qi-xwj659j8 · docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md § Questions for Greg · docs/user-feedback/261007_0544-referee-hidden-instructions-into-a-sub-mode-in-plain-words.md
@@ -19,3 +19,9 @@ A. A small-LLM opinion, shown as a note beside each finding. It never hides or r
 B. (recommended) A few deterministic lines in the check. A text fragment inside real maths markup that contains nothing but zero-width spaces or invisible operators is labelled ordinary typography. It is still listed, last, and the chip shows a quiet ring instead of a dot. Characters that can spell hidden words, or that reorder text, are never covered by the label. Costs: a small edit to a security file, with tests. A document could wrap a payload in maths markup, but then the payload could only be invisible characters, which carry no words.
 
 C. Leave it as it is now: one row saying 39 times, with the dot on the chip.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> I'm optimistic that Opus would be robust to this, so perhaps we could hand this check to Opus, but only if the user requests it (e.g. as a sub-mode), ideally just sending it the relevant bits rather than the whole article (to keep costs low)
+
+Settled: an Opus check the reader asks for, sent only the flagged fragments; its opinion sits beside each row and never removes one. qi-xwj659j8.

@@ -1,7 +1,7 @@
 ---
 id: q-bmt755
 report: spya-rvbmss
-status: open
+status: answered
 asked: 2026-10-06
 title: Two public copies of one article: one card or two, and whose copy Citations links?
 refs: SPIDERYARN-READING2-E4 · qi-a8wyhr67 · docs/plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md § Questions for Greg · docs/user-feedback/261006_2135-two-readers-import-the-same-article.md
@@ -31,3 +31,11 @@ B. Show both when this happens: "On your shelf (matched by title)" and "On the p
 What would decide it: only whether you have been sent to somebody else's copy and minded.
 
 Recommended: A.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> It would be nice to know this wouldn't completely break, but we don't need to optimise the user experience for it much - e.g. if we end up with the article showing up twice, that's fine. But as you say, it's not a high priority.
+
+(Question 1.) And on question 2: *"ok"* (leave it).
+
+Settled: A on both, two cards and Citations as it is. "Wouldn't completely break" is what spya-rvbmss's end-to-end tests already show; nothing to build. qi-a8wyhr67 dropped.

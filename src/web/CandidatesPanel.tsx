@@ -52,6 +52,7 @@
  *
  * docs/project/referee-mode.md § 4.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe, LoaderCircle, SendHorizontal, Square } from "lucide-react";
 import type { Block, BlockId, ChatMessage, ChatThread, Citation } from "../types.js";
@@ -335,9 +336,7 @@ export function CandidatesPanel({
       </p>
 
       {!loaded && !loadFailed && (
-        <p className="cnd-quiet">
-          <LoaderCircle className="cmt-spinner" size={13} aria-hidden /> opening…
-        </p>
+        <BandWaiting className="cnd-quiet">Looking for an earlier search…</BandWaiting>
       )}
       {/* **The way back from a failed read**, which the chip's press used to
           be (`useAutoRun` re-read on an error) until the chip stopped arming

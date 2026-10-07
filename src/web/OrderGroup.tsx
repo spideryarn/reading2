@@ -10,14 +10,9 @@
  * three and hide the one in force — and how the list is ordered is the one thing
  * the row is for. Plan 261001o.
  *
- * **`scrollLeft`, not `scrollIntoView`**, which also scrolls every scrolling
- * ancestor — the band and the page — to bring the button into *their* view.
- *
- * **Again after a reflow, not only on opening.** The UI face swaps in after a
- * mode mounts (fonts.ts § onFontsChanged), a rotation or the trail arriving
- * narrows the group, and newly available orders can move the pressed button;
- * any of them can push it out without changing the selection. GPT Sol, on the
- * plan; the option-set case was completed in its code review.
+ * The reveal — on opening, on a new selection, and after a resize, a font swap
+ * or a change in the options — is useRevealChosen.ts, shared since 2026-10-07
+ * with the part-switcher, whose joined bar scrolls sideways the same way.
  *
  * Where nothing overflows — a mouse, or a wide band — there is nothing to
  * scroll and this does nothing, so the touch-only rule stays in one place: the
@@ -27,18 +22,8 @@
  * badge goes beside this, not in it, because the group is what a screen reader
  * announces as "Order the … by" (GlossaryPanel.tsx § SortBar).
  */
-import { type ReactNode, useLayoutEffect, useRef } from "react";
-import { onFontsChanged } from "./fonts.js";
-
-/** Scroll `group` the least distance that shows its pressed button whole. */
-export function revealPressed(group: HTMLElement): void {
-  const on = group.querySelector<HTMLElement>('[aria-pressed="true"]');
-  if (!on) return;
-  const view = group.getBoundingClientRect();
-  const button = on.getBoundingClientRect();
-  if (button.left < view.left) group.scrollLeft -= view.left - button.left;
-  else if (button.right > view.right) group.scrollLeft += button.right - view.right;
-}
+import { type ReactNode, useRef } from "react";
+import { useRevealChosen } from "./useRevealChosen.js";
 
 export function OrderGroup({
   label,
@@ -52,38 +37,7 @@ export function OrderGroup({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `selected` is the trigger, not an input — the pressed button is read from the DOM.
-  useLayoutEffect(() => {
-    const group = ref.current;
-    if (!group) return;
-    const reveal = () => revealPressed(group);
-    reveal();
-    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reveal);
-    ro?.observe(group);
-    for (const child of group.children) ro?.observe(child);
-    /* A constrained group's box does not change when a new option makes its
-       contents wider, and existing buttons only move — neither wakes a
-       ResizeObserver. Observe new children too, then put the pressed one back
-       in view. `childList` deliberately ignores `aria-pressed`: `selected`
-       owns that path synchronously through the layout effect. */
-    const mutations =
-      typeof MutationObserver === "undefined"
-        ? null
-        : new MutationObserver(() => {
-            ro?.disconnect();
-            ro?.observe(group);
-            for (const child of group.children) ro?.observe(child);
-            reveal();
-          });
-    mutations?.observe(group, { childList: true });
-    const offFonts = onFontsChanged(reveal);
-    return () => {
-      mutations?.disconnect();
-      ro?.disconnect();
-      offFonts();
-    };
-  }, [selected]);
+  useRevealChosen(ref, selected);
 
   return (
     /* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form

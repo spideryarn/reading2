@@ -174,6 +174,31 @@ afterEach(async () => {
 });
 
 describe("the third arm of the toggle", () => {
+  it("acknowledges the first Find immediately, before any wait timer runs", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending: SavedSearch = { ...MEANING, status: "pending" };
+      const base = owner();
+      if (base.kind !== "owner") throw new Error("the Find test needs an owner");
+      const access: Extract<SearchAccess, { kind: "owner" }> = {
+        ...base,
+        onAsk: (criterion, kind) => {
+          asked.push([criterion, kind]);
+          root.render(<Harness access={access} runs={[pending]} start="meaning" active={[pending.id]} />);
+        },
+      };
+      await mount({ access, runs: [], start: "meaning", active: [] });
+      type(pending.criterion);
+      act(() => findButton().click());
+      expect(asked).toEqual([[pending.criterion, "meaning"]]);
+      const line = container.querySelector('.srch-working[role="status"]');
+      expect(line?.textContent).toBe("Reading the article for you…");
+      expect(line?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("is drawn between words and meaning, and checked when the matcher is quick", async () => {
     await mount({ access: owner(), runs: [], start: "quick", active: [] });
     const names = [...container.querySelectorAll('[role="radio"]')].map((b) => b.textContent?.trim());

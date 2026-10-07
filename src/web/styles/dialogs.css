@@ -32,7 +32,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   /* Same layer as the explanation panel: above the sticky bars and the spine,
      below the tooltip layer, for the reasons written on `.cmt-dialog`. */
@@ -248,7 +248,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   /* The same layer as the two panels it shares a corner with. */
   z-index: 70;
