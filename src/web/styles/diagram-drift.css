@@ -34,7 +34,7 @@
 .diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
 .diag-opt-label {
   margin-right: 0.15rem;
-  color: var(--ink-faintest, var(--ink-faint));
+  color: var(--ink-faint);
   font-family: var(--font-ui);
   font-size: 0.76rem;
   letter-spacing: 0.03em;
