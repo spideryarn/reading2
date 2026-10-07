@@ -489,7 +489,7 @@ from another plan: `20261007065807_drop_queue_state_running_job_id`, **a column 
 Greg on 2026-10-07** (*"yes"*, to the seventh sweep's question 6, relayed by the Overseer). It
 drops the foreign key `queue_state_running_job_id_jobs_id_fk` and the column `running_job_id`,
 nothing else; nothing ever read or wrote the column, and its one row holds null
-([261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2). It is the
+([261007g](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2). It is the
 one destructive statement in the set.
 
 **They land together or not at all.** Drizzle applies every pending file in one transaction.

@@ -1290,7 +1290,7 @@ describe("Try again answered by a 404", () => {
    it is the precedent and not a row. A failed *opening* read still ends at
    `error`: nothing was ever answered. docs/project/mode.md § The artefact, if
    the mode shows one;
-   docs/plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md. */
+   docs/plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md. */
 
 const AFTER_NONE = ROWS.filter((row) => row.hook !== "useTweets.ts");
 

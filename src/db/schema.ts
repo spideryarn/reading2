@@ -3081,7 +3081,7 @@ export const jobs = spideryarn.table(
  *
  * **It had a `running_job_id` until 2026-10-07**, a foreign key to `jobs` that
  * nothing ever read or wrote; Greg approved dropping it that day
- * (docs/plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md
+ * (docs/plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md
  * § 2). `updated_at` has not moved since the row was seeded: no claim updates
  * it either.
  */

@@ -389,7 +389,7 @@ that record two ways, and they fail differently:
   deliberately over-reaches: it pulls in `jobs`, because a job points at the draft revision it is
   building. (It pulled in `queue_state` behind that, through `running_job_id`'s key to `jobs`,
   until the column — read and written by nothing — was dropped on 2026-10-07 with Greg's approval;
-  [261007f](../plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2.)
+  [261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2.)
   Over-reach costs one written-down sentence; under-reach
   costs a rollback that quietly loses somebody's work. No database needed.
 - **Is the list true?** Every table the record calls exported gets a row with a sentinel string in it,

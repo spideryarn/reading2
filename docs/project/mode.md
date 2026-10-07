@@ -493,7 +493,7 @@ Then the residue nothing refuses at compile time:
   >
   > — Greg, 2026-10-07, relayed by the Overseer
 
-  ([261007f](../plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md);
+  ([261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md);
   the rows are "Try again answered by another failure, after none yet" in the matrix test.) A
   forced verb goes through `useRewriteHold`
   ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);

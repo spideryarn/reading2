@@ -4,7 +4,7 @@
 -- followed by exactly these eight pending files. Rebuild this ledger literal if
 -- the final deployment commit contains additional migrations.
 -- The eighth, 20261007065807_drop_queue_state_running_job_id, was added on
--- 2026-10-07: a column drop Greg approved that day (plan 261007f § 2). Its checks
+-- 2026-10-07: a column drop Greg approved that day (plan 261007g § 2). Its checks
 -- are the queue_state blocks below, and queue_state and jobs in the lock and
 -- ownership inspections.
 -- Every query labelled VIOLATIONS must return ZERO rows. Counts may grow since

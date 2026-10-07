@@ -460,14 +460,14 @@ applies the fix is cheap: carry the existing check to the other side and keep bo
    everywhere; a possible duplicate run is cheaper than a dead end. Per hook, a few lines each.
    **Answered 2026-10-07: keep it** (*"ok, i'll go along with you on this. I don't quite
    follow"*, relayed by the Overseer). Built in
-   [261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 1.
+   [261007g](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 1.
 5. **One old rate-limit record in production** (from 2026-09-29, no reader text in it) belongs to a
    limit that no longer exists. The database's list of allowed limit names cannot be tidied while
    it is there. *Recommend:* leave both; deleting it buys nothing at runtime.
 6. **An unused column, `queue_state.running_job_id`**: nothing reads or writes it and its one row
    is empty. Dropping it also removes a link the export tool follows. *Recommend:* drop it, low
    priority. **Answered 2026-10-07: yes** (relayed by the Overseer). The migration is in
-   [261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2 and waits
+   [261007g](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2 and waits
    for production with the schema plan's seven.
 7. **Callout blocks**: the database still allows a block kind the pipeline never produces (0 rows).
    Narrow it only if callouts are abandoned for good. *Recommend:* leave it.

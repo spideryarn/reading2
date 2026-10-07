@@ -644,7 +644,7 @@ describe("a failed recheck, then an ordinary refresh", () => {
  * out it still looks (*asking*), as before. Until 2026-10-07 this test pinned
  * the other ending — *failed*, and no button. docs/project/mode.md § The
  * artefact, if the mode shows one;
- * docs/plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md.
+ * docs/plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md.
  */
 describe("none yet, then a failed refresh and a failed Try again", () => {
   it("keeps the empty state and its button through both, with the newest failure beside it", async () => {
