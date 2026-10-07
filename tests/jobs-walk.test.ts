@@ -1668,6 +1668,9 @@ describe("one claim walks the whole job", () => {
       it("pressed on another server: the job ends done and the article is published", async () => {
         const { advanced, draft, row, job } = await stopDuring("test-walk-stop-remote-last", ["fetch"], remote);
         expect(advanced?.job.status).toBe("done");
+        /* 261007l § Part 2: the card says the Stop came too late. */
+        expect(advanced?.job.stopCameTooLate).toBe(true);
+        expect((await pgJobStore.get(job.id, OWNER))?.stopCameTooLate).toBe(true);
         expect(draft).toBe("published");
         expect(row?.draft, "a finished job holds no draft pointer").toBeNull();
         expect(await stopRequestedAt(job.id), "the Stop is still on the row for an operator").toBeTruthy();
@@ -1678,6 +1681,7 @@ describe("one claim walks the whole job", () => {
         expect(advanced?.job.status).toBe("done");
         expect(advanced?.done).toBe(true);
         expect(advanced?.job.cancelling, "or the card stays at Stopping…").toBeUndefined();
+        expect(advanced?.job.stopCameTooLate, "or the card never says the Stop lost").toBe(true);
         expect(advanced?.job.error, "a kept article is not a failure").toBeUndefined();
         expect(advanced?.job.steps[0]?.status, "the step is shown as finished").toBe("done");
         expect(draft).toBe("published");
@@ -1699,6 +1703,7 @@ describe("one claim walks the whole job", () => {
         expect(row?.status).toBe("cancelled");
         expect(draft, "what the earlier steps made is not published").toBe("failed");
         expect(row?.draft).toBeNull();
+        expect(advanced?.job.stopCameTooLate, "a Stop that was honoured did not come too late").toBeUndefined();
       });
 
       it("pressed during a last step that obeys it: no product, the job ends cancelled and the draft is failed", async () => {

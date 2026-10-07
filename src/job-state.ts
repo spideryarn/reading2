@@ -60,9 +60,9 @@ export function isImportJob(job: Pick<Job, "steps">): boolean {
 }
 
 /**
- * The eight things an import can look like to somebody watching it.
+ * The nine things an import can look like to somebody watching it.
  *
- * Eight rather than `JobStatus`'s five, and every extra one is a difference
+ * Nine rather than `JobStatus`'s five, and every extra one is a difference
  * the reader can act on.
  *
  * `queued` and `running` become four. *Waiting*, *working*, *this has gone on
@@ -75,6 +75,10 @@ export function isImportJob(job: Pick<Job, "steps">): boolean {
  * them is worth pressing Retry on twice.
  *
  * And `cancelled` is `stopped`, because the word on the button was Stop.
+ *
+ * `done` becomes two: finished, and finished although the reader pressed Stop,
+ * which needs `stopCameTooLate` (src/types.ts) and is news the reader would
+ * otherwise never get.
  */
 export type JobDisplayState =
   /** Queued. Nothing is driving it this instant; the next poll will. */
@@ -92,7 +96,14 @@ export type JobDisplayState =
   /** The reader stopped it. */
   | "stopped"
   /** Every step finished. */
-  | "done";
+  | "done"
+  /**
+   * Every step finished, after a Stop that arrived too late to stop anything:
+   * it reached the last step while that step was finishing, and the product is
+   * kept (docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md).
+   * Its own state so the card can say so; see `STOP_CAME_TOO_LATE`.
+   */
+  | "kept";
 
 export interface JobDisplay {
   state: JobDisplayState;
@@ -204,6 +215,24 @@ export const RUNNING_A_WHILE = "This step has been running for a while — you c
  * and hands the job back, and until it does there is nothing to see.
  */
 export const STOPPING_AFTER_STEP = "Stopping after the current step…";
+
+/**
+ * **The Stop that lost.** The card said *Stopping…* and the job then finished,
+ * because the Stop reached the last step while that step was finishing and the
+ * rule is to keep what it made (Greg, 2026-10-07, in
+ * docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md). Without
+ * this the card goes from *Stopping…* to finished and the reader cannot tell
+ * their press was overridden.
+ *
+ * **It does not say the step had already finished**, because the record cannot
+ * prove that: `cancel_requested_at` on a `done` job says a Stop was accepted
+ * and the job then finished, not in which order the step's own work went.
+ * `assets` honours a Stop by returning a manifest with the images it had not
+ * fetched marked failed, and still ends `done` (GPT Sol, 261007l plan review,
+ * finding 5). "What it had done by then" is true of both, and of a mode's job. docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md.
+ */
+export const STOP_CAME_TOO_LATE =
+  "You pressed Stop during the last step. What it had done by then was kept.";
 
 /**
  * The tab is the worker, said out loud.
@@ -622,12 +651,12 @@ function stateOf(job: Job, elapsedMs: number | null, slowAfterMs?: number): JobD
     case "cancelled":
       return "stopped";
     case "done":
-      return "done";
+      return job.stopCameTooLate === true ? "kept" : "done";
   }
 }
 
 /**
- * One sentence per state, and **five of the eight say nothing**, which is the
+ * One sentence per state, and **five of the nine say nothing**, which is the
  * part worth defending. A finished import is explained by the article now on
  * the shelf; a stopped one by the reader having stopped it; a failed or
  * interrupted one by the failed step's own message, which is already on the
@@ -635,7 +664,7 @@ function stateOf(job: Job, elapsedMs: number | null, slowAfterMs?: number): JobD
  * repeating any of those is the app talking over itself — the same argument
  * `jobWorthRetrying` makes about not explaining a hidden button.
  *
- * A total map rather than a `switch` with a `default`, so a ninth state cannot
+ * A total map rather than a `switch` with a `default`, so a tenth state cannot
  * be added without deciding this. `RETRYABLE` in src/messages.ts is the same
  * shape for the same reason, and it is there because the comparison version
  * silently stopped charging the cost it claimed to.
@@ -655,6 +684,7 @@ const SENTENCES: Record<Exclude<JobDisplayState, "slow">, string | null> = {
   failed: null,
   stopped: null,
   done: null,
+  kept: STOP_CAME_TOO_LATE,
 };
 
 /* --------------------------------- transport health is not a job state -- */
@@ -680,7 +710,7 @@ export const DRIVER_STALLED_AFTER = 3;
  * Whether this tab can see the job but cannot move it.
  *
  * **A separate question from `displayJob`, on purpose**, and the plan asked for
- * the decision to be written down. Three reasons it is not a ninth
+ * the decision to be written down. Three reasons it is not a tenth
  * `JobDisplayState`:
  *
  * 1. **It is not a fact about the job.** The job is running, and it is the

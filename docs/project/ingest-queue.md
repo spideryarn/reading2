@@ -2465,8 +2465,15 @@ throws and leaves nothing to keep. **Our own deadline** still discards a late pr
 fire, the first abort's reason sticks: deadline first ends as the pause's *Stop wins* answer,
 `cancelled`; Stop first keeps the article.
 
-**`done` is the word, and the press is still on the row.** The card shows the finished state and
-says nothing about the Stop; `jobs.cancel_requested_at` keeps when it was pressed, for an operator.
+**`done` is the word, and the card says the Stop came too late.** `jobs.cancel_requested_at` keeps
+when it was pressed, and a `done` job carrying it is exactly this case, because only an accepted
+Stop on an active job stamps it and a Stop that was honoured ends `cancelled`. So `toJob` sets
+`Job.stopCameTooLate`, `displayJob` calls the job `kept` rather than `done`, and the card says
+*"You pressed Stop during the last step. What it had done by then was kept."* It does not say the
+step had finished first, which the record cannot show: `assets` honours a Stop by returning what it
+had fetched, and still ends `done`.
+(`STOP_CAME_TOO_LATE`, src/job-state.ts;
+[261007l](../plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md) § Part 2).
 
 **Keeping is safe only if the step does not claim a part-made product is finished.** `assets`
 answers a Stop by returning a manifest in which every image not yet fetched is a failure, so it
