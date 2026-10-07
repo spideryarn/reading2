@@ -843,10 +843,13 @@ export function scrollToTop() {
  * **How a `scrollToBlock` ended**, for a caller that has something to do on
  * arrival — the flash (flash.ts, called from keynav.ts § `beginJump`).
  *
- *  - `settled`: the row is where it was sent — where it is *then*, re-measured,
- *    not where it was when asked. At once only for a move of less than a
- *    pixel; on the glide's last frame; and for an instant move (reduced motion,
- *    `"auto"`) one frame after it, when the post-commit re-check has run.
+ *  - `settled`: the destination is where it was sent. Ordinarily that means
+ *    the row is there — where it is *then*, re-measured, not where it was when
+ *    asked. A masthead-echo row instead settles at the page top, where its
+ *    visible copy lives; the hidden row itself is not measured. At once only
+ *    for a move of less than a pixel; on the glide's last frame; and for an
+ *    instant move (reduced motion, `"auto"`) one frame after it, when the
+ *    post-commit re-check has run.
  *    docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  *  - `cancelled`: the reader's wheel or touch stopped the glide, or a newer
  *    movement replaced it (another jump, an arrow key, Back, `abandonScroll`).

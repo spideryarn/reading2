@@ -105,12 +105,13 @@ prose table hides those rows. Nothing is removed from the data.
 **The rule.**
 
 - **The wrapper's shape** (every web article imported before Stage 3): block 0 is an `h1` and
-  block 1 is a paragraph that is only our line, ending `~N min read` after a `·`. The wrapper
-  writes the `·` even when nobody is named (`· ~141 min read`), so an author's own bare
-  `~5 min read` under an `h1` is kept. Both are ours by construction, since the wrapper always comes first, so this needs no
-  comparison with the title, and therefore also works for a visitor, whose payload has the tidied
-  title and not the original (Sol F4). Block 1 is hidden. Block 0 is hidden unless the reader has
-  renamed the article.
+  block 1 is a paragraph that has both our reading-time words and the exact line breaks and
+  two-space indentation written by the old `debugPage` template. The line ends `~N min read`
+  after a `·`; the wrapper writes the `·` even when nobody is named (`· ~141 min read`). The
+  whitespace matters because a newly extracted article can begin with an author's own byline in
+  the same words, and its words are not evidence that we wrote it. This needs no comparison with
+  the title and therefore also works for a visitor, whose payload has the tidied title and not the
+  original (Sol F4). Block 1 is hidden. Block 0 is hidden unless the reader has renamed the article.
 - **The same words at block 0** (a PDF, a web article after Stage 3, a wrapper with no reading
   time): block 0 is an `h1`, its HTML is plain text with no markup in it, its text equals
   `meta.title` after trimming, collapsing whitespace and lower-casing, and the reader has not
@@ -121,8 +122,8 @@ author's own `<h1>` can be block 2, with formatting the plain masthead does not 
 
 **A renamed article keeps its first heading** (`article.titleOverridden`; Sol F3 showed the first
 draft could not tell). The masthead then shows the reader's name for the piece and the prose
-shows, once, the author's. The `~N min read` line is hidden either way, because it is never
-anybody's words but ours.
+shows, once, the author's. A second block that matches the exact legacy-template shape above is
+hidden either way.
 
 **A PDF's own title is hidden under the second rule, and Sol disagreed** (F1: it is the author's
 content, so leave it and ask Greg). Overruled after Opus arbitrated, because the report is about
@@ -155,12 +156,13 @@ screen". An echo hides one row whose section is still on screen. With the echo a
 while the reader was in the first (so a reload put them a section ahead), Structure marked the
 second section as current, and the up arrow could not reach the start of the article.
 
-So `fold.ts` exports `isFoldedAway(id)`: true only when a fold hides the row, never for an echo.
-`useReadingPosition.ts` (its `skip`), `useColumnContext.ts` (Structure's focus) and `step` in
-`keynav.ts` ask that. Everything else still asks `isFolded`. An echo row needs no skipping in
-those three: it has no height and sits at the top of the first visible row, which is in its own
-section, so the measurement is already right. The up arrow to row 0 and `?at=` naming it then go
-through `scrollToBlock`, which sends them to the top of the page (next paragraph).
+So `fold.ts` exports `isFoldedAway(id)`: true only when a real fold hides the row. An echo by
+itself is false, but an echo row covered by a folded heading is true. `useReadingPosition.ts` (its
+`skip`), `useColumnContext.ts` (Structure's focus) and `step` in `keynav.ts` ask that. Everything
+else still asks `isFolded`. An echo row hidden only as an echo needs no skipping in those three:
+it has no height and sits at the top of the first visible row, which is in its own section, so the
+measurement is already right. The up arrow to row 0 and `?at=` naming it then go through
+`scrollToBlock`, which sends them to the top of the page (next paragraph).
 
 One thing this leaves: stepping by single blocks, the first down arrow from the top of the page
 goes to the second visible block, because the first visible one already counts as where the
@@ -261,5 +263,35 @@ GPT Sol, 2026-10-07, verdict *build with the P0 and P1 fixes*. No P0.
   pinned the header, each a block count down by two or an assertion about the header itself. One
   thing it changes that the plan did not foresee: a page that extracts to no prose used to yield
   our two header blocks and so passed `assertSomethingWasProduced`; it now yields none and is
-  refused, which is that guard's purpose. Not traced: what a deliberately re-extracted old
-  article's tree does with the two ids it loses; that is in the queue entry.
+  refused, which is that guard's purpose. This review traced a deliberate re-extraction too. The
+  reader's Rebuild and *Read this* jobs contain all the default stages and force extraction, so
+  the force cascades through blocks and Structure: the tree is rebuilt after the two header ids
+  disappear, and the id-carry guard accepts the prose ids that remain. The developer's explicit
+  `npm run extract -- <slug> --force` is deliberately a one-stage job, so it replaces the stored
+  page but carries the old blocks and tree forward; no ids disappear until a job also names
+  blocks, and the queue refuses any job that names blocks without Structure.
+- 2026-10-07: browser pass after the fix (Playwright on the box; a web paper, an essay, a PDF and a
+  public article, 1440 and 390 wide, owner and signed-out visitor). The title is on the page once
+  and no `~N min read` line is drawn; no link to `/` in the masthead and the bottom bar's mark
+  links there; ↓ and ↑ land only on visible rows and ↑ ends at the top with the masthead in view;
+  `?at=` on either hidden row loads at the top, and on a block in the middle scrolls to it; *Fold
+  all* folds 62 sections of the paper and unfolds them; no console errors. **One thing left on
+  already-imported web articles:** Structure still lists the two hidden blocks as rows (on the
+  paper, 1.1 with the title's words and 1.2 "Author list and read-time for the paper"), and
+  pressing one goes to the top of the page. That goes when the article is rebuilt (qi-tjb2xjmj).
+- 2026-10-07: GPT Sol's code review, round one
+  ([the review](261007b-the-title-is-drawn-once-code-review-sol.md)): verdict *ready to push*,
+  seven findings fixed by it and one reported. C1, an author's own `Author · Site · ~5 min read`
+  line on a newly imported article would have been taken for ours, so the line must also have the
+  old template's line breaks; C2, an echo row under a real fold was not `isFoldedAway`; C3, a jump
+  to an echo row from the very top pushed a history entry for no movement; C4 to C7, a comment, a
+  test that asserted nothing, a stale test name and a wrong fixture path. C8, reported: an
+  author's paragraph that copies the template's exact whitespace would still be hidden; closing
+  that needs provenance stored with the article, which is the rebuild.
+- 2026-10-07: **Sol's C1 fix was wrong for the reported article, and nothing in the tree said so.**
+  Its pattern allowed the byline no line break. Run over the first two blocks of every article in
+  production (read-only), the rule hid both rows on 20 of 22 web articles and only the heading on
+  two, `2608-13566v1-spya-yurten` among them: an arXiv byline is several lines long. The fixtures
+  have no such byline, so every test passed. Test added from the stored shape, red first; pattern
+  loosened; production then: 22 of 22 web articles hide both rows, 22 PDFs hide their heading, 4
+  PDFs and the one renamed PDF hide nothing.

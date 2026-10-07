@@ -20,7 +20,7 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
   return { ...real, scrollToBlock: (id: string) => void jumps.push(id) };
 });
 
-const { useArrowNav } = await import("../src/web/keynav.js");
+const { beginJump, useArrowNav } = await import("../src/web/keynav.js");
 type NavPlan = import("../src/web/keynav.js").NavPlan;
 
 const block = (i: number, heading = false): Block => ({
@@ -134,6 +134,27 @@ describe("↑ and the masthead's echo", () => {
     }
   });
 
+  it("does not add a history entry for an echo jump that is already at the page top", () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const pushed: BlockId[] = [];
+    expect(beginJump(blocks, "spya-b0" as BlockId, (id) => void pushed.push(id))).toBe(false);
+    expect(pushed).toEqual([]);
+    expect(jumps).toEqual([]);
+  });
+
+  it("still finishes an echo jump from part-way through the masthead", () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(40);
+    const pushed: BlockId[] = [];
+    try {
+      expect(beginJump(blocks, "spya-b0" as BlockId, (id) => void pushed.push(id))).toBe(true);
+      expect(pushed).toEqual(["spya-b0"]);
+      expect(jumps).toEqual(["spya-b0"]);
+    } finally {
+      scrollY.mockRestore();
+    }
+  });
+
   it("still has nowhere to go when that start is folded away (the control)", async () => {
     /* b1 to b4 under one folded heading, and a plan whose starts are all inside it. */
     const under: NavPlan = { starts: [[1, 4]] };
@@ -167,11 +188,16 @@ describe("↑ and the masthead's echo", () => {
       const outcomes: string[] = [];
       real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o));
       expect(y).toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["settled"]);
       /* The control: a visible row is measured, and it is not at the top. */
       real.scrollToBlock("spya-b3", "auto");
       expect(y).not.toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
       real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o), { align: "centre" });
       expect(y).toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["settled", "settled"]);
       expect(real.arrivalAnchor()).toBeNull();
       real.abandonScroll();
       expect(isFolded("spya-b0")).toBe(true);

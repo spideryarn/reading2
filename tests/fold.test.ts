@@ -401,9 +401,12 @@ describe("the masthead's echo", () => {
     setFoldArticle("slug", article, set("m"));
     toggleFold(id("t"));
     expect(isFolded("spya-first")).toBe(true);
+    /* The line is an echo, but it is also genuinely inside the fold. Navigation
+       must skip it rather than send a press to its page-top jump policy. */
+    expect(isFoldedAway("spya-m")).toBe(true);
     revealBlock("spya-m");
     expect(isFolded("spya-first")).toBe(true);
-    expect(isFoldedAway("spya-m")).toBe(false);
+    expect(isFoldedAway("spya-m")).toBe(true);
   });
 
   it("takes a rename, which changes the echo and not the blocks, and its undoing (Sol F8)", () => {

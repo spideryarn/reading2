@@ -56,7 +56,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
 /* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
-import { isFolded, isFoldedAway } from "./fold.js";
+import { isFolded, isFoldedAway, isMastheadEcho } from "./fold.js";
 import { blockRow } from "./rows.js";
 
 /**
@@ -449,6 +449,16 @@ export function beginJump(
      destination. */
   dropPendingFlash();
   const origin = measureOrigin(blocks);
+  /* The hidden row's visible copy is the masthead. At the exact page top the
+     reader is already looking at it, even though `alreadyThere` cannot name a
+     hidden block. Do not add a Back entry for a jump that would only glide to
+     the same pixel, and do not try to flash an invisible row. Part-way through
+     the masthead but below the page top, the ordinary jump still finishes the move. */
+  if (origin.kind === "top" && window.scrollY < 1 && isMastheadEcho(target)) {
+    if (glideTarget() !== null) abandonScroll();
+    ended?.();
+    return false;
+  }
   if (alreadyThere(origin, target, passage)) {
     /* Only a glide in flight needs stopping; with none, `abandonScroll` would
        only drop the arrival anchor the reader is standing on (plan 260929a). */

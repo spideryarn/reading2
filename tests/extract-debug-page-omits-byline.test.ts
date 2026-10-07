@@ -36,7 +36,7 @@ ${PROSE}
 </section>
 </article></body></html>`;
 
-describe("the byline on a LaTeXML page", () => {
+describe("a LaTeXML byline when the debug page adds no header", () => {
   it("is in meta.byline, and stage 2's page has no byline line of its own", async () => {
     const out = await runExtract({ html: PAGE, url: "https://arxiv.org/html/2610.01988v1", slug: "glueballs" });
     expect(out.meta.byline).toContain("Ada Lovelace");

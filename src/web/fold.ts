@@ -280,25 +280,33 @@ export function isFolded(id: string): boolean {
   return hidden.has(id as BlockId);
 }
 
+/** Whether `id` is one of the leading rows represented by the masthead. */
+export function isMastheadEcho(id: string): boolean {
+  return article?.echo.has(id as BlockId) ?? false;
+}
+
 /**
  * **Whether the section that starts at `id` is folded away**: true only when a
- * fold hides the row, never for the masthead's echo.
+ * fold hides the row. An echo alone is false; an echo inside a real fold is
+ * true, because navigation must still skip a row the fold covers.
  *
  * Two questions, because the two kinds of hiding differ in what else is gone.
  * A fold hides a whole section, so a section whose start row is folded has
- * nothing on screen and must not be named, focused or stepped to. An echo
- * hides one row whose section is still on screen, and that row is block 0:
+ * nothing on screen and must not be named, focused or stepped to. An echo on
+ * its own hides one row whose section is still on screen, and that row is block 0:
  * the start of the first section of every article. Asked `isFolded`, the
  * reading position wrote `?at=` as the second section while the reader was in
  * the first, Structure marked the second as current, and ↑ could not reach the
  * start of the article. So the three callers that ask about a section's start
  * ask this: `useReadingPosition`, `useColumnContext`, and `step` in keynav.ts.
- * An echo row needs no skipping there: it has no height and sits at the top of
- * the first visible row, which is in its own section.
+ * An echo row that is hidden only because it is an echo needs no skipping
+ * there: it has no height and sits at the top of the first visible row, which
+ * is in its own section. A real fold can still cover that row, in which case
+ * this function returns true.
  * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
  */
 export function isFoldedAway(id: string): boolean {
-  return foldedAway.has(id as BlockId) && !(article?.echo.has(id as BlockId) ?? false);
+  return foldedAway.has(id as BlockId);
 }
 
 /**

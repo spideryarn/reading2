@@ -9,7 +9,7 @@
  *
  * The blocks are built the way stage 3 stores them: `html` is the element's
  * own `outerHTML`, tag and stamped id included (tests/fixtures/data-root/
- * output/noema-mythology-of-conscious-ai.blocks.json, blocks 0 and 1).
+ * data/noema-mythology-of-conscious-ai/blocks.json, blocks 0 and 1).
  */
 import { describe, expect, it } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
@@ -41,7 +41,11 @@ const para = (key: string, text: string, inner = text): Block => ({
 
 /** The debug page's `<div class="meta">`, as the splitter stores it: a `p`, with the template's line breaks. */
 const metaLine = (key: string, text: string): Block =>
-  para(key, text, `\n  ${text.replace(" · ~", "\n  · ~")}\n`);
+  para(
+    key,
+    text,
+    text.startsWith("· ~") ? `\n  \n  ${text}\n` : `\n  ${text.replace(" · ~", "\n  · ~")}\n`,
+  );
 
 const article = (title: string, blocks: Block[], titleOverridden = false) => ({
   meta: { title },
@@ -66,9 +70,33 @@ describe("mastheadEcho: the wrapper's shape", () => {
     expect([...mastheadEcho(article("Claude’s Constitution", blocks))]).toEqual([id("title0"), id("meta00")]);
   });
 
+  /* The reported article itself, `2608-13566v1-spya-yurten`, as production
+     stores it: an arXiv byline is several lines long, and an entity in it is
+     kept as one. A matcher that allowed the byline no line break hid the
+     heading and left this line on the page (found by running the rule over
+     production's first two blocks, 2026-10-07; two of 22 web articles). */
+  it("knows the line when the byline in it runs over several lines", () => {
+    const text = "Timur Galimzyanov Affiliation: Code Modelling Research, JetBrains Research, Munich, Germany · · ~84 min read";
+    const inner =
+      "\n  Timur Galimzyanov\n\nAffiliation:&nbsp;Code Modelling Research, JetBrains Research, Munich, Germany · \n  · ~84 min read\n";
+    const blocks = [heading("title0", "Don’t Claim"), para("meta00", text, inner), body];
+    expect([...mastheadEcho(article("Don’t Claim", blocks))]).toEqual([id("title0"), id("meta00")]);
+    /* And by shape alone, as a visitor with a tidied title gets it. */
+    expect([...mastheadEcho(article("Another title", blocks))]).toEqual([id("title0"), id("meta00")]);
+  });
+
   it("keeps an author's own bare reading time: the wrapper always writes the dot", () => {
     const blocks = [heading("title0", "Something else"), para("meta00", "~26 min read"), body];
     expect(mastheadEcho(article("A different title", blocks)).size).toBe(0);
+  });
+
+  it("keeps an author's own byline and reading time after a fresh extraction", () => {
+    const blocks = [
+      heading("title0", "The Author's Heading"),
+      para("meta00", "Jo Bloggs · Example Review · ~5 min read"),
+      body,
+    ];
+    expect(mastheadEcho(article("A Different Masthead Title", blocks)).size).toBe(0);
   });
 
   it("hides both by shape when the title was tidied on import and no longer matches (Sol F4)", () => {

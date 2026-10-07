@@ -38,14 +38,26 @@ function plain(block: Block): boolean {
 /**
  * The debug page's `<div class="meta">` (src/extract.ts § `debugPage`), which
  * stage 3 stores as a `p`: `Author · Site · ~84 min read`, or `· ~26 min read`
- * when nobody was named. The template writes the `·` even then, so the dot is
- * required: a sentence that mentions a reading time is not taken for our line,
- * and nor is an author's own bare `~5 min read`.
+ * when nobody was named. The words alone are not provenance: a newly extracted
+ * article can open with its own byline in exactly that form. The legacy
+ * template's line breaks and two-space indent survive in `Block.html`, so the
+ * matcher requires those as well as the dot and suffix. An author's source
+ * could imitate that exact whitespace, but ordinary authored paragraphs cannot
+ * be mistaken for the wrapper merely because of what they say.
  */
 const OUR_LINE = /·\s*~\d+ min read$/;
+/* `[^<]*` and not `[^<\n]*`: a byline can run over several lines (an arXiv one
+   does, and it is the reported article's). What the template fixes is how the
+   paragraph opens and how it closes. */
+const OUR_LINE_HTML = /^<p\b[^<>]*>\n {2}[^<]*\n {2}· ~\d+ min read\n<\/p>$/;
 
 function isOurLine(block: Block): boolean {
-  return block.tag === "p" && plain(block) && OUR_LINE.test(block.text.trim());
+  return (
+    block.tag === "p" &&
+    plain(block) &&
+    OUR_LINE.test(block.text.trim()) &&
+    OUR_LINE_HTML.test(block.html.trim())
+  );
 }
 
 /**
