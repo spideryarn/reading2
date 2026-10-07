@@ -946,20 +946,41 @@ describe.each(ROWS)("$name", (mode) => {
     expect(posted).toHaveLength(1);
   });
 
-  it.skipIf(!mode.verb)("an unseen terminal job trimmed from the list remains held even after an online read", async () => {
+  /* GPT Sol's C3 (plan 261007b): the job fails while the band is closed and its
+     row is trimmed before anything mounted sees it. The hold used to outlive
+     every way of learning the outcome, and the control was dead until a
+     reload. The engine's word that the job is over, or gone, is what settles
+     it — never the job's mere absence from a list, which is also what a job
+     not listed yet looks like. */
+  it("a job that ended unseen and was trimmed releases on a read the server answered after that, and on nothing less", async () => {
     start(mode);
     await paint();
     await pressRegenerate();
     showBand = false;
     await paint();
-    /* It failed while closed, then was trimmed by later terminal jobs. No
-       mount saw its outcome, and the artefact was never replaced. */
     jobs = [];
     showBand = true;
     await paint();
-    await expectHeld("no listed outcome can settle this press");
+    await expectHeld("absent from a list is not an outcome");
     await press(mode.readAgain);
-    await expectHeld("a fresh unchanged read cannot prove the unlisted job ended");
+    await expectHeld("nor does an unchanged read make it one");
+
+    /* A read already in the air when the engine finds the job gone. */
+    showBand = false;
+    await paint();
+    let land!: (res: Response) => void;
+    serve = () => new Promise((resolve) => { land = resolve; });
+    showBand = true;
+    await paint();
+    await act(async () => jobEngine.receive([]));
+    serve = dropped;
+    await act(async () => land(json(mode.body("old", usual()))));
+    await flush();
+    await expectHeld("a read asked before the job was found gone, then the offline copy");
+
+    serve = () => json(mode.body("old", usual()));
+    await press(mode.readAgain);
+    expect(await regenerate(), "the server answered a read asked after the job was gone").toBe("enabled");
     expect(posted).toHaveLength(1);
   });
 
@@ -1373,6 +1394,46 @@ describe.each(ROWS.filter((mode) => ["Sketch", "Illustrated"].includes(mode.name
       expect(posted).toHaveLength(1);
     },
   );
+});
+
+/* **A pin of a known-open defect, not a requirement** (GPT Sol's C4, plan
+   261007b § What is left; the form is tests/adversarial-shapes.test.ts's).
+   The command bar's *Run again* row posts its forced run straight through the
+   queue and knows nothing of the mode's hold, so with FAQ held it buys a
+   second run for the one result on screen. Read it as news if it goes red:
+   when the row is taken through the hold, invert the count and strike the
+   item from the plan. It drives the row's own action out of `besideTheModes`
+   rather than the drawn bar, so it says nothing about which rows are drawn. */
+it("pins C4: the command bar's Run again posts a second forced run over a held mode", async () => {
+  const { besideTheModes } = await import("../src/web/CommandBar.js");
+  const { useJobs } = await import("../src/web/useJobs.js");
+  const mode = ROWS.find((r) => r.step === "faq")!;
+  start(mode);
+  await paint();
+  await pressRegenerate();
+  serve = () => new Promise(() => {});
+  finishJob();
+  await paint();
+  await expectHeld("the rewrite finished and its GET is still in the air");
+  expect(posted).toHaveLength(1);
+
+  const again = besideTheModes({
+    article: { slug: SLUG, search: "", view: "article" },
+    openComments: undefined,
+    openFeedback: null,
+    queue: useJobs("quiet"),
+  }).find((command) => command.kind === "action" && command.id === "rerun-faq");
+  expect(again?.kind).toBe("action");
+  if (again?.kind !== "action") return;
+  /* The row then navigates to Metadata; put the address back for whatever runs next. */
+  const here = location.href;
+  await act(async () => void (await again.run()));
+  history.replaceState(null, "", here);
+  await expectHeld("the mode's own controls are still held");
+  expect(posted).toEqual([
+    { slug: SLUG, steps: ["faq"], force: ["faq"] },
+    { slug: SLUG, steps: ["faq"], force: ["faq"] },
+  ]);
 });
 
 /* ------------------------------------------------------ the membership guard --

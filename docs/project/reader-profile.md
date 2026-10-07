@@ -619,8 +619,12 @@ not held yet**; it waits on a change to the same hook.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose
 it. Three things release it: a read **the server answered** shows a different artefact; the job
-failed or was cancelled; or the job is listed as over and a read *started after that* shows the same
-artefact. A read answered from the offline copy is not the server's word and releases nothing. While
+failed or was cancelled; or the job is over and a read *started after that* shows the same
+artefact. *Over* is the job listed as finished, or the job engine saying so with the mode closed: it
+heard the job end, or found it gone from a list asked after the job was made. Until 2026-10-07 only
+the first counted, so a job that failed while the mode was closed and was trimmed from the list
+before it reopened left the control dead until a reload. A read answered from the offline copy is not
+the server's word and releases nothing. While
 the mode is held with nothing running it says the new version hasn't loaded yet and offers *Try
 again*, which only reads.
 
