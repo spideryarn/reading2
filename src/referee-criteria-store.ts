@@ -127,3 +127,57 @@ export function withCriterion(
 
 /** What a sweep writes over an abandoned `pending` row. */
 export const CRITERION_SWEPT = "The server stopped before this criterion finished.";
+
+/**
+ * The foreign key from a comment to the criterion it is placed on
+ * (src/db/schema.ts § `comments_criterion_fk`). Named once, because three
+ * store methods ask `violatesForeignKey` about it and a misspelt name matches
+ * nothing and says nothing.
+ */
+export const COMMENTS_CRITERION_FK = "comments_criterion_fk";
+
+/**
+ * **What a referee is told when they delete a criterion their own comments are
+ * placed on.** A 409: the key refusing is the design
+ * (docs/project/database.md § `restrict` and `no action`), and until 2026-10-07
+ * its refusal reached the reader as *"That is a bug here rather than anything
+ * you did"*.
+ *
+ * In the pattern of `importRunning` (src/store/pg-shelf.ts): what is in the
+ * way, and what to do about it, in the panel's own words — *Place on a
+ * criterion* and *Clear placement* are the controls' labels. No bracketed
+ * code, on docs/project/copy.md's rule that a refusal which is an answer gets
+ * none. What Delete *should* do with the comments is Greg's open question 3,
+ * docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg.
+ */
+export const CRITERION_HAS_COMMENTS =
+  "Your comments are placed on this criterion, so it cannot be deleted until you clear those " +
+  "placements or delete those comments.";
+
+/**
+ * **And when adding one would trim such a criterion.** The same refusal reached
+ * from `begin`: the list is capped at `MAX_CRITERIA`, the oldest finished row is
+ * trimmed to make room, and the same key refuses that delete — so the insert
+ * rolls back, every time, until the comments are moved. Whether a list may
+ * instead grow past the cap to protect them is question 3a in the same plan;
+ * this is only the sentence for today's behaviour.
+ */
+export const CRITERIA_FULL_OLDEST_HAS_COMMENTS =
+  "The list of criteria is full and the oldest one has your comments placed on it, so a new " +
+  "criterion cannot be added until you clear those placements or delete those comments.";
+
+/**
+ * **What a placement is told when its criterion is not there** — a 400, and
+ * word for word what `tidyMark` in src/routes.ts answers when it looks first
+ * and finds nothing. That early check stays; this is the same answer for the
+ * placement that passed it and then lost a race with a delete in another tab,
+ * which used to be a 500. The sentence is written out in both places, and
+ * tests/referee-routes-postgres.test.ts compares the two replies so they
+ * cannot drift.
+ */
+export const CRITERION_NOT_ON_ARTICLE = "criterionId is not one of your criteria on this article";
+
+/** A store-side refusal that crosses `guardDbStore` by door 1: it carries a `status`. */
+export function criterionRefusal(status: 400 | 409, sentence: string): Error {
+  return Object.assign(new Error(sentence), { status });
+}

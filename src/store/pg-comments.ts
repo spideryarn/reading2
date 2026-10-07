@@ -46,9 +46,14 @@ import { comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
+import {
+  COMMENTS_CRITERION_FK,
+  CRITERION_NOT_ON_ARTICLE,
+  criterionRefusal,
+} from "../referee-criteria-store.js";
 import type { Comment, HighlightColour } from "../types.js";
 import { MissingAttempt, type CommentStore } from "./contracts.js";
-import { guardDbStore } from "./db-errors.js";
+import { guardDbStore, violatesForeignKey } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
 
@@ -129,6 +134,26 @@ async function listFor(articleId: string): Promise<Comment[]> {
     .where(eq(commentsTable.articleId, articleId))
     .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id));
   return rows.map(toComment);
+}
+
+/**
+ * **A placement whose criterion is not there when the write lands.**
+ *
+ * The route looks first (`tidyMark`, src/routes.ts) and answers a 400 for a
+ * criterion that is not the reader's on this article. But the look and the
+ * write are two statements, so a criterion deleted in another tab in between —
+ * legitimately: nothing was placed on it yet — leaves `comments_criterion_fk`
+ * to refuse the row, and until 2026-10-07 that was a 500. It is the same fact
+ * the early check reports, so it gets the same status and the same words.
+ *
+ * By name: `comments_identity_fk` raises the same SQLSTATE from the same
+ * statement and is a real failure — see `violatesForeignKey`.
+ */
+function rethrowPlacementError(err: unknown): never {
+  if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
+    throw criterionRefusal(400, CRITERION_NOT_ON_ARTICLE);
+  }
+  throw err;
 }
 
 const rawPgCommentStore: CommentStore = {
@@ -228,7 +253,9 @@ const rawPgCommentStore: CommentStore = {
         .insert(commentsTable)
         .values({ articleId, id, ownerId: currentOwnerId(), ...fields })
         .onConflictDoNothing({ target: [commentsTable.articleId, commentsTable.id] })
-        .returning();
+        .returning()
+        // Both callers below: a thrown refusal rolls the minting transaction back.
+        .catch(rethrowPlacementError);
       return row === undefined ? undefined : toComment(row);
     };
 
@@ -492,7 +519,8 @@ const rawPgCommentStore: CommentStore = {
       .update(commentsTable)
       .set({ criterionId: mark.criterionId, valence: mark.valence, updatedAt: new Date() })
       .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)))
-      .returning();
+      .returning()
+      .catch(rethrowPlacementError);
     if (!row) throw new NotAnExplanation(id, "missing");
     /* The criterion is an id and `placed` is a flag. Whether a referee scored a
        passage is a fact about the app; the number they chose is their judgement

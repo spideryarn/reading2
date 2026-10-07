@@ -19,6 +19,9 @@
  *   back, because the response is the whole row.
  * - **A `result` frame for a deleted row is dropped too**, not just the final
  *   one.
+ * - **A delete the server refuses puts the row back.** The delete is
+ *   optimistic, and a 409 is the server saying the row is still there — see
+ *   `forget`.
  * - **This tab's colour choice beats a frame carrying an older one**, and two
  *   PATCHes for one row are chained so they cannot land out of order.
  * - **`retry` reads from the closure, not from a `setState` updater.** An
@@ -31,7 +34,7 @@ import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
-import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
 import { useMadeFor } from "./lib/made-for.js";
@@ -178,8 +181,26 @@ export function useCriteria(slug: string): CriteriaApi {
     );
   }, []);
 
+  /**
+   * Tell the server, after the row has already left the screen.
+   *
+   * **A 409 puts `back` where it was.** The server refuses to delete a
+   * criterion the referee's own comments are placed on
+   * (`CRITERION_HAS_COMMENTS`, src/referee-criteria-store.ts), and that reply
+   * is the one failure here that says for certain the row still exists. Until
+   * 2026-10-07 the sentence was printed over a list the row was missing from —
+   * *"it cannot be deleted"* about something that visibly had been — and the
+   * row came back on reload. Any other failure leaves the row off the screen
+   * as before: a 500 or a dropped connection does not say whether it went.
+   *
+   * **The tombstone is the test for whether to restore at all.** It is cleared
+   * when the article changes and when the referee runs the criterion again, and
+   * in both cases this reply is about a row the list has moved on from.
+   * Clearing it here is the other half: a row that is back on screen has to
+   * take its stream's frames again, and has to be deletable again.
+   */
   const forget = useCallback(
-    async (id: string) => {
+    async (id: string, back?: { row: SavedCriterion; at?: number }) => {
       try {
         // `fetchOk`, not `apiFetch`: a DELETE that 500s used to remove the row
         // from the screen and say nothing, so the referee saw it gone and found
@@ -187,6 +208,14 @@ export function useCriteria(slug: string): CriteriaApi {
         await fetchOk(one(slug, id), { method: "DELETE" }, madeFor);
       } catch (e) {
         setError(describeFetchFailure(e as Error));
+        if (back && statusOf(e) === 409 && deleted.current.delete(id)) {
+          setRows((prev) => {
+            if (prev.some((c) => c.id === id)) return prev;
+            // Oldest first, and the panel draws that order: where it was, or last.
+            const at = Math.min(back.at ?? prev.length, prev.length);
+            return [...prev.slice(0, at), back.row, ...prev.slice(at)];
+          });
+        }
       }
     },
     [slug, madeFor],
@@ -270,8 +299,9 @@ export function useCriteria(slug: string): CriteriaApi {
               if (deleted.current.has(done.id)) {
                 /* Deleted while the answer was in the air. The DELETE we sent
                    may have run *before* the server finished writing, so send it
-                   again now that nothing else will write it. */
-                void forget(done.id);
+                   again now that nothing else will write it. Refused, the
+                   finished row is the one to show. */
+                void forget(done.id, { row: done });
                 return;
               }
               /* The final pass is authoritative and may legitimately differ
@@ -370,13 +400,17 @@ export function useCriteria(slug: string): CriteriaApi {
 
   const remove = useCallback(
     (id: string) => {
+      /* Read from the closure, not from inside the updater below — an updater
+         must be pure, the rule `retry` keeps for the same reason. */
+      const at = rows.findIndex((c) => c.id === id);
+      const row = rows[at];
       deleted.current.add(id);
       setRows((prev) => prev.filter((c) => c.id !== id));
       // If a POST is still out, its `.then` re-sends the DELETE once the write
       // it is racing has definitely landed.
-      void forget(id);
+      void forget(id, row === undefined ? undefined : { row, at });
     },
-    [forget],
+    [forget, rows],
   );
 
   /**

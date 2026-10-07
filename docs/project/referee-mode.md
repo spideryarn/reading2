@@ -389,6 +389,38 @@ and it is also a ranking of the referee's own work, which wants thought first.
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
 which collects every digit on the row and compares it against the numbers that went in.
 
+#### A criterion with comments on it cannot be deleted, and says so <a id="a-criterion-with-comments-on-it"></a>
+
+A placement points at its criterion, and `comments_criterion_fk` refuses to leave it pointing at
+nothing ([database.md § `restrict` and `no action`](database.md#restrict-and-no-action-are-the-same-rule-at-two-different-moments)).
+Until 2026-10-07 nothing turned that refusal into words, so it reached the referee as a 500
+`[db-failed]`, *"a bug here rather than anything you did"*, from three directions. Each is now a
+refusal with its own sentence, **and nothing else changed**: no comment is detached, no criterion is
+deleted, and the key is what it was.
+
+| The referee | Gets | Sentence |
+|---|---|---|
+| deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
+| adds a criterion when the list is full and the one the trim would remove has comments on it | 409, before any stream opens | `CRITERIA_FULL_OLDEST_HAS_COMMENTS` |
+| places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
+
+The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts); the key
+is matched **by name**, before the store guard drops the name, with `violatesForeignKey`
+([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught rather than checked for
+in advance: a read for comments followed by the delete can be raced by a placement, and the key
+cannot. The delete is optimistic in the browser, so `useCriteria` § `forget` restores the row on a
+409 and on nothing else — a 500 does not say whether the row went.
+
+**The second row is a wedge, and it is still one.** A list is capped at twenty and trimmed from the
+oldest finished criterion; when that one has a comment on it the add fails *every time* until the
+referee clears the placement. Whether the trim should skip such a criterion instead, letting a list
+run past twenty, is a retention decision waiting on Greg (question 3a in
+[the seventh sweep's umbrella](../plans/261006m-seventh-codebase-sweep-depth-umbrella.md)), as is
+what Delete should do with the comments (question 3).
+`tests/referee-routes-postgres.test.ts` § *OPEN QUESTION 3a* pins today's behaviour so whoever
+builds the answer has the case to turn over.
+[The plan](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md).
+
 ### 2. Claims — where the paper addresses its own claims
 
 Pulls the claims the paper makes up front and, for each, lists the passages that address it, by

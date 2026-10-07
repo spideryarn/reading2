@@ -62,13 +62,19 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
-import type { SavedCriterion } from "../src/saved-criteria.js";
+import {
+  CRITERIA_FULL_OLDEST_HAS_COMMENTS,
+  CRITERION_HAS_COMMENTS,
+  CRITERION_NOT_ON_ARTICLE,
+} from "../src/referee-criteria-store.js";
+import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
+import type { BlockId, Comment } from "../src/types.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -133,7 +139,7 @@ await pgReady({
 });
 
 const { CLAIMS_SUPERSEDED, handleApi } = await import("../src/routes.js");
-const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
+const { commentStore, refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
 
 interface Reply {
@@ -402,5 +408,242 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
     expect(deleted.status).toBe(200);
     expect(deleted.body.criteria).toEqual([]);
     expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual([]);
+  });
+
+  /* ------------------------------------- a criterion with comments on it -- */
+
+  /**
+   * **`comments_criterion_fk` refusing, said to the referee instead of thrown at
+   * them** — sweep 7, cluster C5
+   * (docs/plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md).
+   * A comment placed on a criterion points at it, and the key refuses to leave
+   * that pointer dangling. It always did; what reached the reader was a 500
+   * `[db-failed]` and a Sentry report, from three directions: deleting such a
+   * criterion, placing a comment on one another tab had just deleted, and
+   * adding a criterion when the trim wants such a one gone.
+   *
+   * Through the route and against Postgres, because both halves are needed to
+   * see it: the constraint name lives on the driver's error underneath
+   * Drizzle's, and `guardDbStore` drops it on the way out.
+   *
+   * Each refusal was **watched red** before its `catch` existed (500
+   * where the case asks for 409 or 400), and again afterwards by renaming
+   * `COMMENTS_CRITERION_FK` (src/referee-criteria-store.ts) to a constraint
+   * that does not exist: the four refusal cases go red and the three controls
+   * stay green. The last case is the retreat rule the other way round — it
+   * goes red if `violatesForeignKey` stops asking for the name.
+   */
+  describe("a criterion with the referee's own comments placed on it", () => {
+    /** A criterion that has finished, made through the store rather than the paying route. */
+    async function criterion(text: string, at?: () => string): Promise<string> {
+      return asTestOwner(async () => {
+        const { row, attempt } = await refereeCriteriaStore.begin(
+          SLUG,
+          hashBlocks(article.blocks),
+          text,
+          { kind: "single" },
+          undefined,
+          at,
+        );
+        await refereeCriteriaStore.finish(SLUG, row.id, { status: "done", results: [] }, attempt);
+        return row.id;
+      });
+    }
+
+    /** A comment on the fixture's quoted passage, placed on `criterionId`. */
+    function place(criterionId: string): Promise<Reply> {
+      return call("POST", `/api/comments/${SLUG}`, {
+        blockId: RESULT.blockId,
+        quote: RESULT.quote,
+        start: RESULT.start,
+        criterionId,
+      });
+    }
+
+    const criteriaIds = async () =>
+      (await asTestOwner(() => refereeCriteriaStore.load(SLUG))).map((c: SavedCriterion) => c.id);
+
+    /** Every comment and criterion this block made, gone — comments first, for the key. */
+    async function clear(): Promise<void> {
+      await asTestOwner(async () => {
+        for (const c of await commentStore.load(SLUG)) await commentStore.remove(SLUG, c.id);
+        for (const c of await refereeCriteriaStore.load(SLUG)) {
+          await refereeCriteriaStore.remove(SLUG, c.id);
+        }
+      });
+    }
+
+    afterEach(async () => {
+      vi.restoreAllMocks();
+      await clear();
+    });
+
+    it("refuses the delete with a 409 and a sentence, and keeps both rows", async () => {
+      const id = await criterion("Are the controls adequate?");
+      const placed = await place(id);
+      // The control half of the retreat rule: a placement on a live criterion still lands.
+      expect(placed.status, placed.text.slice(0, 300)).toBe(201);
+      const comment = placed.body.comment as Comment;
+      expect(comment.criterionId).toBe(id);
+
+      const deleted = await call("DELETE", `/api/referee/criteria/${SLUG}/${id}`);
+      expect(deleted.status, deleted.text.slice(0, 300)).toBe(409);
+      expect(deleted.body.error).toBe(CRITERION_HAS_COMMENTS);
+
+      // Nothing was detached and nothing was deleted: the refusal is the whole of it.
+      expect(await criteriaIds()).toEqual([id]);
+      const kept = await asTestOwner(() => commentStore.load(SLUG));
+      expect(kept.map((c) => [c.id, c.criterionId])).toEqual([[comment.id, id]]);
+
+      /* And the sentence's own way out works: clear the placement, then delete. */
+      const cleared = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
+        criterionId: null,
+        valence: null,
+      });
+      expect(cleared.status).toBe(200);
+      const again = await call("DELETE", `/api/referee/criteria/${SLUG}/${id}`);
+      expect(again.status).toBe(200);
+      expect(again.body.criteria).toEqual([]);
+      // The referee's words outlive the criterion they were once placed on.
+      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => c.id)).toEqual([
+        comment.id,
+      ]);
+    });
+
+    it("still deletes a criterion nothing is placed on", async () => {
+      const [noted, bare] = [await criterion("with a comment"), await criterion("without one")];
+      expect((await place(noted)).status).toBe(201);
+      const deleted = await call("DELETE", `/api/referee/criteria/${SLUG}/${bare}`);
+      expect(deleted.status).toBe(200);
+      expect(await criteriaIds()).toEqual([noted]);
+    });
+
+    /**
+     * The race (SVR1): `tidyMark` reads the criterion, the write is a separate
+     * statement, and another tab deletes the criterion — which nothing is
+     * placed on yet, so the delete succeeds — in between. Reproduced by having
+     * the route's own read answer and *then* letting the other tab in.
+     */
+    function deletedBetweenTheCheckAndTheWrite(id: string): void {
+      const read = refereeCriteriaStore.load;
+      vi.spyOn(refereeCriteriaStore, "load").mockImplementationOnce(async (slug) => {
+        const seen = await read(slug);
+        await refereeCriteriaStore.remove(slug, id);
+        return seen;
+      });
+    }
+
+    /** What the early check says of a criterion that was never there — the words to match. */
+    async function neverThere(): Promise<Reply> {
+      const reply = await place("spya-zzzzzz");
+      expect(reply.status).toBe(400);
+      return reply;
+    }
+
+    it("answers a new comment whose criterion went mid-request as the early check would", async () => {
+      const early = await neverThere();
+      const id = await criterion("deleted in another tab");
+      deletedBetweenTheCheckAndTheWrite(id);
+
+      const placed = await place(id);
+      expect(placed.status, placed.text.slice(0, 300)).toBe(400);
+      expect(placed.body).toEqual(early.body);
+      expect(placed.body.error).toBe(CRITERION_NOT_ON_ARTICLE);
+      expect(await asTestOwner(() => commentStore.load(SLUG))).toEqual([]);
+    });
+
+    it("answers a placement moved onto a criterion that went mid-request the same way", async () => {
+      const early = await neverThere();
+      const [first, second] = [await criterion("where it is"), await criterion("where it is going")];
+      const comment = (await place(first)).body.comment as Comment;
+      // The control: moving a placement between two live criteria still works.
+      const moved = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
+        criterionId: second,
+        valence: null,
+      });
+      expect(moved.status, moved.text.slice(0, 300)).toBe(200);
+      expect((moved.body.comment as Comment).criterionId).toBe(second);
+
+      deletedBetweenTheCheckAndTheWrite(first);
+      const back = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
+        criterionId: first,
+        valence: null,
+      });
+      expect(back.status, back.text.slice(0, 300)).toBe(400);
+      expect(back.body).toEqual(early.body);
+      // The refused move changed nothing: the comment is where it was.
+      const kept = await asTestOwner(() => commentStore.load(SLUG));
+      expect(kept.map((c) => [c.id, c.criterionId])).toEqual([[comment.id, second]]);
+    });
+
+    /**
+     * **Characterisation, and an open question for the owner — not a verdict.**
+     * Question 3a in docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md
+     * § For Greg: a full list whose oldest finished criterion has a comment on
+     * it cannot take another, *every time*, because the trim's delete is
+     * refused and the insert rolls back with it. That is today's behaviour and
+     * this pins it exactly as it is; only the status and the sentence changed
+     * on 2026-10-07 (it was a 500).
+     *
+     * **Whoever builds 3a starts here.** If the answer is "protect the comments
+     * and let the list run past twenty", the first half of this case turns
+     * over: the POST opens a stream, `done` arrives, and the list holds
+     * twenty-one with the commented one still in it. The second half — an
+     * uncommented oldest is trimmed as before — stays as it is under any answer.
+     */
+    it("OPEN QUESTION 3a: a full list whose oldest criterion has a comment refuses a new one", async () => {
+      const start = Date.parse("2026-08-01T00:00:00.000Z");
+      const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+      const ids: string[] = [];
+      for (let i = 0; i < MAX_CRITERIA; i++) ids.push(await criterion(`criterion ${i}`, at(i)));
+      const oldest = ids[0] as string;
+      const comment = (await place(oldest)).body.comment as Comment;
+
+      const add = () =>
+        call("POST", `/api/referee/criteria/${SLUG}`, { criterion: "one more", kind: "single" });
+
+      for (const attempt of ["first", "retry"]) {
+        const refused = await add();
+        expect(refused.status, `${attempt}: ${refused.text.slice(0, 300)}`).toBe(409);
+        expect(refused.streamed, "a refusal must be JSON, before any header").toBe(false);
+        expect(refused.body.error).toBe(CRITERIA_FULL_OLDEST_HAS_COMMENTS);
+        // Rolled back whole: nothing trimmed, nothing added.
+        expect(await criteriaIds()).toEqual(ids);
+      }
+
+      /* The control, and the way out the sentence names: with the placement
+         cleared the same request succeeds and the oldest is trimmed as ever. */
+      await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
+        criterionId: null,
+        valence: null,
+      });
+      const added = await add();
+      expect(added.streamed, added.text.slice(0, 300)).toBe(true);
+      expect(frame(added.text, "done")?.status).toBe("done");
+      const after = await criteriaIds();
+      expect(after).toHaveLength(MAX_CRITERIA);
+      expect(after).not.toContain(oldest);
+    });
+
+    it("does not take the comment table's other foreign key for this one", async () => {
+      /* `comments_identity_fk`: a comment on a block the article does not have.
+         The route refuses that long before the store, so this goes to the store
+         directly — the point is what the store does with a 23503 that is *not*
+         about a criterion. It must stay the failure it is: a block id the
+         database has never heard of means stage 3 re-minted ids. */
+      const id = await criterion("a live criterion");
+      const error = await asTestOwner(() =>
+        commentStore
+          .create(SLUG, { blockId: "spya-zzzzzz" as BlockId, criterionId: id })
+          .then(
+            () => null,
+            (e: unknown) => e as Error & { status?: number; code?: string },
+          ),
+      );
+      expect(error?.name).toBe("StoreFailure");
+      expect(error?.code).toBe("23503");
+      expect(error?.status).toBeUndefined();
+      expect(error?.message).not.toBe(CRITERION_NOT_ON_ARTICLE);
+    });
   });
 });
