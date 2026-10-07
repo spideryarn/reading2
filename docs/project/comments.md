@@ -485,7 +485,7 @@ not to a row, so a table cell is the wrong shape for it anyway. The dialog
 
 The cost was that only one answer is visible at a time, and at first there was no way to see every
 comment on the article at once. Marginal cards or a column remain the better long-term answer — this is
-explicitly "until we come up with a better plan". Both have since arrived beside the dialog: the
+explicitly "until we come up with a better plan". Two views have since arrived beside the dialog: the
 [drawer](#the-drawer) lists every comment, and [Marginalia](marginalia.md) puts each one level with
 its block.
 
@@ -1248,9 +1248,10 @@ nothing to poll.
    comments saved, the original still marked `error`, and a dialog spinning forever on an id
    nothing would ever answer. Every individual piece reported success. The fix is two-layered — the
    updater is pure now, *and* *Try again* posts to the answer route, whose `beginAnswer` resets the
-   comment in place instead of appending (a second press while it is pending gets a 409). The create
-   route is idempotent on the id too: the same Save twice hands back the stored row, and anything
-   else under a taken id is a 409, never an overwrite. [`tests/store-comments.test.ts`](../../tests/store-comments.test.ts)
+   comment in place instead of appending (a second press while its answer lease is live gets a
+   409). The create route is idempotent on the id too: the same Save twice hands back the stored
+   free row while its status is `none`, and anything else under a taken id is a 409, never an
+   overwrite. [`tests/store-comments.test.ts`](../../tests/store-comments.test.ts)
    pins the server half.
 
 The last of those is the shape [silent-success.md](../reusable/silent-success.md) describes almost
@@ -1498,7 +1499,7 @@ belongs:
 | Where the answer goes | a dialog over the prose, anchored to the words | the band beside the prose |
 | The anchor back to the text | the quote itself | block ids the model cites |
 | Stored as | `comments`, one flat table | `chat_threads` / `chat_messages` |
-| Transport | one POST, the answer streams back with it | a stream |
+| Transport | a JSON POST to save; a separate POST streams an answer | a stream |
 
 **Comments are the narrower and safer feature**, and the one whose scoping vision.md's anti-goals
 actually argue for. Chat is the one that had to earn its place; the argument is in

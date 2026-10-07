@@ -502,18 +502,19 @@ was still true) below.
 - `search.md` § The mode band says the gist columns go away while you search. They were removed on
   2026-09-29. The fallback bullet says "just under 0.7 prints as 70", but the floor is 0.65. —
   *Fixed*, both (`QUICK_FLOOR = 0.65` in `src/quick-search.ts`).
-- `billing.md`: "The live row that needs a backfill" is probably moot, since that subscription ended
-  2026-10-03. The ChatGPT-tiers note says multiples of 50 cents, while the live section says whole
+- `billing.md`: "The live row that needs a backfill" is probably moot, since that subscription was
+  scheduled to end 2026-10-03. The ChatGPT-tiers note says multiples of 50 cents, while the live section says whole
   units. — *Fixed in part*: the ChatGPT note was right; it was the live section that was wrong
-  (`tests/billing-tiers.test.ts` asserts `% 50`). The section is now headed "probably moot,
+  (`tests/billing-tiers.test.ts` asserts `% 50`). The section now opens with "probably moot,
   unverified": `customer.subscription.deleted` resyncs the row, but the production read that would
   confirm it was refused this session's permissions. **Still open: someone with production access
   reads that row.**
 - `overseer-direction.md` says the scheduler has no home, but `scripts/overseer.ts` arms
   `OVERSEER_JOBS`. It also contradicts itself twice: Two tenses against Divergence on who owns the
   vitals history, and § The gates against § Route on who drops a case. — *Fixed*, all three: the
-  scheduler is `tools/overseer/scheduler.ts` behind `OVERSEER_JOBS_ENABLED=1`; the vitals history is
-  the dashboard's (`tools/fleet/health-history.ts`); dropping a case is Greg's, as § The gates and
+  scheduler is `tools/overseer/scheduler.ts`, armed by `OVERSEER_JOBS_ENABLED=1` or, for deterministic
+  rules only, `OVERSEER_RULES_ENABLED=1`; session jobs remain held without a launch protocol. The
+  vitals history is the dashboard's (`tools/fleet/health-history.ts`); dropping a case is Greg's, as § The gates and
   `overseer.md` say. **Code left for the Overseer:** `tools/overseer/attention-classify.ts`' prompt
   still routes "whether a case can be dropped" to `"fable"`, which is both the wrong owner and a
   retired model.
@@ -560,10 +561,12 @@ now) and § *One gateway, five wires* (six); `live-conversation.md` § *Which mo
 GPT-Live yet*; `setup-dev.md` § *Signing in needs four more* (five). — **Taken on 2026-10-07**: seven
 renamed, with every link to them repointed. They are now *What did not work in production at first*,
 *What it took to become a real deployment*, *The button on the live site did not work at first*,
-*The calls allowed round the outside, and the test that keeps them declared* (19 declarations and
+*The calls allowed round the outside, and the test that keeps them declared* (17 declarations and
 6 unmetered, so no count was right), *One gateway, a wire for each shape*, *The default model, and
-why it is not GPT-Live*, and *What signing in needs*. The Sentry one is *wrong*: both gaps are still
-open (`SENTRY_DSN` is `breaks: null` in `src/vercel-health.ts`, and nothing alerts).
+why it is not GPT-Live*, and *What signing in needs*. The Sentry one is *unverified in part*:
+the missing-DSN gap is still open (`SENTRY_DSN` is `breaks: null` in `src/vercel-health.ts`). There
+is no alert configuration in the repo, but that cannot establish whether external Sentry alert
+rules exist. The heading was left alone; calling both gaps open needs a Sentry-side check.
 
 **Code areas no doc owns**, from the hub's survey of `tools/fleet/`: admission; holds, receipts and
 request keys; new, rename and describe session; the Deploys tab, diagnostics and revision; the
@@ -615,7 +618,8 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
 - 2026-10-07 — the two left-alone lists taken by a follow-up session (worktree
   `261007-docs-false-statements`), each claim checked against the code: of 26 statements, 23 fixed,
   two wrong and one (the billing row) unverifiable without a production read; of eight headings,
-  seven renamed with every link repointed, one wrong. Four stale code comments found on the way were
+  seven renamed with every link repointed, one unverified in part. Four stale code comments found
+  on the way were
   corrected too (`vitest.config.ts`, `tests/store-migration-registry.ts`,
   `tests/billing-tiers.test.ts`, `tests/helpers/pg-ready.ts`). Left for the Overseer: that
   production read, and `attention-classify.ts` routing case-dropping to a retired model.

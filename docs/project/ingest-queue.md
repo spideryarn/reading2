@@ -2646,9 +2646,10 @@ Three things that changed since this table was first written:
   have to exist beside pg-boss's own, leaving two sources of truth about the same work. **Revisit
   when redelivery or backoff becomes a requirement rather than a nicety.**
 - **`SKIP LOCKED` does not give a global cap.** The obvious
-  `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` lets two workers claim two *different* jobs, which
-  breaks the global cap this document chose on purpose — concurrency 1 when this was written,
-  `SPIDERYARN_JOB_CONCURRENCY` since. Claiming must lock the singleton `queue_state` row first.
+  `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` lets workers claim *different* jobs without counting
+  those already running. It does not enforce the global cap this document chose on purpose —
+  concurrency 1 when this was written, `SPIDERYARN_JOB_CONCURRENCY` since. Claiming must lock the
+  singleton `queue_state` row first, then count the running jobs inside that lock.
 - **`LISTEN/NOTIFY` is not available.** It is session-scoped, and we reach Postgres through a
   transaction-mode pooler, which hands out a connection per transaction. It would not error at
   connect time — it would simply never deliver. **Keep polling**, which this document already says is

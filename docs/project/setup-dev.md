@@ -189,9 +189,10 @@ needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.e
 
 ### What signing in needs
 
-Since 2026-08-27 the app has a gate ([auth.md](auth.md)), and **without these the client throws at
-module load and you get a blank page** — deliberately, because the alternative is a sign-in button
-that does nothing and no clue why.
+Since 2026-08-27 the app has a gate ([auth.md](auth.md)). **Without the two `VITE_` variables the
+client throws at module load and you get a blank page** — deliberately, because the alternative is
+a sign-in button that does nothing and no clue why. The server key is for verifying sign-in;
+the last two variables configure Google sign-in in the Supabase stack.
 
 ```
 VITE_SUPABASE_URL=http://127.0.0.1:54361

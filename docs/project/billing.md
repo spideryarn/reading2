@@ -412,7 +412,8 @@ payload above rather than from a boolean.
 > [!WARNING]
 > **The live row predates the column.** `cancel_at` landed after the cancellation webhook had already
 > been delivered, and `/profile` never resyncs from Stripe, so the one live cancelled subscription
-> reads `cancel_at = null` until something syncs that customer again. See
+> then read `cancel_at = null` until something synced that customer again. Its current state is
+> unverified; see
 > [The live row that needs a backfill](#the-live-row-that-needs-a-backfill).
 
 ### The live row that needs a backfill
@@ -420,16 +421,16 @@ payload above rather than from a boolean.
 **Probably moot since 2026-10-03, unverified.** The subscription was scheduled to end that day, and
 when Stripe ends one it sends `customer.subscription.deleted`, which is in `HANDLED_EVENTS` and
 resyncs the customer like any other handled event ([`src/billing/webhook.ts`](../../src/billing/webhook.ts)).
-Nobody has read the production row since to confirm it; check it before acting on what follows.
+The production row has not been verified here; check it before acting on what follows.
 
-**One production row, and nothing automatic will fix it.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
+**The original gap, in one production row.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
 cancelled on 2026-09-03; the `customer.subscription.updated` webhook that carried the cancellation
-was delivered and handled *before* `cancel_at` existed as a column, so the row now reads
-`cancel_at = null` under a subscription Stripe has scheduled to end on 3 October. `/profile`
+was delivered and handled *before* `cancel_at` existed as a column, so the row then read
+`cancel_at = null` under a subscription Stripe had scheduled to end on 3 October. `/profile`
 [never resyncs from Stripe](#what-a-reader-sees), so nobody looking at the page can cause the row to
 catch up.
 
-**The recommendation is to make Stripe tell us again, not to type the date in.** Re-deliver that
+**If it is still stale, the recommendation is to make Stripe tell us again, not to type the date in.** Re-deliver that
 event from the Stripe Dashboard (Developers → Events → the `customer.subscription.updated` for that
 subscription → *Resend*), or make any change to the subscription that Stripe emits an event for.
 `syncSubscriptionFromStripe` then does exactly what it does for everyone else — asks Stripe what is

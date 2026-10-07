@@ -3512,7 +3512,7 @@ export const LANES_BEYOND_THE_SCAN: Readonly<Record<string, string>> = {
     "2026-09-04, and confirmed by running it. Its own header already said so - `the " +
     "blob store here is the Supabase one, against the local stack`.",
   "tests/raw-source-store.test.ts":
-    "Reaches Supabase Storage, not Postgres. The dangerous one of the five: it" +
+    "Reaches Supabase Storage, not Postgres. The dangerous one of the five: it " +
     "removes and re-plants ONE deterministic canonical key with deliberately corrupt " +
     "bytes, so two concurrent runs on this box can destroy each other's oracle. GPT " +
     "Sol, 2026-09-04. Serialising it inside a run is what this lane buys; two " +

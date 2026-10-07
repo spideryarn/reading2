@@ -555,8 +555,9 @@ available rather than free memory, swap as a cliff, `vmstat` si/so, and memory a
 kind — with every field a discriminated union that can say *I could not tell* instead of returning a
 zero that reads as healthy. The Overseer stores that object verbatim per event and does not interpret
 it a second time, so a change at the source changes the history's shape rather than drifting from it.
-What the Overseer adds is only the tense the dashboard does not have: **nobody records health over
-time**, so "what was running when the box hit 391" is unanswerable today.
+The dashboard now records health over time too, through
+[`tools/fleet/health-history.ts`](../../tools/fleet/health-history.ts); that tense is no longer the
+Overseer's alone.
 
 ## The order of work
 
@@ -571,7 +572,9 @@ store is not a detour before triage, it is triage's first half. And **the schedu
 choice despite having no home then** ([cron-scheduler.md](cron-scheduler.md)); that was a deliberate
 ordering, not an oversight. It has since been built into the daemon
 ([`tools/overseer/scheduler.ts`](../../tools/overseer/scheduler.ts)), off unless
-`OVERSEER_JOBS_ENABLED=1`.
+`OVERSEER_JOBS_ENABLED=1` or `OVERSEER_RULES_ENABLED=1`. The second arms deterministic rules only.
+Neither currently supplies a launch protocol, so session jobs remain held — `schedulerWiring` in
+[`scripts/overseer.ts`](../../scripts/overseer.ts).
 
 ### It defers work; it never declines it
 
@@ -1030,8 +1033,9 @@ these before designing anything that talks to a session.**
   Anthropic's cloud, so it cannot touch this box's worktrees.** The session-local cron is in-memory
   and dies with its session. So "run job J on the box every M minutes" had no home — Greg
   deferred building one on 2026-09-08; it is now the Overseer daemon's
-  ([§ The scheduler](#the-scheduler)), armed by `OVERSEER_JOBS_ENABLED=1`. See [cron-scheduler.md](cron-scheduler.md), which says the
-  same thing from the product side.
+  ([§ The scheduler](#the-scheduler)), with the arming and current dispatch limit in
+  [§ The order of work](#the-order-of-work). See [cron-scheduler.md](cron-scheduler.md) for the
+  distinction between this and the app's periodic work.
 
 ## Attention, and who the Overseer is really watching
 

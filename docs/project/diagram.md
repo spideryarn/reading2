@@ -835,9 +835,10 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   cell, a spine segment and an arrow key use.
 - **Keyboard** → the picture is one tab stop, not one per node, and the arrows
   move inside it: ↑ / ↓ step through the drawn order **and take the article with
-  them**, Home / End jump to the ends, Enter jumps the article. **←** goes to the
-  parent and **→** steps into the first child; neither opens or closes
-  anything (see the folding line below).
+  them**, Home / End jump to the ends, Enter jumps the article. On Force, **←**
+  moves focus to the parent; **→** does nothing, because no bubble reports children.
+  On Drift and Trail, **← / →** step backward / forward and take the article with them.
+  Neither opens or closes anything (see the folding line below).
   That is the [W3C tree-view pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/),
   and it is written out rather than inherited because SVG has no `ul` and no
   `button` — which is also why each node carries `aria-level`, `aria-setsize` and
@@ -849,7 +850,8 @@ that takes 300ms and cannot be wrong about which build it was looking at.
 - **Folding a part away is gone**, and saying so is the point of this line. The
   chevron on a Tree row was the only way in that ever worked; ← and → look like
   a second way and are not one, because `layoutForce` gives every bubble
-  `hasChildren: false` and both key branches require it. So the collapse set is
+  `hasChildren: false`, so → cannot enter a child, while ← only moves focus to a parent.
+  The collapse set is
   now a constant — `walk`, `buildGraph` and `DiagramOptions` all still honour
   one, and the panel has nothing to drive it with.
 - **Where you are** is a ring on the deepest node you are inside, and on Drift
@@ -1257,8 +1259,9 @@ reduction algorithms"* — and they answer different questions.
   down — which is the thing no other picture in this app can show.
   **Within a lane, sideways is the paragraph's own first principal component**,
   the axis Spread uses, rescaled to the lane — not how central it is to its
-  topic, and the lane next door is the one the article reaches next, not the
-  nearest topic (the cards, above). That is a
+  topic. Lanes are ordered by the median paragraph position of their members, not by
+  semantic distance ([`orderLanes`](../../src/projection.ts)); the lane next door need not be the
+  nearest topic. That is a
   fact, not jitter — and a reader cannot tell the two apart by looking, which is
   exactly why the pixels are spent on something true.
 - **Spread** (`?dx=spread`) puts every paragraph on the first principal
@@ -1392,7 +1395,7 @@ swallowed the article cannot squash everything else to the minimum.
 ### They are a list, not a tree
 
 Force is a `role="tree"` of `treeitem`s with levels, sibling counts, and
-Left/Right meaning close and open. These two cannot honour that:
+Left/Right as described above, without folding. These two cannot honour a tree contract:
 276 paragraphs are not a hierarchy and there is nothing to open. So they are a
 `listbox` of `option`s, and all four arrow keys step one paragraph. Inheriting
 the tree contract would have been a role describing a widget the code does not
