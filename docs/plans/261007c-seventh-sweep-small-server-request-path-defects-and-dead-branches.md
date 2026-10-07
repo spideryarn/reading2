@@ -149,3 +149,56 @@ so "only `load`" needs care there.
 **SVO7.** The list of reads not moved existed in `artefact-not-made-yet.ts`, `types.ts`, plan
 261006h and `web-client.md`, each naming five when there were six (Illustrated was missing). It is
 now in `artefact-not-made-yet.ts` alone, and the other three point at it.
+
+## 8. Comments that described a deleted store
+
+Comment-only. `src/store/fs.ts`, `src/api.ts` and `src/store/realtime-sessions-fs.ts` were all
+deleted on 2026-09-05 (`86a4ef7c0`, `f8798186c`); these comments spoke of them in the present
+tense. Each rewrite was checked against the code it sits on, and each keeps the history, since the
+history is still the reason.
+
+| Where | Said | Now says |
+|---|---|---|
+| `src/store/pg.ts`, header | "Same questions as src/store/fs.ts"; the parity test "asks both stores"; nothing "may … call into src/store/fs.ts" | The only store since 2026-09-05; what the second one was; and that the many "the filesystem store called it stale" comments below are history and still the reason |
+| `src/store/pg.ts` § `cleanedForReading` | "the store that is in the middle of *replacing* the filesystem serves old HTML unchecked" | Past tense, and that this is the one `loadArticle` now |
+| `src/store/pg.ts` § `rawPgArticleReader` | "`fsArticleReader` … is annotated the same way, and the twin adapters should read the same" | The reason that still holds (a test parses the annotation), with the other as history |
+| `src/store/pg-reader.ts`, header | "`fsReaderStore` … is the other"; a pointer to `patchReaderFile`, which does not exist | Past tense; the dead pointer removed |
+| `src/store/realtime-sessions-pg.ts`, header | "The filesystem half is realtime-sessions-fs.ts … the store flag picks one at boot" | The only implementation. **Not on the investigation's list**; found while fixing item 1 |
+| `src/store/public-reader.ts`, the comments' `status: "done"` | "constant by construction: the query refuses every other value" | The query admits `'none'` and `'done'`, this writes `done` for both, and that is harmless only because the DTO drops the field. The code is unchanged, as the review said it should be |
+| `src/routes.ts`, above `GET /api/metadata/:slug` | "stat-ing every file for it" | What `articleMetadata` costs today: the step rows, and every block read, cleaned and hashed |
+
+**Left, on purpose.** `grep -c filesystem src/store/pg.ts` is 43 after this: the loaders' "while
+the filesystem store called it stale" comments are history, which the new header now says. A few
+others are in the present tense about code that is gone, and were found too late to check each one
+against its code, so they were not rewritten:
+
+- `pg.ts` § `loadSketch`: "`readSketchFile` closes on disk" (no such function is defined in `src/`);
+- `pg.ts` § `loadIllustrated`: "`loadIllustrated` closes on the filesystem";
+- `pg-comments.ts` § `create`: "`sameMark` in src/comments.ts is the filesystem half of this" (no
+  `sameMark` there);
+- `src/public-types.ts` § *What is not here*: "the public read filters to finished rows in SQL, so
+  `status` would be a constant", which for comments has the same `'none'` exception as above.
+
+## Mutations
+
+Each fix or pin was broken on purpose at the end, and its test watched red:
+
+| # | Mutation | Went red |
+|---|---|---|
+| 1 | `find`'s `isUuid` guard switched off | the three non-UUID cases in `live-session-routes`, 500 each |
+| 2 | the `res.headersSent` guard absent (the state before the fix) | four of five in `serve-api-after-headers`; the control stayed green |
+| 2 | `!res.destroyed` dropped from the guard | *a response the reader already dropped is not ended a second time* |
+| 3 | the no-row retry gives up after two tries, not three | *gives up after three tries* in `store-comments` |
+| 4 | `loadArticle` stops refusing a minimal paper | both *refuses … as chat is refused, and stores nothing* cases in `minimal-paper` |
+| 5 | `query.get("anchorz")` | *shows whole-block bookmarks only to a client that opts into their anchor shape* in `routes` |
+| 6 | `answerALostClaim`: `unknown` → 400, `expired` → 409, the winner's job not returned | the 404, 410 and job cases in `uploads-api` |
+| 7 | `loadSkim` back to a plain `Error` with `status: 404` | *skim: the loader says "not made yet" with the type the helper reads* |
+| 7 | `GET /api/arc` wrapped in `orNullWhenNotMadeYet` with no name in the offline list | *arc: a 404 with the header and without it* (it answered `200 null`), **and** `api-fetch-offline` § *matches exactly the GET routes that go through orNullWhenNotMadeYet* — the guard that stopped the route half of item 7 |
+
+Not mutated: item 6's *article* and *409* answers and its pinned Stop case (three of the helper's
+six outcomes were, in one run); item 3's *is minted again* and *does not retry a failure that is
+not a collision* cases; item 8, which is comments.
+
+## Gates
+
+Run after merging `origin/dev`; the counts are in the commit that follows this one.
