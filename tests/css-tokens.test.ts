@@ -197,15 +197,15 @@ const TEXT_ON_BRIGHT = ["--page"];
  *  `--panel: var(--sidebar)` and `--page: var(--background)` are both a hop
  *  away from a shadcn surface, and `color: var(--alias)` was one of the shapes
  *  Sol showed passing the first version. */
-function resolvesToSurface(token: string, seen = new Set<string>()): boolean {
-  if (TEXT_ON_BRIGHT.includes(token)) return false;
+function resolvesToSurface(token: string, allowBrightText = true, seen = new Set<string>()): boolean {
+  if (TEXT_ON_BRIGHT.includes(token)) return !allowBrightText;
   if (NON_TEXT_TOKENS.includes(token)) return true;
   if (seen.has(token) || seen.size > 10) return false;
   seen.add(token);
   const value = valueOf.get(token);
   if (value === undefined) return false;
   for (const m of value.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/g)) {
-    if (m[1] && resolvesToSurface(m[1], seen)) return true;
+    if (m[1] && resolvesToSurface(m[1], allowBrightText, seen)) return true;
   }
   return false;
 }
@@ -257,7 +257,7 @@ describe("no text is painted in a surface token", () => {
 });
 
 /**
- * **The same mistake on a focus mark.** Five marks in marginalia.css and
+ * **The same mistake on a focus mark.** Marks in marginalia.css and
  * dialogs.css were `outline: 2px solid var(--rule-strong)` until 2026-10-07: a
  * hairline colour, under 2:1 against the surface in both themes, on controls
  * whose only focus mark it was. Measured in a browser after a real Tab
@@ -266,10 +266,45 @@ describe("no text is painted in a surface token", () => {
  * hairline. The app's mark is `--highlight-text`.
  *
  * As above, this reads text: it cannot see an outline that is legible in one
- * theme and not the other, or a mark made of a border or a box-shadow.
+ * theme and not the other, or a mark made of a border or a box-shadow. It
+ * checks token names and aliases, not contrast or the surface behind a mark;
+ * it shares the text scanner's scope and last-definition limits above.
  */
 describe("no outline is drawn in a surface or hairline token", () => {
   const OUTLINE = /(?<![-\w])outline(?:-color)?\s*:\s*([^;{}]*)/gi;
+
+  function surfaceUses(css: string): string[] {
+    const hits: string[] = [];
+    for (const m of css.matchAll(OUTLINE)) {
+      for (const v of (m[1] ?? "").matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/g)) {
+        if (v[1] && resolvesToSurface(v[1], false)) hits.push(`${m[0].trim()}  →  ${v[1]}`);
+      }
+    }
+    return hits;
+  }
+
+  it("rejects the page surface too, including through an alias", () => {
+    expect(surfaceUses(".bad { outline: 2px solid var(--page); }")).toHaveLength(1);
+    /* The text checker exempts --page on bright fills. That exception is
+       about text, and must not hide a page-coloured outline or its aliases. */
+    valueOf.set("--outline-test-alias", "var(--page)");
+    try {
+      expect(surfaceUses(".bad { outline-color: var(--outline-test-alias); }")).toHaveLength(1);
+    } finally {
+      valueOf.delete("--outline-test-alias");
+    }
+    expect(surfaceUses(".good { outline: 2px solid var(--highlight-text); }")).toEqual([]);
+  });
+
+  it("still recognises the page surface when its value is a literal", () => {
+    const original = valueOf.get("--page")!;
+    valueOf.set("--page", "oklch(0.145 0 0)");
+    try {
+      expect(surfaceUses(".bad { outline: 2px solid var(--page); }")).toHaveLength(1);
+    } finally {
+      valueOf.set("--page", original);
+    }
+  });
 
   it("finds outline declarations at all", () => {
     const scanned = sheets.reduce((n, { css }) => n + [...css.matchAll(OUTLINE)].length, 0);
@@ -278,17 +313,12 @@ describe("no outline is drawn in a surface or hairline token", () => {
   });
 
   for (const { path, css } of sheets) {
-    const hits: string[] = [];
-    for (const m of css.matchAll(OUTLINE)) {
-      for (const v of (m[1] ?? "").matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/g)) {
-        if (v[1] && resolvesToSurface(v[1])) hits.push(`${m[0].trim()}  →  ${v[1]}`);
-      }
-    }
+    const hits = surfaceUses(css);
     it(path, () => {
       expect(
         hits,
-        "these draw an outline in a surface or hairline token, which cannot be seen " +
-          "against the surface it sits on; the focus mark is `--highlight-text`",
+        "these outlines name a known surface or hairline token; this is a spelling " +
+          "tripwire, not a contrast measurement. The focus mark is `--highlight-text`",
       ).toEqual([]);
     });
   }

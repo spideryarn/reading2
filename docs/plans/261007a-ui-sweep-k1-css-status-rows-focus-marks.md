@@ -92,6 +92,12 @@ Red, then green: with the two rows reading `var(--danger)` and the token not yet
 `tests/css-tokens.test.ts` failed twice ("defined in no stylesheet") and the three new palette
 pairs failed in both themes ("--danger is not defined"); all pass with the token in both blocks.
 
+The code review also checked the measurement boundary: Dark at `oklch(0.657 0.2 27.325)`
+passes the continuous-colour test at 4.50008:1 on the raised surface, but an 8-bit sRGB sample
+is 4.49535:1. The three error-text pairs now check both methods. That mutation was seen red
+with the added sample check, then the chosen 0.7 value was restored. This models the recorded
+canvas sampling method; it does not prove every browser's gamut mapping.
+
 ### `--ink-faintest`, the dead fallbacks, the false comment
 
 - `--ink-faintest` (two uses: `.dock-btn.soon`, `.diag-opt-label`) is defined nowhere, so its
@@ -139,6 +145,9 @@ Notes on what was and was not reached:
 A check was added, because the baseline is clean now and only now:
 `tests/css-tokens.test.ts` § *no outline is drawn in a surface or hairline token*. It reuses that
 file's own resolver. Seen red by putting `--rule-strong` back on `.chat-card-shut`.
+The code review removed that resolver's text-only `--page` exemption for outlines. Regressions
+for the page token and a literal page definition were seen red; alias rejection is also checked.
+It is a token-name tripwire, not a contrast measurement.
 
 ## 3. The rest
 
@@ -188,9 +197,10 @@ file's own resolver. Seen red by putting `--rule-strong` back on `.chat-card-shu
   measured card filled the layout's whole width.
 - **`diagram-sketch.css` "references `--destructive` six times"** (the comment's own claim, which
   the umbrella repeats as the comment to remove): it references it nowhere.
-- **`.prof-box-input`, `.outln-row.focused`, the headings in Dark**: no defect there. In Dark
-  `--highlight` and `--highlight-text` are one colour (5.7:1 or better), so those three changes
-  show only in Light.
+- **`.prof-box-input` and `.outln-row.focused` in Dark**: their existing marks already have
+  enough contrast. In Dark `--highlight` and `--highlight-text` are one colour (5.7:1 or
+  better), so those two recolourings show only in Light. The headings gain an outline in both
+  themes; their existing text-colour mark stays.
 
 ## Left, and why
 
@@ -204,3 +214,18 @@ file's own resolver. Seen red by putting `--rule-strong` back on `.chat-card-shu
 - **`.marg-question` and `.tip-hit` on a real page**, and the Add page's purpose box: no fixture
   reaches them without pressing something that may run a model. Each shares a rule with something
   that was measured.
+
+## Review status
+
+- Code, round 1: [GPT Sol](261007a-ui-sweep-k1-code-review-sol.md), write-capable, on commits
+  `74c7ec21b`, `49e5b9ad2`, `3a4d5d745` and `186f696ab`; [the prompt](261007a-ui-sweep-k1-code-review-prompt.md).
+  Verdict **ready with these fixes**, no P0 or P1. Three findings, each checked against the code
+  and kept as the reviewer made it:
+  - **K1-F1** (P2): the new outline check inherited the text check's exemption for `--page`, so a
+    page-coloured outline passed. Outlines no longer get that exemption.
+  - **K1-F2** (P2): the palette test measured `--danger` as a continuous colour, which can pass at
+    4.5001:1 where the 8-bit colour the browser paints is 4.495:1. The three pairs check both.
+  - **K1-F3** (P3): this doc said the headings change only in Light. They gain an outline in both
+    themes.
+  It answered "does any change alter what a reader sees beyond what the plan says" with no, after
+  walking every changed selector. No second round: no P0 or P1 fix landed.

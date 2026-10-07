@@ -20,7 +20,18 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { contrast, DARK_BLOCK as dark, LIGHT_BLOCK as light, PALETTE } from "./helpers/theme-palette.js";
+import {
+  contrast,
+  DARK_BLOCK as dark,
+  decode,
+  encode,
+  LIGHT_BLOCK as light,
+  luminance,
+  PALETTE,
+  ratio,
+  resolve,
+  type Rgb,
+} from "./helpers/theme-palette.js";
 
 /** A value that names a colour itself rather than pointing at another token. */
 const LITERAL = /oklch\(|#[0-9a-f]{3,8}\b|^\d+ \d+ \d+$|\b(white|black)\b/i;
@@ -80,6 +91,18 @@ describe.each([
 ] as const)("the %s theme's core pairs", (_theme, palette) => {
   it.each(PAIRS)("%s on %s clears %s:1", (fg, bg, floor) => {
     expect(contrast(fg, bg, palette)).toBeGreaterThanOrEqual(floor);
+    if (fg === "--danger") {
+      /* K1's browser evidence samples an 8-bit sRGB canvas. Linear clipping
+         and encoded clipping agree, but rounding to bytes can take a value
+         just over the floor below it. Check that sample as well as the
+         continuous colour; this models the recorded sampling method, not
+         every browser's gamut mapping. */
+      const sampledLuminance = (name: string) => {
+        const rgb = resolve(name, palette).map((c) => decode(Math.round(255 * encode(c)) / 255)) as Rgb;
+        return luminance(rgb);
+      };
+      expect(ratio(sampledLuminance(fg), sampledLuminance(bg))).toBeGreaterThanOrEqual(floor);
+    }
   });
 });
 
