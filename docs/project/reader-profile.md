@@ -636,8 +636,10 @@ control in that mode is held**: the panel's Regenerate, and *Write it again*, *F
 with the modes whose Regenerate is in this panel (Quiz, Summary, Thread, Ideas, Glossary and
 Sketch), and since 2026-10-07 it also holds the forced controls that are not: Illustrated's *Paint
 again*, Quotes' *Find more* and *Choose them again*, and the button on the stale banner in Timeline,
-FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)). **Skim's forced run is the one
-not held yet**; it waits on a change to the same hook.
+FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)), and Skim's *Plan it again*
+([261007d](../plans/261007d-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md);
+[skim.md](skim.md) says what that hold does about the Quotes and Ideas a route's job may make
+first). Every artefact hook with a forced run now has one.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose
 it. Three things release it: a read **the server answered** shows a different artefact; the job

@@ -380,6 +380,8 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
+    rewriting: false,
+    refresh: async () => {},
     cancel: () => {},
     ...over,
   };
