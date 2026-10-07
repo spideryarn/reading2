@@ -241,6 +241,11 @@ export function DockQuickSearch({
     }
     if (e.key === "Escape") {
       e.preventDefault();
+      /* Not the Escape that dismisses an input method's candidates: the words
+         and the caret stay. It is still cancelled above, because a
+         `type="search"` box is emptied by the browser itself on Escape
+         (measured in Chrome, 2026-10-07). */
+      if (isImeComposing(e)) return;
       clear();
       e.currentTarget.blur();
     }

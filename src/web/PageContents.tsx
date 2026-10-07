@@ -53,6 +53,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { scrollToAndFlash } from "./flash.js";
+import { isImeComposing } from "./key-chord.js";
 import { searchSections, type SearchableSection, type SynonymTable } from "./page-search.js";
 
 /**
@@ -477,6 +478,15 @@ export function PageContents({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Escape" && query !== "") e.stopPropagation();
+          /* A key an input method is using is not ours: its Enter accepts a
+             candidate and its Escape dismisses the list. A `type="search"`
+             box is also emptied by the browser itself on Escape (measured in
+             Chrome, 2026-10-07), so that default is cancelled. */
+          if (isImeComposing(e)) {
+            if (e.key === "Escape") e.preventDefault();
+            return;
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             const first = matches?.[0];
@@ -485,7 +495,6 @@ export function PageContents({
             /* Only when there is something to clear, so an Escape in an empty
                box still reaches whatever else on the page listens for it. */
             e.preventDefault();
-            e.stopPropagation();
             setQuery("");
           }
         }}
@@ -544,7 +553,13 @@ export function PageContents({
                  would have drawn in Arial beside a page of Geist, which is the
                  exact bug this component was shipped alongside a fix for. GPT
                  Sol, 2026-09-03. */
-              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text ${
+              /* **The focus mark is an outline drawn inside the button.** The
+                 entry fills the list's width and the list scrolls, so a mark
+                 outside the box would be cut off at the list's edges. Until
+                 2026-10-07 the outline was off and focus changed only the
+                 text colour, which on the entry already marked as "here" was
+                 no visible change at all. */
+              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:-outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text ${
                 here === entry.id
                   ? "tw:border-highlight tw:text-foreground"
                   : "tw:border-border tw:text-ink-faint"
