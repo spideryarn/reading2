@@ -31,6 +31,17 @@ they have not been observed red or green because the locked test command could
 not acquire the shared lock. Source inspection establishes the missing check;
 runtime validation remains outstanding.
 
+> **Note, 2026-10-07.** The paragraph above is what was true when this was written. Since then the
+> six cases have been run and seen red and green. With `if (n > 1) options?.signal?.throwIfAborted()`
+> deleted from `asTransportAttempts`, the four non-stream seams' *opens no attempt when the signal
+> aborts as the backoff finishes* fail (`expected undefined to be DOMException`). With
+> `if (attempt > 1) options.signal.throwIfAborted()` deleted from `acceptedStream`, the stream's
+> case of that name and *opens no retry if the activity callback aborts after the wait* fail
+> (`expected 2 to be 1`). All 260 pass with both lines back. The Messages loop's check now has a
+> test of its own too: *a Stop as the backoff finishes leaves one row, and opens no attempt 2* in
+> [messages-stream.test.ts](../../tests/messages-stream.test.ts), red with that line deleted.
+> [The plan](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
+
 Countermeasures, ranked by cost and value:
 
 1. Check cancellation immediately before retry resource creation. Applied here.

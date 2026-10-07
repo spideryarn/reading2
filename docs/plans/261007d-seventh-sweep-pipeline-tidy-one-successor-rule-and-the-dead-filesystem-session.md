@@ -172,3 +172,54 @@ named. Cases 9 and 13 are two it did not.
 - Comments that described `fsStoreSession` in the present tense, in `session.ts`, `pg-session.ts`,
   `pg-jobs.ts`, `jobs.ts`, `structure.ts`, `sketch.ts`, `checkpoints.ts`, `artifacts-pg.ts` and four
   test files, now say when it went. Comments that already described it as history are untouched.
+
+## Item 3: PQO6, two tests seen red, and the missing one
+
+Two postmortems record a regression test as written and never run. Both pass today. Each was
+mutated back to the original bug on 2026-10-07, watched red, and restored; the suites then passed
+(370 of 370 over the four files).
+
+**[261005i](../postmortems/261005i-cancellation-checked-before-an-await-does-not-authorize-the-next-attempt.md),
+the six cancellation cases in `tests/ai-call-transport-retry.test.ts`.** Baseline 260 of 260.
+
+| mutation in `src/ai-call.ts` | red |
+|---|---|
+| `if (n > 1) options?.signal?.throwIfAborted();` deleted from `asTransportAttempts` | 4 of 260: *opens no attempt when the signal aborts as the backoff finishes* for `openRouterJson`, `openRouterImage`, `openRouterTranscription`, `openRouterDecisions` → `expected undefined to be DOMException{ … 'TimeoutError: …' }` |
+| `if (attempt > 1) options.signal.throwIfAborted();` deleted from `acceptedStream` | 2 of 260: the same case for `openRouterStream`, and *opens no retry if the activity callback aborts after the wait* → `expected 2 to be 1` |
+
+Four and two are the six. The Sol cross-review had already shown this in a scratch copy, and says
+the transport plan's own gates recorded it earlier, so the postmortem's "not been observed red or
+green" was stale before this sweep.
+
+**[261005p](../postmortems/261005p-a-successor-completion-rule-must-not-undo-the-producer-on-resume.md),
+the constrained-resume case in `tests/open-before-structure-queue.test.ts`.** Baseline 8 of 8,
+against Postgres. This is the one nobody had seen red.
+
+| mutation in `src/pipeline.ts` | red |
+|---|---|
+| `structureIsNotAStandIn` put back to rejecting every awaiting tree (`return false` in place of the `headingsFirst` and never-published test) | *a handed-back import finishes without rebuilding its stand-in* → `Error: job … did not finish in 120 advances`; and the unit case in `structure-step-headings-first.test.ts`, *keeps a marked unpublished import's stand-in when its claim resumes* → `expected false to be true` |
+
+Both postmortems now carry a dated note under the paragraph that said the test had not run. The
+paragraph itself is unchanged.
+
+**The missing test was written.** The Messages loop's check after its backoff
+(`options.signal?.throwIfAborted()` in `finalMessage`,
+[`src/messages-stream.ts`](../../src/messages-stream.ts)) had none. The seam already existed: the
+scripted `fetch` and the row reader in
+[`tests/messages-stream.test.ts`](../../tests/messages-stream.test.ts), and the timer trick the
+OpenRouter cases use. No paid call and no change to `src/`. The new case, *a Stop as the backoff
+finishes leaves one row, and opens no attempt 2*, lets the wait resolve and aborts before its
+continuation runs.
+
+| mutation in `src/messages-stream.ts` | red |
+|---|---|
+| the `throwIfAborted()` after the wait deleted | `expected [ [ 1, 'error', { …(3) } ], …(1) ] to deeply equal [ [ 1, 'error', { …(3) } ] ]`: a second row, for an attempt opened after the Stop |
+
+One difference from the OpenRouter cases: the SDK sets a timer of its own per request, so the new
+case wraps only the timer whose length is a first backoff's (375 to 625 ms) and asserts that it
+saw exactly one.
+
+**What the docs got wrong.** The Opus read said neither test had been seen red; the Sol review
+corrected that for the transport cases and was right. The Opus read's file for the Messages check
+(`src/messages-stream.ts`) was right; the brief for this cluster named `src/messages.ts` and
+`src/ai-call.ts`, where it is not.

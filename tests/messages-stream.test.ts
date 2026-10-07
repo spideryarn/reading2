@@ -13,7 +13,7 @@
  * hand-written to match the code. If OpenRouter moves the field, these are the
  * record of where it used to be.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Anthropic, { APIUserAbortError } from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { CallDeadlineReached, StallReached } from "../src/call-failure.js";
@@ -986,6 +986,60 @@ describe("streamMessage — every attempt's row says which go it was, and how it
       setTimeout(() => controller.abort(), 50);
     });
     expect(rows).toEqual([[1, "error", beforeAnswer("network")]]);
+  });
+
+  /**
+   * **The Stop that lands after the wait resolves and before the retry opens.**
+   *
+   * The case above stops *during* the backoff, which `waitOrStop` itself
+   * rejects. This one lets the wait resolve and aborts before its continuation
+   * runs, so the only thing between the Stop and a second attempt is the
+   * `options.signal?.throwIfAborted()` after the wait in `finalMessage`
+   * (src/messages-stream.ts). That line was added after a review *"with no test
+   * of its own"*
+   * (docs/postmortems/261005i-cancellation-checked-before-an-await-does-not-authorize-the-next-attempt.md);
+   * this is the test, written 2026-10-07. The OpenRouter seams have had the same
+   * case since then in tests/ai-call-transport-retry.test.ts, and the timer
+   * trick is theirs.
+   *
+   * **Only the backoff's timer is wrapped**, picked out by its length (375 to
+   * 625 ms for a first wait): the SDK sets a timer of its own per request, and
+   * wrapping whichever came first would abort somewhere else.
+   *
+   * Mutation, watched red that day: the `throwIfAborted()` after the wait
+   * deleted → `expected [ [ 1, 'error', { …(3) } ], …(1) ] to deeply equal
+   * [ [ 1, 'error', { …(3) } ] ]`: a second row, for an attempt opened after
+   * the Stop.
+   */
+  it("a Stop as the backoff finishes leaves one row, and opens no attempt 2", async () => {
+    const controller = new AbortController();
+    const schedule = globalThis.setTimeout;
+    let wrapped = 0;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: (...args: unknown[]) => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      const isBackoff = wrapped === 0 && ms !== undefined && ms >= 375 && ms <= 625;
+      if (!isBackoff) return schedule(callback, ms, ...args);
+      wrapped += 1;
+      /* Resolve the wait, then abort before its continuation runs. */
+      return schedule(() => {
+        callback();
+        controller.abort();
+      }, ms);
+    }) as typeof setTimeout);
+    try {
+      const rows = await said([{ throws: "fetch failed" }, { body: cannedStream() }], controller.signal);
+      /* The fixture did what it says: the wait it wrapped was the backoff, and
+         the signal is aborted. Without these the case passes over a retry that
+         simply answered. */
+      expect(wrapped, "the backoff's timer was never seen").toBe(1);
+      expect(controller.signal.aborted).toBe(true);
+      expect(rows).toEqual([[1, "error", beforeAnswer("network")]]);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("a refusal carries its status", async () => {

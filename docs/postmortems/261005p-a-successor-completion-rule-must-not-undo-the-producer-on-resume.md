@@ -40,6 +40,13 @@ completion under the same repeated four-second claims, with structure running on
 test could not run in this sandbox: `connect EPERM 127.0.0.1:54362`, with Docker unavailable.
 Its red-then-green evidence remains unearned.
 
+> **Note, 2026-10-07.** The paragraph above is what was true when this was written. The database
+> test has since been run against Postgres, red and green. With `structureIsNotAStandIn` put back
+> to rejecting every awaiting tree, *a handed-back import finishes without rebuilding its stand-in*
+> fails with `job … did not finish in 120 advances`, and the unit case fails as it did then. All 8
+> pass with the fix back.
+> [The plan](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
+
 ## Countermeasures, ranked by ease against value
 
 1. **Test both producer resume and successor replacement against the same intermediate output.**
