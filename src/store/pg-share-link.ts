@@ -120,11 +120,18 @@ const rawPgShareLinkStore: ShareLinkStore = {
     return stateOf(row);
   },
 
-  async create(slug: string): Promise<ShareLinkState> {
+  async create(slug: string, options?: { keepExisting?: boolean }): Promise<ShareLinkState> {
     requireSlug(slug);
     return getDb().transaction(async (tx) => {
       const [row] = await currentShareLinkQuery(tx, slug, true);
       if (!row) throw notFound(slug);
+
+      /* Under the lock, so a link made a moment ago by somebody else is the
+         one handed over, never replaced (plan 261007o, Sol's F1). */
+      if (options?.keepExisting) {
+        const now = stateOf(row);
+        if (now.on) return now;
+      }
 
       /* The refusal going public gives, in the same words: there is nothing to
          read but a title and an abstract, and the public reader needs a tree. */

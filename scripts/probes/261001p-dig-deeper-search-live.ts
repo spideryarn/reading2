@@ -5,24 +5,31 @@
  * and the Exa tool through the `dig-deeper-search` route, `require_parameters`
  * and all, and does the usage witness see the search?
  *
- * About a cent. No library search (that needs a reader), no answer call.
+ * About a cent. No library search (that needs a reader), no answer call. The
+ * call is written to the ledger (`ai_calls`, `eval` scope, the environment
+ * owner): an eval's spend is refused without one.
  *
  *     npx tsx scripts/probes/261001p-dig-deeper-search-live.ts
  */
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
+import { closeDb } from "../../src/db/client.js";
 import { searchFirst } from "../../src/dig-deeper.js";
 import { loadEnvLocal } from "../../src/env.js";
+import { environmentOwnerId } from "../../src/owner.js";
+import { costStore } from "../../src/store/ai-calls.js";
 
 loadEnvLocal();
 
 const started = Date.now();
-const { result, report } = await collectSpend(() =>
-  searchFirst({
-    slug: "probe",
-    subject: "predictive processing",
-    article: { title: "Surfing Uncertainty", author: "Andy Clark", date: "2016" },
-    context: "Clark calls this view of the brain predictive processing.",
-  }),
+const { result, report } = await collectSpend(
+  () =>
+    searchFirst({
+      slug: "probe",
+      subject: "predictive processing",
+      article: { title: "Surfing Uncertainty", author: "Andy Clark", date: "2016" },
+      context: "Clark calls this view of the brain predictive processing.",
+    }),
+  { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
 );
 console.log(
   JSON.stringify(
@@ -38,3 +45,4 @@ console.log(
     2,
   ),
 );
+await closeDb();

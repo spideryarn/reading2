@@ -70,9 +70,9 @@
     "category": "question-no-mark"
   },
   {
-    "file": "overseer-turn-tails/question-no-mark-fable-empty-state-wording.txt",
+    "file": "overseer-turn-tails/question-no-mark-opus-empty-state-wording.txt",
     "case": "question",
-    "recipient": "fable",
+    "recipient": "opus",
     "why": "Two reader-facing wordings that both read fine, one of them the default; an arbitration, not a fact to look up.",
     "category": "question-no-mark"
   },

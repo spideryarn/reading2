@@ -111,7 +111,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap — 50 MiB, the upload's own `MAX_UPLOAD_BYTES`, counted off the stream and stopped on the first chunk over by [`src/read-capped.ts`](../../src/read-capped.ts), which the store's read shares. [fetching.md § Size](fetching.md#size-and-the-header-that-lies-about-it) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL; `runTool` refuses any tool not in `toolsFor(kind)`, so a conversation's tool list is a boundary and not a suggestion |
-| [`src/web/chat-commands.ts`](../../src/web/chat-commands.ts) and [`src/web/command-proposal.ts`](../../src/web/command-proposal.ts) | `chipFor`: what a model's `[cmd:...]` token may become: an id on `CHAT_PROPOSABLE`, an argument its own command accepts, a mode the reader can open here now, checked at the draw and again at the press. A press is the only way any of it runs. |
+| [`src/web/chat-commands.ts`](../../src/web/chat-commands.ts) and [`src/web/command-proposal.ts`](../../src/web/command-proposal.ts) | `chipFor`: what a model's `[cmd:...]` token may become: an id on `CHAT_PROPOSABLE`, an argument its own command accepts, a mode the reader can open here now, checked at the draw and again at the press. A press is the only way any of it runs, with one exception: in the guide, the first chip of an answer that finished on screen runs itself if it only moves the reader — a jump, or a mode that makes and writes nothing ([`src/web/guide-acts.ts`](../../src/web/guide-acts.ts), [`src/acts-alone.ts`](../../src/acts-alone.ts)). Anything that writes, spends or leaves the article is still a press, so a planted instruction can at worst move the reader, undone by Back. |
 | [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href`; `carriesCredential` — what may not be written into an ownerless cache; `requestTarget` — what a GET actually asks for, and never `urlKey` |
 | [`src/link-previews.ts`](../../src/link-previews.ts) | **the one endpoint a reader's *pointer* can make us fetch a stranger's page with.** Its defence is not the gate but the scope: the caller must own the article *and* the article's own extracted links must contain the URL, before anything is fetched or spent. Authentication alone would make it an open proxy. Plus `fetchDocument`'s complete envelope, a credential refusal, and a per-owner limiter. [links.md](links.md#what-our-own-server-can-reach) |
 | [`src/link-summary.ts`](../../src/link-summary.ts) | **the one place a stranger's page reaches a model.** Same scope as the row above — own the article, and the URL must be in it — plus the fencing: explicit untrusted-content markers, a system rule that the page is data and never a request, a reminder on the far side of it, every run of `===` rewritten so a page cannot close its own fence, and **no tools on the call**, so there is nothing for an injected instruction to reach. Its own limiter bucket, with a day and a global fuse, because this one spends money. [links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands) |
@@ -292,6 +292,16 @@ keeps of what it sent, and in the recipient's inbox, which is the point. It is n
 line or Sentry: the voucher writes go through `guardDbStore`, because a failed email insert puts
 the whole email in Drizzle's error. `tests/share-link-token-stays-home.test.ts` pins the two
 callers of the read, and `tests/voucher-starter.test.ts` the rest.
+
+**And since 2026-10-07, an AI assistant's conversation**
+([261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md)). The MCP server's
+`create_private_link` ([mcp.md](mcp.md)) asks the owner's route for the link, making one only if
+none is on, and hands it to the AI app that called it, where it stays in that conversation and in
+whatever the app or its agent keeps. Greg accepted that (2026-10-07). It is the owner's own route
+with the owner's own session, and **a dialog on the owner's screen approves every call**, naming
+the article; the model cannot answer it. An existing link is handed over, never replaced: the
+route's `keepExisting` decides under the row lock. `tests/share-link-token-stays-home.test.ts`
+pins `src/mcp/tools.ts` as the one client outside the browser that asks for the key.
 
 #### And since 2026-09-04 there is a page over it, which holds one defence
 

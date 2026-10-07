@@ -20,6 +20,8 @@ Chat is only for whoever added the article; on someone else’s shared article i
 
 ## Reading it
 
+![A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on](../images/mode-chat.png "Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.")
+
 The short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or
 point at it to read the start first. A dimmed code is a paragraph the article no longer has. Check
 the passage before you trust the claim — that is what the codes are for.
@@ -47,6 +49,14 @@ still arriving. **Answer again** gets a fresh answer, and the pencil lets you re
 **Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or
 remove a tag, look a term up in the glossary, or show where the article first says something.
 Nothing happens until you press the button; Chat cannot do any of these itself.
+
+**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read
+this article with Spideryarn, rather than about what it says. A new article opens on it when there
+is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
+until you send something. The guide can do one thing per answer by itself, if it only moves you:
+take you to a passage, or open a mode that has nothing to write, such as Structure or Learn. It
+says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
+as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice

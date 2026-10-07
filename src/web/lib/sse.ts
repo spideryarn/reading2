@@ -76,9 +76,10 @@ export interface ReadEventsOptions {
 /**
  * Server-sent events off a `fetch` body.
  *
- * The mirror of `sseChunks` in src/converse.ts, and it has the same three
+ * The mirror of `sseChunks` in src/openrouter-stream.ts, and it has the same three
  * traps — a frame split across two reads, blank lines between frames, and the
- * fact that a `data:` line is not necessarily JSON. The difference is that
+ * fact that a `data:` line is not necessarily JSON. Here one that is not throws
+ * `MalformedReply` (see `parseFrame`) rather than being skipped. The difference is that
  * frames here are separated by a **blank line** and carry an `event:` name, so
  * the split is on `\n\n` rather than on `\n`.
  *
@@ -141,8 +142,8 @@ export async function* readEvents(
     /* Cancel, then release — and in that order.
      *
      * `releaseLock()` alone was enough while the only way out of the loop was
-     * the stream ending. It is not enough for the two ways out this file now
-     * has: a stall, and a caller that `break`s. Both leave the body live, which
+     * the stream ending. A stall, a malformed frame, or a caller that `break`s
+     * can also leave the body live, which
      * on a `fetch` response means the socket stays open and the browser goes on
      * receiving an answer nobody is reading. Cancelling closes it, which is
      * also how the server learns the reader has gone.
@@ -218,9 +219,18 @@ function parseFrame(frame: string): ServerEvent | null {
   try {
     return { name, data: JSON.parse(data.join("\n")) };
   } catch {
-    // A frame we cannot read loses a few words rather than the answer. Same
-    // judgement as the server side, and for the same reason.
-    return null;
+    /* **A frame we cannot read fails the stream.** Until 2026-10-07 it was
+       dropped, on the judgement that losing a few words beats losing the
+       answer — but a dropped `done` or `error` then reads as the body ending
+       early, and a dropped `delta` as words never sent: a stream that lost a
+       frame looked exactly like one that never sent it
+       (docs/reusable/silent-success.md; GPT Sol's C5 on plan 261007l). Our
+       server writes every frame with `JSON.stringify` (`sse` in
+       src/routes.ts), so one that does not parse is this app's bug, and
+       `MalformedReply` is what `describeFetchFailure` turns into `PAGE_FAULT`
+       and reports. The OpenRouter dialect in src/openrouter-stream.ts is a
+       different parser with a different sender, and keeps its own rule. */
+    throw new MalformedReply(`the stream's ${name} frame is not JSON`);
   }
 }
 
@@ -239,14 +249,16 @@ function parseFrame(frame: string): ServerEvent | null {
  * with holes in it. An `error` frame throws its sentence, and so does the body
  * simply ending, which is the case the whole design is arranged against — a
  * stream that stops cleanly looks exactly like one that finished. A stall
- * throws `StreamStalled` from `readEvents`.
+ * throws `StreamStalled` from `readEvents`, and a frame that is not JSON throws
+ * `MalformedReply` from there too.
  *
  * **Every throw here says who it is for, by its class**, because each caller
  * words its failure through `describeFetchFailure` (lib/describe-failure.ts),
  * which shows a reader only what was declared for one: the `error` frame and
- * the early end are `ReaderFacingError`s; a `done` the caller refuses is a
- * `MalformedReply`. Until 2026-10-07 the last two were plain `Error`s, so the
- * helper would have called a dropped connection a fault of the page.
+ * the early end are `ReaderFacingError`s; a `done` the caller refuses, or any
+ * frame that is not JSON, is a `MalformedReply`. Until 2026-10-07 an early
+ * end and a refused `done` were plain `Error`s, so the helper would have called
+ * a dropped connection a fault of the page. Non-JSON frames were silently dropped.
  */
 export async function readAnswerStream<T>(
   body: ReadableStream<Uint8Array>,

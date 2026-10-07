@@ -40,6 +40,8 @@ Learn is only for whoever added the article.
 
 ## Reading it
 
+![Recall: a reader’s short account of an essay on Pittsburgh, a reply that corrects one point with two quoted passages, then a question about a later part, and a Hint button](../images/mode-learn.png "Recall: say what you took from it. The reply corrects one thing, quotes the passages, and asks what you remember next.")
+
 In Recall, a question is never a test you can fail twice: if a nudge gets nothing, the next reply
 tells you. Saying “just tell me”, or asking a direct question, always gets a plain answer. Whenever
 a reply says what the article says, it links the passage, so you can go and look instead. A question

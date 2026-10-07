@@ -6096,24 +6096,31 @@ export function parseHighPowerRequest(body: unknown): { on: boolean } {
 /**
  * The body of `POST /api/article/:slug/share-link`, or a 400:
  *
- *     { "rightsConfirmed": true }
+ *     { "rightsConfirmed": true, "keepExisting"?: boolean }
  *
  * and nothing else. A private link republishes somebody's text to the people
  * it is sent to, so making one takes the same confirmation going public does,
  * read the same way: `=== true`, not truthiness, and an unknown key is refused
  * rather than ignored. `parseVisibilityRequest` below gives both reasons.
  *
- * It returns nothing. There is one acceptable body, so getting past this is
- * the whole of what the caller needs to know.
+ * `keepExisting: true` answers a link that is already on instead of replacing
+ * its key, decided under the store's row lock (plan 261007o, Sol's F1). The
+ * owner's card never sends it: its button means "a new key".
  */
-export function parseShareLinkRequest(body: unknown): void {
+export function parseShareLinkRequest(body: unknown): { keepExisting: boolean } {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     throw httpError(400, "Expected an object with rightsConfirmed");
   }
-  const { rightsConfirmed, ...rest } = body as Record<string, unknown>;
+  const { rightsConfirmed, keepExisting, ...rest } = body as Record<string, unknown>;
   /* Not interpolated, for `parseVisibilityRequest`'s reason. */
   if (Object.keys(rest).length) throw httpError(400, "That request had fields this endpoint does not accept");
   if (rightsConfirmed !== true) throw httpError(400, "A private link needs rightsConfirmed: true");
+  /* Optional, and a boolean when given (plan 261007o): the MCP's
+     create_private_link hands over a link that is on rather than replacing it. */
+  if (keepExisting !== undefined && typeof keepExisting !== "boolean") {
+    throw httpError(400, "keepExisting must be true or false");
+  }
+  return { keepExisting: keepExisting === true };
 }
 
 export function parseVisibilityRequest(body: unknown): {
@@ -9815,8 +9822,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       res.setHeader("Cache-Control", "private, no-store");
       /* The body before the store, so a request without the tick-box changes
          nothing and records nothing. */
-      parseShareLinkRequest(await readBody(req));
-      send(res, 200, await shareLinkStore.create(slugPart(captures, 1)));
+      const { keepExisting } = parseShareLinkRequest(await readBody(req));
+      send(res, 200, await shareLinkStore.create(slugPart(captures, 1), { keepExisting }));
     },
   },
   {

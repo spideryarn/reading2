@@ -27,6 +27,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
 - [§ A private link](#a-private-link) — the four places the page names it
+- [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
 - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
 - [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
 
@@ -703,6 +704,24 @@ way somebody else reads a reader's article, so the page names it in four places:
 What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
 link again; and `article_share_link_events`, who made or turned off a link and when, without the
 key. We record nothing about who opens one.
+
+## An administrator's AI assistant can look up accounts
+
+**Added 2026-10-07** ([261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md)), at
+Greg's request: *"yes, I want user email addresses and activity to be queryable via MCP"*. The MCP
+server ([mcp.md](mcp.md)) has two admin-only tools over `GET /api/admin/users`: `list_users`
+(address, sign-up, last sign-in, last read, article counts, plan) and `user_activity` (one account's
+counts and dates: uploads, questions, chats, searches, opens, this month's model spend, imports
+against the limit). What they answer goes into the administrator's own AI assistant's
+conversation, and so through that assistant's provider. What does not: which articles a reader
+has, their text, titles, notes or anything else they wrote; `AdminUser` never carries those
+([admin.md](admin.md)), and `user_activity` names its fields one by one so a column the admin page
+gains later does not follow without a decision.
+
+It is the administrator's tool, not one of the app's AI calls, so it is not a subprocessor entry.
+The page says it in one sentence under *we can see what is in the app*, and the OpenRouter entry now
+says *"every AI call our reading features make, bar one"* so the two do not contradict each other
+(Sol's F4). `tests/privacy-page.test.ts` holds both.
 
 ## What is pinned by a test, and what is not
 

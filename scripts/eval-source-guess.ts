@@ -17,9 +17,10 @@
  *
  * **What it does not do**: write an `upload_source_guesses` row, or take the
  * `upload-source-guess` allowance. It calls the pieces, not `makeGuessSource`,
- * so there is no claim to write and no bucket to spend. Its spend is collected
- * in memory (`collectSpend` with no sink) and printed, not written to the
- * ledger.
+ * so there is no claim to write and no bucket to spend. Its spend is collected,
+ * printed, and written to the ledger as `eval` spend on the environment owner
+ * (an eval's spend is refused without a ledger, src/ai-spend.ts §
+ * UnrecordedSpendRefused).
  *
  * **Bounds**: at most `--max` papers (10), and no new search once the billed
  * searches reach 10 — a call whose usage reports no count is counted as one.
@@ -55,7 +56,8 @@ if (host !== "127.0.0.1" && host !== "localhost") die(`Refusing: ${host} is not 
 const { sql } = await import("drizzle-orm");
 const { closeDb, getDb } = await import("../src/db/client.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
-const { runAsOwner } = await import("../src/owner.js");
+const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
+const { costStore } = await import("../src/store/ai-calls.js");
 const { collectSpend } = await import("../src/ai-spend.js");
 const { log } = await import("../src/log.js");
 const { wordsOf } = await import("../src/citations.js");
@@ -154,8 +156,12 @@ for (const c of candidates) {
     const line = log("model").child({ slug: c.slug });
 
     try {
-      const { result: found, report } = await collectSpend(() =>
-        defaultFind(workToFind(article.meta), { power: "standard", timeoutMs: remaining(), line }),
+      const { result: found, report } = await collectSpend(
+        () => defaultFind(workToFind(article.meta), { power: "standard", timeoutMs: remaining(), line }),
+        {
+          attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: c.slug },
+          sink: (row) => costStore.record(row),
+        },
       );
       for (const call of report.calls) {
         if (call.cost.source === "provider") row.costNanos += call.cost.costNanos;

@@ -24,10 +24,12 @@ import { createHash } from "node:crypto";
 import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
+import type { AdminUser } from "../admin.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
-import type { LibraryEntry } from "../types.js";
+import { SHARE_KEY_PARAM } from "../share-key.js";
+import type { LibraryEntry, ShareLinkState } from "../types.js";
 import { type Api, ApiError } from "./api.js";
 import type { Operation } from "./approve.js";
 
@@ -172,6 +174,86 @@ function trimVoucher(v: AdminVoucher) {
 }
 
 const voucherNote = z.string().max(500).nullable().optional();
+
+async function titleOf(api: Api, slug: string): Promise<string | undefined> {
+  const entries = [...(await shelf(api, false)), ...(await shelf(api, true))];
+  return entries.find((e) => e.slug === slug)?.title;
+}
+
+/* --------------------------------------------- the private link (261007o) -- */
+
+function shareLinkPath(slug: string): string {
+  return `/api/article/${seg(slug)}/share-link`;
+}
+
+/** The link an owner's card shows, with its key: a credential, so it is built only for the person's yes. */
+function privateLink(api: Api, slug: string, state: ShareLinkState) {
+  if (!state.on) throw new ApiError(500, "Spideryarn did not make the link.");
+  const link = new URL(articleLink(api, slug));
+  link.searchParams.set(SHARE_KEY_PARAM, state.key);
+  return { link: link.toString(), since: state.since };
+}
+
+/* ------------------------------------------------ readers, for the admin -- */
+
+async function listUsers(api: Api): Promise<AdminUser[]> {
+  return (await api.call<{ users: AdminUser[] }>("GET", "/api/admin/users")).users;
+}
+
+/** The most recent sign of life across reading, signing in and signing up. */
+function lastActive(u: AdminUser): string {
+  return [u.lastReadAt, u.lastSignInAt, u.createdAt]
+    .filter((date): date is string => date !== undefined)
+    .sort()
+    .at(-1)!;
+}
+
+/**
+ * **A reader as `list_users` shows one** — enough to say who they are and
+ * whether they are active, for a list that may be long. `user_activity` has
+ * an explicit set of activity fields. Neither names an article: `AdminUser` never does
+ * (docs/project/admin.md § What it deliberately does not show).
+ */
+function trimUser(u: AdminUser) {
+  return {
+    id: u.id,
+    email: u.email,
+    createdAt: u.createdAt,
+    lastSignInAt: u.lastSignInAt ?? null,
+    lastReadAt: u.lastReadAt ?? null,
+    articles: u.articles,
+    archived: u.archived,
+    plan: u.plan,
+  };
+}
+
+/**
+ * **One reader's activity, field by field** (Sol's F3 on 261007o). Named
+ * rather than spread, so a field the admin page's row gains later does not
+ * reach an AI conversation until somebody adds it here.
+ */
+function userActivity(u: AdminUser) {
+  return {
+    ...trimUser(u),
+    emailConfirmedAt: u.emailConfirmedAt ?? null,
+    providers: u.providers,
+    uploads: u.uploads,
+    questions: u.questions,
+    chats: u.chats,
+    searches: u.searches,
+    opens: u.opens,
+    /* The period and the unpriced count travel with the money, as on the page. */
+    spendNanos: u.spendNanos,
+    spendCalls: u.spendCalls,
+    spendUnpricedCalls: u.spendUnpricedCalls,
+    spendMonth: u.spendMonth,
+    planStatus: u.planStatus ?? null,
+    ingests: u.ingests,
+    ingestsShared: u.ingestsShared,
+    ingestLimit: u.ingestLimit,
+    ingestWindow: u.ingestWindow,
+  };
+}
 
 /* ------------------------------------------------------------------ tools -- */
 
@@ -339,8 +421,7 @@ export const TOOLS: readonly Tool[] = [
     input: z.strictObject({ slug: slugInput }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ask: async (api, { slug }) => {
-      const entries = [...(await shelf(api, false)), ...(await shelf(api, true))];
-      const title = entries.find((e) => e.slug === slug)?.title;
+      const title = await titleOf(api, slug);
       return {
         operation: {
           title: "Spideryarn: make an article public?",
@@ -362,6 +443,130 @@ export const TOOLS: readonly Tool[] = [
         rightsConfirmed: true,
       });
       return { link: articleLink(api, slug), visibility: answer };
+    },
+  }),
+
+  /* Plan 261007o. **Read first; make one only when there is none**: a POST
+     mints a new key and the old one stops working, so posting for a link that
+     already exists would break it for everybody it was sent to. The read is in
+     `ask` and the approved action is bound to its answer (`run`), so approving
+     "hand over the existing link" can never become a POST. */
+  tool({
+    name: "create_private_link",
+    title: "Get a private link to an article",
+    description:
+      "Answers the private link to one of your articles (its address with a key), making one if it has none. " +
+      "Anyone who has the link can read the article without signing in, and can pass it on. An existing link is " +
+      "handed over unchanged, never replaced. The key is a credential, so a dialog on this computer asks the " +
+      "person to approve every call, and to confirm they have the right to share the article when one is made. " +
+      "You cannot approve it for them.",
+    input: z.strictObject({ slug: slugInput }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    ask: async (api, { slug }) => {
+      const [state, title] = await Promise.all([
+        api.call<ShareLinkState>("GET", shareLinkPath(slug)),
+        titleOf(api, slug),
+      ]);
+      /* Keep identity separate: the native dialog caps each line, so a long
+         article title must not hide which slug the person is approving. */
+      const article = [`Slug: ${slug}`, ...(title ? [`Article: ${quoted(title)}`] : [])];
+      if (state.on) {
+        return {
+          operation: {
+            title: "Spideryarn: hand over a private link?",
+            lines: [
+              "This article already has a private link. Give it to the AI assistant?",
+              "Anyone who has it can read the article, and the assistant keeps it in its conversation.",
+              "",
+              ...article,
+              `Site: ${api.site}`,
+            ],
+          },
+          /* **Read again after the yes, and hand over only the link approved**
+             (Sol's F2). A fresh authenticated call is what re-checks the session
+             binding, so a logout or another sign-in while the dialog was open
+             hands over nothing; a link turned off or remade meanwhile is an
+             error without a key, never a substitute. */
+          run: async () => {
+            const now = await api.call<ShareLinkState>("GET", shareLinkPath(slug));
+            if (!now.on || now.key !== state.key) {
+              throw new ApiError(409, "The private link changed while the dialog was open, so nothing was handed over. Ask again.");
+            }
+            return privateLink(api, slug, now);
+          },
+        };
+      }
+      return {
+        operation: {
+          title: "Spideryarn: make a private link?",
+          lines: [
+            "Make a private link to this article, and give it to the AI assistant?",
+            "Anyone who has it can read the article, and the assistant keeps it in its conversation.",
+            "",
+            ...article,
+            `Site: ${api.site}`,
+            "",
+            `Approving confirms: ${SHARING_RIGHTS_CONFIRM}`,
+          ],
+        },
+        /* `keepExisting`: somebody may have made one while the dialog was open
+           (the owner, on the article's page). The server hands that one over
+           rather than replace it, deciding under its row lock (Sol's F1). */
+        run: async () =>
+          privateLink(
+            api,
+            slug,
+            await api.call<ShareLinkState>("POST", shareLinkPath(slug), { rightsConfirmed: true, keepExisting: true }),
+          ),
+      };
+    },
+    handler: async () => {
+      throw new Error("create_private_link must run the action prepared for approval");
+    },
+  }),
+
+  tool({
+    name: "list_users",
+    title: "List Spideryarn's readers",
+    description:
+      "Admin only. Every account on Spideryarn, most recently active first: email address, when they signed up, " +
+      "last signed in and last read, how many articles they have (and archived), and their plan. `query` keeps " +
+      "only addresses containing it; `limit` caps how many come back (`total` says how many matched). " +
+      "user_activity has one account's full activity. Never which articles they read or anything they wrote.",
+    input: z.strictObject({
+      query: z.string().min(1).optional().describe("A piece of the email address, any case."),
+      limit: z.number().int().min(1).max(1000).default(100),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    handler: async (api, { query, limit }) => {
+      const needle = query?.toLowerCase();
+      const matched = (await listUsers(api))
+        .filter((u) => needle === undefined || u.email.toLowerCase().includes(needle))
+        .sort((a, b) => lastActive(b).localeCompare(lastActive(a)));
+      return { total: matched.length, users: matched.slice(0, limit).map(trimUser) };
+    },
+  }),
+
+  tool({
+    name: "user_activity",
+    title: "One reader's activity",
+    description:
+      "Admin only. One account, by `email` or `id` (exactly one): sign-up, last sign-in, last read, articles, " +
+      "archived, uploads, questions, chats, searches, opens, this month's model spend and calls, plan, and imports " +
+      "against their limit. Counts and dates only: never which articles they read or anything they wrote.",
+    input: z.strictObject({
+      email: z.string().min(3).optional(),
+      id: z.string().uuid().optional(),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    handler: async (api, { email, id }) => {
+      if ((email === undefined) === (id === undefined)) throw new ApiError(400, "Give exactly one of email or id.");
+      const users = await listUsers(api);
+      const found = users.find((u) =>
+        email !== undefined ? u.email.toLowerCase() === email.trim().toLowerCase() : u.id === id?.toLowerCase(),
+      );
+      if (!found) throw new ApiError(404, "No account has that address or id.");
+      return { user: userActivity(found) };
     },
   }),
 
@@ -522,6 +727,8 @@ export const TOOLS: readonly Tool[] = [
 /* ----------------------------------------------------- failures, in words -- */
 
 const ADMIN_ONLY = new Set([
+  "list_users",
+  "user_activity",
   "list_gift_vouchers",
   "create_gift_voucher",
   "update_gift_voucher",

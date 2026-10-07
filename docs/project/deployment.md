@@ -271,8 +271,25 @@ sharing the primary's `node_modules` (41 s on the box), because under `--ready` 
 whatever the primary installed. And **a failed `git fetch origin main` stops the deploy**: its
 result used to be ignored, leaving a stale `origin/main` to answer the ancestry check.
 
-Not built: a `release/<sha>` branch for fixing a non-test gate without taking the rest of `dev` —
+**How it relates to Greg's branch idea.** He proposed pushing a release candidate to a branch,
+deploying from there, fixing bugs on that branch and merging the fixes back to `dev`, *"so any new
+stuff that happens on dev won't affect the deploy"*. `--ready` gets that isolation a different way:
+it pins the deploy to one commit the loop has already tested, with no branch.
+
+```
+branch:   dev ──●──●──●──●──►            --ready:  dev ──●──●──✓──●──●──►
+                 \                                           │
+                  release ──fix──fix──► deploy               └──► deploy ✓, tests reused
+```
+
+What `--ready` adds is that it never deploys a commit nobody has tested, which was the whole of
+2026-10-07's five failed attempts. What it lacks is somewhere to fix forward: a red on the candidate
+is fixed on `dev`, and the deploy waits for the loop to pass a later commit. That wait is its
+weakness. A full run is 80–90 minutes, the loop skips while the box swaps, and on 2026-10-07 a stale
+local migration-ledger row stopped it for an evening, so on a busy day there may be no green commit
+for hours. Not built, for that case: the `release/<sha>` branch for fixing a candidate in place —
 [261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief).
+Build it the first time `--ready` waits too long or a release needs a fix of its own.
 
 ### The gate needs both halves of the artefact store
 

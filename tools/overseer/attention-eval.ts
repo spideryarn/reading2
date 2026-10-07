@@ -31,12 +31,12 @@
  *   "nothing here" — the calm-inbox failure docs/reusable/silent-success.md is
  *   about.
  *
- * ## Routing reads `recipient`, which only prompt version 2 returns
+ * ## Routing reads `recipient`, which only the proposal-aware prompt returns
  *
  * Under version 1 no verdict carries one, so `recipientOf` reads it through an
  * `in` check and the report says routing is "not measured: this prompt version
- * returns no recipient" rather than inventing a zero. Under version 2
- * (`--prompt-version 2`, `PROPOSAL_PROMPT_VERSION`) every question verdict
+ * returns no recipient" rather than inventing a zero. Under version 3
+ * (`--prompt-version 3`, `PROPOSAL_PROMPT_VERSION`) every question verdict
  * carries one flat on the verdict — attention-classify.ts's `VerdictRoute`.
  * A recipient of `"unplaced"` is read as D8's visible unplaced arm and counted
  * apart from N.

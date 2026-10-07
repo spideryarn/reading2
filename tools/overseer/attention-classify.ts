@@ -84,7 +84,7 @@ export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completion
  * budget allows (`planClassifications`). Bump this whenever `buildClassifierPrompt`
  * or `parseVerdict` changes what a verdict means.
  *
- * Version 1 is the plain question and stays the default. Version 2,
+ * Version 1 is the plain question and stays the default. Version 3,
  * `PROPOSAL_PROMPT_VERSION`, is the proposal-aware prompt (plan 260910f D1),
  * selected by `OVERSEER_PROPOSALS=1` in attention-cli.ts — the only reader of
  * that variable — and handed BOTH to the classifier (`ClassifierOptions`) and
@@ -97,16 +97,33 @@ export const CLASSIFIER_PROMPT_VERSION = 1;
  * The proposal-aware prompt: the same one call, whose `asked: true` answer also
  * names who holds the information, why, and the sentence that asks. With it
  * off, prompt, version and output are exactly version 1's (D1, D7).
+ *
+ * Version 2 routed wording, defaults and dropped cases to Fable. Version 3
+ * (2026-10-07) routes wording and defaults to Opus and whether a case can be
+ * dropped to Greg — Fable is retired, and overseer-direction.md § The gates
+ * gives dropping a case to Greg — so a version-2 verdict is stale and re-read.
  */
-export const PROPOSAL_PROMPT_VERSION = 2;
+export const PROPOSAL_PROMPT_VERSION = 3;
 
 export type PromptVersion = typeof CLASSIFIER_PROMPT_VERSION | typeof PROPOSAL_PROMPT_VERSION;
 
 /** The five holders, in the direction doc's order. `unplaced` is not one of them — see `VerdictRoute`. */
-export const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+export const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "opus", "greg", "overseer", "self"];
 
 /**
- * What a version-2 question verdict adds: a holder with a reason and the quoted
+ * A holder as WRITTEN DOWN — in the attention memory or on the checkpoint — read
+ * back. `fable` was a holder until Greg retired it (2026-09-28) and moved its
+ * questions to Opus, so a stored `fable` reads as `opus`. Only for what was
+ * stored: a model answering `fable` now is answering a prompt it was not given,
+ * and `parseVerdict` refuses it like any other unknown holder (D8).
+ */
+export function storedRecipient(u: unknown): ProposalRecipient | undefined {
+  if (u === "fable") return "opus";
+  return PROPOSAL_RECIPIENTS.find((r) => r === u);
+}
+
+/**
+ * What a proposal-aware question verdict adds: a holder with a reason and the quoted
  * sentence, or `unplaced` with the model's reason for not placing it.
  *
  * FLAT ON THE VERDICT rather than nested, so `recipientOf` in attention-eval.ts
@@ -153,7 +170,7 @@ export type ClassifierVerdict =
     } & (
       /** Version 1: no proposal at all. */
       | { recipient?: never }
-      /** Version 2: who holds it, or `unplaced` (D8). */
+      /** Proposal-aware: who holds it, or `unplaced` (D8). */
       | VerdictRoute
     ))
   | { kind: "no-question"; why: string }
@@ -329,7 +346,7 @@ export function buildClassifierPrompt(
 }
 
 /**
- * Version 2: version 1's question, then who holds the answer.
+ * The proposal-aware prompt: version 1's question, then who holds the answer.
  *
  * The recipients are docs/project/overseer-direction.md § Route by who has the
  * information, not by confidence, in the model's words — and the prompt says
@@ -350,10 +367,11 @@ function proposalSystemPrompt(): string {
     "agent happened to address, and not how sure anyone is. Pick exactly one:",
     '- "sol": a technical question whose evidence is in the code — which approach is right, why a test fails,',
     "  whether a design holds.",
-    '- "fable": wording, a default, or whether a case can be dropped.',
+    '- "opus": wording, a default, or arbitrating between two options that both work, when nothing irreversible is at stake.',
     '- "greg": anything irreversible or visible outside the project (deploying, production data, spending money,',
-    "  pushing to main, deleting work); any change to a rule or policy document; whether a small product tweak",
-    "  would remove a lot of engineering; or anything where the agent's own recommendation looks contestable.",
+    "  pushing to main, deleting work); any change to a rule or policy document; whether a case can be dropped;",
+    "  whether a small product tweak would remove a lot of engineering; or anything where the agent's own",
+    "  recommendation looks contestable.",
     '- "overseer": something that can be CHECKED rather than judged — whether to pull the latest changes, whose',
     "  tests are failing, whether the machine is overloaded.",
     '- "self": the agent already has everything it needs and stopped out of habit.',
@@ -367,7 +385,7 @@ function proposalSystemPrompt(): string {
     'or {"asked": false, "why": "..."}',
     "",
     fields,
-    'recipient: one of "sol", "fable", "greg", "overseer", "self", "unplaced", as above.',
+    'recipient: one of "sol", "opus", "greg", "overseer", "self", "unplaced", as above.',
     "reason: one sentence saying why that holder has what is needed to answer. Never a score.",
     "asks: the sentence or sentences in the text that hand over the decision, COPIED EXACTLY as one continuous",
     "  passage in the agent's own words. Never paraphrase, never join two separate places, never quote anything",
@@ -455,7 +473,7 @@ const CHAT_TEMPLATE_TOKENS = 64;
 export const WORST_CASE_PROMPT_TOKENS = Math.max(
   // OVER EVERY VERSION, not the default: the proposal-aware prompt is the
   // longer one, and a budget reserving against version 1's length would let a
-  // version-2 call cost more than it reserved.
+  // proposal-aware call cost more than it reserved.
   ...promptVersions().map((version) => {
     const longest = buildClassifierPrompt("x".repeat(MAX_TAIL_CHARS), version);
     return 3 * (longest.system.length + longest.user.length) + CHAT_TEMPLATE_TOKENS;
@@ -504,7 +522,7 @@ export function parseVerdict(
 ): ClassifierVerdict {
   const question = parseQuestion(raw);
   if (question.kind !== "question" || context.promptVersion === CLASSIFIER_PROMPT_VERSION) return question;
-  // VERSION 2: the proposal is part of the answer, and a question without a
+  // PROPOSAL-AWARE: the proposal is part of the answer, and a question without a
   // readable one is an unreadable answer — never a default, never Greg (D8).
   const route = parseRoute(jsonObject(raw) ?? {}, context.tail);
   if (typeof route === "string") return { kind: "unreadable", why: route };
@@ -512,7 +530,7 @@ export function parseVerdict(
 }
 
 /**
- * What the parse needs besides the text: version 2 checks its quote against
+ * What the parse needs besides the text: the proposal-aware prompt checks its quote against
  * the tail the model was shown (D13), so it needs that tail.
  */
 export type VerdictContext =
@@ -579,7 +597,7 @@ export function quotedIn(asks: string, text: string): boolean {
 }
 
 /**
- * Version 2's proposal, or the reason it cannot be believed.
+ * The proposal-aware answer's route, or the reason it cannot be believed.
  *
  * **Strict on every field, and a refusal is a sentence** so a broken prompt is
  * diagnosable from the log. **The quote must be in the tail** after whitespace
@@ -851,7 +869,7 @@ export async function classifyTail(
   const version = options.promptVersion ?? CLASSIFIER_PROMPT_VERSION;
   // The one value both sent and reported, so the two cannot disagree (F18).
   const model = options.model ?? ATTENTION_CLASSIFIER_MODEL;
-  // The model reads the CLIPPED text, so a version-2 quote is checked against
+  // The model reads the CLIPPED text, so a proposal-aware quote is checked against
   // exactly that (D13) — not against the longer input it never saw.
   const input = clipForClassifier(tail);
   const { system, user } = buildClassifierPrompt(input, version);

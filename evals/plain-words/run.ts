@@ -24,8 +24,8 @@
  * prompt bytes are not recoverable from the result JSON alone.
  *
  * **What it reads and writes.** It reads articles from the local database,
- * read-only, and writes nothing there beyond the AI-spend rows every call
- * records. Output is JSON under `evals/results/plain-words/<arm>/`.
+ * and writes nothing there beyond the `ai_calls` row each call records
+ * (`generate` runs inside `withLedger`). Output is JSON under `evals/results/plain-words/<arm>/`.
  *
  * **What the number cannot say.** The hard-word share rewards shorter, commoner
  * words, and a vaguer sentence has those too. So it is a screen — it must fall —
@@ -387,7 +387,11 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
           ...(e.background ? { background: e.background } : {}),
         }));
       };
-      const [s, g] = await Promise.all([summaries(), glossary()]);
+      /* Both bought calls must finish before a rejection closes the ledger. */
+      const [summaryResult, glossaryResult] = await Promise.allSettled([summaries(), glossary()]);
+      if (summaryResult.status === "rejected") throw summaryResult.reason;
+      if (glossaryResult.status === "rejected") throw glossaryResult.reason;
+      const [s, g] = [summaryResult.value, glossaryResult.value];
       fs.writeFileSync(
         out,
         `${JSON.stringify({ arm, slug, tocVersion: TOC_VERSION, glossaryVersion: GLOSSARY_VERSION, sourceSha256, at: new Date().toISOString(), summaries: s, glossary: g }, null, 2)}\n`,
@@ -418,7 +422,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const at = rest.indexOf("--arm");
     const slugs = rest.filter((_, i) => i !== at && i !== at + 1);
     if (slugs.length === 0) throw new Error("generate needs at least one slug");
-    await generate(arm, slugs);
+    loadEnvLocal();
+    const { withLedger } = await import("../../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, slugs));
   } else if (cmd === "report") {
     report();
   } else if (cmd === "pairs") {

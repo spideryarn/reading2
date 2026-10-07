@@ -4,10 +4,11 @@
  * Two things are worth pinning here and the rest is bookkeeping.
  *
  * **A call made with no collector open must not fail, and must not vanish
- * without trace.** Both halves matter: failing would break every CLI run and
- * every test that reaches a model, and vanishing silently is how a cost table
+ * without trace.** Both halves matter: failing would break every test and every
+ * request that reaches a model, and vanishing silently is how a cost table
  * ends up plausible and short. `unscopedCalls()` is the compromise, and it is
- * only worth anything if something counts it.
+ * only worth anything if something counts it. A script or an eval gets no such
+ * pass: it is refused before the call (tests/unrecorded-spend-refused.test.ts).
  *
  * **A total must carry its own caveat.** `totalSpend` returns `unpriced`
  * alongside `nanos` so a report cannot present "$0.30" when three of the nine

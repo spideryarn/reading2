@@ -318,7 +318,7 @@ export function PrivacyPage() {
             about a day.
           </Third>
           <Third name="OpenRouter" href="https://openrouter.ai/privacy">
-            every AI call but one goes through them, and they pick an upstream that serves the model
+            every AI call our reading features make, bar one, goes through them, and they pick an upstream that serves the model
             we asked for. We prefer Anthropic for Claude, but fallbacks are allowed, so the upstream
             can be a cloud host such as AWS rather than the model’s maker.
           </Third>
@@ -588,7 +588,10 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
           written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
-          feed it to a model’s training.
+          feed it to a model’s training. An administrator may also look up account details (your
+          email address, when you joined and were last active, and how much you have used
+          Spideryarn, but not what you read or wrote) by asking an AI assistant of their choosing,
+          so those details pass through that assistant’s provider.
         </p>
       </Section>
 

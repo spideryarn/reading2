@@ -42,6 +42,14 @@ import glossaryCardPng from "./pages/images/glossary-card.png";
 import gutterPng from "./pages/images/gutter.png";
 import helpModeInfoPng from "./pages/images/help-mode-info.png";
 import modeCitationsPng from "./pages/images/mode-citations.png";
+import modeChatPng from "./pages/images/mode-chat.png";
+import modeDebatePng from "./pages/images/mode-debate.png";
+import modeFaqPng from "./pages/images/mode-faq.png";
+import modeIllustratedPng from "./pages/images/mode-illustrated.png";
+import modeLearnPng from "./pages/images/mode-learn.png";
+import modeMarginaliaPng from "./pages/images/mode-marginalia.png";
+import modePlainPng from "./pages/images/mode-plain.png";
+import modeRefereePng from "./pages/images/mode-referee.png";
 import modeGlossaryPng from "./pages/images/mode-glossary.png";
 import modeIdeasPng from "./pages/images/mode-ideas.png";
 import modeQuotesPng from "./pages/images/mode-quotes.png";
@@ -307,6 +315,86 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     h: 740,
     shows: "?mode=ideas, the band alone.",
     article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-faq.png": {
+    src: modeFaqPng,
+    w: 1088,
+    h: 1076,
+    shows:
+      "?mode=faq, prioritised, the band alone after one run of Find the questions; clip x12 y44 w544 h538 CSS, cropped after the second question.",
+    article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-learn.png": {
+    src: modeLearnPng,
+    w: 1088,
+    h: 1120,
+    shows:
+      "?mode=learn, Recall, after one turn. Typed: “Graham’s idea is that Pittsburgh shouldn’t chase startups directly, but should make itself a place smart young people want to live. I think he said the main thing Pittsburgh has going for it is Carnegie Mellon’s research money.” (the last sentence is the planted mistake). Clip x12 y44 w544 h560 CSS, the band alone.",
+    article: "How to Make Pittsburgh a Startup Hub (pgh-spya-vkvqjq)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-chat.png": {
+    src: modeChatPng,
+    w: 1088,
+    h: 880,
+    shows:
+      "?mode=chat, one question: “Does Graham give real evidence that great hackers are that much more productive, or does he just assert it?” Clip x12 y44 w544 h440 CSS, the band alone: the question and the top of the answer.",
+    article: "Great Hackers (gh-spya-whnhkx)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-debate.png": {
+    src: modeDebatePng,
+    w: 1088,
+    h: 1200,
+    shows:
+      "?mode=debate on the run already made, the Claims tab (Reception was empty), the band alone; clip x12 y138 w544 h600 CSS.",
+    article: "Claude’s Constitution (claudes-constitution-spya-cr8bzk)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-referee.png": {
+    src: modeRefereePng,
+    w: 1088,
+    h: 1356,
+    shows:
+      "?mode=referee, Criteria, the Strength of evidence preset and Run this criterion; the panel scrolled so the criterion is at its top, clip x12 y92 w544 h678 CSS, the band alone.",
+    article: "Batch Normalization (arxiv-1502-spya-tqwbn2)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-marginalia.png": {
+    src: modeMarginaliaPng,
+    w: 1344,
+    h: 556,
+    shows:
+      "With Ideas and FAQ already made, ?mode=plain, then the bottom bar’s Marginalia; scrollTo(0, 2456); clip x412 y0 w1008 h417 CSS so prose and column are both in, downscaled from 2016 to 1344 wide. The introduces stamp comes from Ideas; the shut question comes from FAQ.",
+    article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×, downscaled",
+    taken: "2026-10-07",
+  },
+  "mode-plain.png": {
+    src: modePlainPng,
+    w: 1180,
+    h: 556,
+    shows:
+      "With Glossary already made, ?mode=plain, scrolled to the first occurrence of Millikan; clip x412 y90 w590 h278 CSS, the prose alone.",
+    article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-07",
+  },
+  "mode-illustrated.png": {
+    src: modeIllustratedPng,
+    w: 1088,
+    h: 1432,
+    shows:
+      "With Sketch already drawn, ?mode=diagram, the Illustrated chip once painted, first plate The Funnel and the Fan selected; clip x12 y40 w544 h716 CSS, the band alone, down to the first item of What it depicts.",
+    article: "Utility of phrenology (fowler-phrenology)",
     window: "1440×900 at 2×",
     taken: "2026-10-07",
   },

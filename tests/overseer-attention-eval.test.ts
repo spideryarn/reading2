@@ -212,16 +212,16 @@ describe("routing", () => {
 
   /**
    * THE ROUTING FAKE: the detection fake, with each question verdict carrying
-   * the label's recipient EXCEPT fable-empty-state -> "greg" (wrong holder),
+   * the label's recipient EXCEPT opus-empty-state -> "greg" (wrong holder),
    * overseer-merge-dev-first -> "unplaced", and the rhetorical false alarm and
    * the misdirection item -> "sol". Proposals on scored items: shut-it-down,
-   * fable, greg-drop, whose-failures, self-commit, cleanup, rhetorical = N 7;
+   * opus, greg-drop, whose-failures, self-commit, cleanup, rhetorical = N 7;
    * correct R 5; wrong W 2 (one wrong holder, one on a turn that asked
    * nothing); unplaced 1; K 2 (whose-failures -> overseer, self-commit -> self).
    */
   function routingExtra(l: AttentionLabel): Record<string, unknown> {
     const f = base(l.file);
-    if (f === "question-no-mark-fable-empty-state-wording.txt") return { recipient: "greg" };
+    if (f === "question-no-mark-opus-empty-state-wording.txt") return { recipient: "greg" };
     if (f === "question-overseer-merge-dev-first.txt") return { recipient: "unplaced" };
     if (l.case !== "question") return { recipient: "sol" };
     return { recipient: l.recipient };
@@ -286,9 +286,9 @@ describe("routing", () => {
     expect(r.routing.proposed).toBe(r.routing.trueQuestions);
     expect(r.routing.correct).toBe(r.routing.trueQuestions);
     expect(recipientOf(parseVerdict(
-      JSON.stringify({ asked: true, topic: "t", why: "w", kind: "other", answerable: "phone", recipient: "fable", reason: "r", asks: "Tell me which one." }),
+      JSON.stringify({ asked: true, topic: "t", why: "w", kind: "other", answerable: "phone", recipient: "opus", reason: "r", asks: "Tell me which one." }),
       { promptVersion: PROPOSAL_PROMPT_VERSION, tail: "xx Tell me which one. yy" },
-    ))).toBe("fable");
+    ))).toBe("opus");
   });
 
   it("says in words what K is and that avoided waiting is not measured", async () => {

@@ -359,8 +359,9 @@ the paragraphs.
 
   [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
-  with nothing stored the owner sees an empty state with **Write it**. That is also what lets
-  Summary be where a signed-in reader's first open of an article lands, where there is room
+  with nothing stored the owner sees an empty state with **Write it**. That is also what let
+  Summary be where a signed-in reader's first open of an article landed, where there is room, from
+  2026-10-05 until the guide took that place on 2026-10-07
   ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
   The add page's *Generate the
   main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,

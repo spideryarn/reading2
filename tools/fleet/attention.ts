@@ -537,7 +537,12 @@ function quotedIn(asks: string, text: string): boolean {
   return normaliseSpace(text).includes(normaliseSpace(asks));
 }
 
-const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "opus", "greg", "overseer", "self"];
+
+/** A published holder; `fable`, retired by Greg on 2026-09-28, reads as the `opus` that replaced it. */
+function publishedRecipient(u: unknown): ProposalRecipient | undefined {
+  return u === "fable" ? "opus" : PROPOSAL_RECIPIENTS.find((r) => r === u);
+}
 
 /**
  * An item's proposal, every arm in full (plan 260910f Stage 2).
@@ -555,7 +560,7 @@ function parseProposal(u: unknown): AttentionProposal | null {
   switch (u["kind"]) {
     case "proposed": {
       const id = nonBlank(u["id"]);
-      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === u["recipient"]);
+      const recipient = publishedRecipient(u["recipient"]);
       const reason = nonBlank(u["reason"]);
       const asks = nonBlank(u["asks"]);
       const by = parseProposalAuthor(u["by"]);

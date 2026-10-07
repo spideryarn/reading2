@@ -31,3 +31,5 @@ The chips above the picture give other views:
   Sketch first. It is an interpretation: nothing in the painting can be clicked or checked, though
   **What it depicts**, under it, quotes the article and links to the passages. Treat the Sketch as
   the one to trust.
+
+![Illustrated: a painted picture of an argument about phrenology, scenes in round medallions joined in a funnel and a fan, and under it the first item of What it depicts, quoting the article](../images/mode-illustrated.png "Illustrated: the Sketch painted. Nothing in the painting is checked; the quotes under What it depicts are the article’s own.")

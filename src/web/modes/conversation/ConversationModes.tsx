@@ -523,6 +523,7 @@ export function ConversationBand({
     settled,
     named,
     speak,
+    onAnswered,
     error,
   } = useChat(slug, onSettled);
   /**
@@ -1356,6 +1357,9 @@ export function ConversationBand({
          (`awaitsOrigin` above): no button, and the callback is refused too. */
       /* Nor in the guide, which is typed (plan 261007j). */
       live={OFFERS_LIVE[kind] && openKind !== "guide" && !awaitsOrigin(current) ? live : undefined}
+      /* The guide's answers may press one of their own buttons; ChatPanel's
+         conversation listens only when it is the guide (guide-acts.ts). */
+      onAnswered={onAnswered}
       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
         if (awaitsOrigin(id)) return;

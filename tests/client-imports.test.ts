@@ -41,6 +41,11 @@ const WEB = path.join(ROOT, "src", "web");
  */
 const SHARED = new Set([
   "types.js", // the shapes both sides speak in
+  /* Which modes the guide may open without a press: the server's prompt marks
+     each mode with it and the page applies it, so the sentence the model is
+     told to write and what happens cannot drift. Imports nothing. See
+     src/acts-alone.ts and plan 261007p. */
+  "acts-alone.js",
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`

@@ -10,12 +10,16 @@
  *
  *     npx tsx evals/debate/themes.ts <debates.json> [--out <file.json>]
  *
+ * Each call is written to the local database's `ai_calls` ledger, its only
+ * write there.
+ *
  * Prints each debate's sources and, under them, the themes and key sources
  * with the row each one points at, so a reader can judge the grouping against
  * the passages rather than against the labels.
  */
 import fs from "node:fs";
 
+import { withLedger } from "../../src/cli-ledger.js";
 import { synthesiseDebate } from "../../src/debate.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { modelFor } from "../../src/models.js";
@@ -48,4 +52,7 @@ async function main(): Promise<void> {
   if (flag === "--out" && out) fs.writeFileSync(out, JSON.stringify(results, null, 2));
 }
 
-await main();
+/* Before the ledger, which reads the owner from the environment. */
+loadEnvLocal();
+/* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+await withLedger("eval", main);
