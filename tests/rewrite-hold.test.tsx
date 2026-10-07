@@ -735,7 +735,7 @@ const ROWS: Row[] = [
     waiting: "The new citations haven't loaded yet.",
     readAgain: "Try again",
   },
-  /* The seventh of the seven that had a forced verb and no hold (plan 261007d).
+  /* The seventh of the seven that had a forced verb and no hold (plan 261007e).
      Its forced control is the stale or profile-changed banner's, and the same
      button in the status foot of a current route. The Quotes and the Ideas are
      served current, so the press asks for the route alone: what a run does
@@ -1438,7 +1438,7 @@ describe.each(ROWS)("$name", (mode) => {
   });
 });
 
-/* **Skim's hold and the steps its job may run first** (plan 261007d). A run
+/* **Skim's hold and the steps its job may run first** (plan 261007e). A run
    names the Quotes or the Ideas in `precededBy` when they are missing or
    stale, unforced, in the one job. The hold follows that job: it is not a hold
    on the prerequisite, and a press that had to wait for the prerequisite reads
@@ -1706,7 +1706,7 @@ describe("every file under src/web that forces a step", () => {
     expect(forcers.length, "the search found nothing, so it proves nothing").toBeGreaterThanOrEqual(ROWS.length);
     /* A form a search of the text misses: without this hit the scan is the
        literal scan again. (The conditional spread, which Skim used until plan
-       261007d, is pinned by the snippets above.) */
+       261007e, is pinned by the snippets above.) */
     expect(forcers, "the glossary's shorthand `force`").toContain("useGlossary.ts");
     expect(
       forcers.filter((f) => !rows.has(f) && !(f in NOT_HELD)),

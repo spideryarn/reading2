@@ -637,7 +637,7 @@ with the modes whose Regenerate is in this panel (Quiz, Summary, Thread, Ideas, 
 Sketch), and since 2026-10-07 it also holds the forced controls that are not: Illustrated's *Paint
 again*, Quotes' *Find more* and *Choose them again*, and the button on the stale banner in Timeline,
 FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)), and Skim's *Plan it again*
-([261007d](../plans/261007d-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md);
+([261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md);
 [skim.md](skim.md) says what that hold does about the Quotes and Ideas a route's job may make
 first). Every artefact hook with a forced run now has one.
 

@@ -116,7 +116,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
       try {
         const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`);
         if (!current()) return;
-        /* **Checked and derived before anything is published** (plan 261007d,
+        /* **Checked and derived before anything is published** (plan 261007e,
            WCO4): `readJson` checks no shape, and an empty 200 is `{}`.
            A 404 is "none yet", and so is `200 null`, which this route does not
            send today and a route under `NONE_YET_AS_NULL_HEADER` does. */

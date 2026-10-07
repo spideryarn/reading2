@@ -7,6 +7,9 @@ the first half: [261007b](261007b-seventh-sweep-rewrite-hold-on-the-six-forced-v
 
 Three small repairs in the reader's client, one commit each. None changes a server file.
 
+(This file was `261007d-…` for its first two commits, whose messages say so. Another plan took
+that letter on `dev` the same hour, so it moved to `e`.)
+
 ## 1. Skim's rewrite hold
 
 **What was wrong.** *Plan it again* is a forced run beside a route already on screen. The job
@@ -145,3 +148,62 @@ lands in the same catch. `npm run typecheck` is what refused it.
   a reply whose `thread` is `null`.
 - The brief's "surface the failure the way the nine do" fits Skim. Thread already had a sentence
   of its own for a failed re-read and keeps it.
+
+## 3. A picture's flags go with the picture
+
+**What was wrong.** `useSketch` and `useIllustrated` each have two ways to `none`: a 404, and a
+reply whose stored value the checker keeps nothing of (no scene; no plate). The second cleared the
+picture and its identity, kept the checker's `faults`, and did not reset `stale`, `outdated`,
+`profiled` or `profileChanged`. So after a flagged picture, the hook said "no picture" and
+"stale, outdated, written for a profile that has changed" at once. Found by the read-type spike
+([261006n](261006n-one-type-for-a-read-spiked-on-useideas.md)) and confirmed by GPT Sol.
+
+**Reproduced.** A transition test per hook in
+[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx) §
+*a checked-empty answer carries none of the last picture's flags*: flagged picture, then a stored
+value with nothing drawable, then a fresh picture. Red on both before the fix: all four flags
+still true beside `status: "none"`.
+
+**Fixed by grouping, in both hooks.** As `useIdeas` now holds its list and flags in one
+`IdeasAnswer | null`, each picture hook holds one nullable value: the checked picture, the stored
+value's identity for the hold, and the four flags. "No picture" is that value being null, so it
+has nowhere to carry a flag. `faults` stays its own state, and the checked-empty branch still
+keeps it. Status, error, `useOrderedRead`, the `FreshReads` calls and the returned interface are
+unchanged; no consumer changed. The minimal repair (four resets in the branch) was not needed in
+either hook: the identity was already set and cleared in step with the picture, so putting it in
+the same value disturbed nothing about the hold (`tests/rewrite-hold.test.tsx`, both rows and
+their Retry seam, green).
+
+**What a reader could have seen: nothing.** Both views return their empty state as soon as
+`status` is `none`, and that branch reads none of the four flags. `SketchView` reads `stale`,
+`profiled` and `profileChanged` only below its `if (!view.sketch) return null`; `IllustratedView`
+reads `stale` and `profileChanged` only below its own, and in `PaintAgain`, which is drawn beside
+a painting. Inside `useIllustrated`, `regenerate` reads `profileChanged` to decide whether to
+draw the Sketch first, and nothing calls `regenerate` with no painting. So this was a wrong
+answer from the hook that no caller asked for, and the fix is for the next caller.
+
+**Mutations, each put back** (90 tests in the file), the same five in each hook:
+
+| Mutation | Red |
+|---|---|
+| the checked-empty branch does not clear the value | 1 |
+| the checked-empty branch drops the faults | 1 |
+| a 404 keeps the faults | 1 (0 at first: see below) |
+| a failed re-read clears the value | 2 |
+| a returned flag is a constant `false` | 2 |
+
+*A 404 keeps the faults* survived the first version of its test, in both hooks: the flagged
+picture had no faults, so there was nothing for the 404 to fail to clear. The test now goes
+through the checked-empty answer first.
+
+**What the documents got wrong.** Nothing in substance. The brief's "Illustrated's second none
+branch" and "Sketch's empty-scenes branch" are as described.
+
+## Left
+
+- **The command bar's *Run again* row** still bypasses every hold, Skim's now included. Known,
+  pinned by a test, not this cluster's.
+- ***Plan the route for this* over a held route** starts an unforced run for a new purpose (§ 1).
+- **Stored Skim routes were not sampled** from any database (§ 2).
+- **No browser pass and no cross-family review yet.** The caller runs the GPT review before this
+  is pushed.

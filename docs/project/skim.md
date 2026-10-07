@@ -179,7 +179,7 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   in the row when there are no Quotes.
 
   **One press, one route** (since 2026-10-07,
-  [261007d](../plans/261007d-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
+  [261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
   From the press until the new route has been read, *Plan it again* is held, in the banner and in
   the status foot: the rewrite hold every other forced verb has
   ([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).

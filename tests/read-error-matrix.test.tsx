@@ -522,6 +522,8 @@ const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuizRead } = await import("../src/web/useQuiz.js");
 const { useTweets } = await import("../src/web/useTweets.js");
 const { useSkim } = await import("../src/web/useSkim.js");
+const { useSketch } = await import("../src/web/useSketch.js");
+const { useIllustrated } = await import("../src/web/useIllustrated.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -861,8 +863,135 @@ describe.each([
   });
 });
 
+/* ------------------------------------------ a picture's flags go with the picture --
+
+   **A reply that was read and found to hold nothing drawable is "none", and
+   "none" carries no flags.** Both picture hooks have a second way to `none`
+   besides the 404: the stored value came back and the checker kept no scene
+   (Sketch) or no plate (Illustrated). That branch cleared the picture and left
+   `stale`, `outdated`, `profiled` and `profileChanged` as the previous picture
+   had them. What the checker refused (`faults`) is kept on purpose: it is the
+   only thing that says why there is nothing to draw. Plan 261007e § 3. */
+
+const FLAGGED = { stale: true, outdated: true, profileChanged: true };
+const BLOCK_IDS = BLOCKS.map((block) => block.id);
+
+describe.each([
+  {
+    name: "Sketch",
+    kind: "sketch",
+    use: () => {
+      const read = useSketch(SLUG, BLOCK_IDS);
+      return { read, picture: read.sketch };
+    },
+    /* Something the checker refuses whole, so there are faults to keep. */
+    nothingDrawable: { title: "t", caption: "c", scenes: ["not a scene"] },
+  },
+  {
+    name: "Illustrated",
+    kind: "illustrated",
+    use: () => {
+      const read = useIllustrated(SLUG, BLOCKS);
+      return { read, picture: read.illustrated };
+    },
+    nothingDrawable: {
+      ...(BODIES.illustrated as { illustrated: object }).illustrated,
+      plates: "not a list",
+    },
+  },
+])("$name: a checked-empty answer carries none of the last picture's flags", ({ kind, use, nothingDrawable }) => {
+  const stored = (BODIES[kind] as Record<string, object>)[kind]!;
+  const flagsOf = (read: ReturnType<typeof use>["read"]) => ({
+    stale: read.stale,
+    outdated: read.outdated,
+    profiled: read.profiled,
+    profileChanged: read.profileChanged,
+  });
+
+  it("flagged picture, then nothing drawable, then a fresh picture with flags of its own", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    expect(seen.read.status).toBe("ready");
+    expect(seen.picture).not.toBeNull();
+    expect(flagsOf(seen.read)).toEqual({ stale: true, outdated: true, profiled: true, profileChanged: true });
+
+    answers = { [kind]: { body: { [kind]: { ...nothingDrawable, profileHash: "a-profile" }, ...FLAGGED } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("none");
+    expect(seen.read.error).toBeNull();
+    expect(seen.picture).toBeNull();
+    expect(seen.read.faults.length, "what the checker refused is the only account of the emptiness").toBeGreaterThan(0);
+    expect(flagsOf(seen.read), "the previous picture's flags, beside no picture").toEqual({
+      stale: false,
+      outdated: false,
+      profiled: false,
+      profileChanged: false,
+    });
+
+    answers = { [kind]: { body: { [kind]: stored, stale: false, outdated: true, profileChanged: false } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.picture).not.toBeNull();
+    expect(flagsOf(seen.read)).toEqual({ stale: false, outdated: true, profiled: false, profileChanged: false });
+    expect(posts).toEqual([]);
+  });
+
+  it("a 404 after a flagged picture clears the flags and the faults", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    /* Through the checked-empty answer first, so there are faults for the 404 to clear. */
+    answers = { [kind]: { body: { [kind]: nothingDrawable, ...FLAGGED } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.faults.length).toBeGreaterThan(0);
+    answers = { [kind]: "missing" };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("none");
+    expect(seen.picture).toBeNull();
+    expect(seen.read.faults).toEqual([]);
+    expect(flagsOf(seen.read)).toEqual({ stale: false, outdated: false, profiled: false, profileChanged: false });
+  });
+
+  it("a failed re-read keeps the picture and its flags", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    const kept = seen.picture;
+    answers = { [kind]: "transport" };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.read.error).not.toBeNull();
+    expect(seen.picture).toBe(kept);
+    expect(flagsOf(seen.read)).toEqual({ stale: true, outdated: true, profiled: true, profileChanged: true });
+  });
+});
+
 /* **Thread and Skim, which published a reply before checking it** (WCO4, plan
-   261007d). Their envelope's key is not their path's word, and Skim's hook
+   261007e). Their envelope's key is not their path's word, and Skim's hook
    stands on two other reads, so they are rows of their own. `readJson` checks
    no shape: an empty 200 is `{}`, and a reply with no artefact used to be
    committed as one (Thread ended `ready` with no thread; Skim ended `ready`
