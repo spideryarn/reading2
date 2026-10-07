@@ -31,8 +31,11 @@ they have not been observed red or green because the locked test command could
 not acquire the shared lock. Source inspection establishes the missing check;
 runtime validation remains outstanding.
 
-> **Note, 2026-10-07.** The paragraph above is what was true when this was written. Since then the
-> six cases have been run and seen red and green. With `if (n > 1) options?.signal?.throwIfAborted()`
+> **Note, 2026-10-07.** The paragraph above records validation as outstanding, but the
+> [transport plan's gates](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md#gates) already recorded
+> the six cases red and green before this sweep (see the
+> [Sol cross-review](../investigations/261006d-seventh-sweep-depth-pipeline-review-sol-on-opus.md#pqo6-tests-allegedly-never-seen-red)).
+> They were run again here. With `if (n > 1) options?.signal?.throwIfAborted()`
 > deleted from `asTransportAttempts`, the four non-stream seams' *opens no attempt when the signal
 > aborts as the backoff finishes* fail (`expected undefined to be DOMException`). With
 > `if (attempt > 1) options.signal.throwIfAborted()` deleted from `acceptedStream`, the stream's

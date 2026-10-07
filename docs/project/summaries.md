@@ -164,8 +164,9 @@ for both.
 
   **This is the one step that does it, and it is a deliberate exception**, not an oversight to
   tidy. Every other step with a stamp
-  ([architecture.md § Conventions](architecture.md#conventions)) expects the *current* prompt
-  version and model, so a version bump makes its stored output not current and the next unforced
+  ([architecture.md § Conventions](architecture.md#conventions)) expects the *current* version,
+  and the current model where its stamp includes one (`assets` has no model in its stamp), so a
+  version bump makes its stored output not current and the next unforced
   job that names the step writes it again. `simple` alone expects the stored summary's own, which
   splits two questions the other steps answer together:
 

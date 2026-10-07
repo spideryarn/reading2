@@ -477,10 +477,10 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * **A checkpoint store that remembers nothing**, for the callers that have no
  * article row to key on.
  *
- * `npm run eval:pdf-read` and `evals/pdf/titles.mts`, neither of them
- * production: they read a PDF with no `articles` row and therefore no
+ * The PDF CLI (`npm run eval:pdf-read`) and standalone evals, including
+ * `evals/pdf/titles.mts`: they run with no `articles` row and therefore no
  * `articleId` — the one thing this store must be keyed on. (The filesystem
- * session was a third, until it was deleted on 2026-10-07.)
+ * session was another caller, until it was deleted on 2026-10-07.)
  *
  * **It used to be three command lines and is now one.** `npm run structure` and
  * `npm run blocks` go through the queue since 2026-09-05 (`scripts/stage.ts`),

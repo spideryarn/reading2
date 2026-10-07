@@ -93,9 +93,16 @@
  * | the `labels` membership test dropped, so any active job counts | case 15g alone, same line |
  * | the sweep's call removed | case 15e alone, as on 2026-09-07 |
  *
- * **Not covered:** `not(cancelling)`. A cancelling job is `running`
- * (`jobs_cancelling_is_running`), and no case here has two running jobs on one
- * article. The clause moved with the query, unchanged.
+ * The review added a direct predicate test for `not(cancelling)`, with the
+ * same running row as a positive control once its flag is cleared, and two
+ * cases pinning the live trigger. Run against Postgres on 2026-10-07 and each
+ * watched red:
+ *
+ * | mutation | red |
+ * |---|---|
+ * | `not(jobs.cancelling)` dropped from `anotherJobCarriesLabelsIn` | *a cancelling labels job is not a promise of more labels* alone → `a cancelling job promised work it may abandon: expected true to be false` |
+ * | the live trigger's `unfinished === "labels"` widened to any unfinished step | *a live structure error leaves pending labels alone* alone → `expected 'failed' to be 'pending'` |
+ * | the live trigger's `ending.status === "error"` dropped | *a live labels cancelled leaves pending labels alone* alone, same line |
  *
  * **The sixth is the one worth reading twice, because the symptom is not what
  * the design expected.** The plan predicted that copying the parent's
@@ -136,7 +143,7 @@ import { runAsOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { mintAttempt, workKeyFor } from "../src/store/jobs.js";
-import { pgJobStore, ingestProvenanceOf } from "../src/store/pg-jobs.js";
+import { anotherJobCarriesLabelsIn, pgJobStore, ingestProvenanceOf } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { settleReservation } from "../src/store/pg-billing.js";
 import {
@@ -1609,6 +1616,60 @@ describe("publication enqueues the free labels successor", () => {
       "a job that will not make this article's labels was counted as the one that will",
     ).toBe("failed");
   });
+
+  // The coordinator normally serializes claims on an article. Ask the helper
+  // directly so this clause needs no impossible pair of live claimants.
+  mine("a cancelling labels job is not a promise of more labels", async () => {
+    const slug = `${SLUG_PREFIX}cancelling-carrier`;
+    await publishPending(slug);
+    const successor = (await successorsOf(slug))[0];
+    expect(successor).toBeTruthy();
+    const id = successor!.id;
+    await db().update(jobsTable).set({
+      status: "running",
+      attemptId: mintAttempt(),
+      leaseExpiresAt: new Date(Date.now() + LEASE_MS),
+      cancelling: true,
+    }).where(eq(jobsTable.id, id));
+    try {
+      const carries = () => db().transaction((tx) =>
+        anotherJobCarriesLabelsIn(tx, { slug, ownerId: OWNER }, []),
+      );
+      expect(await carries(), "a cancelling job promised work it may abandon").toBe(false);
+      await db().update(jobsTable).set({ cancelling: false }).where(eq(jobsTable.id, id));
+      expect(await carries(), "the same running labels job must be a positive control").toBe(true);
+    } finally {
+      await db().update(jobsTable).set({
+        status: "cancelled", cancelling: false, attemptId: null, leaseExpiresAt: null,
+      }).where(eq(jobsTable.id, id));
+    }
+  });
+
+  // Pin the live trigger separately from successor suppression. Otherwise a
+  // broadened membership check can pass 15f because its successor still exists.
+  for (const { step, status } of [
+    { step: "structure", status: "error" },
+    { step: "labels", status: "cancelled" },
+  ] as const) {
+    mine(`a live ${step} ${status} leaves pending labels alone`, async () => {
+      const slug = `${SLUG_PREFIX}live-trigger-${step}-${status}`;
+      const fixture = await publishPending(slug);
+      const successor = (await successorsOf(slug))[0];
+      expect(successor).toBeTruthy();
+      await db().delete(jobsTable).where(eq(jobsTable.id, successor!.id));
+      const id = await queueBehind(slug, ["structure", "labels"]);
+      const attempt = mintAttempt();
+      const job = await claimWhenSlotFree(id, attempt);
+      const session = await openPgStoreSession({ slug, job: { id, attemptId: attempt } });
+      await session.beginStep(slug, step);
+      await session.settleJob({
+        kind: "end", jobId: id, attempt,
+        ending: { status, steps: job.steps, ...(status === "error" ? { error: "gave up" } : {}) },
+      });
+      expect((await jobRow(id))?.status).toBe(status);
+      expect(await navLabelStatusOf(fixture.revisionId)).toBe("pending");
+    });
+  }
 
   /* ---------------------------------------------------------------- 15d -- */
 

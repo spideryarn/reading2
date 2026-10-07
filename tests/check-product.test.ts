@@ -30,7 +30,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LabelsFile } from "../src/labels.js";
-import { assertProduced } from "../src/pipeline.js";
+import { assertProduced, STEPS } from "../src/pipeline.js";
 import type { PipelineStep, StepContext, StepProduct } from "../src/pipeline.js";
 import { checkProduct } from "../src/store/session.js";
 import type { Tree } from "../src/types.js";
@@ -93,6 +93,20 @@ function stepProducing(produces: PipelineStep["produces"]): PipelineStep {
 }
 
 describe("the edges of what a product may be", () => {
+  it("refuses a product with no parts for every step", () => {
+    for (const step of Object.values(STEPS)) {
+      expect(() => checkProduct(step, { detail: "nothing returned" }), step.name).toThrow(
+        /returned no artefacts to write/,
+      );
+    }
+  });
+
+  it("requires parts in every step's run return type", () => {
+    // @ts-expect-error a new step cannot return an unconverted product.
+    const run: PipelineStep["run"] = async () => ({ detail: "nothing returned" });
+    expect(typeof run).toBe("function");
+  });
+
   /**
    * **`Object.hasOwn`, not a lookup.** The store's `write` iterates
    * `Object.entries`, which skips the prototype — so an inherited `labels`

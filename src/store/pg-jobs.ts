@@ -2248,7 +2248,7 @@ const rawPgJobStore: JobStore = {
  * - **it is `queued` or `running` and not `cancelling`.** A job on its way out
  *   promises nothing;
  * - **its step list has `labels`.** Membership is right *here*, about the other
- *   job, which has not started: this is whether it will carry the work, not
+ *   job: this is whether it may still carry the work, not
  *   whether it failed inside it.
  *
  * **When to ask is the caller's, and the two differ on purpose.** The sweep
@@ -2258,7 +2258,10 @@ const rawPgJobStore: JobStore = {
  *
  * Reads `jobs` and takes no lock. Both callers already hold the article's row,
  * which is what a publication takes before it queues a successor, so a
- * successor cannot appear between this answer and the mark.
+ * successor cannot appear between this answer and the mark. Session completion
+ * takes that lock too. Stop does not: it can cancel a queued successor while
+ * this transaction holds the article. As with Stop after this commit, that can
+ * leave labels pending; both callers deliberately mark only an error ending.
  */
 export async function anotherJobCarriesLabelsIn(
   exec: Executor,

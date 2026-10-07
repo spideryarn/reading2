@@ -1,7 +1,8 @@
 # Seventh sweep: pipeline tidy (C8)
 
-Status as of 2026-10-07: all four items built, one commit each. Not pushed: a GPT
-review comes first.
+Status as of 2026-10-07: all four items built, one commit each, reviewed by GPT Sol, its fixes
+applied and landed on `dev`. See [Review status](#review-status) for what the review changed and
+the two wider gaps it left.
 
 **The four commits name this file `261007d`**, which is what it was called until `dev` was merged
 in and another plan turned out to hold that letter. It is `261007e`.
@@ -57,8 +58,10 @@ weighed, because the brief allowed it. The helper won on the deletion test: ever
 (status, cancelling, owner, membership, exclusion) and the two callers differ only in *when* they
 ask, which stays with each caller. A second copy is how this drifted the first time.
 
-**One cost:** the sweep asked once for every article it was ending and now asks once per ended
-`labels` job. That is a handful of rows on a path that runs when a lease lapses.
+**One cost:** the sweep previously made one batched query and now asks once per ended `labels`
+job. The query count is bounded by its initial running-job candidate set, normally limited by
+configured concurrency. That configuration accepts any positive integer; there is no small fixed
+bound. Each query can also read queued candidates, whose count is not capped by concurrency.
 
 **The broken twin (U10) and its controls.** Mutations, each watched red on 2026-10-07 and restored:
 
@@ -76,9 +79,11 @@ with no `labels` step, both queued, and the base is still marked `failed`.
 case 8 is that job and is unchanged and green, and it is the case that goes red when the helper
 counts the settling job.
 
-**Not covered by any test:** the `not(cancelling)` clause. A cancelling job is `running`
+**At build time, not covered by any test:** the `not(cancelling)` clause. A cancelling job is `running`
 (`jobs_cancelling_is_running`), and no fixture has two running jobs on one article. The clause
-moved with the query, unchanged.
+moved with the query, unchanged. The code review added a direct predicate test with the same
+running row as a positive control after its flag is cleared. It has since been run and seen red:
+[Review status](#review-status).
 
 **What the docs got wrong.** Sol's finding was marked *C, not reproduced*; the Opus review
 reproduced it, and so did this. Nothing in the finding was false.
@@ -134,9 +139,9 @@ file this touched.
 | 1 | refuses a step that returned one of the two artefacts it declares | **twin**: `stage2c-raw-bytes` *refuses an extract product missing extractedHtml, by name* |
 | 2 | refuses over an artefact carried from a previous run, and leaves it alone | **twin**: `store-pg-session` *refuses a missing part that the carried artefact would have hidden* |
 | 3 | refuses an empty parts object | **twin**: the same case (it passes `parts: {}`), and `stage2c-raw-bytes` *refuses a fetch product with no raw manifest* |
-| 4 | writes the new artefacts over the carried ones, and finishes the step | **twin**: `store-pg-session` *writes, completes, publishes, finishes and clears the pointer* |
+| 4 | writes the new artefacts over the carried ones, and finishes the step | **twins**: `store-pg-session` *writes, completes, publishes, finishes and clears the pointer* covers one arc; `pg-session-real-step` *writes both its artefacts, finishes the step and publishes* covers two carried artefacts overwritten |
 | 5 | is accepted with no parts while it is marked unconverted | **obsolete**: the exemption is deleted |
-| 6 | is refused with no parts once it is no longer marked unconverted | **twin**: `stage2c-raw-bytes` *refuses an extract product with no parts whatsoever*; the marker half is `store-pg-session` *re-runs a step that was begun and never committed* |
+| 6 | is refused with no parts once it is no longer marked unconverted | **ported in code review**: `store-pg-session` *refuses a product with no parts without closing its begun step* (run and seen red, [Review status](#review-status)). The originally named twins checked the guard and an abandoned run separately; neither asserted that this refusal retains its begun run |
 | 7 | lists only real steps on the exemption | **obsolete**: the list is deleted |
 | 8 | `assertProduced` refuses an unconverted step whose artefacts are not there | **obsolete**: only an exempt step could reach the postcondition with no parts |
 | 9 | `assertProduced`, as a function: half of what a step declares is missing | **ported**: `check-product` *refuses a step with half of what it declares readable* |
@@ -216,11 +221,14 @@ continuation runs.
 
 | mutation in `src/messages-stream.ts` | red |
 |---|---|
-| the `throwIfAborted()` after the wait deleted | `expected [ [ 1, 'error', { …(3) } ], …(1) ] to deeply equal [ [ 1, 'error', { …(3) } ] ]`: a second row, for an attempt opened after the Stop |
+| the `throwIfAborted()` after the wait deleted | as first written: `expected [ [ 1, 'error', { …(3) } ], …(1) ] to deeply equal [ [ 1, 'error', { …(3) } ] ]`, a second row for an attempt opened after the Stop. As rewritten in review: `expected 2 to be 1` on `call.attempts()` |
 
-One difference from the OpenRouter cases: the SDK sets a timer of its own per request, so the new
-case wraps only the timer whose length is a first backoff's (375 to 625 ms) and asserts that it
-saw exactly one.
+The original case wrapped the first timer of a backoff's length (375 to 625 ms), asserting it
+saw one. The code review showed that a different backoff duration makes that fixture fail against
+correct code. It now wraps the real `waitOrStop`, aborting after it resolves and before its
+caller continues, and checks opened attempts as well as sends and rows. The root cause and
+mutation evidence are in
+[the postmortem](../postmortems/261007e-a-timer-duration-is-not-the-boundary-it-belongs-to.md).
 
 ## Item 4: Summary's stamp, written down
 
@@ -252,3 +260,68 @@ an entry point whose wording is a rule.
 corrected that for the transport cases and was right. The Opus read's file for the Messages check
 (`src/messages-stream.ts`) was right; the brief for this cluster named `src/messages.ts` and
 `src/ai-call.ts`, where it is not.
+
+## Review status
+
+GPT Sol reviewed the built code on 2026-10-07
+([prompt](261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session-code-review-prompt.md),
+[answer](261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session-code-review-sol.md)).
+**Verdict: "ship with these fixes applied."** It made the fixes itself and had no database, so
+its Postgres cases arrived unrun. They were then run outside the sandbox, and each was shown to
+fail against the wrong implementation it exists to catch. Source was restored from a scratch copy
+and compared byte for byte after each mutation.
+
+| | finding | what happened |
+|---|---|---|
+| **C1** | Deleted case 6 checked that refusing a step with no `parts` leaves the begun run open. Its named twins checked the refusal and an abandoned run separately, so a session that closed the run while refusing would have passed | **Fixed.** New Postgres case in `tests/store-pg-session.test.ts`, plus a runtime guard over every step and a compile-time guard in `tests/check-product.test.ts` |
+| **C2** | The Messages boundary test picked out the backoff's timer by its length. A changed backoff made it fail against correct code | **Fixed.** It wraps the real `waitOrStop` and asserts opened attempts, sends and ledger rows. [Postmortem](../postmortems/261007e-a-timer-duration-is-not-the-boundary-it-belongs-to.md) |
+| **C3** | Three clauses of the successor rule had no case: `not(cancelling)`, the live trigger's `unfinished === "labels"`, and its error-only condition | **Fixed.** Three Postgres cases in `tests/publication-enqueues-the-labels-successor.test.ts`. No change to `src/` beyond a comment |
+| **C4** | Comments and docs that claimed more than the code does: every stamp has a model (`assets` has none), Sketch has two callers, the null checkpoint store has two, the helper only sees jobs that have not started, the transport cases had never been seen red, the sweep's query count is "a handful" | **Fixed**, each checked against the code. One link Sol wrote had a doubled hyphen in its anchor and was corrected |
+
+### The Postgres cases, run
+
+All four passed as written (`tests/store-pg-session.test.ts` and
+`tests/publication-enqueues-the-labels-successor.test.ts`, 46 of 46 together).
+
+| case | wrong implementation | red |
+|---|---|---|
+| *refuses a product with no parts without closing its begun step* | `commit` ends the step's run row before refusing absent parts | that case alone, 1 of 18 → `the step is not done: expected 'error' to be 'running'` |
+| *a cancelling labels job is not a promise of more labels* | `not(jobs.cancelling)` removed from `anotherJobCarriesLabelsIn` | that case alone, 1 of 28 → `a cancelling job promised work it may abandon: expected true to be false` |
+| *a live structure error leaves pending labels alone* | the live trigger's `unfinished === "labels"` widened to any unfinished step | that case alone, 1 of 28 → `expected 'failed' to be 'pending'` |
+| *a live labels cancelled leaves pending labels alone* | the live trigger's `ending.status === "error"` removed | that case alone, 1 of 28 → `expected 'failed' to be 'pending'` |
+
+C2 was run again too: with the `throwIfAborted()` after the wait removed from
+`src/messages-stream.ts`, *a Stop as the backoff finishes leaves one row, and opens no attempt 2*
+fails alone, 1 of 86, with `expected 2 to be 1`.
+
+### The deletion a comment argued against
+
+The docstring on `LEGACY_UNCONVERTED_STEPS` said deleting the list *"would be the wrong
+tidy-up"*, and this work deleted it ([item 2](#item-2-pqo3-the-filesystem-session)). The review
+was asked to judge that deletion specifically. Sol's judgement: it stands. Its searches found no
+remaining executable use of the deleted machinery, string-built references included, it raised no
+finding against the deletion, and its verdict was to ship. Under C1 it added the two guards at
+the end of this list. The argument that the comment defended the refusal and not the list is the
+builder's, in item 2. Four things now hold the rule the list held:
+
+- the type `ConvertedProduct`, which is the return type of every step's `run` and requires `parts`;
+- `checkProduct`, which refuses a product with no `parts` unconditionally, with no opt-out
+  parameter;
+- a runtime guard: `check-product` *refuses a product with no parts for every step* walks `STEPS`;
+- a compile-time guard: `check-product` *requires parts in every step's run return type*, a
+  `@ts-expect-error` that stops compiling if `run` may return a product without `parts`.
+
+### Left
+
+Two wider gaps Sol named and did not change. Neither was introduced here.
+
+- **A Stop can leave the labels `pending` with nobody coming.** The successor rule says "another
+  job is still going to make them, so do not mark them failed". Stop does not take the article's
+  lock, so a reader can stop that queued successor while the failing job is settling, or just
+  after. The failing job has already decided not to mark, the successor is now cancelled, and the
+  article goes on saying its labels are arriving. Closing it means changing what Stop does, which
+  is out of scope here and is a question already with the owner.
+- **A successor queued against an older base revision is counted as still carrying the work.**
+  The rule looks at the job's status and step list, not at which revision it was queued for. A
+  successor from before the article was republished cannot finish the current revision's labels,
+  but it still stops the current revision being marked `failed`.

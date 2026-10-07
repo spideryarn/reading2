@@ -987,55 +987,71 @@ describe("the transactional session", () => {
    * before the stage ran. So without `checkProduct` the step is marked done,
    * the job moves on, and the article keeps last week's arc under a green tick.
    */
-  mine("refuses a missing part that the carried artefact would have hidden", async () => {
-    const slug = `${SLUG_PREFIX}carried`;
-    await publishArticle(slug, "the carried arc");
-    const claimed = await claimWithSession(slug, ["arc", "tweets"]);
-    const ctx = contextFor(slug);
+  // Both refusals must retain the begun run and the claim, not just reject.
+  // The absent-parts case preserves deleted store-session case 6. Watched red on
+  // 2026-10-07 with `commit` closing the run before it refuses absent parts:
+  // `the step is not done: expected 'error' to be 'running'`.
+  for (const fixture of [
+    {
+      name: "empty",
+      test: "refuses a missing part that the carried artefact would have hidden",
+      product: { detail: "nothing at all", parts: {} },
+      refusal: /returned a product missing arc/,
+    },
+    {
+      name: "absent",
+      test: "refuses a product with no parts without closing its begun step",
+      product: { detail: "nothing at all" },
+      refusal: /returned no artefacts to write/,
+    },
+  ]) {
+    mine(fixture.test, async () => {
+      const slug = `${SLUG_PREFIX}carried-${fixture.name}`;
+      await publishArticle(slug, "the carried arc");
+      const claimed = await claimWithSession(slug, ["arc", "tweets"]);
+      const ctx = contextFor(slug);
 
-    /* The state that makes this test mean something, asserted rather than
-       assumed: the draft really can answer `read` with an arc. */
-    const carried = await claimed.session.reads.read(slug, "arc", "arc");
-    expect(carried?.entries[0]?.text).toBe("the carried arc");
+      /* The state that makes this test mean something, asserted rather than
+         assumed: the draft really can answer `read` with an arc. */
+      const carried = await claimed.session.reads.read(slug, "arc", "arc");
+      expect(carried?.entries[0]?.text).toBe("the carried arc");
 
-    await claimed.session.beginStep(slug, "arc");
-    const release: JobTransition = {
-      kind: "release",
-      jobId: claimed.jobId,
-      attempt: claimed.attempt,
-      steps: claimed.steps,
-      fields: {},
-    };
+      await claimed.session.beginStep(slug, "arc");
+      const release: JobTransition = {
+        kind: "release",
+        jobId: claimed.jobId,
+        attempt: claimed.attempt,
+        steps: claimed.steps,
+        fields: {},
+      };
 
-    await expect(
-      claimed.session.commit(
-        ctx,
-        fakeArc(async () => ({ detail: "nothing at all" })),
-        claimed.attempt,
-        /* `{}` rather than absent, because an empty object is the sneakier of
-           the two: it is truthy, it has none of the declared kinds, and it
-           would call `write` with nothing in it. */
-        { detail: "nothing at all", parts: {} },
-        release,
-      ),
-      /* **The sentence, not merely a rejection.** `checkProduct` refuses before
-         the transaction opens, so nothing has been near the database — and the
-         session goes through `guardDbStore`, which until 2026-08-30 replaced
-         this with *"this app asked its database for something it would not
-         do"*. That is false, and it drops the half naming the artefact. See
-         `ProductRefused` in src/store/artifacts.ts. */
-    ).rejects.toThrow(/returned a product missing arc/);
+      await expect(
+        claimed.session.commit(
+          ctx,
+          fakeArc(async () => ({ detail: "nothing at all" })),
+          claimed.attempt,
+          fixture.product,
+          release,
+        ),
+        /* **The sentence, not merely a rejection.** `checkProduct` refuses before
+           the transaction opens, so nothing has been near the database — and the
+           session goes through `guardDbStore`, which until 2026-08-30 replaced
+           this with *"this app asked its database for something it would not
+           do"*. That is false, and it drops the half naming the artefact. See
+           `ProductRefused` in src/store/artifacts.ts. */
+      ).rejects.toThrow(fixture.refusal);
 
-    expect(await arcTextOf(claimed.revisionId), "the carried arc must be untouched").toBe(
-      "the carried arc",
-    );
-    expect((await runRow(claimed.revisionId, "arc"))?.status, "the step is not done").toBe(
-      "running",
-    );
-    const job = await jobRow(claimed.jobId);
-    expect(job?.status, "the claim was not released").toBe("running");
-    expect(job?.draftRevisionId).toBe(claimed.revisionId);
-  });
+      expect(await arcTextOf(claimed.revisionId), "the carried arc must be untouched").toBe(
+        "the carried arc",
+      );
+      expect((await runRow(claimed.revisionId, "arc"))?.status, "the step is not done").toBe(
+        "running",
+      );
+      const job = await jobRow(claimed.jobId);
+      expect(job?.status, "the claim was not released").toBe("running");
+      expect(job?.draftRevisionId).toBe(claimed.revisionId);
+    });
+  }
 
   /* ------------------------------------------------------------------ 3 -- */
 
@@ -1907,10 +1923,12 @@ describe("the transactional session", () => {
     expect(reached.write).toBeUndefined();
     expect(reached.beginStep).toBeUndefined();
     expect(reached.finishStep).toBeUndefined();
-    /* And the six really answer, about this draft: a facade of undefineds would
-       pass everything above. */
+    /* The read and existence check answer about this draft: a facade of
+       undefineds would pass the shape checks above. */
     expect((await claimed.session.reads.read(slug, "arc", "arc"))?.entries[0]?.text).toBe(
       "the carried arc",
     );
+    expect(await claimed.session.reads.has(slug, "arc", ["arc"])).toBe(true);
+    expect(await claimed.session.reads.has(slug, "tweets", ["tweets"])).toBe(false);
   });
 });
