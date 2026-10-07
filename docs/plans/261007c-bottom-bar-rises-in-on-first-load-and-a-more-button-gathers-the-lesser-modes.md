@@ -1,6 +1,6 @@
 # The bottom bar rises in when an article loads, and a More button gathers the lesser modes
 
-*Status as of 2026-10-07: built on the worktree branch, code review and browser check pending — evidence: `splitForMore` and `DockMore` in `src/web/Dock.tsx`, `dock-enter` in `styles/dock.css`.*
+*Status as of 2026-10-07: built, reviewed and checked in a browser; on `dev`, not deployed — evidence: `splitForMore` and `DockMore` in `src/web/Dock.tsx`, `dock-enter` in `styles/dock.css`.*
 
 Up: [plans.md](../project/plans.md). Report `spya-dest8x` (Sentry SPIDERYARN-READING2-E6), from Greg
 as admin; Overseer queue item `qi-wpkewsk3`.
@@ -248,3 +248,47 @@ first second.
 Tests: `tests/dock-more.test.tsx` and `tests/dock-entrance.test.tsx` are new and were seen red;
 twenty-two existing files that walk the bar were updated, the sweeps through
 `tests/helpers/dock-more.ts` so that they assert the set of modes visited (PR-10).
+
+**2026-10-07, GPT Sol's code review** of commit `6c788fd51`
+([prompt](261007c-bottom-bar-more-and-entrance-code-review-prompt.md),
+[answer](261007c-bottom-bar-more-and-entrance-code-review-sol.md)): approve with the changes it
+made. One round; nothing overruled.
+
+- **CR-1 (P1, fixed by the reviewer, red first).** Five described items could be taller than a
+  phone held sideways, and the top ones left the screen. The menu now takes Radix's available
+  height as a ceiling and scrolls.
+- **CR-2, CR-3, CR-4 (P3, fixed).** Docs that overlooked the open-mode exception, said every
+  gathered mode is in the command bar when a signed-out visitor has none, and called this the app's
+  second Radix menu when `DataTable` has one.
+
+It also audited the updated tests (no assertion weakened, no sweep that can pass visiting nothing)
+and the lift of the shelf menu's helpers into `menu.ts` (behaviour unchanged).
+
+**2026-10-07, in Chrome on the box** (Sonnet subagent, Playwright, its own dev server on this
+worktree). Everything in the plan's browser list passed: the menu opens upwards and unclipped at
+1440 and 390, light and dark; a pick opens the mode and draws its button; the switch adds FAQ and
+Timeline; Tab, Enter, arrows and Escape; Escape over the Comments drawer closes only the menu; the
+phone's bar stays home while the menu is open; Metadata's items are links back into the article; a
+signed-out visitor's items are dimmed with their sentence; opening the menu moves nothing else; no
+console warnings. The entrance plays on a fresh load, not on a second article or on return from
+Metadata, replays on reload, and is skipped under reduced motion.
+
+[Wide, open](261007c-shot-2-more-open-1440.png) ·
+[Glossary open](261007c-shot-3-glossary-open-1440.png) ·
+[switch on](261007c-shot-5-more-open-experimental-1440.png) ·
+[dark](261007c-shot-6-more-open-dark-1440.png) ·
+[phone](261007c-shot-9-phone-more-open-390.png) ·
+[Metadata](261007c-shot-11-metadata-more-open-1440.png) ·
+[signed out](261007c-shot-14-public-signed-out-more-1440.png)
+
+Two things it found that are worth Greg's eye, neither a defect:
+
+- **The second of absence is measured from when the bar mounts, not from when the page is ready.**
+  On this busy box the browser was still drawing the article for most of that second, so the bar
+  seemed to arrive almost with the page; on a fast laptop the full second will show. If it should
+  wait for the article to settle, that is a change to what starts the clock.
+- **On a phone the bar is wider than the screen and scrolls sideways, as before, and More is off
+  the right-hand edge until it is scrolled.** Gathering five buttons made that row shorter, not
+  short enough.
+
+Not run: `scripts/measure-cpu.ts` (edited, read by the reviewer, never executed).

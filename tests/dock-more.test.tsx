@@ -393,6 +393,16 @@ describe("what an item under More says", () => {
       expect(items[i]?.hasAttribute("title")).toBe(false);
     }
   });
+
+  it("keeps every described item reachable when the viewport is shorter than the menu", () => {
+    reading({ experimental: EXPERIMENTAL_ON });
+    const menu = openMore(host);
+    /* Five descriptions can make the list taller than a landscape phone. Radix
+       publishes the collision-aware room on this variable; the content must
+       consume it and scroll rather than placing an item outside the viewport. */
+    expect(menu.classList.contains("tw:max-h-[var(--radix-dropdown-menu-content-available-height)]")).toBe(true);
+    expect(menu.classList.contains("tw:overflow-y-auto")).toBe(true);
+  });
 });
 
 describe("a mode a visitor cannot use, under More", () => {

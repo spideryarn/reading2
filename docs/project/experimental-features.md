@@ -198,7 +198,8 @@ In the same piece of work:
   bar offers the non-experimental modes **plus whichever one the URL names**
   ([`Dock.tsx`](../../src/web/Dock.tsx) § `visibleModes`). *Offers*, because since 2026-10-07 five
   modes are listed under the bar's More button instead of drawn in it, FAQ and Timeline among them:
-  with the switch on they join that menu, not the bar
+  when offered and not current they join that menu rather than the bar; while current they stay in
+  both
   ([reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)). Falling back to the default mode is
   allowed by this doc and was turned down: staying put is less surprising and costs nothing. A gated
   control that cannot do that — one that would be left in a state it cannot draw — must fall back

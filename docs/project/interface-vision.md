@@ -232,8 +232,8 @@ What has happened and what is on the table:
   ([261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md)).
 - **Done:** Quotes, Glossary, FAQ, Ideas and Timeline left the bar for a **More** button, whose
   menu opens upwards ([261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)). Nothing was
-  removed: each is still a mode, still in the command bar, and drawn in the bar again while it is
-  the open one. This **supersedes the *Extracts* menu** proposed in queue item `qi-5ay85q7d` (one
+  removed: each is still a mode, still in an owner's command bar whenever it is offered, and drawn
+  in the bar again while it is the open one. This **supersedes the *Extracts* menu** proposed in queue item `qi-5ay85q7d` (one
   button for Quotes, Glossary and Ideas), and with it the merged *Lists* mode and the "leave the bar
   alone" option weighed beside it. Folding those lists into Marginalia was weighed then and argued
   against, because a phone has no Marginalia column.

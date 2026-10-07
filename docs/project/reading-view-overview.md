@@ -125,8 +125,9 @@ readers never are.
 **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
 FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands after the
 other modes and before Marginalia, and its menu opens upwards. A mode there is as reachable as it
-was — the command bar lists it, its address works — and while it is the open mode it is drawn in
-the bar again, checked, so a second press still closes it. This is a second, separate reason a mode
+was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
+while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
+This is a second, separate reason a mode
 has no bar button: the switch decides whether a reader is *offered* a mode, More decides where an
 offered one stands, and FAQ and Timeline are subject to both. The row flag is `more` in `MODES_UI`
 and the split is `splitForMore`, both in [`src/web/Dock.tsx`](../../src/web/Dock.tsx);

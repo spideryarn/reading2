@@ -1,9 +1,9 @@
 /**
- * **What the app's two Radix `DropdownMenu`s share**: how the list looks, and
- * how a finger opens it. The shelf's "⋯" (`ShelfEntry.tsx` § `ShelfActionsMenu`)
+ * **What these two Radix `DropdownMenu`s share**: how the list looks, and how
+ * a finger opens it. The shelf's "⋯" (`ShelfEntry.tsx` § `ShelfActionsMenu`)
  * had both to itself until 2026-10-07, when the bottom bar's More button became
- * the second menu (`Dock.tsx` § `DockMore`, plan 261007c). They live here so
- * the second is not a copy that drifts.
+ * the second caller (`Dock.tsx` § `DockMore`, plan 261007c). They live here so
+ * the newer one is not a copy that drifts.
  */
 import { type PointerEvent, type MouseEvent, useRef } from "react";
 

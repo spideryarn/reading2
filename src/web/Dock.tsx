@@ -3329,9 +3329,9 @@ type MorePick =
  * **Never `.on`.** The open gathered mode is drawn in the bar as its own
  * checked radio (`splitForMore`), so this button never has to mean two things.
  *
- * **Radix `DropdownMenu`, portalled, `side="top"`** — the second in the app,
- * after the shelf's "⋯" (ShelfEntry.tsx § `ShelfActionsMenu`), sharing its
- * look and its finger handling through menu.ts. Portalled because `.dock`
+ * **Radix `DropdownMenu`, portalled, `side="top"`** — sharing the shelf "⋯" menu's
+ * look and finger handling (ShelfEntry.tsx § `ShelfActionsMenu`) through
+ * menu.ts. Portalled because `.dock`
  * clips (`overflow-y: hidden`) and has a `transform`. Being outside `.dock`
  * is what three other things had to be told about:
  *
@@ -3424,7 +3424,11 @@ function DockMore({
               pickedByPointer.current = false;
               e.preventDefault();
             }}
-            className={`dock-more-menu ${MENU_SURFACE} tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))]`}
+            /* Five items with descriptions — and, for some visitors, a state
+               sentence too — can be taller than a phone in landscape. Radix
+               publishes the collision-aware room; use it as a ceiling and
+               scroll the list so no mode leaves the viewport. */
+            className={`dock-more-menu ${MENU_SURFACE} tw:max-h-[var(--radix-dropdown-menu-content-available-height)] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:overflow-y-auto`}
           >
             {menu.map((m) => {
               const Icon = MODE_ICON[m.mode];
