@@ -1,5 +1,29 @@
 # Touch: a swipe in a column steps, the prose scrolls
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+**The title is the removed design.** Sections down to § How it is wired (lines about swipe and gist columns) are history, though § What happens where also lists the live tap-reveal surfaces. From § How big a thing has to be to press it on, the doc is live touch policy.
+
+- [§ What happens where](#what-happens-where) — what a tap does on the spine, a glossary term, a link, a shelf card (the swipe table is history)
+- [§ Why the prose is untouched](#why-the-prose-is-untouched) — why the prose scrolls natively, one axis at a time
+- [§ Reading mode only](#reading-mode-only) — (history)
+- [§ Why a gesture, and not `scroll-snap`](#why-a-gesture-and-not-scroll-snap) — the rejected mechanism (history)
+- [§ How it is wired](#how-it-is-wired) — the swipe listeners and their traps (history); the pen/touch rule still applies
+- [§ How big a thing has to be to press it](#how-big-a-thing-has-to-be-to-press-it) — `pointer` against `any-pointer`, and the mode bands
+- [§ The gutter, and the row a finger is on](#the-gutter-and-the-row-a-finger-is-on) — block icons under a finger
+- [§ What the Enter key promises](#what-the-enter-key-promises) — soft-keyboard Enter, dismissal, iOS focus zoom
+- [§ One banner, once, when both will not fit](#one-banner-once-when-both-will-not-fit) — the phone and fit notices
+- [§ A passage link in a covering band shows the passage](#a-passage-link-in-a-covering-band-shows-the-passage) — a band that steps aside, and the chip back
+- [§ A mode says its name when you press it](#a-mode-says-its-name-when-you-press-it) — a tap on a mode button, no hover
+- [§ A finger's selection gets a button](#a-fingers-selection-gets-a-button) — highlighting on a touch screen
+- [§ What we deliberately did not build](#what-we-deliberately-did-not-build)
+- [§ What only a real iPad can tell us](#what-only-a-real-ipad-can-tell-us) — the hand checks no emulator replaces
+- [§ See also](#see-also)
+
+Code for the live parts: [`useTapReveal.ts`](../../src/web/useTapReveal.ts), [`useHoverCard.ts`](../../src/web/useHoverCard.ts), [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), [`layout.ts`](../../src/web/layout.ts) (`bandCoversProse`); the full device inventory is [phone-and-touch.md](phone-and-touch.md).
+
 > **Status, 2026-09-29.** The gist columns this doc is about were part of Hierarchy mode, which was
 > removed that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)), so there is no column to swipe now and the prose scrolls
 > natively everywhere. The design, the reasons and the accident notes below are history, kept for the
@@ -24,7 +48,7 @@ arithmetic — `stepTarget` and `scrollToBlock` — so a finger and a key cannot
 **A finger on the prose column gets ordinary iPad scrolling**, and that is the design rather than a
 limitation. See [§ why the prose is untouched](#why-the-prose-is-untouched).
 
-The code is `src/web/swipe.ts` — one pure function and one hook over six
+The code was `src/web/swipe.ts` (deleted with Hierarchy mode on 2026-09-29, with `tests/swipe.test.ts`) — one pure function and one hook over six
 window listeners. The reasoning, the sources and the two mechanisms we rejected are in
 [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touch-scrolling.md).
 
@@ -891,7 +915,7 @@ No colour dots and no copy button in it. The colours are in the box it opens, an
 None of this is testable from a laptop, and the automation browser is worse than useless here — its
 tab is hidden, so `requestAnimationFrame` never runs and neither does anything downstream of it
 ([browser-testing.md](browser-testing.md)). The pure arithmetic is pinned in
-`tests/swipe.test.ts` and
+`tests/swipe.test.ts` (since deleted) and
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts) — the latter added after a cross-family review
 pointed out that both bugs in the screenful step were arithmetic, and neither had needed a browser to
 find. Everything below is a hand check.

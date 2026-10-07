@@ -1001,7 +1001,7 @@ export function CitationsPanel({
       label={label}
       step="citations"
       icon={<BookText size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 

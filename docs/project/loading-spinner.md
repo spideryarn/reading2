@@ -1,5 +1,7 @@
 # Loading spinners
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 The app has two, and which one a wait gets depends on what else is on the screen:
 
 | | Where | What it is |
@@ -80,5 +82,3 @@ Radius Sweep's conic gradient — which is fine for a page with nothing else on 
 It sizes itself; the caller decides where it sits (the article page centres it in 70dvh). Reach for
 it when the whole page is the wait; anywhere something else is already drawn, the wordmark would
 outshout it and `LoaderCircle` is the one.
-
-Up: [design-css-overview.md](design-css-overview.md)

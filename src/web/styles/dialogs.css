@@ -178,8 +178,11 @@
   cursor: pointer;
 }
 .chat-card-shut:hover { background: var(--panel); }
+/* Inset, because `.chat-dialog` hides its overflow and an outward mark would
+   be cut. `--highlight-text`, the app's usual mark; it was `--rule-strong`,
+   which is a hairline colour and under 2:1 against this card. */
 .chat-card-shut:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: -2px;
 }
 /* The header's own label, one line: the icon, the reader's title, and a

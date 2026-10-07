@@ -12,6 +12,8 @@ into the prose. Asked for by an admin through the Feedback button on 2026-09-12
 The design, the two reviews that reshaped it and the real runs are
 [260916d-faq-mode.md](../plans/260916d-faq-mode.md). This page says what is built.
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 ## A row
 
 The question, one sentence in the article's own terms; then one to three passages, in document
@@ -151,6 +153,8 @@ plan's § Deferred, with the reason.
 [`src/faq.ts`](../../src/faq.ts) (the stage) · [`useFaq.ts`](../../src/web/useFaq.ts) ·
 [`FaqPanel.tsx`](../../src/web/FaqPanel.tsx) · [`faq-order.ts`](../../src/web/faq-order.ts) ·
 [`FaqMode.tsx`](../../src/web/modes/faq/FaqMode.tsx) ·
-[`faq.css`](../../src/web/styles/faq.css).
+[`faq.css`](../../src/web/styles/faq.css). Tests: [`faq.test.ts`](../../tests/faq.test.ts),
+[`faq-order.test.ts`](../../tests/faq-order.test.ts),
+[`faq-panel.test.tsx`](../../tests/faq-panel.test.tsx).
 
 Up: [reading-view-overview.md](reading-view-overview.md)

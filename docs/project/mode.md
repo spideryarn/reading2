@@ -1,5 +1,22 @@
 # Adding a mode
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Where else to look](#where-else-to-look) — visitors, auto-run on import, browser checks: what this list leaves to others
+- [§ Adjacent shapes](#adjacent-shapes-that-reuse-part-of-the-machinery) — a pipeline step with no band, or a per-reader setting
+- [§ The client](#the-client) — the total tables the compiler asks for, then the residue: band, surface, (i), voices, cacheable
+- [§ Patterns requested for existing modes](#patterns-requested-for-existing-modes) — marks in the prose, thresholds, Marginalia candidacy
+- [§ The card on the button](#the-card-on-the-button) — writing `description` and `how`
+- [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) — the three edits, and why nothing counts modes
+- [§ The artefact](#the-artefact-if-the-mode-shows-one) — store, step, route, export, public read, prompt version
+- [§ The words](#the-words-the-mode-puts-in-front-of-the-reader) — plain words, paperwork, JSON schema
+- [§ Its cost](#its-cost) — route table, `JOB_DISPOSITION`, cache group
+- [§ Retiring a mode](#retiring-a-mode) — `RETIRED_MODES`, aliases, the tests that list the rest
+- [§ Renaming a mode](#renaming-a-mode) — where the name is stored outside the unions, loud or silent, and the two precedents
+- [§ Before you call it finished](#before-you-call-it-finished) — what a new mode turns red, and what only the suite finds
+
 The one checklist for adding a mode to the reader — the client half and, if the mode shows a
 generated artefact, the pipeline-and-store half. It was two sections until 2026-09-03,
 [web-client.md § Adding a mode](web-client.md#adding-a-mode) and
@@ -575,6 +592,82 @@ instead, so it is translated there by `isMarginaliaModeWord` in [`src/modes.ts`]
 which the Reader, the Dock's links and the remembered last view all ask —
 [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md).
 
+## Renaming a mode
+
+A rename is [§ Retiring a mode](#retiring-a-mode) for the old word, plus renaming everything stored
+under it, in the same piece of work:
+[rename-or-move.md § A rename on screen is a rename all the way down](../reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)
+(Greg, 2026-10-06). The TypeScript unions (`MODES`, `StepName`, `Task`) and their total tables go
+red by themselves. These do not all, and `debate` is the specimen each was checked against on
+2026-10-07:
+
+**Where a mode's name is stored**
+
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `articleRevisions` — the jsonb column named for
+  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks create-or-rename, and
+  without a TTY it cannot take the answer —
+  [database.md § That rename question needs a terminal](database.md#that-rename-question-needs-a-terminal-and-without-one-you-get-silence);
+  the migration itself is [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines).
+- Same file § `revision_step_runs_step` — the hand-kept CHECK listing every step name, and the rows
+  under it. *Loud:* [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts).
+  `jobs.steps[].name` and `jobs.reset.regenerate[]` hold the step name too, in jsonb. *Silent.*
+  `jobs.work_key` hashes the ordered step names (`workKeyFor` in
+  [`src/store/jobs.ts`](../../src/store/jobs.ts)); the Skim migration deliberately kept it, accepting
+  a possible duplicate run across the deploy window.
+- [`src/debate.ts`](../../src/debate.ts) § `PROMPT_VERSION` — stored in `debate.version` and
+  `revision_step_runs.prompt_version`. A rename alone keeps this tag, as the Skim precedent did;
+  changing it would mark unchanged output outdated. *A string, not checked by the compiler.*
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
+  `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
+  [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
+- [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler) and
+  § `RENAMED` — `ai_calls.purpose` and `ai_calls.step_name` are append-only and are **not** rewritten,
+  so the old job/step name gets a row in `RENAMED`. *Silent if forgotten.*
+- Same schema § `feedback` — the saved URL and diagnostics (`article.mode`, `job.step`)
+  keep old names as evidence. Incoming stale-tab names are normalised in
+  [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
+- [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
+  (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
+- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
+  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  [`DebateMode.tsx`](../../src/web/modes/debate/DebateMode.tsx). *Silent:* an old link loses the parameter.
+- [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
+  keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
+  the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
+  *The compiler does not check these strings; `tests/last-view.test.ts` checks the key inventory.*
+- [`src/routes.ts`](../../src/routes.ts) and [`src/web/useDebate.ts`](../../src/web/useDebate.ts) —
+  `/api/debate/:slug`, also in `CACHEABLE` and `NONE_YET_AS_NULL` in
+  [`src/web/lib/api.ts`](../../src/web/lib/api.ts). The IndexedDB offline copy stores that URL
+  (`keyFor` in [`offline-store.ts`](../../src/web/lib/offline-store.ts)). *The path is a string:*
+  renaming it loses the old offline read until fetched again, a cost the Skim precedent accepted.
+- [`src/public-types.ts`](../../src/public-types.ts) § `PublicArtefactSet` — the visitor's key.
+  *Compiler.*
+- [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) § `REVISION_WRITTEN_ELSEWHERE`
+  and the `at("<name>.json")` lines — the file in the owner's zip. A mode with no file there
+  (Debate) ships as its column's key in `content/revision.json`. *A file name is a string.*
+- [`src/command-pick-catalogue.generated.json`](../../src/command-pick-catalogue.generated.json) —
+  *loud:* [`tests/command-pick-catalogue.test.ts`](../../tests/command-pick-catalogue.test.ts)
+  fails until `WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts`.
+- [`package.json`](../../package.json) § `eval:debate`, and `evals/debate/`. *Silent.*
+
+**The precedents**
+
+- **Trajectory → Skim**
+  ([261001r](../plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md)) is the
+  template for a mode with a pipeline step: one in-place migration for the column, the step CHECK
+  and `jobs.steps` / `jobs.reset.regenerate` (`drizzle/20261001224759_skim.sql`), and what deliberately
+  **kept** the old word — the prompt version tag, the input-hash namespace, `ai_calls`, feedback
+  evidence and the immutable `jobs.work_key`.
+- **Remember → Learn**
+  ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)) is the
+  template for a name stored as a value under a CHECK (`chat_threads.kind`, plus the partial unique
+  index rebuilt with the new kind in its predicate), for which old URL words
+  get an alias and which are let go, and for the list of what keeps the old word on purpose.
+
+**Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
+quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:
+they keep their words and their file names; retarget their links to renamed live files.
+
 ## Before you call it finished
 
 The dock, the visitor's view, the exported bundle and the offline copy each have a test that
@@ -591,7 +684,7 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 |---|---|
 | [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
 | [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, in a run (`group`) — whether it is behind the switch is `MODE_CATALOG`'s `experimental` now |
 | [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
 | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `modeBand()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
@@ -632,7 +725,3 @@ stop.
 `src/web/help/`: the mode's own section (when to use it, how to read it) and its row in *Which mode
 when*. Write them for a reader, not a developer — [help-page.md](help-page.md). Retiring a mode keeps
 its `#mode-…` link working on its own, through `RETIRED_MODES`.
-
----
-
-Up: [reading-view-overview.md](reading-view-overview.md)

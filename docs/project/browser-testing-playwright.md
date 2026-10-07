@@ -1,5 +1,7 @@
 # Testing it in a browser, with Playwright
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 [browser-testing.md](browser-testing.md) is **what to look at** — the URLs, the widths, the checks
 worth running, and the many ways the eye lies to you. Almost all of it is true whatever is driving
 the page. But its recipes are written in the Claude-in-Chrome extension's tools, because that is what
@@ -82,6 +84,12 @@ and check its `cwd` is your own tree first.
 
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the
 landing page and very little else. This is the rest of it, and it needs no human:
+
+> Can we create/hardcode a dummy-dev user with a known password … so that you can sign in with
+> email & password (rather than needing Google SSO, which is a nuisance)? … The key thing is that
+> it shouldn't need human input to create/log in as this dev user.
+>
+> — Greg, 2026-09-01 ([the plan](../plans/260901j-a-signed-in-browser-on-the-box-with-no-human.md))
 
 ```js
 import { signedInBrowser } from "./scripts/browser-sign-in.ts";   // tsx, from the repo root
@@ -347,7 +355,3 @@ in [browser-testing.md](browser-testing.md) have still not been run on this mech
 
 Also untested: headed Chrome over noVNC, where the visibility findings above may well go back to
 behaving like the laptop, since then there is a real window again.
-
----
-
-Up: [code-quality-overview.md](code-quality-overview.md)

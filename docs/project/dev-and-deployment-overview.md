@@ -83,6 +83,10 @@ reference, and is authoritative wherever the two disagree.
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh
   handshake.
+- **[fleet-and-overseer-overview.md](fleet-and-overseer-overview.md)** — **the hub for the docs
+  below about them, and for `tools/fleet/` and `tools/overseer/`.** Open it first when the task is about the
+  fleet dashboard or the Overseer: a table from the task you arrived with to the doc that owns it,
+  the code by area with its way in, and which areas no doc owns yet.
 - **[overseer-direction.md](overseer-direction.md)** — where the agent fleet dashboard is
   going: a page that shows every session on the box, what it is blocked on, and eventually the
   decisions agents made without asking — with a coordinator agent, not a person, driving the
@@ -134,13 +138,13 @@ reference, and is authoritative wherever the two disagree.
   agents reading diffs, a big model checking every claim against them, and a copy pass that is
   forbidden to learn anything new.
 - **[worktrees.md](worktrees.md)** — how to stop thirteen agents sharing one checkout, and the
-  operational half of it: starting one and what it costs, why the local Supabase stays shared for now
+  operational half of it: starting one and what it costs, removing one safely (`worktree:check`,
+  `worktree:remove`, the sweep), why the local Supabase stays shared for now
   (measured, and it is not the RAM that blocks it), and both runbooks — the trunk flip to `dev`, run
   2026-09-02, and getting the Mac out of Dropbox, done 2026-09-01.
 
 - **[cron-scheduler.md](cron-scheduler.md)** — there is no scheduler, and nothing here runs on a
-  clock. Why that keeps producing sweepers with no caller (two of them so far, both correct code that
-  is never called), the rule that follows — don't write a cleanup you cannot call — what we do
+  clock. Why that keeps producing sweepers with no caller (two of them so far; one has since been given a caller), the rule that follows — don't write a cleanup you cannot call — what we do
   instead, and the four jobs that would justify a real cron if it ever gets built.
 
 Connecting to the **remote** database — which host, the SSL `pg` does not do by default, and the

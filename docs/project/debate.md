@@ -144,7 +144,7 @@ changed here:
   mark sits on a claim's heading.
 
 Not built yet, and in the plan: the same from a Summary paragraph. A claim typed in your own words
-is the angle box, next. Chat's list now shows Learn's
+is the angle box, in the next section. Chat's list now shows Learn's
 conversations, with a filter
 ([chat-tools.md](chat-tools.md#chats-list-shows-every-conversation-about-the-article)).
 
@@ -351,6 +351,12 @@ Each module's header comment says what it owns and why; start with `src/debate.t
   shared limiter in [`src/bibliographic.ts`](../../src/bibliographic.ts) (`inServiceTurn`).
   [`src/citer-link.ts`](../../src/citer-link.ts) builds a citer's link, and
   [`src/web/useCiters.ts`](../../src/web/useCiters.ts) is the panel's read, which has no job.
+
+Tests: `tests/debate*.test.ts(x)` — [`debate.test.ts`](../../tests/debate.test.ts) for the step,
+[`debate-panel.test.tsx`](../../tests/debate-panel.test.tsx) for the panel,
+[`debate-order.test.ts`](../../tests/debate-order.test.ts) and
+[`debate-threads.test.ts`](../../tests/debate-threads.test.ts) for the orders and threads; the
+evaluation's scorer is [`debate-eval-score.test.ts`](../../tests/debate-eval-score.test.ts).
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;

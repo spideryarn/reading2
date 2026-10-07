@@ -431,7 +431,7 @@ const CHAT: BandShape = {
  */
 const LEARN: BandShape = {
   className: "mode-band chat learn has-about",
-  label: "Remember what you took from this article",
+  label: "Recall what you took from this article",
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,

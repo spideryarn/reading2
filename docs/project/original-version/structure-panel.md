@@ -174,7 +174,7 @@ same tree), so what follows is a record; the design is in
 - The two ways to be hidden are two variables, which is this page's best single sentence.
 - The depth cut-off is in the URL (`?deep=`). **Per-node open/closed is not**, and that is a partial
   decline of the advice above rather than a repeat of their mistake: the only way to write that set
-  down is a list of node ids, and node ids here are positional — a re-run of `npm run toc` renumbers
+  down is a list of node ids, and node ids here are positional — a re-run of `npm run structure` renumbers
   them, so a shared link would open a set of sections that are no longer the ones you opened. The
   depth is the stable half. See [../summaries.md](../summaries.md).
 
@@ -186,3 +186,7 @@ same tree), so what follows is a record; the design is in
 - [../structure-step.md](../structure-step.md) — our tree and what a row is for
 - [reading-view-ui.md](reading-view-ui.md) — the pane this panel lived in, and what consolidating panes cost
 - [summaries.md](summaries.md) — the summaries its tooltips were fetching
+
+---
+
+Up: [overview.md](overview.md)

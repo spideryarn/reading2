@@ -46,9 +46,12 @@
   line-height: 1.5;
   resize: vertical;
 }
+/* `--highlight-text`, not the raw orange: on the light page `--highlight` as a
+   1px border is 2.7:1 against the white field, and this border is the only
+   focus mark the box has. The same colour in Dark, where the two are equal. */
 .prof-box-input:focus-visible {
   outline: none;
-  border-color: var(--highlight);
+  border-color: var(--highlight-text);
 }
 .prof-box-input:disabled { opacity: 0.5; }
 

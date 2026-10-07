@@ -346,6 +346,15 @@ describe("the public-readable-sharing page", () => {
    * that publicly visible material is private is the worst failure available to
    * it, so the claim is pinned to the constant that owns the fact.
    */
+  /* The gist columns, and the zoom between them, were removed on 2026-09-29.
+     Both sentences went on promising them (plan 261007a § K3). */
+  it("promises no zoom levels, which a shared article no longer has", () => {
+    expect(SHARED_LINK_CARRIES).not.toMatch(/zoom/i);
+    expect(SHARED_LINK_CARRIES).toMatch(/the article, its table of contents, and the reading aids/);
+    expect(PAGE).not.toMatch(/zoom/i);
+    expect(PAGE).toMatch(/never a model's version of it/);
+  });
+
   it("says a shared link carries the sharer's notes, and does not claim they are private", () => {
     expect(SHARED_LINK_CARRIES).toMatch(/marks, notes and searches/);
     expect(SHARED_LINK_CARRIES).toMatch(/conversations with the model are not part of it/i);

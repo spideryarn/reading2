@@ -1,5 +1,7 @@
 # Fonts: a face for each voice
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 **Whose words are these?** The reading view puts three voices side by side: the article's author,
 a model, and the reader. Each gets its own face, so the reader can tell at a glance which is which.
 The chrome keeps the app's own sans as a fourth voice. For a product that augments reading rather
@@ -95,9 +97,8 @@ to it means changing the token and its import.
 
 The three voice lists and the placeholder reset are in one file,
 [`src/web/styles/voices.css`](../../src/web/styles/voices.css), every rule `:root :is(…)` — the
-`:root` is specificity, not a switch. Two narrow UI resets that undo an inherited voice live beside
-the rules they correct: `.chat-stance-tag` in `mode-band.css`, and `.passage-whole` in
-`annotations.css` and `dock.css`.
+`:root` is specificity, not a switch. A narrow UI reset that undoes an inherited voice lives beside
+the rule it corrects: `.passage-whole` in `annotations.css` and `dock.css`.
 
 **Two ways in, by whether the voice depends on the data:**
 
@@ -156,6 +157,3 @@ The audit that found what was missing, with file:line and where each string come
 [261002f](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md) for the pages
 outside it.
 
----
-
-Up: [design-css-overview.md](design-css-overview.md)

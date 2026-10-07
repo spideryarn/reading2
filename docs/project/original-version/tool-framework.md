@@ -72,3 +72,7 @@ article**. See [ai-headings.md § Where our architecture is already ahead](ai-he
 - [llm-plumbing.md](llm-plumbing.md) — the layer underneath this one, where the good ideas are
 - [process-and-docs.md](process-and-docs.md) — the critique habit that caught this, which *is* worth stealing
 - [../architecture.md](../architecture.md) — our stages, and why they stay plain functions
+
+---
+
+Up: [overview.md](overview.md)

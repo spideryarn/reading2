@@ -2,6 +2,16 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ The unit is what is new, not the provenance](#the-unit-is-what-is-new-not-the-provenance) — what counts as an idea
+- [§ The occurrence is where you NEED it](#the-occurrence-is-where-you-need-it-not-where-it-is-said) — where an idea is anchored
+- [§ This is the first stage that lets the model name block ids](#this-is-the-first-stage-that-lets-the-model-name-block-ids) — id validation
+- [§ Freshness](#freshness-the-two-holes-this-stage-does-not-inherit) · [§ No append, and therefore no pagination](#no-append-and-therefore-no-pagination)
+- [§ Drawing it](#drawing-it-the-third-arm-of-one-pipe) · [§ The band's own layout](#the-bands-own-layout-and-the-thing-a-screenshot-found) · [§ Prev / next](#prev-next-in-both-modes)
+- [§ Two bugs found by running it](#two-bugs-found-by-running-it-rather-than-by-reading-it) · [§ Where the bans relocate to](#where-the-bans-relocate-to)
+- [§ What this deliberately does not do](#what-this-deliberately-does-not-do) · [§ What is still open](#what-is-still-open) · [§ See also](#see-also)
+
 The **glossary** answers *what does this word mean*. This answers *what do I have to understand* —
 the ideas an article leans on without stating, and the ideas it puts forward. A mode in the band
 between the spine and the prose, beside [Glossary](glossary.md).
@@ -64,7 +74,7 @@ answers to.
  │             │ Ideas you could carry │                            │   │
  │             │ out of it …           │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
- │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …             │
+ │ ⊞Structure ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …             │
  └───────────────────────────────────────────────────────────────────────┘
 
  The heading over the passages is the whole of "this is a hypothesis". An
@@ -478,9 +488,6 @@ on the re-run — which is the right answer.
 - **No eval file yet.** The judging so far is two articles read by hand, written up in
   [the plan](../plans/260826ac-ideas-mode.md). A scored pass under [`evals/`](../../evals/README.md) is what
   would turn that into a number the next prompt change is compared against.
-- **Nothing generates ideas for the committed `example/` fixture**, so the panel there offers a
-  button that writes into `data/`. The same gap the glossary and the thread page have, and equally
-  unsatisfying in all three.
 - **The two-state fix has no test.** `resolveIdea` and the stepper's arithmetic are covered by
   [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts); the search → ideas → search
   mode handoff is not, and it is the one place a React-level test would earn its keep.
@@ -493,6 +500,10 @@ on the re-run — which is the right answer.
 
 ## See also
 
+- **Wanting an *Ask in chat* button on an idea?** This mode has none. Today only Glossary entries
+  and Citations rows have one (the shared `AskInChatButton` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
+  pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [glossary.md](glossary.md) — the sibling mode, and where the provenance-as-label treatment, the
   id-inheritance rule and the register traps all come from
 - [search.md](search.md) — the marks, the fallback, the rail, and the two rulers

@@ -2,6 +2,21 @@
 
 Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 
+## In this doc
+
+- [§ Where it is](#where-it-is) — the project, region, Node version and URLs, at a glance
+- [§ The domain](#the-domain) — how `spideryarn.com` moved projects, the 308, and rollback (history)
+- [§ Deploying](#deploying) — `npm run deploy`, its flags, the gates, the build stamp, the two ways in, the build
+- [§ Who can reach it](#who-can-reach-it) — the `.vercel.app` trap, `robots.txt`, `noindex`, the preview bots
+- [§ Environment variables](#environment-variables) — what is set on Vercel and what each one breaks
+- [§ `/api/health`, and why to look at it first](#apihealth-and-why-to-look-at-it-first) — what the endpoint checks and how it once lied
+- [§ The five that fail quietly](#the-five-that-fail-quietly) — failures that reported success: TypeScript, routing, `require(ESM)`, the certificate, the body, the bucket
+- [§ What does not work in production yet](#what-does-not-work-in-production-yet) — the filesystem wall and its four wrong diagnoses (history)
+- [§ What the reader sees when the server fails](#what-the-reader-sees-when-the-server-fails) — why an outage showed as a JSON parse error
+- [§ Still to do before this is a real deployment](#still-to-do-before-this-is-a-real-deployment) — the first-deploy checklist, all done (history)
+- [§ It is up, and here is the reading of it](#it-is-up-and-here-is-the-reading-of-it) — the first healthy `/api/health`, and what it does not prove (history)
+- [§ See also](#see-also) — the tutorial, the plan, and the neighbouring docs
+
 Spideryarn on Vercel: how it gets there, what is live, and the five things that
 break without saying so.
 
@@ -153,6 +168,9 @@ project. Deferred by Greg, not forgotten.
 
 ## Deploying
 
+**Only the Overseer runs this** (Greg, 2026-09-29); any other session asks it to —
+[overseer.md § Deploying](overseer.md#deploying).
+
 ```
 npm run deploy
 ```
@@ -291,9 +309,10 @@ Two honesty limits remain, and they are limits rather than bugs:
 - **`.env.local` is still linked from the laptop.** It is the only personal state
   the gate now depends on.
 - **A bare `npm test` in an unprepared checkout is still not hermetic.** Only the
-  gate materialises the corpus; the ~76 test files that compute their own
-  `ROOT/data` path are deliberately left until stage 4 of the store migration
-  gives them a durable target, rather than migrated twice.
+  gate and `npm run worktree:setup` materialise the corpus; the test files that
+  compute their own `ROOT/data` path (~76 when this was written) still read the
+  copied files. Stage 4 of the store migration deleted the filesystem store on
+  2026-09-05 and did not move them.
 
 One consequence of the old arrangement outlived it: `doc-links` will accept a
 link into gitignored `output/`, which nobody else can follow.
@@ -731,7 +750,8 @@ branch, and it will track `main` from now on.
 
 Set on the project, for `production` and `preview`. None of them lives in a file
 here; [`.env.prod`](../../.env.example) is a record of what production needs and
-is read by nothing.
+is read by no deployment — only by `npm run deploy` and the `--prod` scripts, on
+the machine that runs them.
 
 | | |
 |---|---|
@@ -872,8 +892,9 @@ Two further things it changed, both about what a check can honestly claim:
   module load without them — a blank reading view while every server-side line stays green — so they
   are worth checking. But they are compiled into the client bundle at *build* time, and what this
   endpoint sees is the current project setting. Add them and never redeploy, and it goes green over a
-  blank page. Absent is conclusive; present is not. A build-stamped sentinel is the real answer and
-  is not built.
+  blank page. Absent is conclusive; present is not. A build on Vercel now fails when either is
+  missing (`missingClientEnv`, run from `vite.config.ts`), which closes the new-build half; the
+  never-redeployed half is still invisible here.
 
 The whole thing is written up in
 [260827b-health-check-green-while-uploads-dead.md](../postmortems/260827b-health-check-green-while-uploads-dead.md) —
@@ -1108,11 +1129,12 @@ writes to a local filesystem, which a serverless host does not have:
   transaction that finishes the job** — because until then a job could go `done`
   having published nothing at all, which nothing in this file had noticed.
 
-  **What is still broken, stated plainly:** re-running one step against an
-  existing article. A `{steps:["arc"]}` job gets its own job id and therefore its
-  own empty scratch, and cannot see what the ingest wrote — so opening an article
-  that has no arc fails with the same `ENOENT` one directory deeper. The article
-  reads fine without it.
+  **What was still broken on 2026-08-30, stated plainly** (gone with the scratch
+  directory itself on 2026-09-05, `src/jobs.ts`): re-running one step against an
+  existing article. A `{steps:["arc"]}` job got its own job id and therefore its
+  own empty scratch, and could not see what the ingest wrote — so opening an article
+  that had no arc failed with the same `ENOENT` one directory deeper. The article
+  read fine without it.
 
   The rest of this entry is kept because the diagnosis took four wrong answers to
   reach, and each wrong answer is written below in the order it was believed.
@@ -1152,6 +1174,7 @@ writes to a local filesystem, which a serverless host does not have:
   `urlForSlug` read `data/<slug>/meta.json`
   ([`pipeline.ts`](../../src/pipeline.ts)) on the live enqueue path, so once
   ingest works, a Postgres article with no local file reads as a free slug.
+  (Fixed: both read Postgres now; the filesystem branch went on 2026-09-05.)
 
   **How to find this class of failure yourself** — the route answers `200` and
   Vercel's error dashboard stays empty, so the recipe matters:

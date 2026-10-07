@@ -176,11 +176,12 @@ had been failing and the way we found out was Greg trying to read an article.
 
 ### The health check cannot see it
 
-`SENTRY_DSN` is **not** in the list of variables `/api/health` reports, and
-[`initMonitoring`](../../src/monitoring.ts) returns silently when the DSN is absent. So *"monitoring
-is switched off"* and *"monitoring found nothing"* are the same picture from outside — the shape
-[silent-success.md](../reusable/silent-success.md) is about. The fix is one entry in the health
-check's env list, and it is not done.
+`SENTRY_DSN` is in the list of variables `/api/health` reports (`src/vercel-health.ts`), but with
+`breaks: null`, so a missing one shows as `false` in the `env` block and **does not warn or 503**.
+[`initMonitoring`](../../src/monitoring.ts) also returns silently when the DSN is absent. So *"monitoring
+is switched off"* looks like *"monitoring found nothing"* unless somebody reads that one line of
+`env` — the shape [silent-success.md](../reusable/silent-success.md) is about. Making it a warning
+is the part that is not done.
 
 ## Related docs
 

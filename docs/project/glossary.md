@@ -2,6 +2,33 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+This doc is long, and a read stops about line 860. **Jump with these.**
+
+- [§ Asking about an entry in chat](#asking-about-an-entry-in-chat) — **the *Ask in chat* button**
+  (Glossary and Citations; also the pattern to copy when another mode wants one): origin, line under
+  the buttons, what the server does not check. Line ~976.
+- [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
+  different *Ask in chat*, with no origin)
+- [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer
+- [§ Where it lives, and why that cost nothing](#where-it-lives-and-why-that-cost-nothing) — the
+  band's place in the page
+- [§ What is generated, and when](#what-is-generated-and-when) — the stage, Find more, regeneration
+- [§ The two bugs this feature is shaped around](#the-two-bugs-this-feature-is-shaped-around) — read
+  before changing the prompt or the dedup
+- [§ Finding the term in the prose](#finding-the-term-in-the-prose) — the matching rule, underlines,
+  the hover card
+- [§ Hiding an entry](#hiding-an-entry) · [§ What we deliberately do not do](#what-we-deliberately-do-not-do)
+- [§ What an entry says, and which half came from where](#what-an-entry-says-and-which-half-came-from-where)
+  — the two fields, provenance as the label, register traps
+- [§ The scores, and the condition attached to keeping them](#the-scores-and-the-condition-attached-to-keeping-them)
+  — prioritised order, the threshold slider
+- [§ Finding more](#finding-more) — appending to a list; ids inherited across regeneration
+- [§ Staleness, and the force cascade](#staleness-and-the-force-cascade)
+- [§ Six ways to break this quietly](#six-ways-to-break-this-quietly) — the checklist before a change
+- [§ What is still open](#what-is-still-open) · [§ See also](#see-also)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.
@@ -56,7 +83,7 @@ until you know what they are for.
  │             │ interoception d·66 c·61                        │
  │             │ …                   │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
- │ ⊞Hierarchy ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
+ │ ⊞Structure ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
  └─────────────────────────────────────────────────────────────┘
 
  The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
@@ -1512,13 +1539,6 @@ contract to maintain, tests for something no reader can reach, and git keeps the
 it was weighed and lost to Fable's, and this paragraph is what the next person needs to reopen it.
 ⟨Sol, 2026-09-05⟩
 
-`deleteGlossary` still refuses to touch the committed `example/` fixture. That guard was load-bearing
-while `articleDir` fell through to `example/` for any slug with no output of its own, including one
-that does not exist — the one committed directory in the repo was a `DELETE` away from any unknown
-article. Since stage 1a, `candidateDirs` resolves `example/` for the fixture's own slug and no other,
-so what the guard now stops is a `DELETE` addressed to `example` itself, which is nobody's to write
-to.
-
 **In Postgres the delete can also answer 409**, if a queued or running job already holds a draft for
 the article — deleting the published glossary underneath a job in flight would otherwise be
 overwritten right back when that job publishes.
@@ -1585,7 +1605,7 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 1. **Change the matching rule on one side.** `src/term-match.ts` is imported by the stage and by the
    reading view. Inlining a "quick" regex in either half makes the occurrence list and the underlines
    disagree, and neither will error.
-2. **Sort the entries in the artefact.** `glossary.json` stores document order. Sorting on write
+2. **Sort the entries in the artefact.** The stored glossary is in document order. Sorting on write
    would make `?sort=document` mean whatever the last writer felt like, and the panel's default order
    would silently become a ranking.
 3. **Trust `url`.** It came out of a language model and the panel renders it as an `href`.
@@ -1602,14 +1622,15 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
    laptop. `article_revisions.glossary` is published whole to everyone a shared link is shared with
    ([`public-reader.ts`](../../src/store/public-reader.ts)) and the public DTO strips only
    `entry.lookup` — so the entry leaves with the article, and *Find more terms* may merge it away on
-   the way. This is why the [Look up a term](#looking-a-term-up) box stores
-   nothing. It needs its own owner-scoped table before it needs a UI.
+   the way. This is why a term the reader adds through the [Look up a term](#looking-a-term-up)
+   box lives in its own owner-scoped table (`glossary_lookups`), not in the document.
 
 ## What is still open
 
-- **The hover card has no keyboard route at all**, and that is the one open question here with a
-  real cost attached. The marks are injected HTML, so they are not focusable and cannot take
-  `aria-describedby`; the card is reachable by pointer and by nothing else. Making every run a tab
+- **The hover card itself has no keyboard route** (the entry has one, through G, above), and that
+  is the one open question here with a real cost attached. The marks are injected HTML, so they are
+  not focusable and cannot take `aria-describedby`; the card is reachable by pointer and by nothing
+  else. Making every run a tab
   stop is not the answer — a long article has several hundred of them, and tabbing through the
   article's prose to reach a definition is worse than the gap. A GPT Sol review, 2026-08-26,
   suggested the two least-bad shapes: **one focusable control per paragraph** ("the terms used here")
@@ -1618,17 +1639,14 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   done is honest labelling: the card is `role="dialog"` rather than `role="tooltip"`, because WAI's
   tooltip pattern says outright that a tooltip does not take focus and should not contain focusable
   controls, and this one holds a link and a button.
-- **The hover state machine has no test**, and it is the part of this feature most likely to be
+- **The hover state machine's mouse path has little test** (the touch path has one,
+  `tests/hover-card-touch.test.tsx`), and it is the part of this feature most likely to be
   wrong: it is timers, a delegated listener and two pieces of mutable closure state, and the one real
   bug in it so far — a pointer that crossed a term and moved on within the open delay cancelled
   nothing, so the card opened at a word nobody was pointing at — was found by *reading* it, not by
-  running it. Testing it needs a component harness this repo does not have
-  ([testing.md](testing.md) is about pure functions), so adding one is a dependency decision rather
-  than a chore. Until then the marks and the merge are covered by `tests/annotate.test.ts` and the
+  running it. The jsdom component tests (`useHoverCard` is mounted for real in several) are the way
+  to cover it. The marks and the merge are covered by `tests/annotate.test.ts`, and the mouse
   interaction is covered by a person.
-- **Nothing generates a glossary for the fixture.** `example/` has no `glossary.json`, so the panel
-  there always offers the button and the button writes into `data/`, which the fixture is not. That
-  is consistent with the thread page and equally unsatisfying on both.
 - **No keyboard traversal of the term list.** ↑ / ↓ belong to the article
   ([keyboard.md](keyboard.md)) and taking them inside the band needs a focus story the band does not
   have yet. Same gap chat has — and the same gap is why the ‹ › stepper added to the occurrence line

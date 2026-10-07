@@ -1,5 +1,26 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- Status (the paragraphs below, before the first section) — what is built, with the day each part landed (largely history)
+- [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now
+- [§ How to read a panel](#how-to-read-a-panel-one-press-away-since-2026-10-03) — where the "how to read this" sentences went
+- [§ The job](#the-job-and-the-tension-it-was-built-to-hold) — Greg's tension and the research number behind it
+- [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
+- [§ The four sub-modes](#the-four-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4)
+- [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
+- [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
+- [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
+- [§ The (i) in the corner](#what-the-mode-is-for-the-i-in-the-corner) — what the mode is, in two sentences
+- [§ The rules the whole mode obeys](#the-rules-the-whole-mode-obeys) — no verdict, identity-stripped calls, the injection scan
+- [§ Confidentiality](#confidentiality-exact-and-unflinching-about-the-tense) — the three sentences and why their tenses differ
+- [§ The band has to fit](#the-band-has-to-fit-and-for-a-day-it-did-not) — the layout accident (history, partly superseded)
+- [§ What the evidence says](#what-the-evidence-actually-says-and-where-the-plan-overstated-it) — the two numbers, and what the plan overstated
+- [§ Website copy notes](#website-copy-notes-kept-for-later) — raw material for a referee landing page
+- [§ See also](#see-also) — plans, research and the source files, by name
+
 **Status, 2026-09-01: all four sub-modes are built, and all four work in the store that deploys.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
@@ -190,10 +211,10 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 ## Why the mode is `referee`, not `reviewer`
 
-`review` is already a mode — the reader says what they took from a piece they have read for
-themselves and the model shows them where it comes apart
-([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
-name was chosen). A `reviewer` mode beside a `review` mode would be one word meaning two things,
+`review` was already a mode when this name was chosen — the reader says what they took from a piece
+they have read for themselves and the model shows them where it comes apart
+([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, and to `learn`
+on 2026-10-06). A `reviewer` mode beside a `review` mode would be one word meaning two things,
 which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md)).
@@ -443,15 +464,17 @@ the same omissions, on a repeat run — with the dropped claim's words swallowed
 claim's quote. Every rule above is about the rows that came back, and a claim that never gets a row
 is invisible: the zero-passage row and its honest sentence cannot fire when there is no row.
 
-So the panel now prints, under the list, **what the claims did not account for**: for each block a
-claim was taken from, the sentences and clauses no claim above is anchored in
-(`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
-for the clause its quote *begins* in rather than every clause it covers, which is what makes a
-three-claim sentence quoted whole under one claim show its other two.
+So the panel now prints, under the list, **the other text inside the quoted passages** (heading
+`OTHER_TEXT_HEADING`): the sentences and clauses of the passages the claims quote that no claim above
+begins in (`otherTextInQuotes`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim
+accounts for the clause its quote *begins* in rather than every clause it covers, which is what makes
+a three-claim sentence quoted whole under one claim show its other two. (It listed every clause of
+every block a claim came from, under the heading "Not accounted for", until GPT Sol's review on
+2026-09-01 narrowed it to the quotes.)
 
-**The wording is the whole value of it**, and it is a checked constant rather than a string in the
-panel. It says *what was not accounted for* and never *the claims you missed*: a block a claim came
-from carries background, citation and setup as well as claims, so calling these missed claims would
+**The wording is the whole value of it**, and it is a checked constant (`OTHER_TEXT_NOTE`) rather
+than a string in the panel. It says what the list *is* — a fact about the list above — and never
+*the claims you missed*: a block a claim came from carries background, citation and setup as well as claims, so calling these missed claims would
 be the judgement this sub-mode refuses, made in reverse and on worse evidence.
 [`tests/referee-copy-is-about-the-model.test.ts`](../../tests/referee-copy-is-about-the-model.test.ts)
 holds it there, and no number appears beside them for the same reason no number appears on a claim.
@@ -532,8 +555,8 @@ cut —
 >
 > — Greg, 2026-09-01
 
-**It is Chat with a third personality, not a panel of its own.** `candidates` is a third
-`ThreadKind` beside `chat` and `learn` ([`src/types.ts`](../../src/types.ts)), so it inherits
+**It is Chat with a third personality, not a panel of its own.** `candidates` was the third
+`ThreadKind`, after `chat` and `learn` (there are five now: [`src/types.ts`](../../src/types.ts)), so it inherits
 streaming, the tools, OpenRouter's server-side web search, citation collection, thread persistence
 and retry for nothing. What had to change was small and known: the `chat_threads_kind` CHECK
 (`drizzle/0050_candidates_thread_kind.sql` — the *widening* direction, which needs no data movement
@@ -969,7 +992,7 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
 ## Confidentiality: exact, and unflinching about the tense
 
 By the time a reader reaches Referee mode, the article's text has already gone to a third-party
-model provider — `DEFAULT_INGEST_STEPS` runs extraction, structure and gists at ingest
+model provider — `DEFAULT_INGEST_STEPS` runs extraction and structure at ingest
 ([`src/pipeline.ts`](../../src/pipeline.ts)), and a PDF is read by a model before it is anything
 else. The first draft of this plan put a notice about that fact *inside* Referee mode, phrased as
 something still to decide. The cross-family review called that the single most serious finding in

@@ -13,6 +13,28 @@ running text — each with a link. Asked for through the Feedback button on 2026
 The design, the review that reshaped it and the real runs are
 [260911g-citations-mode.md](../plans/260911g-citations-mode.md). This page says what is built.
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ A row](#a-row) — what one row draws, and where its two scores come from
+- [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
+- [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
+- [§ What we have read of the work](#what-we-have-read-of-the-work-said-on-every-row) — the "read from" line on every row
+- [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
+- [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
+- [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
+- [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
+- [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
+- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that reads a work and judges its influence
+- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work
+- [§ Already an article here](#already-an-article-here) — a cited work that is already on the shelf
+- [§ Chat can read it](#chat-can-read-it) — the `article_citations` tool
+- [§ Making it again](#making-it-again) — the Metadata redo
+- [§ Who sees it](#who-sees-it) — owner, visitor, experimental switch
+- [§ Deferred](#deferred) — what was left out, and where each reason is written
+- [§ The code](#the-code) — the files, in one list
+
 ## A row
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
@@ -887,6 +909,12 @@ code keeps of it) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).
+
+The tests are the `tests/citation*.test.ts(x)` and `tests/citations*.test.ts(x)` files, one per
+piece above (for instance [`citations.test.ts`](../../tests/citations.test.ts),
+[`citation-marks.test.ts`](../../tests/citation-marks.test.ts),
+[`citations-panel.test.tsx`](../../tests/citations-panel.test.tsx)). The probe behind the
+influence numbers is [`evals/citations-influence-dig.ts`](../../evals/citations-influence-dig.ts).
 
 ---
 

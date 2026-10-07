@@ -79,7 +79,9 @@ export function ShelfTagFilter({
           >
             <Tag size={11} aria-hidden="true" className="tw:shrink-0 tw:opacity-70" />
             <span className={`tw:min-w-0 tw:truncate ${voiceClass("reader")}`}>{t.label}</span>
-            <span className="tw:tabular-nums tw:opacity-70">{n}</span>
+            {/* At the chip's own ink, as the topic chips' count is
+                (ShelfTermChip.tsx § TermChip). */}
+            <span className="tw:tabular-nums">{n}</span>
             {on && <X size={11} aria-hidden="true" />}
           </button>
         );

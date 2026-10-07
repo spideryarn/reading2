@@ -5,7 +5,7 @@
  * live in docs/project/colour-scales.md. This file is the values.
  *
  * Imported by styles/tokens.css, which is imported by src/web/styles.css inside
- * `@layer app` — see docs/project/design-css-overview.md § The four files. It is
+ * `@layer app` — see docs/project/design-css-overview.md § The stylesheets, in load order. It is
  * a file of its own rather than more of tokens.css because tokens.css is the
  * palette this app *wears* and these are palettes it *uses*: one hue means "the
  * brand", eight mean "these are different things", nine mean "this much of it",
