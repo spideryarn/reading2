@@ -2252,7 +2252,7 @@ function ExportSection({
         {error ? (
           <p
             role="alert"
-            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
           >
             <TriangleAlert size={12} /> {error}
           </p>
@@ -2830,7 +2830,7 @@ function TopActions({
         </p>
       ) : null}
       {error ? (
-        <p className="tw:m-0 tw:basis-full tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive">
+        <p className="tw:m-0 tw:basis-full tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-danger">
           <TriangleAlert size={12} /> Couldn't confirm that — {error}
         </p>
       ) : null}
@@ -2892,7 +2892,7 @@ function ArchiveArticle({
             : "Checking…"}
         </p>
         {error ? (
-          <p className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive">
+          <p className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-danger">
             <TriangleAlert size={12} /> {error}
           </p>
         ) : null}
@@ -3001,7 +3001,7 @@ function ArchiveArticle({
       {error ? (
         <p
           role="alert"
-          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive"
+          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-danger"
         >
           <TriangleAlert size={12} /> Couldn't confirm that — {error}
         </p>
@@ -3399,7 +3399,7 @@ function DeletePermanently({
       <div className={`${CARD} tw:p-4`}>
         <p
           role="alert"
-          className="tw:m-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+          className="tw:m-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
         >
           <TriangleAlert size={12} /> {error ?? "Couldn't tell whether that worked. Reload the page."}
         </p>
@@ -3519,7 +3519,7 @@ function DeletePermanently({
       {error ? (
         <p
           role="alert"
-          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-destructive"
+          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
         >
           <TriangleAlert size={12} /> {error}
         </p>

@@ -256,7 +256,8 @@ import type { CitersResult } from "./types.js";
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
-import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
+import { slugForUrlKey } from "./store/find-article.js";
 import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
@@ -11461,6 +11462,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (request.readThis) {
         send(res, 202, publicJob(await queueReadThis(request.slug)));
         return;
+      }
+      /* **A repeat paste is free, and says it is one** — Greg, 2026-10-06:
+         *"yes repeat pastes should be free (and signal they're a repeat in the
+         UI)"*. A plain add whose address finds an article the reader already
+         has used to adopt it, run a job whose cached steps usually skipped, and charge a
+         slot. Now it is answered with the article and nothing else: no slot, no
+         job. The upload path's `{ article }` answer is the same shape, so the
+         add page already treats it as a completion; `repeat` is what lets it
+         say why.
+
+         **Outside the billing lock, and safe there in both directions.** A hit
+         spends nothing and starts nothing, so there is nothing to race for; a
+         miss falls through to the locked admission below, and an article that
+         publishes in between is charged exactly as before.
+
+         Only a *plain* add: `steps` or `force` beside a URL asks for work on
+         the article, and swallowing it here would drop that work and report
+         success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
+      if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
+        const have = await slugForUrlKey(urlKey(request.url));
+        if (have !== undefined) {
+          send(res, 200, { article: have, repeat: true });
+          return;
+        }
       }
       const profile =
         request.url !== undefined || request.useProfile === false

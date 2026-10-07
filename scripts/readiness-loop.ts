@@ -37,16 +37,19 @@
  * § "The shared local database can be ahead of the commit under test".
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   closeSync,
-  copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   realpathSync,
   readdirSync,
+  readlinkSync,
   rmSync,
+  symlinkSync,
   unlinkSync,
 } from "node:fs";
 import path from "node:path";
@@ -84,11 +87,18 @@ import {
 } from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
-import { describeReadingOutcome, type TreeStamp } from "../tools/fleet/readiness.js";
+import {
+  describeReadingOutcome,
+  PREPARATION_VERSION,
+  READINESS_PREPARATION_ENV,
+  readinessRunnerPath,
+  type Preparation,
+  type TreeStamp,
+} from "../tools/fleet/readiness.js";
+import { CORPUS_HALVES, describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { collectHealth } from "../tools/fleet/health.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
-const RUNNER_WORKTREE = path.join(".claude", "worktrees", "readiness-checks");
 const RUNNER_BRANCH = "readiness-checks";
 const LOOP_LOCK = "readiness-loop.lock";
 const RUN_LOG_DIR = path.join("logs", "readiness-runs");
@@ -225,7 +235,11 @@ function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
  * having run nothing.
  */
 export function readinessCheckEnv(runner: string): NodeJS.ProcessEnv {
-  return runnerChildEnv(runnerLocalDatabaseEnv(runner));
+  const env = runnerChildEnv(runnerLocalDatabaseEnv(runner));
+  // Only the explicit stamp made for this tick may reach the wrapper. In
+  // particular, merging an empty preparation object must mean no stamp.
+  delete env[READINESS_PREPARATION_ENV];
+  return env;
 }
 
 export function runCommand(
@@ -415,12 +429,12 @@ function runnerBranchExists(primary: string): boolean {
   return result.status === 0;
 }
 
-function ensureRunnerWorktree(primary: string, nowIso: string): string {
-  const runner = path.join(primary, RUNNER_WORKTREE);
+export function ensureRunnerWorktree(primary: string, nowIso: string): string {
+  const runner = readinessRunnerPath(primary);
   if (existsSync(runner)) {
-    if (!existsSync(path.join(runner, ".env.local"))) {
-      throw new Error(`${runner}/.env.local is missing. Copy it from ${primary}/.env.local, run setup, and inspect the tree.`);
-    }
+    const problem = runnerWorktreeProblem(runner, runCommand, primary);
+    if (problem !== null) throw new Error(`refusing to prepare an unexpected runner checkout: ${problem}`);
+    linkRunnerEnvLocal(runner, primary);
     return runner;
   }
 
@@ -450,24 +464,86 @@ function ensureRunnerWorktree(primary: string, nowIso: string): string {
      no-op is how this runner keeps its stricter fast-forward-only contract. */
   requireCommand(runner, "git", ["merge", "--ff-only", "origin/dev"], "advancing the recreated runner branch");
 
-  let setup = runSetup(runner);
+  /* Linked before setup, so setup finds it: the primary's file, read where it
+     lives, as the deploy's gate worktree reads it (261007k § 3). */
+  linkRunnerEnvLocal(runner, primary);
+  const setup = runSetup(runner);
   if (!commandSucceeded(setup)) throw new Error(`runner worktree setup failed: ${usefulOutput(setup)}`);
-  let setupOutput = `${setup.stdout}\n${setup.stderr}`;
-  if (!setupHasEnv(setupOutput)) {
-    const sourceEnv = path.join(primary, ".env.local");
-    if (!existsSync(sourceEnv)) {
-      throw new Error(`setup reported that .env.local is missing, and there is no ${sourceEnv} to copy`);
-    }
-    copyFileSync(sourceEnv, path.join(runner, ".env.local"));
-    setup = runSetup(runner);
-    if (!commandSucceeded(setup)) throw new Error(`runner worktree setup after copying .env.local failed: ${usefulOutput(setup)}`);
-    setupOutput = `${setup.stdout}\n${setup.stderr}`;
-  }
+  const setupOutput = `${setup.stdout}\n${setup.stderr}`;
   if (!setupHasEnv(setupOutput)) {
     throw new Error("runner worktree setup did not confirm `ok .env.local is here`; refusing to record a red check about setup");
   }
   requireRunnerAtDev(runner, nowIso, "after creating and setting up the runner worktree");
   return runner;
+}
+
+/**
+ * **The runner reads the primary's `.env.local`, through a symlink** — the
+ * same file the deploy's gate worktree links (scripts/deploy.ts § gatesAt).
+ *
+ * It used to be a copy taken when the runner was created, on 2026-09-09, and
+ * by 2026-10-07 it lacked two keys the primary had. A suite that skips when a
+ * key is absent then passes here and runs in the deploy, and a deploy reusing
+ * this run's result would be standing on a test that never ran. GPT Sol and
+ * docs/plans/261007k § 3.
+ *
+ * Called on every tick, so a copy put back by hand is replaced again. Throws
+ * when the primary has none: a run without one is not a run the deploy could
+ * have made.
+ */
+export function linkRunnerEnvLocal(runner: string, primary: string): void {
+  const source = path.join(primary, ".env.local");
+  const target = path.join(runner, ".env.local");
+  if (!existsSync(source)) {
+    throw new Error(`${source} is missing, so the runner has no .env.local to read; refusing to run checks without one`);
+  }
+  let current: string | null = null;
+  try {
+    current = lstatSync(target).isSymbolicLink() ? readlinkSync(target) : "";
+  } catch {
+    current = null;
+  }
+  if (current === source) return;
+  if (current !== null) rmSync(target, { force: true });
+  symlinkSync(source, target);
+}
+
+/**
+ * **`data/` and `output/` as the commit has them, and nothing else** —
+ * deleted and copied again from its tracked corpus, immediately before each
+ * check.
+ *
+ * The deploy's gate worktree starts empty and copies the corpus once, so
+ * that is the state a reused result must have been made in. The runner used
+ * to copy it once, at creation, and every run since had been writing under
+ * it: a fixture the commit deleted stayed, and a test the commit broke could
+ * still find it. Refuses unless both halves were copied, because
+ * `materialiseCorpus` reports a missing half rather than throwing.
+ *
+ * Here and not in preparation, which runs before the tick knows whether
+ * anything is running in this checkout (GPT Sol on 261007k, P2-5).
+ */
+export function refreshRunnerCorpus(runner: string): void {
+  for (const half of CORPUS_HALVES) rmSync(path.join(runner, half), { recursive: true, force: true });
+  const result = materialiseCorpus(runner);
+  if (result.copied.length !== CORPUS_HALVES.length) {
+    throw new Error(`refreshing the runner's corpus: ${describeMaterialise(result)}`);
+  }
+}
+
+/**
+ * What the loop tells the wrapper it did, as the environment variable the
+ * wrapper reads. Taken after the corpus refresh, so the `.env.local` hash is of
+ * the file the run is about to read.
+ */
+export function preparationEnv(runner: string, sha: string): NodeJS.ProcessEnv {
+  const preparation: Preparation = {
+    by: "readiness-loop",
+    version: PREPARATION_VERSION,
+    sha,
+    envLocalSha256: createHash("sha256").update(readFileSync(path.join(runner, ".env.local"))).digest("hex"),
+  };
+  return { [READINESS_PREPARATION_ENV]: JSON.stringify(preparation) };
 }
 
 /**
@@ -735,7 +811,12 @@ function elapsed(durationMs: number): string {
 
 let activeChild: ChildProcess | null = null;
 
-async function runReadinessCheck(runner: string, sha: string, store: ReadinessStore): Promise<void> {
+async function runReadinessCheck(
+  runner: string,
+  sha: string,
+  store: ReadinessStore,
+  preparation: NodeJS.ProcessEnv,
+): Promise<void> {
   const startedMs = Date.now();
   const logDir = path.join(runner, RUN_LOG_DIR);
   mkdirSync(logDir, { recursive: true });
@@ -747,7 +828,7 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
   try {
     const child = spawn("npx", ["tsx", "scripts/readiness-run.ts", "check"], {
       cwd: runner,
-      env: readinessCheckEnv(runner),
+      env: { ...readinessCheckEnv(runner), ...preparation },
       stdio: ["ignore", fd, fd],
       detached: process.platform !== "win32",
     });
@@ -827,6 +908,8 @@ async function tick(
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
   const fastForwardProblem = advanceRunner(runner, expectedRepository);
+  // A refused repository/pointer guard must also refuse filesystem mutation.
+  if (fastForwardProblem === null) linkRunnerEnvLocal(runner, expectedRepository);
 
   const dev = snapshotDev(runner, nowIso);
   const afterMerge = stampTree(runner);
@@ -867,7 +950,11 @@ async function tick(
   }
   if (decision.kind === "run") {
     assertLock();
-    await runReadinessCheck(runner, decision.sha, store);
+    refreshRunnerCorpus(runner);
+    /* Stamped only when preparation latched at exactly this sha; otherwise the
+       run is still recorded, and simply cannot stand in for a deploy's gate. */
+    const stamped = preparation.preparedFor === decision.sha ? preparationEnv(runner, decision.sha) : {};
+    await runReadinessCheck(runner, decision.sha, store, stamped);
   }
 }
 

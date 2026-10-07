@@ -589,14 +589,14 @@ describe("the half-article overdraft, which is accepted rather than absent", () 
 
 describe("the offer counts articles rather than ledger rows", () => {
   /**
-   * **A re-added URL adopts the shelf's article and charges again**, so one
-   * article can own several charged rows. Sharing it frees all of them at once —
+   * **One article can own several charged rows** — a re-added URL charged
+   * again until 2026-10-07 (plan 261007k). Sharing it frees all of them at once —
    * which means *"share three articles"* would be false for somebody who needs
    * to share one.
    */
   it("says one article when three rows' worth of points come from one article", async () => {
     /* One article added three times — the same URL pasted back after being
-       archived, which adopts the shelf's article and charges again — plus one
+       archived, which charged again until 2026-10-07 — plus one
        ordinary article. 800 points against a budget of 600, so 300 have to be
        freed — three rows' worth — to get back under the wall.
 

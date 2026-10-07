@@ -344,7 +344,7 @@ export function JobProgress({
         </Button>
       )}
       {failed && (
-        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed.message}</p>
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-danger">{failed.message}</p>
       )}
     </>
   );

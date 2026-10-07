@@ -37,7 +37,7 @@ defect (E5 in the review).
 The shared component's no-timer regression also failed separately (**1 failed, 6 passed**);
 the zero-delay override now draws synchronously. The final targeted run passed **418 tests**,
 including all seven requested suites and the caller regressions. That result excludes the
-blocked Chrome geometry test; E1 still prevents approval.
+blocked Chrome geometry test; E1 was unresolved at that first review.
 
 ## The fix that keeps the meaning
 
@@ -47,13 +47,35 @@ wait is keyed by the request's slug, hash and extension, so switching requests r
 These are the long-term caller fixes: they express information already owned by the caller and
 leave the shared loading component responsible only for presentation and timing.
 
-**The candidate is still not ready because E1 remains unresolved.** Its `min-height: 1lh` includes
+**E1 remained unresolved at the first review.** Its `min-height: 1lh` includes
 caller padding under the reader's `border-box` reset, so an empty padded wait can grow when words
 arrive; wrapping is another source of growth. The Chrome geometry regression was written, but
 Chrome startup was refused with `setsockopt: Operation not permitted` (`EPERM`). It did not reach
 the layout assertions. The reviewer left the geometry CSS unchanged rather than claim a verified
 fix. Caller tests establish timing and identity, not browser geometry; their green results do not
-close E1.
+close E1. The orchestrator subsequently reserved the unseen sentence and spinner in `5fb8b4783`;
+`337fee2ed` let that sentence shrink and wrap like the visible one. The round-2 review found no
+remaining geometry defect for the existing plain-text callers; Chrome still could not launch in
+the review sandbox, so it supplied no fresh height measurements.
+
+## Round 2: a placeholder accepts more than its serialization preserves
+
+`5fb8b4783` introduced `wordsOf`, which silently dropped React elements while `children` still
+accepted `ReactNode`. An accepted fragment containing emphasis and a line break therefore reserved
+no sentence before 600ms. Every existing caller passed plain words, and both the tests and the
+serialization shared that narrower assumption. No affected production caller was found.
+
+The long-term fix retains CSS content for plain words and renders formatted children inside the
+same hidden, `aria-hidden` footprint. This preserves their actual markup rather than guessing its
+geometry from flattened text. The new fragment/emphasis/line-break regression first failed with
+missing emphasis (**1 failed, 8 passed**), then the component and four caller suites passed
+**142 tests**. A formatted multiline fixture was added to the Chrome geometry test, but browser
+startup still failed with `setsockopt: Operation not permitted` and SIGTRAP before measurement.
+
+Countermeasures for this class, ranked: exercise a placeholder with a richer value allowed by its
+public type (done); compare its input type with its serialization whenever extracting shared UI
+(cheap); reject a separate markup-measurement system, which adds machinery when rendering the
+existing hidden markup already preserves the footprint.
 
 ## Countermeasures, ranked by ease against value
 

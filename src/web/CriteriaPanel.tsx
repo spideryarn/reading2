@@ -122,6 +122,7 @@ import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
@@ -810,11 +811,14 @@ function NewCriterion({
             submit. `onClick` is *not* where that guard goes — Enter in a text
             field submits a form without ever pressing the button.
 
-            The dead look is `.crit-run[aria-disabled="true"]` in styles.css,
-            which took over from `:disabled` in the same change. */}
-        <button type="submit" className="crit-run" aria-disabled={!ready}>
+            The dead look is `Button`'s own `aria-disabled:` classes
+            (components/ui/button.tsx § THREE): half opacity, no hover, and no
+            `pointer-events: none`, which would take the card away again.
+            Shadcn's outline button since plan 261007h § F3, the run button
+            every mode shares; `.crit-run` stays as a hook. */}
+        <Button type="submit" variant="outline" size="sm" className="crit-run" aria-disabled={!ready}>
           Run this criterion
-        </button>
+        </Button>
       </Tooltip>
     </form>
   );

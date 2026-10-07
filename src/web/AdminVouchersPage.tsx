@@ -388,7 +388,7 @@ function EmailLine({
         </button>
       )}
       {refusal && (
-        <p role="alert" className="tw:m-0 tw:mt-1 tw:text-destructive">
+        <p role="alert" className="tw:m-0 tw:mt-1 tw:text-danger">
           {refusal}
         </p>
       )}
@@ -617,7 +617,7 @@ function VoucherRow({
       <td className={`${CELL} tw:min-w-56`}>{usage(voucher)}</td>
       <td className={CELL}>
         {refusal && (
-          <p role="alert" className="tw:m-0 tw:mb-2 tw:text-xs tw:text-destructive">
+          <p role="alert" className="tw:m-0 tw:mb-2 tw:text-xs tw:text-danger">
             {refusal}
           </p>
         )}

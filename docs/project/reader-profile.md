@@ -66,8 +66,11 @@ exists; words typed before that are held and saved the moment it does. The reaso
 server queues the first modes when the import publishes, with the purpose stored by then
 ([plan 261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
 so a purpose saved at a button after the import was always too late for them. A reader still typing
-at that moment still misses. On a re-add the box shows the purpose already stored, so an emptied box
-clears it. The saving is a small class of its own, bound to one article's slug
+at that moment still misses. Whenever an add resolves to an existing article, its purpose session
+reads the stored purpose before writing, so an emptied box clears it only after that read. An
+untouched repeat paste offers no purpose box; a draft entered while its answer was pending stays
+visible ([ingest-queue.md](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
+The saving is a small class of its own, bound to one article's slug
 ([`src/web/add-purpose.ts`](../../src/web/add-purpose.ts)), because one add page can change which
 article it is about (a new address, a Retry) and `useAutosavedText` cannot be re-pointed;
 [plan 261004l](../plans/261004l-the-add-page-purpose-box-saves-as-you-type.md) has why, and what

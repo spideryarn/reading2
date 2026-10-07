@@ -35,16 +35,22 @@ import {
    which since 2026-09-06 is the list of `@import`s and holds no rule. */
 const CSS = readerCss();
 
-it("Diagram's read failures keep the quiet colour of its job failures", () => {
+/* Diagram's failures were grey, every band's "not made yet" colour, until
+   2026-10-07; since then they are `--danger` like every other band's, and its
+   read failure is no longer overridden (plan 261007h § F4 and § Judgement
+   calls). tests/failure-colour-and-order-chips.test.ts holds the whole set. */
+it("Diagram's read and job failures are drawn in every band's failure colour", () => {
   const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
   const colour = (selector: string) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const rule = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(bare)?.[1];
+    /* The selector alone, not the tail of a list (`.ill-busy, .ill-failed`). */
+    const rule = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(bare)?.[1];
     return /(?:^|;)\s*color:\s*([^;]+);/.exec(rule ?? "")?.[1];
   };
-  expect(colour(".sk-failed")).toBe("var(--ink-faint)");
-  expect(colour(".ill-busy, .ill-failed")).toBe(colour(".sk-failed"));
-  expect(colour(".mode-band.diag .read-error .gloss-error")).toBe(colour(".sk-failed"));
+  expect(colour(".sk-failed")).toBe("var(--danger)");
+  expect(colour(".ill-failed")).toBe(colour(".sk-failed"));
+  expect(colour(".gloss-error")).toBe(colour(".sk-failed"));
+  expect(colour(".mode-band.diag .read-error .gloss-error")).toBeUndefined();
   expect(readFileSync("src/web/ReadError.tsx", "utf8")).toContain('className="gloss-error"');
 });
 

@@ -56,6 +56,19 @@ vi.mock("../src/billing/admission.js", async (original) => {
   };
 });
 
+/**
+ * **The shelf, empty and asked without a database.** Since plan 261007k the
+ * route asks whether the reader already has the address before the slot (a
+ * repeat paste is free), and this file runs with no database. An empty shelf
+ * is the case the control below is about: an ordinary address goes on to the
+ * slot. The repeat itself is tested against a real one in
+ * tests/billing-admission.test.ts.
+ */
+vi.mock("../src/store/find-article.js", async (original) => ({
+  ...(await original<typeof import("../src/store/find-article.js")>()),
+  slugForUrlKey: async () => undefined,
+}));
+
 describe("which addresses are our own reading pages", () => {
   const OURS = [
     "https://www.spideryarn.com/read/why-trees-spya-k3m9qt",

@@ -243,7 +243,7 @@ export function SourceLink({
           from that reader's side pressing the button did nothing at all. GPT
           Sol, second pass, 2026-08-31. */}
       {error && (
-        <span role="alert" className="tw:ml-2 tw:text-xs tw:text-destructive">
+        <span role="alert" className="tw:ml-2 tw:text-xs tw:text-danger">
           {error}
         </span>
       )}

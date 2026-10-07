@@ -407,7 +407,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
               did. QuotaNotice.tsx. */}
           <QuotaNotice
             message={queue.error}
-            className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive"
+            className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-danger"
           />
 
           {current.length > 0 && <JobList jobs={current} queue={queue} onHide={hide} />}
@@ -446,7 +446,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     <span aria-hidden="true" className="tw:opacity-50">
                       ·
                     </span>
-                    <span className="tw:text-destructive">
+                    <span className="tw:text-danger">
                       {failedEarlier === 1 ? "1 failed" : `${failedEarlier} failed`}
                     </span>
                   </>
@@ -739,7 +739,7 @@ export function JobCard({
           aria-live="polite"
           className={
             copied === "failed"
-              ? "tw:-mt-1 tw:mb-2 tw:text-xs tw:text-destructive"
+              ? "tw:-mt-1 tw:mb-2 tw:text-xs tw:text-danger"
               : "tw:sr-only"
           }
         >
@@ -792,7 +792,7 @@ export function JobCard({
           this job: the shelf's own line is engine state shared with the poller,
           and two cards refused for different reasons would both point at it.
           See `refusal` above. */}
-      <QuotaNotice message={refusal} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive" />
+      <QuotaNotice message={refusal} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-danger" />
     </div>
   );
 }
@@ -886,7 +886,7 @@ function StepRow({
 }) {
   const tone =
     step.status === "error"
-      ? "tw:text-destructive"
+      ? "tw:text-danger"
       : step.status === "running"
         ? "tw:text-foreground"
         : step.status === "pending"

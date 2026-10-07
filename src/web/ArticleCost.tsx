@@ -132,7 +132,7 @@ export function ArticleCostBody({ load }: { load: ArticleCostLoad }) {
   }
   if (load.kind === "failed") {
     return (
-      <p role="alert" className="tw:m-0 tw:text-sm tw:text-destructive">
+      <p role="alert" className="tw:m-0 tw:text-sm tw:text-danger">
         Could not read what this article cost: {load.message}
       </p>
     );
