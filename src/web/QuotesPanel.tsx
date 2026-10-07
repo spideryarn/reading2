@@ -1183,7 +1183,7 @@ function RankBar({
   onRank(rank: QuoteRank): void;
 }) {
   return (
-    <div className="quotes-rank">
+    <div className="gloss-sort">
       <OrderGroup label="Order the quotes by" selected={rank}>
         {/* No "order" word in front since 2026-10-01, as in Glossary; the
             group's `aria-label` still says it to a screen reader. */}
@@ -1191,7 +1191,7 @@ function RankBar({
           <button
             key={option.key}
             type="button"
-            className={`quotes-rank-btn${rank === option.key ? " on" : ""}`}
+            className={`gloss-sort-btn${rank === option.key ? " on" : ""}`}
             aria-pressed={rank === option.key}
             title={option.title}
             onClick={() => onRank(option.key)}
@@ -1252,12 +1252,12 @@ function BarSlider({
   const count = `${visible.length} of ${quotes.length}`;
 
   return (
-    <div className="quotes-bar">
-      <div className="quotes-bar-row">
-        <label className="quotes-bar-label" htmlFor="quotes-bar">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="quotes-bar">
           bar
         </label>
-        <span className="quotes-bar-value">
+        <span className="gloss-gate-value">
           {bar.toFixed(2)} · {withYours(count, yours)}
         </span>
         {/* Only once there is something to undo. A reset that is always there is
@@ -1265,7 +1265,7 @@ function BarSlider({
         {moved && (
           <button
             type="button"
-            className="quotes-bar-reset"
+            className="gloss-gate-reset"
             title={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             aria-label={`Reset the bar to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             onClick={() => onBar(null)}
@@ -1282,7 +1282,7 @@ function BarSlider({
           meaningless against a re-run list, where a score is still a score. */}
       <input
         id="quotes-bar"
-        className="quotes-bar-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         max={Math.max(stops.length - 1, 0)}
@@ -1299,7 +1299,7 @@ function BarSlider({
       {/* Always, never conditionally: present wherever the slider is, absent
           wherever it is not. A line that is sometimes missing for a *different*
           reason teaches the reader nothing. */}
-      <p className="quotes-bar-note">{note}</p>
+      <p className="gloss-gate-note">{note}</p>
     </div>
   );
 }

@@ -1,0 +1,56 @@
+"""K5: each guard, mutated. Apply one change, run the test that should notice,
+record red or green, put the text back. Prints a table; exits 1 if any
+mutation was not noticed or a file was not restored."""
+import subprocess, sys, json
+R='/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/'
+G='src/web/styles/glossary.css'
+M=[
+ ("M1 no finger floor on the order buttons", 'src/web/styles/narrow-window.css',
+  "    justify-content: center;\n    min-height: 2.5rem;\n  }\n\n  /* The profile icon is a button", "    justify-content: center;\n  }\n\n  /* The profile icon is a button", 'tests/touch-controls.test.ts'),
+ ("M2 no :active on the order buttons", G,
+  ".gloss-sort-btn:active { color: var(--ink); background: var(--surface-raised); }\n", "", 'tests/touch-controls.test.ts'),
+ ("M3 no focus mark on the order buttons", G,
+  ".gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }\n", "", 'tests/touch-controls.test.ts'),
+ ("M4 the row wraps on a touch screen", G,
+  "@media (pointer: coarse) {\n  .gloss-sort { flex-wrap: nowrap; }\n", "@media (pointer: coarse) {\n", 'tests/touch-controls.test.ts'),
+ ("M5 hover outside (hover: hover)", G,
+  "@media (hover: hover) {\n  .gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }\n}\n",
+  ".gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }\n", 'tests/touch-controls.test.ts'),
+ ("M6a Quotes' foot line under its old class", 'src/web/QuotesPanel.tsx',
+  '<p className="gloss-gate-note">{note}</p>', '<p className="quotes-bar-note">{note}</p>', 'tests/glossary-band-wiring.test.ts'),
+ ("M6b Quotes' foot line made conditional", 'src/web/QuotesPanel.tsx',
+  '<p className="gloss-gate-note">{note}</p>', '{note && <p className="gloss-gate-note">{note}</p>}', 'tests/glossary-band-wiring.test.ts'),
+ ("M7 Search's foot line made unconditional", 'src/web/SearchPanel.tsx',
+  '{hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}', '<p className="gloss-gate-note">{note}</p>', 'tests/glossary-band-wiring.test.ts'),
+ ("M8 no rule for Debate's words", G,
+  ".gloss-gate-value.in-words { font-family: inherit; }\n", "", 'tests/debate-panel.test.tsx'),
+ ("M8b the rule for Debate's words only in print (GPT Sol, K5-F2)", G,
+  ".gloss-gate-value.in-words { font-family: inherit; }\n", "@media print {\n  .gloss-gate-value.in-words { font-family: inherit; }\n}\n", 'tests/debate-panel.test.tsx'),
+ ("M9 Debate's value without the modifier", 'src/web/DebatePanel.tsx',
+  'className="gloss-gate-value in-words"', 'className="gloss-gate-value"', 'tests/debate-panel.test.tsx'),
+ ("M10 Quotes' order row under its old class", 'src/web/QuotesPanel.tsx',
+  'className="gloss-sort"', 'className="quotes-rank"', 'tests/quotes-and-citations-compact-header.test.tsx'),
+ ("M11 Quotes' value under its old class", 'src/web/QuotesPanel.tsx',
+  'className="gloss-gate-value"', 'className="quotes-bar-value"', 'tests/quotes-yours-rows.test.tsx'),
+ ("M12 Search's slider under its old class", 'src/web/SearchPanel.tsx',
+  'className="gloss-gate-value"', 'className="srch-gate-value"', 'tests/search-results-get-the-room.test.tsx'),
+ ("M13 Debate's reset under its old class", 'src/web/DebatePanel.tsx',
+  'className="gloss-gate-reset"', 'className="dbt-bar-reset"', 'tests/debate-panel.test.tsx'),
+]
+out=[]; bad=False
+for name, path, a, b, test in M:
+    orig=open(R+path).read()
+    if orig.count(a)!=1:
+        out.append((name, f"NOT APPLIED ({orig.count(a)} matches)")); bad=True; continue
+    open(R+path,'w').write(orig.replace(a,b))
+    try:
+        r=subprocess.run(['npx','vitest','run',test], cwd=R, capture_output=True, text=True)
+        tail=[l for l in (r.stdout+r.stderr).splitlines() if 'Tests ' in l]
+        red = r.returncode!=0
+        out.append((name, ("RED" if red else "GREEN (not noticed)")+" | "+test+" | "+(tail[-1].strip() if tail else '?')))
+        if not red: bad=True
+    finally:
+        open(R+path,'w').write(orig)
+    if open(R+path).read()!=orig: bad=True; out.append((name,"NOT RESTORED"))
+for n,v in out: print(f"{n}: {v}")
+sys.exit(1 if bad else 0)

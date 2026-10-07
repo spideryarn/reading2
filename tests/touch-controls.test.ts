@@ -34,9 +34,9 @@
  *
  * Nor can it see the whole cascade. It compares specificity between selectors
  * it can find in the sheets this helper walks. Source order, `@layer`
- * (the Tailwind utilities layer outranks all of this, which is why four
- * `tw:`-styled fields carry `tw:any-pointer-coarse:text-base` at their own call
- * sites), inline styles and `font` shorthands are all outside it.
+ * (the Tailwind utilities layer outranks all of this, which is why the
+ * `tw:`-styled fields carry an `any-pointer-coarse` font-size floor at their
+ * own call sites), inline styles and `font` shorthands are all outside it.
  */
 import { describe, expect, it } from "vitest";
 import { readerCssNoComments, readerSheets, stripComments } from "./helpers/stylesheets.js";
@@ -162,16 +162,15 @@ function beats(a: [number, number], b: [number, number]): boolean {
 /* ------------------------------------------------------------------------- */
 
 describe("a control a finger has to hit", () => {
-  /* The two order rows are one control written twice — `.gloss-sort-btn` in
-     glossary.css and `.quotes-rank-btn` in quotes.css carry the same
-     declarations, character for character. Whatever floor they get, they get
-     together, or the next report is about the other one. */
-  const PAIR = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
-  /* **And Search's order buttons, which are their own class** (they are not an
+  /* Every band's order buttons but Search's are `.gloss-sort-btn`
+     (glossary.css). Quotes' were `.quotes-rank-btn`, the same declarations
+     written a second time in quotes.css, until plan 261007a § K5 left one.
+
+     **And Search's order buttons, which are their own class** (they are not an
      `OrderGroup`: plan 261007a § K4, the review's U16). They had a bare
      `:hover`, no `:active` and no floor until 2026-10-07; their rules are in
      search.css, under their own class, and the same checks hold them. */
-  const BARS = [...PAIR, ".srch-sort-btn"] as const;
+  const BARS = [".gloss-sort-btn", ".srch-sort-btn"] as const;
   const FLOOR_REM = 2.5; // 40px — these rows' retained floor.
 
   it("keeps the dock's raised 44px coarse-pointer width floor", () => {
@@ -442,7 +441,7 @@ describe("an order row on a touch screen", () => {
      only**, the floor's own query, since `coarseBlocks` also takes
      `any-pointer`. The other half of the decision, *touch only*, is that no
      rule outside a coarse block says `nowrap`. */
-  const ROWS = [".gloss-sort", ".quotes-rank", ".gloss-sort-group"] as const;
+  const ROWS = [".gloss-sort", ".gloss-sort-group"] as const;
 
   /** `[start, end)` of every block opened by `query`, in `css`. */
   function spans(css: string, query: RegExp): [number, number][] {

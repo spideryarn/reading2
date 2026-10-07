@@ -240,9 +240,26 @@ describe("the profile page's contents list", () => {
     expect(entries().map((b) => b.textContent)).toEqual(labels);
   });
 
-  /* The list is fixed in the margin and assumes its page steps right to clear
-     it (PageContents.tsx § CONTENTS_MARGIN). A page that mounts the list
-     without the class puts it over the prose between 1024px and 1152px. */
+  /* **Where it is in the page, by its neighbours.** Below `lg` the nav is drawn
+     in the column, so its place in the markup is its place on a phone: under
+     the page's one-line introduction, above *Account*. Greg, 2026-10-06, report
+     `spya-vwf00u`;
+     docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */
+  it("sits in the page's column, after the introduction and before Account", async () => {
+    await paint();
+    const list = nav();
+    const main = host.querySelector("main");
+    if (!list || !main) throw new Error("no nav or no main");
+    expect(list.parentElement).toBe(main);
+    const before = list.previousElementSibling;
+    expect(before?.tagName).toBe("P");
+    expect(before?.textContent).toContain("What the model knows about who it is writing for");
+    expect(list.nextElementSibling).toBe(section("Account"));
+  });
+
+  /* From `lg` the list is fixed in the margin and assumes its page steps right
+     to clear it (PageContents.tsx § CONTENTS_MARGIN). A page that mounts the
+     list without the class puts it over the prose between 1024px and 1152px. */
   it("applies the desktop clearance class to its main column", async () => {
     await paint();
     const main = host.querySelector("main");
