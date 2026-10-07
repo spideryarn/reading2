@@ -1499,6 +1499,7 @@ function SortBar({
             K4). `display: contents` in search.css, so the wrapper is in the
             accessibility tree and not in the layout. Until 2026-10-07 the
             pressed order was a colour and nothing a screen reader could hear. */
+        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a list, not form controls; `role="group"` with a name is what ARIA has for that, as OrderGroup.tsx says */
         <div className="srch-sort-group" role="group" aria-label="Order the passages by">
           <button
             type="button"

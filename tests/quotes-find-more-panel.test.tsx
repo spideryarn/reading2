@@ -247,6 +247,29 @@ describe("the foot", () => {
       expect(regenerate.mock.calls).toEqual([[]]);
     });
 
+    /* **The rewrite hold's waiting line is a status too** (rewrite-hold.ts): the
+       job has ended and the new list has not been read, so the forced verb is
+       held and the reader is told why. Under the ceiling `findMore` carries
+       that line; at the ceiling the sentence must not stand in front of it. */
+    it("shows the hold's waiting line while the new list has not loaded, not the sentence", async () => {
+      await mount(owner(full(), { rewriting: true }));
+      expect(foot()?.textContent).toContain("The new quotes haven't loaded yet.");
+      expect(foot()?.textContent).not.toContain("as many as we keep");
+    });
+
+    it("holds the rewrite's button while a failed run's new list is still unread", async () => {
+      await mount(
+        owner(full(), {
+          rewriting: true,
+          failed: { message: "The server refused the run.", retryable: true, retry: null },
+        }),
+      );
+      const again = [...(foot()?.querySelectorAll("button") ?? [])].find((b) =>
+        /choose them again/i.test(b.textContent ?? ""),
+      );
+      expect(again?.disabled, "a second forced run was offered over the hold").toBe(true);
+    });
+
     it("says the sentence again once nothing is running or failed", async () => {
       await mount(owner(full()));
       expect(foot()?.textContent).toContain("as many as we keep");

@@ -985,9 +985,13 @@ export function QuotesPanel({
             /* A job at the ceiling was not started by Find more, which is not
                offered there: it is a forced re-run from Metadata. So its
                status, and the way to ask again when it never became a job,
-               are the rewrite's (`rerun`), as on an outdated list below. */
+               are the rewrite's (`rerun`), as on an outdated list below.
+               `rewriting` too: a run that has ended with its list unread is
+               the hold's waiting line, which `rerun` draws (rewrite-hold.ts). */
             elsewhere={
-              owner.job || owner.starting || owner.failed ? rerun("Choose them again", true) : null
+              owner.job || owner.starting || owner.failed || owner.rewriting
+                ? rerun("Choose them again", true)
+                : null
             }
           />
         ) : /* **Status only, on an outdated list.** Its banner went on
@@ -1631,8 +1635,9 @@ function Foot({
   addable: boolean;
   findMore: ReactElement;
   /**
-   * The progress, Stop or failure of a run that is going or has failed, or
-   * null when there is none. Drawn at the ceiling **in place of** its
+   * The progress, Stop or failure of a run that is going or has failed (or
+   * the line that says its new list has not loaded), or null when there is
+   * none. Drawn at the ceiling **in place of** its
    * sentence, which until 2026-10-07 stood where a running job's Stop and a
    * failed one's Retry would have been (plan 261007a § K4). Under the
    * ceiling `findMore` already carries the same status.

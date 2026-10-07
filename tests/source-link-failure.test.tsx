@@ -11,7 +11,7 @@
  * change), and anything unexpected. The real `apiFetch`; only `fetch` and
  * `window.open` are posed.
  */
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,7 +57,13 @@ beforeEach(() => {
   /* A built page: the development build keeps the browser's words in brackets. */
   vi.stubEnv("PROD", true);
   vi.spyOn(console, "error").mockImplementation(() => {});
-  vi.stubGlobal("open", () => ({ opener: {}, location: { href: "" }, close: () => void (closed += 1) }));
+  vi.stubGlobal("open", () => ({
+    opener: {},
+    location: { href: "" },
+    close: () => {
+      closed += 1;
+    },
+  }));
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -74,7 +80,7 @@ afterEach(async () => {
 async function press(answer: () => Promise<Response>): Promise<string> {
   vi.stubGlobal("fetch", answer);
   await act(async () => {
-    root.render(createElement(SourceLink, { slug: "a-piece", children: "view the original" }));
+    root.render(<SourceLink slug="a-piece">view the original</SourceLink>);
   });
   await act(async () => host.querySelector("button")!.click());
   for (let i = 0; i < 5; i++) {
