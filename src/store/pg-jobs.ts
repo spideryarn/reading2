@@ -2243,8 +2243,10 @@ const rawPgJobStore: JobStore = {
  *   terminal. For the live path it is the whole of the answer: the settling job
  *   is still `running` with a `labels` step when this is asked, and would
  *   otherwise be read as its own successor, so no live failure would ever mark;
- * - **it belongs to `article.ownerId`.** A slug is unique per owner, not across
- *   them, and the sweep runs over everybody's rows;
+ * - **it belongs to `article.ownerId`.** `articles.slug` is unique across every
+ *   owner, but `jobs.slug` is plain text with no key to the article, so the
+ *   schema does not stop another owner's job carrying the same text, and the
+ *   sweep runs over everybody's rows;
  * - **it is `queued` or `running` and not `cancelling`.** A job on its way out
  *   promises nothing;
  * - **its step list has `labels`.** Membership is right *here*, about the other

@@ -1256,11 +1256,12 @@ export async function assertProduced(
  * URL while resolving the collision."*
  *
  * So this closes the **destructive** case — same owner, reader state
- * overwritten — and knowingly leaves the **wasteful** one open: two owners
- * racing for one free slug, where the second pays for a whole pipeline before
- * publication refuses it (case 4 above). Fixing that needs a return shape that
- * can say *"taken, but not yours"* without disclosing what it is, and it
- * belongs in `freeSlug` rather than here. It is a known gap, not an oversight.
+ * overwritten. The **wasteful** one it used to leave open, two owners racing
+ * for one free slug (case 4 above), went on 2026-08-31 by another route: every
+ * new slug ends in a random short id (src/ingest.ts § `slugWithShortId`), so
+ * two owners who paste one address are given two slugs and never want the same
+ * one. A slug somebody else holds is refused where the article row is created,
+ * before any step runs (`lockOrCreateArticle`, src/store/pg-revisions.ts).
  *
  * **Broader than `meta.json` was**, and in the safe direction: this is true as
  * soon as the article row exists, which is before the first revision is

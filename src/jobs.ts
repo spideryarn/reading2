@@ -98,6 +98,7 @@ import { NotProcessed } from "./not-processed.js";
 import { NeedsAnotherWindow } from "./another-window.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
+import { shortIdIsTaken } from "./store/short-id-is-taken.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
@@ -3749,7 +3750,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     : request.url
       ? await freeSlug(request.slug, request.url)
       : request.upload
-        ? { kind: "minted", slug: slugWithShortId(request.slug) }
+        ? { kind: "minted", slug: await mintSlug(request.slug) }
         : /* From the shelf, and the preflight a few lines up has just proved it:
              this is *"run something on the article I already have"*, and a slug
              nobody has is refused there rather than reaching this line. */
@@ -4086,7 +4087,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
-        : { kind: "minted", slug: slugWithShortId(request.slug) };
+        : { kind: "minted", slug: await mintSlug(request.slug) };
       continue;
     }
 
@@ -4391,6 +4392,45 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
   return allocation.kind === "adopted" && allocation.from === "shelf";
 }
 
+/** How many ids `mintSlug` will mint for one slug. It asks about all but the last. */
+const MINT_TRIES = 3;
+
+/**
+ * **A slug for a new article, ending in a short id no article already has.**
+ *
+ * `articles.short_id` is unique across every owner, and a freshly minted id
+ * can equal one an article already holds. That is rare for one import and
+ * grows with the library, and until 2026-10-07 nothing looked: the import
+ * failed where the article row is created, and a retry, which keeps its name,
+ * failed again. So this asks, and mints again on a yes. Plan 261007f, E10.
+ *
+ * **The one way `enqueue` mints.** Its three mints (a pasted address through
+ * `freeSlug`, an upload, and the re-mint after `nameTaken`) all come here. A
+ * retry does not: it keeps the failed attempt's name (`slugForRetry`).
+ *
+ * **Asking is not reserving**, and this does not pretend to. Two imports that
+ * mint one id at the same moment both hear "free". The last id is also sent
+ * out unasked, so a lookup that says yes for ever cannot hang an import. In
+ * both cases the database refuses the second row and `lockOrCreateArticle`
+ * (src/store/pg-revisions.ts) refuses in words. **The reader does not see
+ * those words today**: a refusal while a claim opens its draft ends no job, so
+ * the import sits as running until its lease and requeues run out, then fails
+ * as interrupted. That is true of every refusal thrown there, not only this
+ * one, and is written up in docs/project/ingest-queue.md § When two imports
+ * mint the same id at once.
+ *
+ * The lookup is an argument for `freeSlug`'s reason: tests/short-id-collision.test.ts
+ * can say "taken, then free" without an article in the way.
+ */
+export async function mintSlug(
+  base: string,
+  isTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
+): Promise<string> {
+  let id = mintId();
+  for (let tries = 1; tries < MINT_TRIES && (await isTaken(id)); tries += 1) id = mintId();
+  return slugWithShortId(base, id);
+}
+
 /**
  * **The slug this URL should use: the one it already has, or a fresh one.**
  *
@@ -4445,6 +4485,10 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
  * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
  * one line those tests do not cover.
  *
+ * `idIsTaken` is a second lookup, handed straight to `mintSlug` above. The
+ * cases in that file that mint leave it at its default, so they do ask the
+ * database; tests/short-id-collision.test.ts is where it is stood in for.
+ *
  * ## It says which of the two it did, and that is not decoration
  *
  * See `SlugAllocation`. The two branches below are the *only* place in the
@@ -4455,9 +4499,10 @@ export async function freeSlug(
   slug: string,
   url: string,
   alreadyHolding: (urlKey: string) => Promise<SlugHolder | undefined> = slugAlreadyHolding,
+  idIsTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
 ): Promise<SlugAllocation> {
   const held = await alreadyHolding(urlKey(url));
-  if (held === undefined) return { kind: "minted", slug: slugWithShortId(slug) };
+  if (held === undefined) return { kind: "minted", slug: await mintSlug(slug, idIsTaken) };
   /* The two adoptions are spelled out rather than spread, because they are not
      the same allocation: a queue adoption carries the holder it adopted from,
      and the type will not let it be built without one. See `SlugAllocation`. */

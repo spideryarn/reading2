@@ -2,9 +2,11 @@
 
 Up: [plans.md](../project/plans.md)
 
-**Status as of 2026-10-07: planned and reviewed (GPT Sol, verdict revise; every finding F1 to F10
-taken, F1 in the form Opus arbitrated), not built.** Evidence: no test file named
-`tests/two-readers-one-article*.test.ts` exists yet.
+**Status as of 2026-10-07: built, stages 1 to 3.** Evidence: `tests/two-readers-one-article-pg.test.ts`
+(12 cases) and `tests/two-readers-one-article-billing-pg.test.ts` (9 cases) pass against Postgres,
+with the mutations in § Progress watched going red. **No bug was found in the two-readers behaviour
+itself.** Two things were fixed beside it (E8, E10) and one gap is left open and queued (§ Progress).
+The edge-case table below describes the code as it was found; § Progress says what changed.
 
 Report `spya-rvbmss` (SPIDERYARN-READING2-E4), from Greg; Overseer queue item `qi-z93rkwjm`.
 Session `fbrvbmss-same-article-two-importers`.
@@ -117,7 +119,7 @@ none has both copies public; none deletes one and checks the other still serves.
 
 ### Stage 1: one test file that runs the whole thing with two accounts
 
-- [ ] New `tests/two-readers-one-article-pg.test.ts`, in the Postgres lane, registered the way
+- [x] New `tests/two-readers-one-article-pg.test.ts`, in the Postgres lane, registered the way
       [testing.md § What a brand-new test file owes the two registries](../project/testing.md#what-a-brand-new-test-file-owes-the-two-registries)
       says. Two seeded accounts, A and B, fixture ids minted randomly.
   - **Each queued job is driven to publication through the production coordinator**
@@ -129,56 +131,56 @@ none has both copies public; none deletes one and checks the other still serves.
     route's admission or make real reservations.
   - A second file, `tests/two-readers-one-article-billing-pg.test.ts`, holds E14, E15 and E16, so
     two builders can work without sharing a file.
-  - [ ] **E1** both enqueue the same address through `enqueue` (`src/jobs.ts`): two jobs, two
+  - [x] **E1** both enqueue the same address through `enqueue` (`src/jobs.ts`): two jobs, two
         different slugs, each owned by its asker; publish both; `slugForUrlKey` as A returns A's
         slug and as B returns B's; a third paste by A adopts A's and never B's.
-  - [ ] **E1, AI is separate**: write the same checkpoint namespace and key for both article ids
+  - [x] **E1, AI is separate**: write the same checkpoint namespace and key for both article ids
         with different marker values; each read through its own article returns its own marker.
         Separately, B cannot resolve A's article id through an owner lookup. (Not "write A, read
         through B's slug": the store's own request check rejects that before it asks Postgres, so
         it would pass for the wrong reason. Sol F4.)
-  - [ ] **E13** A and B `Promise.all`-enqueue the same address: two active jobs, two slugs. A's
+  - [x] **E13** A and B `Promise.all`-enqueue the same address: two active jobs, two slugs. A's
         fails and is retried: the retry keeps A's name and never touches B's. One forced case of
         two requests wanting the same full slug, to exercise `jobs_reserved_slug`, which random
         ids otherwise never reach.
-  - [ ] **E2** A makes theirs public. The public route serves A's slug; B's slug is 404 to a
+  - [x] **E2** A makes theirs public. The public route serves A's slug; B's slug is 404 to a
         visitor and to A; B still reads their own. The public shelf lists exactly one.
-  - [ ] **E3** B makes theirs public too. The publish succeeds; the public shelf lists both, with
+  - [x] **E3** B makes theirs public too. The publish succeeds; the public shelf lists both, with
         different slugs; each public address returns its own article (told apart by a marker in
         each one's content).
-  - [ ] **E6** B, signed in, asking for A's slug through the owner's route gets 404, and through
+  - [x] **E6** B, signed in, asking for A's slug through the owner's route gets 404, and through
         the public route gets A's; B's own slug still answers as owner.
-  - [ ] **E4** A unshares: A's leaves the shelf, B's stays. A deletes: B's article, its blocks and
+  - [x] **E4** A unshares: A's leaves the shelf, B's stays. A deletes: B's article, its blocks and
         its image manifest still serve, and the shared `raw_sources` row is still there.
-  - [ ] **E5** both upload the same bytes: two articles, one `raw_sources` row, each claim owned by
+  - [x] **E5** both upload the same bytes: two articles, one `raw_sources` row, each claim owned by
         its uploader.
-  - [ ] **E11** a legacy row whose slug is a bare name owned by A; B imports an address that
+  - [x] **E11** a legacy row whose slug is a bare name owned by A; B imports an address that
         derives the same name; B gets a different slug and A's row is untouched.
-  - [ ] **Per-reader data**: a comment and a tag B adds on B's slug land on B's article id only.
-- [ ] `tests/two-readers-one-article-billing-pg.test.ts`:
-  - [ ] **E16** each has one ingest event of their own; sharing A's changes only A's full and
+  - [x] **Per-reader data**: a comment and a tag B adds on B's slug land on B's article id only.
+- [x] `tests/two-readers-one-article-billing-pg.test.ts`:
+  - [x] **E16** each has one ingest event of their own; sharing A's changes only A's full and
         half-price counts; deleting A's freezes only A's price; an `ai_calls` row for each job
         carries the right owner and article id.
-  - [ ] **E14** both minimally import the same PDF bytes: two minimal articles, two charges. A's
+  - [x] **E14** both minimally import the same PDF bytes: two minimal articles, two charges. A's
         *Read this* supersedes only A's. B stays minimal and can upgrade later.
-  - [ ] **E15** both create a private link: A's key opens only A's, B's only B's, even though
+  - [x] **E15** both create a private link: A's key opens only A's, B's only B's, even though
         both image manifests name the same hash. A revokes, then deletes: B's key and B's image
         response still work.
-- [ ] Mutation check, recorded in this doc: for at least three of the above, break the guard
+- [x] Mutation check, recorded in this doc: for at least three of the above, break the guard
       (drop `ownedByReader()` from `slugForUrlKey`; remove the owner from the delete; make the
       public resolver ignore the slug's owner by returning the first public row) and see the right
       case go red.
-- [ ] `npm run typecheck`, the new file, `tests/owner-isolation.test.ts`, `tests/find-article.test.ts`.
-- [ ] If a case fails, that is a bug: postmortem, fix red-first, and say so here.
+- [x] `npm run typecheck`, the new file, `tests/owner-isolation.test.ts`, `tests/find-article.test.ts`.
+- [x] If a case fails, that is a bug: postmortem, fix red-first, and say so here.
 
 ### Stage 2: the small fixes and the probe
 
-- [ ] **E9** correct the three stale comments: `src/store/pg-revisions.ts` ("what it does NOT do
+- [x] **E9** correct the three stale comments: `src/store/pg-revisions.ts` ("what it does NOT do
       is let two readers keep the same URL, which is still an open question"),
       `src/store/pg-jobs.ts` ("A slug is unique per owner, not across them"), `src/pipeline.ts`
       ("two owners racing for one free slug … known gap"). Each to say what is true now, checked
       against the code it sits on.
-- [ ] **E8** refuse a Spideryarn `/read/<slug>` address pasted into Add, always, in the
+- [x] **E8** refuse a Spideryarn `/read/<slug>` address pasted into Add, always, in the
       `POST /api/jobs` handler (`src/routes.ts`) after `parseJobRequest` and before a slot is
       reserved. Changed from "probe, then decide" by Sol F10: whether today's page happens to
       extract to junk or to nothing is not a policy, and importing our own reading page can never
@@ -190,7 +192,7 @@ none has both copies public; none deletes one and checks the other still serves.
       sentence. The probe still runs once, to record what happened before.
   - Retreat, decided now: if the Add page cannot show a route's 4xx sentence without new UI,
     keep the refusal and the sentence in the response, and record the UI gap as a queue entry.
-- [ ] **E10** stop a new slug's random id equalling one an article already has. The first draft
+- [x] **E10** stop a new slug's random id equalling one an article already has. The first draft
       of this plan wrote it down as accepted. GPT Sol graded that P1 (F1) and asked for an atomic
       reservation; Opus arbitrated on 2026-10-07 and I have taken its answer:
   - a boolean leaf `src/store/short-id-is-taken.ts`, sibling of `slugIsTaken`, registered with
@@ -214,13 +216,13 @@ none has both copies public; none deletes one and checks the other still serves.
 
 ### Stage 3: write it down
 
-- [ ] One section, **"Two readers, one article"**, in [library.md](../project/library.md) (the
+- [x] One section, **"Two readers, one article"**, in [library.md](../project/library.md) (the
       shelf's doc), as the single home for the facts in § What the code does today, citing the
       test file as what keeps them true. `public-shelf.md`, `billing.md` and `ingest-queue.md` get
       a line pointing at it where they touch the subject, not a second copy.
-- [ ] The note in `docs/user-feedback/`, `feedback-endings.ts`, the line in
+- [x] The note in `docs/user-feedback/`, `feedback-endings.ts`, the line in
       `awaiting-approval.md` for the questions below, and a queue entry for them.
-- [ ] Full suite once, typecheck, doc-links, GPT Sol code review, push to `dev`.
+- [x] Full suite once, typecheck, doc-links, GPT Sol code review, push to `dev`.
 
 ## Questions for Greg
 
@@ -298,6 +300,72 @@ is refused with a sentence that says what to do instead (E8).
   [260929_1442](../user-feedback/260929_1442-public-articles-versus-personalisation.md), declined,
   and 261006k, awaiting Greg; `qi-yxr67qkz`, the free repeat paste, is same-owner and separate).
   Map made, production counted, plan written.
+- 2026-10-07, plan review: GPT Sol, verdict revise, ten findings, all taken (F1 as arbitrated by
+  Opus, see stage 2).
+- 2026-10-07, stage 1: both test files written by two Opus builders and green. **Every case passed
+  on its first run**, so what makes them evidence is the mutations, each made in `src`, watched red,
+  and edited back by hand:
+
+  | Guard removed | Went red |
+  |---|---|
+  | the owner filter in `articleUrls` (`src/store/find-article.ts`) | E1: "B was told somebody else's article is the one they already have" |
+  | all three `ownedSlug` in `destroy` (`src/store/pg-shelf.ts`) | E4: B's delete of A's article succeeded |
+  | `publicSlug` matching on visibility alone | E2: "a visitor was served something at B's private address" |
+  | the owner clause in `usageSql` (`src/store/pg-billing.ts`) | E16 and E14: counts doubled |
+  | the key clause in `src/store/link-shared-slug.ts` | E15: A's key opened B's |
+  | `ownedSlug` in `currentShareLinkQuery` | E15: B read A's link |
+  | the owner clause in `duplicateOnShelfSql` (`src/minimal-paper.ts`) | E14: B was handed A's slug as a duplicate |
+  | `ownedSlug` in `articleIdFor` (`src/store/ai-calls-pg.ts`) | E16: B's call landed on A's article |
+
+  Unscoping only the final `delete from articles` statement stayed green: the two owner-scoped
+  reads in front of it already answer 404, so that clause is a second lock, not the only one.
+  Not mutation-checked: that B's key and picture survive A's delete (E15's last case), and the
+  price freeze on delete other than through the usage mutation.
+- What the builders found false in this plan or its briefs, so nobody inherits it:
+  - `tests/asset-route.test.ts` has no in-memory blob store; it points `blobStore()` at a temp
+    directory. And mocking `blobStore()` alone does **not** keep an upload off Storage:
+    `storeRawSource`'s default parameter, `uploadGrants()` and `postgresBlobStore()` reach the
+    bucket too. Both new files mock all of them, and the main file has a tripwire that fails if
+    any network request is made.
+  - `articles` has no address column; "same address" is the same `final_url` on both revisions.
+  - A minimal (bulk) paper cannot be link-shared, so E15 and E16 use seeded published copies
+    rather than E14's imports.
+  - Sol F7's "the admin view reports both accounts separately" is not tested.
+  - Deleting an article is refused while any job on it is live, and publication queues follow-on
+    jobs, so a reader who deletes seconds after an import is told to wait. Existing behaviour; E4
+    cancels those jobs first.
+- 2026-10-07, stage 2:
+  - **E9** the three comments now say what is true. The one in `src/store/pg-jobs.ts` turned out
+    to hide a real reason: `jobs.slug` is plain text with no key to the article, so the owner
+    filter there is doing work.
+  - **E8** built as planned: `isOwnReadingPage` (`src/own-reading-page.ts`), checked in
+    `POST /api/jobs` before a slot. The sentence is `OWN_READING_PAGE` in `src/messages.ts`,
+    registered as one Retry cannot help, so the Add page shows it with no *Try again* under it:
+    *"That link is an article already in Spideryarn, and adding the link again will be refused the
+    same way. Open the link to read it, or paste the article's original address to add your own
+    copy."* (Reworded from the plan's draft because the message registry requires a sentence with
+    no Retry to say that retrying comes back the same.) The probe: `/read/public` on production is
+    the app shell, a default head and an empty `<div id="root">`, so there was never prose to
+    import. Not caught, on purpose: a short link that redirects to one of our pages, and preview
+    hosts.
+  - **E10** built as arbitrated: `shortIdIsTaken`, `mintSlug` at all three mint sites, the guard in
+    `tests/owner-isolation.test.ts` extended to notice a bare `short_id` lookup, and the plain
+    refusal in `lockOrCreateArticle`. Constraint: `articles_short_id_unique`.
+  - **A gap found while doing E10, left open and queued.** A refusal thrown while a claim opens its
+    draft ends no job. The reader sees an import "running" for about 38 minutes (a 760-second
+    lease, then two requeues), then *"This stopped part-way through"*, with a Retry that repeats
+    it. The plain sentence reaches only the log and the advance's 409. This was already true of the
+    older "slug already belongs to another reader" refusal. After E10 the only ways to reach it
+    are two imports minting one id at the same moment, or a slug with no id. Fixing it means
+    ending the job when the open fails permanently, which is new machinery in the open-session
+    path, so it has its own queue entry and a paragraph in
+    [ingest-queue.md](../project/ingest-queue.md#a-new-id-is-checked-against-every-article-and-when-two-imports-mint-the-same-id-at-once).
+    Pinned as it is by `tests/short-id-collision.test.ts`.
+  - Seen and not touched: above any refused paste the Add page still prints "The article's text
+    has been sent to a third-party model provider for processing", which is false when the paste
+    was refused before anything was fetched. Existing behaviour for every refused POST; queued.
+- 2026-10-07, stage 3: [library.md § Two readers, one article](../project/library.md#two-readers-one-article)
+  is the home for the facts; `public-shelf.md` and `ingest-queue.md` point at it.
 
 ## Appendix: the map
 

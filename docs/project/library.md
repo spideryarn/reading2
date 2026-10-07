@@ -40,6 +40,7 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 - [§ Adding an article](#adding-an-article-the-box-submits-now) — the add box (the queue itself is ingest-queue.md)
 - [§ The free-allowance box](#the-free-allowance-box) — what a free reader sees under the add box
 - [§ `meta.json`](#metajson-and-the-articles-identity) — the article's title, byline and source, and where they live now
+- [§ Two readers, one article](#two-readers-one-article) — each has their own copy; what they share, and the two test files that keep it true
 - [§ When this becomes Postgres](#when-this-becomes-postgres) — (history) why the shelf's row shape was chosen
 - [§ Where the code is](#where-the-code-is) — every file and test behind the shelf
 - [§ A repeat visit draws the shelf](#a-repeat-visit-draws-the-shelf-before-the-server-answers) — the saved copy that paints first, and who wins
@@ -1354,6 +1355,52 @@ An article with no stored title still lists: the title falls back to the first `
 ([`src/library-scalars.ts`](../../src/library-scalars.ts)), and the date is `fetched_at` with the article's `created_at`
 as its fallback (`ADDED_AT` and `listArticles` in `src/store/pg.ts`). A missing byline or source just is not shown.
 `npm run extract -- <slug> --force` re-runs the stage.
+
+## Two readers, one article
+
+Greg, 2026-10-06, on what should happen when two people import the same piece:
+
+> They should both have their own copy with their own AI processing. … One of them has a public
+> article and one of them has their own copy with their own processing. What about if they both get
+> made public? Well, maybe then we have two versions of the same article public. I mean, it seems
+> sort of wasteful and weird, but I couldn't see a better way of dealing with things because the two
+> public articles might have slightly different AI processing, especially if, you know, one or both
+> of these has had a profile.
+
+That is what happens, and this section is the one place that says so.
+
+- **Two rows, two addresses.** Each import is its own `articles` row with its own owner, and a slug
+  is unique across everybody, so the two copies are `/read/why-trees-spya-k3m9qt` and
+  `/read/why-trees-spya-x7p2ha`
+  ([ingest-queue.md § Every slug carries a short id](ingest-queue.md#every-slug-carries-a-short-id-so-nothing-has-to-step-aside)).
+- **"You already have this" looks only at your own shelf.** A second paste by the same reader
+  comes back to their own article; it never finds somebody else's.
+- **Everything a model wrote, and everything the reader did, belongs to one copy**: mode output,
+  checkpoints, chat, comments, tags, reading time. So a profile shapes only its owner's copy.
+- **What the two copies share has no owner and nothing of a reader in it**: the fetched file and
+  the pictures, stored once under their hash, and public facts about outside pages (link previews,
+  the bibliographic registry). Nothing deletes the stored bytes, so one reader deleting their
+  article cannot break the other's pictures.
+- **Sharing is a setting on your own copy.** One public and one private, or both public, are all
+  fine. Both public means two cards on the public shelf with the same title and nothing to tell
+  them apart; whether that should change is a question waiting for Greg
+  ([261007f § Questions for Greg](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#questions-for-greg)).
+- **Charging is per reader.** Each import is its own slot; sharing halves only the sharer's
+  ([billing.md](billing.md)).
+- **Pasting somebody's Spideryarn link into Add is refused**, with a sentence saying to open it or
+  to paste the original address (`isOwnReadingPage`,
+  [`src/own-reading-page.ts`](../../src/own-reading-page.ts)). Our reading page is an app, not the
+  piece, so there was never anything there to import.
+- **In Citations, a link to a work already here can go to a stranger's public copy rather than your
+  own**, when theirs was matched by DOI or arXiv id and yours only by title
+  ([citations.md](citations.md)). Between equally sure matches, yours wins.
+
+Two test files run all of this with two accounts against Postgres, and each case was watched going
+red with its guard removed:
+[`tests/two-readers-one-article-pg.test.ts`](../../tests/two-readers-one-article-pg.test.ts)
+(import, sharing, deleting, uploads, a name from before short ids) and
+[`tests/two-readers-one-article-billing-pg.test.ts`](../../tests/two-readers-one-article-billing-pg.test.ts)
+(charging, the cheap bulk import and *Read this*, private links).
 
 ## When this becomes Postgres
 

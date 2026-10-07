@@ -887,6 +887,30 @@ handle a rename would redirect through. `slugForShortId`
 ([`src/store/find-article.ts`](../../src/store/find-article.ts)) is that lookup. The rename itself is
 not built.
 
+### A new id is checked against every article, and when two imports mint the same id at once
+
+A short id is random, so a new one can equal one an article already has. For one import that is 8
+in 100 million at 62 articles, but it grows with the square of the library: an even chance of a
+first collision by about 33,000 articles. So since 2026-10-07 `mintSlug`
+([`src/jobs.ts`](../../src/jobs.ts)) asks whether any article has the id, through the boolean
+`shortIdIsTaken` ([`src/store/short-id-is-taken.ts`](../../src/store/short-id-is-taken.ts)), and
+mints again if so. All three places `enqueue` mints go through it. Before that, the import failed
+where its article row is created and Retry, which keeps the name, failed again.
+
+**Known and left open:** asking is not reserving. Two imports in flight that mint the same id at the
+same moment both hear "free", and the database refuses the second row. That is about 1 in 100
+million per import and does not grow with the library. No model has been paid at that point, because
+the row is created when the job's draft opens, before any step. `lockOrCreateArticle`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) turns the violation into a refusal
+in plain words, but **the reader does not see them**: a refusal thrown while a claim opens its draft
+ends no job, so the card shows an import running for about 38 minutes (the lease, then two requeues)
+and then *"This stopped part-way through"* with a Retry that repeats it. Pasting the address again
+works at once. That gap belongs to every refusal thrown at draft open, the older "slug already
+belongs to another reader" included, and closing it is queued separately
+([261007f](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
+Closing the window itself would take a unique index on the queue and a migration; passed over as
+machinery for a one-in-a-hundred-million event. `tests/short-id-collision.test.ts`.
+
 ### What the short id changed about adoption, and it is not nothing
 
 `freeSlug` still *adopts* — adding an article we already have comes back to its slug, so every step

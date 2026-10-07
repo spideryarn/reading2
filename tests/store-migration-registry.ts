@@ -3184,6 +3184,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Plan 261005j: an import that opens before its structure is built, through
      the real `enqueue`, claim, `structure` step and publication. */
   "tests/open-before-structure-queue.test.ts": "private-postgres",
+  /* Plan 261007f: two accounts import one address, through the real `enqueue`,
+     claim and publication. The bucket is a `Map` in the test's own process. */
+  "tests/two-readers-one-article-pg.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
      is what the conversion falsifies, and the lane follows from the two owners
@@ -3229,6 +3232,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the public reads with a key. The bucket is a temp directory, mocked at
      the `blobStore()` selector as `asset-route` mocks it. */
   "tests/share-link-pg.test.ts": "private-postgres",
+  /* Plan 261007f, E14 to E16: two seeded readers who hold the same article,
+     through the real billing, upload, share-link and public routes. The bucket
+     is a temp directory, mocked as `share-link-pg` mocks it, and the upload
+     grant is mocked beside it, so nothing reaches Storage. */
+  "tests/two-readers-one-article-billing-pg.test.ts": "private-postgres",
   /* A visitor before publication, plan 261005l § 2c: thirteen seeded articles
      and their jobs, read through the public route. The bucket is a temp
      directory, mocked as `share-link-pg` mocks it. */
@@ -3358,6 +3366,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      clone already seeds, no article is loaded from the corpus, and nothing
      goes near GoTrue or the bucket. */
   "tests/shared-site-run-row-gate.test.ts": "private-postgres",
+  /* 2026-10-07 (plan 261007f, E10): `articles` rows under the ambient owner,
+     which the private clone already seeds. Rolled back, bar one row it deletes. */
+  "tests/short-id-collision.test.ts": "private-postgres",
   "tests/source-store.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the private lane is not optional
      here: six fixed slugs, each of which `lockOrCreateArticle` **creates** the
@@ -3696,6 +3707,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/minimal-paper.test.ts": {
     "3e1ec7ed-0000-4000-8000-00000000ab01": { kind: "seeded" },
     "3e1ec7ed-0000-4000-8000-00000000ab02": { kind: "seeded" },
+  },
+  /* 261007f's two readers, A and B, who hold the same article. `seedAuthUser`
+     in `beforeAll`; articles, uploads, ledger rows, jobs and the billing
+     anchor all hang off the `auth.users` foreign key. */
+  "tests/two-readers-one-article-billing-pg.test.ts": {
+    "dbd38869-cc97-475e-b4d5-0d690338daad": { kind: "seeded" },
+    "0ee81fe4-6630-450f-9d3a-97750838f812": { kind: "seeded" },
   },
   "tests/billing-high-power.test.ts": {
     "0b1f0a1e-0000-4000-8000-0000000c6c01": { kind: "seeded" },
