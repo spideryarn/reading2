@@ -142,6 +142,41 @@ describe("↑ and the masthead's echo", () => {
     expect(jumps).toEqual([]);
   });
 
+  /* GPT Sol, code review round two, D2. An instant move (reduced motion,
+     `"auto"`) holds no glide target but still owes one frame and its landing
+     callback. A jump to the echo from the page top ends at once, and that
+     older frame must end with it, or it lands, flashes or anchors afterwards. */
+  it("cancels an instant move still owed its frame when an echo jump ends at the page top", async () => {
+    const real = await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    /* Every row still below the reading line, as at the top of a page under
+       its masthead: the origin `beginJump` measures is then "top". */
+    const leave = standOn(-5, 1);
+    let y = 300;
+    const tall = vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(5000);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockImplementation(() => y);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(((o: ScrollToOptions) => {
+      y = o.top ?? y;
+    }) as typeof window.scrollTo);
+    try {
+      const outcomes: string[] = [];
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o));
+      expect(y).toBe(0);
+      expect(real.glideTarget()).toBeNull();
+      expect(outcomes).toEqual([]);
+      expect(beginJump(blocks, "spya-b0" as BlockId, () => {})).toBe(false);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["cancelled"]);
+    } finally {
+      real.abandonScroll();
+      scrollTo.mockRestore();
+      tall.mockRestore();
+      scrollY.mockRestore();
+      leave();
+    }
+  });
+
   it("still finishes an echo jump from part-way through the masthead", () => {
     setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
     const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(40);

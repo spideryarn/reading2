@@ -84,7 +84,10 @@ function isOurLine(block: Block): boolean {
 export function mastheadEcho(article: EchoArticle): ReadonlySet<BlockId> {
   const [first, second] = article.blocks;
   if (first === undefined || first.tag !== "h1") return NONE;
-  const ourLine = second !== undefined && isOurLine(second) ? second : null;
+  /* The wrapper is both rows or neither. Its heading was written as escaped
+     text (`<h1>${text(title)}</h1>`), so a first heading with markup in it is
+     the author's, and the line under it is then not ours either. */
+  const ourLine = plain(first) && second !== undefined && isOurLine(second) ? second : null;
   /* Maths is asked of the text because that is where it is: TeX stays in the
      words until the prose draws it (maths.ts), and the masthead never does. */
   const sameAsMasthead = () =>

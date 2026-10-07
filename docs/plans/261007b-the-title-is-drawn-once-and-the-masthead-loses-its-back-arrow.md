@@ -104,7 +104,7 @@ prose table hides those rows. Nothing is removed from the data.
 
 **The rule.**
 
-- **The wrapper's shape** (every web article imported before Stage 3): block 0 is an `h1` and
+- **The wrapper's shape** (every web article imported before Stage 3): block 0 is an `h1` of plain text and
   block 1 is a paragraph that has both our reading-time words and the exact line breaks and
   two-space indentation written by the old `debugPage` template. The line ends `~N min read`
   after a `·`; the wrapper writes the `·` even when nobody is named (`· ~141 min read`). The
@@ -295,3 +295,21 @@ GPT Sol, 2026-10-07, verdict *build with the P0 and P1 fixes*. No P0.
   have no such byline, so every test passed. Test added from the stored shape, red first; pattern
   loosened; production then: 22 of 22 web articles hide both rows, 22 PDFs hide their heading, 4
   PDFs and the one renamed PDF hide nothing.
+- 2026-10-07: GPT Sol's code review, round two, a narrow check of the fixes round one had not seen
+  ([the review](261007b-the-title-is-drawn-once-code-review-2-sol.md)): verdict *ready after the
+  reported P0 and P1s*. The fold change (C2) was confirmed correct.
+  - **D1, P1: Sol still objects that whitespace is not provenance; overruled after Opus
+    arbitrated.** A newly imported article whose own source puts, directly under a leading `h1`,
+    a paragraph laid out exactly as the old template laid out ours (a line break and two spaces
+    before a closing `· ~N min read`) has that heading and line hidden. Sol showed it through the
+    real splitter. Shipped anyway because closing it needs provenance stored per article (a
+    schema or payload change and a backfill), it is display-only, the only person who can cause
+    it is the author to their own page, and the queued rebuild (qi-tjb2xjmj) deletes the shape
+    rule altogether. Opus added one tightening that costs no legacy article: the wrapper's
+    heading was written as escaped text, so the shape now also needs a plain `h1`. Red first;
+    production re-checked afterwards, 22 of 22 web articles still hide both rows.
+  - **D2, P2, fixed:** the early return in `beginJump` cancelled an older glide but not an older
+    instant move, which holds no glide target yet still owes a frame. It now cancels
+    unconditionally. Red first: the older move reported `settled` instead of `cancelled`.
+  Discovery is closed after round two. D2's fix and the plain-heading conjunct were made after
+  it and are each one line with a test seen red.

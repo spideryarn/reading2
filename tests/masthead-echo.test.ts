@@ -85,6 +85,18 @@ describe("mastheadEcho: the wrapper's shape", () => {
     expect([...mastheadEcho(article("Another title", blocks))]).toEqual([id("title0"), id("meta00")]);
   });
 
+  /* The old template wrote the title as escaped text, so the wrapper's heading
+     never has markup in it. One that does is the author's (Opus, arbitrating
+     GPT Sol's round-two D1). */
+  it("keeps a heading with markup in it even above a line shaped like ours", () => {
+    const blocks = [
+      heading("title0", "On H2O", "h1", "On H<sub>2</sub>O"),
+      metaLine("meta00", "Jo Bloggs · ~5 min read"),
+      body,
+    ];
+    expect(mastheadEcho(article("A different title", blocks)).size).toBe(0);
+  });
+
   it("keeps an author's own bare reading time: the wrapper always writes the dot", () => {
     const blocks = [heading("title0", "Something else"), para("meta00", "~26 min read"), body];
     expect(mastheadEcho(article("A different title", blocks)).size).toBe(0);

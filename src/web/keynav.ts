@@ -455,7 +455,11 @@ export function beginJump(
      the same pixel, and do not try to flash an invisible row. Part-way through
      the masthead but below the page top, the ordinary jump still finishes the move. */
   if (origin.kind === "top" && window.scrollY < 1 && isMastheadEcho(target)) {
-    if (glideTarget() !== null) abandonScroll();
+    /* Unconditionally, unlike the branch below: an instant move holds no
+       glide target yet still owes a frame and its landing callback, and from
+       the top there is no arrival anchor for the cancel to cost (GPT Sol,
+       round two, D2). */
+    abandonScroll();
     ended?.();
     return false;
   }
