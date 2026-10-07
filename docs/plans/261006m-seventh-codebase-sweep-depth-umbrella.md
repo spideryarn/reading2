@@ -1,7 +1,8 @@
 # Seventh codebase sweep: depth, with the second model family
 
-**Status: investigations done and cross-reviewed, 2026-10-06; clusters being built. § What landed is
-filled in as each does.**
+**Status: finished, 2026-10-07. All ten clusters are on `dev`; seven migrations wait for
+production; nothing was deployed and no browser pass was run. § Where this stands says what is
+left, and for whom.**
 
 A follow-on to the [sixth sweep](261006j-sixth-codebase-sweep-umbrella.md), which ran no depth stage
 and whose second-family breadth pass was, in its own words, "a weak null, not a clean bill". This
@@ -557,3 +558,161 @@ touched and their neighbours.
   a second run button, the failure colour) and wants a yes or no first. **Left, reproduced and
   pinned by a test that goes red when it is fixed:** the command bar's *Run again* row posts a
   forced run directly and bypasses every mode's hold. Skim's hold waits for C10b.
+
+- **C5, referee criteria with comments on them — landed 2026-10-07**, `0c5c71e16`, `c98d3b26c`,
+  `e134be6b8`
+  ([its plan](261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md)). The
+  product's word is *comments*, not notes. A hand delete of a criterion with comments placed on it
+  is a 409 with a sentence and the row is put back; a placement that loses a race with a delete is
+  a 400 in the early check's words; adding to a full list whose next-to-drop criterion has comments
+  is a 409 with a sentence **and the same rollback as before: the trim's rule is unchanged**
+  (verified column by column) and is still For Greg 3a. Two new reader-facing sentences, for Greg
+  to veto: *Your comments are placed on this criterion, so it cannot be deleted until you clear
+  those placements or delete those comments.* and *The list of criteria is full and the one that
+  would be dropped to make room has your comments placed on it, so a new criterion cannot be added
+  until you clear those placements or delete those comments.* **The review said "do not ship":** the
+  second sentence first said "the oldest one", which is false when the oldest is pending. It also
+  found five races in the client's put-the-row-back path. Left: the reused 400 sentence
+  (*criterionId is not one of your criteria on this article*) is developer-register and reaches
+  readers through `useComments`; "the one" is singular and the trim can have several candidates.
+
+- **C7, the schema — landed on `dev` 2026-10-07, NOT applied to production**, `54b5975be` …
+  `0fb218e79`
+  ([its plan](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md)).
+  **Seven migrations wait for production, applied by Drizzle in one transaction:** the
+  `revision_blocks (article_id, block_id)` index; `referee_criteria_diverging_shape` tightened;
+  `referee_claims_empty_unless_done` added; `upload_source_guesses.created_at`; the duplicate
+  `chat_messages_thread_ordinal_idx` dropped; and two that run no DDL. The latency claim Sol
+  doubted held: deleting a 141-block article locally took 3.2 to 3.9 s before the index and about
+  50 ms after. Declaring the ten migration-only objects found **two index declarations that had
+  been wrong all along** (`DESC NULLS LAST` in `schema.ts`, `NULLS FIRST` in both databases), fixed
+  as a second comment-only migration the plan did not have. **Stage 7, the published-scalars CHECK,
+  was stopped:** 35 of 124 test files insert rows it forbids and two tests exist to cover exactly
+  those rows. **Before applying:** the read-only pre-flight
+  [261007c-…-production-preflight.sql](261007c-seventh-sweep-schema-production-preflight.sql) ran
+  clean against production at 02:31 UTC (153 ledger rows; 0 of 10 and 0 of 4 violations; every
+  definition check zero rows). The index build holds a SHARE lock on `revision_blocks` until the
+  whole transaction commits and the connection's `lock_timeout` is 0, so set finite timeouts and
+  re-run the long-transaction check as the migration role immediately before. The pre-flight
+  expects exactly 153 applied rows: rebuild it if another migration lands first.
+
+- **C6, small server defects — landed 2026-10-07**, `906f95363` … `91688c845`
+  ([its plan](261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md)). A
+  malformed live-session id is a 404; a fault after a stream's headers are out no longer throws a
+  second time, and keeps its log severity (the review restored that: the build had it at `info`);
+  the dead comment retry and the hand-rolled lost-claim block are gone; a Stop that races an upload
+  claim answers 410, not "already being turned into an article". **SVO5 was wrong and was reverted:**
+  the "second, redundant" minimal-paper gate covers an article whose first revision is not yet
+  published, which the first gate does not; deleting it turned a 409 into a 404, and the review's
+  repair would have moved the lookup into the loader every caller uses. The gate is back, with a
+  comment saying what it is for. **Half built:** the six reads that still answer 404 for "none yet"
+  (tweets, relations, skim, sketch, illustrated, arc) now throw the typed error, with every
+  response unchanged; the route opt-in needs a matching edit in `src/web/lib/api.ts`, which a test
+  enforces, and is left. Left: search and referee handlers can close without a terminal frame when
+  result storage fails.
+
+- **C9, the read type — spiked, and not adopted; landed 2026-10-07**, `f36f463c7`, `751cab265`,
+  `e55b9d070` ([its plan](261006n-one-type-for-a-read-spiked-on-useideas.md) § What the spike
+  found, § The decision). **This is the answer to the sixth sweep's item 5.** Three things were
+  built on `useIdeas`: 53 characterisation tests; a smaller change (the list and its four flags in
+  one nullable object; seven `useState`s became three; one file, no test touched); and the full
+  `asking | failed | known` union on top. Compiled against both, the consumer mistakes behind the
+  two postmortems the plan set out to prevent **compile under the union too**, and still do with
+  its projection helpers removed (GPT Sol checked). The union's hook is better; its panel is not;
+  one hook cost ten test-file edits; on paper Quotes fits, Glossary fits with caveats and Sketch
+  does not. The builder and Sol independently said: land the tests and the smaller change, not the
+  union. Landed so. The union is kept on the remote branch `worktree-sweep7-read-type-spike` at
+  `781589b13`. The case for it, weighed and not taken: its named transitions would have helped one
+  of the seven postmortems materially and three modestly. What the tests are, and the smaller
+  change is not: the thing that catches those bugs.
+
+- **C8, pipeline tidy — landed 2026-10-07**, `db88ac268` … `55867554a`
+  ([its plan](261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)).
+  One helper, `anotherJobCarriesLabelsIn`, answers "is another job still going to do this" for both
+  the live failure and the lease expiry; each of its clauses was seen red against Postgres with
+  the clause removed. `fsStoreSession` and its scaffolding are deleted: of its test's 18 cases, ten
+  had a Postgres twin, three were obsolete and five were ported. **The review found a rule that had
+  lost its only test in the deletion** (refusing a step that returned no parts must leave its begun
+  run open: the named twins checked the refusal and the interruption separately) and put it back.
+  The two regression tests the postmortems recorded as never run have now been seen red, and a
+  test for a Stop landing as the Messages backoff finishes exists; the review rewrote that one,
+  which had picked its timer by duration and failed on correct code when the backoff changed.
+  Summary's stamp is written into `summaries.md` as the one deliberate exception. Left: a Stop can
+  cancel a queued successor and leave the base `pending` with nobody coming; a successor queued
+  against an older revision counts as still carrying the work.
+
+- **C10b, Skim's hold, two unchecked replies, the picture flags — landed 2026-10-07**,
+  `0ecb8f2c2` … `1b1cb87a2`
+  ([its plan](261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
+  Skim is the thirteenth and last forced verb on the hold, and is out of the guard's exclusion
+  list. One new reader-facing sentence for Greg to veto: *The new route hasn't loaded yet.*
+  `useTweets` and `useSkim` check a reply before publishing it; **all 222 stored Skim routes and
+  395 stored threads in the local database pass the check** (nobody had sampled real ones until
+  the landing). `useSketch` and `useIllustrated` hold the picture and its four flags in one value,
+  as `useIdeas` now does; a reader could not have seen the leak, since both views return their
+  empty state before reading the flags. Left: *Plan the route for this* over a held route starts a
+  run for a different purpose, judged a different request.
+
+## Where this stands, 2026-10-07
+
+**Finished, for what it set out to build.** All ten clusters are on `dev`; C7's seven migrations
+are on `dev` and wait for production; nothing was deployed. Eleven builders, twelve GPT Sol code
+reviews (C3 took two rounds), and one read-only review each of the umbrella and of two plans. Three
+reviews said "do not ship" (C3, C5, the umbrella) and were right each time.
+
+Not done, in this order of importance:
+
+1. **No browser pass on any cluster.** C2, C4, C5, C10a and C10b change what the client does;
+   their evidence is jsdom and Postgres tests. A pass over Referee criteria (delete one with a
+   comment on it), a comment edited while its explanation streams, and a forced re-run in each of
+   the thirteen modes is the first thing to do before a deploy.
+2. **The seven migrations are not applied to production** (C7, above).
+3. **For Greg**, the revised list in § What the review changed, plus what building added:
+   - **Seven new reader-facing sentences to veto:** the two Referee refusals (C5), and *The new …
+     hasn't loaded yet.* for quotes, timeline, search, citations and route (C10a, C10b).
+   - **A Stop beside a loaded Sketch or painting** (C10a): today a re-run there has no Stop, no
+     retry and no stalled warning. Giving it the shared progress row reverses three recorded
+     decisions, so it wants a yes or no.
+   - **The two step budgets** (C3): the image step is admitted on a 185 s estimate and can run
+     about 360 s; fetch on 150 s. Raising them costs requeue windows; the numbers were not touched.
+   - Question 4 (the Generate button after a failed retry) is not "one line once C9 lands": the
+     union was not adopted, so it is a few lines in each of twelve hooks.
+4. **Left, each in its cluster's plan:** the command bar's *Run again* row bypasses every hold
+   (reproduced, pinned by a test that goes red when it is fixed; P1 by Sol's grading and the most
+   valuable thing left); the route opt-in for the last six "none yet" reads; stage 7 of the schema
+   (the published-scalars CHECK); a deleted cross-reference artefact replayed from the offline
+   cache; the developer-register 400 sentence a reader can meet in Referee; NEW1.
+
+## What this run says about the method
+
+- **Depth by two families found what breadth by one did not.** The sixth sweep's nominators
+  returned residue; a file-by-file read returned thirteen reproduced defects. The two families
+  overlapped on only a handful of findings out of about sixty (the chat anchor, the Referee
+  criterion, the unused queue pointer, the spike hook), so each alone would have missed most of
+  what the other saw. Opus found more, and more that was tidy-up; Sol found fewer, nearly all live.
+- **The second family should have the database, or the first should run its SQL.** Every Sol
+  finding that needed Postgres arrived as "proved from code"; the Opus cross-reviewer reproduced
+  all of them within the hour, through an untracked vitest config that reused the private lane.
+- **The code review was where the worst bugs were found, again**: the forced step paid for twice
+  (C3), the dead control after a trimmed job (C10a), the spinner that never stops (C4), the false
+  sentence (C5), the lost log severity and the gate that was not redundant (C6). Six of twelve
+  reviews found a defect in the new code that its builder's tests had passed; none of the twelve
+  came back clean.
+- **And the reviewer's own work needed checking.** Four times a test Sol wrote could not fail (an
+  assertion inside a step body; inside a swallowed spy; a timer picked by its duration; a
+  `ReferenceError` standing in for the authored failure), and once its diff did not typecheck. The
+  Opus reader who lands a cluster, reverting each fix by hand to watch its test go red, is not a
+  formality.
+- **An audit's proposed fix was wrong about as often as before.** "Reuse the count mechanism"
+  (the summary is 96,000 lines from where the counts are read); "delete the second gate" (it
+  covered a state the first did not); "the trim is safe to change" (a retention choice); "one
+  exit" (four); "the union prevents two postmortems outright" (it prevents none by type).
+- **A characterisation test licenses a deletion only for the states it characterises.** SVO5's
+  missed the state between an article row existing and its first revision being published, and
+  PQO3's twins each checked half of a rule. Before deleting on a characterisation, list the
+  lifecycle states of the thing and say which the test visits.
+- **Plan letters collide when ten agents name plans in one hour.** Five plans were renamed after a
+  merge. `scripts/plan-name.ts` reads the local tree; it cannot see a letter another worktree has
+  taken and not yet pushed. Not fixed here; named for whoever owns that script.
+- **The shared scratchpad cost two overwritten files** before builders were told to take a
+  subdirectory each. It is in `engineering-manager.md` already; the brief has to say it.
