@@ -2,7 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CRITERION_HAS_COMMENTS } from "../src/referee-criteria-store.js";
+import { CRITERIA_AT_CEILING, CRITERION_HAS_COMMENTS } from "../src/referee-criteria-store.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { CriteriaApi } from "../src/web/useCriteria.js";
 
@@ -304,5 +304,31 @@ describe("refused optimistic criterion deletes under overlapping work", () => {
     stream.end(); await flush();
     expect(api.criteria).toEqual([]);
     expect(api.error).toBeNull();
+  });
+});
+
+/**
+ * **An add refused at the ceiling** (`CRITERIA_AT_CEILING`, a 409 before any
+ * stream: docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+ * No new handling was written for it: the hook's ordinary pre-stream failure
+ * path already does the right thing, and this pins that it does. The row stays
+ * on screen as a failed criterion carrying the server's sentence, so the
+ * referee's words are not lost and Retry is there once they have deleted one;
+ * it is never shown as added, and no existing row is touched.
+ */
+describe("an add refused at the ceiling", () => {
+  it("shows the typed criterion as failed, with the sentence, and leaves the rest alone", async () => {
+    answer = (_url, init) =>
+      Promise.resolve(init.method === "POST"
+        ? json({ error: CRITERIA_AT_CEILING }, 409)
+        : json({ criteria: [first, second], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("One too many", { kind: "single" }); }); await flush();
+    expect(api.criteria.slice(0, 2)).toMatchObject([first, second]);
+    const refused = api.criteria.find((c) => c.id === id);
+    expect(refused).toMatchObject({ criterion: "One too many", status: "error", results: [], error: CRITERIA_AT_CEILING });
+    expect(api.criteria).toHaveLength(3);
+    expect(api.error).toBe(CRITERIA_AT_CEILING);
   });
 });

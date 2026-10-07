@@ -21,8 +21,11 @@
  * - Everything else — the fingerprint, the retry rule, the colour — is
  *   deliberately identical, and where it is identical it is *imported* from
  *   src/searches.ts rather than copied (`pg-referee-criteria.ts` imports
- *   `requireColour` from there directly). The trim is each Postgres store's
- *   own, in SQL: `MAX_CRITERIA` mirrors `MAX_RUNS`.
+ *   `requireColour` from there directly).
+ * - **Nothing is trimmed.** Searches keep `MAX_RUNS` by dropping the oldest;
+ *   criteria did the same at twenty until 2026-10-07, and now refuse an add at
+ *   `MAX_CRITERIA` instead (`CRITERIA_AT_CEILING` below). A criterion is the
+ *   referee's own words, so it goes only when they delete it.
  *
  * ## What may be logged from this file
  *
@@ -36,7 +39,7 @@
 
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import type { RefereeCriterionConfig } from "./referee-criteria.js";
-import type { SavedCriterion } from "./saved-criteria.js";
+import { MAX_CRITERIA, type SavedCriterion } from "./saved-criteria.js";
 
 /**
  * Which criterion a `begin` produces, as a value. **Pure — no clock, no disk.**
@@ -65,8 +68,8 @@ import type { SavedCriterion } from "./saved-criteria.js";
  * different statements. A store reading `status` to work it out would get it
  * wrong: both branches produce `pending`.
  *
- * **It returns the row and not the list** — `withRun` says why. The trim to
- * `MAX_CRITERIA` is the SQL one in src/store/pg-referee-criteria.ts § begin.
+ * **It returns the row and not the list** — `withRun` says why. The ceiling,
+ * `MAX_CRITERIA`, is checked in SQL in src/store/pg-referee-criteria.ts § begin.
  */
 export function withCriterion(
   criteria: SavedCriterion[],
@@ -147,31 +150,27 @@ export const COMMENTS_CRITERION_FK = "comments_criterion_fk";
  * way, and what to do about it, in the panel's own words — *Place on a
  * criterion* and *Clear placement* are the controls' labels. No bracketed
  * code, on docs/project/copy.md's rule that a refusal which is an answer gets
- * none. What Delete *should* do with the comments is Greg's open question 3,
- * docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg.
+ * none. What Delete should do with the comments was question 3b in
+ * docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg, and
+ * the answer relayed on 2026-10-07 was to keep refusing.
  */
 export const CRITERION_HAS_COMMENTS =
   "Your comments are placed on this criterion, so it cannot be deleted until you clear those " +
   "placements or delete those comments.";
 
 /**
- * **And when adding one would trim such a criterion.** The same refusal reached
- * from `begin`: finished rows past the cap are trimmed to make room, while
- * pending rows are skipped. The same key refuses that delete, so the insert
- * rolls back. Whether a list may
- * instead grow past the cap to protect them is question 3a in the same plan;
- * this is only the sentence for today's behaviour.
+ * **What a referee is told when the article already holds `MAX_CRITERIA`.** A
+ * 409, from `begin` in src/store/pg-referee-criteria.ts, before any stream
+ * opens: nothing is written and nothing is deleted. It replaced, on 2026-10-07,
+ * a trim that dropped the oldest criterion to make room without saying so
+ * (docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
  *
- * It says "the one that would be dropped", not "the oldest one": the oldest
- * criterion can be a pending one the trim skips, with nothing placed on it,
- * while a younger finished one is what the key refuses to delete. The
- * sentence said "the oldest one" as first built, on 2026-10-07, which pointed the
- * referee at the wrong row in exactly that case; it was changed before it shipped.
+ * The number is spelled from the constant, so the sentence cannot name a
+ * ceiling the store does not enforce.
  */
-export const CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS =
-  "The list of criteria is full and the one that would be dropped to make room has your comments " +
-  "placed on it, so a new criterion cannot be added until you clear those placements or delete " +
-  "those comments.";
+export const CRITERIA_AT_CEILING =
+  `This article already has ${MAX_CRITERIA} criteria, which is as many as it can hold. ` +
+  "Delete one to add another.";
 
 /**
  * **What a placement is told when its criterion is not there** — a 400, and
