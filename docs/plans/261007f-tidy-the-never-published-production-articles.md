@@ -29,8 +29,11 @@ paragraph ids and the half-finished PDF transcriptions the failed attempt made.
   account, Greg's own. With them go 7,205 paragraph ids and 164 cached PDF-transcription chunks
   (about 1.6 MB). Nothing in them was typed by a reader: no titles, notes, comments, chats or
   sharing.
-- **What a reader could notice:** nothing. The records are not on any shelf, have no import running,
-  and the four PDFs among them were all imported successfully later as other articles, which stay.
+- **What a reader could notice:** almost nothing. The records are not on any shelf, have no import
+  running, and the four PDFs among them were all imported successfully later as other articles,
+  which stay. The one exception is an old upload address (`/add/upload/<id>`) for five of them,
+  which today leads to an article nobody can open and afterwards to one that is not there — see
+  [§ 3](#3-is-any-of-them-alive-and-would-a-retry-reuse-them).
 - **What stays:** the cost ledger (273 model-call rows keep their numbers and lose only the link to
   the deleted record — the same as any deleted article), the 5 upload records (kept with a stale
   name, which is how a reader's own Delete leaves them), the stored PDF files themselves (two other,
@@ -151,7 +154,8 @@ is on the Add page either: that page shows jobs, and there are none.
 (`KEEP_FINISHED`, [`src/jobs.ts`](../../src/jobs.ts)), and this owner's 50 run from 2026-09-28 10:46
 onwards (T3). None of the nine job ids the candidates' model calls name still exists (T4).
 
-**Would a retry reuse a candidate? No route reaches one.** Two ways to "try again":
+**Would a retry reuse a candidate? No.** (This said *no route reaches one*; that was wrong — see
+the upload fallbacks below. GPT Sol's R5.) Two ways to "try again":
 
 - **The Retry button** on a failed job (`retryJob` → `slugForRetry`) keeps the failed attempt's own
   slug, so `lockOrCreateArticle` would *find* the never-published row and reuse its block ids and
@@ -162,6 +166,20 @@ onwards (T3). None of the nine job ids the candidates' model calls name still ex
   published revision — a never-published row "simply never matches" — so it mints a fresh slug and a
   fresh article. **Uploading the same PDF again** always mints (`two uploads of one file are two
   documents`). Neither can find a candidate.
+
+**But one route does point at five of them: an old upload address.** `resolveExistingUpload` and
+`answerALostClaim` in [`src/routes.ts`](../../src/routes.ts) answer a repeat of `POST /api/jobs
+{ uploadId }` from the upload record once retention has trimmed the job: if `uploads.slug` is set
+they return `{ kind: "article", slug }` **without checking that the article exists or was ever
+published**, and the upload page treats that as done and navigates there. So reloading
+`/add/upload/<id>` for any of the five verified uploads leads, **today**, to an article that was
+never published (which nothing can show), and **after the delete** to one that is not there. That
+is an existing defect, made no worse in substance by the delete — a page that cannot show the
+article either way, and no published content lost. It is recorded here, not fixed: **follow-up** —
+both fallbacks should answer a clear "that upload is not available as an article" when the slug
+names an absent or unpublished article, keeping the upload row and its Storage mapping; checking the
+upload's `sha256` against the article's source would also stop a reused slug pointing at a
+different paper. `routes.ts` is deliberately not changed by this plan.
 
 So the checkpoints represent paid work nobody can collect. Quantified (S8, S8b, T1): 196
 `pdf-chunk` checkpoints on four candidates, from 326 transcription calls billed to Greg's own key
