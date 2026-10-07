@@ -25,8 +25,9 @@
  * - `finds` keeps a *Look it up* find in memory (and the reader overlays its
  *   `lookup` onto the row), instead of saving it;
  * - `allowance` always allows, and frees nothing (no `fetch_allowance` row);
- * - the spend collector has no sink, so no `ai_calls` row is written — the
- *   cost is read from the collector's own records.
+ * - the spend collector writes each call to the ledger (`ai_calls`, `eval`
+ *   scope, the environment owner) — an eval's spend is refused without one —
+ *   and the cost printed is read from the collector's own records.
  *
  * The one write that remains in both parts is stage 1's registry cache
  * (`lookupWork` caches its Crossref/DataCite answers), which is the real
@@ -62,6 +63,7 @@ import {
   readPaperEvidence,
 } from "../../src/paper-evidence.js";
 import { runStream, type StreamRun, type StreamRunEvent } from "../../src/stream-run.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { citationFindStore, listArticles, loadArticle, loadCitations } from "../../src/store/index.js";
 import type { CitationFind, CitationsFound, CitedWork, PaperPassage } from "../../src/types.js";
 
@@ -356,6 +358,9 @@ async function paidPress(c: Candidate): Promise<PaidRow> {
         ending = `stopped by the quote guard: ${guardCause(allowedQuoteTexts(article.blocks, context, matched), rawDeltas)}`;
       } else ending = `failed: ${message.slice(0, 120)}`;
     }
+  }, {
+    attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: c.slug },
+    sink: (row) => costStore.record(row),
   });
   const pressMs = Date.now() - started;
 

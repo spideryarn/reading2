@@ -37,4 +37,10 @@ async function main(): Promise<void> {
   });
 }
 
-if (isMain(import.meta.url)) await main();
+if (isMain(import.meta.url)) {
+  /* Before the ledger, which reads the owner from the environment. */
+  loadEnvLocal();
+  const { withLedger } = await import("../../src/cli-ledger.js");
+  /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+  await withLedger("eval", main);
+}

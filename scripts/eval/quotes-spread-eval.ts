@@ -27,9 +27,10 @@
  *
  * ## What it writes
  *
- * **Nothing to the database.** It reads the article and its stored Ideas
- * through `pgArticleReader`, and the spend collector has no sink, so no
- * `ai_calls` row either. Files only: `evals/results/quotes-spread-<ts>.json`
+ * **One `ai_calls` row per model call, and nothing else to the database.** It
+ * reads the article and its stored Ideas through `pgArticleReader`; the spend
+ * collector writes to the ledger (an eval's spend is refused without one,
+ * src/ai-spend.ts § UnrecordedSpendRefused). Files: `evals/results/quotes-spread-<ts>.json`
  * (every run's quotes and metrics), `…-pairs.md` (control-run-1 vs
  * nudge-run-1 per article, sides shuffled by `crypto.randomInt`, for a blind
  * read) and `…-key.json` (which side was which — open it only after judging).
@@ -60,6 +61,7 @@ const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
 const { blockIndex } = await import("../../src/section-path.js");
 const { generateQuotes, SYSTEM, PROMPT_VERSION, inputFingerprint } = await import("../../src/quotes.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
+const { costStore } = await import("../../src/store/ai-calls.js");
 
 import type { Article as PipelineArticle } from "../../src/article-input.js";
 import type { Article, Block, Idea, Quote } from "../../src/types.js";
@@ -222,7 +224,10 @@ async function runOne(slug: string, article: Article, ideas: readonly Idea[], ar
   const input: PipelineArticle = { slug, blocks: article.blocks, tree: article.tree, meta: article.meta ?? null };
   const { result, report } = await collectSpend(
     () => generateQuotes({ power: "standard", article: input, previous: null, profile: null }),
-    { attribution: { scopeKind: "eval", articleSlug: slug } },
+    {
+      attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
+      sink: (row) => costStore.record(row),
+    },
   );
   if (arm === "nudge" && nudgeApplied === before) throw new Error("nudge arm ran without the patch applying");
   const spent = totalSpend(report.calls);

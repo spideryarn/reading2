@@ -9,9 +9,10 @@
  *   npx tsx evals/long-documents/spike-parts.ts run             # paid: slices + root call
  *   npx tsx evals/long-documents/spike-parts.ts stitch          # free, from saved answers
  *
- * Reads the local database only, and writes no row anywhere: spend is
- * collected by `collectSpend` and sunk to a JSON file beside the results rather
- * than to `ai_calls`, because this spike was told to leave the database alone.
+ * Reads the local database, and writes one `ai_calls` row per paid call and
+ * nothing else to it. It was first told to leave the database alone and kept
+ * its spend only in the results file; since 2026-10-07 an eval's spend is
+ * refused without a ledger (src/ai-spend.ts § UnrecordedSpendRefused).
  * Results hold ids, titles and gists; never block prose.
  */
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,6 +25,7 @@ import { unaskableBatches } from "../../src/labels.js";
 import { finishedText, streamMessage } from "../../src/messages-stream.js";
 import { withMessagesJsonSchema } from "../../src/messages-structured-output.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
+import { environmentOwnerId } from "../../src/owner.js";
 import { plainWords } from "../../src/plain-words.js";
 import {
   buildTree,
@@ -35,6 +37,7 @@ import {
   type BuildReport,
   type ModelNode,
 } from "../../src/structure.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { appendSupplement, isSupplementNode, splitBlocks } from "../../src/supplement.js";
 import { checkTree } from "../../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
@@ -435,9 +438,10 @@ async function modeRun() {
       return { sliceResults, slicesWallMs, root, rootMs, rootUsage: { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens } };
     },
     {
-      attribution: { scopeKind: "eval", articleSlug: SLUG },
+      attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: SLUG },
       sink: async (row) => {
         rows.push(row);
+        await costStore.record(row);
       },
     },
   );
@@ -456,7 +460,7 @@ async function modeRun() {
     totalDollars: dollars(report.calls),
     unpriced: totalSpend(report.calls).unpriced,
     calls: perCall,
-    ledgerRowsNotWrittenToDatabase: rows.length,
+    ledgerRows: rows.length,
   };
   save("run.json", run);
   console.log(JSON.stringify({ ...run, calls: undefined }, null, 1));

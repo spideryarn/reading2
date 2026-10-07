@@ -14,8 +14,8 @@
  *
  *   npx tsx evals/long-documents/spike-followups.ts
  *
- * Same rules as spike-parts.ts: local database read-only, no row written,
- * spend sunk to the results file.
+ * Same rules as spike-parts.ts: the local database is read, and its only
+ * write is one `ai_calls` row per paid call; spend is also in the results file.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -26,6 +26,7 @@ import { unaskableBatches } from "../../src/labels.js";
 import { finishedText, streamMessage, type MessagesBody } from "../../src/messages-stream.js";
 import { withMessagesJsonSchema } from "../../src/messages-structured-output.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
+import { environmentOwnerId } from "../../src/owner.js";
 import { plainWords } from "../../src/plain-words.js";
 import {
   buildTree,
@@ -36,6 +37,7 @@ import {
   type BuildReport,
   type ModelNode,
 } from "../../src/structure.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { isSupplementNode } from "../../src/supplement.js";
 import { checkTree } from "../../src/tree-invariants.js";
 import type { Block, Tree } from "../../src/types.js";
@@ -184,7 +186,7 @@ const { result, report } = await collectSpend(
     const root = parseJsonAnswer<{ gist: string; question: string }>(finishedText(message, "book root", 6000, 200), "the book root response");
     return { refills, hinted, refilled, root, rootMs: Date.now() - t0 };
   },
-  { attribution: { scopeKind: "eval", articleSlug: SLUG }, sink: async () => {} },
+  { attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: SLUG }, sink: (row) => costStore.record(row) },
 );
 
 const hintedParts = [

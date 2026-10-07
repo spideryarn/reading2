@@ -27,6 +27,9 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CallFailure, FailureClass, FailurePhase } from "./call-failure.js";
 import { log } from "./log.js";
 import type { Nanos } from "./pricing.js";
@@ -860,6 +863,7 @@ export function resetUnscopedCalls(): void {
  * collecting. Called by the two gateways, not by callers.
  */
 export function beginSpend(job: AiJob, model: string): number | null {
+  if (!persistingSpend() && refusesUnrecordedSpend(processEntry())) throw new UnrecordedSpendRefused(job, model);
   const scope = store.getStore();
   if (!scope) return null;
   const id = nextCallId++;
@@ -870,6 +874,79 @@ export function beginSpend(job: AiJob, model: string): number | null {
     rowId: randomUUID(),
   });
   return id;
+}
+
+/**
+ * **A script or an eval tried to spend into no ledger, and was stopped first.**
+ *
+ * Thrown by `beginSpend`, before a byte goes over the wire, so the refusal costs
+ * nothing. Until 2026-10-07 such a call went ahead, was metered, and was dropped
+ * with one warning line: no collector open, a collector opened without a `sink`,
+ * or one already closed. That was about $79 of the dev key's October, more than
+ * every job step together —
+ * docs/investigations/261007c-openrouter-spend-the-ledger-does-not-record.md.
+ */
+export class UnrecordedSpendRefused extends Error {
+  constructor(job: AiJob, model: string) {
+    super(
+      `Refused a ${job} call to ${model}: this process is a script or an eval, and no ` +
+        `spend collector that writes rows is open, so the money would be in no ledger. ` +
+        `Wrap the entry point in withLedger("eval", main) from src/cli-ledger.ts, or give ` +
+        `collectSpend a sink: (row) => costStore.record(row). docs/project/cost-tracking.md.`,
+    );
+    this.name = "UnrecordedSpendRefused";
+  }
+}
+
+/** A path with its symlinks resolved, or as given when it does not exist. */
+function real(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * The repository root, from this file's place in `src/`, symlinks resolved —
+ * src/is-main.ts says why an entry path and a module path can disagree on them.
+ */
+const REPO_ROOT = real(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
+
+/**
+ * **Whether a process started from `entry` must not spend unrecorded.**
+ *
+ * True for an entry file under `evals/` or `scripts/`. Those are the processes
+ * a person starts to spend money on purpose, and nothing else in them will ever
+ * write the row. Everything else keeps the warning and the counter
+ * (`unscopedCalls()`). The dev server runs under Vite, production under Vercel,
+ * and a test under vitest, where `tests/setup/no-provider-calls.ts` already
+ * stops a real call. Refusing in any of those would break a reader's feature or
+ * a test, not stop a leak.
+ *
+ * Keyed on the entry file because the process already knows it. A flag would be
+ * one more thing somebody has to remember to set.
+ */
+export function refusesUnrecordedSpend(entry: string | undefined): boolean {
+  if (!entry) return false;
+  const rel = path.relative(REPO_ROOT, real(entry));
+  return /^(evals|scripts)[\\/]/.test(rel);
+}
+
+let entryOverride: { entry: string | undefined } | null = null;
+
+/** This process's entry file, as `node` or `tsx` was given it. */
+function processEntry(): string | undefined {
+  return entryOverride ? entryOverride.entry : process.argv[1];
+}
+
+/**
+ * A TEST SEAM: pretend the process was started from `entry`. Pass `undefined`
+ * to go back to the real one. Tests use this rather than reassigning
+ * `process.argv`, which every other module in the worker can see.
+ */
+export function overrideProcessEntryForTests(entry: string | undefined): void {
+  entryOverride = entry === undefined ? null : { entry };
 }
 
 /**

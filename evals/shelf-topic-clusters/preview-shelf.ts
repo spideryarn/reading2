@@ -266,8 +266,13 @@ async function main(): Promise<void> {
     proposal = "too-small";
   } else {
     try {
-      /* A collector with no sink: the call is metered in memory and nothing is recorded. */
-      await collectSpend(() => induce(shelf, out), { attribution: { scopeKind: "eval" } });
+      /* **A sink that keeps nothing, on purpose.** The header says why: the
+         ledger here would be a write to the production database being read.
+         Since 2026-10-07 a collector with no sink is refused its call
+         (`UnrecordedSpendRefused`, src/ai-spend.ts), so the choice is spelled
+         out rather than left as an absence. About a cent, once per run —
+         docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md. */
+      await collectSpend(() => induce(shelf, out), { attribution: { scopeKind: "eval" }, sink: async () => {} });
     } catch {
       /* Provider errors can include returned text. Do not print one beside a
          command whose input is a reader's titles, gists and profile. */

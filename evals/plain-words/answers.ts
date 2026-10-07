@@ -267,7 +267,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (cmd === "generate") {
     const arm = flag("--arm");
     if (!arm || !/^(before|after)(-\d+)?$/.test(arm)) throw new Error("generate needs --arm before|after[-N]");
-    await generate(arm, rest.includes("--keep-unfinished"));
+    loadEnvLocal();
+    const { withLedger } = await import("../../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, rest.includes("--keep-unfinished")));
   } else if (cmd === "report") {
     report();
   } else if (cmd === "pairs") {

@@ -388,8 +388,10 @@ identical to a cheap one. Availability quietly beating correctness.
 **4. A call recorded with no collector open vanishes.** [`src/ai-spend.ts`](../../src/ai-spend.ts) is
 an `AsyncLocalStorage`, on the same reasoning as [`src/owner.ts`](../../src/owner.ts): a step is not
 a model call — `summarise` batches per parent, `labels` fans out — so no stage can report its own
-total. Outside a collector `recordSpend` is deliberately a no-op, because a CLI run must not fail for
-want of bookkeeping. But "silently does nothing" is how a cost table ends up plausible and short, so
+total. Outside a collector `recordSpend` is deliberately a no-op, because a reader's request or a
+test must not fail for want of bookkeeping. (A CLI run used to get the same pass; since 2026-10-07 a
+script or an eval is refused instead, before the call: the paragraph on `withLedger` further down,
+and [cost-tracking.md](cost-tracking.md) rule 2.) But "silently does nothing" is how a cost table ends up plausible and short, so
 `unscopedCalls()` counts what fell on the floor and anything reporting a total is expected to admit
 it. Its sibling `lateCalls()` counts a call that finished *after* its collector had already
 reported — which cannot be a field on the report, by definition, and a first draft that made it one
@@ -750,11 +752,15 @@ after the move: every call from `npm run ingest`, `npm run structure` and the re
 
 `withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via
 [`src/cli-ledger.ts`](../../src/cli-ledger.ts), and there is one: `npm run eval:pdf-read`.
-An eval that wraps its run in `withLedger("eval", …)` or opens its own `collectSpend` writes
-ordinary rows with `scope_kind = 'eval'`, and `npm run cost` splits those out as non-product spend
-(`src/cost-report.ts`); [`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts) is the
-shortest example. An eval that opens no scope records nothing, and is counted only by
-`unscopedCalls()`. (This paragraph said "`evals/` is not in the ledger" until 2026-10-01, which had
+An eval that wraps its run in `withLedger("eval", …)`, or opens its own `collectSpend` **with a
+`sink`**, writes ordinary rows with `scope_kind = 'eval'`, and `npm run cost` splits those out as
+non-product spend (`src/cost-report.ts`); [`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts)
+is the shortest example. An eval that opens no scope, or one with no sink, used to record nothing
+and be counted only by `unscopedCalls()`. Since 2026-10-07 it is refused its first call instead,
+before anything is spent: `beginSpend` throws `UnrecordedSpendRefused` for any process started from
+a file under `evals/` or `scripts/` when no collector with a sink is open. By October that hole was
+costing more than every job step together
+([261007c](../investigations/261007c-openrouter-spend-the-ledger-does-not-record.md)). (This paragraph said "`evals/` is not in the ledger" until 2026-10-01, which had
 stopped being true; [cost-tracking.md](cost-tracking.md) had it right.)
 
 **That sentence was false for two of the eight until 2026-08-28.** `npm run labels` and

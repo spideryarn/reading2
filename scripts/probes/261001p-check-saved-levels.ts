@@ -12,8 +12,9 @@
  * parallel. So it says how often the guard would fire on text the writer
  * produced with the guard off, and on which levels.
  *
- * The spend collector has no sink, so **no `ai_calls` row is written**; cost is
- * read from the collector's records. One JSONL line per level to
+ * The spend collector writes each call to the ledger (`ai_calls`, `eval`
+ * scope, the environment owner; an eval's spend is refused without one); the
+ * cost printed is read from the collector's records. One JSONL line per level to
  * `docs/plans/261001p-check-saved-levels.jsonl`; a level already there is never
  * called again.
  */
@@ -42,6 +43,7 @@ const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
 const { loadArticle } = await import("../../src/store/index.js");
 const { isBodyEvidence } = await import("../../src/block-policy.js");
 const { closeDb } = await import("../../src/db/client.js");
+const { costStore } = await import("../../src/store/ai-calls.js");
 
 const done = new Set(
   fs.existsSync(OUT)
@@ -82,7 +84,10 @@ await runAsOwner(environmentOwnerId(), async () => {
         const paragraphs = run[field] as Para[] | undefined;
         if (!paragraphs) return null;
         const started = Date.now();
-        const { result, report } = await collectSpend(() => checkLevel(paragraphs as never, textOf));
+        const { result, report } = await collectSpend(() => checkLevel(paragraphs as never, textOf), {
+          attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
+          sink: (row) => costStore.record(row),
+        });
         const outcome = result.outcome;
         return {
           arm,

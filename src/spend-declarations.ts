@@ -290,7 +290,15 @@ export const DECLARATIONS: readonly Declaration[] = [
      2026-08-28, and doing it for two files and not the third would leave the
      directory half-converted with nothing saying which half. Worth doing as one
      small job across the three, under the `eval` kind rather than `dictation`,
-     so a few hundred eval calls do not land in the product's cost report. */
+     so a few hundred eval calls do not land in the product's cost report.
+
+     **Since 2026-10-07 none of the three can spend that way.** `beginSpend`
+     refuses a gateway call from a script or an eval with no ledger open
+     (`UnrecordedSpendRefused`, src/ai-spend.ts), so each now stops at its
+     first transcription, for nothing, until it is wrapped. The entries stay
+     because the files still name a credential, and `gate-models.ts` still makes
+     raw diagnostic requests no wrapper meters —
+     docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md. */
   {
     id: "dictation-gate-models",
     kind: "unscoped",

@@ -54,6 +54,7 @@ import {
   type CallContext,
   type CallRecord,
   estimateUsd,
+  evalSpend,
   type FailureReason,
   inPool,
   type Ledger,
@@ -272,12 +273,7 @@ export async function armA(ctx: ArmContext): Promise<ArmResult> {
         deps: SLICE_DEPS,
         deadline: slicesDeadline(begun.at, STEP_BUDGET_MS),
       }),
-    {
-      attribution: { scopeKind: "eval", articleSlug: doc.slug },
-      sink: async (row) => {
-        rows.push(row);
-      },
-    },
+    evalSpend(ctx.ledger, doc.slug, rows),
   );
   release();
   /* `runSlices` does not say which call was which. The root call is the last

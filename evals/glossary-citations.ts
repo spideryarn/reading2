@@ -15,8 +15,9 @@
  * (no profile, a first pass) and records a hash of the prompt's source files
  * beside the answer. There is no copy of the prompt in here to drift.
  *
- * Reads the local database, writes nothing there beyond the `ai_calls` rows
- * every call records. Output under `evals/results/glossary-citations/<arm>/`.
+ * Reads the local database, writes nothing there beyond the `ai_calls` row each
+ * call records (`generate` runs inside `withLedger`). Output under
+ * `evals/results/glossary-citations/<arm>/`.
  *
  * **What the screen cannot say.** `looksCited` is a regex over names and
  * aliases: it flags "Blade Runner (1982)" and "Tokyo 2020" as readily as
@@ -125,7 +126,11 @@ async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === "report") return report();
   if (command === "generate" && rest[0] === "--arm" && rest[1] && rest.length > 2) {
-    return generate(rest[1], rest.slice(2));
+    const [arm, slugs] = [rest[1], rest.slice(2)];
+    loadEnvLocal();
+    const { withLedger } = await import("../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    return withLedger("eval", () => generate(arm, slugs));
   }
   throw new Error("usage: glossary-citations.ts generate --arm <name> <slug>... | report");
 }

@@ -16,11 +16,13 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
-import { type AiCallRow, collectSpend, totalSpend } from "../../src/ai-spend.js";
+import { type AiCallRow, type CollectOptions, collectSpend, totalSpend } from "../../src/ai-spend.js";
 import { estimateTokens } from "../../src/article-prompt.js";
 import { finishedText, type MessagesBody, streamMessage, wasRefused } from "../../src/messages-stream.js";
 import { modelFor, type ModelPower } from "../../src/models.js";
+import { environmentOwnerId } from "../../src/owner.js";
 import { MalformedJson } from "../../src/parse-json.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { ExpansionRefused } from "../../src/structure-cascade.js";
 import { priceOf } from "../dig-deeper/arms.js";
 
@@ -193,6 +195,33 @@ function classify(err: unknown): "parse" | "tiling" {
   return "tiling";
 }
 
+/**
+ * **The collector for one of this eval's calls: rows kept for its own ledger
+ * file, and on a real run written to `ai_calls` too.** Every paid call an eval
+ * makes goes in the shared ledger (an eval's spend is refused without one,
+ * src/ai-spend.ts § UnrecordedSpendRefused). A dry run's fake model reports
+ * invented costs, so on a dry run (`ledger.fake`) nothing reaches the database
+ * and the run does not need one. The rows are pushed first, so this eval's own
+ * accounting does not wait on the database.
+ */
+export function evalSpend(ledger: Ledger, articleSlug: string, rows: AiCallRow[]): CollectOptions {
+  if (ledger.fake) {
+    return {
+      attribution: { scopeKind: "eval", articleSlug },
+      sink: async (row) => {
+        rows.push(row);
+      },
+    };
+  }
+  return {
+    attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug },
+    sink: async (row) => {
+      rows.push(row);
+      await costStore.record(row);
+    },
+  };
+}
+
 /** Thrown by an `accept` for an answer that is JSON and not the shape asked for. */
 export class ShapeFault extends Error {}
 
@@ -220,12 +249,7 @@ export async function ask<T>(ctx: CallContext, q: Question<T>): Promise<Asked<T>
           networkAttempts = call.attempts();
         }
       },
-      {
-        attribution: { scopeKind: "eval", articleSlug: ctx.slug },
-        sink: async (row) => {
-          rows.push(row);
-        },
-      },
+      evalSpend(ctx.ledger, ctx.slug, rows),
     );
     release();
     for (const row of rows) ctx.ledger.write(ctx.cell, q.purpose, q.unit, attempt, row);

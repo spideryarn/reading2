@@ -136,6 +136,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { closeDb } = await import("../../src/db/client.js");
+  const { withLedger } = await import("../../src/cli-ledger.js");
   const { generateSketch } = await import("../../src/sketch.js");
   const { generateIllustrated } = await import("../../src/illustrated.js");
   const { generateFaq } = await import("../../src/faq.js");
@@ -155,7 +156,8 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   };
 
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
-  await runAsOwner(environmentOwnerId(), async () => {
+  /* The ledger closes, and its writes land, before `closeDb` below. */
+  await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
     await Promise.all(
       slugs.map(async (slug) => {
         const out = path.join(OUT, arm, `${slug}.json`);
@@ -192,7 +194,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         console.log(`${arm} ${slug}: ${MODES.filter((m) => failed(file.outputs[m])).join(", ") || "all modes"}${MODES.some((m) => failed(file.outputs[m])) ? " FAILED" : " written"}`);
       }),
     );
-  });
+  }));
   await closeDb();
 }
 
