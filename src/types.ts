@@ -7458,7 +7458,7 @@ export const MAX_LEGACY_FEEDBACK_ANSWER_CHARS = 4_000;
  * The longest a `feedback.body` the route will file — the reader's one box,
  * or a stale client's three answers folded into one.
  *
- * Until plan 261007o this was also the number written into
+ * Until plan 261007q this was also the number written into
  * `feedback_body_shape` (src/db/schema.ts). That CHECK is now a ceiling of a
  * million characters that only catches a runaway (docs/project/sql.md §
  * "Except a size limit"), so the route is the guard and this moves without a
@@ -7484,7 +7484,7 @@ export const MAX_FEEDBACK_BODY_CHARS = 20_000;
  * does, because client-side downscaling is not validation. The
  * `feedback_screenshot_size` CHECK in src/db/schema.ts is a ceiling of 50 MiB
  * that only catches a runaway, not this limit (docs/project/sql.md § "Except a
- * size limit", plan 261007o).
+ * size limit", plan 261007q).
  *
  * **Two megabytes since 2026-10-03; it was 400,000.** At the old number a
  * screenshot with a photograph in it had to go at about 640 pixels to fit, which

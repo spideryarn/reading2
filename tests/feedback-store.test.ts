@@ -611,7 +611,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
    * limit and only catches a runaway, so each test below proves both halves: one
    * past the product's limit is filed, which is what lets the limit move without
    * a migration, and one past the ceiling is refused, so the CHECK still can.
-   * Plan 261007o.
+   * Plan 261007q.
    */
   const URL_CEILING = 10_000;
   const BODY_CEILING = 1_000_000;
@@ -1226,7 +1226,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
 
     /* The reply box's limit is the route's to hold (`MAX_FEEDBACK_ANSWER_CHARS`);
        the CHECK is a ceiling far above it that only catches a runaway — the
-       ceilings above, plan 261007o. */
+       ceilings above, plan 261007q. */
     it("takes a reply past the product's limit, and the database refuses one past the ceiling", async () => {
       const past = await runAsOwner(ALICE, () =>
         pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })),

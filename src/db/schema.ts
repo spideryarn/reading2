@@ -5491,7 +5491,7 @@ export const feedback = spideryarn.table(
      * `feedback_screenshot_size` below is 50 MiB, the largest object we take
      * anywhere (`uploads_claimed_bytes`): a ceiling that only catches a runaway,
      * not the product's limit (docs/project/sql.md § "Except a size limit",
-     * plan 261007o). The filename and content type
+     * plan 261007q). The filename and content type
      * are never stored — the route writes a constant pair, so a client-supplied
      * MIME type or filename can never be forwarded.
      */
@@ -5585,7 +5585,7 @@ export const feedback = spideryarn.table(
      * **Non-empty, and under a ceiling**, which is the whole of what this
      * column promises. The 2048 a reader can send is `MAX_FEEDBACK_URL_CHARS`
      * in src/types.ts, held by the route; 10,000 here only catches a runaway
-     * (docs/project/sql.md § "Except a size limit", plan 261007o).
+     * (docs/project/sql.md § "Except a size limit", plan 261007q).
      *
      * That the value is an `http(s)` address is `isWebUrl`'s job at the route,
      * not this constraint's: a URL grammar in SQL would be a second, worse
@@ -5604,7 +5604,7 @@ export const feedback = spideryarn.table(
      * 2026-10-07: *"I don't see the point of including a character/size limit
      * on fields. or if we're going to, make it very high"* — so this only
      * catches a runaway, and the reader's limit moves without a migration
-     * (docs/project/sql.md § "Except a size limit", plan 261007o).
+     * (docs/project/sql.md § "Except a size limit", plan 261007q).
      * tests/feedback-store.test.ts files one past the product's limit and
      * refuses one past this.
      *
@@ -5783,7 +5783,7 @@ export const feedbackQuestionAnswers = spideryarn.table(
        reply box and the route hold a reply to `MAX_FEEDBACK_ANSWER_CHARS`
        (src/types.ts); the million here only catches a runaway, so the two no
        longer have to move together (docs/project/sql.md § "Except a size
-       limit", plan 261007o). */
+       limit", plan 261007q). */
     check(
       "feedback_question_answers_body_shape",
       sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,

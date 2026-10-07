@@ -1514,7 +1514,7 @@ describe("their name, which opens the email", () => {
     expect((await make(7)).status).toBe(400);
     /* The 80 is the route's alone. The table's CHECK is a ceiling far above it
        that only catches a runaway (docs/project/sql.md § "Except a size
-       limit", plan 261007o), so the limit can move without a migration. */
+       limit", plan 261007q), so the limit can move without a migration. */
     const past = await pool.query<{ recipient_name: string }>(
       "insert into spideryarn.billing_vouchers (email, articles, created_by, recipient_name) values ($1, 1, $2, $3) returning recipient_name",
       [emailOf(OTHER), CREATOR_A, "x".repeat(81)],
