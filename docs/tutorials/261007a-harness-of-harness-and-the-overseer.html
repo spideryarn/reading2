@@ -28,6 +28,17 @@
     and the deterministic rules propose rather than act, per overseer.md on that date. Check those
     against overseer.md before trusting this page: that doc changes weekly.
 
+    SECOND REQUEST (2026-10-07): "Can you update the tutorial to compare it to
+    ~/dev/gdconsult_work/mindstone/MindstoneRebel/coding-agent-instructions/ CHIEF_ENGINEER and the
+    remote server fleet workflow in there, and also mindstone/fleet-overseer-landing-board . Then push
+    and reopen in browser."
+    Sources for that: coding-agent-instructions (MindstoneRebel, adb0fa247, 2026-09-26) --
+      workflows/CHIEF_ENGINEER/CHIEF_ENGINEER.md sections 1-5 and 7 (last changed f5417384b,
+      2026-09-23), CHIEF_ENGINEER_AUTONOMOUS.md, activities/reviewer.md (reviewers are read-only),
+      diagrams/chief_engineer_workflow.mermaid, docs/REMOTE_AGENT_FLEET.md (2026-08-16, last changed
+      2026-09-08); fleet-overseer-landing-board (4bd8a922b, 2026-09-22) -- README.md, EXTRACTION.md,
+      docs/project/vision.md (Greg, 2026-09-13), docs/merger/DISCREPANCIES.md (J1-J21, X1-X4).
+
     Reviewed by GPT Sol (high effort) 2026-10-07: 16 findings, each checked against the paper and the
     docs and applied. The important ones: the first "what to borrow" item claimed nobody re-reviews
     Sol's fixes, when engineering-manager.md and codex-cli-as-subagent.md already require the next
@@ -37,12 +48,20 @@
     Table 2 matches pass counts, not budgets; the paper's planner prompt forbids reading code.
     Diagrams checked in headless Chrome (dark, 1280px and 500px): three label collisions in Figure 2
     fixed; no horizontal page overflow at 500px.
+
+    Second GPT Sol review (high effort), of the Mindstone section, 2026-10-07: 11 findings, each checked
+    and applied. The important ones: the landing board's gates have diverged from ours (there the
+    Overseer may not deploy, works in the primary checkout, and may authorise routine fixes of its own
+    devising -- its overseer.md gate 3); the first Figure 5 ranked systems on one autonomy scale the
+    sources do not support (redrawn as "what each may decide on its own"); CHIEF_ENGINEER's
+    convergence rule has a one-off arbitrated extension and a separate Closer step. Figures 4 and 5
+    checked in headless Chrome.
 -->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Harness-of-Harness (arXiv 2609.01481) set beside Spideryarn's Overseer: what each one wraps around a coding agent, where their loops line up, where they deliberately differ, and what we might borrow.">
-<title>Harness-of-Harness vs the Overseer</title>
+<meta name="description" content="Harness-of-Harness (arXiv 2609.01481) set beside Spideryarn's Overseer and Mindstone's Chief Engineer, remote fleet and landing board: what each one wraps around a coding agent, where their loops line up, where they deliberately differ, and what we might borrow.">
+<title>Harness-of-Harness and Our Fleets</title>
 <style>
   :root {
     --bg: #fbfaf8;
@@ -135,6 +154,7 @@
   .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
   .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
   .ln-acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .dash { stroke-dasharray: 5 4; }
   .ah { fill: var(--ink-soft); }
   .ah-acc { fill: var(--accent); }
 
@@ -169,12 +189,13 @@
 </head>
 <body>
 
-<h1>Harness-of-Harness vs the Overseer</h1>
+<h1>Harness-of-Harness and our fleets</h1>
 <p class="lede">A paper that wraps a coding agent in a planner → developer → tester loop and lets it build
 a game for days with nobody watching, set beside the machinery that runs Spideryarn's own fleet of
-coding agents. Where they line up, where they part, and what is worth borrowing.</p>
-<p class="meta">Skim: 8 minutes (TL;DR, mental models, Pass 1, the comparison table, judgement). Deep
-dive: 25 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
+coding agents — and beside its Mindstone relatives, the Chief Engineer workflow, the remote agent
+fleet and the landing board. Where they line up, where they part, and what is worth borrowing.</p>
+<p class="meta">Skim: 10 minutes (TL;DR, mental models, Pass 1, the two comparison tables, judgement).
+Deep dive: 35 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
 
 <div class="callout key">
   <p class="title">TL;DR</p>
@@ -190,6 +211,11 @@ dive: 25 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
   handles what the paper never faces: shared machines, usage limits, deploys, and a human who keeps
   the consequential product calls. Within the loop, the sharpest difference is the tester: HoH's may
   not touch the code it judges, and ours fixes what it finds.</p>
+  <p>In the Mindstone repositories, <strong>CHIEF_ENGINEER</strong> is HoH's closest relative: a
+  coordinator that never edits code, with separate planner, builders and several read-only reviewers
+  from different model families. The <strong>remote agent fleet</strong> is the earlier, unsupervised
+  version of our fleet, and the <strong>landing board</strong> is our Overseer, copied on 2026-09-10 and
+  heading towards an Overseer per person on a shared machine.</p>
 </div>
 
 <h2 id="models">Mental models</h2>
@@ -222,6 +248,7 @@ dive: 25 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
   <ol>
     <li><a href="#pass1">Pass 1 — the two shapes, in one picture each</a></li>
     <li><a href="#pass2">Pass 2 — the parts, side by side</a></li>
+    <li><a href="#mindstone">Pass 2b — the Mindstone relatives: CHIEF_ENGINEER, the remote fleet, the landing board</a></li>
     <li><a href="#pass3">Pass 3 — one real job, followed through both lenses</a></li>
     <li><a href="#pass4">Pass 4 — the evidence, and the hard parts</a></li>
     <li><a href="#judgement">Judgement — what to borrow, risks, open questions</a></li>
@@ -236,6 +263,8 @@ dive: 25 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
     <p><strong>If you're deciding what to change in our process:</strong>
       <a href="#borrow">What to borrow</a> and <a href="#opposite">where we deliberately do the opposite</a>.</p>
     <p><strong>If you want to see it on a real piece of work:</strong> <a href="#pass3">Pass 3</a>.</p>
+    <p><strong>If you want the Mindstone comparison:</strong> <a href="#mindstone">Pass 2b</a>, its
+      <a href="#mindstone-loop">loop table</a> and <a href="#mindstone-fleet">fleet table</a>.</p>
   </div>
 </nav>
 
@@ -521,6 +550,289 @@ the fleet time actually lost.</p>
 target database, and the commit production reports serving.</p>
 </details>
 
+<!-- ================================================================== MINDSTONE -->
+<h2 id="mindstone"><span class="pass">Pass 2b</span>The Mindstone relatives</h2>
+
+<p>The same problem has been worked on three more times nearby, in the Mindstone repositories. Two are
+direct relatives of ours, and one is closer to HoH than anything we run:</p>
+<ul>
+  <li><strong>CHIEF_ENGINEER</strong> (in <code>coding-agent-instructions/workflows/</code>, last changed
+    2026-09-23) — Mindstone's version of one job's loop, and a much heavier one than ours. A
+    coordinating agent, the <em>Chief</em>, that never touches code itself and runs a crew: a planner,
+    implementers, several reviewers from different model families, specialists, and an arbitrator who
+    settles disagreements.</li>
+  <li><strong>The remote agent fleet</strong> (<code>docs/REMOTE_AGENT_FLEET.md</code>, from
+    2026-08-16) — a dozen Chief Engineer jobs on a cloud machine, one terminal tab each, which keep
+    running when the laptop shuts. No supervisor: <em>you</em> are the Overseer, flicking between tabs.</li>
+  <li><strong>fleet-overseer-landing-board</strong> (last changed 2026-09-22) — <strong>our own
+    Overseer and dashboard, copied out of this repo on 2026-09-10</strong> and made general for Mindstone
+    machines. It is absorbing the best of Josh's coordinator and "landing board" (his system for
+    supervising sessions and landing their code), and heading towards several people on one machine,
+    each with their own Overseer.</li>
+</ul>
+
+<div class="callout model">
+  <p class="title">The Chief Engineer is a site manager who never picks up a tool</p>
+  <p>Every change, down to a one-line fix, goes to a builder. One to three inspectors from different
+  firms, depending on how risky the job is, check each stage without seeing each other's notes. When
+  their findings need weighing up, a referee recommends a way forward. The Chief's job is to route the
+  work, keep the site diary, and know when to call the client.</p>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 910 440" role="img" aria-labelledby="f4t">
+  <title id="f4t">Four levels of organising coding agents, and which of HoH, Spideryarn and Mindstone fills each</title>
+
+  <text x="295" y="28" text-anchor="middle" class="t-hd">HOH (THE PAPER)</text>
+  <text x="535" y="28" text-anchor="middle" class="t-hd">SPIDERYARN</text>
+  <text x="775" y="28" text-anchor="middle" class="t-hd">MINDSTONE</text>
+
+  <text x="10" y="80" class="t-b">Many people,</text>
+  <text x="10" y="98" class="t-b">many boxes</text>
+  <text x="10" y="170" class="t-b">A fleet on</text>
+  <text x="10" y="188" class="t-b">one box</text>
+  <text x="10" y="260" class="t-b">One job's</text>
+  <text x="10" y="278" class="t-b">loop</text>
+  <text x="10" y="350" class="t-b">One agent</text>
+  <text x="10" y="368" class="t-b">run</text>
+
+  <rect x="180" y="50" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="295" y="93" text-anchor="middle" class="t-s">not addressed</text>
+  <rect x="420" y="50" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="535" y="93" text-anchor="middle" class="t-s">not addressed (one person)</text>
+  <rect x="660" y="50" width="240" height="76" rx="6" class="box s-claude dash"/>
+  <text x="780" y="74" text-anchor="middle" class="t-b">landing board, next</text>
+  <text x="780" y="94" text-anchor="middle" class="t-s">an Overseer per person, one box</text>
+  <text x="780" y="112" text-anchor="middle" class="t-s">per product · partly built</text>
+
+  <rect x="180" y="140" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="295" y="183" text-anchor="middle" class="t-s">not addressed (one project)</text>
+  <rect x="420" y="140" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="535" y="164" text-anchor="middle" class="t-b">The Overseer</text>
+  <text x="535" y="184" text-anchor="middle" class="t-s">daemon + permanent session,</text>
+  <text x="535" y="202" text-anchor="middle" class="t-s">four gates, deploys</text>
+  <rect x="660" y="140" width="240" height="76" rx="6" class="box s-claude"/>
+  <text x="780" y="164" text-anchor="middle" class="t-b">mindstone-fleet → landing board</text>
+  <text x="780" y="184" text-anchor="middle" class="t-s">Aug: tabs, you supervise · Sep:</text>
+  <text x="780" y="202" text-anchor="middle" class="t-s">our Overseer + Josh's ideas</text>
+
+  <rect x="180" y="230" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="295" y="254" text-anchor="middle" class="t-b">Planner → Developer → QA</text>
+  <text x="295" y="274" text-anchor="middle" class="t-s">one model in every role,</text>
+  <text x="295" y="292" text-anchor="middle" class="t-s">repeated 3 to 70 times</text>
+  <rect x="420" y="230" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="535" y="254" text-anchor="middle" class="t-b">engineering-manager</text>
+  <text x="535" y="274" text-anchor="middle" class="t-s">plan → build → Sol review;</text>
+  <text x="535" y="292" text-anchor="middle" class="t-s">Sol fixes what it finds</text>
+  <rect x="660" y="230" width="240" height="76" rx="6" class="box s-claude"/>
+  <text x="780" y="254" text-anchor="middle" class="t-b">CHIEF_ENGINEER</text>
+  <text x="780" y="274" text-anchor="middle" class="t-s">planner, implementers, read-only</text>
+  <text x="780" y="292" text-anchor="middle" class="t-s">reviewers, specialists, arbitrator</text>
+
+  <rect x="180" y="320" width="230" height="76" rx="6" class="box s-store"/>
+  <text x="295" y="344" text-anchor="middle" class="t-b">An off-the-shelf harness</text>
+  <text x="295" y="364" text-anchor="middle" class="t-s">Codex, OpenCode or Pi,</text>
+  <text x="295" y="382" text-anchor="middle" class="t-s">each with one model</text>
+  <rect x="420" y="320" width="230" height="76" rx="6" class="box s-store"/>
+  <text x="535" y="344" text-anchor="middle" class="t-b">Claude Code, Codex</text>
+  <text x="535" y="364" text-anchor="middle" class="t-s">plus Claude subagents</text>
+  <text x="535" y="382" text-anchor="middle" class="t-s">(Sonnet, Opus)</text>
+  <rect x="660" y="320" width="240" height="76" rx="6" class="box s-store"/>
+  <text x="780" y="344" text-anchor="middle" class="t-b">Pi, Claude Code, Codex, Cursor</text>
+  <text x="780" y="364" text-anchor="middle" class="t-s">a selector picks the model and</text>
+  <text x="780" y="382" text-anchor="middle" class="t-s">which subscription pays</text>
+
+  <text x="455" y="428" text-anchor="middle" class="t-s">Dashed outline: not addressed. Dashed blue: planned, partly built.</text>
+</svg>
+</div>
+<figcaption>Figure 4. Four levels, three projects. HoH works only at the bottom two levels. The
+landing board's fleet level started as a copy of ours, which is why those two cells say so much the
+same thing.</figcaption>
+</figure>
+
+<h3 id="mindstone-loop">The loop: HoH, our jobs and CHIEF_ENGINEER</h3>
+
+<div class="tbl-scroll">
+<table>
+<thead><tr><th></th><th>HoH</th><th>Spideryarn job</th><th>CHIEF_ENGINEER</th></tr></thead>
+<tbody>
+<tr><td><strong>Who plans</strong></td>
+  <td>A Planner run that may not edit code.</td>
+  <td>The job agent writes the plan doc itself.</td>
+  <td>A Planner subagent (the Chief plans alone only for light work), then the plan is critiqued
+  before anything is built.</td></tr>
+<tr><td><strong>Who builds</strong></td>
+  <td>The Developer, the only writer.</td>
+  <td>The job agent, or subagents and Codex it hands work to.</td>
+  <td>Implementer subagents only: <em>"The Chief never edits code itself — every change, down to a
+  one-liner, goes to an implementer."</em></td></tr>
+<tr><td><strong>Who judges</strong></td>
+  <td>One QA run, same model, on a locked read-only copy.</td>
+  <td>GPT Sol: a different model family, and it fixes what it finds.</td>
+  <td>One to three general reviewers from different families, plus specialists (a devil's advocate,
+  completeness, runtime safety…). They read the plan and the code, run in parallel, and do not see
+  each other's reports, so their views stay independent. Reviewers are read-only; the same batch may
+  include a testing implementer that writes tests. When the findings conflict or confidence is low, an
+  Arbitrator recommends what to do next.</td></tr>
+<tr><td><strong>When is it good enough</strong></td>
+  <td>The tester's evidence, with no threshold; the loop count is a budget.</td>
+  <td>Two review rounds per stage, then the agent decides; an overruled P0 or P1 goes to Opus or
+  Greg first.</td>
+  <td>Numbers: 95% confidence about intent before planning; move on after a confirming round with no
+  new important findings and every reviewer at 90% or above; after three rounds of the same kind,
+  restructure or escalate, unless the Arbitrator grants one final extension. The tooling enforces only
+  part of this.</td></tr>
+<tr><td><strong>How heavy</strong></td>
+  <td>Always three runs per loop.</td>
+  <td>One reviewer per stage, always.</td>
+  <td>Light, medium (the default) or heavy, as starting points the Chief adjusts. Heavy starts with three
+  reviewer families plus a devil's advocate and three to five other specialists.</td></tr>
+<tr><td><strong>Memory</strong></td>
+  <td>Dev doc, evidence bundle, the workspace.</td>
+  <td>The plan doc and Sol's review files in <code>docs/plans/</code>.</td>
+  <td>A planning folder per task: <code>PLAN.md</code>, an append-only status ledger written by a
+  script, and one report file per subagent — <em>"writing the file is the definition of done"</em>.</td></tr>
+<tr><td><strong>Which model, and who pays</strong></td>
+  <td>One fixed harness and model.</td>
+  <td>By convention: Claude builds, Sol reviews, Opus arbitrates wording.</td>
+  <td>A selector script picks the model per task and routes it across subscriptions, skipping
+  accounts that have hit their limits. Every report must state which model actually ran.</td></tr>
+<tr><td><strong>The human</strong></td>
+  <td>None after the spec.</td>
+  <td>Greg, for product calls; questions asked up front.</td>
+  <td>Two modes. Normally the user can be asked at set stopping points. Unattended, the run ends with
+  an "escalation" outcome rather than waiting or inventing an approval.</td></tr>
+<tr><td><strong>Repeated?</strong></td>
+  <td>Yes: 3 to 70 loops on the same thing.</td>
+  <td>Once per stage.</td>
+  <td>Per stage: build, review, refine, repeated until the reviewers settle; then a review of the whole
+  change, and a separate "Closer" that runs every check before the push and reports without fixing.
+  The plan is expected to grow new stages as the run learns.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout key">
+  <p class="title">CHIEF_ENGINEER is HoH's closest relative, not our job loop</p>
+  <p>It keeps HoH's split — planning, building and judging are different agents — and HoH's rule that
+  the judge may not edit. Then it multiplies the judging: several model families instead of one, and
+  specialists on top. Our <code>engineering-manager.md</code> is the light cousin: one agent plans and
+  builds, one reviewer from another family checks it and fixes it. So the two houses have already run
+  the comparison the paper raises — <em>should the reviewer be allowed to fix?</em> — in opposite
+  directions, and nobody has compared the results.</p>
+</div>
+
+<h3 id="mindstone-fleet">The fleet: our Overseer, the remote fleet and the landing board</h3>
+
+<div class="tbl-scroll">
+<table>
+<thead><tr><th></th><th>Spideryarn Overseer</th><th>Remote fleet (Aug 2026)</th><th>Landing board (Sep 2026)</th></tr></thead>
+<tbody>
+<tr><td><strong>Who supervises</strong></td>
+  <td>The Overseer: one permanent session plus a daemon.</td>
+  <td>You. One terminal tab per job; jobs survive the laptop closing.</td>
+  <td>The same Overseer, copied from here. Its daemon runs <strong>record-only</strong> on the team
+  machine: both switches that would let it act are off, and arming them is Greg's call.</td></tr>
+<tr><td><strong>How jobs start</strong></td>
+  <td>From Greg's queue, in waves.</td>
+  <td>You write a prompt file per job; one command launches them all, staggered so a dozen setups
+  don't run the machine out of memory.</td>
+  <td>The queue, or a button on the page that also tells the Overseer.</td></tr>
+<tr><td><strong>Getting code in</strong></td>
+  <td>Each job pushes to <code>dev</code>; only the Overseer deploys to production.</td>
+  <td>Each job pushes for itself once its checks pass — permission written into the prompt, with a
+  machine-wide lock so a dozen jobs finishing together don't trip over each other.</td>
+  <td>Production stays Greg's: unlike ours, this Overseer may not deploy. Josh's design, being weighed:
+  a queue that lets one branch land at a time, only when the machine has room. Greg's vision adds a merge queue: push early, and a separate agent periodically tests
+  everything and promotes it.</td></tr>
+<tr><td><strong>Who may start new work</strong></td>
+  <td>Never the Overseer: only what Greg queued.</td>
+  <td>Only you.</td>
+  <td>Mostly the same gate, with a narrow exception ours lacks: it may authorise routine fixes of its own
+  devising, recorded as its own authority and listed for Greg to audit (Greg, 2026-09-11: <em>"the
+  whole point is that you can do the low-level work so that I don't have to"</em>). Josh's loops that
+  generated product ideas, and his "learn from the owner's decisions" machinery, were excluded. And
+  Greg's 2026-09-13 vision says: <em>"New ideas get added to an Ideas Queue, and the Overseer
+  prioritises and instructs agents to work on them."</em></td></tr>
+<tr><td><strong>People</strong></td>
+  <td>One.</td>
+  <td>One.</td>
+  <td>Several on one box, each with a "cell" — their own dashboard, Overseer and sessions. Cells for
+  colleagues are built; cells that can see or talk to each other are not.</td></tr>
+<tr><td><strong>What it has that ours lacks</strong></td>
+  <td>—</td>
+  <td>Nothing: it is the earlier, simpler idea.</td>
+  <td>Taken from Josh, in part: an ask to Greg must say what was checked; a blocker records who owns it
+  and what happens next. Next in line: confirming a message really arrived in a session, rather than
+  assuming it did. Its own: onboarding a colleague in two commands.</td></tr>
+</tbody>
+</table>
+</div>
+
+<details>
+<summary>How the four fit together, in time</summary>
+<p><strong>16 August 2026:</strong> the remote fleet — a dozen Chief Engineer jobs on a Mindstone cloud
+machine, each in its own tmux session (a terminal that keeps running on the server), each shown as one
+iTerm tab on the laptop. Greg's brief: <em>"I want to be able to shut my laptop and open it back up and
+everything carries on going in the background."</em> No supervisor, no dashboard.</p>
+<p><strong>7–10 September:</strong> the fleet dashboard and the Overseer are built here, in Spideryarn,
+on our own Hetzner box.</p>
+<p><strong>10 September:</strong> a verbatim snapshot of that tooling (627 files at commit
+<code>f77b3115</code>) becomes <code>fleet-overseer-landing-board</code>, with Greg's gates as the
+operating rules and Josh's coordinator as a register of ideas to step through — 21 places where his
+system differs, each marked adopt, revisit, defer or exclude.</p>
+<p><strong>13 September:</strong> Greg's vision for it: <em>"We want to be Product Owners, not
+babysitters."</em> One box per product, several people per box, an Overseer per person, and each
+Overseer running several Chief Engineers — <em>"each running multiple subagents."</em> That is four
+levels of nesting, where HoH has two.</p>
+<p><strong>Since:</strong> the two copies have been changed separately, so a fix in one is not
+automatically in the other.</p>
+</details>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 200" role="img" aria-labelledby="f5t">
+  <title id="f5t">What each system is allowed to decide on its own</title>
+  <text x="20" y="28" class="t-hd">WHAT EACH IS ALLOWED TO DECIDE ON ITS OWN</text>
+
+  <rect x="20" y="48" width="160" height="110" rx="6" class="box s-human"/>
+  <text x="100" y="74" text-anchor="middle" class="t-b">Remote fleet</text>
+  <text x="100" y="98" text-anchor="middle" class="t-s">nothing: you write</text>
+  <text x="100" y="116" text-anchor="middle" class="t-s">every prompt</text>
+
+  <rect x="195" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="275" y="74" text-anchor="middle" class="t-b">Our Overseer</text>
+  <text x="275" y="98" text-anchor="middle" class="t-s">orders queued work;</text>
+  <text x="275" y="116" text-anchor="middle" class="t-s">small calls, logged for</text>
+  <text x="275" y="134" text-anchor="middle" class="t-s">veto; it deploys</text>
+
+  <rect x="370" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="450" y="74" text-anchor="middle" class="t-b">Landing board's</text>
+  <text x="450" y="98" text-anchor="middle" class="t-s">routine fixes it may</text>
+  <text x="450" y="116" text-anchor="middle" class="t-s">authorise itself, on</text>
+  <text x="450" y="134" text-anchor="middle" class="t-s">record; never deploys</text>
+
+  <rect x="545" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="625" y="74" text-anchor="middle" class="t-b">HoH</text>
+  <text x="625" y="98" text-anchor="middle" class="t-s">the next increment,</text>
+  <text x="625" y="116" text-anchor="middle" class="t-s">within one brief,</text>
+  <text x="625" y="134" text-anchor="middle" class="t-s">for 70 loops</text>
+
+  <rect x="720" y="48" width="160" height="110" rx="6" class="box s-store"/>
+  <text x="800" y="74" text-anchor="middle" class="t-b">Josh's coordinator</text>
+  <text x="800" y="98" text-anchor="middle" class="t-s">new product ideas</text>
+  <text x="800" y="116" text-anchor="middle" class="t-s">from its own loops;</text>
+  <text x="800" y="134" text-anchor="middle" class="t-s">excluded by Greg</text>
+
+  <text x="450" y="188" text-anchor="middle" class="t-s">Not a scale: HoH decides inside one product brief, the others across a whole fleet.</text>
+</svg>
+</div>
+<figcaption>Figure 5. Who may decide what without asking. Greg's 2026-09-13 vision, in which the
+Overseer prioritises an Ideas Queue, would sit somewhere among the middle three; how far it stretches
+is the open question in judgement item 6.</figcaption>
+</figure>
+
 <!-- ================================================================== PASS 3 -->
 <h2 id="pass3"><span class="pass">Pass 3</span>One real job, through both lenses</h2>
 
@@ -740,6 +1052,25 @@ until three independent signals agree.</p>
   feedback reports would tell us which steps earn their cost.</p>
 </div>
 
+<div class="callout decide">
+  <p class="title">5. Compare our two review styles, which already exist side by side</p>
+  <p>CHIEF_ENGINEER keeps the reviewers read-only and runs several families in parallel; our jobs use
+  one reviewer that also fixes. The two repositories prescribe opposite answers to the question the
+  paper raises. Reading a handful of real runs from each — which caught the bugs that later turned
+  into postmortems, and at what cost in time and usage — would settle it better than the paper can.
+  <strong>Costs</strong> an afternoon of an agent's reading. <strong>Gives</strong> evidence for
+  whichever way we go next.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">6. Decide the Ideas Queue question before it is built</p>
+  <p>The landing board's vision has the Overseer <em>prioritise</em> a queue of ideas. Its runbook
+  already lets it order queued work and authorise routine fixes of its own; what is undecided is whether
+  the vision means more — choosing which product ideas are worth doing at all, which edges towards what
+  Greg excluded from Josh's system. That would be a new decision, and is easier to make before the code
+  exists. (Here, the Overseer has neither the exception nor the vision.)</p>
+</div>
+
 <h3 id="opposite">Where we deliberately do the opposite, and should keep doing so</h3>
 <ul>
   <li><strong>Nobody originating the work.</strong> HoH's planner picks increments, but always within
@@ -781,6 +1112,25 @@ until three independent signals agree.</p>
 
 <!-- ================================================================== FAQ -->
 <h2 id="faq">FAQ</h2>
+
+<details>
+<summary>Which of our systems is most like HoH?</summary>
+<p>At the loop level, Mindstone's CHIEF_ENGINEER: separate agents plan, build and judge, and the judges
+may not edit — HoH's shape, with more judges. It differs in looping per planned stage (build, review,
+refine until the reviewers settle) rather than over the whole product, and in having numeric stopping
+rules (95% intent, 90% reviewer confidence, three rounds plus at most one arbitrated extension) where
+HoH has a loop budget. Its unattended mode is the nearest thing either house has to HoH's
+"no human after the spec", and even there a decision it cannot take ends the run as an escalation.</p>
+</details>
+
+<details>
+<summary>Is the landing board the same code as our Overseer?</summary>
+<p>It started as a byte-for-byte copy of ours on 2026-09-10 and has been changed separately since, for
+Mindstone machines, several people per box, and some of Josh's mechanisms. The four gates share their
+principles, but the wording has diverged in both directions: there, deploying stays with Greg and the
+Overseer works in the main checkout and may authorise routine fixes itself; here, the Overseer deploys
+and authorises nothing of its own. Neither copy pulls the other's fixes automatically.</p>
+</details>
 
 <details>
 <summary>Is the Overseer a "harness of harnesses" too?</summary>
@@ -839,6 +1189,16 @@ bill."</em></p>
   lets the Overseer start a job.</td></tr>
 <tr><td><strong>Gate</strong></td><td>One of the Overseer's four principles bounding what it may decide
   on Greg's behalf.</td></tr>
+<tr><td><strong>Chief</strong> (CHIEF_ENGINEER)</td><td>The coordinating agent in Mindstone's workflow:
+  routes work to subagents, keeps the planning folder, never edits code.</td></tr>
+<tr><td><strong>Arbitrator</strong> (CHIEF_ENGINEER)</td><td>A subagent that reads the reviewers'
+  reports and the code and writes the recommendation when they disagree.</td></tr>
+<tr><td><strong>Specialist</strong> (CHIEF_ENGINEER)</td><td>A narrow focus applied to a kind of work —
+  a security reviewer, a completeness researcher, a testing implementer, a devil's advocate.</td></tr>
+<tr><td><strong>Cell</strong> (landing board)</td><td>One person's own dashboard, Overseer and
+  sessions on a shared machine.</td></tr>
+<tr><td><strong>Landing</strong></td><td>Getting a finished branch's code into the shared branch, in
+  Josh's system through a queue that lets one land at a time.</td></tr>
 <tr><td><strong>P0 / P1 / P2</strong></td><td>A reviewer's severity labels: must fix / should fix /
   worth considering.</td></tr>
 </tbody>
@@ -858,6 +1218,17 @@ bill."</em></p>
   <li><code>docs/reusable/codex-cli-as-subagent.md</code> — how a Sol review is run, and why it writes.</li>
   <li><code>docs/plans/261003b-earlier-tab-counts-on-the-pills*.md</code> — the worked example's plan
     and both reviews.</li>
+</ul>
+<p>In the Mindstone repositories (under <code>~/dev/gdconsult_work/mindstone/</code>):</p>
+<ul>
+  <li><code>MindstoneRebel/coding-agent-instructions/workflows/CHIEF_ENGINEER/CHIEF_ENGINEER.md</code>
+    — the Chief Engineer workflow; <code>CHIEF_ENGINEER_AUTONOMOUS.md</code> beside it is the
+    unattended mode, <code>MODEL_ROSTER.md</code> which model does what.</li>
+  <li><code>MindstoneRebel/coding-agent-instructions/docs/REMOTE_AGENT_FLEET.md</code> — the remote
+    fleet: tmux per job, iTerm tabs, mosh.</li>
+  <li><code>fleet-overseer-landing-board/README.md</code> — what is built and what is not;
+    <code>docs/project/vision.md</code> is Greg's 2026-09-13 vision, and
+    <code>docs/merger/DISCREPANCIES.md</code> the 21 differences from Josh's coordinator.</li>
 </ul>
 
 </body>
