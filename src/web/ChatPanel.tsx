@@ -135,6 +135,8 @@ import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
+import type { Answered } from "./chat/controller.js";
+import { answerMayAct, type GuideAct, GuideActContext } from "./guide-acts.js";
 import { rowTitle } from "./chat-list-row.js";
 
 interface Props {
@@ -186,6 +188,12 @@ interface Props {
   live?: LiveApi | undefined;
   /** Null creates a chat; returning its id lets the panel carry the unsent draft with it. */
   onStartLive?: ((threadId: string | null) => string | undefined) | undefined;
+  /**
+   * Hear each answer that finishes arriving in this tab — `useChat`'s
+   * `onAnswered`. Only the guide listens: its answer may press one of its own
+   * buttons (guide-acts.ts, plan 261007o). Absent, nothing acts.
+   */
+  onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
@@ -433,6 +441,7 @@ export function ChatPanel({
   subMode,
   live,
   onStartLive,
+  onAnswered,
 }: Props) {
   useRenderCount("ChatPanel");
   /* **Learn's layout, for all three of its conversations** — Recall,
@@ -698,6 +707,7 @@ export function ChatPanel({
           kind={open.kind}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
+          onAnswered={onAnswered}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1355,6 +1365,7 @@ export function Conversation({
   sized = "fixed",
   live,
   onStartLive,
+  onAnswered,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
@@ -1397,8 +1408,39 @@ export function Conversation({
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
+  /** See `onAnswered` in Props. */
+  onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  /**
+   * **The guide's one act for the answer that has just finished here**
+   * (guide-acts.ts, plan 261007o). Made only on the controller's `Answered`
+   * event for this conversation, while it is mounted and shown — never from a
+   * transcript that arrived some other way — and handed to that answer's chips
+   * alone. The effect after it spends it once the commit its chips' effects
+   * ran in is over, so nothing that mounts later can act on it.
+   */
+  const [act, setAct] = useState<GuideAct | null>(null);
+  const threadId = thread.id;
+  useEffect(() => {
+    if (kind !== "guide" || onAnswered === undefined || !visible) return;
+    return onAnswered((answered) => {
+      if (answered.threadId !== threadId || !answerMayAct(answered.message)) return;
+      setAct({ messageId: answered.message.id, used: false });
+    });
+  }, [kind, onAnswered, visible, threadId]);
+  /* **Offered, and spent, only once this conversation draws that answer as
+     finished.** The `Answered` event can land before the store's notification
+     does (chat/controller.ts batches those), and then this render still has
+     the answer pending, its last token held back by `partial`: spending the
+     act in that commit left the chip to mount later onto a spent act, so the
+     guide said "I've opened it" and nothing opened
+     (tests/guide-acts-live-stream.test.tsx). */
+  const drawnAct =
+    act !== null && thread.messages.some((m) => m.id === act.messageId && m.status === "done") ? act : null;
+  useEffect(() => {
+    if (drawnAct !== null) drawnAct.used = true;
+  }, [drawnAct]);
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
@@ -1763,8 +1805,8 @@ export function Conversation({
             <Suggestions onAsk={(q) => onSend(q)} />
           ))}
         {thread.messages.map((m, i) => (
+          <GuideActContext.Provider key={m.id} value={drawnAct !== null && drawnAct.messageId === m.id ? drawnAct : null}>
           <Turn
-            key={m.id}
             message={m}
             kind={kind}
             onHintOpened={onHintOpened}
@@ -1794,6 +1836,7 @@ export function Conversation({
                what is on screen. */
             discards={thread.messages.length - i - 1}
           />
+          </GuideActContext.Provider>
         ))}
         {/* The spoken words still on their way to being saved, as the end of
             this same conversation. ./live/LiveTail.tsx. */}

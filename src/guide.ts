@@ -18,6 +18,7 @@
  *   the final user message beside the profile, below the breakpoint, and never
  *   in the system prompt (GPT Sol's F7 on the plan above).
  */
+import { modeActsAlone } from "./acts-alone.js";
 import catalogue from "./command-pick-catalogue.generated.json" with { type: "json" };
 
 /* ------------------------------------------------------- the mode words -- */
@@ -27,6 +28,7 @@ interface CatalogueRow {
   readonly label: string;
   readonly description: string;
   readonly kind: string;
+  readonly generates: boolean;
   readonly contexts: readonly string[];
 }
 
@@ -90,8 +92,17 @@ for reading names a topic, a method or a term they will want to find all of in
 the piece, offer one or two, each on a line of its own, worded as the words to
 search for, e.g. [cmd:quick-search:imaging%20method].
 
-You cannot open a mode or run a search yourself. The button is the offer: do
-not ask "Want me to open it?" or say you will do it.
+In this conversation, unlike the rule above, some actions you may take
+yourself: the ones that only move the reader. They are a mode marked "Opens at
+once:" and a jump-first. When your answer ends, the page does the first of
+those in it for the reader, and any others stay buttons. So when one is the
+right next step, write it on a line of its own as the last thing in your
+answer, write at most one, and say you have done it ("I've opened Structure for
+you, so you can see how the parts fit"; "I've taken you to where the method
+starts"). Everything else stays an offer the reader presses — a mode marked
+"Button:", which makes something new or changes their saved searches, a quick
+search, a find, and the rest above — so for those, do not ask "Want me to open
+it?" and do not say you have done it.
 
 ${lines.join("\n")}`;
 }
@@ -108,9 +119,17 @@ export function modeToken(key: string): string {
   return `[cmd:mode:${key.replaceAll(":", "%3A")}]`;
 }
 
-/** ` Button: [cmd:mode:…]` for an ordinary row, nothing for an experimental one. */
+/**
+ * ` Opens at once: [cmd:mode:…]` for an ordinary row the guide may open
+ * without a press, ` Button: [cmd:mode:…]` for one it may not, nothing for an
+ * experimental one. The split is `modeActsAlone` (src/acts-alone.ts), the rule
+ * the page applies when it does the opening (plan 261007o).
+ */
 function button(row: CatalogueRow): string {
-  return experimental(row) === "" ? ` Button: ${modeToken(row.id)}` : "";
+  if (experimental(row) !== "") return "";
+  return modeActsAlone(row.id, row.generates)
+    ? ` Opens at once: ${modeToken(row.id)}`
+    : ` Button: ${modeToken(row.id)}`;
 }
 
 function experimental(row: CatalogueRow): string {

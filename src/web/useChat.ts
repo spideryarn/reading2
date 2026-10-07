@@ -49,6 +49,7 @@ import { mintId } from "../ids.js";
 import {
   ChatController,
   recoverUntil,
+  type Answered,
   type ChatEffects,
   type SpokenLanded,
 } from "./chat/controller.js";
@@ -372,6 +373,12 @@ export interface ChatApi {
    * origin.
    */
   named(threadId: string): boolean;
+  /**
+   * **Hear each answer as it finishes arriving from a turn this tab started**
+   * — chat/controller.ts § `Answered`. The guide's one act listens here
+   * (guide-acts.ts, plan 261007o). Returns the unsubscribe.
+   */
+  onAnswered(listener: (answered: Answered) => void): () => void;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
 }
@@ -1022,6 +1029,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     deleting,
     settled,
     named,
+    onAnswered: controller.onAnswered,
     error: state.error,
   };
 }

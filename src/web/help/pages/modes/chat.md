@@ -48,6 +48,14 @@ still arriving. **Answer again** gets a fresh answer, and the pencil lets you re
 remove a tag, look a term up in the glossary, or show where the article first says something.
 Nothing happens until you press the button; Chat cannot do any of these itself.
 
+**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read
+this article with Spideryarn, rather than about what it says. A new article opens on it when there
+is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
+until you send something. The guide can do one thing per answer by itself, if it only moves you:
+take you to a passage, or open a mode that has nothing to write, such as Structure or Learn. It
+says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
+as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
+
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice
 quickly and it sends by itself once the words arrive; this works here, in Feedback, in a comment

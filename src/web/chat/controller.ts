@@ -175,6 +175,21 @@ export type SpokenLanded =
   | { ok: true; threadId: string; tailId: string }
   | { ok: false; conflict: boolean; error: string };
 
+/**
+ * **An answer that has just finished arriving in this tab, from a turn this
+ * tab started** — a send, a retry or an edit whose stream ended with its
+ * `done` frame. The guide acts on these and on nothing else (src/web/guide-acts.ts,
+ * plan 261007o, GPT Sol's F2): a recovered answer arrives as `recovery.found`,
+ * a refused retry puts an old answer back without a `done`, and a transcript
+ * loaded from the server never streams at all, so none of them is one.
+ *
+ * Both ids are the server's: the `begin` frame swapped them before any `done`.
+ */
+export interface Answered {
+  readonly threadId: string;
+  readonly message: ChatMessage;
+}
+
 /** What React reads: the state, and the two things derived from it. */
 export interface ChatSnapshot {
   state: ChatState;
@@ -225,6 +240,8 @@ export class ChatController {
    * 409 we inflicted on ourselves.
    */
   #spokenWaiters = new Map<OpId, (landed: SpokenLanded) => void>();
+  /** Who is told of each `Answered` — an event, so nobody mounted later hears an old one. */
+  #answered = new Set<(answered: Answered) => void>();
 
   /** No side effects here — the hook builds one during a render. */
   constructor(slug: string, effects: ChatEffects, onSettled?: () => void) {
@@ -243,6 +260,18 @@ export class ChatController {
   };
 
   getSnapshot = (): ChatSnapshot => this.#current;
+
+  /**
+   * **Hear each answer as it finishes** (`Answered`). Told once, at the moment
+   * of the `done` frame, after the state is current and before React has
+   * necessarily re-rendered; a listener added afterwards never hears it.
+   */
+  onAnswered = (listener: (answered: Answered) => void): (() => void) => {
+    this.#answered.add(listener);
+    return () => {
+      this.#answered.delete(listener);
+    };
+  };
 
   /** The state as it is **now**, readable from an event handler. */
   get state(): ChatState {
@@ -351,6 +380,16 @@ export class ChatController {
          is still current on this line; only *when React hears* is bounded.
          docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md */
       this.#notify();
+    }
+    /* A turn's own `done`, not superseded (its conversation deleted), whose
+       row is on screen now: the one shape `Answered` names. */
+    if (event.type === "turn.done" && operation?.kind === "turn" && !operation.superseded && this.#answered.size > 0) {
+      const message = this.#current.threads
+        .find((t) => t.id === operation.threadId)
+        ?.messages.find((m) => m.id === operation.replyId);
+      if (message?.status === "done") {
+        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, message });
+      }
     }
     for (const command of commands) this.#perform(command);
     if (finished) this.#onSettled?.();

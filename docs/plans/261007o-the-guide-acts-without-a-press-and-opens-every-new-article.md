@@ -147,6 +147,21 @@ stays, with his 2026-10-07 answer under it as what replaced it.
   relation words may be made on a wide first open, as since 2026-10-05. The security wording is
   about automatic proposals only; the guide's own tools inside a turn the reader sent are unchanged.
 
+## As built
+
+- Stage 1 (`6830d4317`): the first-open default is the guide; the coordinator keeps its immediate
+  apply and decides only the modal.
+- Stage 2: `src/acts-alone.ts` (`modeActsAlone`, shared by the prompt and the page),
+  `src/web/guide-acts.ts`, `ChatController.onAnswered`, the chip's effect, the conversation's
+  listener. **The act set is narrower than the first table**: `glossary-open` does not act, because
+  the model writes `glossary-ask` and is told *"the button will look it up"*, and whether `chipFor`
+  resolves it to an entry is something the model cannot know, so its sentence would be wrong
+  either way. So: `jump-first`, and a mode `modeActsAlone` allows. **A race found by the tests**
+  (`tests/guide-acts-live-stream.test.tsx`, red first): `Answered` can land inside the
+  controller's notification window, before React draws the finished answer, and the act was spent
+  in a commit with no chip in it. The act is now offered and spent only once the drawn thread holds
+  that answer as `done`.
+
 ## The simpler options passed over
 
 - **Item 1, open a generating mode without arming it** (the band would show its own *Write it*
