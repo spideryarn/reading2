@@ -1750,9 +1750,9 @@ function Results({
   if (waiting.length > 0 && all.length === 0) {
     return (
       <div className="srch-empty">
-        {/* The line waits its 600ms like every band's (BandWaiting.tsx); the
-            hint under it does not, because it answers the press. */}
-        <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin">
+        {/* Find has just been pressed: this line acknowledges that request,
+            like a turn already sent, rather than an opening read. */}
+        <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin" delayMs={0}>
           Reading the article for you…
         </BandWaiting>
         <p className="srch-empty-hint">

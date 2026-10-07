@@ -928,7 +928,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             real='status: "loading"'
             note="BandWaiting: nothing for 600ms, then a spinner and the sentence naming what it
                   waits for, in a status line mounted from the start. Every band's wait is this
-                  one. Drawn here without the 600ms, which a real band always has."
+                  one. Drawn here without the 600ms; responses to a press also show immediately."
           >
             <BandWaiting className="gloss-quiet" delayMs={0}>
               Looking for a glossary…

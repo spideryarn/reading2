@@ -21,10 +21,11 @@ The app has two, and which one a wait gets depends on what else is on the screen
 
 - **Nothing before 600ms.** A spinner that flashes and vanishes reads as breakage. Gate it on
   [`useSlow`](../../src/web/useSlow.ts), which owns the threshold; the loader is never a placeholder
-  for a fast fetch, which is also why it cannot delay the first paint or the article. The one
-  exception is a model turn already on screen in a conversation
+  for a fast fetch, which is also why it cannot delay the first paint or the article. A response to
+  a press acknowledges it immediately: for example, a model turn already on screen in a conversation
   ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `Turn`): it is not gated, because the reader has
   already sent a question and the turn is drawn empty, so it acknowledges the send immediately.
+  The band's immediate responses are listed below.
 - **The words are kept.** Each wait still has a sentence naming what it is waiting for. Beside
   `LoaderCircle` it is visible. In `LogoLoader` it is visually-hidden text beside an `aria-hidden`
   wordmark, and it is what a reader who asked for reduced motion sees *instead* of the wordmark
@@ -42,11 +43,12 @@ adds the row and one line's height at zero specificity. Mount it only while wait
 that ends inside 600ms never shows. It began as Chat's `ChatListLoading` and now draws that one too,
 and the Glossary, Ideas, Timeline, Skim, FAQ, Citations, Tweets, Quiz, Debate, Criteria, Claims,
 Quotes and Simple waits, Sketch's, Illustrated's (and each plate's), Diagram's projection, Candidates'
-first read, the dock's comments and Search's saved searches and first answer — Search with its own
+first read, the dock's comments and Search's saved searches — Search with its own
 hue through `spinnerClassName` (plan
 [261007h § F1](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)).
 `delayMs={0}` draws it at once: `/design` passes it to show the line, and so do Referee's two
-"Reading the paper…" lines, because they answer a run the reader has just pressed — the same
+"Reading the paper…" lines and Search's first "Reading the article for you…" answer, because they
+answer a run the reader has just pressed — the same
 exception as a chat turn already sent, since a press followed by 600ms of nothing reads as a press
 that did nothing. A wait for a read leaves it.
 
@@ -55,6 +57,8 @@ this one yet"*) is the page, not a wait, and is drawn at once without it. **Not 
 spinner beside something the reader can already use — Search's partial-results count and its
 "thorough" upgrade, Diagram's "Reading the article for related passages…" over a drawn picture, the
 `sk-busy`/`ill-busy` job lines over a picture — keeps its own fixed place and shows at once.
+Illustrated keeps its confirmed "Nobody has painted this one yet" sentence immediate while a
+separate delayed line names its lookup for a Sketch to paint from.
 
 ## The wordmark loader
 

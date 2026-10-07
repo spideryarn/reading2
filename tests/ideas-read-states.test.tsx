@@ -486,13 +486,30 @@ afterEach(() => {
 
 describe("the six things the Ideas read can be", () => {
   it("asking: the opening read is out, and the band says it is looking", async () => {
-    const opening = hold();
-    await mount(["band", "probe"]);
-    expect(screen()).toEqual(ASKING);
-    expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
-    /* Not in words yet: a read that lands inside 600ms never says it. */
-    expect(host.textContent).not.toContain(LOOKING);
-    await opening.land(noneYet);
+    vi.useFakeTimers();
+    try {
+      const opening = hold();
+      // mount() flushes real event-loop turns. Render directly under fake time.
+      await act(async () => root.render(
+        createElement(NuqsTestingAdapter, { searchParams: "", hasMemory: true } as Parameters<typeof NuqsTestingAdapter>[0], [
+          createElement(IdeasBand, { key: "band", slug: SLUG, blocks: BLOCKS, onJump: noop, onFound: noop, openKey: null, onOpenKey: noop }),
+          createElement(Probe, { key: "probe", slug: SLUG, withSkim: false }),
+        ]),
+      ));
+      expect(screen()).toEqual(ASKING);
+      expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
+      /* The box alone cannot prove the caller eventually names its read. */
+      act(() => vi.advanceTimersByTime(599));
+      expect(host.textContent).not.toContain(LOOKING);
+      act(() => vi.advanceTimersByTime(1));
+      expect(host.textContent).toContain(LOOKING);
+      vi.useRealTimers();
+      await opening.land(noneYet);
+      expect(host.querySelector('.band-waiting[role="status"]')).toBeNull();
+      expect(host.textContent).not.toContain(LOOKING);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("failed: the opening read failed, and the band offers the read again and nothing that spends", async () => {

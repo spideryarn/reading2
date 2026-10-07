@@ -1,5 +1,5 @@
 import { LoaderCircle } from "lucide-react";
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import { useSlow } from "./useSlow.js";
 
 /**
@@ -49,14 +49,35 @@ export function BandWaiting({
   delayMs?: number;
 }) {
   const slow = useSlow(true, delayMs);
+  // A press response must be present on the first render, even before timers
+  // run. Opening reads still mount the empty live region before their words.
+  const visible = delayMs === 0 || slow;
   return (
     <Tag className={className ? `band-waiting ${className}` : "band-waiting"} role="status">
-      {slow && (
+      {visible ? (
         <>
           <LoaderCircle className={spinnerClassName} size={13} aria-hidden="true" />
           <span>{children}</span>
         </>
+      ) : (
+        /* **The line's footprint before its words** (GPT Sol, F1 review E1):
+           the same spinner and sentence, unseen, so the box is as tall as the
+           line it stands in for — wrapped, at this width — and the band does
+           not jump when the words land. The sentence is a CSS `content`
+           (`.band-waiting-ghost`, mode-band.css), not text, so the live region
+           holds no words to announce until they are real. */
+        <>
+          <LoaderCircle className={`${spinnerClassName} band-waiting-ghost`} size={13} aria-hidden="true" />
+          <span className="band-waiting-ghost" aria-hidden="true" data-words={wordsOf(children)} />
+        </>
       )}
     </Tag>
   );
+}
+
+/** The sentence as plain text, for the unseen copy; every caller passes words. */
+function wordsOf(children: ReactNode): string {
+  return Children.toArray(children)
+    .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
+    .join("");
 }

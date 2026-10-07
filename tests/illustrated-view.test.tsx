@@ -131,6 +131,8 @@ interface Serving {
   plateStatus?: number;
   /** Hold `GET /api/sketch/:slug` open, so `checking` can be observed. */
   hangSketch?: boolean;
+  /** Keep image bytes unresolved while timing or switching their wait lines. */
+  hangPlate?: boolean;
   /** What `GET /api/jobs` answers. Empty unless a test puts a run in flight. */
   jobs?: unknown[];
   /** The artefact the route answers with, when not `ILLUSTRATED`. */
@@ -165,6 +167,7 @@ function serving(opts: Serving = {}) {
     const method = (init?.method ?? "GET").toUpperCase();
     record(method, u, init);
     if (/\/api\/illustrated\/[^/]+\/[0-9a-f]{64}\.jpeg$/.test(u)) {
+      if (opts.hangPlate) return new Promise<Response>(() => {});
       /* **A refusal still has a body**, which is the whole hazard: an error
          page makes a perfectly good Blob, so a component that skipped `res.ok`
          would show it as a picture. */
@@ -259,6 +262,40 @@ async function mount(onJump: (id: BlockId) => void = () => {}) {
 }
 
 describe("the plate's bytes", () => {
+  it("starts a fresh wait when another plate is chosen before the first fetch finishes", async () => {
+    vi.useFakeTimers();
+    try {
+      serving({
+        hangPlate: true,
+        illustrated: {
+          ...ILLUSTRATED,
+          plates: [
+            ILLUSTRATED.plates[0],
+            { ...ILLUSTRATED.plates[0], sceneId: "second", title: "Another picture", image: {
+              ...ILLUSTRATED.plates[0]!.image, sha256: "b".repeat(64),
+            } },
+          ],
+        },
+      });
+      await act(async () => root.render(<IllustratedView slug="s" blocks={BLOCKS} onJump={() => {}} />));
+      expect(asked.some((u) => u.endsWith(`/${HASH}.jpeg`))).toBe(true);
+      act(() => vi.advanceTimersByTime(600));
+      expect(host.querySelector('.ill-plate-out[role="status"]')?.textContent).toBe("Fetching the picture…");
+      const second = host.querySelector<HTMLButtonElement>('[data-ill-plate="second"]');
+      expect(second).not.toBeNull();
+      await act(async () => second?.click());
+      expect(asked.some((u) => u.endsWith(`/${"b".repeat(64)}.jpeg`))).toBe(true);
+      const line = () => host.querySelector('.ill-plate-out[role="status"]');
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(599));
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(1));
+      expect(line()?.textContent).toBe("Fetching the picture…");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   /**
    * **Written red first.** Against a `Plate` that rendered
    * `<img src={"/api/illustrated/s/" + hash + ".jpeg"}>` both of these failed:
@@ -764,6 +801,27 @@ describe("a plate the run could not paint", () => {
 });
 
 describe("the empty state, which has three refusals to tell apart", () => {
+  it("shows the known empty state immediately and delays only the Sketch lookup", async () => {
+    vi.useFakeTimers();
+    try {
+      serving({ noArtefact: true, hangSketch: true });
+      await act(async () => root.render(<IllustratedView slug="s" blocks={BLOCKS} onJump={() => {}} />));
+      expect(asked).toContain("GET /api/sketch/s");
+      expect(host.textContent).toContain("Nobody has painted this one yet.");
+      expect(host.querySelector("svg.cmt-spinner:not(.band-waiting-ghost)")).toBeNull();
+      const line = () => host.querySelector('.band-waiting[role="status"]');
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(599));
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(1));
+      expect(line()?.textContent).toBe("Looking for the Sketch…");
+      expect(line()?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+      expect(host.textContent).toContain("Nobody has painted this one yet.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   /**
    * The step refuses when the Sketch is absent, stale, or drawn for a different
    * reader profile — always before the brief call, so nothing is spent. Each of

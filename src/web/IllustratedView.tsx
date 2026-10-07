@@ -278,7 +278,9 @@ function Plate({
     return (
       /* The dashed plate is there at once, so the page does not jump; the
          words join it only if the fetch is slow. BandWaiting.tsx. */
-      <BandWaiting className="ill-plate-out">Fetching the picture…</BandWaiting>
+      <BandWaiting key={`${slug}\u0000${plate.image.sha256}\u0000${plate.image.ext}`} className="ill-plate-out">
+        Fetching the picture…
+      </BandWaiting>
     );
   }
   return (
@@ -946,10 +948,10 @@ function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
 
   if (sketch.kind === "checking") {
     return (
-      <p role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Nobody has painted this
-        one yet.
-      </p>
+      <>
+        <p>Nobody has painted this one yet.</p>
+        <BandWaiting>Looking for the Sketch…</BandWaiting>
+      </>
     );
   }
 

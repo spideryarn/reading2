@@ -30,7 +30,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Claim, ClaimsRun, OtherText } from "../src/referee-claims.js";
 import {
@@ -144,6 +144,17 @@ const OTHER_TEXT: OtherText[] = [
 ];
 
 /* ------------------------------------------------- rule 1, on the screen -- */
+
+it("acknowledges a Claims run immediately, before any wait timer runs", () => {
+  vi.useFakeTimers();
+  try {
+    render([], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [] });
+    expect(host.querySelector('.band-waiting[role="status"]')?.textContent).toBe("Reading the paper…");
+    expect(host.querySelector('svg.cmt-spinner[aria-hidden="true"]')).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 describe("the order, and the absence of any way to rank", () => {
   it("draws the claims in the order it is given, thinnest last", () => {

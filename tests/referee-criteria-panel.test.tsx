@@ -647,9 +647,9 @@ describe("a criterion deleted while the model is thinking stays deleted", () => 
       },
     ]);
     await flush();
-    /* The row's wait line is up. Its words join it after 600ms
-       (BandWaiting.tsx), which this test has no reason to wait out. */
-    expect(host.querySelector('.crit-row .band-waiting[role="status"]')).not.toBeNull();
+    /* This answers the press that started the run: the words are immediate. */
+    expect(host.querySelector('.crit-row .band-waiting[role="status"]')?.textContent)
+      .toContain("Reading the paper…");
 
     // The referee gives up on it mid-run.
     click(byLabel("Delete"));
