@@ -181,7 +181,6 @@ import {
   ChevronUp,
   Ellipsis,
   FlaskConical,
-  LoaderCircle,
   FileCog,
   type Info,
   LifeBuoy,
@@ -265,7 +264,7 @@ import {
    import graph. key-chord.ts imports nothing, so that argument is answered. */
 import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { InstallHint } from "./InstallHint.js";
 import { DropdownMenu } from "radix-ui";
 import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "./menu.js";
@@ -4482,18 +4481,8 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
  * so the sentence sits exactly where the one it stands in for would.
  */
 function QuestionsLoading() {
-  const slow = useSlow(true);
-  /* `role="status"` for the same reason the chat panel's has one: the sentence
-     arrives 600ms late and would otherwise be announced to nobody. */
-  return (
-    <p className="dock-empty dock-loading" role="status">
-      {slow && (
-        <>
-          <LoaderCircle className="cmt-spinner" size={13} /> Fetching your comments…
-        </>
-      )}
-    </p>
-  );
+  /* The shared wait line: BandWaiting.tsx. */
+  return <BandWaiting className="dock-empty dock-loading">Fetching your comments…</BandWaiting>;
 }
 
 /**

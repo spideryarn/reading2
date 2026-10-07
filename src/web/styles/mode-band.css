@@ -172,6 +172,22 @@
   white-space: nowrap;
 }
 
+/* ------------------------------------------------------- § the wait line --
+   Every band's wait: `BandWaiting.tsx`, docs/project/loading-spinner.md. The
+   caller's own class (`gloss-quiet`, `chat-loading`, `diag-wait`, …) brings
+   the padding, type and colour; this adds only the row — spinner beside the
+   sentence, a wrapped sentence hanging beside the spinner rather than under
+   it — and one line's height, so the empty container that holds the place for
+   600ms is already the height the line will be. `:where()` keeps it at zero
+   specificity, so any caller that states its own display, gap or min-height
+   (Diagram's centred 8rem) still wins. */
+:where(.band-waiting) {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1lh;
+}
+
 /* ------------------------------------------------------------ § the herald --
    **The name the title row gave up, back for three seconds after a press.**
    The row above lost the mode's name on 2026-09-05 because the Dock says it —

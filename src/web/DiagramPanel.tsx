@@ -53,6 +53,7 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -2341,12 +2342,7 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
       </p>
     );
   }
-  return (
-    <p className="diag-wait" role="status">
-      <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" />
-      Reading the article paragraph by paragraph…
-    </p>
-  );
+  return <BandWaiting className="diag-wait">Reading the article paragraph by paragraph…</BandWaiting>;
 }
 
 /**

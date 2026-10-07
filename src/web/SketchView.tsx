@@ -63,6 +63,7 @@
  * no `opens` anywhere. Depending on it would have meant paying for two pictures
  * per article that nobody could ever see.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
@@ -210,9 +211,9 @@ function OwnerSketch({
 
   if (view.status === "loading") {
     return (
-      <div className="sk-wait" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Looking for a picture…
-      </div>
+      <BandWaiting as="div" className="sk-wait">
+        Looking for a picture…
+      </BandWaiting>
     );
   }
 

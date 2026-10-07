@@ -165,6 +165,7 @@ const DESIGN_HIGH_POWER_SINCE = new Date(Date.now() - 3 * 86_400_000).toISOStrin
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
 import { useTheme } from "./appearance.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * The real run button, with only the state under test varying.
@@ -925,10 +926,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <BandCase
             state="loading"
             real='status: "loading"'
-            note="One quiet line, under a head row that is already drawn and still empty. There is
-                  no count yet because there is nothing to count."
+            note="BandWaiting: nothing for 600ms, then a spinner and the sentence naming what it
+                  waits for, in a status line mounted from the start. Every band's wait is this
+                  one. Drawn here without the 600ms, which a real band always has."
           >
-            <p className="gloss-quiet">Looking for a glossary…</p>
+            <BandWaiting className="gloss-quiet" delayMs={0}>
+              Looking for a glossary…
+            </BandWaiting>
           </BandCase>
 
           <BandCase

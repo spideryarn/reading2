@@ -31,6 +31,31 @@ The app has two, and which one a wait gets depends on what else is on the screen
   (below). It is not a live region: on the article page the tab title already announces the wait
   ([page-titles.md](page-titles.md)), and a region mounted already filled announces nothing.
 
+## The band's wait line
+
+Every mode's band draws its wait with one component,
+[`BandWaiting`](../../src/web/BandWaiting.tsx): nothing for 600ms, then a 13px `LoaderCircle`
+(`.cmt-spinner`, `aria-hidden`) and the sentence, *"Looking for the timeline…"*. Its `role="status"`
+container is mounted at once and carries the caller's class (`gloss-quiet`, `diag-wait`, …), so the
+words are announced when they arrive and the band does not jump; `.band-waiting` in `mode-band.css`
+adds the row and one line's height at zero specificity. Mount it only while waiting, and a wait
+that ends inside 600ms never shows. It began as Chat's `ChatListLoading` and now draws that one too,
+and the Glossary, Ideas, Timeline, Skim, FAQ, Citations, Tweets, Quiz, Debate, Criteria, Claims,
+Quotes and Simple waits, Sketch's, Illustrated's (and each plate's), Diagram's projection, Candidates'
+first read, the dock's comments and Search's saved searches and first answer — Search with its own
+hue through `spinnerClassName` (plan
+[261007h § F1](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)).
+`delayMs={0}` draws it at once: `/design` passes it to show the line, and so do Referee's two
+"Reading the paper…" lines, because they answer a run the reader has just pressed — the same
+exception as a chat turn already sent, since a press followed by 600ms of nothing reads as a press
+that did nothing. A wait for a read leaves it.
+
+**Only waits.** A sentence saying nothing has been made yet (*"Nobody has read the chronology out of
+this one yet"*) is the page, not a wait, and is drawn at once without it. **Not here either:** a
+spinner beside something the reader can already use — Search's partial-results count and its
+"thorough" upgrade, Diagram's "Reading the article for related passages…" over a drawn picture, the
+`sk-busy`/`ill-busy` job lines over a picture — keeps its own fixed place and shows at once.
+
 ## The wordmark loader
 
 **It is not a new animation.** It is [the wordmark's hover set](design-logo.md) run on two tracks

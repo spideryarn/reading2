@@ -12,6 +12,7 @@ import type { BlockId, Faq, FaqDropped, FaqQuestion, Job } from "../src/types.js
 import type { UseFaq } from "../src/web/useFaq.js";
 import type { FaqAccess } from "../src/web/FaqPanel.js";
 import { FAQ_BAR_DEFAULT, type FaqOrder } from "../src/web/faq-order.js";
+import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
 const { FAQ_NONE, FAQ_PROMISE, FaqPanel, droppedCount, droppedNote } = await import(
   "../src/web/FaqPanel.js"
@@ -277,9 +278,21 @@ describe("FaqPanel", () => {
     expect(host.querySelector(".faq-item")).toBeNull();
   });
 
-  it("says it is looking while the read is out", async () => {
-    await draw(owner({ status: "loading", faq: null }));
-    expect(host.textContent).toContain("Looking for the questions…");
+  /* The shared wait line (BandWaiting.tsx): its live region at once, the
+     words only once the read has been out long enough to be worth saying. */
+  it("says it is looking while the read is out, once the wait is worth mentioning", async () => {
+    vi.useFakeTimers();
+    try {
+      await draw(owner({ status: "loading", faq: null }));
+      expect(host.querySelector('.band-waiting[role="status"]')).not.toBeNull();
+      expect(host.textContent).not.toContain("Looking for the questions…");
+      act(() => {
+        vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+      });
+      expect(host.textContent).toContain("Looking for the questions…");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("draws a failed read's message", async () => {

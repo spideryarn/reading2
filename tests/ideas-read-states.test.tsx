@@ -340,7 +340,9 @@ function screen(): Screen {
   const text = band.textContent ?? "";
   const badge = band.querySelector(".prof-badge");
   return {
-    looking: text.includes(LOOKING),
+    /* The wait line's live region, which is mounted at once; its words wait
+       600ms (BandWaiting.tsx), so the text is not what says "looking". */
+    looking: band.querySelector('.band-waiting[role="status"]') !== null,
     error: band.querySelector('[role="alert"]')?.textContent ?? null,
     tryAgain: buttons("Try again").length > 0,
     nobody: text.includes(NOBODY),
@@ -488,6 +490,8 @@ describe("the six things the Ideas read can be", () => {
     await mount(["band", "probe"]);
     expect(screen()).toEqual(ASKING);
     expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
+    /* Not in words yet: a read that lands inside 600ms never says it. */
+    expect(host.textContent).not.toContain(LOOKING);
     await opening.land(noneYet);
   });
 

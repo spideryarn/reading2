@@ -116,7 +116,7 @@ import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { media } from "./media.js";
@@ -887,22 +887,14 @@ const Box = forwardRef<
  * Its own component because `useSlow` is a hook and `Saved` returns early.
  */
 function SavedLoading() {
-  const slow = useSlow(true);
   return (
     <div className="srch-empty">
-      {/* `role="status"` rather than a bare paragraph: the words arrive 600ms
-          after the panel does, and a line that appears with no live region
-          around it is silent to a screen reader. It also reads politely — the
-          reader is not interrupted, they are told when they next pause.
-          `srch-waiting` holds the line's height across those 600ms, so the
-          panel does not grow when the sentence lands. GPT Sol, 2026-08-27. */}
-      <p className="srch-working srch-waiting" role="status">
-        {slow && (
-          <>
-            <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
-          </>
-        )}
-      </p>
+      {/* The shared wait line (BandWaiting.tsx), in Search's own hue.
+          `srch-waiting` holds the line's height across the first 600ms, so
+          the panel does not grow when the sentence lands. */}
+      <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin">
+        Fetching your saved searches…
+      </BandWaiting>
     </div>
   );
 }
@@ -1758,9 +1750,11 @@ function Results({
   if (waiting.length > 0 && all.length === 0) {
     return (
       <div className="srch-empty">
-        <p className="srch-working">
-          <LoaderCircle size={13} className="srch-spin" /> Reading the article for you…
-        </p>
+        {/* The line waits its 600ms like every band's (BandWaiting.tsx); the
+            hint under it does not, because it answers the press. */}
+        <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin">
+          Reading the article for you…
+        </BandWaiting>
         <p className="srch-empty-hint">
           The whole piece goes to the model, so this takes a few seconds. You can carry on reading —
           the answer is saved either way.

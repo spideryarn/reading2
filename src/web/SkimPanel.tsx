@@ -73,6 +73,7 @@ import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
 import { type Voice, voiceClass } from "./voice.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** One title on a row's section path, and whose words it is — tree.ts § `titleVoice`. */
 export interface PlaceStep {
@@ -683,7 +684,7 @@ export function SkimPanel({ access, view, away }: Props) {
     >
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the route…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">

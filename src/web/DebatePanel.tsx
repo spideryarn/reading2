@@ -250,6 +250,7 @@ import type {
   PublicDirectDebateRow,
   PublicIdentificationSignal,
 } from "../public-types.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A row as this panel draws it** — the owner's stored row and a visitor's
@@ -1205,7 +1206,7 @@ export function DebatePanel({
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && (
-        <p className="gloss-quiet">Looking for what the web says…</p>
+        <BandWaiting className="gloss-quiet">Looking for what the web says…</BandWaiting>
       )}
 
       {owner?.status === "none" && (

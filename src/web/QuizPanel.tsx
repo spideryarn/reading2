@@ -132,6 +132,7 @@ import { armActivation } from "./activation.js";
 import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -1164,7 +1165,7 @@ export function QuizPanel({
 
       {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the questions…</BandWaiting>}
 
       {owner.status === "none" && (
         <div className="gloss-empty">
@@ -1216,7 +1217,7 @@ export function QuizPanel({
           )}
 
           {waitingForReading && questions.length > 0 && (
-            <p className="gloss-quiet">Looking for what you have read…</p>
+            <BandWaiting className="gloss-quiet">Looking for what you have read…</BandWaiting>
           )}
 
           {filterActive && questions.length > 0 && includedAt.length === 0 && (

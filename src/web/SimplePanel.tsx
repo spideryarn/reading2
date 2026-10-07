@@ -46,6 +46,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** A visitor on a public article whose owner never asked for one. */
 export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this piece yet.";
@@ -146,7 +147,7 @@ export function SimplePanel({
   return (
     <div className="summ-scroll simple-scroll">
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
-      {owner?.status === "loading" && !early && <p className="summ-quiet">Looking for the plain-words version…</p>}
+      {owner?.status === "loading" && !early && <BandWaiting className="summ-quiet">Looking for the plain-words version…</BandWaiting>}
       {owner && early && (
         <EarlyBrief
           owner={owner}

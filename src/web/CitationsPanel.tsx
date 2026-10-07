@@ -96,6 +96,7 @@ import {
   type ThresholdResult,
 } from "./threshold.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -1053,7 +1054,7 @@ export function CitationsPanel({
 
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the citations…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">

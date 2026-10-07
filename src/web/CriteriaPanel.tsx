@@ -132,6 +132,7 @@ import {
   valenceToken,
   valenceWords,
 } from "./valence.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **Starter packs, taken from real referee forms** — Nature's, PLOS ONE's
@@ -394,7 +395,7 @@ function CriteriaView({
       {api.loadError && <p className="crit-error">{api.loadError}</p>}
       {api.error && <p className="crit-error">{api.error}</p>}
 
-      {!api.loaded && <p className="gloss-quiet">Loading your criteria…</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading your criteria…</BandWaiting>}
       {api.loadFailed && (
         <p className="gloss-quiet">Couldn't load your criteria. Reload to try again.</p>
       )}
@@ -1242,7 +1243,7 @@ function CriterionRow({
       </p>
 
       {row.status === "pending" && row.results.length === 0 && (
-        <p className="gloss-quiet">Reading the paper…</p>
+        <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>
       )}
       {row.status === "error" && (
         <p className="crit-error">
