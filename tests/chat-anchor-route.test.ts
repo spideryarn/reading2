@@ -406,6 +406,17 @@ describe("cancelling the first answer", () => {
  * Through `chatStore` (the guarded one the route uses), so what is asserted is
  * also that each refusal crosses `guardDbStore` as itself: a `ChatConflict`
  * for the route's 409, a numeric `status` of 400 for help.
+ *
+ * **Mutation.** Three, each applied to src/chat.ts § `withTurn` alone, watched
+ * red here on 2026-10-07 and undone. The anchor refusal disabled: the first
+ * two cases. The help refusal disabled: the third. The help refusal thrown as
+ * a `ChatConflict` instead of a `ChatTurnRefused`: the third again, on the
+ * status, which is the 400 against 409 the route has always kept apart.
+ *
+ * **Blind to.** Two servers. This is one process calling `begin` as a second
+ * would, so it shows what the transaction decides and nothing about the
+ * schedule that gets a request there; and it does not show the route turning
+ * these into a response, because the route's own check answers first here.
  */
 describe("the store refuses what the route would, for a request another process let through", () => {
   const begin = (turn: Parameters<typeof chatStore.begin>[1]) =>
@@ -470,6 +481,17 @@ describe("the store refuses what the route would, for a request another process 
  * each on a freshly minted id with `send(null, …)`; its `onSend` for a
  * follow-up, which carries no anchor and no flag) plus the one resend the
  * route has always allowed.
+ *
+ * **Mutation.** Two, for the two ways the new refusals could reach a request
+ * that was fine, watched red here on 2026-10-07 and undone. `sameAnchor` in
+ * src/types.ts answering `false` for an identical anchor: the first case.
+ * `withTurn` refusing `help` whether or not the thread exists: the second.
+ * Both cases were green before the refusals existed, which is their point.
+ *
+ * **Blind to.** The browser. The request bodies are written out from a
+ * reading of src/web/ChatDialog.tsx, so a client that started sending an
+ * anchor on a follow-up would not turn this red; it would meet the 409 the
+ * route already gave it.
  */
 describe("the requests one tab makes, after the store learnt the route's rules", () => {
   it("first send, the same send again, and a follow-up", async () => {
@@ -513,6 +535,15 @@ describe("the requests one tab makes, after the store learnt the route's rules",
  *
  * Counted up to the moment `begin` is called, because the stream reads the
  * thread again afterwards for reasons of its own.
+ *
+ * **Mutation.** The code before the change is the first one: these read 1, 4
+ * and 5. And on 2026-10-07 the shared read was made to load twice, which
+ * turned the second and third cases red and left the first green, as it
+ * should: a send carrying none of the four never takes that read.
+ *
+ * **Blind to.** Queries. It counts calls to `chatStore.load`, each of which
+ * is three statements, and nothing after `begin` is called: the loads the
+ * stream makes for its own reasons are not in the number.
  */
 describe("a send reads the article's conversations once for its checks, however many it carries", () => {
   async function loadsBeforeBegin(body: unknown): Promise<number> {

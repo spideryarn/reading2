@@ -191,6 +191,11 @@ describe("the begin frame names both rows of the turn", () => {
  * The model here hangs until its request is aborted, which is what lets an
  * answer be "live" for the length of a test. Everything else in this file
  * rejects at once.
+ *
+ * Checked by mutation: the `requireTail` line in the route's gate deleted, watched
+ * red on 2026-10-07 and undone: the first case fails on *the live answer was
+ * ended by a request that was refused*, and the second, the control, stays
+ * green, which is what says the first is not red for an unrelated reason.
  */
 describe("an edit the store will refuse stops nothing", () => {
   /** A request left open, with what it has written so far. */
