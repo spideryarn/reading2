@@ -2083,8 +2083,12 @@ export interface ShareLinkStore {
    * working in the same statement. Refuses a paper that has not been read
    * through, as going public does. The route has already refused a request
    * without `rightsConfirmed: true`; the audit row records that it was given.
+   *
+   * **`keepExisting`** answers a link that is already on, unchanged and with
+   * nothing recorded, instead of replacing it — checked under the row lock, so
+   * two callers at once make one key between them (plan 261007o).
    */
-  create(slug: string): Promise<ShareLinkState>;
+  create(slug: string, options?: { keepExisting?: boolean }): Promise<ShareLinkState>;
   /** Turn it off. Already off changes nothing and records nothing. */
   turnOff(slug: string): Promise<ShareLinkState>;
 }

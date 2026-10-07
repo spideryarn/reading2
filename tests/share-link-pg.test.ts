@@ -167,7 +167,9 @@ const BONELESS = fixture("boneless", { boneless: true });
 /** Private, with a link, and archived. */
 const ARCHIVED = fixture("archived", { archived: true });
 
-const ALL = [MINE, OTHER, BARE, BOTH, MINIMAL, BONELESS, ARCHIVED];
+/** Private, no link, for two `keepExisting` makes at once (plan 261007o); BARE must stay untouched. */
+const RACED = fixture("raced");
+const ALL = [MINE, OTHER, BARE, BOTH, MINIMAL, BONELESS, ARCHIVED, RACED];
 /** A slug nothing has, for the 404 everything else is compared with. */
 const ABSENT = `test-share-link-absent-${RUN}`;
 /** Key-shaped, and nobody's. */
@@ -852,6 +854,32 @@ describe("a private link", { timeout: 60_000 }, () => {
       "created",
       "created",
     ]);
+  });
+
+  /* Plan 261007o (Sol's F1): the MCP's create_private_link must hand over a link
+     that exists rather than replace it, and the check has to be under the row
+     lock, or a link made between a read and a POST would be replaced anyway. */
+  it("with keepExisting, answers the link that is on and changes and records nothing", async () => {
+    const before = (await events(MINE)).length;
+    const r = await link("POST", MINE, { body: { rightsConfirmed: true, keepExisting: true } });
+    expect(r.status, r.text).toBe(200);
+    expect(r.body).toEqual(expect.objectContaining({ on: true, key: KEYS.mine }));
+    expect((await article(MINE, KEYS.mine)).status).toBe(200);
+    expect(await events(MINE)).toHaveLength(before);
+
+    const bad = await link("POST", MINE, { body: { rightsConfirmed: true, keepExisting: "yes" } });
+    expect(bad.status).toBe(400);
+  });
+
+  it("with keepExisting, two at once on an article with no link make one key between them", async () => {
+    expect(await tokenOf(RACED)).toEqual({ token: null, at: null });
+    const body = { rightsConfirmed: true, keepExisting: true };
+    const [a, b] = await Promise.all([link("POST", RACED, { body }), link("POST", RACED, { body })]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const keyA = (a.body as ShareLinkState).on ? (a.body as { key: string }).key : null;
+    expect(keyA).not.toBeNull();
+    expect((b.body as { key?: string }).key).toBe(keyA);
+    expect((await events(RACED)).map((e) => e.event)).toEqual(["created"]);
   });
 
   /* ---------------------------------------------------- one transaction -- */
