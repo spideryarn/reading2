@@ -29,6 +29,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { AdminVouchersPage } = await import("../src/web/AdminVouchersPage.js");
 const { useAdminVouchers } = await import("../src/web/useAdminVouchers.js");
+const { SignedInReader } = await import("../src/web/lib/made-for.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,6 +52,7 @@ const VOUCHERS = [
     claimedAt: null,
     revokedAt: null,
     claimantEmail: null,
+    starter: null,
     emails: { gift: null, claimed: null },
   },
   {
@@ -68,6 +70,7 @@ const VOUCHERS = [
     revokedAt: null,
     claimantEmail: "claimed-now@example.test",
     claimant: { kind: "free", used: 4, limit: 13, remaining: 9, lapsed: false },
+    starter: null,
     emails: { gift: null, claimed: null },
   },
   {
@@ -84,6 +87,7 @@ const VOUCHERS = [
     claimedAt: null,
     revokedAt: "2026-09-11T10:00:00Z",
     claimantEmail: null,
+    starter: null,
     emails: { gift: null, claimed: null },
   },
 ];
@@ -92,9 +96,36 @@ type Call = { method: string; url: string; body: unknown };
 let calls: Call[];
 let patchAnswer: { status: number; body: unknown };
 /** Status 0 is a network failure: `fetch` throws. */
-let postAnswer: { status: number; body: unknown };
+let postAnswer: { status: number; body: unknown } | Promise<{ status: number; body: unknown }>;
 let retryAnswer: { status: number; body: unknown } | Promise<{ status: number; body: unknown }>;
 let listAnswer: unknown[];
+/** What `GET /api/library` answers: the administrator's own shelf, for the starter picker. */
+let shelfAnswer: unknown[];
+
+/** A shelf row with what the picker reads, and what the shelf's cache insists on. */
+const shelfRow = (over: { readonly slug: string; readonly [field: string]: unknown }) => ({
+  title: "Untitled",
+  addedAt: "2026-10-01T10:00:00Z",
+  words: 1000,
+  minutes: 5,
+  blocks: 10,
+  parts: 1,
+  sections: 1,
+  comments: 0,
+  sourceReusable: true,
+  opens: 0,
+  has: { arc: false, tweets: false, glossary: false },
+  processing: "full",
+  ...over,
+});
+
+/* Out of order, so "newest first" is the picker's doing. */
+const SHELF = [
+  shelfRow({ slug: "the-bitter-lesson", title: "The Bitter Lesson", addedAt: "2026-10-05T10:00:00Z", privateLinkOn: true }),
+  shelfRow({ slug: "another-one", title: "Another", addedAt: "2026-10-01T10:00:00Z", visibility: "public" }),
+  shelfRow({ slug: "some-paper", title: "Some Paper", addedAt: "2026-10-06T10:00:00Z" }),
+  shelfRow({ slug: "abstract-only", title: "Abstract Only", addedAt: "2026-10-07T10:00:00Z", processing: "minimal" }),
+];
 
 beforeEach(() => {
   calls = [];
@@ -102,6 +133,7 @@ beforeEach(() => {
   postAnswer = { status: 201, body: { id: "new", email: "queued" } };
   retryAnswer = { status: 202, body: { id: "x", email: "sending" } };
   listAnswer = VOUCHERS;
+  shelfAnswer = SHELF;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -118,9 +150,11 @@ beforeEach(() => {
       return json(answer.status, answer.body);
     }
     if (method === "POST") {
-      if (postAnswer.status === 0) throw new TypeError("Failed to fetch");
-      return json(postAnswer.status, postAnswer.body);
+      const answer = await postAnswer;
+      if (answer.status === 0) throw new TypeError("Failed to fetch");
+      return json(answer.status, answer.body);
     }
+    if (url.startsWith("/api/library")) return json(200, { articles: shelfAnswer });
     return json(200, { vouchers: listAnswer });
   }) as typeof fetch;
 });
@@ -132,7 +166,14 @@ async function mount() {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<AdminVouchersPage />));
+  /* Signed in, as App draws every admin page: the starter picker reads this reader's shelf. */
+  await act(async () =>
+    root.render(
+      <SignedInReader.Provider value="reader-1">
+        <AdminVouchersPage />
+      </SignedInReader.Provider>,
+    ),
+  );
   for (let i = 0; i < 50 && !host.querySelector("tbody tr"); i++) {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1));
@@ -402,7 +443,7 @@ describe("/admin/vouchers", () => {
       const state = useAdminVouchers();
       return (
         <>
-          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null, recipientNote: null, recipientName: null })}>
+          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null, recipientNote: null, recipientName: null, starterSlug: null })}>
             Create
           </button>
           <span>{state.vouchers?.map((voucher) => voucher.email).join(",") ?? "loading"}</span>
@@ -609,6 +650,30 @@ describe("/admin/vouchers", () => {
     });
     const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
 
+    /* Sol's F13 on 261007j: the inputs stay editable while a create is in
+       flight, so the answer to the first must not wipe a second draft typed
+       meanwhile. */
+    it("keeps a draft typed while the create was in flight", async () => {
+      await mount();
+      await fill("first@example.test");
+      let answer: (value: { status: number; body: unknown }) => void = () => {};
+      postAnswer = new Promise((resolve) => {
+        answer = resolve;
+      });
+      await act(async () => form().requestSubmit());
+      await fill("second@example.test");
+      await act(async () => answer({ status: 201, body: { id: "new", email: "queued" } }));
+      await settle();
+      expect((host.querySelector("#voucher-new-email") as HTMLInputElement).value).toBe("second@example.test");
+    });
+
+    it("still clears the form when nothing changed while the create was in flight", async () => {
+      await mount();
+      await fill("first@example.test");
+      await submit();
+      expect((host.querySelector("#voucher-new-email") as HTMLInputElement).value).toBe("");
+    });
+
     it("sends an id it minted, and the same one again when the same form is resubmitted", async () => {
       await mount();
       await fill("new@example.test");
@@ -803,7 +868,8 @@ describe("/admin/vouchers", () => {
       await fill("new@example.test");
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       try {
-        const reads = () => calls.filter((c) => c.method === "GET").length;
+        /* The voucher list's reads; the starter picker's shelf has its own. */
+        const reads = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/vouchers").length;
         const start = reads();
         await act(async () => form().requestSubmit());
         await act(async () => {
@@ -845,6 +911,322 @@ describe("/admin/vouchers", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  /**
+   * **The starter article** — plan 261007j stage 2. The picker reads the
+   * administrator's own shelf, links out to the add page and to the article's
+   * own sharing card rather than importing or making a link itself (§ Why the
+   * form links out), and holds Create back while the chosen article could not
+   * be linked. The key is never asked for, so it can be in no request and on
+   * no screen.
+   */
+  describe("its starter article", () => {
+    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+    const picker = () => host.querySelector("#voucher-new-starter") as HTMLSelectElement;
+    const statusLine = () => host.querySelector("#voucher-new-starter-status");
+    const createButton = () => form().querySelector('button[type="submit"]') as HTMLButtonElement;
+    const creates = () => calls.filter((c) => c.method === "POST" && c.url === "/api/admin/vouchers");
+    const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
+    const linkNamed = (label: string) =>
+      [...host.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.trim() === label);
+
+    /* The shelf arrives after the voucher list; wait for its options. */
+    async function mountWithShelf() {
+      await mount();
+      for (let i = 0; i < 50 && (picker()?.options.length ?? 0) < 2; i++) await settle();
+    }
+
+    async function choose(slug: string) {
+      await act(async () => {
+        picker().value = slug;
+        picker().dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+
+    async function fill(email: string) {
+      const input = host.querySelector("#voucher-new-email") as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(input, email);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    async function submit() {
+      await act(async () => form().requestSubmit());
+      await settle();
+    }
+
+    it("offers your own articles, newest first, without the abstract-only papers, and none by default", async () => {
+      await mountWithShelf();
+      expect([...picker().options].map((o) => o.textContent)).toEqual([
+        "None",
+        "Some Paper",
+        "The Bitter Lesson",
+        "Another",
+      ]);
+      expect(picker().value).toBe("");
+      expect(picker().labels?.[0]?.textContent).toContain("Starter article");
+      /* After the note to them, before the private note. */
+      const controls = [...form().querySelectorAll<HTMLElement>("input, textarea, select, button")];
+      const at = (selector: string) => controls.indexOf(form().querySelector(selector) as HTMLElement);
+      expect(at("#voucher-new-recipient-note")).toBeLessThan(at("#voucher-new-starter"));
+      expect(at("#voucher-new-starter")).toBeLessThan(at("#voucher-new-note"));
+      expect(statusLine()).toBeNull();
+      expect(createButton().disabled).toBe(false);
+    });
+
+    it("says a private article with its link on will be carried, and lets Create go", async () => {
+      await mountWithShelf();
+      await choose("the-bitter-lesson");
+      expect(statusLine()?.textContent).toContain("The Bitter Lesson");
+      expect(statusLine()?.textContent).toContain("private link is on");
+      expect(statusLine()?.textContent).toContain("The email will carry it.");
+      expect(createButton().disabled).toBe(false);
+    });
+
+    it("says a public article is linked by its public page, no key involved", async () => {
+      await mountWithShelf();
+      await choose("another-one");
+      expect(statusLine()?.textContent).toContain("public");
+      expect(statusLine()?.textContent).toContain("no key involved");
+      const page = linkNamed("its public page");
+      expect(page?.getAttribute("href")).toBe("/read/another-one");
+      expect(page?.target).toBe("_blank");
+      expect(page?.rel).toContain("noopener");
+      expect(createButton().disabled).toBe(false);
+    });
+
+    it("holds Create back for a private article with no link, and links to its sharing card in a new tab", async () => {
+      await mountWithShelf();
+      await choose("some-paper");
+      expect(statusLine()?.textContent).toContain("private, with no private link yet");
+      const make = linkNamed("Make one on its page");
+      expect(make?.getAttribute("href")).toBe("/read/some-paper/metadata?section=access-sharing");
+      expect(make?.target).toBe("_blank");
+      expect(make?.rel).toContain("noopener");
+      expect(createButton().disabled).toBe(true);
+      expect(statusLine()?.textContent).toContain("Create voucher waits until it has one.");
+      expect(createButton().getAttribute("aria-describedby")).toBe("voucher-new-starter-status");
+    });
+
+    it("turns no link into on when Refresh reads the shelf again", async () => {
+      await mountWithShelf();
+      await choose("some-paper");
+      expect(createButton().disabled).toBe(true);
+      shelfAnswer = SHELF.map((row) => (row.slug === "some-paper" ? { ...row, privateLinkOn: true } : row));
+      const before = calls.length;
+      await act(async () => buttonIn(form(), "Refresh")?.click());
+      await settle();
+      expect(calls.slice(before).filter((c) => c.method === "GET").map((c) => c.url)).toEqual(["/api/library"]);
+      expect(statusLine()?.textContent).toContain("private link is on");
+      expect(createButton().disabled).toBe(false);
+    });
+
+    it("holds Create back when the chosen article has left the shelf", async () => {
+      await mountWithShelf();
+      await choose("some-paper");
+      shelfAnswer = SHELF.filter((row) => row.slug !== "some-paper");
+      await act(async () => buttonIn(form(), "Refresh")?.click());
+      await settle();
+      expect(statusLine()?.textContent).toContain("no longer on your shelf");
+      expect(createButton().disabled).toBe(true);
+    });
+
+    it("opens the add page for a pasted address in a new tab, and imports nothing itself", async () => {
+      await mountWithShelf();
+      const box = host.querySelector("#voucher-new-import") as HTMLInputElement;
+      expect(box.labels?.[0]?.textContent).toContain("Or import one");
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(box, " https://example.test/essay ");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const open = linkNamed("Import in a new tab");
+      expect(open?.getAttribute("href")).toBe("/add/https%3A%2F%2Fexample.test%2Fessay");
+      expect(open?.target).toBe("_blank");
+      expect(open?.rel).toContain("noopener");
+      /* Enter in the box opens it too, and must not create the voucher. */
+      const opened = vi.fn((e: Event) => e.preventDefault());
+      open?.addEventListener("click", opened);
+      await act(async () => {
+        box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+      await settle();
+      expect(opened).toHaveBeenCalledTimes(1);
+      expect(creates()).toHaveLength(0);
+      expect(calls.some((c) => c.method !== "GET")).toBe(false);
+    });
+
+    it("sends the starter's slug, or null, and goes back to none once the voucher is made", async () => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ starterSlug: null });
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      await submit();
+      expect(creates()[1]?.body).toMatchObject({ email: "new@example.test", starterSlug: "the-bitter-lesson" });
+      expect(picker().value).toBe("");
+    });
+
+    it("mints a new id when only the starter changed after a create whose answer was lost", async () => {
+      /* Sol's F5, as 261007f's name: the fingerprint lists every field by hand. */
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      await submit();
+      expect(idOf(creates()[1])).toBe(idOf(creates()[0]));
+      await choose("another-one");
+      await submit();
+      expect(creates()[2]?.body).toMatchObject({ starterSlug: "another-one" });
+      expect(idOf(creates()[2])).not.toBe(idOf(creates()[0]));
+    });
+
+    it("shows the server's sentence when it refuses the starter anyway", async () => {
+      const sentence = "That starter article is private and has no private link. Make the link on its page first.";
+      postAnswer = { status: 409, body: { error: sentence } };
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      await submit();
+      expect(form().querySelector('[role="alert"]')?.textContent).toBe(sentence);
+    });
+
+    it.each(["link-off", "deleted", "minimal"])("replays a lost create answer even after its starter becomes %s", async (state) => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      shelfAnswer = state === "deleted"
+        ? SHELF.filter((row) => row.slug !== "the-bitter-lesson")
+        : SHELF.map((row) => row.slug === "the-bitter-lesson"
+          ? { ...row, privateLinkOn: false, ...(state === "minimal" ? { processing: "minimal" } : {}) }
+          : row);
+      await act(async () => buttonIn(form(), "Refresh")?.click());
+      await settle();
+      expect(createButton().disabled).toBe(false);
+      expect(statusLine()?.textContent).toContain("retry the unchanged voucher");
+      /* A changed draft is a new create and still needs an eligible starter. */
+      await fill("changed@example.test");
+      expect(createButton().disabled).toBe(true);
+      await submit();
+      expect(creates()).toHaveLength(1);
+      await fill("new@example.test");
+      expect(createButton().disabled).toBe(false);
+      postAnswer = { status: 200, body: { id: "x", email: "replayed" } };
+      await submit();
+      expect(creates()).toHaveLength(2);
+      expect(creates()[1]?.body).toEqual(creates()[0]?.body);
+      expect(form().textContent).toContain("already been created");
+    });
+
+    it("keeps an import draft out of voucher validation", async () => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      const box = host.querySelector("#voucher-new-import") as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(box, "example.test/essay");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(linkNamed("Import in a new tab")?.getAttribute("href")).toBe("/add/example.test%2Fessay");
+      expect(form().checkValidity()).toBe(true);
+      await submit();
+      expect(creates()).toHaveLength(1);
+      expect(creates()[0]?.body).toMatchObject({ starterSlug: null });
+    });
+
+    it.each([false, true])("voices the sketch title according to its rename flag (%s)", async (renamed) => {
+      shelfAnswer = SHELF.map((row) => row.slug === "the-bitter-lesson" ? { ...row, titleOverridden: renamed } : row);
+      await mountWithShelf();
+      await choose("the-bitter-lesson");
+      const sketch = host.querySelector('[aria-label="What their email will look like"]');
+      expect(sketch?.querySelector(renamed ? ".voice-reader" : ".voice-author")?.textContent).toBe("The Bitter Lesson");
+      if (renamed) expect(sketch?.textContent).toContain("Their email uses the article’s original title.");
+    });
+
+    it("sketches the starter line, title only, after the note", async () => {
+      await mountWithShelf();
+      const sketch = () => host.querySelector('[aria-label="What their email will look like"]');
+      const lines = () => [...(sketch()?.querySelectorAll("p") ?? [])].map((p) => p.textContent);
+      expect(sketch()?.textContent).not.toContain("Here is");
+      await choose("the-bitter-lesson");
+      const line = 'Here is "The Bitter Lesson" in Spideryarn, to start with:';
+      expect(lines()).toContain(line);
+      expect(lines().indexOf(line)).toBe(lines().indexOf("Your note to them goes here, if you write one.") + 1);
+      await choose("");
+      expect(sketch()?.textContent).not.toContain("Here is");
+    });
+
+    it("never asks for, sends or shows a key", async () => {
+      await mountWithShelf();
+      for (const slug of ["the-bitter-lesson", "another-one", "some-paper", "the-bitter-lesson"]) await choose(slug);
+      await fill("new@example.test");
+      await submit();
+      for (const c of calls) {
+        expect(c.url).not.toContain("share-link");
+        expect(`${c.url} ${JSON.stringify(c.body ?? null)}`).not.toMatch(/[?&]key=/);
+      }
+      expect(host.innerHTML).not.toMatch(/[?&](amp;)?key=/);
+    });
+  });
+
+  describe("a voucher with a starter", () => {
+    const STARTED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
+    const GONE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
+    const withStarters = () => [
+      { ...VOUCHERS[0], id: STARTED, email: "started@example.test", starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson" } },
+      { ...VOUCHERS[0], id: GONE, email: "gone@example.test", recipientName: null, starter: { slug: "old-essay", title: null } },
+      { ...VOUCHERS[1], starter: null },
+    ];
+
+    it("names its starter under the address, and says when the article is gone", async () => {
+      listAnswer = withStarters();
+      await mount();
+      const started = rowFor("started@example.test")?.querySelector("td");
+      expect(started?.textContent).toContain("Starter: The Bitter Lesson");
+      /* The title is the author's words (fonts.md). */
+      expect([...(started?.querySelectorAll(".voice-author") ?? [])].map((e) => e.textContent)).toEqual([
+        "The Bitter Lesson",
+      ]);
+      expect(rowFor("gone@example.test")?.querySelector("td")?.textContent).toContain("Starter: old-essay (deleted)");
+      expect(rowFor("claimed@example.test")?.querySelector("td")?.textContent).toBe("claimed@example.test");
+    });
+
+    async function readdress(answer: unknown) {
+      patchAnswer = { status: 200, body: answer };
+      listAnswer = withStarters();
+      await mount();
+      const row = rowFor("started@example.test");
+      await act(async () => buttonIn(row, "Edit")?.click());
+      const email = row?.querySelector<HTMLInputElement>('input[type="email"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(email, "moved@example.test");
+        email?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => buttonIn(row, "Save")?.click());
+      await settle();
+      expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([{ email: "moved@example.test" }]);
+      return row;
+    }
+
+    it("says so when a new address's email went without its starter", async () => {
+      const row = await readdress({ ok: true, email: "queued", starter: "dropped" });
+      const said = row?.querySelector('[role="status"]')?.textContent ?? "";
+      expect(said).toContain("Saved.");
+      expect(said).toContain("without the starter article");
+    });
+
+    it("says nothing extra when the starter went with it", async () => {
+      const row = await readdress({ ok: true, email: "queued", starter: "kept" });
+      expect(row?.textContent).not.toContain("without the starter article");
     });
   });
 });

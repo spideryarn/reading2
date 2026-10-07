@@ -332,18 +332,17 @@ import {
 import { readBillingSummary } from "./billing/summary.js";
 import {
   claimVouchersFor,
-  createVoucher,
-  listVouchers,
   parseNewVoucher,
   parseVoucherPatch,
-  updateVoucher,
+  pgVoucherStore,
+  type StarterRefusal,
 } from "./store/pg-vouchers.js";
 import {
   deliverReservedVoucherEmail,
   reserveVoucherEmailRetry,
   sendQueuedVoucherEmail,
 } from "./store/pg-voucher-emails.js";
-import type { VoucherCreated } from "./admin-vouchers.js";
+import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
 import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
@@ -8584,6 +8583,28 @@ const JOBS_PATH = "/api/jobs";
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
+
+/**
+ * **Why a voucher's starter article was refused**, in the administrator's
+ * words (plan 261007j). A slug that is not theirs is a 400, as a typo would
+ * be; the other two are states of their own article they can change, so 409.
+ * Constant sentences: every `httpError` here is logged, and none names the
+ * article, let alone its link.
+ */
+function starterRefused(reason: StarterRefusal): Error {
+  switch (reason) {
+    case "absent":
+      return httpError(400, "That starter article is not one of yours.");
+    case "unpublished":
+      return httpError(409, "That starter article has nothing to read yet. Choose it once it is on your shelf.");
+    case "link-off":
+      return httpError(409, "That starter article is private and has no private link. Make the link on its page first.");
+    default: {
+      const never: never = reason;
+      return httpError(500, `unknown starter refusal ${String(never)}`);
+    }
+  }
+}
 /* One report, by its pair: read with GET, marked ignored with PATCH. */
 const ADMIN_FEEDBACK_REPORT_PATTERN = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/;
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
@@ -8715,7 +8736,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      `billing_vouchers` bar the reader's own claim, and they are here, inside
      the namespace gate above the table, so no reader can reach them.
      docs/plans/261001m-gift-vouchers-for-free-articles.md;
-     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation. */
+     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation.
+     Through `pgVoucherStore`, the guarded store, so a failed write cannot put
+     the email it was queueing — a starter's private link included — into a
+     log line, a 500 or Sentry (261007j, Sol's F1). */
   {
     kind: "exact",
     method: "GET",
@@ -8724,7 +8748,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }) => {
       /* Addresses and private notes about other people. */
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, { vouchers: await listVouchers() });
+      send(res, 200, { vouchers: await pgVoucherStore.listVouchers() });
     },
   },
   {
@@ -8735,9 +8759,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ user, request: { req, res } }) => {
       const parsed = parseNewVoucher(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      /* The browser mints the id, so a replay is the same create (261001p). */
-      const answer = await createVoucher(parsed.value, user.id);
+      /* The browser mints the id, so a replay is the same create (261001p).
+         A starter is resolved as this administrator, after the replay check
+         and only for a new id (261007j); its link is read, never made. */
+      const answer = await pgVoucherStore.createVoucher(parsed.value, user.id);
       if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
+      if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
       res.setHeader("Cache-Control", "private, no-store");
       if (answer.kind === "replayed") {
         send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
@@ -8761,16 +8788,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
       const parsed = parseVoucherPatch(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      const answer = await updateVoucher(id, parsed.value);
+      const answer = await pgVoucherStore.updateVoucher(id, parsed.value);
       if (answer.kind === "not-found") throw httpError(404, "There is no such voucher.");
       if (answer.kind === "claimed") {
         throw httpError(409, "That voucher has been claimed, so its address can no longer change.");
       }
       res.setHeader("Cache-Control", "private, no-store");
-      /* A real change of address queued the recipient's email to the new one. */
+      /* A real change of address queued the recipient's email to the new one,
+         and says whether that email still links the starter (261007j, F3). */
       const delivery = answer.giftDelivery;
       if (delivery) await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
-      send(res, 200, delivery ? { ok: true, email: "queued" } : { ok: true });
+      send(
+        res,
+        200,
+        (delivery
+          ? { ok: true, email: "queued", ...(answer.starter ? { starter: answer.starter } : {}) }
+          : { ok: true }) satisfies VoucherUpdated,
+      );
     },
   },
   /* **Retry one voucher email** — the Status cell's button. Reserved here, so

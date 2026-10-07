@@ -201,6 +201,15 @@ export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: st
      Its bytes are unedited. */
   { name: "winehq-anubis", file: "winehq_anubis.html", slot: "—",
     url: "https://bugs.winehq.org/" },
+  /* **Two blog posts with their readers' comments in the HTML**, 2026-10-07:
+     Greg's own example of a post whose thread must stay out, and a short post
+     whose thread Readability's retry handed back as the article when the post
+     was cut down — docs/plans/261007k-readers-comments-left-out-of-a-blog-import-on-every-pass.md,
+     tests/extract-reader-comments.test.ts. Bytes unedited. */
+  { name: "xena-wordpress-comments", file: "xena_wordpress_comments.html", slot: "—",
+    url: "https://xenaproject.wordpress.com/2026/10/01/to-grieve-or-not-to-grieve/" },
+  { name: "lemire-wordpress-comments", file: "lemire_wordpress_comments.html", slot: "—",
+    url: "https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/" },
 ];
 
 /** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */

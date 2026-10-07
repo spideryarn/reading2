@@ -14,6 +14,8 @@ summaries, but not the sizes.
 
 ## Reading it
 
+![Structure in two columns: the article’s seven parts on the left, the first part’s four sections on the right, the current one highlighted with a line on what it says](../images/mode-structure.png "Structure: the parts on the left, the sections of the part you are in on the right. Press any row to jump there.")
+
 In **Fisheye**, where a column has no room for every row it says how many come earlier or later. As
 one list, Fisheye always shows the sections directly under the part you are in and the available
 summary of the current one; when that will not all fit, the list scrolls. Use **Expanded** to see

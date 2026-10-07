@@ -581,6 +581,14 @@ in their inbox. The Resend entry on the page says so, `tests/privacy-page.test.t
 and `LAST_UPDATED` moved to 7 October 2026. It is never in the subject, the claim notice or a log
 line.
 
+**And, the same day, a link to a starter article** ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)):
+whoever makes the gift may choose one of their own articles, and the email links it — by its public
+address, or, for an article that is not public, by its private link, whose key lets whoever holds
+it read that article. The key is then in the kept email, Resend's log and the recipient's inbox,
+and anyone they forward it to can read the article, as with any private link
+([security-map.md](security-map.md)). The Resend entry on the page says so in one clause,
+`tests/privacy-page.test.ts` holds it, and `LAST_UPDATED` was already 7 October 2026.
+
 ## A reader is emailed when their feedback ships
 
 **Added 2026-10-02** ([261002f](../plans/261002f-email-readers-when-their-feedback-ships.md)): when

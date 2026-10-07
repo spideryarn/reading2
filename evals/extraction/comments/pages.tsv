@@ -1,0 +1,32 @@
+# The live pages behind plan 261007k (readers' comments), fetched 2026-10-07 by fetch.sh into pages/,
+# which is not committed: these change. The two that matter most are corpus fixtures instead
+# (xena_wordpress_comments.html, lemire_wordpress_comments.html). <file>\t<url>
+# Blog posts with readers' comments, and pages without:
+pages/xena.html	https://xenaproject.wordpress.com/2026/10/01/to-grieve-or-not-to-grieve/
+pages/ssc.html	https://slatestarcodex.com/2014/07/30/meditations-on-moloch/
+pages/cc-blogger.html	https://blog.computationalcomplexity.org/2025/07/answer-to-my-group-onegroup-two-prez.html
+pages/cc-blogger2.html	https://blog.computationalcomplexity.org/2025/12/weird-al-vs-weird-ai.html
+pages/lemire.html	https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/
+pages/johndcook.html	https://www.johndcook.com/blog/2026/10/06/lissajous-and-bowditch/
+pages/languagelog.html	https://languagelog.ldc.upenn.edu/nll/?p=74365
+pages/lwn.html	https://lwn.net/Articles/922405/
+pages/ncatcafe.html	https://golem.ph.utexas.edu/category/2026/09/the_e6_root_polytope.html
+pages/fourgravitons.html	https://4gravitons.com/2026/08/07/it-only-counts-when-ai-gets-to-my-field/
+pages/radimentary.html	https://radimentary.wordpress.com/2026/10/01/on-social-reality-in-china/
+pages/terrytao-hex.html	https://terrytao.wordpress.com/2026/10/06/hexagon/
+pages/terrytao.html	https://terrytao.wordpress.com/2024/12/
+pages/crookedtimber.html	https://crookedtimber.org/
+pages/blogger.html	https://bldgblog.com/2023/01/
+pages/lesswrong.html	https://www.lesswrong.com/posts/AfAp8mEAbuavuHZMc/for-the-sake-of-pleasure-alone
+pages/hn.html	https://news.ycombinator.com/item?id=8863
+# Pages where the discussion is the content:
+pages/github-issue.html	https://github.com/mozilla/readability/issues/1
+pages/github-issue2.html	https://github.com/nodejs/node/issues/1
+pages/oldreddit.html	https://old.reddit.com/r/AskHistorians/comments/1c9q9i3/
+pages/discourse.html	https://discuss.python.org/t/pep-8-modernisation/1
+pages/discourse2.html	https://meta.discourse.org/t/what-is-discourse/1
+pages/stackoverflow.html	https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array
+pages/mailarchive.html	https://mail.python.org/archives/list/python-dev@python.org/thread/2JEEHNSDQIXDNOYN3FRQXSRSURLZWBGZ/
+pages/lkml.html	https://lkml.org/lkml/2012/12/23/75
+pages/guardian.html	https://www.theguardian.com/commentisfree/2024/jan/01/new-year-resolutions
+pages/lwn-comments.html	https://lwn.net/Articles/922405/#Comments

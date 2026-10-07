@@ -1,5 +1,5 @@
 {
-  "id": "571e0aae-3cb7-41ef-991c-2fbb81f26497",
+  "id": "8002ef28-09ea-4123-b19f-b8a9435eee60",
   "prevId": "630d2d07-94a8-48fc-a19e-e41f4a3ae30c",
   "version": "7",
   "dialect": "postgresql",
@@ -2283,6 +2283,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "starter_article_id": {
+          "name": "starter_article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "starter_slug": {
+          "name": "starter_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2356,6 +2368,20 @@
         }
       },
       "foreignKeys": {
+        "billing_vouchers_starter_article_id_articles_id_fk": {
+          "name": "billing_vouchers_starter_article_id_articles_id_fk",
+          "tableFrom": "billing_vouchers",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "starter_article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "billing_vouchers_claimed_by_billing_accounts_owner_id_fk": {
           "name": "billing_vouchers_claimed_by_billing_accounts_owner_id_fk",
           "tableFrom": "billing_vouchers",
@@ -2394,6 +2420,10 @@
         "billing_vouchers_recipient_name_length": {
           "name": "billing_vouchers_recipient_name_length",
           "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_name\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_name\") <= 80"
+        },
+        "billing_vouchers_starter_has_slug": {
+          "name": "billing_vouchers_starter_has_slug",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"starter_article_id\" is null or \"spideryarn\".\"billing_vouchers\".\"starter_slug\" is not null"
         },
         "billing_vouchers_claimed_together": {
           "name": "billing_vouchers_claimed_together",
@@ -5744,7 +5774,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice')"
         }
       },
       "isRLSEnabled": false

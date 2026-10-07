@@ -1,0 +1,4 @@
+ALTER TABLE "spideryarn"."billing_vouchers" ADD COLUMN "starter_article_id" uuid;--> statement-breakpoint
+ALTER TABLE "spideryarn"."billing_vouchers" ADD COLUMN "starter_slug" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."billing_vouchers" ADD CONSTRAINT "billing_vouchers_starter_article_id_articles_id_fk" FOREIGN KEY ("starter_article_id") REFERENCES "spideryarn"."articles"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "spideryarn"."billing_vouchers" ADD CONSTRAINT "billing_vouchers_starter_has_slug" CHECK ("spideryarn"."billing_vouchers"."starter_article_id" is null or "spideryarn"."billing_vouchers"."starter_slug" is not null);

@@ -172,7 +172,16 @@ describe("the privacy page", () => {
     expect(prose).toContain("and the recipient’s name as that person gave it, if they gave one");
   });
 
-  it("dates the privacy notice to the day the recipient-name disclosure was added", () => {
+  it("says a gift email may carry a link to an article, which may be a private link", () => {
+    /* Plan 261007j: a voucher's starter article is linked from its email, and a
+       private one by its private link, kept in the email and sent through Resend. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "and a link to one of their articles, if they chose one — for an article that is not public, a private link that lets whoever holds it read that article",
+    );
+  });
+
+  it("dates the privacy notice to the day the recipient-name and starter-article disclosures were added", () => {
     expect(PAGE).toContain('const LAST_UPDATED = "7 October 2026"');
   });
 

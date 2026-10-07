@@ -11,6 +11,8 @@ article see the stored list.
 
 ## Reading it
 
+![The Citations panel: a threshold slider hiding 7 of 58 citations, then two works, each with its bars, Dig deeper and Ask in chat](../images/mode-citations.png "Citations, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+
 - Each row says what we have read of the work, which is usually nothing: the sentence on what the
   piece uses it for is written from the article, not from the cited work.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the

@@ -5,6 +5,8 @@ keywords: keys hotkeys arrow up down left right command k ctrl enter escape tab 
 related: touch, jumping-around
 ---
 
+![The command bar open: a box saying “Type a command…” above a list of modes, each with a line on what it does, most marked generates](images/command-bar.png "The command bar: type a mode, a page or an action. Rows marked generates start the AI writing.")
+
 - <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd> opens the **command bar**. Type the name of a mode, a
   page or an action — *quotes*, *library*, *feedback* — and press <kbd>Enter</kbd>. Rows marked
   **generates** start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the

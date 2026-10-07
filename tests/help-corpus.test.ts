@@ -36,9 +36,22 @@ import { helpPage } from "../src/web/help/help-pages.js";
 const FILE = path.join(import.meta.dirname, "..", "src", "help-corpus.generated.json");
 const REGENERATE = "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts";
 
+/**
+ * **A picture line, as words**: `![alt](images/x.png "caption")` becomes
+ * `(Picture: alt. Caption: caption)`. The model cannot see the picture, a
+ * reader could not use its path, and an answer that copied the markup would
+ * show its characters. A line that is not exactly one picture is left alone,
+ * and the test above fails on any `![` that gets through.
+ */
+function pictureInWords(body: string): string {
+  return body.replace(/^!\[([^\]]*)\]\(\S+?(?: "([^"]*)")?\)$/gm, (_line, alt: string, caption?: string) =>
+    caption ? `(Picture: ${alt}. Caption: ${caption})` : `(Picture: ${alt})`,
+  );
+}
+
 /** A mode's page opens with the catalog's two sentences, as the page draws it (help-content.tsx § helpBody). */
 function bodyOf(anchor: HelpAnchor): string {
-  const words = expandHelpTokens(helpPage(anchor).body, anchor).trim();
+  const words = pictureInWords(expandHelpTokens(helpPage(anchor).body, anchor).trim());
   const kind = helpAnchorKind(anchor);
   if (kind.kind !== "mode") return words;
   const catalog = MODE_CATALOG[kind.mode];
@@ -76,6 +89,15 @@ describe("src/help-corpus.generated.json", () => {
 
   it("expands every token, so no page shows the model a {{…}}", () => {
     for (const page of built) expect(page.body, page.anchor).not.toMatch(/\{\{|\}\}/);
+  });
+
+  it("says what a picture shows in words, and never hands the model image markup", () => {
+    /* A picture line copied into an answer would be drawn as its characters
+       (Cited shows an image as source), and its file path is no use to a
+       reader. The words of it are: the alt text and the caption. */
+    for (const page of built) expect(page.body, page.anchor).not.toMatch(/!\[|images\//);
+    const spine = built.find((p) => p.anchor === "jumping-around");
+    expect(spine?.body).toContain("(Picture: A click on the spine jumps to another section");
   });
 
   it("opens a mode's page with the catalog's sentences, which its file does not hold", () => {

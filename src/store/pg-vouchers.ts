@@ -17,6 +17,11 @@
  * 3. **The administrator's** list, create and update, called only from the
  *    routes under `/api/admin/vouchers`, behind the namespace gate.
  *
+ * The routes reach the third through `pgVoucherStore` at the bottom, which is
+ * `guardDbStore`: a failed insert of a gift email would otherwise carry the
+ * whole rendered email — a starter's private link included — into a log line
+ * and a 500 (plan 261007j, Sol's F1).
+ *
  * ## The lock order, and why a revoke takes the billing lock
  *
  * The bonus is part of the allowance the wall enforces, so lowering it must
@@ -38,8 +43,9 @@ import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { type Articles, type Points, articles as articlesOf, budgetFor, ingestHeadroom } from "../billing/points.js";
 import type { Gift } from "../billing-plan.js";
 import { getDb } from "../db/client.js";
-import { billingAccounts, billingVouchers } from "../db/schema.js";
+import { articleRevisions, articles, billingAccounts, billingVouchers } from "../db/schema.js";
 import { noteText } from "../email.js";
+import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import type { AccountByEmail, AccountConfirmation, AccountEmail } from "./admin-accounts.js";
 import { accountEmail, confirmedAccountByEmail, confirmedAccountEmail } from "./admin-accounts.js";
@@ -52,10 +58,12 @@ import {
   usageFor,
   wallUsed,
 } from "./pg-billing.js";
+import { guardDbStore } from "./db-errors.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
 import {
   type GiftAudience,
+  type GiftStarter,
   latestVoucherEmails,
   queueClaimedEmail,
   queueGiftEmail,
@@ -68,6 +76,7 @@ import {
   cleanRecipientName,
 } from "../admin-vouchers.js";
 import { isUuid } from "../ids.js";
+import { type Starter, type StarterResolution, resolveStarter } from "./voucher-starter.js";
 
 const logger = log("store");
 
@@ -257,7 +266,17 @@ export interface ListDeps {
  * notice uses), because the voucher's own address is only what it was sent to.
  */
 export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]> {
-  const rows = await getDb().select().from(billingVouchers).orderBy(desc(billingVouchers.createdAt));
+  /* The starter's title through the article's current revision, by named
+     column: the voucher keeps which article, and the article row is never
+     read whole here, because the key is on it. */
+  const joined = await getDb()
+    .select({ voucher: billingVouchers, starterTitle: articleRevisions.title })
+    .from(billingVouchers)
+    .leftJoin(articles, eq(articles.id, billingVouchers.starterArticleId))
+    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .orderBy(desc(billingVouchers.createdAt));
+  const rows = joined.map((j) => j.voucher);
+  const titles = new Map(joined.map((j) => [j.voucher.id, j.starterTitle] as const));
   const emails = await latestVoucherEmails(rows.map((r) => r.id));
   const claimants = [...new Set(rows.flatMap((r) => (r.claimedBy ? [r.claimedBy] : [])))];
   const tiers = claimants.length > 0 ? await allTiers() : [];
@@ -279,6 +298,7 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
       note: row.note,
       recipientNote: row.recipientNote,
       recipientName: row.recipientName,
+      starter: starterOf(row, titles.get(row.id) ?? null),
       createdAt: row.createdAt.toISOString(),
       createdBy: row.createdBy,
       updatedAt: row.updatedAt.toISOString(),
@@ -290,6 +310,19 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
       emails: emails.get(row.id) ?? { gift: null, claimed: null },
     };
   });
+}
+
+/**
+ * The list's starter: the slug the create named, and the title while the
+ * article is there. A deleted article leaves the slug and a null title; one
+ * with no stored title shows its slug.
+ */
+function starterOf(
+  row: { readonly starterSlug: string | null; readonly starterArticleId: string | null },
+  title: string | null,
+): AdminVoucher["starter"] {
+  if (row.starterSlug === null) return null;
+  return { slug: row.starterSlug, title: row.starterArticleId === null ? null : (title ?? row.starterSlug) };
 }
 
 /** One account's standing, decided by `entitlementFromRow` like every other surface. */
@@ -332,6 +365,8 @@ async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof a
 export interface VoucherWriteDeps {
   /** Who the recipient's email is written for. */
   readonly audience?: (normalisedEmail: string) => Promise<GiftAudience>;
+  /** The starter article, as the administrator's own reads find it now (src/store/voucher-starter.ts). */
+  readonly resolveStarter?: (slug: string) => Promise<StarterResolution>;
 }
 
 /**
@@ -422,7 +457,16 @@ export interface NewVoucher {
   readonly recipientNote: string | null;
   /** Their name, which opens their email as *Dear <name>,*. Plan 261007f. */
   readonly recipientName: string | null;
+  /**
+   * **One of the administrator's own articles, for their email to link**, by
+   * slug; null for none. Part of the create's identity, compared as given, so a
+   * replay names the same starter or is a different create. Plan 261007j.
+   */
+  readonly starterSlug: string | null;
 }
+
+/** Why a starter was refused: `StarterResolution` less the one that was not. */
+export type StarterRefusal = Exclude<StarterResolution, { readonly kind: "ready" }>["kind"];
 
 export type CreateVoucherAnswer =
   /** `delivery` is the recipient's email, queued and committed with the voucher. */
@@ -430,16 +474,27 @@ export type CreateVoucherAnswer =
   /** The same body under the same id: the original, and nothing queued. */
   | { readonly kind: "replayed"; readonly id: string }
   /** That id is a different voucher. */
-  | { readonly kind: "conflict" };
+  | { readonly kind: "conflict" }
+  /** A new voucher whose starter cannot be linked as things stand. Nothing was made. */
+  | { readonly kind: "starter-refused"; readonly reason: StarterRefusal };
 
 /**
  * **Make one voucher, and queue its recipient's email in the same
  * transaction.** It then waits, unclaimed, until its address asks for a plan.
  *
  * `on conflict (id) do nothing`: a replay under the same id finds the original,
- * and is `replayed` only if the stored address, articles, both notes, name and
- * creator are exactly what it carries; anything else under that id is a `conflict`. The
- * email is queued only when this call's insert is the one that inserted.
+ * and is `replayed` only if the stored address, articles, both notes, name,
+ * starter and creator are exactly what it carries; anything else under that id
+ * is a `conflict`. The email is queued only when this call's insert is the one
+ * that inserted.
+ *
+ * **Replay first, then the starter** (plan 261007j, Sol's F2). An id that
+ * already exists is answered from its row before anything about the starter
+ * article is looked at: the answer to the first create can be lost, and by the
+ * time the browser sends it again the link may be off, rotated, or the article
+ * gone — none of which makes it a different create. Only a new id has its
+ * starter resolved, as the administrator, and a starter that cannot be linked
+ * now is `starter-refused`, with nothing written.
  */
 export async function createVoucher(
   input: NewVoucher,
@@ -447,6 +502,19 @@ export async function createVoucher(
   deps: VoucherWriteDeps = {},
 ): Promise<CreateVoucherAnswer> {
   const email = normaliseEmail(input.email);
+  const replay = await replayOf(getDb(), input, email, createdBy);
+  if (replay !== null) return replay;
+
+  let starter: Starter | null = null;
+  if (input.starterSlug !== null) {
+    const resolved = await (deps.resolveStarter ?? resolveStarter)(input.starterSlug);
+    if (resolved.kind !== "ready") {
+      /* A concurrent create may have committed while these reads were in
+         flight. Its replay identity still wins over the article's live state. */
+      return (await replayOf(getDb(), input, email, createdBy)) ?? { kind: "starter-refused", reason: resolved.kind };
+    }
+    starter = resolved.starter;
+  }
   /* Before the transaction: a network call does not belong inside one. */
   const audience = await giftAudienceOrInvite(email, deps.audience ?? giftAudienceFor);
   return await getDb().transaction(
@@ -460,6 +528,9 @@ export async function createVoucher(
           note: input.note,
           recipientNote: input.recipientNote,
           recipientName: input.recipientName,
+          /* Which article, and the slug it was named by. Never the key. */
+          starterArticleId: starter?.articleId ?? null,
+          starterSlug: input.starterSlug,
           createdBy,
         })
         .onConflictDoNothing({ target: billingVouchers.id })
@@ -468,36 +539,56 @@ export async function createVoucher(
         const delivery = await queueGiftEmail(tx, row.id, email, input.articles, audience, {
           recipientName: input.recipientName,
           recipientNote: input.recipientNote,
+          starter: starter === null ? null : { title: starter.title, url: starter.url },
         });
         return { kind: "created", id: row.id, delivery };
       }
-      const [existing] = await tx
-        .select({
-          email: billingVouchers.email,
-          articles: billingVouchers.articles,
-          note: billingVouchers.note,
-          recipientNote: billingVouchers.recipientNote,
-          recipientName: billingVouchers.recipientName,
-          createdBy: billingVouchers.createdBy,
-        })
-        .from(billingVouchers)
-        .where(eq(billingVouchers.id, input.id))
-        .limit(1);
-      const same =
-        existing !== undefined &&
-        existing.email === email &&
-        existing.articles === input.articles &&
-        existing.note === input.note &&
-        existing.recipientNote === input.recipientNote &&
-        existing.recipientName === input.recipientName &&
-        existing.createdBy === createdBy;
-      return same ? { kind: "replayed", id: input.id } : { kind: "conflict" };
+      /* Another create of this id inserted between the check above and this
+         insert: the same comparison, against what it committed. */
+      return (await replayOf(tx, input, email, createdBy)) ?? { kind: "conflict" };
     },
     /* A concurrent replay waits on the first insert's key, then does nothing
        and reads the committed original — which needs a fresh snapshot per
        statement, as `reserveIngest` explains. */
     READ_COMMITTED,
   );
+}
+
+/**
+ * **Is there already a voucher with this id, and is it this create?** Null
+ * when there is none; otherwise `replayed` if every field the create carries
+ * matches the stored row, the starter's slug as given included, and `conflict`
+ * if any does not. Reads the voucher's own row and nothing else.
+ */
+async function replayOf(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  input: NewVoucher,
+  email: string,
+  createdBy: string,
+): Promise<Extract<CreateVoucherAnswer, { kind: "replayed" | "conflict" }> | null> {
+  const [existing] = await db
+    .select({
+      email: billingVouchers.email,
+      articles: billingVouchers.articles,
+      note: billingVouchers.note,
+      recipientNote: billingVouchers.recipientNote,
+      recipientName: billingVouchers.recipientName,
+      starterSlug: billingVouchers.starterSlug,
+      createdBy: billingVouchers.createdBy,
+    })
+    .from(billingVouchers)
+    .where(eq(billingVouchers.id, input.id))
+    .limit(1);
+  if (existing === undefined) return null;
+  const same =
+    existing.email === email &&
+    existing.articles === input.articles &&
+    existing.note === input.note &&
+    existing.recipientNote === input.recipientNote &&
+    existing.recipientName === input.recipientName &&
+    existing.starterSlug === input.starterSlug &&
+    existing.createdBy === createdBy;
+  return same ? { kind: "replayed", id: input.id } : { kind: "conflict" };
 }
 
 /** A parsed request body, or the sentence a 400 says. */
@@ -512,7 +603,7 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const unknown = Object.keys(body).filter(
-    (key) => !["id", "email", "articles", "note", "recipientNote", "recipientName"].includes(key),
+    (key) => !["id", "email", "articles", "note", "recipientNote", "recipientName", "starterSlug"].includes(key),
   );
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   if (typeof body.id !== "string" || !isUuid(body.id)) return { ok: false, message: "id must be a uuid." };
@@ -526,6 +617,12 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!recipientNote.ok) return recipientNote;
   const recipientName = parseName(body.recipientName ?? null);
   if (!recipientName.ok) return recipientName;
+  const starterSlug = body.starterSlug ?? null;
+  /* A shape check only. Whose article it is, and whether it can be linked, is
+     asked later, and only of a new id (`createVoucher`). */
+  if (starterSlug !== null && !isSlug(starterSlug)) {
+    return { ok: false, message: "starterSlug must be an article's slug, or null." };
+  }
   return {
     ok: true,
     value: {
@@ -535,11 +632,16 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
       note: note.value,
       recipientNote: recipientNote.value,
       recipientName: recipientName.value,
+      starterSlug,
     },
   };
 }
 
-/** What `PATCH /api/admin/vouchers/:id` may carry: any of six fields, at least one. */
+/**
+ * What `PATCH /api/admin/vouchers/:id` may carry: any of six fields, at least
+ * one. Not the starter, which is fixed at create (plan 261007j): a new one would
+ * want a new email, and changing the name or the note sends nothing.
+ */
 export function parseVoucherPatch(body: unknown): Parsed<VoucherPatch> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const keys = Object.keys(body);
@@ -665,7 +767,16 @@ export type VoucherUpdate =
    * queued and committed with the change, for the caller to send after its
    * response.
    */
-  | { readonly kind: "updated"; readonly giftDelivery?: string }
+  | {
+      readonly kind: "updated";
+      readonly giftDelivery?: string;
+      /**
+       * Only beside a `giftDelivery`, and only for a voucher with a starter:
+       * `kept` when the new email links it, `dropped` when it could no longer
+       * be linked and the email went without it (plan 261007j, Sol's F3).
+       */
+      readonly starter?: "kept" | "dropped";
+    }
   | { readonly kind: "not-found" }
   /** The address of a claimed voucher cannot change: it already belongs to an account. */
   | { readonly kind: "claimed" };
@@ -678,8 +789,18 @@ export type VoucherUpdate =
  * only then the voucher. If the unlocked read saw it unclaimed and the locked
  * read finds it claimed (a claim landed in between), this transaction holds the
  * voucher without the billing lock, so it gives up and starts again; the second
- * attempt sees the claimant on the unlocked read. Two attempts are enough —
- * nothing claims a voucher twice — and a third is a bug, said loudly.
+ * attempt sees the claimant on the unlocked read. A concurrent readdress or
+ * restore can also require another attempt when an email becomes due. Three
+ * attempts bound those races; continued contention fails the change.
+ *
+ * **A starter is resolved afresh for the new email** (plan 261007j), as
+ * whoever is making the change, and only when the change will send one. It is
+ * read before the transaction, from the unlocked read. Its id is checked
+ * again under the voucher lock: deleting an article can free its slug for
+ * another article, which is not the starter this voucher named. An article
+ * that can no longer be linked — gone, not theirs, unpublished, its link off — is left out of the
+ * email and the answer says `dropped`; a read that *fails* fails the change,
+ * because an email quietly missing its starter looks exactly like one meant to.
  */
 export async function updateVoucher(id: string, patch: VoucherPatch, deps: VoucherWriteDeps = {}): Promise<VoucherUpdate> {
   /* Asked only when the address is being set, and before any transaction: it
@@ -688,11 +809,12 @@ export async function updateVoucher(id: string, patch: VoucherPatch, deps: Vouch
     patch.email === undefined
       ? undefined
       : await giftAudienceOrInvite(normaliseEmail(patch.email), deps.audience ?? giftAudienceFor);
+  const resolve = deps.resolveStarter ?? resolveStarter;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const answer = await updateOnce(id, patch, audience);
+    const answer = await updateOnce(id, patch, audience, resolve);
     if (answer !== "retry") return answer;
   }
-  throw new Error(`updating gift voucher ${id} kept racing its claim`);
+  throw new Error(`updating gift voucher ${id} kept racing another change`);
 }
 
 /** The write's last fail-open boundary: audience enrichment never owns the voucher event. */
@@ -715,14 +837,32 @@ async function updateOnce(
   id: string,
   patch: VoucherPatch,
   audience: GiftAudience | undefined,
+  resolve: (slug: string) => Promise<StarterResolution>,
 ): Promise<VoucherUpdate | "retry"> {
   const db = getDb();
   const [seen] = await db
-    .select({ claimedBy: billingVouchers.claimedBy })
+    .select({
+      claimedBy: billingVouchers.claimedBy,
+      email: billingVouchers.email,
+      revokedAt: billingVouchers.revokedAt,
+      starterSlug: billingVouchers.starterSlug,
+      starterArticleId: billingVouchers.starterArticleId,
+    })
     .from(billingVouchers)
     .where(eq(billingVouchers.id, id))
     .limit(1);
   if (!seen) return { kind: "not-found" };
+
+  /* The starter, read now if this change looks as if it will send an email.
+     If the locked read below disagrees — a concurrent change of address or a
+     restore landed in between — and an email is due after all, that attempt
+     starts again rather than sending without having asked. */
+  const starter =
+    seen.starterSlug !== null && sendsGift(patch, seen)
+      ? seen.starterArticleId === null
+        ? { kind: "absent" as const }
+        : await resolve(seen.starterSlug)
+      : undefined;
 
   return await db.transaction(
     async (tx): Promise<VoucherUpdate | "retry"> => {
@@ -737,6 +877,8 @@ async function updateOnce(
           articles: billingVouchers.articles,
           recipientNote: billingVouchers.recipientNote,
           recipientName: billingVouchers.recipientName,
+          starterSlug: billingVouchers.starterSlug,
+          starterArticleId: billingVouchers.starterArticleId,
         })
         .from(billingVouchers)
         .where(eq(billingVouchers.id, id))
@@ -751,6 +893,15 @@ async function updateOnce(
       const newEmail = patch.email === undefined ? undefined : normaliseEmail(patch.email);
       const readdressed = newEmail !== undefined && newEmail !== current.email;
       const revokedAfter = patch.revoked === undefined ? current.revokedAt !== null : patch.revoked;
+      /* An email is due and its starter was not asked for: see above. */
+      if (readdressed && !revokedAfter && current.starterSlug !== null && starter === undefined) return "retry";
+
+      /* The slug may now name a replacement, or deletion may have landed
+         after resolution. Neither can replace the article chosen at create. */
+      const linkedStarter =
+        starter?.kind === "ready" && starter.starter.articleId === current.starterArticleId
+          ? giftStarterOf(starter.starter)
+          : null;
 
       await tx
         .update(billingVouchers)
@@ -783,16 +934,57 @@ async function updateOnce(
           newEmail,
           patch.articles ?? current.articles,
           audience ?? { kind: "invite" },
-          /* The name and the note as they stand after this patch. */
+          /* The name and the note as they stand after this patch, and the
+             starter as it resolves now. */
           {
             recipientName: patch.recipientName === undefined ? current.recipientName : patch.recipientName,
             recipientNote: patch.recipientNote === undefined ? current.recipientNote : patch.recipientNote,
+            starter: linkedStarter,
           },
         );
-        return { kind: "updated", giftDelivery };
+        return starter === undefined
+          ? { kind: "updated", giftDelivery }
+          : { kind: "updated", giftDelivery, starter: linkedStarter === null ? "dropped" : "kept" };
       }
       return { kind: "updated" };
     },
     READ_COMMITTED,
   );
 }
+
+/**
+ * Whether this patch, applied to the voucher as last seen, sends a gift email:
+ * a real change of address on a voucher that is unclaimed and not revoked
+ * afterwards. The transaction decides it again under the lock.
+ */
+function sendsGift(
+  patch: VoucherPatch,
+  seen: { readonly claimedBy: string | null; readonly email: string; readonly revokedAt: Date | null },
+): boolean {
+  if (patch.email === undefined || seen.claimedBy !== null) return false;
+  const revokedAfter = patch.revoked === undefined ? seen.revokedAt !== null : patch.revoked;
+  return normaliseEmail(patch.email) !== seen.email && !revokedAfter;
+}
+
+/** The part of a resolved starter the email is written from: its title and address. */
+function giftStarterOf(starter: Starter): GiftStarter {
+  return { title: starter.title, url: starter.url };
+}
+
+/**
+ * **The administrator's writes and reads, behind the database-error guard** —
+ * what the routes call. `guardDbStore` replaces any error a method throws with
+ * one that carries nothing a query was given (src/store/db-errors.ts), and here
+ * that matters more than anywhere: a failed insert of a gift email puts the
+ * whole rendered email into Drizzle's message — the recipient's address, the
+ * note, and a starter's private link with its key (plan 261007j, Sol's F1).
+ *
+ * Not the claim: its route already catches and logs the error's name alone,
+ * and serves the plan regardless. The bare functions above stay exported for
+ * tests that pass their seams.
+ */
+export const pgVoucherStore = guardDbStore("vouchers", {
+  listVouchers,
+  createVoucher,
+  updateVoucher,
+});
