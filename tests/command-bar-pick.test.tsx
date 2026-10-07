@@ -297,7 +297,11 @@ describe("asking", () => {
     /* The Metadata row's address is this article's, with the place in it; its
        key is neither. */
     expect(body.rows).toContainEqual({ id: "page:/read/:slug/metadata", label: "Metadata" });
+    /* The Help row's address is a page of Help now (`/help/the-reading-view`
+       from Plain); its key is still the one Help key the server holds, or the
+       row would be dropped there. GPT Sol, plan review of 261007e, R1. */
     expect(body.rows).toContainEqual({ id: "page:/help", label: "Help" });
+    expect(body.rows.filter((key: PickKey) => key.id.startsWith("page:/help"))).toHaveLength(1);
     expect(JSON.stringify(body.rows)).not.toContain(SLUG);
     expect(JSON.stringify(body.rows)).not.toContain("spya-");
     for (const key of body.rows) expect(Object.keys(key).sort()).toEqual(["id", "label"]);

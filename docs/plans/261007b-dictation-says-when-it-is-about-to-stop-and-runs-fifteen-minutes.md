@@ -72,7 +72,8 @@ Two stages, both small.
 6. **The cap sentence stays after the words arrive**, as it does today (the test asserts it only
    before the transcript; it will assert it after too).
 7. **Every sentence that says "five minutes" about dictation is corrected**: the Help page
-   ([`help-modes.tsx`](../../src/web/help/help-modes.tsx), *"a recording stops after five
+   (`help-modes.tsx`, whose words are in
+   [`pages/modes/chat.md`](../../src/web/help/pages/modes/chat.md) since 2026-10-07, *"a recording stops after five
    minutes"*), `dictation.md` § The sizes, and the comments in `mic-recording.ts` and
    `transcribe.ts` (whose "the recorder stops at five minutes" has been per-part since 260929f).
 8. **The fleet dashboard** reuses `useDictation` and draws its own chrome

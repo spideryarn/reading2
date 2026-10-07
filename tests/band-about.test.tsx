@@ -73,7 +73,7 @@ describe("ModeSurface's about", () => {
 
   /* Plan 261002e: the one card in the corner with something to press, and so
      the one that lets the pointer in. */
-  it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
+  it("ends a mode's card with a link to that mode's page of Help, and lets the pointer in", async () => {
     draw(
       <ModeSurface label="Tweets" mode="summary" about={<p>12 posts.</p>}>
         body
@@ -83,7 +83,7 @@ describe("ModeSurface's about", () => {
     const card = document.querySelector(".band-about-card")!;
     const link = card.querySelector("a")!;
     expect(link.textContent).toBe("More in Help →");
-    expect(link.getAttribute("href")).toBe("/help#mode-summary");
+    expect(link.getAttribute("href")).toBe("/help/mode-summary");
     expect(card.textContent?.endsWith("More in Help →")).toBe(true);
     expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
   });
@@ -181,7 +181,7 @@ describe("ModeSurface's about", () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(link.isConnected).toBe(true);
     await act(async () => link.click());
-    expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-summary");
+    expect(navigate).toHaveBeenCalledWith(null, "", "/help/mode-summary");
   });
 
   it("lets a real mouse take over when it enters a touch-open interactive card directly", async () => {

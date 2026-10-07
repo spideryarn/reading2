@@ -1,7 +1,8 @@
 -- C7 first-application preflight, reviewed HEAD d4bbcd76e plus uncommitted review fixes.
 -- Read-only; not executed in this review. Run on production's SESSION connection
 -- using the migration credential. It expects the complete original 153-row ledger,
--- followed by exactly these nine pending files. Rebuild this ledger literal if
+-- followed by exactly these eleven pending files (two feedback migrations, 261007d, were
+-- added by the Overseer on 2026-10-07 when they landed first). Rebuild this ledger literal if
 -- the final deployment commit contains additional migrations.
 -- The eighth, 20261007053304_billing_voucher_recipient_name, is another
 -- session's (plan 261007f-gift-voucher-recipient-name-and-a-starter-article-written-up),
@@ -203,6 +204,8 @@ WITH pending(stamp, tag) AS (VALUES
   (1791336047829::bigint, '20261007012047_drop_duplicate_chat_messages_index'),
   (1791336414855::bigint, '20261007012654_declare_migration_only_indexes_and_checks'),
   (1791337115199::bigint, '20261007013835_ledger_indexes_declared_as_made'),
+  (1791346617451::bigint, '20261007041657_feedback_number'),
+  (1791350012682::bigint, '20261007051332_feedback_question_answers'),
   (1791351184402::bigint, '20261007053304_billing_voucher_recipient_name'),
   (1791358504947::bigint, '20261007073504_drop_queue_state_running_job_id')
 )
@@ -223,6 +226,13 @@ UNION ALL
 SELECT 'referee_claims_empty_unless_done already exists'
 WHERE EXISTS (SELECT 1 FROM pg_constraint
  WHERE conrelid='spideryarn.referee_claims'::regclass AND conname='referee_claims_empty_unless_done')
+UNION ALL
+SELECT 'feedback.number already exists'
+WHERE EXISTS (SELECT 1 FROM pg_attribute
+ WHERE attrelid='spideryarn.feedback'::regclass AND attname='number' AND NOT attisdropped)
+UNION ALL
+SELECT 'feedback_question_answers already exists'
+WHERE to_regclass('spideryarn.feedback_question_answers') IS NOT NULL
 UNION ALL
 SELECT 'billing_vouchers.recipient_name already exists'
 WHERE EXISTS (SELECT 1 FROM pg_attribute

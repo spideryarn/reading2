@@ -116,7 +116,7 @@ function rowsIn(context: Context): readonly Command[] {
             slug: SLUG,
             search: "at=spya-k3m9qt",
             view: context.article.view,
-            help: "/help#glossary",
+            help: "/help/mode-glossary",
             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
             /* What the reading view hands the owner when both lists can be
                added to — the widest bar, so both *Find more* rows are in the
@@ -181,6 +181,23 @@ describe("pickKey", () => {
     expect(pickKey(row, "my-paper")).toEqual({ id: `page:/read/${PICK_SLUG}/metadata`, label: "Metadata" });
     expect(pickKey(page("/help#glossary"), "my-paper").id).toBe("page:/help");
     expect(pickKey(page("/read/my-paper"), "my-paper").id).toBe(`page:/read/${PICK_SLUG}`);
+  });
+
+  /* The Help row's address names the page for the mode the reader is in, and
+     the server holds one Help row, not one per page: a key the generated list
+     does not hold is dropped (src/command-pick-call.ts § knownOptions), and
+     the row would vanish from what a model may pick. GPT Sol, plan review of
+     261007e, R1. */
+  it("gives every Help page the one Help key, and leaves the row's own address alone", () => {
+    for (const href of ["/help", "/help/mode-glossary", "/help/the-reading-view", "/help/questions#faq-older-profile", "/help/spine?x=1"]) {
+      const row = page(href);
+      expect(pickKey(row, "my-paper").id, href).toBe("page:/help");
+      /* The row's own id still carries its address: only the key is shared. */
+      expect(commandId(row)).toBe(`page:${href}`);
+    }
+    /* Only Help's own pages: a path that merely starts the same is its own row. */
+    expect(pickKey(page("/helpful"), "my-paper").id).toBe("page:/helpful");
+    expect(pickKey(page("/help/a/b"), "my-paper").id).toBe("page:/help/a/b");
   });
 
   it("gives two articles the same key, and leaves a slug that only starts the same alone", () => {

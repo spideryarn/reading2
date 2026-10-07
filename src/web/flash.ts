@@ -331,7 +331,7 @@ const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
  *
  * Two callers: Metadata's contents list and search box (PageContents.tsx §
  * reveal, which moved this here), and the Help page's arrival at a fragment
- * (help/HelpPage.tsx § arrive).
+ * (help/HelpPage.tsx § Arriving, a question on the questions' page).
  */
 export function scrollToAndFlash(el: HTMLElement): () => void {
   let finished = false;

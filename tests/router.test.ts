@@ -264,15 +264,42 @@ describe("the help route", () => {
     expect(parseRoute(HELP_HREF)).toEqual({ kind: "help" });
   });
 
-  it("is not a prefix: a section is a fragment, never a path", () => {
-    expect(parseRoute("/help/spine")).toEqual({ kind: "not-found" });
+  /* Since 2026-10-07 a page of Help is a path (help-anchors.ts § helpHref).
+     docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+     § Routing and old links. */
+  it("gives Help one segment under it, with or without a trailing slash", () => {
+    expect(parseRoute("/help/spine")).toEqual({ kind: "help", page: "spine" });
+    expect(parseRoute("/help/spine/")).toEqual({ kind: "help", page: "spine" });
+    expect(parseRoute("/help/questions")).toEqual({ kind: "help", page: "questions" });
   });
 
-  /* A link into Help is all fragment (help-anchors.ts § helpHref). Nothing
-     on the way in may rewrite it, or every `/help#spine` lands at the top. */
+  /* Whether the segment names a page is Help's to say, so the router imports
+     none of Help and Help can answer a wrong address itself
+     (help-anchors.ts § resolveHelpPage). */
+  it("does not judge the segment, and hands it over decoded", () => {
+    expect(parseRoute("/help/nonsense")).toEqual({ kind: "help", page: "nonsense" });
+    expect(parseRoute("/help/mode-trajectory")).toEqual({ kind: "help", page: "mode-trajectory" });
+    expect(parseRoute("/help/mode%2Dskim")).toEqual({ kind: "help", page: "mode-skim" });
+    /* A mangled escape is handed over as it came rather than thrown on. */
+    expect(parseRoute("/help/%E0%A4%A")).toEqual({ kind: "help", page: "%E0%A4%A" });
+  });
+
+  it("is one segment deep and no more, and is not a prefix of another word", () => {
+    expect(parseRoute("/help/a/b")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/help/spine/more")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/help//")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/helpful")).toEqual({ kind: "not-found" });
+  });
+
+  /* An old link into Help is all fragment (`/help#spine`), and a question's
+     still is (`/help/questions#faq-…`). Nothing on the way in may rewrite
+     either: the page itself carries the old one over (HelpPage.tsx §
+     Arriving), and it needs the fragment to do it. */
   it("is left alone by settleAddress, fragment and all", () => {
     expect(settleAddress("/help", "", "#spine")).toBeNull();
     expect(settleAddress("/help", "", "#mode-trajectory")).toBeNull();
+    expect(settleAddress("/help/spine", "", "")).toBeNull();
+    expect(settleAddress("/help/questions", "", "#faq-older-profile")).toBeNull();
   });
 });
 
