@@ -1092,17 +1092,54 @@ svg.band-waiting-ghost { flex: none; }
      floor, and `resize: none` is what stops the reader dragging the box over
      the article it is supposed to sit beside. */
   max-height: 10rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.4;
   resize: none;
 }
-.chat-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* ---- text boxes in the bands ----
+   **One look for every box a reader types into inside a band**: chat's
+   composer, Search's and Glossary's (and Debate's) one-line boxes, Referee's
+   criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note
+   and Skim's purpose. Greg, 2026-10-07: *"controls that do the same job should
+   look the same in every mode, though use your judgment."* Before this rule
+   they came in four borders, three corners (4px, 5px, 10px), two grounds,
+   five paddings and three focus marks — Learn's, Referee's and Illustrated's
+   the browser's own. These values are the majority's, `.chat-input`'s.
+
+   Only the box: each class keeps its own size, type and line height, the
+   reader's face is voices.css's, autosizing and `resize` stay with the
+   component, and narrow-window.css § the 16px field floor still wins on a
+   touchscreen. Not here on purpose (GPT Sol's R8): Chat's rename and edit
+   boxes, which are inline editors drawn in the line they edit, and
+   `ProfileBox`, which is shared with /profile and Metadata off the band.
+   tests/run-buttons-and-text-boxes-agree.test.ts folds the cascade for each
+   class, so a later sheet that gives one its own border back turns it red.
+   Plan 261007h § F3. */
+.chat-input,
+.srch-input,
+.gloss-ask-input,
+.cnd-box,
+.crit-text,
+.crit-poles input,
+.quiz-answer,
+.ill-steer-input,
+.skim-purpose-input {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+}
+.chat-input:focus-visible,
+.srch-input:focus-visible,
+.gloss-ask-input:focus-visible,
+.cnd-box:focus-visible,
+.crit-text:focus-visible,
+.crit-poles input:focus-visible,
+.quiz-answer:focus-visible,
+.ill-steer-input:focus-visible,
+.skim-purpose-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
    should be bigger and maybe have some kind of outline to indicate that it's
    probably the most important button in that little area."* So it is the one

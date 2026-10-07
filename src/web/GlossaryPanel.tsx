@@ -126,6 +126,7 @@ import { pendingGlossaryAsk, subscribeGlossaryAsk, takeGlossaryAsk } from "./glo
 import { freshRunOffered, glossaryFindMoreOffered } from "./find-more.js";
 import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
 import { JobProgress } from "./JobProgress.js";
+import { Button } from "@/components/ui/button";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
@@ -1774,9 +1775,13 @@ function AskATerm({
             clearAsked();
           }}
         />
-        <button
+        {/* The run button every mode shares (plan 261007h § F3, GPT Sol's
+            R10); `.gloss-btn` stays as a hook. */}
+        <Button
           type="submit"
-          className="gloss-btn"
+          variant="outline"
+          size="sm"
+          className="gloss-btn gloss-ask-go"
           /* Disabled on the same rule the server refuses on, so the button is
              never a request that could only fail. Whitespace alone is an empty
              box. */
@@ -1790,7 +1795,7 @@ function AskATerm({
         >
           {asking ? <LoaderCircle size={12} className="cmt-spinner" /> : <TextSearch size={12} />}
           {asking ? "Looking…" : "Look up"}
-        </button>
+        </Button>
       </form>
 
 
@@ -2092,9 +2097,11 @@ export function Looked({
        worked. */
     return (
       <div className="gloss-look">
-        <button
+        <Button
           type="button"
-          className="gloss-btn"
+          variant="outline"
+          size="sm"
+          className="gloss-btn gloss-dig"
           /* Disabled while any lookup runs, not just this one. Each is a model
              call somebody pays for, and a panel that fires five because five
              rows were clicked spends money on a mis-click. */
@@ -2104,7 +2111,7 @@ export function Looked({
         >
           {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
           {looking ? "Digging deeper…" : lookup ? "Dig deeper again" : "Dig deeper"}
-        </button>
+        </Button>
         {/* **Not disabled for a term the article never quotes**, unlike its
             neighbour: Dig deeper needs a passage to anchor to, a chat does
             not. It is its own conversation, so it does not wait for a
@@ -2422,9 +2429,14 @@ function MoreRow({
   return (
     <div className="gloss-more">
       <div className="gloss-actions">
-        <button
+        {/* The idle half of the run `Progress` draws above while a run is
+            starting, going or failed, so it is the same button (plan 261007h
+            § F3); `.gloss-btn` stays as a hook. */}
+        <Button
           type="button"
-          className="gloss-btn"
+          variant="outline"
+          size="sm"
+          className="gloss-btn gloss-more-go"
           title={title}
           /* Held with the retry elsewhere: `ReadError`, under a failed re-read. */
           disabled={waiting === "held"}
@@ -2432,7 +2444,7 @@ function MoreRow({
         >
           <Search size={12} />
           {label}
-        </button>
+        </Button>
       </div>
       {rewrites ? (
         <p className="gloss-more-note">

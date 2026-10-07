@@ -271,17 +271,20 @@ describe("the run button, while the criterion is incomplete", () => {
     expect(run().getAttribute("aria-disabled"), "the button never comes alive").toBe("false");
   });
 
-  it("keeps the dead look on the attribute the markup now uses", () => {
-    const css = rules();
+  it("keeps the dead look on the attribute the markup now uses", async () => {
     /* The pair: `aria-disabled` in the markup and `:disabled` in the stylesheet
        is a button that looks live and does nothing, which is worse than either
-       of the two states this replaced. Comments stripped — see `rules`. */
-    expect(css, "the rule that greys the dead button has gone").toContain(
-      '.crit-run[aria-disabled="true"]',
-    );
-    expect(css, "the old rule is still there and now matches nothing").not.toContain(
-      ".crit-run:disabled",
-    );
+       of the two states this replaced. Since plan 261007h § F3 the button is
+       shadcn's, and the dead look is its own `aria-disabled:` classes
+       (components/ui/button.tsx § THREE) rather than a rule in referee.css. */
+    mount();
+    await flush();
+    const cls = run().className;
+    expect(run().getAttribute("data-slot"), "not the shared run button").toBe("button");
+    expect(cls, "nothing greys the dead button").toContain("tw:aria-disabled:opacity-50");
+    expect(cls, "the dead button still lights up on hover").toContain("tw:aria-disabled:hover:bg-transparent");
+    expect(cls, "pointer-events: none would take the card away").not.toMatch(/aria-disabled:pointer-events-none/);
+    expect(rules(), "the old rule is still there and now matches nothing").not.toContain(".crit-run:disabled");
   });
 });
 

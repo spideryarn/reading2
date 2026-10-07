@@ -130,8 +130,10 @@ now holds a decision for each of those too. The measurement is in
 name. shadcn's `outline` and `ghost` both hovered to `bg-accent`, while every hand-rolled control
 on the shelf hovered to `bg-highlight/10`. Same page, two answers.
 The variants were repainted to the app's own; see the header comment in
-[`button.tsx`](../../src/web/components/ui/button.tsx), which is now **two** local edits rather than
-one.
+[`button.tsx`](../../src/web/components/ui/button.tsx), which is now **three** local edits rather than
+one: the third (2026-10-07, plan 261007h § F3) makes `aria-disabled="true"` look as unavailable as
+`disabled` — half opacity, a default cursor, no hover — for a button that must keep its tooltip
+reachable while it cannot act.
 
 `outline` lost more than a hover. It shipped `dark:bg-input/30` over `bg-background` plus
 `shadow-xs`, and every `dark:` here means *always* (the `@custom-variant` in `tailwind.css`), so it
@@ -153,7 +155,9 @@ list page now agree, and agreeing is the whole of it:
 | sort chips, Unread, Archived, Undo, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
 | the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
 | shadcn `size="sm"` | 32px | `rounded-md` |
+| **a mode's run button** — `JobProgress`'s, Referee's five (*Run this criterion*, *Pull the paper's claims*, Mirror's, *Build the reviewer brief*, Candidates' *Ask*), Search's *find*, Glossary's *Look up*, *Find more* / *Write a new list* and an entry's *Dig deeper* (plan 261007h § F3) | 32px: shadcn `Button` `variant="outline" size="sm"`; each old class stays as a hook. Citations' *Dig deeper* is the same button at `size="xs"`, 24px, because it sits in a row of 24px controls | `rounded-md` (8px) |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
+| **a text box in a band** — chat's composer, Search's, Glossary's and Debate's one-line boxes, Referee's criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note, Skim's purpose | the content's: padding `0.45rem 0.55rem`, a 1px `--rule-strong` border, `--page` ground, the 2px `--highlight-text` focus mark; one rule, mode-band.css § text boxes in the bands. Not Chat's rename and edit boxes or `ProfileBox` | `var(--radius)` (10px) |
 | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
 | every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |

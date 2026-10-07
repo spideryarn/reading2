@@ -278,19 +278,16 @@
 .skim-purpose-tip p { margin: 0; max-width: 24em; }
 .skim-purpose-ask { flex-direction: column; align-items: stretch; gap: 0.3rem; }
 .skim-purpose-q { color: var(--ink-soft); }
+/* Its border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. (A 5px corner, the raised ground
+   and a border-colour focus until 2026-10-07.) */
 .skim-purpose-input {
   display: block;
   width: 100%;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: 5px;
-  background: var(--surface-raised);
-  color: var(--ink);
   font: inherit;
   font-size: 0.86rem;
   resize: vertical;
 }
-.skim-purpose-input:focus-visible { outline: none; border-color: var(--highlight-text); }
 .skim-purpose-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
 .skim-purpose-ask .gloss-error { margin: 0; }
 

@@ -99,20 +99,15 @@
   margin-top: 0.2rem;
 }
 
+/* Its border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. (It had a 4px corner and the
+   fainter rule until 2026-10-07, and the browser's own focus ring.) */
 .quiz-answer {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
   font-size: 0.94rem;
   line-height: 1.45;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  /* `--page`, as `.chat-input` uses. An earlier draft said `--paper`, which is
-     not a token this stylesheet defines — so the box drew with whatever was
-     behind it and looked right by accident against the band. */
-  background: var(--page);
-  color: var(--ink);
   /* The height is the words' (QuizPanel.tsx § `fitBox`), so there is nothing
      to drag and nothing to scroll: the whole answer is on screen and the band
      is what scrolls. spya-qnrxuw. */

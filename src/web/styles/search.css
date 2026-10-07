@@ -30,19 +30,15 @@
    the zero-slack vertical fit is untouched. */
 .mode-band.has-about > .srch-box { padding-right: calc(0.6rem + var(--band-about-room)); }
 .srch-field { position: relative; display: flex; align-items: center; }
+/* Its border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. */
 .srch-input {
   flex: 1;
   min-width: 0;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.4;
 }
-.srch-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .srch-input::placeholder { color: var(--ink-faint); }
 /* The browser's own clear button on `type="search"`, which on a dark page is a
    dark X on a dark field. Ours is Escape and `.srch-clear` below — the
@@ -142,21 +138,15 @@
    by 46, hiding most of *words*; at 0.4rem it is 215px and scrolls by 27, the
    chosen matcher kept in view. Before the bar, the same row was 221px of
    matchers that did not shrink, and pushed `find` past the band's edge
-   (measured 2026-10-07, plan 261007h § F2). */
+   (measured 2026-10-07, plan 261007h § F2). Since `find` became the shared
+   32px run button (§ F3, below) it is 52px rather than 43, so the bar has
+   180px and scrolls by 35; the chosen matcher is still the one in view. */
 .srch-mode { padding-inline: 0.4rem; }
-.srch-go {
-  margin-left: auto;
-  padding: 0.15rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.83rem;
-  cursor: pointer;
-}
-.srch-go:disabled { opacity: 0.4; cursor: default; }
-.srch-go:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
+/* *find*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here.
+   It was a 24px chip of its own until 2026-10-07, 12px shorter than the box
+   above it, and hovered in the search hue. */
+.srch-go { margin-left: auto; }
 
 .srch-error {
   margin: 0;
