@@ -1,0 +1,12 @@
+You are reviewing a plan before it is built, in the repo you are running in (Spideryarn, TypeScript/React/Postgres). Read-only: do not edit files.
+
+Plan: docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md
+Read it, then check it against the code. Key places: src/types.ts (ThreadKind, THREAD_KINDS, SINGLE_THREAD_KINDS), src/db/schema.ts (chat_threads CHECKs and partial unique indexes), src/converse.ts (systemFor, readItFor, COMMAND_CHIPS, buildConverseMessages, webSearchTool), src/chat-tools.ts (toolsFor), src/routes.ts (streamChat, the `visible` refusal ~3111, kind mismatch ~3367), src/chat.ts (targetOf), src/web/thread-source.ts, src/web/modes/conversation/ConversationModes.tsx (threads vs listed, sendTo, handoffs ~868-909), src/web/ChatPanel.tsx, src/web/command-proposal.ts, src/web/chat-commands.ts (CHAT_PROPOSABLE, chipFor), src/web/command-runners.ts, src/web/CommandBar.tsx (NO_MATCH, ask()), src/web/PurposePrompt.tsx, src/web/last-view.ts (firstOpenSearch), src/command-pick-catalogue.generated.json, docs/project/chat-tools.md § Security and § Command buttons, docs/project/chat-llm-help-commands-vision.md § The line, docs/project/security-map.md.
+
+Questions:
+1. Is the design sound and is it the right 80/20 of the two reports quoted at its top? Anything cheaper that gets most of the value, or anything in it that will cost far more than the plan thinks?
+2. Security: do the three new buttons (mode, quick-search, purpose) hold the existing line (model proposes, reader presses, token parsed against an allowlist)? Is `purpose:<free text>` from a model whose context holds an untrusted article acceptable as a pressed button? Does any part edit a defence listed in security-map.md § Where the defences physically live?
+3. Correctness traps: adding a ThreadKind that is single-thread but opened in Chat rather than Learn; sending to it from the Chat band (kind, visible, drafts, handoffs); the first-open replacement of PurposePrompt interacting with last-view's first-open default and the mark lifecycle; the bar row that hands a sentence to the guide and sends it.
+4. Anything missing from the stages (tests, docs, privacy page, cost tracking/gateway inventory for a new prompt, route-contract rows, evals).
+
+Answer as numbered findings F1.. with severity (P0-P3), the file:line evidence, and a concrete change to the plan. End with a one-line verdict: "build as planned", "build with changes", or "rethink".

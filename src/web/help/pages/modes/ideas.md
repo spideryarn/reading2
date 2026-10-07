@@ -12,6 +12,8 @@ news or narrative, which rarely assume much.
 
 ## Reading it
 
+![Ideas: two under What you need to bring and three under What this piece adds](../images/mode-ideas.png "Ideas: what the piece assumes you already hold, and what it adds.")
+
 Click an idea to open it and mark all its passages in the text; the arrows step through them. Click
 it again to clear the marks.
 

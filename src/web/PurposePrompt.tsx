@@ -26,6 +26,14 @@
  *   exists → cleared, nothing shown. Definitively none → cleared, asked. A
  *   failed read, or `purposeFailed` (the shelf could not be read, which must
  *   never pass for "you have not said") → kept for the next load. Sol's item 3.
+ * - **Asked here only where the guide cannot ask instead** (plan 261007j F4).
+ *   On a first open that `useLastView` claimed, with a band's room beside the
+ *   text, definitively none opens the guide in Chat, whose greeting holds the
+ *   same box — and no modal. Below that width (a phone, where a band covers
+ *   the article), and on any open that was not a claimed first open, the modal
+ *   as before. The one decision, and the race it settles with the first-open
+ *   default, is src/web/first-open-purpose.ts; this component reports its read
+ *   there with `settleFirstOpen` and asks only if told to.
  *
  * ## The dialog
  *
@@ -48,6 +56,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { clearAskPurpose, peekAskPurpose } from "./ask-purpose.js";
+import { settleFirstOpen } from "./first-open-purpose.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { leavePurpose, savePurpose, usePurpose } from "./purpose.js";
@@ -81,13 +90,22 @@ function Ask({ slug }: { slug: string }) {
      this effect finds it taken and does not seed again over a first keystroke. */
   const decided = useRef(false);
   useEffect(() => {
-    if (read.state !== "ready" || read.purposeFailed) return;
+    if (read.state === "loading") return;
+    /* Not a definitive answer: the mark stays, and a first open it was
+       holding gets its ordinary default (first-open-purpose.ts). */
+    if (read.state === "failed" || read.purposeFailed) {
+      settleFirstOpen(slug, madeFor, "unknown");
+      return;
+    }
     clearAskPurpose(slug);
-    if (read.purpose !== null || decided.current) return;
+    /* No reason, on a first open with room for a band: the guide, whose
+       greeting holds this same box, instead of the modal (plan 261007j F4). */
+    const { modal } = settleFirstOpen(slug, madeFor, read.purpose !== null ? "stored" : "none");
+    if (!modal || decided.current) return;
     decided.current = true;
     seed("");
     setOpen(true);
-  }, [read, slug, seed]);
+  }, [read, slug, madeFor, seed]);
 
   /* **Done, latched.** Set by the press; this closes once the save it started
      has landed, and lets go on a refusal so the reader can see why.

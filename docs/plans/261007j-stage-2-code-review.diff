@@ -1,0 +1,3204 @@
+diff --git a/docs/project/chat-tools.md b/docs/project/chat-tools.md
+index 915420bee..09adc04b7 100644
+--- a/docs/project/chat-tools.md
++++ b/docs/project/chat-tools.md
+@@ -478,7 +478,17 @@ Since 2026-10-05, for report `spya-hyfqkq`
+ From 2026-10-01 it showed chats only.
+ 
+ - **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
+-  Candidates thread is not: it is not a conversation the reader had.
++  Candidates thread is not: it is not a conversation the reader had. **The guide is not listed but
++  pinned** (since 2026-10-07,
++  [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)): one row above the
++  filter and the list, with a `Compass`, there whatever `?chatfrom=` says and before the guide
++  exists; a press opens it in the band, and `?mode=chat&guide=1` does the same from a link
++  ([url-state.md](url-state.md)).
++- **What Chat may open is chats and the guide** (`openableInChat`). A send, an edit and Live go by
++  the open conversation's kind, never the band's: a guide turn is sent as `guide`, with no blocks
++  on screen and no Live. Every *Ask in chat* handoff still starts a fresh chat, even with the guide
++  open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
++  (stage 3) targets the guide.
+ - **Where a row came from** is one pure function, `threadSource` in
+   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
+   from a claim in Debate*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
+@@ -492,7 +502,8 @@ From 2026-10-01 it showed chats only.
+   *Start over* lives in Learn.
+ - **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
+   screen, which the server refuses on any kind but `chat`. So `ConversationBand` hands the panel
+-  `listed` (every kind but Candidates) and `threads` (chats only), and the open conversation, the
++  `listed` (every kind but Candidates and the guide) and `threads` (chats, and the guide since
++  2026-10-07), and the open conversation, the
+   drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
+   cleared by replace once the list has loaded. An article whose only conversations are Learn's
+   shows those rows and does not begin a blank chat; the box under the list and the + start one.
+@@ -872,13 +883,28 @@ prompt.
+   command accepts, and for a bookmark a block this article has. `glossary-open` is not on it — its
+   argument is an entry id the model is never shown — so chat writes `glossary-ask` with the term and
+   `chipFor` turns that into *open the entry* when the visible glossary has it.
++- **Two more ids since 2026-10-07, for Chat and the guide alike**
++  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
++  `quick-search:<words>` is the bar's own *Quick search “X”* row (the same press,
++  `quickSearchPress`; the words take `find`'s rule; it *generates*), and `mode:<catalogue key>` —
++  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
++  sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
++  at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
++  [`command-runners.ts`](../../src/web/command-runners.ts), built by the reading view from
++  `visibleModes` and `subModeRows`), never the whole catalogue — so a mode behind the experimental
++  switch, or one this page does not draw, is no button. Its `generates` marker is the mode's own
++  (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
++  activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
++  key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
++  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button: the
++  guide's greeting holds the reader's own box instead (the plan's F5).
+ - **Asked twice.** `chipFor` runs at the draw and again at the press
+   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
+   remembered from the render. A press goes through `chatExecutor`
+   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
+   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
+   runner yet (the comments read still out) is a disabled button, not raw brackets.
+-- **Who gets them.** Chat and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
++- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
+   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
+   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
+ - **A token is never citation text**, valid or not, on both sides: `citableText`
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index 129fe76ff..4526f3d0e 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -73,6 +73,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
+ | `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10, and `?mode=hierarchy` does too; `?mode=trajectory` opens Skim; `?mode=remember` opens Learn; `?mode=tweets` is rewritten to `?mode=summary&summary=thread` (`liftLegacyTweets` in [`router.ts`](../../src/web/router.ts)) (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
+ | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
+ | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
++| `guide` | **open this article's guide in Chat**, whether or not it exists yet (one per article, so a link cannot know its id). Chat's band reads it once its list has loaded, opens the stored guide or begins one, and in one *replace* writes its id to `thread` and drops `guide`, so the address becomes the ordinary `?mode=chat&thread=<id>`. Meaningless outside `mode=chat`; never restored — [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) ([`params.ts`](../../src/web/params.ts) § `guideParam`) | **replace** | `?mode=chat&guide=1` |
+ | `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `glossary`, `citations`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
+ | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
+ | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
+diff --git a/src/converse.ts b/src/converse.ts
+index 1db4b25a9..9a9bf057b 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -456,10 +456,16 @@ conversation, and the right response is to say so to the reader and carry on.`;
+  * **This section is not the defence.** Chat's context holds the article and
+  * whatever a tool fetched, so a page can ask for a token and sometimes get one
+  * — measured in docs/investigations/261003b-chat-proposes-commands-as-chips.md.
+- * The defence is in code: the six ids in `CHAT_PROPOSABLE`
+- * (src/web/chat-commands.ts), each argument checked by its own command, and a
++ * The defence is in code: the ids in `CHAT_PROPOSABLE`
++ * (src/web/chat-commands.ts), each argument checked by its own command — a
++ * mode's key against the modes the reader can open there and then — and a
+  * press. What the sentence about the article buys is fewer stray buttons.
+  *
++ * **Two more ids since 2026-10-07**, `quick-search` and `mode`, shared with
++ * the guide (plan 261007j). Chat's prompt carries no list of the modes, so it
++ * is shown the key's shape and a few examples; the guide's carries every
++ * ordinary mode with its token beside it (src/guide.ts § `modeWordsSection`).
++ *
+  * **Chat's prompt only.** Learn, Tutorial and Candidates are handed no
+  * executor, so a token there would be raw brackets; and the spoken prompt is a
+  * different constant (`LIVE_SYSTEM`, src/live.ts) that must never learn a
+@@ -487,6 +493,15 @@ token alone. The reader sees a button there, not the token.
+   article has exactly those words.
+ - [cmd:glossary-ask:free%20energy] — looks that term up in this article's
+   glossary, and adds it if it is not there yet.
++- [cmd:quick-search:how%20they%20measured%20it] — runs a quick search for the
++  passages about that, in whatever words the article uses, and shows them.
++  Use it when they want the parts about an idea rather than one exact phrase.
++- [cmd:mode:mode%3Aglossary] — opens one of Spideryarn's modes beside the
++  article, here the Glossary. After "mode:" comes the mode's key: mode%3A and
++  the mode's name in lower case (mode%3Asummary, mode%3Aquotes,
++  mode%3Astructure), or submode%3A, the mode and one of its parts
++  (submode%3Alearn%3Atutorial). Name only a mode you know exists; one the
++  reader cannot open here gets no button.
+ 
+ After the second colon, letters, digits and hyphens are written as they are.
+ Every other character is percent-encoded: a space is %20, an apostrophe is %27.
+@@ -496,7 +511,8 @@ the reader sees the brackets.
+ 
+ Offer a button only when the reader's message asks for that action: "bookmark
+ that", "tag this as methods", "where does it first mention X?", "show me
+-everywhere it says X", "add X to the glossary". Still answer in words — for
++everywhere it says X", "add X to the glossary", "find the parts about X",
++"open the quotes". Still answer in words — for
+ "where does it first mention X?", say where, cite the block, and then offer the
+ jump. When the action is all they asked for, the one sentence and the button
+ are the whole answer. Do not ask whether they would like a button: when their
+diff --git a/src/guide.ts b/src/guide.ts
+index 1a3f140a3..b12589e0e 100644
+--- a/src/guide.ts
++++ b/src/guide.ts
+@@ -45,6 +45,15 @@ const EXPERIMENTAL_OFF = "owner-article-experimental-off";
+  * nothing but that file: a regenerated catalogue is the only thing that moves
+  * them. A sub-mode follows its mode. A mode that only shows with experimental
+  * features on says so, because the reader may not see it in their bar.
++ *
++ * **Each ordinary one carries its button**, since stage 2 of the plan: the
++ * `mode` proposal's token with the row's own catalogue key already encoded
++ * (`modeToken`), so the model copies a token rather than spelling one. An
++ * experimental one carries none, and the section says to name it in words:
++ * whether the reader can open it is the switch's to say, and a token the
++ * reader's page refuses is drawn as its raw brackets
++ * (src/web/chat-commands.ts § `chipFor`). The page resolves every key against
++ * what it can open now in any case; this only keeps the stray brackets down.
+  */
+ export function modeWordsSection(rows: readonly CatalogueRow[] = catalogue): string {
+   const ours = rows.filter(
+@@ -54,10 +63,10 @@ export function modeWordsSection(rows: readonly CatalogueRow[] = catalogue): str
+   const lines: string[] = [];
+   for (const mode of modes) {
+     const name = mode.id.slice("mode:".length);
+-    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.`);
++    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.${button(mode)}`);
+     for (const sub of ours) {
+       if (sub.kind !== "submode" || !sub.id.startsWith(`submode:${name}:`)) continue;
+-      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.`);
++      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.${button(sub)}`);
+     }
+   }
+   return `WHAT SPIDERYARN CAN SHOW THEM
+@@ -69,9 +78,32 @@ these names exactly, so the reader can find what you mean. "(experimental)"
+ means the reader sees it only once they have turned on experimental features on
+ their profile page.
+ 
++When you suggest a mode, you may put its button on a line of its own, after the
++sentence saying what it would do for them: suggesting where to go is answering
++here, so this is one of the times a button needs no asking. Copy the token
++shown beside the mode exactly. A mode marked "(experimental)" has no button:
++name it in words. The same holds for a quick search when you suggest one.
++
+ ${lines.join("\n")}`;
+ }
+ 
++/**
++ * **The `mode` proposal's token for one catalogue row** — `[cmd:mode:<key>]`
++ * with the key percent-encoded the way src/web/command-proposal.ts §
++ * `formatProposalToken` encodes it. A key is lower-case letters, `-` and `:`
++ * (command-match.ts § `commandId`), so `:` is the one character to encode.
++ * tests/chat-command-chips-prompt.test.ts runs every token through the real
++ * parser, so a key that ever needed more would fail there.
++ */
++export function modeToken(key: string): string {
++  return `[cmd:mode:${key.replaceAll(":", "%3A")}]`;
++}
++
++/** ` Button: [cmd:mode:…]` for an ordinary row, nothing for an experimental one. */
++function button(row: CatalogueRow): string {
++  return experimental(row) === "" ? ` Button: ${modeToken(row.id)}` : "";
++}
++
+ function experimental(row: CatalogueRow): string {
+   return row.contexts.includes(EXPERIMENTAL_OFF) ? "" : " (experimental)";
+ }
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index 09b485ad0..fdc9dd6c5 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -60,6 +60,7 @@ import {
+   BookMarked,
+   Check,
+   ClipboardCheck,
++  Compass,
+   Copy,
+   FileText,
+   Globe,
+@@ -92,6 +93,7 @@ import type {
+ } from "../types.js";
+ import { isLearnKind } from "../types.js";
+ import { CitedMarkdown } from "./Cited.js";
++import { GuideGreeting } from "./GuideGreeting.js";
+ import { Button } from "./components/ui/button.js";
+ import { useChatCommands } from "./CommandChip.js";
+ import { chipFor } from "./chat-commands.js";
+@@ -113,6 +115,7 @@ import { isHeldSendEnter, isImeComposing, isSendEnter } from "./key-chord.js";
+ import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
+ import {
+   CHAT_FROM_LABEL,
++  GUIDE_LABEL,
+   type LearnConversationView,
+   narrowed,
+   sourcesIn,
+@@ -164,6 +167,14 @@ interface Props {
+    * Learn row is drawn and cannot be pressed.
+    */
+   onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
++  /**
++   * **The guide's pinned row, Chat's alone** (plan 261007j): the article's one
++   * guide, or `null` before there is one, and how to open it — the stored one
++   * or one begun for the press. Drawn above the list and outside its source
++   * filter (GPT Sol's F2), so it is there whatever `?chatfrom=` says and even
++   * when no conversation is. Absent in Learn, which has no list.
++   */
++  guide?: { readonly thread: ChatThread | null; onOpen(): void } | undefined;
+   /**
+    * The live conversation, owned above this component.
+    *
+@@ -391,6 +402,7 @@ export function ChatPanel({
+   from,
+   onFrom,
+   onOpenLearn,
++  guide,
+   threadId,
+   onThread,
+   onSend,
+@@ -586,6 +598,9 @@ export function ChatPanel({
+           <h2 className={learn && subMode ? "sr-only" : undefined}>
+             {learn ? (
+               MODE_LABEL.learn
++            ) : open?.kind === "guide" ? (
++              /* One per article, so its name rather than its first question. */
++              GUIDE_LABEL
+             ) : open ? (
+               /* The title is the reader's first question, or their rename. */
+               <span className="chat-head-title">{open.title}</span>
+@@ -726,6 +741,7 @@ export function ChatPanel({
+         <>
+           <ThreadList
+             threads={rows}
++            guide={guide}
+             from={from ?? null}
+             onFrom={onFrom}
+             onOpen={onThread}
+@@ -926,6 +942,7 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
+  */
+ function ThreadList({
+   threads,
++  guide,
+   from,
+   onFrom,
+   onOpen,
+@@ -935,6 +952,7 @@ function ThreadList({
+   onDelete,
+ }: {
+   threads: ChatThread[];
++  guide?: { readonly thread: ChatThread | null; onOpen(): void } | undefined;
+   from: ChatFrom | null;
+   onFrom?: ((next: ChatFrom | null) => void) | undefined;
+   onOpen(id: string): void;
+@@ -948,8 +966,14 @@ function ThreadList({
+      same paint cannot disagree about what "now" is. useNow.ts § why. */
+   const now = useNow();
+ 
++  /* **The guide, pinned**: above the filter and every row, never narrowed by
++     it, and drawn whether or not it exists yet (plan 261007j, GPT Sol's F2). */
++  const pinned = guide && <GuideRow guide={guide} now={now} />;
++
+   if (threads.length === 0) {
+     return (
++      <>
++      {pinned}
+       <div className="chat-empty">
+         <p>Nothing asked yet.</p>
+         <p className="chat-empty-hint">
+@@ -959,6 +983,7 @@ function ThreadList({
+           <MessageSquarePlus size={14} /> New conversation
+         </button>
+       </div>
++      </>
+     );
+   }
+ 
+@@ -971,10 +996,12 @@ function ThreadList({
+   const sorted = narrowed(threads, chosen).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+   /* One slot at the head of every row when any row has an icon, so the titles
+      of the rows without one still start on the same line down the list. */
+-  const anySource = threads.some((t) => threadSource(t) !== null);
++  /* The pinned guide always has one, so its title lines up with theirs. */
++  const anySource = guide !== undefined || threads.some((t) => threadSource(t) !== null);
+ 
+   return (
+     <>
++      {pinned}
+       {sources.length > 1 && onFrom && (
+         /* No `role="group"`, as Learn's chips have none (QuizPanel.tsx §
+            `LearnSubModeToggle`): each button says what it is and whether
+@@ -1099,6 +1126,55 @@ function ThreadList({
+   );
+ }
+ 
++/**
++ * **The guide's row, pinned above Chat's list** (plan 261007j) — one per
++ * article, so it is named for what it is, not for its first question, and it
++ * wears an icon no mode has: `Compass` (docs/project/icons.md, one glyph one
++ * meaning). Before the guide exists it says what it is for; after, where it
++ * got to, as every row does. No rename and no delete here: it is not one of
++ * many, and its delete is in its own header, as a chat's is.
++ */
++function GuideRow({
++  guide,
++  now,
++}: {
++  guide: { readonly thread: ChatThread | null; onOpen(): void };
++  now: number;
++}) {
++  const t = guide.thread;
++  const last = t ? lastSaid(t) : undefined;
++  return (
++    <div className="chat-guide" data-guide="">
++      <span className="chat-thread-lead">
++        <span className="chat-guide-mark">
++          <Compass size={12} aria-hidden="true" />
++        </span>
++      </span>
++      <button
++        type="button"
++        className="chat-thread-open"
++        title={t && t.messages.length > 0 ? describe(t) : "Your guide to reading this piece, and to Spideryarn"}
++        onClick={guide.onOpen}
++      >
++        <span className="chat-thread-title">{GUIDE_LABEL}</span>
++        {last ? (
++          <span className={last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"}>
++            {last.text}
++          </span>
++        ) : (
++          <span className="chat-thread-last">How to read this piece, and where to start</span>
++        )}
++        {t && t.messages.length > 0 && (
++          <span className="chat-thread-meta">
++            <span className="chat-thread-count">{turns(t)}</span>
++            <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
++          </span>
++        )}
++      </button>
++    </div>
++  );
++}
++
+ /**
+  * **Where a row's conversation came from**: the source mode's own icon from
+  * the bar (mode-icons.ts; docs/project/icons.md), with a card saying so and,
+@@ -1661,7 +1737,9 @@ export function Conversation({
+         }}
+       >
+         {empty &&
+-          (kind === "tutorial" ? (
++          (kind === "guide" ? (
++            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
++          ) : kind === "tutorial" ? (
+             <TutorialInvitation />
+           ) : kind === "explore" ? (
+             <ExploreInvitation onAsk={(q) => onSend(q)} />
+@@ -2853,7 +2931,9 @@ export function Composer({
+         placeholder={
+           busy
+             ? "Waiting for the answer…"
+-            : kind === "tutorial"
++            : kind === "guide"
++              ? "Why are you reading this, or what would help?"
++              : kind === "tutorial"
+               ? "What do you remember about it? It's fine if you haven't read it yet."
+               : kind === "explore"
+                 ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
+diff --git a/src/web/CommandChip.tsx b/src/web/CommandChip.tsx
+index 9a49b45dc..4ad3c7241 100644
+--- a/src/web/CommandChip.tsx
++++ b/src/web/CommandChip.tsx
+@@ -96,7 +96,7 @@ export function CommandChip({
+   // one (the article's blocks changed under it), it is its own characters.
+   if (chip === null) return <>{raw}</>;
+ 
+-  const { label, description, generates } = proposalWords(chip.proposal, chip.shown);
++  const { label, description, generates } = proposalWords(chip.proposal, chip.shown, chip.target);
+ 
+   const settle = (outcome: ActionOutcome, done: string | null) => {
+     switch (outcome.kind) {
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 55240d31a..cc41d4528 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1725,7 +1725,7 @@ function useMetadataEscape(enabled: boolean, href: string): void {
+  * as the owner and spend on what was only an arrival. GPT Sol's plan review of
+  * docs/plans/261002a-summary-generates-on-open.md, P1.
+  */
+-function useActivateMode(
++export function useActivateMode(
+   slug: string,
+   search: string,
+   diagram: DiagramKind,
+@@ -1784,7 +1784,7 @@ function useActivateMode(
+  * Off the reading view it is a link to the article in that sub-mode and arms
+  * nothing, as a mode row there is (§ `useActivateMode`).
+  */
+-function useActivateSubMode(
++export function useActivateSubMode(
+   slug: string,
+   search: string,
+   onMode: Props["onMode"],
+diff --git a/src/web/GuideGreeting.tsx b/src/web/GuideGreeting.tsx
+new file mode 100644
+index 000000000..41c4b4cef
+--- /dev/null
++++ b/src/web/GuideGreeting.tsx
+@@ -0,0 +1,122 @@
++/**
++ * **The guide's empty state: our words, and no model call.** Plan
++ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, § The
++ * design, 3: *"The greeting is ours, not a model's … Nothing is spent until the
++ * reader sends."*
++ *
++ * Shaped like the other conversations' empty states (ChatPanel.tsx §
++ * `TutorialInvitation`, `ExploreInvitation`): a few plain sentences, and a
++ * button only where pressing it is a complete request. What it shows depends on
++ * what the reader has already told us, read from `GET /api/reader?slug=`
++ * (`usePurpose`):
++ *
++ * - **No reason for reading stored** → the very box the first-open prompt and
++ *   Metadata hold for *Why you're reading this one* — `ProfileBox` with
++ *   `useAutosavedText` and `savePurpose`, wired as PurposePrompt.tsx wires it,
++ *   so it saves itself — and a line saying they can answer there or type below.
++ *   **The reader's own words are what is saved; nothing a model wrote ever
++ *   becomes their reason** (GPT Sol's F5 on the plan, which is why there is no
++ *   `purpose` button).
++ * - **About you empty** → one light line pointing at their profile page.
++ * - **A reason stored, or just saved in the box** → *Ask the guide where to
++ *   start*, which sends `GUIDE_FIRST_QUESTION`. The press is the consent to
++ *   spend; nothing is asked before it.
++ *
++ * A read that failed, or a shelf the server could not read (`purposeFailed`),
++ * is never taken for "you have not said": no box over a sentence the reader
++ * may already have written, and no button promising a reason we cannot see.
++ *
++ * The words are the app's, so they are set in the app's face; the reader's
++ * own reason is in their box, which `ProfileBox` draws (docs/project/fonts.md).
++ */
++import { useEffect, useRef } from "react";
++import { MAX_PURPOSE_CHARS } from "../types.js";
++import { Link } from "./Link.js";
++import { ProfileBox } from "./ProfileBox.js";
++import { useMadeFor } from "./lib/made-for.js";
++import { leavePurpose, savePurpose, usePurpose } from "./purpose.js";
++import { PROFILE_HREF } from "./router.js";
++import { useAutosavedText } from "./useAutosavedText.js";
++
++/**
++ * **What *Ask the guide where to start* sends**, as the reader's first message
++ * — so what they pressed is what the transcript shows, and what the guide
++ * answers with their reason in front of it (`GUIDE_SYSTEM`, src/converse.ts).
++ */
++export const GUIDE_FIRST_QUESTION = "I've said why I'm reading this. Where should I start?";
++
++/** The button's words. */
++export const GUIDE_START_LABEL = "Ask the guide where to start";
++
++export function GuideGreeting({ slug, onAsk }: { slug: string; onAsk(question: string): void }) {
++  const read = usePurpose(slug);
++  /* The reader the box was mounted for, so its unmount save cannot go out as
++     the next one (lib/made-for.ts), exactly as PurposePrompt.tsx's. */
++  const madeFor = useMadeFor();
++  const purpose = useAutosavedText({
++    /* The server's answer, not what was typed, and an empty box clears: the
++       box is seeded only over a reason that is definitively none, so there
++       is nothing hidden to erase. */
++    save: async (text) => (await savePurpose(slug, text === "" ? null : text, madeFor)) ?? "",
++    leave: (text) => leavePurpose(slug, text, madeFor),
++  });
++  const seed = purpose.seed;
++
++  const known = read.state === "ready" && !read.purposeFailed;
++  /* Asked once, at the read: a box that appeared after the reader saved into
++     it would vanish under them, so once shown it stays. */
++  const asking = known && read.purpose === null;
++  const seeded = useRef(false);
++  useEffect(() => {
++    if (!asking || seeded.current) return;
++    seeded.current = true;
++    seed("");
++  }, [asking, seed]);
++
++  const hasReason = known && (read.purpose !== null || (purpose.saved ?? "").trim() !== "");
++  const noProfile = read.state === "ready" && read.profile === null;
++
++  return (
++    <div className="chat-suggest guide-greeting">
++      <p className="chat-empty-hint">
++        I'm here to help you read this piece well, and to get the most out of Spideryarn while you do.
++        Tell me why you're reading it, and I'll suggest where to start, what to search for, and which
++        modes would help.
++      </p>
++      {asking && (
++        <>
++          <ProfileBox
++            id="guide-purpose"
++            label="Why you're reading this one"
++            placeholder="e.g. I want to know how they handled missing data"
++            hint="Saved as you type, for this article only. You can change it later on Metadata."
++            value={purpose.draft}
++            onChange={purpose.setDraft}
++            onCommit={purpose.commit}
++            max={MAX_PURPOSE_CHARS}
++            disabled={purpose.saved === null}
++            rows={2}
++            save={purpose.state}
++            inFlight={purpose.inFlight}
++          />
++          <p className="chat-empty-hint">You can answer in the box above, or just type below.</p>
++        </>
++      )}
++      {noProfile && (
++        <p className="chat-empty-hint">
++          If you tell us a little about yourself on your <Link href={PROFILE_HREF}>profile</Link>, I can
++          fit my suggestions to you.
++        </p>
++      )}
++      {hasReason && (
++        <ul>
++          <li>
++            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(GUIDE_FIRST_QUESTION)}>
++              {GUIDE_START_LABEL}
++            </button>
++          </li>
++        </ul>
++      )}
++    </div>
++  );
++}
+diff --git a/src/web/chat-commands.ts b/src/web/chat-commands.ts
+index 2f39e6e6c..26bd68cc8 100644
+--- a/src/web/chat-commands.ts
++++ b/src/web/chat-commands.ts
+@@ -15,13 +15,15 @@ import {
+   canRun,
+   type CommandExecutor,
+   type CommandProposal,
++  type ModeTarget,
+   type ProposalId,
+   parseProposalToken,
+   resolveArgument,
+ } from "./command-proposal.js";
+ 
+ /**
+- * **The ids a chat answer may propose.** Six of the seven.
++ * **The ids a chat answer may propose.** Eight of the nine — and the guide's
++ * the same eight (plan 261007j: one allowlist, the same token, the same press).
+  *
+  * `glossary-open` is left out because its argument is a glossary entry's id,
+  * and nothing chat is shown carries one: a model writing it would be inventing
+@@ -36,6 +38,11 @@ export const CHAT_PROPOSABLE: readonly ProposalId[] = [
+   "tag-add",
+   "tag-remove",
+   "bookmark",
++  /* Since 2026-10-07: open a mode the reader can open here, and the bar's own
++     quick search. Resolved against what is here at the draw and at the press
++     (`chipFor`). */
++  "mode",
++  "quick-search",
+ ];
+ 
+ /**
+@@ -45,6 +52,8 @@ export const CHAT_PROPOSABLE: readonly ProposalId[] = [
+ export interface ChatChip {
+   readonly proposal: CommandProposal;
+   readonly shown?: string;
++  /** What a `mode` proposal opens here, with its name and its own `generates`. */
++  readonly target?: ModeTarget;
+   readonly enabled: boolean;
+ }
+ 
+@@ -53,8 +62,12 @@ export interface ChatChip {
+  * model wrote**, exactly as a block id the article lacks is.
+  *
+  * `null` for a token that does not parse or whose argument its command refuses
+- * (`parseProposalToken`), an id outside `CHAT_PROPOSABLE`, and a bookmark on a
+- * block this article does not have — the case a hostile page would write.
++ * (`parseProposalToken`), an id outside `CHAT_PROPOSABLE`, a bookmark on a
++ * block this article does not have — the case a hostile page would write — and
++ * a mode the reader cannot open here: hidden behind the experimental switch,
++ * unknown, or anything else the Dock does not offer now (GPT Sol's F3 on plan
++ * 261007j). A mode's key is resolved against `commands.sources.modes`, the
++ * live set, never against the whole catalogue.
+  *
+  * A chip with no runner here is still a chip, **not enabled**: the bookmark
+  * before the comments read has landed, the look-up before the glossary read
+@@ -67,6 +80,11 @@ export function chipFor(raw: string, commands: CommandExecutor, blocks: Known):
+   const parsed = parseProposalToken(raw);
+   if (parsed === null || !CHAT_PROPOSABLE.includes(parsed.id)) return null;
+   if (parsed.id === "bookmark" && !blocks.has(parsed.blockId)) return null;
++  if (parsed.id === "mode") {
++    const target = commands.sources.modes?.get(parsed.key);
++    if (target === undefined) return null;
++    return { proposal: parsed, target, enabled: canRun(commands.runners, "mode") };
++  }
+   if (parsed.id !== "glossary-ask") {
+     return { proposal: parsed, enabled: canRun(commands.runners, parsed.id) };
+   }
+@@ -97,10 +115,14 @@ export function doneWords(id: ProposalId): string | null {
+       return "Removed.";
+     case "bookmark":
+       return "Bookmarked.";
++    /* A mode and a quick search move the reader into a band that shows what
++       happened; there is nothing more for the chip to say. */
+     case "jump-first":
+     case "find":
+     case "glossary-open":
+     case "glossary-ask":
++    case "mode":
++    case "quick-search":
+       return null;
+     default: {
+       const never: never = id;
+diff --git a/src/web/chat-draft.ts b/src/web/chat-draft.ts
+index 1ed144921..a5d39dfa0 100644
+--- a/src/web/chat-draft.ts
++++ b/src/web/chat-draft.ts
+@@ -94,6 +94,18 @@ export interface ChatDrafts {
+   destination(): string | null | undefined;
+   setDestination(id: string | null): void;
+ 
++  /**
++   * **The guide this tab began**, by id, or `undefined` (plan 261007j). The
++   * guide is one conversation per article, opened in Chat's band; one this tab
++   * began and nothing has been sent to goes with the band on a mode change, as
++   * an unsent chat does. Kept here so the band can begin it again **under the
++   * same id**, words and all, rather than mistake its words for a chat's —
++   * and so two quick opens (StrictMode's second run, a pinned-row press racing
++   * `?guide=1`) are one guide, not two.
++   */
++  guide(): string | undefined;
++  setGuide(id: string): void;
++
+   /** Whether any of the three boxes holds words — more than spaces — right now. */
+   holdsWords(): boolean;
+ }
+@@ -109,7 +121,12 @@ export function createChatDrafts(): ChatDrafts {
+   let list = "";
+   const learnDrafts = new Map<LearnKind, string>();
+   let destination: string | null | undefined;
++  let guide: string | undefined;
+   return {
++    guide: () => guide,
++    setGuide(id) {
++      guide = id;
++    },
+     thread: (id) => threads.get(id),
+     setThread(id, text) {
+       threads.set(id, text);
+diff --git a/src/web/command-proposal.ts b/src/web/command-proposal.ts
+index 3ad2e63d0..9ee2623f3 100644
+--- a/src/web/command-proposal.ts
++++ b/src/web/command-proposal.ts
+@@ -29,10 +29,20 @@ import { type ActionOutcome, type ArgumentQuery, canonical } from "./command-mat
+ import type { FindMoreMode } from "./find-more.js";
+ 
+ /**
+- * **Everything a proposal can ask for.** Seven ids, and an argument each.
++ * **Everything a proposal can ask for.** Nine ids, and an argument each.
+  *
+  * `bookmark` has no verb in the bar — a reader has no block id to type — and
+  * is here for chat (Stage 2), which can name the passage it is talking about.
++ *
++ * **`mode` and `quick-search` since 2026-10-07**, for Chat and the guide both
++ * (docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md;
++ * Greg: *"all of the main chats should probably have all the same tools"*).
++ * Neither has a verb in the bar either: the bar has its own mode rows and its
++ * own *Quick search “X”* row, and these are those rows as a model may name
++ * them. A `mode` key is a command-pick catalogue id — `mode:glossary`,
++ * `submode:learn:tutorial` (command-match.ts § `commandId`) — and parsing it
++ * says only that it is shaped like one: whether the reader can open it *here*
++ * is the live set's to say (`ArgumentSources.modes`, GPT Sol's F3).
+  */
+ export type CommandProposal =
+   | { readonly id: "jump-first"; readonly words: string }
+@@ -41,20 +51,31 @@ export type CommandProposal =
+   | { readonly id: "glossary-ask"; readonly term: string }
+   | { readonly id: "tag-add"; readonly tag: string }
+   | { readonly id: "tag-remove"; readonly tag: string }
+-  | { readonly id: "bookmark"; readonly blockId: BlockId };
++  | { readonly id: "bookmark"; readonly blockId: BlockId }
++  | { readonly id: "mode"; readonly key: string }
++  | { readonly id: "quick-search"; readonly words: string };
+ 
+ export type ProposalId = CommandProposal["id"];
+ type ProposalOf<K extends ProposalId> = Extract<CommandProposal, { id: K }>;
+ 
++/** Moves the reader, writes the reader's own data (reversibly), or spends a model call. */
++export type Risk = "navigate" | "writes" | "spends";
++
+ /**
+  * **What pressing each one does to the world** — moves the reader, writes the
+  * reader's own data (reversibly), or spends a model call.
+  *
+- * A `Record` over the ids, so an eighth id is a compile error here before it
++ * A `Record` over the ids, so a tenth id is a compile error here before it
+  * is a row. The bar's `generates` marker is read off this
+  * (`proposalWords`), never written beside it, so the two cannot disagree.
++ *
++ * **`mode` is the one id whose answer is its target's** (`"per-mode"`): opening
++ * Structure moves the reader, opening Summary may write one (GPT Sol's F3 on
++ * plan 261007j). One id cannot honestly say both, so `proposalRisk` asks the
++ * mode itself — `modeGenerates` / `subModeGenerates` in activation.ts, the
++ * table the bar's own mode rows read — through the resolved `ModeTarget`.
+  */
+-export const RISK: Readonly<Record<ProposalId, "navigate" | "writes" | "spends">> = {
++export const RISK: Readonly<Record<ProposalId, Risk | "per-mode">> = {
+   "jump-first": "navigate",
+   find: "navigate",
+   "glossary-open": "navigate",
+@@ -62,13 +83,35 @@ export const RISK: Readonly<Record<ProposalId, "navigate" | "writes" | "spends">
+   "tag-add": "writes",
+   "tag-remove": "writes",
+   bookmark: "writes",
++  mode: "per-mode",
++  /* A quick search is a model call and a saved row — the bar's own row says
++     `generates` for it (CommandBar.tsx § `quickSearchRow`). */
++  "quick-search": "spends",
+ };
+ 
++/**
++ * **What this press does to the world**, `RISK` with the one per-target id
++ * resolved. A `mode` with no target in hand says `spends`: over-warning is the
++ * direction that costs nothing (activation.ts § `modeGenerates`).
++ */
++export function proposalRisk(proposal: CommandProposal, target?: ModeTarget): Risk {
++  const risk = RISK[proposal.id];
++  if (risk !== "per-mode") return risk;
++  return target === undefined || target.generates ? "spends" : "navigate";
++}
++
+ export const PROPOSAL_IDS = Object.keys(RISK) as readonly ProposalId[];
+ 
+ /** Longest a `find` or jump phrase may be in a token — a ceiling, not a design limit. */
+ const MAX_WORDS = 200;
+ 
++/**
++ * **The shape of a catalogue key for a mode or a sub-mode** — `commandId`'s
++ * two mode arms (command-match.ts). Only the shape: what the key names, and
++ * whether it can be opened here, is `ArgumentSources.modes`'.
++ */
++const MODE_KEY = /^(?:mode:[a-z-]+|submode:[a-z-]+:[a-z-]+)$/;
++
+ /**
+  * **A proposal whose argument its own command accepts**, or `null`.
+  *
+@@ -80,11 +123,17 @@ const MAX_WORDS = 200;
+  */
+ function checked(id: ProposalId, argument: string): CommandProposal | null {
+   switch (id) {
++    /* A quick search takes what a typed `find X` would: the bar draws its
++       *Quick search “X”* row for exactly those words (CommandBar.tsx §
++       `argumentRowsFor`). */
+     case "jump-first":
+-    case "find": {
++    case "find":
++    case "quick-search": {
+       const words = argument.replace(/\s+/g, " ").trim();
+       return words === "" || words.length > MAX_WORDS ? null : { id, words };
+     }
++    case "mode":
++      return MODE_KEY.test(argument) ? { id, key: argument } : null;
+     case "glossary-open":
+       return isSpideryarnId(argument) ? { id, termId: argument } : null;
+     case "bookmark":
+@@ -110,7 +159,10 @@ function argumentOf(proposal: CommandProposal): string {
+   switch (proposal.id) {
+     case "jump-first":
+     case "find":
++    case "quick-search":
+       return proposal.words;
++    case "mode":
++      return proposal.key;
+     case "glossary-open":
+       return proposal.termId;
+     case "glossary-ask":
+@@ -189,9 +241,32 @@ export interface GlossaryLookupSource {
+   readonly terms: readonly Pick<GlossaryEntry, "id" | "name" | "aliases">[];
+ }
+ 
++/**
++ * **A mode or sub-mode the reader can open here, now**, as a `mode` proposal
++ * resolves to it — built by the reading view from the Dock's own reachable
++ * set (command-runners.ts § `modeDoor`), never from the whole catalogue.
++ */
++export interface ModeTarget {
++  /** The catalogue key: `mode:glossary`, `submode:learn:tutorial`. */
++  readonly key: string;
++  /** Its name as the reader sees it: `Glossary`, `Learn › Tutorial`. */
++  readonly label: string;
++  /** The bar's own sentence about it. */
++  readonly description: string;
++  /** Whether opening it may start work — `modeGenerates` / `subModeGenerates`. */
++  readonly generates: boolean;
++}
++
+ /** What a typed argument can be matched against where the reader is standing. */
+ export interface ArgumentSources {
+   readonly glossary?: GlossaryLookupSource | undefined;
++  /**
++   * **The modes and sub-modes the reader can open here now, by catalogue
++   * key** (GPT Sol's F3 on plan 261007j): the Dock's reachable set — the
++   * experimental switch, the mode open now — and its sub-mode rows, exactly as
++   * the command bar lists them. Absent means no `mode` proposal resolves.
++   */
++  readonly modes?: ReadonlyMap<string, ModeTarget> | undefined;
+ }
+ 
+ /**
+@@ -271,10 +346,11 @@ export interface ProposalWords {
+ /**
+  * **What a proposal's row says** — and, from `RISK`, whether it carries the
+  * `generates` marker. `shown` is the display name a `glossary-open` row needs
+- * (its argument is an id); the others ignore it.
++ * (its argument is an id); the others ignore it. `target` is what a `mode`
++ * proposal resolved to here, which carries its name and its own marker.
+  */
+-export function proposalWords(proposal: CommandProposal, shown?: string): ProposalWords {
+-  const generates = RISK[proposal.id] === "spends";
++export function proposalWords(proposal: CommandProposal, shown?: string, target?: ModeTarget): ProposalWords {
++  const generates = proposalRisk(proposal, target) === "spends";
+   switch (proposal.id) {
+     case "jump-first":
+       return {
+@@ -314,6 +390,22 @@ export function proposalWords(proposal: CommandProposal, shown?: string): Propos
+       };
+     case "bookmark":
+       return { label: "Bookmark this passage", description: "In your comments, with no note.", generates };
++    /* The bar's own words for both: a mode row's label and sentence, and the
++       *Quick search “X”* row's (CommandBar.tsx § `quickSearchRow`). No quotes
++       round a mode's name: it is ours, not the model's (CommandChip.tsx §
++       `voiced`). */
++    case "mode":
++      return {
++        label: `Open ${target?.label ?? "that mode"}`,
++        description: target?.description ?? "",
++        generates,
++      };
++    case "quick-search":
++      return {
++        label: `Quick search “${proposal.words}”`,
++        description: "Search mode, a fast first pass for the passages about this.",
++        generates,
++      };
+     default: {
+       const never: never = proposal;
+       return never;
+@@ -359,6 +451,10 @@ export function runProposal(runners: ProposalRunners, proposal: CommandProposal)
+       return runners["tag-remove"]?.(proposal) ?? null;
+     case "bookmark":
+       return runners.bookmark?.(proposal) ?? null;
++    case "mode":
++      return runners.mode?.(proposal) ?? null;
++    case "quick-search":
++      return runners["quick-search"]?.(proposal) ?? null;
+     default: {
+       const never: never = proposal;
+       return never;
+@@ -423,9 +519,10 @@ export interface CommandExecutor {
+   /**
+    * **Run a quick search for these words** — since 2026-10-05, plan 261005i:
+    * what the bar's *Quick search “X”* row presses, drawn in front of every
+-   * *Find “X”* row. The bar's own, like `findMore`, and for the same reason
+-   * not a proposal: chat's chips never see it, and a chat *Find “X”* chip
+-   * stays the exact-words address.
++   * *Find “X”* row. The bar's own row, like `findMore`; a chat *Find “X”*
++   * chip stays the exact-words address. **Since 2026-10-07 a chat chip can
++   * run the same search** as the `quick-search` proposal, whose runner calls
++   * this same press (command-runners.ts § `readingExecutor`).
+    *
+    * **Absent means not offered**: the reading view hands it over for the
+    * owner alone, the cut the bar's own quick-search box makes (Dock.tsx §
+@@ -474,6 +571,10 @@ function unchecked(id: ProposalId, shown: string): CommandProposal {
+       return { id, tag: shown };
+     case "bookmark":
+       return { id, blockId: shown };
++    case "mode":
++      return { id, key: shown };
++    case "quick-search":
++      return { id, words: shown };
+     default: {
+       const never: never = id;
+       return never;
+diff --git a/src/web/command-runners.ts b/src/web/command-runners.ts
+index 9790b2aa2..aead3ef51 100644
+--- a/src/web/command-runners.ts
++++ b/src/web/command-runners.ts
+@@ -10,12 +10,15 @@
+  * their runners from these, and tests/command-runners.test.ts presses each.
+  */
+ import type { Block, BlockId } from "../types.js";
+-import type { ActionOutcome } from "./command-match.js";
++import { MODE_LABEL } from "../title-text.js";
++import { modeGenerates, subModeGenerates } from "./activation.js";
++import { type ActionOutcome, type Command, commandId, commandText } from "./command-match.js";
+ import type {
+   CommandExecutor,
+   CommandProposal,
+   FindMorePresses,
+   GlossaryLookupSource,
++  ModeTarget,
+   Outcome,
+ } from "./command-proposal.js";
+ import { FIND_MORE_MODES, type FindMoreMode } from "./find-more.js";
+@@ -201,6 +204,78 @@ export function quickSearchPress(slug: string, open: () => void): (words: string
+   };
+ }
+ 
++/** A mode row or a sub-mode row of the bar — the two a `mode` proposal can name. */
++export type ModeCommand = Extract<Command, { kind: "mode" | "submode" }>;
++
++/**
++ * **How a `mode` proposal opens what it names** (plan 261007j, GPT Sol's F3):
++ * the targets the reader can open here now, by catalogue key, and the press.
++ */
++export interface ModeDoor {
++  readonly targets: ReadonlyMap<string, ModeTarget>;
++  open(key: string): void;
++}
++
++/**
++ * **The bar's own mode and sub-mode rows, as a door a chat chip can use.**
++ *
++ * `commands` are the rows the command bar lists on this page now — the Dock's
++ * reachable set (`visibleModes`) and its sub-mode rows (`subModeRows`), built
++ * by the reading view from the same two functions the Dock and the bar call —
++ * so a key resolves exactly where the bar would offer that row, and nowhere
++ * else: not behind the experimental switch, not a mode this page does not draw.
++ *
++ * `activate` is the Dock's own pair (Dock.tsx § `useActivateMode`,
++ * `useActivateSubMode`), handed in by reference: a press arms what the Dock's
++ * press arms and moves the band the way it does, so the chip's `generates`
++ * marker (`modeGenerates`, `subModeGenerates`) is a statement about what the
++ * press will do, not a guess beside it.
++ */
++export function modeDoor(
++  commands: readonly ModeCommand[],
++  activate: {
++    mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
++    sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
++  },
++): ModeDoor {
++  const byKey = new Map<string, ModeCommand>();
++  const targets = new Map<string, ModeTarget>();
++  for (const command of commands) {
++    const key = commandId(command);
++    const { label, description } = commandText(command);
++    byKey.set(key, command);
++    targets.set(key, {
++      key,
++      /* A sub-mode's own label is one word of its parent's (*Tutorial*), so
++         the chip names both, as the plan's sketch does: *Open Learn › Tutorial*. */
++      label: command.kind === "submode" ? `${MODE_LABEL[command.sub.mode]} › ${label}` : label,
++      description,
++      generates: command.kind === "mode" ? modeGenerates(command.mode) : subModeGenerates(command.sub),
++    });
++  }
++  return {
++    targets,
++    open(key) {
++      const command = byKey.get(key);
++      if (command === undefined) return;
++      if (command.kind === "mode") activate.mode(command);
++      else activate.sub(command);
++    },
++  };
++}
++
++/**
++ * **Open the mode a chip names** — refused, in a sentence, if the door no
++ * longer offers it (it went behind the switch between draw and press).
++ */
++export function modeRunner(door: ModeDoor): Runner<"mode"> {
++  return ({ key }) => {
++    if (!door.targets.has(key)) return { kind: "stay", message: "That mode isn't available here any more." };
++    door.open(key);
++    return CLOSE;
++  };
++}
++
+ /**
+  * **The reading view's executor, built once** — what Reader.tsx hands the Dock
+  * (command-proposal.ts § `CommandExecutor`), from the controllers it already
+@@ -218,7 +293,10 @@ export function quickSearchPress(slug: string, open: () => void): (words: string
+  *    the owner while that band's list can be added to (`findMoreRunners`);
+  *  - **a quick search exists only when the page hands in Search's opener**,
+  *    which it does for the owner: a visitor's band cannot ask
+- *    (`quickSearchPress`).
++ *    (`quickSearchPress`) — as the bar's row and, since 2026-10-07, as the
++ *    `quick-search` proposal a chat chip presses, one press for both;
++ *  - **a mode exists only when the page hands in its door** (`modeDoor`),
++ *    which it does for the owner, from the Dock's own reachable set.
+  */
+ export function readingExecutor({
+   slug,
+@@ -229,6 +307,7 @@ export function readingExecutor({
+   findMore,
+   openQuickSearch,
+   askThroughLens,
++  modes,
+ }: {
+   slug: string;
+   blocks: Block[];
+@@ -244,16 +323,25 @@ export function readingExecutor({
+    * Reader.tsx § `suggestedLensInChat` (plan 261005k).
+    */
+   askThroughLens?: ((lens: string) => void) | undefined;
++  /** The modes a chip may open, and how — `modeDoor` (plan 261007j). */
++  modes?: ModeDoor | undefined;
+ }): CommandExecutor {
++  const quickSearch = openQuickSearch === undefined ? undefined : quickSearchPress(slug, openQuickSearch);
+   return {
+     runners: {
+       "jump-first": jumpFirstRunner(blocks, jump),
+       ...(glossary === undefined ? {} : glossaryRunners({ slug, ...glossary })),
+       ...(bookmark === undefined ? {} : { bookmark: bookmarkRunner(blocks, bookmark) }),
++      /* The bar's own press, so a chip's quick search and the bar's row are one search. */
++      ...(quickSearch === undefined ? {} : { "quick-search": ({ words }: { words: string }) => quickSearch(words) }),
++      ...(modes === undefined ? {} : { mode: modeRunner(modes) }),
++    },
++    sources: {
++      ...(glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } }),
++      ...(modes === undefined ? {} : { modes: modes.targets }),
+     },
+-    sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
+     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
+-    ...(openQuickSearch === undefined ? {} : { quickSearch: quickSearchPress(slug, openQuickSearch) }),
++    ...(quickSearch === undefined ? {} : { quickSearch }),
+     ...(askThroughLens === undefined
+       ? {}
+       : {
+@@ -278,9 +366,11 @@ export function readingExecutor({
+  *  - **the jump of the surface the chat is drawn in** — the band's, which
+  *    steps a covering band aside on a phone, or the dialog's plain one.
+  *
+- * **Not the reading view's `findMore`, nor its `quickSearch`**: each is a row
+- * of the bar's, not a proposal, and no chip token names it. A chat *Find “X”*
+- * chip goes on opening the exact-words search.
++ * **Not the reading view's `findMore`, nor its `quickSearch` row**: each is a
++ * row of the bar's, not a proposal. A chat *Find “X”* chip goes on opening the
++ * exact-words search; a quick search reaches chat as its own proposal,
++ * `quick-search`, whose runner is in `reading.runners` above (since
++ * 2026-10-07, plan 261007j), and so is a `mode`.
+  *
+  * Chat is the owner's, so this is only ever built for one.
+  */
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index 70e8c7b08..9384fae4b 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -145,6 +145,10 @@ export const NEVER_REMEMBERED = [
+   /* Names an open conversation. `NEEDS_AN_EXPLICIT_PRESS` below is why we do
+      not put the reader back into a conversation mode at all, either. */
+   "thread",
++  /* "Open the guide", which Chat turns into `thread=<the guide's id>` the
++     moment its list answers (params.ts § `guideParam`): an instruction, not a
++     place, and gone from the address before anything could remember it. */
++  "guide",
+   /* Search mode's matcher, the thing being matched, and the ordering of its
+      results. A search *outlines* the passages that match, so replaying last
+      week's over the prose changes what the article looks like on arrival.
+diff --git a/src/web/modes/conversation/ConversationModes.tsx b/src/web/modes/conversation/ConversationModes.tsx
+index 30101fe03..0107acdf4 100644
+--- a/src/web/modes/conversation/ConversationModes.tsx
++++ b/src/web/modes/conversation/ConversationModes.tsx
+@@ -26,13 +26,13 @@ import type {
+   BlockId,
+   ChatAnchor,
+   ChatThread,
+-  LearnKind,
++  SingleThreadKind,
+   ThreadKind,
+   ThreadOrigin,
+ } from "../../../types.js";
+ import { isLearnKind } from "../../../types.js";
+-import { chatFromParam, currentAt, modeParam, learnParam, threadParam } from "../../params.js";
+-import { listedInChat, sourcesIn } from "../../thread-source.js";
++import { chatFromParam, currentAt, guideParam, modeParam, learnParam, threadParam } from "../../params.js";
++import { listedInChat, openableInChat, sourcesIn } from "../../thread-source.js";
+ import { useRenderCount } from "../../perf.js";
+ import { type QuizArrival, QuizPanel, type QuizSections, LearnSubModeToggle } from "../../QuizPanel.js";
+ import { type QuizRead, useQuiz } from "../../useQuiz.js";
+@@ -321,7 +321,16 @@ type ConversationKind = Exclude<ThreadKind, "candidates" | "guide">;
+  * Nor is it in the URL: the question is the reader's text, which
+  * docs/project/logging.md keeps out of addresses.
+  */
+-export interface ChatHandoff {
++export type ChatHandoff = ChatHandoffToChat | ChatHandoffToGuide;
++
++/**
++ * **Where a handoff goes — required, so a sender has to say** (plan 261007j,
++ * GPT Sol's F2). Every *Ask in chat* in the app starts a fresh chat, as Greg
++ * asked on 2026-09-11 (*"fresh"*), whatever conversation the band has open —
++ * the guide included. The command bar's *Ask the guide* row (stage 3) targets
++ * the article's one guide instead: open it, existing or new, and send there.
++ */
++interface ChatHandoffBase {
+   readonly slug: string;
+   readonly question: string;
+   /**
+@@ -336,6 +345,16 @@ export interface ChatHandoff {
+    * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+    */
+   readonly send: boolean;
++}
++
++/** To the guide: open it (or begin it) and send, or wait in its box. Nothing else rides along. */
++export interface ChatHandoffToGuide extends ChatHandoffBase {
++  readonly target: "guide";
++}
++
++/** A fresh chat — every *Ask in chat* sender in `Reader` § `handToChat`. */
++export interface ChatHandoffToChat extends ChatHandoffBase {
++  readonly target: "chat";
+   /**
+    * The item the question is about, when the conversation should remember it
+    * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
+@@ -364,7 +383,9 @@ export interface ChatHandoff {
+  */
+ export function oneLearn(
+   threads: readonly ChatThread[],
+-  kind: LearnKind = "learn",
++  /* Any single-thread kind: Learn's three, and since plan 261007j the guide,
++     which Chat's band picks the same way. */
++  kind: SingleThreadKind = "learn",
+ ): ChatThread | null {
+   let best: ChatThread | null = null;
+   for (const t of threads) {
+@@ -521,7 +542,15 @@ export function ConversationBand({
+    */
+   /* Origins come from the server, through a load or the successful `begin`
+      frame. A held draft may have been refused, so it cannot label a row. */
+-  const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
++  /* **Chat's band opens the guide as well as its chats** (plan 261007j, GPT
++     Sol's F2: `openableInChat`). Everything below that resolves the open
++     conversation, or where a question goes, reads this set — so a `?thread=`
++     naming the guide opens it here, and the kind a send carries is the open
++     conversation's, never the band's (`sendTo`). */
++  const threads = useMemo(
++    () => everyThread.filter((t) => (kind === "chat" ? openableInChat(t.kind) : t.kind === kind)),
++    [everyThread, kind],
++  );
+   /**
+    * **What Chat's list draws: every conversation but Referee's Candidates.**
+    *
+@@ -565,6 +594,19 @@ export function ConversationBand({
+   const theLearn = resetting === "idle" ? found : null;
+   /** The open conversation's id: Learn's one, or what `?thread=` says in chat. */
+   const current = learning ? (theLearn?.id ?? null) : thread;
++  /**
++   * **The open conversation's kind**, which is what a send, an edit and Live
++   * go by — not the band's (GPT Sol's F2). In Chat it is `chat` or `guide`;
++   * with nothing open, a send mints a conversation of the band's kind.
++   */
++  const openKind: ThreadKind = threads.find((t) => t.id === current)?.kind ?? kind;
++  /**
++   * **This article's guide, in Chat's band** — one per article, chosen like
++   * Learn's (`oneLearn`): one with something in it over an empty one this tab
++   * began before the list brought the stored one. `null` until there is one;
++   * the pinned row is drawn either way, and a press begins it (`openGuide`).
++   */
++  const theGuide = useMemo(() => (kind === "chat" ? oneLearn(threads, "guide") : null), [kind, threads]);
+ 
+   /* The address follows Learn's conversation, by *replace* — this corrects
+      the URL; it is not a step the reader took. */
+@@ -611,6 +653,22 @@ export function ConversationBand({
+   useEffect(() => {
+     for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
+   }, [threads, named, drafts]);
++
++  /* **An empty guide this tab began, beaten by the stored one**, goes — as an
++     empty Learn conversation does below — and if it was the one on screen,
++     the reader is moved to the stored guide with their unsent words. By
++     *replace*: this corrects the address. */
++  useEffect(() => {
++    if (!theGuide) return;
++    for (const t of threads) {
++      if (t.kind !== "guide" || t.id === theGuide.id || t.messages.length > 0) continue;
++      if (t.id === thread) {
++        drafts.moveThread(t.id, theGuide.id);
++        void setThread(theGuide.id, { history: "replace" });
++      }
++      discard(t.id);
++    }
++  }, [theGuide, threads, thread, drafts, discard, setThread]);
+   /**
+    * `speak`, as the live session is handed it: **a spoken exchange is a
+    * submission**, and it is one the typed draft knows nothing about — the
+@@ -759,6 +817,40 @@ export function ConversationBand({
+   }, [begin, setThread, kind, drafts]);
+   const startNew = useCallback(() => beginHere(true), [beginHere]);
+ 
++  /**
++   * **Open this article's guide in the band: the stored one, or one begun
++   * here** (plan 261007j). One per article, so there is nothing to choose:
++   * the pinned row, `?guide=1` and a handoff that targets the guide all come
++   * here. A guide begun here is local until its first question, like any new
++   * conversation; the server folds a first turn into a guide it already holds
++   * and says so in the `begin` frame (src/chat.ts § `targetOf`), which is the
++   * id `send`'s `onThreadId` puts in the address.
++   *
++   * `wanted` is an id to begin it under — the one this tab began before a
++   * mode change took it away, so its words come back with it. Through a ref
++   * for the stored guide, because a handoff's effect can run before this
++   * render's `theGuide` is the newest.
++   */
++  const guideNow = useRef(theGuide);
++  guideNow.current = theGuide;
++  const openGuide = useCallback(
++    (focus: boolean, wanted?: string): string => {
++      heldOnList.current = null;
++      setPendingLive(null);
++      const stored = guideNow.current;
++      /* `begin` with an id this tab already holds returns it unchanged, so a
++         second open in one commit (StrictMode) is the same guide. */
++      const id = stored?.id ?? begin("guide", wanted ?? drafts.guide());
++      if (!stored) drafts.setGuide(id);
++      if (wanted !== undefined && wanted !== id) drafts.moveThread(wanted, id);
++      drafts.setDestination(id);
++      void setThread(id);
++      if (focus) setFocusNonce((n) => n + 1);
++      return id;
++    },
++    [begin, setThread, drafts],
++  );
++
+   /**
+    * **An empty chat opens a conversation rather than an empty list.**
+    *
+@@ -867,7 +959,7 @@ export function ConversationBand({
+    */
+   const taken = useRef<ChatHandoff | null>(null);
+   const sendToRef = useRef<
+-    (id: string | null, question: string, first?: ChatHandoff) => void
++    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind) => void
+   >(() => {});
+   useEffect(() => {
+     if (!handoff) return;
+@@ -878,7 +970,15 @@ export function ConversationBand({
+     const take = () => {
+       if (taken.current === handoff) return;
+       taken.current = handoff;
+-      if (ours) {
++      if (ours && handoff.target === "guide") {
++        /* The one guide, not a fresh conversation: the bar's *Ask the guide*
++           (plan 261007j). Sent as a guide turn, whatever the band had open. */
++        const id = openGuide(!handoff.send);
++        if (handoff.send) sendToRef.current(id, handoff.question, undefined, "guide");
++        else drafts.setThread(id, handoff.question);
++      } else if (ours && handoff.target === "chat") {
++        /* A fresh chat, even with the guide open: `beginHere` mints the
++           band's kind, which here is `chat`. */
+         const id = beginHere(!handoff.send);
+         /* Under the conversation's id, so it goes wherever its words go, and
+            before the send, which reads it (`pendingOrigin`). */
+@@ -911,7 +1011,24 @@ export function ConversationBand({
+     return () => {
+       live = false;
+     };
+-  }, [handoff, slug, beginHere, onHandoffTaken, onHandoffThread, drafts]);
++  }, [handoff, slug, beginHere, openGuide, onHandoffTaken, onHandoffThread, drafts]);
++
++  /**
++   * **`?guide=1`: open the guide, whether or not it exists** (params.ts §
++   * `guideParam`). Once the list has answered, so a stored guide is opened
++   * rather than a second begun beside it; then the address says
++   * `?thread=<its id>` and the flag goes, in one replace. It spends the
++   * arrival latch, as a handoff does, so the rule below does not open a chat
++   * over it. After the handoff effect and before the arrival rule, for the
++   * reason that order is given above.
++   */
++  const [askGuide, setAskGuide] = useQueryState("guide", guideParam);
++  useEffect(() => {
++    if (kind !== "chat" || askGuide !== true || !loaded) return;
++    started.current = true;
++    openGuide(false);
++    void setAskGuide(null);
++  }, [kind, askGuide, loaded, openGuide, setAskGuide]);
+ 
+   /**
+    * **Arriving in chat: one decision, in this order**, made once per visit and
+@@ -975,7 +1092,7 @@ export function ConversationBand({
+    */
+   useEffect(() => {
+     if (kind !== "chat" || modeNow !== "chat" || !loaded || thread === null) return;
+-    if (everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
++    if (everyThread.some((t) => t.id === thread && !openableInChat(t.kind))) {
+       void setThread(null, { history: "replace" });
+     }
+   }, [kind, modeNow, loaded, thread, everyThread, setThread]);
+@@ -996,7 +1113,7 @@ export function ConversationBand({
+     if (!arrived.current) {
+       arrived.current = true;
+       const was = drafts.destination();
+-      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
++      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && !openableInChat(t.kind))) {
+         /* A known non-chat URL means the list, even if this tab left words in
+            another chat. Stored chats already have a selectable row. Recover
+            a missing draft as a row too, without selecting it or sending it. */
+@@ -1031,6 +1148,11 @@ export function ConversationBand({
+         } else if (threads.some((t) => t.id === was)) {
+           /* This corrects the address; it is not a step the reader took. */
+           void setThread(was, { history: "replace" });
++        } else if (was === drafts.guide()) {
++          /* The guide this tab began, gone with the band: begin it again
++             under the same id, words and all — never as a chat (plan 261007j). */
++          started.current = true;
++          openGuide(true, was);
+         } else if (drafts.isFresh(was)) {
+           started.current = true;
+           drafts.moveThread(was, startNew());
+@@ -1042,11 +1164,13 @@ export function ConversationBand({
+        conversations are Learn's has rows to show, and a blank chat begun
+        over them would hide the list this visit was for. The box under the
+        list and the + in the header still start one. */
+-    if (listed.length === 0) {
++    /* Nor when the guide has been talked to: its pinned row is something to
++       show (plan 261007j). An empty guide is not. */
++    if (listed.length === 0 && !(theGuide && theGuide.messages.length > 0)) {
+       started.current = true;
+       startNew();
+     }
+-  }, [learning, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind]);
++  }, [learning, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind, theGuide, openGuide]);
+ 
+   /**
+    * **Where chat is, written down for the next visit** — the conversation on
+@@ -1112,16 +1236,23 @@ export function ConversationBand({
+   const sendTo = (
+     to: string | null,
+     question: string,
+-    first?: ChatHandoff,
++    first?: ChatHandoffToChat,
++    /* The kind of conversation `to` is, when this render cannot see it yet —
++       a guide a handoff has just begun. Otherwise the open thread's own. */
++    as?: ThreadKind,
+   ): void => {
+     if (resettingNow.current) return;
+     // `send` returns the thread it went to, minted here when this is a new
+     // conversation — so the URL can name it before the request lands.
+-    /* This mode's kind: every conversation the band can open is of it now.
+-       The server refuses a kind that contradicts an existing thread rather
+-       than taking our word for it, so this being wrong is a 409 rather than
+-       a corrupted transcript. */
+-    const origin = pendingOrigin(to);
++    /* **The conversation's kind, never the band's** (GPT Sol's F2 on plan
++       261007j): Chat's band opens the guide too, and a guide turn sent as
++       `chat` would be refused (409) or answered with the wrong prompt. A new
++       conversation (`to` names nothing yet) is the band's kind. The server
++       refuses a kind that contradicts an existing thread rather than taking
++       our word for it, so this being wrong is a 409 rather than a corrupted
++       transcript. */
++    const sendKind: ThreadKind = as ?? threads.find((t) => t.id === to)?.kind ?? kind;
++    const origin = sendKind === "chat" ? pendingOrigin(to) : undefined;
+     const id = send(to, question, at, {
+       onThreadId: (corrected) => void setThread(corrected),
+       ...((first || (origin && to)) ? {
+@@ -1145,8 +1276,10 @@ export function ConversationBand({
+           if (origin && to) drafts.clearOrigin(confirmed);
+         },
+       } : {}),
+-      kind,
+-      ...(onScreen ? { visible: onScreen() } : {}),
++      kind: sendKind,
++      /* The blocks on screen are a chat's alone: the server refuses them on
++         any other kind (src/routes.ts). */
++      ...(onScreen && sendKind === "chat" ? { visible: onScreen() } : {}),
+       ...(origin ? { origin } : {}),
+       ...(first?.anchor ? { anchor: first.anchor } : {}),
+       ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
+@@ -1182,6 +1315,9 @@ export function ConversationBand({
+          conversation open. Pushed, as a press on the bar's Learn is.
+          Learn's band would write its conversation's id itself; naming it
+          here means the address is right from the first frame. */
++      /* The guide's pinned row: Chat's alone, drawn whether or not the guide
++         exists yet (plan 261007j). */
++      guide={kind === "chat" ? { thread: theGuide, onOpen: () => void openGuide(true) } : undefined}
+       onOpenLearn={kind === "chat" ? (view, id) => {
+         setPendingLive(null);
+         void setWhere({ mode: "learn", learn: view, thread: id }, { history: "push" });
+@@ -1207,10 +1343,12 @@ export function ConversationBand({
+          by the server, so there is no button. */
+       /* Nor on a conversation whose origin the server does not have yet
+          (`awaitsOrigin` above): no button, and the callback is refused too. */
+-      live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
++      /* Nor in the guide, which is typed (plan 261007j). */
++      live={OFFERS_LIVE[kind] && openKind !== "guide" && !awaitsOrigin(current) ? live : undefined}
+       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
+         if (resettingNow.current) return;
+         if (awaitsOrigin(id)) return;
++        if (id && threads.find((t) => t.id === id)?.kind === "guide") return;
+         if (!id && kind !== "chat") return;
+         const next = id ?? begin("chat");
+         /* Begun here like `startNew`'s, and as unsent until its first spoken
+@@ -1289,8 +1427,10 @@ export function ConversationBand({
+          back is the one it was given. `current` is non-null wherever these can
+          be pressed — the conversation view is what renders them. */
+       onRetry={(messageId) => current && retry(current, messageId)}
++      /* What was on screen goes with a chat's edit, as with its send, and with
++         nothing else's. */
+       onEdit={(messageId, question) =>
+-        current && edit(current, messageId, question, at, onScreen?.())
++        current && edit(current, messageId, question, at, openKind === "chat" ? onScreen?.() : undefined)
+       }
+       onStop={(messageId) => current && stop(current, messageId)}
+       onHintOpened={(messageId, hint) => current && openHint(current, messageId, hint)}
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 9e6502a19..9d9598723 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -348,6 +348,23 @@ export function marginInSearch(search: string): boolean {
+  */
+ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
+ 
++/**
++ * **`?guide=1`: open this article's guide in Chat, whether or not it exists
++ * yet** — plan 261007j. The guide is one conversation per article (src/types.ts
++ * § `SINGLE_THREAD_KINDS`), so a link that means *the guide* cannot name an id:
++ * there may be none until the first question is sent.
++ *
++ * A flag beside `?thread=` rather than a sentinel in it, so `threadParam`
++ * stays a block id for every reader of it. Chat's band reads it once its list
++ * has answered, opens the stored guide or begins one, and in the same *replace*
++ * writes that conversation's id to `?thread=` and drops this — so the address
++ * round-trips to the ordinary `?mode=chat&thread=<id>`
++ * (`ConversationBand`, src/web/modes/conversation/ConversationModes.tsx).
++ * Meaningless outside `mode=chat`, and never put back by a restore
++ * (last-view.ts § `NEVER_REMEMBERED`).
++ */
++export const guideParam = parseAsBit.withOptions({ history: "replace" });
++
+ /**
+  * **Which conversations Chat's list is narrowed to, by where they came from**
+  * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
+diff --git a/src/web/purpose.ts b/src/web/purpose.ts
+index 88bc8a2a4..0f58bd475 100644
+--- a/src/web/purpose.ts
++++ b/src/web/purpose.ts
+@@ -128,7 +128,9 @@ export function leavePurpose(slug: string, text: string, madeFor: string | null
+  */
+ export type PurposeRead =
+   | { state: "loading" }
+-  | { state: "ready"; purpose: string | null; purposeFailed: boolean }
++  /* `profile` is *About you*, which the same answer carries: the guide's
++     greeting asks for it only when it is empty (plan 261007j). */
++  | { state: "ready"; purpose: string | null; purposeFailed: boolean; profile: string | null }
+   | { state: "failed" };
+ 
+ /** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
+@@ -141,7 +143,7 @@ export function usePurpose(slug: string): PurposeRead {
+     const mine = ++generation.current;
+     setRead({ state: "loading" });
+     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
+-      .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean }>(r))
++      .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean; profile?: string | null }>(r))
+       .then(
+         (body) =>
+           mine === generation.current &&
+@@ -149,6 +151,7 @@ export function usePurpose(slug: string): PurposeRead {
+             state: "ready",
+             purpose: body.purpose ?? null,
+             purposeFailed: body.purposeFailed === true,
++            profile: typeof body.profile === "string" && body.profile !== "" ? body.profile : null,
+           }),
+       )
+       .catch(() => mine === generation.current && setRead({ state: "failed" }));
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index a6cbc49e1..aa38dfe28 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -116,16 +116,17 @@ import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-h
+ import type { CommentsApi } from "../useComments.js";
+ import { mintId } from "../../ids.js";
+ import { Masthead } from "../Masthead.js";
+-import { Dock } from "../Dock.js";
++import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
+ import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
+ import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+ import type { CiteFocus } from "../CitationsPanel.js";
+ import { shownEntries } from "../glossary-shown.js";
+ import { editArticleTags } from "../article-tags.js";
+-import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
++import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
++import { modeCommand } from "../command-match.js";
+ import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
+ import { ChatCommands } from "../CommandChip.js";
+-import { findHref } from "../CommandBar.js";
++import { findHref, subModeRows } from "../CommandBar.js";
+ import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
+ import {
+   blockHues,
+@@ -157,7 +158,7 @@ import {
+   type BandMode,
+   type Mode,
+ } from "../params.js";
+-import { type ModeWithSubModes, returnToSubMode, subModeParams } from "../sub-modes.js";
++import { type ModeWithSubModes, returnToSubMode, type SubMode, subModeParams } from "../sub-modes.js";
+ import { isMarginaliaModeWord } from "../../modes.js";
+ import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
+ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
+@@ -969,6 +970,9 @@ export function Reader({
+     ) => {
+       setChatHandoff({
+         slug,
++        /* Every *Ask in chat* starts a fresh chat, whatever is open there — the
++           guide included (`ChatHandoff`, plan 261007j). */
++        target: "chat",
+         question,
+         send: then === "send",
+         ...(origin ? { origin } : {}),
+@@ -1071,7 +1075,7 @@ export function Reader({
+   const handoffTaken = useCallback(() => setChatHandoff(null), []);
+   const handoffThread = useCallback(
+     (taken: ChatHandoff, id: string) => {
+-      if (taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
++      if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
+     },
+     [owner],
+   );
+@@ -2679,6 +2683,30 @@ export function Reader({
+       on: experimental.on,
+       current: mode === target,
+     });
++  /**
++   * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
++   * the command bar's own mode and sub-mode rows, from the same two functions
++   * the Dock and the bar call — `visibleModes` with this page's switch, mode
++   * and margin, then `subModeRows` — so a `mode` proposal resolves exactly
++   * where the bar would offer that row. The press is the Dock's own pair of
++   * activators, through `modeActivators` (set below, beside `onDockMode`).
++   */
++  const modeActivators = useRef<{ mode(next: Mode): void; sub(sub: SubMode): void } | null>(null);
++  const chipModes = useMemo(() => {
++    if (!isOwner) return undefined;
++    const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
++    const rows = [
++      ...reachable.map(modeCommand),
++      ...subModeRows(reachable, experimental.on, {
++        diagram: subNav.diagram,
++        learn: mode === "learn" ? subNav.learn : undefined,
++      }),
++    ].filter((c): c is ModeCommand => c.kind === "mode" || c.kind === "submode");
++    return modeDoor(rows, {
++      mode: (c) => modeActivators.current?.mode(c.mode),
++      sub: (c) => modeActivators.current?.sub(c.sub),
++    });
++  }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
+   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
+   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
+   const executor = useMemo(
+@@ -2706,6 +2734,8 @@ export function Reader({
+         /* The bar's suggested lens row: Debate's own handoff, so the question
+            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
+         askThroughLens: isOwner ? suggestedLensInChat : undefined,
++        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
++        modes: chipModes,
+       }),
+     [
+       slug,
+@@ -2722,6 +2752,7 @@ export function Reader({
+       moreQuotes,
+       openQuickSearch,
+       suggestedLensInChat,
++      chipModes,
+     ],
+   );
+   /**
+@@ -3637,6 +3668,158 @@ export function Reader({
+     );
+   }
+ 
++  /**
++   * **The Dock's `onMode`**: what a press on a mode button, a command-bar mode
++   * row or a sub-mode row does to the reading view. Named, rather than written
++   * inline in the `<Dock>` below, since 2026-10-07, because a second caller
++   * needs the very same function: a chat chip's `mode` proposal opens a mode
++   * through the Dock's own activators wrapped round this (`modeActivators`
++   * below; plan 261007j, GPT Sol's F3).
++   */
++  const onDockMode = (next: Mode, sub?: SubMode, toggle = false): void => {
++    /* The callback itself is proof of a press. Arm before `setMode`:
++       nuqs updates React now but may leave `location.href` on the old
++       entry for ~50ms, so inferring intent from the address races. Back
++       and Forward never call this callback and therefore never arm. */
++    /* **Marginalia is a switch, not a band** (`BandMode`): its press
++       turns the column on or off and leaves the band, the herald and a
++       stepped-aside band exactly as they were — unless the two do not
++       fit together, when the notes, pressed last, swap the band out
++       (`marginaliaPress`, Greg's 7P). */
++    if (next === "marginalia") {
++      const press = marginaliaPress({
++        margin: marginOpen,
++        bandOpen,
++        bothFit: wouldFit.both,
++        aloneFit: wouldFit.alone,
++      });
++      /* The bar's own Marginalia button is a toggle; the command bar
++         names a destination, as it does for every band. If the notes
++         are already on and there is no useful swap to make, choosing
++         them there is therefore idempotent. Keep the narrow-window
++         swap, though: `closeBand` means `?margin=1` is on but hidden
++         behind the band, and naming Marginalia should bring that
++         destination on screen.
++         docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
++      if (!toggle && marginOpen && !press.closeBand) return;
++      if (press.closeBand) {
++        void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
++        setBandAway(false);
++      } else {
++        void setMargin(press.margin ? true : null);
++      }
++      return;
++    }
++    /* **Plain closes both columns, and a second press closes the band**
++       (`modePress`, Greg's 96). Both are one push, so one Back puts it
++       all back; neither is a press on a band, so neither names one in
++       the herald. A sub-mode row always moves to its sub-mode. */
++    if (sub === undefined) {
++      const press = modePress({ next, current: mode, bandBack, toggle });
++      if (press === "plain") {
++        /* Already at the destination, with nothing left for Plain to
++           close. `nuqs` does not elide a same-value push, so calling the
++           setter here would add an invisible history entry and make the
++           reader press Back twice to leave the article. */
++        if (mode === "plain" && !marginOpen) return;
++        void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
++        setBandAway(false);
++        return;
++      }
++      if (press === "close") {
++        void setMode("plain");
++        return;
++      }
++    }
++    armSkimOpening(skimArrival.current, mode, next);
++    /* One Search arrival for its Dock button, quick box and command row.
++       The toggle-to-close above has already handled a second mode press. */
++    if (next === "search" && sub === undefined) {
++      openQuickSearch();
++      return;
++    }
++    /* A sub-mode row has already armed its chip's press (Dock.tsx §
++       `useActivateSubMode`); this only moves the band, sub-mode and all. */
++    /* A command naming the mode already open, or the bar bringing a
++       stepped-aside band back, changes no URL state. Avoid a same-value
++       `nuqs` write: it still pushes a history entry even though the
++       address and the rendered mode do not move. The activation and
++       recovery paths do not depend on that write — the token minted in
++       Dock is their signal. */
++    if (sub === undefined) {
++      if (next !== mode) {
++        /* **`mode` alone, with one exception**: returning to Learn
++           while `learn=quiz` is still in the address is a navigation
++           to Quiz, so it clears `thread` in the same pushed entry rather
++           than mounting the Quiz over Chat's conversation for
++           `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
++        const back = returnToSubMode(next, { learn: subNav.learn });
++        if (back === null) void setMode(next);
++        else void setSubNav(back, { history: "push" });
++      }
++    } else void setSubNav(subModeParams(sub), { history: "push" });
++    /* Pressing the mode you are in brings its band back if it had stepped
++       aside — `bandAway` above. */
++    setBandAway(false);
++    /* A new nonce every press, so pressing the mode you are in while it
++       has stepped aside names it again as it comes back. */
++    setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
++    /* Search draws its results down the rail, so entering search mode
++       brings the rail back if the reader had put it away — Greg,
++       2026-08-26: *"show the Spine by default when Search mode is
++       active"*.
++
++       `null`, not `true`: the rail goes back to following the window and
++       the mode, which in a mode means on. Writing `true` would pin it,
++       and the reader would find it still there in outline mode later
++       with no memory of having asked for that.
++
++       On the transition and **not** as a standing effect, which is the
++       part worth getting right. A rule that re-asserted the rail whenever
++       search mode was open would make the `Spine` pill dead in exactly
++       the mode this is about: press it off, and it comes straight back.
++       "By default" is a fact about arriving, not a fact about staying —
++       hence `mode !== "search"` as well, since the dock calls this for a
++       press on the mode you are already in.
++
++       **The cost, stated because it is real**: the reader's `?spine=0`
++       was a choice about the page, and this throws it away rather than
++       suspending it — come back to reading mode afterwards and the rail
++       is there. Suspending it would mean `?spine=` growing a per-mode
++       shape, which is a lot of machinery for one bit; and the alternative
++       of leaving it alone means a reader who has hidden the rail opens
++       search and finds half the feature drawn somewhere they cannot see.
++       The pill is one press away. docs/project/search.md § The rail. */
++    /* Ideas paints one lane down the rail for the selected idea, and
++       the rail is the only place that can show an idea's *shape* — is
++       this threaded through the piece, or concentrated in one section?
++       So it earns the same arrival rule search has, for the same reason
++       and with the same `null` rather than `true`. */
++    if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
++      void setShowSpine(null);
++    }
++  };
++  /* **The Dock's own two activators, called again here for the chips.** The
++     same hooks the Dock calls (Dock.tsx § `useActivateMode`,
++     `useActivateSubMode`), with the same inputs it is handed below — so a chip
++     arms what the bar's row arms and moves the band the way it does. The
++     owner's alone (`arms`), since chat is. The command bar's choice: naming the
++     mode you are in leaves you there (`toggles` false). Kept in a ref so the
++     executor above is not rebuilt on every render for them. */
++  const activateModeHere = useActivateMode(
++    slug,
++    carriedSearch(location.search),
++    subNav.diagram,
++    summaryView,
++    onDockMode,
++    isOwner,
++    mode,
++    false,
++    marginOpen,
++  );
++  const activateSubModeHere = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, isOwner);
++  modeActivators.current = { mode: activateModeHere, sub: activateSubModeHere };
++
+   return (
+     /* Every block link inside — panels, chips, the chat dialog through its
+        portal — reads its card and its "is this block real" answer from here.
+@@ -4400,129 +4583,7 @@ export function Reader({
+         /* The same state the Diagram band's chips read (`diagramParam`), not
+            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
+         diagram={subNav.diagram}
+-        onMode={(next, sub, toggle = false) => {
+-          /* The callback itself is proof of a press. Arm before `setMode`:
+-             nuqs updates React now but may leave `location.href` on the old
+-             entry for ~50ms, so inferring intent from the address races. Back
+-             and Forward never call this callback and therefore never arm. */
+-          /* **Marginalia is a switch, not a band** (`BandMode`): its press
+-             turns the column on or off and leaves the band, the herald and a
+-             stepped-aside band exactly as they were — unless the two do not
+-             fit together, when the notes, pressed last, swap the band out
+-             (`marginaliaPress`, Greg's 7P). */
+-          if (next === "marginalia") {
+-            const press = marginaliaPress({
+-              margin: marginOpen,
+-              bandOpen,
+-              bothFit: wouldFit.both,
+-              aloneFit: wouldFit.alone,
+-            });
+-            /* The bar's own Marginalia button is a toggle; the command bar
+-               names a destination, as it does for every band. If the notes
+-               are already on and there is no useful swap to make, choosing
+-               them there is therefore idempotent. Keep the narrow-window
+-               swap, though: `closeBand` means `?margin=1` is on but hidden
+-               behind the band, and naming Marginalia should bring that
+-               destination on screen.
+-               docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+-            if (!toggle && marginOpen && !press.closeBand) return;
+-            if (press.closeBand) {
+-              void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
+-              setBandAway(false);
+-            } else {
+-              void setMargin(press.margin ? true : null);
+-            }
+-            return;
+-          }
+-          /* **Plain closes both columns, and a second press closes the band**
+-             (`modePress`, Greg's 96). Both are one push, so one Back puts it
+-             all back; neither is a press on a band, so neither names one in
+-             the herald. A sub-mode row always moves to its sub-mode. */
+-          if (sub === undefined) {
+-            const press = modePress({ next, current: mode, bandBack, toggle });
+-            if (press === "plain") {
+-              /* Already at the destination, with nothing left for Plain to
+-                 close. `nuqs` does not elide a same-value push, so calling the
+-                 setter here would add an invisible history entry and make the
+-                 reader press Back twice to leave the article. */
+-              if (mode === "plain" && !marginOpen) return;
+-              void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
+-              setBandAway(false);
+-              return;
+-            }
+-            if (press === "close") {
+-              void setMode("plain");
+-              return;
+-            }
+-          }
+-          armSkimOpening(skimArrival.current, mode, next);
+-          /* One Search arrival for its Dock button, quick box and command row.
+-             The toggle-to-close above has already handled a second mode press. */
+-          if (next === "search" && sub === undefined) {
+-            openQuickSearch();
+-            return;
+-          }
+-          /* A sub-mode row has already armed its chip's press (Dock.tsx §
+-             `useActivateSubMode`); this only moves the band, sub-mode and all. */
+-          /* A command naming the mode already open, or the bar bringing a
+-             stepped-aside band back, changes no URL state. Avoid a same-value
+-             `nuqs` write: it still pushes a history entry even though the
+-             address and the rendered mode do not move. The activation and
+-             recovery paths do not depend on that write — the token minted in
+-             Dock is their signal. */
+-          if (sub === undefined) {
+-            if (next !== mode) {
+-              /* **`mode` alone, with one exception**: returning to Learn
+-                 while `learn=quiz` is still in the address is a navigation
+-                 to Quiz, so it clears `thread` in the same pushed entry rather
+-                 than mounting the Quiz over Chat's conversation for
+-                 `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
+-              const back = returnToSubMode(next, { learn: subNav.learn });
+-              if (back === null) void setMode(next);
+-              else void setSubNav(back, { history: "push" });
+-            }
+-          } else void setSubNav(subModeParams(sub), { history: "push" });
+-          /* Pressing the mode you are in brings its band back if it had stepped
+-             aside — `bandAway` above. */
+-          setBandAway(false);
+-          /* A new nonce every press, so pressing the mode you are in while it
+-             has stepped aside names it again as it comes back. */
+-          setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
+-          /* Search draws its results down the rail, so entering search mode
+-             brings the rail back if the reader had put it away — Greg,
+-             2026-08-26: *"show the Spine by default when Search mode is
+-             active"*.
+-
+-             `null`, not `true`: the rail goes back to following the window and
+-             the mode, which in a mode means on. Writing `true` would pin it,
+-             and the reader would find it still there in outline mode later
+-             with no memory of having asked for that.
+-
+-             On the transition and **not** as a standing effect, which is the
+-             part worth getting right. A rule that re-asserted the rail whenever
+-             search mode was open would make the `Spine` pill dead in exactly
+-             the mode this is about: press it off, and it comes straight back.
+-             "By default" is a fact about arriving, not a fact about staying —
+-             hence `mode !== "search"` as well, since the dock calls this for a
+-             press on the mode you are already in.
+-
+-             **The cost, stated because it is real**: the reader's `?spine=0`
+-             was a choice about the page, and this throws it away rather than
+-             suspending it — come back to reading mode afterwards and the rail
+-             is there. Suspending it would mean `?spine=` growing a per-mode
+-             shape, which is a lot of machinery for one bit; and the alternative
+-             of leaving it alone means a reader who has hidden the rail opens
+-             search and finds half the feature drawn somewhere they cannot see.
+-             The pill is one press away. docs/project/search.md § The rail. */
+-          /* Ideas paints one lane down the rail for the selected idea, and
+-             the rail is the only place that can show an idea's *shape* — is
+-             this threaded through the piece, or concentrated in one section?
+-             So it earns the same arrival rule search has, for the same reason
+-             and with the same `null` rather than `true`. */
+-          if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
+-            void setShowSpine(null);
+-          }
+-        }}
++        onMode={onDockMode}
+         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
+            is exactly what it was; derived from `MODES` for a visitor, so a mode
+            added later is marked whether or not whoever adds it remembers.
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index f694b71a2..f09ed1095 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -338,13 +338,31 @@
+ /* Three lines: the title, where the conversation got to, and when. `flex-start`
+    rather than `center` because the two icons belong beside the *title*, not
+    halfway down a row whose height now depends on how long the title is. */
+-.chat-thread {
++.chat-thread,
++.chat-guide {
+   display: flex;
+   align-items: flex-start;
+   gap: 0.15rem;
+   border-radius: var(--radius);
+ }
+-.chat-thread:hover { background: var(--surface-raised); }
++.chat-thread:hover,
++.chat-guide:hover { background: var(--surface-raised); }
++/* **The guide, pinned above the list** (plan 261007j): outside `.chat-threads`,
++   so it takes that list's inset itself, and a rule under it says the rows
++   below are the ordinary list it is not part of. A class of its own rather
++   than `chat-thread`, which means *one of the list's conversations* to
++   everything that counts them. */
++.chat-guide {
++  margin: 0.35rem 0.35rem 0;
++  padding-bottom: 0.2rem;
++  border-bottom: 1px solid var(--rule);
++  border-radius: var(--radius) var(--radius) 0 0;
++}
++.chat-guide-mark {
++  display: inline-flex;
++  padding: 0.55rem 0.25rem 0.25rem;
++  color: var(--ink-faint);
++}
+ /* Rows are three lines now, so they need a hairline of air between them or
+    two conversations read as one. */
+ .chat-threads li + li { margin-top: 0.1rem; }
+diff --git a/src/web/thread-source.ts b/src/web/thread-source.ts
+index 5e018be40..2be9741c6 100644
+--- a/src/web/thread-source.ts
++++ b/src/web/thread-source.ts
+@@ -89,6 +89,20 @@ export function listedInChat(thread: { kind: ThreadKind }): boolean {
+   return thread.kind !== "candidates" && thread.kind !== "guide";
+ }
+ 
++/**
++ * **Can Chat's band open this conversation, and send to it?** A chat, and the
++ * guide (plan 261007j, GPT Sol's F2: *openable in Chat* is its own idea, apart
++ * from single-thread and from Learn). Not the same set as `listedInChat`: a
++ * Learn row is listed and opens Learn; the guide is pinned rather than listed,
++ * and opens here.
++ */
++export function openableInChat(kind: ThreadKind): boolean {
++  return kind === "chat" || kind === "guide";
++}
++
++/** What the pinned row and the open guide's header call it. */
++export const GUIDE_LABEL = "Guide";
++
+ export function threadSource(thread: SourcedThread): ThreadSource | null {
+   const { origin, kind, anchor } = thread;
+   if (origin) {
+diff --git a/tests/chat-card-host-change.test.tsx b/tests/chat-card-host-change.test.tsx
+index 87c81fa83..330c97a5d 100644
+--- a/tests/chat-card-host-change.test.tsx
++++ b/tests/chat-card-host-change.test.tsx
+@@ -24,7 +24,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
+   supabase: { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } },
+ }));
+ vi.mock("../src/web/Masthead.js", () => ({ Masthead: () => null }));
+-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
++/* The component only: Reader also calls the Dock's mode activators and
++   `visibleModes` for chat's `mode` chips (plan 261007j). */
++vi.mock("../src/web/Dock.js", async (importOriginal) => ({
++  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
++  Dock: () => null,
++}));
+ vi.mock("../src/web/reader/measure.js", () => ({ useWindowWidth: () => 1600, useRootFontPx: () => 16 }));
+ vi.mock("../src/web/marginalia/MarginaliaColumn.js", async (original) => ({
+   ...await original<typeof import("../src/web/marginalia/MarginaliaColumn.js")>(),
+diff --git a/tests/chat-command-chips-prompt.test.ts b/tests/chat-command-chips-prompt.test.ts
+index 4f0efa202..6f6ed0858 100644
+--- a/tests/chat-command-chips-prompt.test.ts
++++ b/tests/chat-command-chips-prompt.test.ts
+@@ -18,6 +18,7 @@ import { LIVE_SYSTEM } from "../src/live.js";
+ import type { Block, Meta } from "../src/types.js";
+ import { CHAT_PROPOSABLE } from "../src/web/chat-commands.js";
+ import { parseProposalToken } from "../src/web/command-proposal.js";
++import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
+ 
+ const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" } as unknown as Meta;
+ const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
+@@ -76,6 +77,21 @@ describe("the chat prompt's section on offering an action", () => {
+     }
+   });
+ 
++  /* Plan 261007j: the guide is handed a `mode` button beside every ordinary
++     mode, and none beside an experimental one, which the reader may not have. */
++  it("gives the guide a mode button for every ordinary mode, each a real catalogue key, and none for an experimental one", () => {
++    const keys = tokensIn(rules("guide"))
++      .map((raw) => parseProposalToken(raw))
++      .flatMap((p) => (p?.id === "mode" ? [p.key] : []));
++    const rows = catalogue.filter(
++      (r) => (r.kind === "mode" || r.kind === "submode") && r.contexts.includes("owner-article"),
++    );
++    const ordinary = rows.filter((r) => r.contexts.includes("owner-article-experimental-off")).map((r) => r.id);
++    for (const id of ordinary) expect(keys, id).toContain(id);
++    for (const key of keys) expect(ordinary, key).toContain(key);
++    expect(keys).not.toContain("mode:debate");
++  });
++
+   it.each(["learn", "tutorial", "explore", "candidates"] as const)("is not in the %s prompt", (kind) => {
+     expect(rules(kind)).not.toContain("[cmd:");
+     expect(rules(kind)).not.toContain("OFFERING AN ACTION");
+diff --git a/tests/chat-commands.test.ts b/tests/chat-commands.test.ts
+index d12af42e5..8a54701c2 100644
+--- a/tests/chat-commands.test.ts
++++ b/tests/chat-commands.test.ts
+@@ -34,12 +34,26 @@ const executor = (glossaryReady = true): CommandExecutor => ({
+     "tag-add": () => CLOSE,
+     "tag-remove": () => CLOSE,
+     bookmark: () => CLOSE,
++    mode: () => CLOSE,
++    "quick-search": () => CLOSE,
+   },
+   sources: {
+     glossary: {
+       ready: glossaryReady,
+       terms: [{ id: "spya-g7w2dn", name: "Free energy", aliases: ["FE"] }],
+     },
++    /* What the reading view's door offers: the Dock's reachable set and its
++       sub-mode rows (command-runners.ts § `modeDoor`). Not Debate, which is
++       behind the switch here; not anything the catalogue has and this page
++       does not draw. */
++    modes: new Map([
++      ["mode:glossary", { key: "mode:glossary", label: "Glossary", description: "Terms", generates: true }],
++      ["mode:structure", { key: "mode:structure", label: "Structure", description: "Shape", generates: false }],
++      [
++        "submode:learn:tutorial",
++        { key: "submode:learn:tutorial", label: "Learn › Tutorial", description: "Turns", generates: false },
++      ],
++    ]),
+   },
+ });
+ 
+@@ -99,7 +113,7 @@ describe("finding tokens in a run of text", () => {
+ describe("which tokens are a chip", () => {
+   it("offers every id but glossary-open", () => {
+     expect([...CHAT_PROPOSABLE].sort()).toEqual(
+-      ["bookmark", "find", "glossary-ask", "jump-first", "tag-add", "tag-remove"].sort(),
++      ["bookmark", "find", "glossary-ask", "jump-first", "mode", "quick-search", "tag-add", "tag-remove"].sort(),
+     );
+     expect(chipFor("[cmd:glossary-open:spya-g7w2dn]", executor(), BLOCKS)).toBeNull();
+   });
+@@ -163,6 +177,53 @@ describe("which tokens are a chip", () => {
+   });
+ });
+ 
++/* Plan 261007j, GPT Sol's F3: a mode is resolved against what the reader can
++   open here now, at the draw and again at the press — never the catalogue. */
++describe("a mode or a quick search as a chip", () => {
++  it("is a chip for a mode the page offers, carrying the mode's own marker", () => {
++    expect(chipFor("[cmd:mode:mode%3Aglossary]", executor(), BLOCKS)).toEqual({
++      proposal: { id: "mode", key: "mode:glossary" },
++      target: { key: "mode:glossary", label: "Glossary", description: "Terms", generates: true },
++      enabled: true,
++    });
++    expect(chipFor("[cmd:mode:mode%3Astructure]", executor(), BLOCKS)?.target?.generates).toBe(false);
++    expect(chipFor("[cmd:mode:submode%3Alearn%3Atutorial]", executor(), BLOCKS)?.target?.label).toBe(
++      "Learn › Tutorial",
++    );
++  });
++
++  it("is no chip for a mode behind the switch, one this page does not offer, or one nobody has heard of", () => {
++    for (const raw of [
++      "[cmd:mode:mode%3Adebate]", // experimental, switch off: not in the door
++      "[cmd:mode:submode%3Alearn%3Aexplore]", // an experimental sub-mode
++      "[cmd:mode:mode%3Anonsense]",
++      "[cmd:mode:mode%3Aglossary%20]",
++    ]) {
++      expect(chipFor(raw, executor(), BLOCKS), raw).toBeNull();
++    }
++    const noModes: CommandExecutor = { runners: executor().runners, sources: {} };
++    expect(chipFor("[cmd:mode:mode%3Aglossary]", noModes, BLOCKS)).toBeNull();
++  });
++
++  it("says no at the press once the mode has gone, because the press asks again", () => {
++    const modes = new Map(executor().sources.modes);
++    const live: CommandExecutor = { ...executor(), sources: { ...executor().sources, modes } };
++    expect(chipFor("[cmd:mode:mode%3Aglossary]", live, BLOCKS)).not.toBeNull();
++    modes.delete("mode:glossary");
++    expect(chipFor("[cmd:mode:mode%3Aglossary]", live, BLOCKS)).toBeNull();
++  });
++
++  it("is a chip for a quick search, enabled only where the page can run one", () => {
++    expect(chipFor("[cmd:quick-search:how%20they%20measured]", executor(), BLOCKS)).toEqual({
++      proposal: { id: "quick-search", words: "how they measured" },
++      enabled: true,
++    });
++    const { "quick-search": _q, ...rest } = executor().runners;
++    expect(chipFor("[cmd:quick-search:x]", { runners: rest, sources: {} }, BLOCKS)?.enabled).toBe(false);
++    expect(chipFor("[cmd:quick-search:]", executor(), BLOCKS)).toBeNull();
++  });
++});
++
+ describe("the server's citation counters", () => {
+   it("do not count a block id inside a token as a citation", () => {
+     const answer = "He says so [spya-k3m9qt]. [cmd:bookmark:spya-p7w2dn]";
+diff --git a/tests/chat-draft-survives-a-mode-change.test.tsx b/tests/chat-draft-survives-a-mode-change.test.tsx
+index 5f0814824..5efcbe286 100644
+--- a/tests/chat-draft-survives-a-mode-change.test.tsx
++++ b/tests/chat-draft-survives-a-mode-change.test.tsx
+@@ -399,6 +399,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
+     const handoffOrigin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "The claim" };
+     handoff = {
+       slug: SLUG,
++      target: "chat" as const,
+       question: "Check this claim",
+       send: false,
+       origin: handoffOrigin,
+@@ -683,7 +684,7 @@ describe("a question handed over from another mode", () => {
+   const QUESTION = 'What does "axiom" mean here?';
+ 
+   it("survives the round trip untouched, in one conversation", async () => {
+-    handoff = { slug: SLUG, question: QUESTION, send: false };
++    handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: false };
+     await arrive("chat");
+     expect(box().value).toBe(QUESTION);
+     expect(handoff, "the owner was told to forget it").toBeNull();
+@@ -696,7 +697,7 @@ describe("a question handed over from another mode", () => {
+ 
+   it("survives untouched when the list load failed on handoff arrival", async () => {
+     failList = true;
+-    handoff = { slug: SLUG, question: QUESTION, send: false };
++    handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: false };
+     await arrive("chat");
+     expect(panel?.loadFailed).toBe(true);
+     expect(box().value).toBe(QUESTION);
+@@ -709,7 +710,7 @@ describe("a question handed over from another mode", () => {
+   });
+ 
+   it("and once cleared, stays cleared", async () => {
+-    handoff = { slug: SLUG, question: QUESTION, send: false };
++    handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: false };
+     await arrive("chat");
+     await act(async () => {
+       box().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+diff --git a/tests/command-proposal.test.ts b/tests/command-proposal.test.ts
+index 344a5dd38..f8ac51d1c 100644
+--- a/tests/command-proposal.test.ts
++++ b/tests/command-proposal.test.ts
+@@ -22,6 +22,7 @@ import {
+   PROPOSAL_IDS,
+   RISK,
+   formatProposalToken,
++  proposalRisk,
+   parseProposalToken,
+   proposalWords,
+   resolveArgument,
+@@ -47,9 +48,82 @@ describe("RISK", () => {
+       "tag-add": "writes",
+       "tag-remove": "writes",
+       bookmark: "writes",
++      mode: "per-mode",
++      "quick-search": "spends",
+     });
+     expect([...PROPOSAL_IDS].sort()).toEqual(Object.keys(RISK).sort());
+   });
++
++  /* GPT Sol's F3 on plan 261007j: one `mode` id cannot honestly carry one
++     marker, so the answer is the target's own. */
++  it("asks a mode's own target whether opening it spends, and over-warns without one", () => {
++    const target = (generates: boolean) => ({ key: "mode:x", label: "X", description: "", generates });
++    expect(proposalRisk({ id: "mode", key: "mode:summary" }, target(true))).toBe("spends");
++    expect(proposalRisk({ id: "mode", key: "mode:structure" }, target(false))).toBe("navigate");
++    expect(proposalRisk({ id: "mode", key: "mode:structure" })).toBe("spends");
++    expect(proposalRisk({ id: "quick-search", words: "x" })).toBe("spends");
++  });
++});
++
++describe("the two proposals chat and the guide share (plan 261007j)", () => {
++  it("parses a mode key of either shape, and nothing else", () => {
++    expect(parseProposalToken("[cmd:mode:mode%3Aglossary]")).toEqual({ id: "mode", key: "mode:glossary" });
++    expect(parseProposalToken("[cmd:mode:submode%3Alearn%3Atutorial]")).toEqual({
++      id: "mode",
++      key: "submode:learn:tutorial",
++    });
++    for (const raw of [
++      "[cmd:mode:glossary]",
++      "[cmd:mode:page%3A%2Fprofile]",
++      "[cmd:mode:action%3Aarchive]",
++      "[cmd:mode:mode%3AGlossary]",
++      "[cmd:mode:mode%3A]",
++      "[cmd:mode:]",
++    ]) {
++      expect(parseProposalToken(raw), raw).toBeNull();
++    }
++  });
++
++  it("parses a quick search's words with find's rule, and round-trips both", () => {
++    expect(parseProposalToken("[cmd:quick-search:how%20%20they%20measured]")).toEqual({
++      id: "quick-search",
++      words: "how they measured",
++    });
++    expect(parseProposalToken("[cmd:quick-search:%20%20]")).toBeNull();
++    expect(parseProposalToken(`[cmd:quick-search:${"a".repeat(201)}]`)).toBeNull();
++    for (const proposal of [
++      { id: "mode", key: "submode:learn:tutorial" },
++      { id: "quick-search", words: "rock & roll" },
++    ] as const) {
++      expect(parseProposalToken(formatProposalToken(proposal))).toEqual(proposal);
++    }
++  });
++
++  it("words them as the bar's own rows do, the mode's marker its own", () => {
++    const summary = { key: "mode:summary", label: "Summary", description: "The piece restated", generates: true };
++    const structure = { key: "mode:structure", label: "Structure", description: "Its shape", generates: false };
++    expect(proposalWords({ id: "mode", key: summary.key }, undefined, summary)).toEqual({
++      label: "Open Summary",
++      description: "The piece restated",
++      generates: true,
++    });
++    expect(proposalWords({ id: "mode", key: structure.key }, undefined, structure).generates).toBe(false);
++    expect(proposalWords({ id: "quick-search", words: "priors" })).toEqual({
++      label: "Quick search “priors”",
++      description: "Search mode, a fast first pass for the passages about this.",
++      generates: true,
++    });
++  });
++
++  it("runs each through its own runner", () => {
++    const mode = vi.fn(() => ({ kind: "close" }) as const);
++    const quick = vi.fn(() => ({ kind: "close" }) as const);
++    runProposal({ mode, "quick-search": quick }, { id: "mode", key: "mode:glossary" });
++    runProposal({ mode, "quick-search": quick }, { id: "quick-search", words: "x" });
++    expect(mode).toHaveBeenCalledWith({ id: "mode", key: "mode:glossary" });
++    expect(quick).toHaveBeenCalledWith({ id: "quick-search", words: "x" });
++    expect(runProposal({}, { id: "mode", key: "mode:glossary" })).toBeNull();
++  });
+ });
+ 
+ describe("the stored token", () => {
+@@ -202,6 +276,7 @@ describe("proposalWords", () => {
+       { id: "tag-add", tag: "x" },
+       { id: "tag-remove", tag: "x" },
+       { id: "bookmark", blockId: BLOCK },
++      { id: "quick-search", words: "x" },
+     ] as const) {
+       expect(words(proposal).generates, proposal.id).toBe(RISK[proposal.id] === "spends");
+     }
+diff --git a/tests/command-runners.test.ts b/tests/command-runners.test.ts
+index b6a0fe83e..b1ccc9966 100644
+--- a/tests/command-runners.test.ts
++++ b/tests/command-runners.test.ts
+@@ -20,6 +20,9 @@ import {
+   chatExecutor,
+   glossaryRunners,
+   jumpFirstRunner,
++  type ModeCommand,
++  modeDoor,
++  modeRunner,
+   readingExecutor,
+   tagRunners,
+ } from "../src/web/command-runners.js";
+@@ -280,6 +283,69 @@ describe("the reading view's executor", () => {
+     const chat = chatExecutor({ reading: owner, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+     expect(chat.quickSearch).toBeUndefined();
+   });
++
++  /* Plan 261007j: a chat chip's `quick-search` proposal presses the bar's own
++     quick search — one search, whichever door. */
++  it("gives chat's chips the bar's own quick search as the quick-search proposal", () => {
++    const slug = "a-piece-chip-quick-search";
++    const openQuickSearch = vi.fn();
++    const owner = readingExecutor({ slug, blocks: BLOCKS, jump: vi.fn(), openQuickSearch });
++    const chat = chatExecutor({ reading: owner, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
++    expect(chat.runners["quick-search"]?.({ id: "quick-search", words: "free will" })).toEqual({ kind: "close" });
++    const draft = searchDraftFor(slug);
++    expect(draft.handoff()).toEqual({ type: "enter", text: "free will" });
++    expect(openQuickSearch).toHaveBeenCalledTimes(1);
++    draft.clearHandoffs();
++    expect(readingExecutor({ slug, blocks: BLOCKS, jump: vi.fn() }).runners["quick-search"]).toBeUndefined();
++  });
++});
++
++/* Plan 261007j, GPT Sol's F3: what a `mode` chip can open is the bar's own
++   rows here, and a press is the Dock's own activator. */
++describe("the mode door", () => {
++  const rows: ModeCommand[] = [
++    { kind: "mode", mode: "summary" },
++    { kind: "mode", mode: "structure" },
++    { kind: "submode", sub: { mode: "learn", view: "tutorial" } },
++  ];
++
++  it("offers exactly the rows it is handed, each with the mode's own marker", () => {
++    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() });
++    expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:tutorial"]);
++    expect(door.targets.get("mode:summary")?.generates).toBe(true);
++    expect(door.targets.get("mode:structure")?.generates).toBe(false);
++    expect(door.targets.get("submode:learn:tutorial")?.label).toBe("Learn › Tutorial");
++    expect(door.targets.has("mode:debate")).toBe(false);
++  });
++
++  it("opens a mode or a sub-mode through the activator it was handed, once", () => {
++    const mode = vi.fn();
++    const sub = vi.fn();
++    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }) });
++    expect(executor.sources.modes?.has("mode:summary")).toBe(true);
++    expect(executor.runners.mode?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
++    expect(mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
++    expect(executor.runners.mode?.({ id: "mode", key: "submode:learn:tutorial" })).toEqual({ kind: "close" });
++    expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
++    expect(mode).toHaveBeenCalledTimes(1);
++    expect(sub).toHaveBeenCalledTimes(1);
++  });
++
++  it("refuses a key it does not offer, and opens nothing", () => {
++    const mode = vi.fn();
++    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }));
++    expect(runner({ id: "mode", key: "mode:debate" })).toEqual({
++      kind: "stay",
++      message: "That mode isn't available here any more.",
++    });
++    expect(mode).not.toHaveBeenCalled();
++  });
++
++  it("is absent where the page hands in no door: a visitor's executor has no mode", () => {
++    const visitor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() });
++    expect(visitor.runners.mode).toBeUndefined();
++    expect(visitor.sources.modes).toBeUndefined();
++  });
+ });
+ 
+ /* Stage 2: what a chat chip's press reaches. The reading view's own runners —
+diff --git a/tests/conversation-band-handoff.test.tsx b/tests/conversation-band-handoff.test.tsx
+index 1a67563b5..7173ede0b 100644
+--- a/tests/conversation-band-handoff.test.tsx
++++ b/tests/conversation-band-handoff.test.tsx
+@@ -167,7 +167,7 @@ const posts = () => calls.filter((c) => c.method === "POST");
+  */
+ describe("ConversationBand's handoff that sends", () => {
+   it("sends the question once under StrictMode, to the one conversation it began", async () => {
+-    await mount({ slug: SLUG, question: QUESTION, send: true });
++    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true });
+ 
+     expect(threads()).toHaveLength(1);
+     const fresh = threads()[0] as ChatThread;
+@@ -185,7 +185,7 @@ describe("ConversationBand's handoff that sends", () => {
+ 
+   it("sends the origin with it", async () => {
+     const origin = { mode: "glossary", itemId: "spya-aaaaaa", quote: "axiom" } as const;
+-    await mount({ slug: SLUG, question: QUESTION, send: true, origin });
++    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true, origin });
+     expect(posts()).toHaveLength(1);
+     expect(posts()[0]?.body).toMatchObject({ question: QUESTION, origin });
+   });
+@@ -194,6 +194,7 @@ describe("ConversationBand's handoff that sends", () => {
+     const anchor = { blockId: "spya-bbbbbb", quote: "a passage", start: 4 } as const;
+     const handoff = {
+       slug: SLUG,
++      target: "chat" as const,
+       question: QUESTION,
+       send: true,
+       anchor,
+@@ -213,7 +214,7 @@ describe("ConversationBand's handoff that sends", () => {
+   });
+ 
+   it("does not send again when the band re-renders with the same handoff", async () => {
+-    const handoff = { slug: SLUG, question: QUESTION, send: true };
++    const handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: true };
+     await mount(handoff);
+     await act(async () => root.render(band(handoff)));
+     await settle();
+@@ -231,7 +232,7 @@ describe("ConversationBand's handoff that sends", () => {
+   it("sends once while the list is still loading, and begins no second conversation when it lands", async () => {
+     holdList = true;
+     history.replaceState(null, "", "/a-piece?mode=chat");
+-    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: true })));
++    await act(async () => root.render(band({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true })));
+     await settle();
+     expect(posts()).toHaveLength(1);
+     const sentTo = (posts()[0]!.body as { threadId: string }).threadId;
+@@ -246,14 +247,14 @@ describe("ConversationBand's handoff that sends", () => {
+   });
+ 
+   it("sends nothing for a question asked in another article", async () => {
+-    await mount({ slug: "another-piece", question: QUESTION, send: true });
++    await mount({ slug: "another-piece", target: "chat" as const, question: QUESTION, send: true });
+     expect(posts()).toHaveLength(0);
+   });
+ });
+ 
+ describe("ConversationBand's handoff", () => {
+   it("mints one conversation under StrictMode, seeds it, and opens it", async () => {
+-    await mount({ slug: SLUG, question: QUESTION, send: false });
++    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false });
+ 
+     /* One, not two — and not a second, empty one from the arrival rule either,
+        which fires on exactly this state (no conversations, list loaded). */
+@@ -281,7 +282,7 @@ describe("ConversationBand's handoff", () => {
+         messages: [],
+       },
+     ];
+-    await mount({ slug: SLUG, question: QUESTION, send: false });
++    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false });
+     expect(threads().map((t) => t.id)).toContain("spya-k3m9qt");
+     expect(threads()).toHaveLength(2);
+     expect(panel?.threadId).not.toBe("spya-k3m9qt");
+@@ -290,7 +291,7 @@ describe("ConversationBand's handoff", () => {
+   });
+ 
+   it("does not take the same handoff twice when the band re-renders with it", async () => {
+-    const handoff = { slug: SLUG, question: QUESTION, send: false };
++    const handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: false };
+     await mount(handoff);
+     await act(async () => root.render(band(handoff)));
+     await settle();
+@@ -308,7 +309,7 @@ describe("ConversationBand's handoff", () => {
+   it("does not reopen an empty conversation after the reader closes the handed-over one", async () => {
+     holdList = true;
+     history.replaceState(null, "", "/a-piece?mode=chat");
+-    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: false })));
++    await act(async () => root.render(band({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false })));
+     await settle();
+     expect(threads()).toHaveLength(1);
+     const fresh = (threads()[0] as ChatThread).id;
+@@ -330,7 +331,7 @@ describe("ConversationBand's handoff", () => {
+   });
+ 
+   it("drops a question asked in another article, and starts only the ordinary empty one", async () => {
+-    await mount({ slug: "another-piece", question: QUESTION, send: false });
++    await mount({ slug: "another-piece", target: "chat" as const, question: QUESTION, send: false });
+     expect(taken, "refused, but still handed back").toBeGreaterThan(0);
+     for (const t of threads()) expect(chatDraftsFor(SLUG).thread(t.id)).toBeUndefined();
+     for (const t of threads()) expect(chatDraftsFor("another-piece").thread(t.id)).toBeUndefined();
+diff --git a/tests/conversation-band-origin.test.tsx b/tests/conversation-band-origin.test.tsx
+index 4d6c06639..2c42fb2d1 100644
+--- a/tests/conversation-band-origin.test.tsx
++++ b/tests/conversation-band-origin.test.tsx
+@@ -185,6 +185,7 @@ describe("a conversation handed over with an origin", () => {
+     onPost = () => answered("spya-rgn444");
+     const handoff = {
+       slug: SLUG,
++      target: "chat" as const,
+       question: SEED,
+       send: true,
+       anchor: { blockId: "spya-bbbbbb" } as const,
+@@ -209,6 +210,7 @@ describe("a conversation handed over with an origin", () => {
+       });
+     const handoff = {
+       slug: SLUG,
++      target: "chat" as const,
+       question: SEED,
+       send: true,
+       anchor: { blockId: "spya-bbbbbb" } as const,
+@@ -228,7 +230,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("keeps the origin beside the conversation, sends nothing, then sends exactly it with the first question", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     expect(drafts().thread(fresh)).toBe(SEED);
+     expect(drafts().origin(fresh)).toEqual(CLAIM);
+@@ -242,7 +244,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("stops sending the origin once the server has the thread", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     await send(SEED);
+     await send("and who disagrees?");
+     expect(posts).toHaveLength(2);
+@@ -252,7 +254,7 @@ describe("a conversation handed over with an origin", () => {
+ 
+   it("uses the server's replacement id and stored origin, and forgets the pending entry", async () => {
+     onPost = (body) => answered("spya-rgn444", body.origin);
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const guessed = open();
+     await send(SEED);
+     await vi.waitFor(() => expect(open()).toBe("spya-rgn444"));
+@@ -267,7 +269,7 @@ describe("a conversation handed over with an origin", () => {
+   it("shows the list where the conversation came from at once, before any reload", async () => {
+     /* The `begin` frame carries the stored origin; a pending draft does not
+        stand in for the server's acknowledgement. */
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     const handed = () => prop<ChatThread[]>("threads").find((t) => t.id === fresh);
+     expect(handed()?.origin, "not before the server has it").toBeUndefined();
+@@ -284,9 +286,9 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("does not share an origin between two handed-over conversations, or with an ordinary one", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const first = open();
+-    await show({ slug: SLUG, question: "Check another", send: false, origin: OTHER });
++    await show({ slug: SLUG, target: "chat" as const, question: "Check another", send: false, origin: OTHER });
+     const second = open();
+     expect(second).not.toBe(first);
+     expect(drafts().origin(first)).toEqual(CLAIM);
+@@ -314,7 +316,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("keeps the origin across a look at another mode, under the conversation begun in its place", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const first = open();
+     await leave();
+     /* Back in Chat: the unsent conversation went with the band, so the arrival
+@@ -336,7 +338,7 @@ describe("a conversation handed over with an origin", () => {
+     await mount(null);
+     const displaced = open();
+     drafts().setThread(displaced, "My unfinished question");
+-    await show({ slug: SLUG, question: "Ask about replication", send: false, origin: LENS });
++    await show({ slug: SLUG, target: "chat" as const, question: "Ask about replication", send: false, origin: LENS });
+     expect(open()).not.toBe(displaced);
+     expect(drafts().thread(displaced), "kept while the band is still mounted").toBe("My unfinished question");
+     expect(prop<ChatThread[]>("threads").some((t) => t.id === displaced)).toBe(true);
+@@ -351,7 +353,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("forgets the origin with a deleted conversation", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     await act(async () => prop<(id: string) => void>("onDelete")(fresh));
+     await settleChat();
+@@ -359,7 +361,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("keeps a claim's origin on returning to Chat after the reader cleared the seed", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     drafts().setThread(fresh, "");
+     await leave();
+@@ -370,7 +372,7 @@ describe("a conversation handed over with an origin", () => {
+   });
+ 
+   it("does not overlay a refused origin on an existing plain thread after returning to Chat", async () => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     // Another creator won this id, so the server refuses our origin.
+     stored = [{ id: fresh, kind: "chat", title: "Plain chat", createdAt: "2026-10-05T10:00:00Z",
+@@ -385,7 +387,7 @@ describe("a conversation handed over with an origin", () => {
+ 
+   it("keeps the origin after a first Send that failed, and sends it again", async () => {
+     onPost = refused;
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     await send(SEED);
+     expect(posts).toHaveLength(1);
+@@ -401,7 +403,7 @@ describe("a conversation handed over with an origin", () => {
+ 
+   it("keeps the pending origin and id after a failed first Send followed by leaving Chat", async () => {
+     onPost = refused;
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const fresh = open();
+     await send(SEED);
+     await leave();
+@@ -417,7 +419,7 @@ describe("a conversation handed over with an origin", () => {
+   it("forgets a pending guess when the server corrects its id after leaving Chat", async () => {
+     let release!: (response: Response) => void;
+     onPost = () => new Promise((resolve) => { release = resolve; });
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     const guessed = open();
+     await send(SEED);
+     await leave();
+@@ -432,7 +434,7 @@ describe("a conversation handed over with an origin", () => {
+ 
+   it("keeps an explicit choice of another chat while a submitted origin draft is missing", async () => {
+     onPost = refused;
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     await send(SEED);
+     await leave();
+     stored = [{ id: "spya-rgn555", kind: "chat", title: "Another chat",
+@@ -452,7 +454,7 @@ describe("Live on a handed-over conversation", () => {
+   });
+ 
+   it.each([CLAIM, LENS])("is not offered, and its start is refused, until the first typed Send has landed (%j)", async (origin) => {
+-    await mount({ slug: SLUG, question: SEED, send: false, origin });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin });
+     const fresh = open();
+     expect(panel?.live, "no Live control while the origin is pending").toBeUndefined();
+     let started: string | undefined = "unset";
+@@ -471,7 +473,7 @@ describe("Live on a handed-over conversation", () => {
+ 
+   it("stays withheld after a first Send that failed", async () => {
+     onPost = refused;
+-    await mount({ slug: SLUG, question: SEED, send: false, origin: CLAIM });
++    await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
+     await send(SEED);
+     expect(panel?.live).toBeUndefined();
+   });
+diff --git a/tests/guide-in-chat-band.test.tsx b/tests/guide-in-chat-band.test.tsx
+new file mode 100644
+index 000000000..cba33aa56
+--- /dev/null
++++ b/tests/guide-in-chat-band.test.tsx
+@@ -0,0 +1,344 @@
++// @vitest-environment jsdom
++/**
++ * **The guide in Chat's band** — plan
++ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md,
++ * stage 2, and GPT Sol's F2 on it: *openable in Chat* is its own idea, the
++ * kind a send carries is the open conversation's (or the handoff target's),
++ * never the band's, and `visible` goes with a chat alone.
++ *
++ * - the pinned row is handed down whether or not the guide exists;
++ * - the stored guide is opened, and a send to it is a `guide` turn with no
++ *   blocks on screen, while a chat's send is unchanged;
++ * - with no guide, one is begun here and the server's id for it is taken;
++ * - `?guide=1` opens the guide, existing or not, and round-trips to
++ *   `?thread=<id>`;
++ * - an ordinary *Ask in chat* while the guide is open still starts a fresh
++ *   chat, and a handoff that targets the guide goes to the guide while a chat
++ *   is open;
++ * - the guide's unsent words come back after a mode change, under the same
++ *   guide, stored or begun here;
++ * - no Live in the guide.
++ *
++ * The real band and the real `useChat`, with `ChatPanel` stubbed to expose
++ * the props it is handed: tests/conversation-band-origin.test.tsx's harness.
++ * What the panel draws for the guide is tests/guide-in-chat-panel.test.tsx.
++ */
++import { act, createElement, StrictMode } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { ChatThread, ThreadKind } from "../src/types.js";
++import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
++import type { ChatHandoff } from "../src/web/modes/conversation/ConversationModes.js";
++import { settleChat } from "./helpers/settle-chat.js";
++
++let panel: Record<string, unknown> | undefined;
++
++vi.mock("../src/web/ChatPanel.js", () => ({
++  ChatPanel: (props: Record<string, unknown>) => {
++    panel = props;
++    return null;
++  },
++}));
++
++const posts: { url: string; body: Record<string, unknown> }[] = [];
++let stored: ChatThread[] = [];
++let onPost: (body: Record<string, unknown>) => Response | Promise<Response>;
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  return {
++    ...real,
++    apiFetch: (url: string, init?: RequestInit) => {
++      if ((init?.method ?? "GET") === "POST") {
++        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
++        posts.push({ url: String(url), body });
++        return Promise.resolve(onPost(body));
++      }
++      return Promise.resolve(
++        new Response(JSON.stringify({ threads: stored }), {
++          status: 200,
++          headers: { "content-type": "application/json" },
++        }),
++      );
++    },
++  };
++});
++
++const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
++
++const SLUG = "a-piece";
++const AT = "2026-10-07T09:00:00.000Z";
++/** What a chat's send carries as on screen; a guide's must carry none. */
++const ON_SCREEN = ["spya-k3m9qt"];
++
++function thread(id: string, kind: ThreadKind, said = true): ChatThread {
++  return {
++    id,
++    kind,
++    title: kind === "guide" ? "Where should I start?" : `A question in ${id}`,
++    createdAt: AT,
++    updatedAt: AT,
++    messages: said
++      ? [
++          { id: `${id.slice(0, 9)}q`, role: "user", text: "said", createdAt: AT, status: "done" },
++          { id: `${id.slice(0, 9)}a`, role: "assistant", text: "answered", createdAt: AT, status: "done" },
++        ]
++      : [],
++  };
++}
++
++const GUIDE = thread("spya-gdeaaa", "guide");
++const CHAT = thread("spya-chtaaa", "chat");
++
++/** The server names the conversation (perhaps not as this tab did), answers, and finishes. */
++function answered(threadId: string): Response {
++  const enc = new TextEncoder();
++  const body = new ReadableStream<Uint8Array>({
++    start(c) {
++      const frame = (event: string, data: unknown) =>
++        c.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
++      frame("begin", {
++        threadId,
++        title: "Where should I start?",
++        messageId: "spya-rep333",
++        questionId: "spya-que333",
++        attempt: "att-1",
++      });
++      frame("done", { text: "Start with the Methods.", citations: [], searches: 0, model: "m" });
++      c.close();
++    },
++  });
++  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
++}
++
++let host: HTMLDivElement;
++let root: Root;
++
++enableHistorySync();
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  forgetChatDrafts();
++  posts.length = 0;
++  stored = [];
++  panel = undefined;
++  onPost = (body) => answered(String(body.threadId));
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++});
++
++function band(handoff: ChatHandoff | null) {
++  return createElement(
++    StrictMode,
++    null,
++    createElement(
++      NuqsAdapter,
++      null,
++      createElement(ConversationBand, {
++        slug: SLUG,
++        blocks: new Map<string, string>(),
++        onJump: () => {},
++        kind: "chat" as const,
++        onScreen: () => ON_SCREEN,
++        handoff,
++        onHandoffTaken: () => {},
++      }),
++    ),
++  );
++}
++
++const param = (name: string): string | null => new URLSearchParams(location.search).get(name);
++
++async function show(handoff: ChatHandoff | null = null): Promise<void> {
++  await act(async () => root.render(band(handoff)));
++  await settleChat();
++  await vi.waitFor(() => {
++    expect(param("thread")).toBe(panel?.threadId ?? null);
++  });
++}
++
++async function mount(search = "?mode=chat", handoff: ChatHandoff | null = null): Promise<void> {
++  history.replaceState(null, "", `/a-piece${search}`);
++  await show(handoff);
++}
++
++async function leave(): Promise<void> {
++  await act(async () => root.unmount());
++  panel = undefined;
++  root = createRoot(host);
++}
++
++function prop<T>(name: string): T {
++  const value = panel?.[name];
++  if (value === undefined) throw new Error(`the band handed the panel no ${name}`);
++  return value as T;
++}
++const threads = (): ChatThread[] => prop<ChatThread[]>("threads");
++const guides = (): ChatThread[] => threads().filter((t) => t.kind === "guide");
++const pinned = () => prop<{ thread: ChatThread | null; onOpen(): void }>("guide");
++
++async function openGuide(): Promise<void> {
++  await act(async () => pinned().onOpen());
++  await settleChat();
++}
++
++async function send(question: string): Promise<void> {
++  await act(async () => prop<(q: string) => void>("onSend")(question));
++  await settleChat();
++}
++
++describe("the guide's pinned row", () => {
++  it("is handed down before the guide exists, and names the stored one once it does", async () => {
++    await mount();
++    expect(pinned().thread).toBeNull();
++    await leave();
++    stored = [GUIDE, CHAT];
++    await mount();
++    expect(pinned().thread?.id).toBe(GUIDE.id);
++    /* Not among Chat's listed rows: it is pinned, not listed. */
++    expect(prop<ChatThread[]>("listed").map((t) => t.id)).toEqual([CHAT.id]);
++  });
++});
++
++describe("sending in the guide", () => {
++  it("opens the stored guide and sends a guide turn, with nothing on screen", async () => {
++    stored = [GUIDE, CHAT];
++    await mount();
++    await openGuide();
++    expect(panel?.threadId).toBe(GUIDE.id);
++    await send("Where next?");
++    expect(posts).toHaveLength(1);
++    expect(posts[0]?.body).toMatchObject({ question: "Where next?", threadId: GUIDE.id, kind: "guide" });
++    expect(posts[0]?.body).not.toHaveProperty("visible");
++  });
++
++  it("leaves a chat's send as it was: no kind, and the blocks on screen", async () => {
++    stored = [GUIDE, CHAT];
++    await mount(`?mode=chat&thread=${CHAT.id}`);
++    await send("What does it say?");
++    expect(posts[0]?.body).toMatchObject({ threadId: CHAT.id, visible: ON_SCREEN });
++    expect(posts[0]?.body).not.toHaveProperty("kind");
++  });
++
++  it("begins one when there is none, and takes the server's id for it", async () => {
++    await mount();
++    await openGuide();
++    expect(guides()).toHaveLength(1);
++    const local = guides()[0] as ChatThread;
++    expect(panel?.threadId).toBe(local.id);
++    /* The server already held a guide for this article and folded the turn
++       into it (src/chat.ts § `targetOf`): its `begin` frame names that one. */
++    onPost = () => answered("spya-gdsrv9");
++    await send("Where should I start?");
++    expect(posts[0]?.body).toMatchObject({ threadId: local.id, kind: "guide" });
++    expect(posts[0]?.body).not.toHaveProperty("visible");
++    await vi.waitFor(() => expect(param("thread")).toBe("spya-gdsrv9"));
++    expect(panel?.threadId).toBe("spya-gdsrv9");
++  });
++
++  it("offers no Live in the guide, and refuses to start one there", async () => {
++    stored = [GUIDE, CHAT];
++    await mount(`?mode=chat&thread=${CHAT.id}`);
++    expect(panel?.live).toBeDefined();
++    await openGuide();
++    expect(panel?.live).toBeUndefined();
++    const start = prop<(id: string | null) => string | undefined>("onStartLive");
++    expect(start(GUIDE.id)).toBeUndefined();
++  });
++});
++
++describe("?guide=1", () => {
++  it("opens the stored guide and becomes ?thread=<its id>", async () => {
++    stored = [GUIDE, CHAT];
++    await mount("?mode=chat&guide=1");
++    await vi.waitFor(() => expect(param("guide")).toBeNull());
++    expect(param("thread")).toBe(GUIDE.id);
++    expect(panel?.threadId).toBe(GUIDE.id);
++    expect(guides()).toHaveLength(1);
++  });
++
++  it("begins one guide, not two, when there is none", async () => {
++    stored = [CHAT];
++    await mount("?mode=chat&guide=1");
++    await vi.waitFor(() => expect(param("guide")).toBeNull());
++    expect(guides()).toHaveLength(1);
++    expect(panel?.threadId).toBe(guides()[0]?.id);
++    expect(posts, "opening spends nothing").toHaveLength(0);
++  });
++});
++
++describe("handoffs and the guide", () => {
++  it("starts a fresh chat for an ordinary Ask in chat, even with the guide open", async () => {
++    stored = [GUIDE, CHAT];
++    await mount(`?mode=chat&thread=${GUIDE.id}`);
++    expect(panel?.threadId).toBe(GUIDE.id);
++    await show({ slug: SLUG, target: "chat", question: "What is an axiom?", send: true });
++    expect(posts).toHaveLength(1);
++    const body = posts[0]?.body ?? {};
++    expect(body.threadId).not.toBe(GUIDE.id);
++    expect(body.threadId).not.toBe(CHAT.id);
++    expect(body).not.toHaveProperty("kind");
++    expect(body.visible).toEqual(ON_SCREEN);
++  });
++
++  it("sends to the guide a handoff that targets it, with a chat open", async () => {
++    stored = [GUIDE, CHAT];
++    await mount(`?mode=chat&thread=${CHAT.id}`);
++    await show({ slug: SLUG, target: "guide", question: "Where should I start?", send: true });
++    expect(posts, "one press, one model call").toHaveLength(1);
++    expect(posts[0]?.body).toMatchObject({ threadId: GUIDE.id, kind: "guide", question: "Where should I start?" });
++    expect(posts[0]?.body).not.toHaveProperty("visible");
++    expect(panel?.threadId).toBe(GUIDE.id);
++  });
++
++  it("begins the guide for a handoff that targets it when there is none, and sends once", async () => {
++    stored = [CHAT];
++    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: true });
++    expect(posts).toHaveLength(1);
++    expect(posts[0]?.body).toMatchObject({ kind: "guide", question: "Where should I start?" });
++    expect(guides()).toHaveLength(1);
++  });
++
++  it("leaves a waiting guide handoff in the guide's box, and sends nothing", async () => {
++    stored = [GUIDE, CHAT];
++    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: false });
++    expect(posts).toHaveLength(0);
++    expect(panel?.threadId).toBe(GUIDE.id);
++    expect(chatDraftsFor(SLUG).thread(GUIDE.id)).toBe("Where should I start?");
++  });
++});
++
++describe("the guide's unsent words across a mode change", () => {
++  it("puts the reader back in the stored guide with them", async () => {
++    stored = [GUIDE, CHAT];
++    await mount();
++    await openGuide();
++    chatDraftsFor(SLUG).setThread(GUIDE.id, "half a thought");
++    await leave();
++    history.replaceState(null, "", "/a-piece?mode=chat");
++    await show();
++    expect(panel?.threadId).toBe(GUIDE.id);
++    expect(chatDraftsFor(SLUG).thread(GUIDE.id)).toBe("half a thought");
++  });
++
++  it("begins a guide this tab began again under the same id, never as a chat", async () => {
++    stored = [CHAT];
++    await mount();
++    await openGuide();
++    const local = guides()[0]?.id as string;
++    chatDraftsFor(SLUG).setThread(local, "half a thought");
++    await leave();
++    history.replaceState(null, "", "/a-piece?mode=chat");
++    await show();
++    expect(panel?.threadId).toBe(local);
++    expect(threads().find((t) => t.id === local)?.kind).toBe("guide");
++    expect(chatDraftsFor(SLUG).thread(local)).toBe("half a thought");
++  });
++});
+diff --git a/tests/guide-in-chat-panel.test.tsx b/tests/guide-in-chat-panel.test.tsx
+new file mode 100644
+index 000000000..5159e6614
+--- /dev/null
++++ b/tests/guide-in-chat-panel.test.tsx
+@@ -0,0 +1,246 @@
++// @vitest-environment jsdom
++/**
++ * **What Chat's panel draws for the guide** — plan
++ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md,
++ * stage 2:
++ *
++ * - **the pinned row**, above the list and outside its source filter, there
++ *   under every `?chatfrom=` and with no conversation at all, and a press on
++ *   it opens the guide (GPT Sol's F2);
++ * - **the greeting**, ours and free: the *Why you're reading this one* box
++ *   only when no reason is stored, *Ask the guide where to start* only when
++ *   one is, a line about the profile only when *About you* is empty, and
++ *   neither box nor button when the reason could not be read (F5).
++ *
++ * The real `ChatPanel`, handed props directly, as
++ * tests/chat-list-sources.test.tsx does. What the band hands it is
++ * tests/guide-in-chat-band.test.tsx.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { ChatThread, ThreadKind } from "../src/types.js";
++import { forgetChatDrafts } from "../src/web/chat-draft.js";
++import type { ChatFrom } from "../src/web/params.js";
++
++/** What `GET /api/reader?slug=` answers. */
++let reader: { profile: string | null; purpose: string | null; purposeFailed: boolean } = {
++  profile: null,
++  purpose: null,
++  purposeFailed: false,
++};
++const patches: unknown[] = [];
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  const json = (body: unknown) =>
++    new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
++  return {
++    ...real,
++    apiFetch: (url: string, init?: RequestInit) => {
++      if ((init?.method ?? "GET") === "PATCH") {
++        const body = JSON.parse(String(init?.body ?? "{}")) as { purpose: string | null };
++        patches.push(body);
++        reader = { ...reader, purpose: body.purpose };
++        return Promise.resolve(json({ purpose: body.purpose }));
++      }
++      if (String(url).startsWith("/api/reader")) return Promise.resolve(json(reader));
++      return Promise.resolve(json({}));
++    },
++  };
++});
++
++const { ChatPanel } = await import("../src/web/ChatPanel.js");
++const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL } = await import("../src/web/GuideGreeting.js");
++
++const AT = "2026-10-07T09:00:00.000Z";
++
++function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): ChatThread {
++  return {
++    id,
++    kind,
++    title: `A question in ${id}`,
++    createdAt: AT,
++    updatedAt: AT,
++    messages: [
++      { id: `${id.slice(0, 9)}q`, role: "user", text: "said", createdAt: AT, status: "done" },
++      { id: `${id.slice(0, 9)}a`, role: "assistant", text: "answered", createdAt: AT, status: "done" },
++    ],
++    ...over,
++  };
++}
++
++const CHAT = thread("spya-chtaab", "chat");
++const CLAIM = thread("spya-clmaab", "chat", {
++  origin: { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
++});
++const LEARN = thread("spya-remaab", "learn");
++const EMPTY_GUIDE = thread("spya-gdeaab", "guide", { messages: [] });
++
++let host: HTMLDivElement;
++let root: Root;
++const sent: string[] = [];
++let guideOpened = 0;
++
++function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null } = {}) {
++  const guide = over.guide ?? null;
++  act(() => {
++    root.render(
++      createElement(ChatPanel, {
++        slug: "a-piece",
++        kind: "chat" as const,
++        loaded: true,
++        loadFailed: false,
++        listed,
++        threads: [...listed.filter((t) => t.kind === "chat"), ...(guide ? [guide] : [])],
++        guide: {
++          thread: guide,
++          onOpen: () => {
++            guideOpened += 1;
++          },
++        },
++        threadId: over.threadId ?? null,
++        from: over.from ?? null,
++        onFrom: () => {},
++        onOpenLearn: () => {},
++        onThread: () => {},
++        onSend: (q: string) => {
++          sent.push(q);
++        },
++        onNew: () => {},
++        onSendNew: () => {},
++        onDiscard: () => {},
++        onRename: () => {},
++        onDelete: () => {},
++        canStartOver: false,
++        onRetry: () => {},
++        onEdit: () => {},
++        onStop: () => {},
++        onJump: () => {},
++        recovering: new Set<string>(),
++        blocks: new Map<string, string>(),
++        focusNonce: 0,
++        error: null,
++      }),
++    );
++  });
++}
++
++async function settle(): Promise<void> {
++  for (let i = 0; i < 4; i++) {
++    await act(async () => {
++      await new Promise((go) => setTimeout(go, 0));
++    });
++  }
++}
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  reader = { profile: null, purpose: null, purposeFailed: false };
++  patches.length = 0;
++  sent.length = 0;
++  guideOpened = 0;
++  forgetChatDrafts();
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++const guideRow = (): HTMLElement | null => host.querySelector<HTMLElement>(".chat-guide");
++
++describe("the guide's pinned row", () => {
++  it.each([null, "chats", "debate", "learn"] as const)("is above the list whatever the filter says (%s)", (from) => {
++    paint([CHAT, CLAIM, LEARN], { from });
++    const row = guideRow();
++    expect(row).not.toBeNull();
++    expect(row?.textContent).toContain("Guide");
++    /* First in the list, ahead of the filter and every row. */
++    const list = host.querySelector(".chat-threads");
++    expect(row && list && row.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
++  });
++
++  it("is there with no conversation at all, and before the guide exists", () => {
++    paint([]);
++    expect(guideRow()?.textContent).toContain("How to read this piece");
++  });
++
++  it("opens the guide when pressed", () => {
++    paint([CHAT]);
++    act(() => guideRow()?.querySelector<HTMLButtonElement>("button")?.click());
++    expect(guideOpened).toBe(1);
++  });
++});
++
++describe("the guide's greeting", () => {
++  const greeting = async () => {
++    paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id });
++    await settle();
++  };
++  const box = () => host.querySelector<HTMLTextAreaElement>("#guide-purpose");
++  const startButton = () =>
++    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === GUIDE_START_LABEL);
++
++  it("says what the guide is for, and is headed Guide", async () => {
++    await greeting();
++    expect(host.textContent).toContain("I'm here to help you read this piece well");
++    expect(host.querySelector("h2")?.textContent).toBe("Guide");
++  });
++
++  it("holds the reason box, and no start button, when no reason is stored", async () => {
++    await greeting();
++    expect(box()).not.toBeNull();
++    expect(host.textContent).toContain("You can answer in the box above, or just type below.");
++    expect(startButton()).toBeUndefined();
++  });
++
++  it("offers the start button, and no box, when a reason is stored; the press sends the fixed question", async () => {
++    reader = { ...reader, purpose: "I review for a journal" };
++    await greeting();
++    expect(box()).toBeNull();
++    const button = startButton();
++    expect(button).toBeDefined();
++    act(() => button?.click());
++    expect(sent).toEqual([GUIDE_FIRST_QUESTION]);
++  });
++
++  it("offers the start button once the reader's own reason has been saved from the box", async () => {
++    await greeting();
++    const field = box();
++    if (!field) throw new Error("no box");
++    await act(async () => {
++      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
++      setter?.call(field, "To find the method");
++      field.dispatchEvent(new Event("input", { bubbles: true }));
++    });
++    await act(async () => {
++      field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
++      field.blur();
++    });
++    await settle();
++    expect(patches).toEqual([{ purpose: "To find the method" }]);
++    expect(startButton()).toBeDefined();
++    expect(sent, "saving the reason sends nothing").toEqual([]);
++  });
++
++  it("points at the profile only when About you is empty", async () => {
++    await greeting();
++    expect(host.querySelector('a[href="/profile"]')).not.toBeNull();
++    act(() => root.unmount());
++    root = createRoot(host);
++    reader = { ...reader, profile: "A historian of science" };
++    await greeting();
++    expect(host.querySelector('a[href="/profile"]')).toBeNull();
++  });
++
++  it("asks nothing and offers nothing when the reason could not be read", async () => {
++    reader = { ...reader, purposeFailed: true };
++    await greeting();
++    expect(box()).toBeNull();
++    expect(startButton()).toBeUndefined();
++  });
++});
+diff --git a/tests/helpers/reader-reading-harness.tsx b/tests/helpers/reader-reading-harness.tsx
+index 1845067ca..6068d5504 100644
+--- a/tests/helpers/reader-reading-harness.tsx
++++ b/tests/helpers/reader-reading-harness.tsx
+@@ -48,7 +48,12 @@ vi.mock("../../src/web/lib/supabase.js", () => ({
+   },
+ }));
+ vi.mock("../../src/web/Masthead.js", () => ({ Masthead: () => null }));
+-vi.mock("../../src/web/Dock.js", () => ({ Dock: () => null }));
++/* The component only: Reader also calls the Dock's mode activators and
++   `visibleModes` for chat's `mode` chips (plan 261007j). */
++vi.mock("../../src/web/Dock.js", async (importOriginal) => ({
++  ...(await importOriginal<typeof import("../../src/web/Dock.js")>()),
++  Dock: () => null,
++}));
+ vi.mock("../../src/web/reader/measure.js", () => ({ useWindowWidth: () => 1600, useRootFontPx: () => 16 }));
+ vi.mock("../../src/web/marginalia/MarginaliaColumn.js", async (original) => {
+   const actual = await original<typeof import("../../src/web/marginalia/MarginaliaColumn.js")>();

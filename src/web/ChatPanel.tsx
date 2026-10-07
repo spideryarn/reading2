@@ -60,6 +60,7 @@ import {
   BookMarked,
   Check,
   ClipboardCheck,
+  Compass,
   Copy,
   FileText,
   Globe,
@@ -90,8 +91,9 @@ import type {
   ThreadKind,
   ToolRun,
 } from "../types.js";
-import { isSingleThreadKind } from "../types.js";
+import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { GuideGreeting } from "./GuideGreeting.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
@@ -113,6 +115,7 @@ import { isHeldSendEnter, isImeComposing, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import {
   CHAT_FROM_LABEL,
+  GUIDE_LABEL,
   type LearnConversationView,
   narrowed,
   sourcesIn,
@@ -164,6 +167,14 @@ interface Props {
    * Learn row is drawn and cannot be pressed.
    */
   onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
+  /**
+   * **The guide's pinned row, Chat's alone** (plan 261007j): the article's one
+   * guide, or `null` before there is one, and how to open it — the stored one
+   * or one begun for the press. Drawn above the list and outside its source
+   * filter (GPT Sol's F2), so it is there whatever `?chatfrom=` says and even
+   * when no conversation is. Absent in Learn, which has no list.
+   */
+  guide?: { readonly thread: ChatThread | null; onOpen(): void } | undefined;
   /**
    * The live conversation, owned above this component.
    *
@@ -391,6 +402,7 @@ export function ChatPanel({
   from,
   onFrom,
   onOpenLearn,
+  guide,
   threadId,
   onThread,
   onSend,
@@ -417,9 +429,9 @@ export function ChatPanel({
   useRenderCount("ChatPanel");
   /* **Learn's layout, for all three of its conversations** — Recall,
      Tutorial and Explore are each one thread per article, dictated into a tall
-     box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+     box, with no list (`LEARN_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
-  const learn = isSingleThreadKind(kind);
+  const learn = isLearnKind(kind);
   /* Among `threads`, never among `listed`: what the list draws and what may
      be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -481,9 +493,9 @@ export function ChatPanel({
    * picked. GPT Sol's review of the plan above, F4.
    */
   const draftFor = (id: string): string =>
-    isSingleThreadKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
+    isLearnKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
   const setDraftFor = (id: string, text: string): void => {
-    if (isSingleThreadKind(kind)) drafts.setLearn(kind, text);
+    if (isLearnKind(kind)) drafts.setLearn(kind, text);
     else drafts.setThread(id, text);
   };
 
@@ -586,6 +598,9 @@ export function ChatPanel({
           <h2 className={learn && subMode ? "sr-only" : undefined}>
             {learn ? (
               MODE_LABEL.learn
+            ) : open?.kind === "guide" ? (
+              /* One per article, so its name rather than its first question. */
+              GUIDE_LABEL
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -726,6 +741,7 @@ export function ChatPanel({
         <>
           <ThreadList
             threads={rows}
+            guide={guide}
             from={from ?? null}
             onFrom={onFrom}
             onOpen={onThread}
@@ -917,6 +933,7 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
  */
 function ThreadList({
   threads,
+  guide,
   from,
   onFrom,
   onOpen,
@@ -926,6 +943,7 @@ function ThreadList({
   onDelete,
 }: {
   threads: ChatThread[];
+  guide?: { readonly thread: ChatThread | null; onOpen(): void } | undefined;
   from: ChatFrom | null;
   onFrom?: ((next: ChatFrom | null) => void) | undefined;
   onOpen(id: string): void;
@@ -939,10 +957,18 @@ function ThreadList({
      same paint cannot disagree about what "now" is. useNow.ts § why. */
   const now = useNow();
 
+  /* **The guide, pinned**: above the filter and every row, never narrowed by
+     it, and drawn whether or not it exists yet (plan 261007j, GPT Sol's F2). */
+  const pinned = guide && <GuideRow guide={guide} now={now} />;
+
   if (threads.length === 0) {
     return (
+      <>
+      {pinned}
       <div className="chat-empty">
-        <p>Nothing asked yet.</p>
+        {/* Not while the guide holds a conversation: something has been asked
+            (the browser pass of plan 261007j). */}
+        {!(guide?.thread && guide.thread.messages.length > 0) && <p>Nothing asked yet.</p>}
         <p className="chat-empty-hint">
           Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there.
         </p>
@@ -950,6 +976,7 @@ function ThreadList({
           <MessageSquarePlus size={14} /> New conversation
         </button>
       </div>
+      </>
     );
   }
 
@@ -962,10 +989,12 @@ function ThreadList({
   const sorted = narrowed(threads, chosen).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   /* One slot at the head of every row when any row has an icon, so the titles
      of the rows without one still start on the same line down the list. */
-  const anySource = threads.some((t) => threadSource(t) !== null);
+  /* The pinned guide always has one, so its title lines up with theirs. */
+  const anySource = guide !== undefined || threads.some((t) => threadSource(t) !== null);
 
   return (
     <>
+      {pinned}
       {sources.length > 1 && onFrom && (
         /* No `role="group"`, as Learn's chips have none (QuizPanel.tsx §
            `LearnSubModeToggle`): each button says what it is and whether
@@ -1087,6 +1116,55 @@ function ThreadList({
         })}
       </ol>
     </>
+  );
+}
+
+/**
+ * **The guide's row, pinned above Chat's list** (plan 261007j) — one per
+ * article, so it is named for what it is, not for its first question, and it
+ * wears an icon no mode has: `Compass` (docs/project/icons.md, one glyph one
+ * meaning). Before the guide exists it says what it is for; after, where it
+ * got to, as every row does. No rename and no delete here: it is not one of
+ * many, and its delete is in its own header, as a chat's is.
+ */
+function GuideRow({
+  guide,
+  now,
+}: {
+  guide: { readonly thread: ChatThread | null; onOpen(): void };
+  now: number;
+}) {
+  const t = guide.thread;
+  const last = t ? lastSaid(t) : undefined;
+  return (
+    <div className="chat-guide" data-guide="">
+      <span className="chat-thread-lead">
+        <span className="chat-guide-mark">
+          <Compass size={12} aria-hidden="true" />
+        </span>
+      </span>
+      <button
+        type="button"
+        className="chat-thread-open"
+        title={t && t.messages.length > 0 ? describe(t) : "Your guide to reading this piece, and to Spideryarn"}
+        onClick={guide.onOpen}
+      >
+        <span className="chat-thread-title">{GUIDE_LABEL}</span>
+        {last ? (
+          <span className={last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"}>
+            {last.text}
+          </span>
+        ) : (
+          <span className="chat-thread-last">How to read this piece, and where to start</span>
+        )}
+        {t && t.messages.length > 0 && (
+          <span className="chat-thread-meta">
+            <span className="chat-thread-count">{turns(t)}</span>
+            <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -1652,7 +1730,9 @@ export function Conversation({
         }}
       >
         {empty &&
-          (kind === "tutorial" ? (
+          (kind === "guide" ? (
+            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
+          ) : kind === "tutorial" ? (
             <TutorialInvitation />
           ) : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
@@ -2672,7 +2752,7 @@ export function Composer({
      transcript above. */
   const [value, setValue] = useState(draft);
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
-  const learn = isSingleThreadKind(kind);
+  const learn = isLearnKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
@@ -2844,7 +2924,9 @@ export function Composer({
         placeholder={
           busy
             ? "Waiting for the answer…"
-            : kind === "tutorial"
+            : kind === "guide"
+              ? "Ask how to read this, or say what you're after"
+              : kind === "tutorial"
               ? "What do you remember about it? It's fine if you haven't read it yet."
               : kind === "explore"
                 ? "What do you make of it? Say what's on your mind, or where you'd like to take it."

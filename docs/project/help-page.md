@@ -56,7 +56,7 @@ page) and `keywords` (words a reader brings that the title does not say); a ques
 `keywords`; a mode has `keywords` only. Any of them may have `related` (anchors, for *See also*). A
 mode's body is up to two sections, `## When to use it` and `## Reading it`. Links are site paths
 (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
-HTML is `<kbd>`. Four tokens stand for facts kept in code — `{{experimental-modes}}`,
+HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Four tokens stand for facts kept in code — `{{experimental-modes}}`,
 `{{public-shelf-label}}`, `{{whats-new-label}}` and `{{modes-table}}` — and `help-markdown.tsx` §
 `expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
 rather than draw it.
@@ -82,6 +82,34 @@ already state**; it is a route through the pages for one kind of reader, with a 
 paragraphs are `MODE_CATALOG`'s `description` and `how` — the same words as the dock's card and the
 band's (i). Its file adds only *when to use it* and *how to read it*. So fix a mode's description in the
 catalog, and Help follows.
+
+## Pictures
+
+Since 2026-10-07 Help has screenshots, cropped to what the passage around them describes, each
+with a caption, and a few GIFs where the thing being explained is a movement — plan
+[261007l](../plans/261007l-help-screenshots-and-gifs.md). Greg, 2026-10-07 (`spya-mq05ww`):
+
+> Include lots of screenshots throughout Help, ideally cropped to highlight what's being described,
+> with nice caption. Even better if some of those could be animated gifs, if that will help make it
+> clearer to the reader.
+
+- **In a page:** one Markdown image, alone in its paragraph, with its caption as the image's title
+  in quotes — [`spine.md`](../../src/web/help/pages/spine.md) has one. The alt is for somebody who
+  cannot see it; the title is the caption under it. The path is relative to the page's file
+  (`../images/…` from `modes/`, `guides/` or `questions/`), so GitHub shows it too. Search reads a
+  picture as its caption; anything handed the Markdown itself (`expandHelpTokens`) gets the line as
+  written.
+- **The file** goes in `src/web/help/pages/images/`, and **an entry** in
+  [`help-images.ts`](../../src/web/help/help-images.ts): its size, what it shows, which article,
+  the window, the day. That entry is how the next person retakes it. `tests/help-images.test.ts`
+  holds the folder, the entries and the pages to each other, and each file to its declared size.
+- **Shooting one** is [marketing-pages.md § Shooting a screenshot of the
+  product](marketing-pages.md#shooting-a-screenshot-of-the-product): one idea per picture, nothing
+  brighter in the frame than the thing named, nothing half-cut. Then, for Help: **only an article
+  on the public shelf**, never one from anybody's own library; **cropped to the passage's subject**,
+  not the whole window; shot at 2× and kept at 2× (the page draws it at half, at most 672px wide);
+  `npm run screenshots:compress -- <file>`, which is pngquant. A GIF only where the motion is the point, a few seconds,
+  looping, made with `scripts/frames-to-gif.ts`.
 
 ## Anchors are a promise
 
@@ -124,12 +152,16 @@ The brief for the deploy's step 4, and for anyone else updating Help:
    [changelog.md § The pending release](changelog.md#the-pending-release))
    — or, outside a deploy, the commits you are covering.
 2. For each one a reader would notice, ask: does Help say anything that is now false? Is there
-   something here a reader could not work out alone? If neither, move on — most entries need nothing.
+   something here a reader could not work out alone? **Does a picture now show something that is no
+   longer true** — a control moved or renamed, a mode's band redrawn? If none of these, move on —
+   most entries need nothing. A picture that is wrong is retaken from its entry in
+   `help-images.ts` (§ Pictures), or deleted with its line; a new screen worth showing gets one.
 3. Edit the page's file under `src/web/help/pages/`, checking the fact against the code, not the
    commit message. A new topic gets a new id in `help-anchors.ts`, a file and its import in
    `help-pages.ts`, a place in a group, and a line in `PINNED_ANCHORS`. A guide that recommends what
    changed may need its sentence too (`pages/guides/`).
-4. `npx vitest run tests/help-page.test.tsx` and `npm run typecheck`, then commit and push to `dev`.
+4. `npx vitest run tests/help-page.test.tsx tests/help-images.test.ts` and `npm run typecheck`, then
+   commit and push to `dev`.
 
 ## The ways in
 

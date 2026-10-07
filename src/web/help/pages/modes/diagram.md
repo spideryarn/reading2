@@ -11,6 +11,8 @@ article you see a Sketch only if one has already been drawn.
 
 ## Reading it
 
+![A Sketch of an article on phrenology: a question at the top, a chain of claims fanning out into five regions, and a conclusion at the bottom](../images/mode-sketch.png "Sketch: the argument as a picture, running down the page in the article’s order. Click a box to jump to its passage.")
+
 The Sketch mostly runs down the page in the article’s order, and nothing in it is to scale. Point at
 a box to read more; click one to jump to its passage, though not every box has one. Click a region’s
 name to zoom into that part, and use **Back** or <kbd>Esc</kbd> to come out. **Enlarge** opens it

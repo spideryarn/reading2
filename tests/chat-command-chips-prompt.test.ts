@@ -7,7 +7,7 @@
  * written in the prompt is run through the real parser, and every id chat may
  * propose has to be shown at least once.
  *
- * And the section is chat's alone: Learn, Tutorial and Explore are not handed an
+ * And the section is chat's and the guide's alone: Learn, Tutorial and Explore are not handed an
  * executor (Reader.tsx), and the spoken prompt must never be taught a token it
  * would read aloud (src/live.ts § `LIVE_SYSTEM`).
  */
@@ -18,11 +18,12 @@ import { LIVE_SYSTEM } from "../src/live.js";
 import type { Block, Meta } from "../src/types.js";
 import { CHAT_PROPOSABLE } from "../src/web/chat-commands.js";
 import { parseProposalToken } from "../src/web/command-proposal.js";
+import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
 
 const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" } as unknown as Meta;
 const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
 
-const system = (kind: "chat" | "learn" | "tutorial" | "explore" | "candidates"): string => {
+const system = (kind: "chat" | "learn" | "tutorial" | "explore" | "candidates" | "guide"): string => {
   const messages = buildConverseMessages({ meta, blocks, history: [], question: "q", kind });
   const found = messages.find((m) => m.role === "system");
   if (!found) throw new Error(`no system message for a ${kind} turn`);
@@ -30,7 +31,7 @@ const system = (kind: "chat" | "learn" | "tutorial" | "explore" | "candidates"):
 };
 
 /** The prompt's own rules, without the article that follows them. */
-const rules = (kind: "chat" | "learn" | "tutorial" | "explore" | "candidates"): string =>
+const rules = (kind: "chat" | "learn" | "tutorial" | "explore" | "candidates" | "guide"): string =>
   system(kind).split("A paragraph.")[0] ?? "";
 
 const tokensIn = (text: string): string[] => text.match(new RegExp(COMMAND_TOKEN_SOURCE, "g")) ?? [];
@@ -59,6 +60,36 @@ describe("the chat prompt's section on offering an action", () => {
     const prompt = rules("chat");
     expect(prompt).toContain("Only the reader's own message");
     expect(prompt).toContain("You have not done it");
+  });
+
+  /* The guide proposes actions as buttons too, under the same rules: the same
+     section, word for word, so a fix to one is a fix to both.
+     docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md. */
+  it("is in the guide's prompt too, word for word", () => {
+    const section = (text: string) => {
+      const start = text.indexOf("OFFERING AN ACTION");
+      expect(start).toBeGreaterThanOrEqual(0);
+      return text.slice(start, text.indexOf("describe it in words instead.", start));
+    };
+    expect(section(rules("guide"))).toBe(section(rules("chat")));
+    for (const raw of tokensIn(rules("guide"))) {
+      expect(CHAT_PROPOSABLE, raw).toContain(parseProposalToken(raw)?.id);
+    }
+  });
+
+  /* Plan 261007j: the guide is handed a `mode` button beside every ordinary
+     mode, and none beside an experimental one, which the reader may not have. */
+  it("gives the guide a mode button for every ordinary mode, each a real catalogue key, and none for an experimental one", () => {
+    const keys = tokensIn(rules("guide"))
+      .map((raw) => parseProposalToken(raw))
+      .flatMap((p) => (p?.id === "mode" ? [p.key] : []));
+    const rows = catalogue.filter(
+      (r) => (r.kind === "mode" || r.kind === "submode") && r.contexts.includes("owner-article"),
+    );
+    const ordinary = rows.filter((r) => r.contexts.includes("owner-article-experimental-off")).map((r) => r.id);
+    for (const id of ordinary) expect(keys, id).toContain(id);
+    for (const key of keys) expect(ordinary, key).toContain(key);
+    expect(keys).not.toContain("mode:debate");
   });
 
   it.each(["learn", "tutorial", "explore", "candidates"] as const)("is not in the %s prompt", (kind) => {

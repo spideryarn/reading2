@@ -17,6 +17,8 @@ your own article. A thread is a compression: treat it as a way in, not a stand-i
 
 ## Reading it
 
+![Summary’s Brief view: two paragraphs, each followed by the short codes of the passages it rests on](../images/mode-summary.png "Brief, with a code after each paragraph for the passages it rests on: follow one to read what the author actually wrote.")
+
 Three buttons at the top choose what you see: **Brief**, **Fuller**, which is several times longer
 and goes into the method, the evidence and the limits, and **Thread**. The phrases in bold are the
 ones to catch if you are skimming.

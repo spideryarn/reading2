@@ -16,13 +16,18 @@ page. The words are from that row, as the Overseer relayed them:
 - **Built: *Their name*.** A new optional box on `/admin/vouchers`. With a name, the gift email
   opens *Dear Ada,* above the note to them. Without one the email is what it was. The note to
   them was already there (since 2026-10-02).
-- **Not built, a question for Greg: the starter article.** The private link exists, but an email
+- **Built later, once Greg answered: the starter article.** The private link exists, but an email
   that carries it keeps the link's key in a second place of ours and at our mail provider, and
-  where that key may go is a listed defence. Four options in the plan; recommended is to build
-  it, with the voucher keeping only which article. Queue entry `qi-zqkjnadh`.
-- **Not built, a question for Greg: the big list of people.** A voucher sends its email and
+  where that key may go is a listed defence, so it was asked first (four options in the plan).
+  Greg answered on 2026-10-07 (`q-t2vhv6`), and option A is on `dev`: a voucher can name a
+  starter article and its email carries the private link, and `/admin/vouchers` picks one or
+  links out to import one. Plan
+  [261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md), queue entry
+  `qi-zqkjnadh`.
+- **Not built, by Greg's choice: the big list of people.** A voucher sends its email and
   becomes claimable the moment it is made, so it cannot hold people who are only candidates.
-  Three options in the plan. Queue entry `qi-dajb32q7`.
+  Three options in the plan; Greg chose A on 2026-10-07 (`q-avh98t`): no list in the app for now.
+  Queue entry `qi-dajb32q7`, dropped.
 
 **The questions for Greg are now files**, `docs/user-feedback/questions/q-t2vhv6.md` (the starter
 article) and `docs/user-feedback/questions/q-avh98t.md` (the list of people), moved there from

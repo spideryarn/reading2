@@ -14,6 +14,8 @@ For one exact paragraph, press the **link** icon in its margin. That copies a li
 that paragraph and keeps your current mode. On a phone, a long press on the icon offers the
 browser’s own **Copy link**.
 
+![The link icon in a paragraph’s margin, with its tooltip: click to copy a link to this paragraph](images/passage-link.png "One press on a paragraph’s link icon copies a link that opens at that paragraph.")
+
 Opening an article from your shelf returns you to where you left it on that device, but a link
 always wins: if someone sends you a passage, it opens at their passage. When signed in, an article
 you have not opened in this browser before can open in Summary, where the window has room for it

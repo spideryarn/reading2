@@ -210,7 +210,7 @@ async function givenVoucher(
   recipientName: string | null = null,
 ): Promise<{ id: string; delivery: string }> {
   const made = await createVoucher(
-    { id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote, recipientName },
+    { id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote, recipientName, starterSlug: null },
     createdBy,
   );
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
@@ -885,7 +885,7 @@ describe("the recipient's email is written for who they are", () => {
       expect(await giftAudienceFor(emailOf(READER), { lookup: failed })).toEqual({ kind: "invite" });
 
       const made = await createVoucher(
-        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null, recipientNote: null, recipientName: null },
+        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null, recipientNote: null, recipientName: null, starterSlug: null },
         CREATOR_A,
         { audience: failed },
       );

@@ -35,6 +35,7 @@ import {
   renderHelpMarkdown,
   renderHelpModeHalves,
 } from "../src/web/help/help-markdown.js";
+import { HELP_IMAGES } from "../src/web/help/help-images.js";
 import { HELP_TOPIC_FILES, HELP_TOPIC_PAGES } from "../src/web/help/help-pages.js";
 
 const html = (md: string): string => renderToStaticMarkup(<>{renderHelpMarkdown(md, "t")}</>);
@@ -114,11 +115,45 @@ describe("drawing a file", () => {
     ["a loose list", "- one\n\n- two", /blank line/],
     ["a deeper heading", "### Three", /only ## headings/],
     ["a block quote", "> quoted", /nothing draws a "blockquote"/],
-    ["an image", "![alt](/x.png)", /nothing draws a "image"/],
+    ["an image inside a sentence", 'See ![alt](images/x.png "Cap.") here.', /alone in its own paragraph/],
+    ["two images in one paragraph", '![a](images/x.png "A.")\n![b](images/x.png "B.")', /alone in its own paragraph/],
+    ["an image in a list", '- ![alt](images/x.png "Cap.")', /alone in its own paragraph/],
+    ["an image inside a link", '[![alt](images/x.png "Cap.")](/help/spine)', /alone in its own paragraph/],
+    ["an image with no caption", "![alt](images/x.png)", /needs a caption/],
+    ["an image with no alt", '![](images/x.png "Cap.")', /needs alt text/],
+    ["an image not in the manifest", '![alt](images/nowhere.png "Cap.")', /not in help-images.ts/],
+    ["an image off the site", '![alt](https://example.com/x.png "Cap.")', /images\/<name>/],
+    ["an image by reference", "![alt][x]\n\n[x]: images/x.png", /nothing draws a "imageReference"/],
   ])("throws on %s", (_name, md, message) => {
     expect(() => html(md)).toThrow(message);
     /* The text walk refuses the same files, so search cannot index what the page cannot draw. */
     expect(() => helpMarkdownText(md, "t")).toThrow();
+  });
+
+  it("draws an image alone in its paragraph as a figure, its title the caption", () => {
+    const [name, image] = Object.entries(HELP_IMAGES).find(([, i]) => i.still === undefined) ?? [];
+    if (name === undefined || image === undefined) throw new Error("help-images.ts has no still pictures");
+    for (const path of [`images/${name}`, `../images/${name}`]) {
+      const out = html(`![What it shows](${path} "The caption.")`);
+      expect(out).toMatch(/^<figure[^>]*><img [^>]*\/?><figcaption[^>]*>The caption\.<\/figcaption><\/figure>$/);
+      expect(out).toContain(`src="${image.src}"`);
+      expect(out).toContain('alt="What it shows"');
+      /* Drawn at half the file's pixels: every picture is shot at 2×. */
+      expect(out).toContain(`width="${image.w / 2}"`);
+      expect(out).toContain(`height="${image.h / 2}"`);
+    }
+    /* A straight quote in a caption is written escaped, and arrives whole. */
+    expect(html(`![x](images/${name} "A \\"quoted\\" word.")`)).toContain(">A &quot;quoted&quot; word.</figcaption>");
+    /* A GIF is drawn with its still for a reader who asked for less motion. */
+    const gif = Object.entries(HELP_IMAGES).find(([, i]) => i.still !== undefined);
+    if (gif !== undefined) {
+      const out = html(`![x](images/${gif[0]} "Moves.")`);
+      expect(out.toLowerCase()).toContain(
+        `<picture><source media="(prefers-reduced-motion: reduce)" srcset="${gif[1].still?.src}"/><img `.toLowerCase(),
+      );
+    }
+    /* In the text walk a figure is its caption, so search finds it. */
+    expect(helpMarkdownText(`A.\n\n![What it shows](images/${name} "The caption.")`, "t")).toBe("A.\nThe caption.");
   });
 
   it("splits a mode's file into its two halves, and a missing half is null", () => {

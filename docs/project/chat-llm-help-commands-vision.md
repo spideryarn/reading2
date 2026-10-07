@@ -281,6 +281,18 @@ the interface model.
   the conversation, and
   [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
   says why that is allowed and what it does not promise.
+- **Built** (2026-10-07, [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)):
+  **the guide**, Greg's *"the command bar … could be the guide agent"* (`spya-kfjrzv`) in its 80/20
+  form. A conversation of its own kind (`guide`), one per article, pinned at the top of Chat's
+  list, about *how to read this piece* rather than what it says: it knows the reader's profile and
+  reason for reading, roughly how many other articles they have opened, and our words for every
+  mode, and it proposes **buttons** — open a mode, quick search, and chat's others — that the
+  reader presses. The bar reaches it as a second door: when the fast pick answers that no row fits,
+  a row *Ask the guide: "…"* sends the sentence there. It replaces the "Why are you reading this?"
+  modal on a first open where a band fits. [chat-tools.md § The guide](chat-tools.md#the-guide).
+  Unlike the pick, **the guide sees the article**, so it holds the line by pressing alone: nothing
+  it writes runs without the reader. Whether it may open a mode itself is a question for Greg
+  (`[Q-guide-acts]` in the plan).
 - **Not built**: questions about the app answered from the Help; two commands from one sentence;
   the capable model when Jev is unsure (§ Jev first says what replaced it); the interface model
   in chat.

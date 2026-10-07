@@ -161,8 +161,8 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Learn: Tutorial and Explore are one
-     per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  /* Every single-thread kind, not only Learn: Tutorial, Explore and the guide
+     are one per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
 }
@@ -205,7 +205,7 @@ export interface Turn {
    */
   origin?: ThreadOrigin;
   /**
-   * Chat or Learn — **only meaningful when this turn creates the thread**,
+   * The conversation kind — **only meaningful when this turn creates the thread**,
    * which is the only branch `withTurn` applies it on, exactly like `anchor`
    * above.
    *

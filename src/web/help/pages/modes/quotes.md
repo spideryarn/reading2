@@ -11,6 +11,8 @@ more** adds lines to the list rather than replacing it.
 
 ## Reading it
 
+![The Quotes panel in order: four of the piece’s own sentences, one under another](../images/mode-quotes.png "Quotes, in order: every line is cut straight out of the article.")
+
 - **Once made, quotes are highlighted in the text in every mode**, in purple, like a highlighter
   pen. A stronger highlight means the AI judged the line more important or more striking. Search
   results are outlined and quotes are filled in, so the two never look alike, and your own

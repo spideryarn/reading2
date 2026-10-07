@@ -96,7 +96,7 @@ export function CommandChip({
   // one (the article's blocks changed under it), it is its own characters.
   if (chip === null) return <>{raw}</>;
 
-  const { label, description, generates } = proposalWords(chip.proposal, chip.shown);
+  const { label, description, generates } = proposalWords(chip.proposal, chip.shown, chip.target);
 
   const settle = (outcome: ActionOutcome, done: string | null) => {
     switch (outcome.kind) {

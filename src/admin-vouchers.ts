@@ -3,8 +3,8 @@
  * `GET /api/admin/vouchers` (src/store/pg-vouchers.ts builds it) and
  * src/web/AdminVouchersPage.tsx (draws it).
  *
- * A flat module with no imports — types, and the four small functions at the
- * bottom that say the gift email's subject, heading and greeting — for the reason src/admin.ts and
+ * A flat module with no imports — types, and the small functions at the
+ * bottom that say the gift email's subject, heading, greeting and starter line — for the reason src/admin.ts and
  * src/billing-plan.ts are: the browser may not import from src/store/, even a
  * type (tests/client-imports.test.ts), and two hand-kept copies of one shape
  * are two places to disagree. Admin-only: it carries the private note.
@@ -72,6 +72,30 @@ export interface VoucherCreated {
   readonly email: "queued" | "replayed";
 }
 
+/**
+ * What `PATCH /api/admin/vouchers/:id` answers. `email: "queued"` only for a
+ * real change of address, which sends the gift again; `starter` only then, and
+ * only for a voucher that has one: `kept` when the new email links it, and
+ * `dropped` when it no longer could — the article deleted or unpublished, or
+ * its private link turned off — so the page can say the new email went without
+ * it. Plan 261007j (Sol's F3).
+ */
+export interface VoucherUpdated {
+  readonly ok: true;
+  readonly email?: "queued";
+  readonly starter?: "kept" | "dropped";
+}
+
+/**
+ * **The starter article, as the list names it** — never by its link. `title`
+ * is null once the article is gone (deleted); the slug the create named is
+ * kept, so the row still says there was one. Plan 261007j.
+ */
+export interface AdminVoucherStarter {
+  readonly slug: string;
+  readonly title: string | null;
+}
+
 /** One voucher as `/admin/vouchers` draws it. Admin-only: it carries the note. */
 export interface AdminVoucher {
   readonly id: string;
@@ -82,6 +106,8 @@ export interface AdminVoucher {
   readonly recipientNote: string | null;
   /** Their name: the email opens *Dear <name>,*. Null is no greeting. Plan 261007f. */
   readonly recipientName: string | null;
+  /** The article its email linked, or null for none. Never the link itself. Plan 261007j. */
+  readonly starter: AdminVoucherStarter | null;
   readonly createdAt: string;
   readonly createdBy: string;
   readonly updatedAt: string;
@@ -127,6 +153,16 @@ export function giftEmailSubject(articles: number): string {
  */
 export function giftEmailGreeting(name: string): string {
   return `Dear ${name},`;
+}
+
+/**
+ * **`Here is "The Bitter Lesson" in Spideryarn, to start with:`** — the line
+ * above the starter article's link, after the note. `title` is the author's
+ * text: the caller cleans it to one line first and escapes the result where it
+ * meets HTML, as the greeting's name. Plan 261007j.
+ */
+export function giftEmailStarterLine(title: string): string {
+  return `Here is "${title}" in Spideryarn, to start with:`;
 }
 
 /** The longest recipient name the API and table take, in Unicode code points. */

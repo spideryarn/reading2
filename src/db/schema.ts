@@ -4125,7 +4125,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore','guide')`),
     /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
        modes is wider than the union on purpose: the later callers are named
        in the plan, and widening a CHECK is a migration each time. Necessary
@@ -4204,6 +4204,15 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_explore")
       .on(t.articleId)
       .where(sql`${t.kind} = 'explore'`),
+    /**
+     * **One guide per article**: the conversation about how to read this
+     * piece, opened in the Chat band. The same reason, the same fallback
+     * (`targetOf`), and no fold, because no guide thread existed before the
+     * index. docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
+     */
+    uniqueIndex("chat_threads_one_guide")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'guide'`),
     /**
      * The thread list, newest first — what the chat panel opens with. Made by
      * hand in drizzle/0003_reader_state_owner_fks.sql and declared here on
@@ -6259,6 +6268,24 @@ export const billingVouchers = spideryarn.table(
      * render exactly as the note is. Null is no greeting. Plan 261007f.
      */
     recipientName: text("recipient_name"),
+    /**
+     * **The starter article**: one of the administrator's own, linked from the
+     * gift email (plan 261007j). Here for the voucher list's title; null when
+     * there was none, or once the article is deleted.
+     *
+     * **Which article, never the key.** A private article's link is read for
+     * the email when it is queued (src/store/voucher-starter.ts) and frozen
+     * into that one email, not kept here.
+     */
+    starterArticleId: uuid("starter_article_id").references(() => articles.id, { onDelete: "set null" }),
+    /**
+     * **The starter's slug, as the create named it**, kept when the article is
+     * deleted. Two jobs the id cannot do once it is nulled (Sol's F2 and F3 on
+     * the plan): a replayed create is the same create only if it names the same
+     * starter, and a readdress knows there *was* one, so it can say it dropped
+     * it. Key-free, like the id.
+     */
+    starterSlug: text("starter_slug"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -6292,6 +6319,13 @@ export const billingVouchers = spideryarn.table(
     check(
       "billing_vouchers_recipient_name_length",
       sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 80`,
+    ),
+    /* An article without the slug it was named by would make a replay of its
+       create look like one with no starter. The other way round is the deleted
+       article, and is fine. */
+    check(
+      "billing_vouchers_starter_has_slug",
+      sql`${t.starterArticleId} is null or ${t.starterSlug} is not null`,
     ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),

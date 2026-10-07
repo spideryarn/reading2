@@ -11,6 +11,8 @@ nothing.
 
 ## Reading it
 
+![Timeline: a list of events, most with a dash because the piece gives no time, two with the article’s own phrase in quotation marks](../images/mode-timeline.png "Timeline: a dash means the piece gives no time; words in quotation marks are the article’s own.")
+
 - **A date**, such as *26 May* or *at or before 12 May*, was read from the article’s own words by
   plain code, not by the AI.
 - **Words in quotation marks**, such as *“another month later”*, are the article’s own phrase — as

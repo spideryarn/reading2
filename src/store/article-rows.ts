@@ -505,6 +505,61 @@ export const ARTICLE_TABLE_COVERAGE = {
         "recomputed by Spideryarn on demand.",
     },
   },
+  /* The next three arrive together, through one key: since 2026-10-07 a gift
+     voucher may name a starter article (`billing_vouchers.starter_article_id`,
+     plan 261007j), which makes the voucher article-scoped by this file's rule,
+     its emails a child of it, and the billing anchor it points at one hop out.
+     None of them is the article's. */
+  billing_vouchers: {
+    rollback: {
+      exported: false,
+      why:
+        "An administrator's gift of free articles to an email address, which may " +
+        "name one of their articles to link from its email. Billing is Postgres-" +
+        "only, so a rollback to data/ has nothing that could read it, and the " +
+        "voucher is about its recipient, not about the article.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "A gift of free articles that an administrator sent to somebody else's " +
+        "email address, linking this article as a place to start. It is about " +
+        "that person, not about the article: their address, and notes about them, " +
+        "do not belong in a file the article's owner may forward.",
+    },
+  },
+  billing_voucher_emails: {
+    rollback: {
+      exported: false,
+      why:
+        "The outbox of a gift voucher's emails (src/store/pg-voucher-emails.ts): " +
+        "billing, Postgres-only, and not article state.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The emails sent about a gift voucher, to its recipient and its creator. " +
+        "They hold other people's addresses and, for a private article, its " +
+        "private link, which is deliberately in no file: a zip gets forwarded and " +
+        "the link opens the article.",
+    },
+  },
+  billing_accounts: {
+    rollback: {
+      exported: false,
+      why:
+        "A reader's billing anchor, reached only because a gift voucher points at " +
+        "the account that claimed it. One row per account, not per article, and " +
+        "Postgres-only.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "A reader's subscription and allowance, reached from this article only " +
+        "through a gift voucher that linked it. It is one row per account, not " +
+        "anything about the article, and it belongs to whoever claimed the gift.",
+    },
+  },
 } as const satisfies Readonly<Record<string, TableCoverage>>;
 
 /** A table name this record knows about. */

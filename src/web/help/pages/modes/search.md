@@ -31,6 +31,8 @@ second finds the exact words. The box keeps your words after a search, so you ca
 
 ## Reading it
 
+![A search for the word science: 16 passages, each shown with the words around the match](../images/mode-search.png "A search by words: every passage that uses them, in the order they come.")
+
 Each meaning search gets its own colour, and its matches are marked in the text in that colour and
 **down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or
 runs through the whole piece — see [Reading the spine](/help/spine).
