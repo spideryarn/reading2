@@ -1,7 +1,7 @@
 # UI sweep K1: a leaking error style, focus marks, undefined tokens, small cascade defects
 
 **Status: being built, 2026-10-07.** One cluster of
-[the UI sweep umbrella](261007a-ui-sweep-umbrella.md#k1--css-a-leaking-error-style-focus-marks-undefined-tokens-small-cascade-defects),
+[the UI sweep umbrella](261007a-ui-sweep-umbrella.md#k1-css-a-leaking-error-style-focus-marks-undefined-tokens-small-cascade-defects),
 which is the plan and was reviewed by GPT Sol before anything was built. This doc records what
 landed, what was measured, what in the umbrella turned out false, and what was left.
 
@@ -131,3 +131,68 @@ Notes on what was and was not reached:
 A check was added, because the baseline is clean now and only now:
 `tests/css-tokens.test.ts` § *no outline is drawn in a surface or hairline token*. It reuses that
 file's own resolver. Seen red by putting `--rule-strong` back on `.chat-card-shut`.
+
+## 3. The rest
+
+| Item | Before | After |
+|---|---|---|
+| **Full-screen Sketch re-truncates the open chip.** `.sk-in-full .sk-scene { max-width: 20rem }` ties `.sk-scene.on` on specificity and comes later | open chip in full screen: `max-width: 320px`; a long title is cut at 320px | `.sk-in-full .sk-scene:not(.on)`: the open chip is `max-width: none` and a long title is whole (807px on the test string); a closed chip is still capped at 320px |
+| **`.gloss-btn:hover` lights a disabled button** | a `disabled` button under a real pointer: border `--highlight`, text `--ink` | border and text as at rest. A live button still lights |
+| **`.tooltip.tip-cite` and `.tip-hit` drop the viewport cap** | `max-width: 416px` in a 390px window | `min(26rem, calc(100vw - 1.75rem))`: 362px at 390 |
+| **The no-zoom floor is `1rem`** | at a 12px root on a touch screen, `.srch-input` is 12px | `max(1rem, 16px)`: 16px at a 12px root, 16px at 16, 20px at 20 |
+| `.quotes-hint`'s two `!important`s | `--ink-faint`, 13.44px | `.quotes-empty .quotes-hint`, no `!important`: the same `--ink-faint`, 13.44px |
+| `feedback.css` mixes `in oklch` | pressed pill ground paints `rgba(222, 140, 66, 0.12)` | `in oklab`: paints the same `rgba(222, 140, 66, 0.12)` |
+
+- **The Sketch chip on a real Sketch.** `fowler-phrenology` and `writes` have a stored Sketch.
+  Opened full screen with *Enlarge* (not a model call) at 1440 and at 390: the open chip's
+  computed `max-width` goes from `320px` to `none`. Its real title is 250px wide, so nothing was
+  being cut on this fixture; the cut was shown on injected markup with a long title.
+- **The tooltip at 390, on a real card.** A block link in FAQ mode on `vb-spya-vu3xen`, hovered at
+  390 wide: before, the card was 375px wide, from 10px to 385px, which is the whole width the
+  layout had (this Chrome draws a 15px scrollbar gutter), 5px from the right edge. After: 362px,
+  from 10px to 372px. So **the umbrella's hypothesis of an overflow is false as "off screen"**: the
+  floating layer already stops the card at the layout's width. What the bare `26rem` did is what
+  the base rule's comment warns of, the card becoming the whole of a narrow window. On a phone,
+  with no scrollbar gutter, that is edge to edge. `.tip-hit` is the card on a search hit. Two
+  fixtures have saved searches, but none shows a hit until one is ticked, and a tick may run a
+  search, so it was not pressed; that card was measured as bare markup only.
+- **`.gloss-btn` and `aria-disabled`, which the umbrella does not name.** Citations' *Investigate*
+  is turned off with `aria-disabled="true"` so it keeps its tooltip (`citations.css`), and it lit
+  under the pointer in exactly the same way. The guard covers both spellings, as `.chat-icon`'s
+  does. Measured before and after like the `disabled` case.
+- **The no-zoom floor does not reach Tailwind-classed fields**, as the umbrella's § After the
+  clusters already says: `tw:any-pointer-coarse:text-base` is `1rem` in the utilities layer, which
+  outranks this rule. The comment beside the rule now says so. `tests/touch-controls.test.ts` asks
+  for `max(1rem, 16px)` by name; seen red against `1rem`.
+- **Three false comments**, each re-found and corrected to what is true: `src/web/styles/tokens.css`
+  "the app is dark only" (the light washes are at the foot of the same file); `styles/tokens.css`
+  "custom properties are unaffected by layering" (they cascade like any declaration, layers
+  included); and "a THIRD" beside `--block-pad: calc(var(--rhythm) / 4)` (a quarter since
+  2026-08-28, by the comment on `--block-pad` itself).
+
+## What in the umbrella was false, or less than it said
+
+- **"Marginalia's four buttons"**: five. `.marg-shut-button` has the same rule.
+- **"At a 12px root two neighbours' marks can touch (6px gap, 8px of marks)"**: the 6px gap is
+  right, but only one button is focused at a time, so the sum of two marks is never drawn. One
+  mark is 4px. The offset is unchanged.
+- **The tooltip "overflow" (marked H)**: not off screen; see above. The cap is restored because the
+  measured card filled the layout's whole width.
+- **`diagram-sketch.css` "references `--destructive` six times"** (the comment's own claim, which
+  the umbrella repeats as the comment to remove): it references it nowhere.
+- **`.prof-box-input`, `.outln-row.focused`, the headings in Dark**: no defect there. In Dark
+  `--highlight` and `--highlight-text` are one colour (5.7:1 or better), so those three changes
+  show only in Light.
+
+## Left, and why
+
+- **`design-css-overview.md` does not mention `--danger`.** It is an entry-point doc whose wording
+  is a rule, so an edit needs Greg's approval one set at a time. The token's comment in
+  `styles/tokens.css` is its home.
+- **The ordinary chat tool detail is `--ink-faint` at opacity 0.7**: 3.2:1 on the band and 2.9:1
+  on the raised dialog in Dark, 3.1 and 3.3 in Light. Measured in passing. The umbrella says to
+  leave the ordinary detail's opacity alone, and it is the same question as "Faint text" in § For
+  Greg, question 3.
+- **`.marg-question` and `.tip-hit` on a real page**, and the Add page's purpose box: no fixture
+  reaches them without pressing something that may run a model. Each shares a rule with something
+  that was measured.

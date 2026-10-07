@@ -223,7 +223,10 @@
 .sk-in-full .sk-card { height: 7.5rem; }
 .sk-in-full .sk-card-detail { -webkit-line-clamp: 3; }
 .sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
-.sk-in-full .sk-scene { max-width: 20rem; }
+/* Closed chips only. A bare `.sk-in-full .sk-scene` ties `.sk-scene.on` on
+   specificity and comes later, so it put a cap back on the open chip: the one
+   label § the open one is not truncated says must be readable. */
+.sk-in-full .sk-scene:not(.on) { max-width: 20rem; }
 /* Stops a trackpad flick inside a tall picture scrolling the article behind it
    — the case that actually happens. Lightbox.tsx § two things `<dialog>` does
    not do has the reasoning, including why locking `body` was rejected. */

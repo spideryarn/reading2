@@ -789,8 +789,9 @@
 .srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
-   it is to show more than the row could. */
-.tip-hit { max-width: 26rem; }
+   it is to show more than the row could; and under the viewport cap the base
+   card has (tooltip.css § .tooltip), which a bare `26rem` replaced. */
+.tip-hit { max-width: min(26rem, calc(100vw - 1.75rem)); }
 .tip-hit p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 /* What the two numbers in the gutter mean, under the passage they belong to.
    Ruled off and set smaller, because it is *about* the result rather than part
