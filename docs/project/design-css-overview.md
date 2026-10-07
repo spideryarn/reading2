@@ -91,8 +91,9 @@ lighter on the light one.
 
 **Elevation is three tokens there too**, since 2026-10-07: `--shadow-pop` (tooltips, menus,
 pickers), `--shadow-dialog` (a panel over the prose, the command bar, the toast) and
-`--shadow-sheet` (the large modal surfaces). Dark keeps the old literals exactly; Light softens them
-to about 0.35–0.4 of the alpha, as the marketing pages' `--site-lift` does. Write one of the three
+`--shadow-sheet` (the large modal surfaces). Extracted literals keep their dark values;
+CommandBar moves from Tailwind's `shadow-lg` to the dialog shadow in both themes. Light softens
+the token alphas to about 0.35–0.4 of Dark, as the marketing pages' `--site-lift` does. Write one of the three
 rather than a new `rgb(0 0 0 / …)`; in a `tw:` string, `tw:shadow-[var(--shadow-pop)]` compiles to
 a `box-shadow`. Not elevation, so not these: swatch rings, inset marks, table dividers, focus rings.
 

@@ -1021,9 +1021,8 @@
 
    Off-screen by the clip recipe (`.sr-only`, chat-actions.css), never
    `display: none`, which would take it out of the Tab order it exists for.
-   Fixed, so it shows wherever the page is scrolled; above everything (the
-   highest layer elsewhere is 100), because a focus mark under a bar is no
-   mark at all. */
+   Fixed, so it shows wherever the page is scrolled; above the bars and their
+   tooltips, because a focus mark under a bar is no mark at all. */
 .skip-to-modes {
   position: fixed;
   top: calc(var(--safe-top) + 0.5rem);
@@ -1049,4 +1048,16 @@
   text-decoration: none;
   outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
+}
+/* An explicit skip takes priority over the decorative entrance. The marker
+   stays on this mount, so blurring a radio cannot restart the delay. */
+.dock.dock-enter[data-skip-arrived],
+:root:has(.dock[data-skip-arrived]) .install-hint.dock-enter {
+  animation: none;
+  visibility: visible;
+}
+@media print {
+  .skip-to-modes {
+    display: none;
+  }
 }

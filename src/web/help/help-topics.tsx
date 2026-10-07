@@ -417,8 +417,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             In an article, the first <kbd>Tab</kbd> shows <strong>Skip to modes</strong>. Press{" "}
-            <kbd>Enter</kbd> and you land on the open mode in the bottom bar, rather than tabbing
-            through every paragraph’s buttons to get there.
+            <kbd>Enter</kbd> to reach the mode switch in the bottom bar. Focus lands on the open
+            mode, or the first mode button if the open mode lives under <strong>More</strong>.
           </li>
           <li>
             <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for
