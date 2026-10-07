@@ -12,7 +12,7 @@
  * trusting this
  * sentence. Between the two files there is no third way to spend money, and
  * [`tests/ai-call.test.ts`](../tests/ai-call.test.ts) scans `src/` to keep it
- * that way. The doc that owns both is ai-gateway.md#one-gateway-five-wires.
+ * that way. The doc that owns both is ai-gateway.md#one-gateway-a-wire-for-each-shape.
  *
  * > Presumably we want to do this in a way that's reusable (i.e. whenever we
  * > make an AI call, we do it in the same way, which takes care of cost-tracking

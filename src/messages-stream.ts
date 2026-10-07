@@ -11,7 +11,7 @@
  * "Anthropic Skin".
  *
  * The one way a Messages-wire pipeline stage calls a model: `streamMessage`, then
- * `finalMessage()` — ai-gateway.md#one-gateway-five-wires.
+ * `finalMessage()` — ai-gateway.md#one-gateway-a-wire-for-each-shape.
  *
  * ## Why the SDK is still here
  *
