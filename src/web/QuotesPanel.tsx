@@ -967,6 +967,13 @@ export function QuotesPanel({
                false only at the ceiling. */
             addable={quotesAppendOnOffer(owner)}
             findMore={findMore}
+            /* A job at the ceiling was not started by Find more, which is not
+               offered there: it is a forced re-run from Metadata. So its
+               status, and the way to ask again when it never became a job,
+               are the rewrite's (`rerun`), as on an outdated list below. */
+            elsewhere={
+              owner.job || owner.starting || owner.failed ? rerun("Choose them again", true) : null
+            }
           />
         ) : /* **Status only, on an outdated list.** Its banner went on
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
@@ -1594,6 +1601,7 @@ function Foot({
   running,
   addable,
   findMore,
+  elsewhere,
 }: {
   list: Quotes;
   /** False until the first job poll; neither a button nor the cap claim is true yet. */
@@ -1607,6 +1615,14 @@ function Foot({
    */
   addable: boolean;
   findMore: ReactElement;
+  /**
+   * The progress, Stop or failure of a run that is going or has failed, or
+   * null when there is none. Drawn at the ceiling **in place of** its
+   * sentence, which until 2026-10-07 stood where a running job's Stop and a
+   * failed one's Retry would have been (plan 261007a § K4). Under the
+   * ceiling `findMore` already carries the same status.
+   */
+  elsewhere: ReactElement | null;
 }) {
   /* **Said, because otherwise a Find more that found nothing looks exactly
      like a button that did nothing** — the job finishes, the list is the same
@@ -1617,7 +1633,7 @@ function Foot({
     <div className="quotes-foot">
       {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
       {addable ? (loaded ? findMore : null) : (
-        <p className="quotes-quiet">That is as many as we keep for one article.</p>
+        elsewhere ?? <p className="quotes-quiet">That is as many as we keep for one article.</p>
       )}
     </div>
   );

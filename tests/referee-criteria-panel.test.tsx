@@ -848,3 +848,35 @@ describe("a criterion kind this copy of the app was built before", () => {
     },
   );
 });
+
+/* ------------------------------------- a failure another try cannot fix -- */
+
+/* `worthRetrying` (src/messages.ts) reads the bracketed code: an account with
+   no credit refuses the same question again, and a fresh full-price call is
+   what Try again spends. Search's rows already asked; these did not until
+   2026-10-07 (plan 261007a § K4, G2-08). */
+describe("a criterion whose run failed", () => {
+  const paintFailed = async (error: string) => {
+    const failed = diverging([], { status: "error", error });
+    answer = () => Promise.resolve(json({ criteria: [failed], sourceHash: "h" }));
+    mount();
+    await flush();
+  };
+
+  it("keeps the sentence and offers no Try again when trying again cannot help", async () => {
+    await paintFailed("This app's account with the AI service has run out of credit. [ai-no-credit]");
+    expect(host.querySelector(".crit-error")?.textContent).toContain("[ai-no-credit]");
+    expect(host.querySelector(".crit-retry")).toBeNull();
+  });
+
+  it("still offers Try again when it might work", async () => {
+    await paintFailed("The AI service is busy right now. [ai-busy]");
+    expect(host.querySelector(".crit-error")?.textContent).toContain("[ai-busy]");
+    expect(host.querySelector(".crit-retry")).not.toBeNull();
+  });
+
+  it("offers it for a sentence with no code, as every other surface does", async () => {
+    await paintFailed("The model stopped talking.");
+    expect(host.querySelector(".crit-retry")).not.toBeNull();
+  });
+});

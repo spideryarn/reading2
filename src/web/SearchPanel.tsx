@@ -454,6 +454,7 @@ export function SearchPanel({
         loaded={loaded}
         active={active}
         typed={(find ?? "").trim().length}
+        own={own !== null}
       />
     </ModeSurface>
   );
@@ -1491,10 +1492,18 @@ function SortBar({
           a control that visibly does nothing — the honest version of which is
           not to draw it. */}
       {asksTheServer(matcher) && (
-        <>
+        /* **A named group, and each button says whether it is pressed**, as the
+            five sibling rows do through `OrderGroup` ("Order the … by"). This
+            row stays its own markup, since moving onto that component would
+            change how it wraps and scrolls on a touch screen (plan 261007a §
+            K4). `display: contents` in search.css, so the wrapper is in the
+            accessibility tree and not in the layout. Until 2026-10-07 the
+            pressed order was a colour and nothing a screen reader could hear. */
+        <div className="srch-sort-group" role="group" aria-label="Order the passages by">
           <button
             type="button"
             className={`srch-sort-btn${order === "document" ? " on" : ""}`}
+            aria-pressed={order === "document"}
             onClick={() => onOrder("document")}
             title="In the order they appear in the article"
           >
@@ -1503,6 +1512,7 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
+            aria-pressed={order === "confidence"}
             onClick={() => onOrder("confidence")}
             title="Strongest matches first — the model's own judgment about its answers"
           >
@@ -1511,12 +1521,13 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "prioritised" ? " on" : ""}`}
+            aria-pressed={order === "prioritised"}
             onClick={() => onOrder("prioritised")}
             title="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
           >
             prioritised
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -1655,6 +1666,7 @@ function Results({
   loaded,
   active,
   typed,
+  own,
 }: {
   found: Found[];
   order: HitOrder;
@@ -1678,6 +1690,8 @@ function Results({
   loaded: boolean;
   active: string[];
   typed: number;
+  /** The reader owns these searches, so a failed row's ⚠ may be a retry button. */
+  own: boolean;
 }) {
   /* Empty in words mode, whatever is ticked. The ticks deliberately survive a
      trip to the words matcher and back (App.tsx § onMatcher), so `active` is
@@ -1761,6 +1775,11 @@ function Results({
      and the reader deserves to be told that the emptiness has a cause. */
   const broken = switchedOn.filter((r) => r.status === "error");
   if (broken.length > 0 && broken.length === switchedOn.length) {
+    /* **How many of those rows have a ⚠ that is a button.** `Saved` draws one
+       only for the owner and only while `worthRetrying` says another go could
+       work; on the rest the ⚠ is plain text. The hint said "tries it again" of
+       every row until 2026-10-07, which is false for those. */
+    const retryable = own ? broken.filter((r) => worthRetrying(r.error)).length : 0;
     return (
       <div className="srch-empty">
         <p className="srch-failed">
@@ -1770,7 +1789,12 @@ function Results({
             : `All ${broken.length} of these searches failed.`}
         </p>
         <p className="srch-empty-hint">
-          The ⚠ on each row above tries it again.
+          {retryable === broken.length
+            ? "The ⚠ on each row above tries it again."
+            : retryable === 0
+              ? "Trying again would fail the same way, so the ⚠ on each row above only marks the failure."
+              : "The ⚠ tries a search again on the rows above where that could work. On the others " +
+                "it only marks the failure, because trying again would fail the same way."}
         </p>
       </div>
     );

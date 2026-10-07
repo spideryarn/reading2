@@ -447,3 +447,36 @@ describe("a reader who moves on", () => {
     await finished(first);
   });
 });
+
+/* **A key an input method is using is not the box's** (docs/project/keyboard.md):
+   a composing Enter must not submit the form, and a composing Escape must not
+   reach the browser, which empties a `type="search"` box on Escape by itself.
+   The box had no key handler at all until 2026-10-07; left by K2 of plan
+   261007a for K4, which owns the file. jsdom has neither default, so what is
+   pinned is that the key is cancelled. */
+describe("the ask box, while the reader is composing Japanese or Chinese text", () => {
+  const box = () => host.querySelector<HTMLInputElement>(".gloss-ask-input")!;
+  const key = (init: KeyboardEventInit): KeyboardEvent => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    act(() => {
+      box().dispatchEvent(event);
+    });
+    return event;
+  };
+
+  it.each(["Enter", "Escape"])("cancels a composing %s", async (name) => {
+    await mount();
+    expect(key({ key: name, isComposing: true }).defaultPrevented).toBe(true);
+    expect(key({ key: name, keyCode: 229 } as KeyboardEventInit).defaultPrevented).toBe(true);
+  });
+
+  it.each(["Enter", "Escape", "a"])("leaves an ordinary %s alone", async (name) => {
+    await mount();
+    expect(key({ key: name }).defaultPrevented).toBe(false);
+  });
+
+  it("leaves a composing letter alone", async () => {
+    await mount();
+    expect(key({ key: "a", isComposing: true }).defaultPrevented).toBe(false);
+  });
+});
