@@ -51,6 +51,7 @@
 import type { ReactNode } from "react";
 
 import { zonedLine } from "../../zones.js";
+import { codexWindowLabel, isGeneralCodexBucket } from "./codex-buckets";
 import { Explain, type Tip } from "./Tooltip";
 import type { CodexBucketView, CodexObservationView, CodexWindowView } from "./usage-history-client";
 import type {
@@ -151,7 +152,7 @@ function codexWindowCoverage(
        controls, so they are not replacements merely because numbers exist in
        the payload. Model-specific buckets do not apply this general control. */
     if (
-      bucket.limitId === "codex" &&
+      isGeneralCodexBucket(bucket.limitId) &&
       (bucket.spendControlReached !== false || bucket.individualLimit !== null)
     ) continue;
     const bySlot = new Map<CodexWindowView["slot"], CodexWindowView>();
@@ -1280,13 +1281,6 @@ function ClaudeUsageCard({
       ) : null}
     </Card>
   );
-}
-
-function codexWindowLabel(window: CodexWindowView): string {
-  if (window.windowMinutes === 300) return "5 hours";
-  if (window.windowMinutes === 10_080) return "7 days";
-  if (window.windowMinutes !== null) return `${window.windowMinutes.toLocaleString("en-GB")} minutes`;
-  return `${window.slot} window (duration unknown)`;
 }
 
 function CodexWindowStat({

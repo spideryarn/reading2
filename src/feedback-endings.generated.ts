@@ -506,7 +506,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-thpsnd": "Part 1 of 3 shipped: Tweets is now Summary's Thread. Two questions from it are queued for you: one bar button that opens a menu of the list modes, and whether to stop writing the Simple level.",
   "spya-uc0asn": "Waiting on you: not built. AI for a signed-in reader on someone else's public article means we pay, not the owner, and running it in place edits a security defence. Five options, A to E, and two questions.",
-  "spya-ucftjt": "Part 3 of 3 shipped: a guide in Chat that knows why you are reading. The Help pages and the help chatbot are separate parts, not finished yet.",
+  "spya-ucftjt": "All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. Waiting on you: may people who are not signed in use the Help chatbot?",
   "spya-us5kzc": "Set aside: this was a test of the Feedback button on the day it shipped, so there was nothing to build.",
   "spya-v322fd": "You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-6jwj562v and qi-mgxnj233).",
   "spya-vgwt4z": "No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).",

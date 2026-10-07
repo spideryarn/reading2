@@ -179,6 +179,6 @@ describe("the markup the rules above are aimed at", () => {
 
   it("draws the scan as the Hidden text panel, not inside the frame", () => {
     expect(band).not.toContain("<SourceScanNotice");
-    expect(BAND_SOURCE).toMatch(/case "hidden":[\s\S]*?return <SourceScanNotice state=\{scan\} \/>;/);
+    expect(BAND_SOURCE).toMatch(/case "hidden":[\s\S]*?return <SourceScanNotice state=\{scan\}[^>]*\/>;/);
   });
 });

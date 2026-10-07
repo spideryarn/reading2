@@ -892,6 +892,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/referee/mirror/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/referee/hidden-check/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/referee\\/scan\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/referee/scan/w1"],
@@ -957,12 +962,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 /* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
    feedback (plan 261007d); 96 with their replies to questions (its stage 2);
-   97 with the Help pages' chatbot (plan 261007k). */
-const EXPECTED_MATCHER_COUNT = 97;
+   97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
+   check (plan 261007l). */
+const EXPECTED_MATCHER_COUNT = 98;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
-   with the Help pages' chatbot. */
-const EXPECTED_GUARD_COUNT = 119;
+   with the Help pages' chatbot; 120 with Hidden text's Opus check. */
+const EXPECTED_GUARD_COUNT = 120;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2243,6 +2249,8 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
+        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is
+        "POST regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",
         "POST literal /api/uploads",

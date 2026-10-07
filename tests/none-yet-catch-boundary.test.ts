@@ -11,7 +11,7 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 const stores = vi.hoisted(() => ({
   loadQuiz: vi.fn(), loadCrossrefs: vi.fn(), loadCitations: vi.fn(),
   loadSimpleSummary: vi.fn(), loadIdeas: vi.fn(), loadFaq: vi.fn(), loadTimeline: vi.fn(),
-  loadDebate: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(),
+  loadDebate: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(), loadSkim: vi.fn(),
   attempts: vi.fn(), candidates: vi.fn(), profile: vi.fn(),
 }));
 
@@ -22,7 +22,7 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
     loadQuiz: stores.loadQuiz, loadCrossrefs: stores.loadCrossrefs, loadCitations: stores.loadCitations,
     loadSimpleSummary: stores.loadSimpleSummary, loadIdeas: stores.loadIdeas, loadFaq: stores.loadFaq,
     loadTimeline: stores.loadTimeline, loadDebate: stores.loadDebate, loadGlossary: stores.loadGlossary,
-    loadQuotes: stores.loadQuotes,
+    loadQuotes: stores.loadQuotes, loadSkim: stores.loadSkim,
   });
   return {
     ...actual, ...loads,
@@ -68,16 +68,18 @@ async function get(kind: string, asks = true, authed = true) {
     headers: { ...(authed ? AUTHED_HEADERS : {}), ...(asks ? { [NONE_YET_AS_NULL_HEADER]: "1" } : {}) },
   }) as unknown as IncomingMessage;
   let body = "";
+  /** How many responses the route wrote: one, always. */
+  let ends = 0;
   const headers = new Map<string, string>();
   const res = {
     statusCode: 0, writableEnded: false, destroyed: false,
     setHeader(name: string, value: string) { headers.set(name.toLowerCase(), String(value)); },
     on() {},
     write(chunk: string) { body += chunk; return true; },
-    end(chunk = "") { body += chunk; this.writableEnded = true; },
+    end(chunk = "") { body += chunk; ends += 1; this.writableEnded = true; },
   };
   await handleApi(req, res as unknown as ServerResponse, acceptAny);
-  return { status: res.statusCode, body, headers };
+  return { status: res.statusCode, body, headers, ends: () => ends };
 }
 
 describe.each(READS)("%s catch boundary", (kind, load) => {
@@ -180,3 +182,88 @@ describe.each(READS.filter(([kind]) => ["simple", "ideas", "glossary", "quotes"]
     }
   },
 );
+
+/* **Skim reads the route and the profile together, and the helper writes the
+   response** — so it cannot sit inside that `Promise.all`, or a profile read
+   failing after the `null` went would write a second response (GPT Sol's F1 on
+   docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md).
+   Absence takes precedence over a profile failure in either order, as for
+   the other profile-dependent reads; only a made route needs the profile. */
+describe("skim: none yet beside the profile read", () => {
+  const SKIM = { skim: { slug: SLUG, profileHash: null, stops: [] }, stale: false, outdated: false, notOnRoute: 0 };
+  const drain = () => new Promise((settle) => setTimeout(settle, 10));
+
+  beforeEach(() => {
+    stores.loadSkim.mockResolvedValue(SKIM);
+  });
+
+  it("answers 200 null to a client that asks, once", async () => {
+    stores.loadSkim.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+    const res = await get("skim");
+    await drain();
+    expect({ status: res.status, body: res.body, ends: res.ends() }).toEqual({ status: 200, body: "null", ends: 1 });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("is still the 404 to a client that does not", async () => {
+    stores.loadSkim.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+    const res = await get("skim", false);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+  });
+
+  for (const asks of [true, false]) {
+    it(`answers absence without waiting for a pending profile (header=${asks})`, async () => {
+      stores.profile.mockImplementation(() => new Promise(() => {}));
+      stores.loadSkim.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+      const res = await get("skim", asks);
+      expect(res.ends()).toBe(1);
+      expect(res.status).toBe(asks ? 200 : 404);
+      if (asks) expect(res.body).toBe("null");
+      else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+    }, 1000);
+
+    it(`a profile failure after a made route remains a single 500 (header=${asks})`, async () => {
+      stores.profile.mockRejectedValue(new Error("profile failed"));
+      const res = await get("skim", asks);
+      expect(res.ends()).toBe(1);
+      expect(res.status).toBe(500);
+      expect(JSON.parse(res.body)).toHaveProperty("error");
+      expect(res.headers.get("cache-control")).toBe("private, no-store");
+    });
+  }
+
+  it("serves a made route", async () => {
+    const res = await get("skim");
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ ...SKIM, profileChanged: false });
+  });
+
+  for (const first of ["none yet", "the profile failure"] as const) {
+    for (const asks of [true, false]) {
+      it(`writes one absence response when ${first} comes first (header=${asks})`, async () => {
+        let rejectSkim!: (error: Error) => void;
+        let rejectProfile!: (error: Error) => void;
+        stores.loadSkim.mockImplementation(() => new Promise((_, reject) => { rejectSkim = reject; }));
+        stores.profile.mockImplementation(() => new Promise((_, reject) => { rejectProfile = reject; }));
+        const reading = get("skim", asks);
+        await vi.waitFor(() => {
+          expect(stores.loadSkim).toHaveBeenCalled();
+          expect(stores.profile).toHaveBeenCalled();
+        });
+        const skimFails = () => rejectSkim(new ArtefactNotMadeYet("none yet"));
+        const profileFails = () => rejectProfile(new Error("profile failed"));
+        (first === "none yet" ? skimFails : profileFails)();
+        await drain();
+        (first === "none yet" ? profileFails : skimFails)();
+        const res = await reading;
+        await drain();
+        expect(res.ends()).toBe(1);
+        expect(res.status).toBe(asks ? 200 : 404);
+        if (asks) expect(res.body).toBe("null");
+        else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+        expect(res.headers.get("cache-control")).toBe("private, no-store");
+      });
+    }
+  }
+});

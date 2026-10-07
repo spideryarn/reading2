@@ -26,6 +26,7 @@ import { buildMarkMessages } from "../src/quiz-mark.js";
 import { buildClaimsMessages } from "../src/referee-claims-run.js";
 import { buildCriterionMessages } from "../src/referee-criteria-run.js";
 import { buildMirrorMessages } from "../src/referee-mirror.js";
+import { prepareHiddenCheck } from "../src/referee-hidden-check.js";
 import { buildSearchMessages } from "../src/search.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
@@ -104,6 +105,11 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
   {
     name: "referee mirror",
     text: () => textOf(buildMirrorMessages([], [])[0]?.content),
+    kinds: ["explain"],
+  },
+  {
+    name: "referee hidden-text check",
+    text: () => textOf(prepareHiddenCheck([]).messages[0]?.content),
     kinds: ["explain"],
   },
   {

@@ -30,7 +30,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { THREAD_RECHECK_FAILED } from "../messages.js";
-import type { Job, ThreadResponse, TweetThread } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER, type Job, type ThreadResponse, type TweetThread } from "../types.js";
 import { recordLog } from "./log-buffer.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -82,7 +82,7 @@ export function useTweets(slug: string): UseTweets {
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
   /**
-   * Whether a read has ever answered for this slug — a thread or a clean 404.
+   * Whether a read has ever answered for this slug — a thread or none yet.
    * Read by the catch, which is a stable callback and cannot see state; after
    * an answer, a failed read keeps what is on screen and says so.
    */
@@ -101,12 +101,16 @@ export function useTweets(slug: string): UseTweets {
     async (current: () => boolean) => {
       const started = begin();
       try {
-        const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). */
+        const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
         /* **Checked before anything is published** (plan 261007e, WCO4):
-           `readJson` checks no shape, and an empty 200 is `{}`. A 404 is
-           "none yet", and so is `200 null`, which this route does not send
-           today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+           `readJson` checks no shape, and an empty 200 is `{}`. "None yet" is
+           exactly `null` — never a falsy body — or a 404, from a server that
+           has not heard of the header (the minutes of a deploy). */
         const found = res.status === 404 ? null : await readJson<ThreadResponse | null>(res);
         if (!current()) return;
         if (found === null) {

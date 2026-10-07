@@ -452,7 +452,7 @@ describe("the Postgres store, over the whole corpus", () => {
        into a 500, so a reader that threw the right sentence with no status
        would turn "nobody has written questions yet", the ordinary case the
        panel's button is for, into a server error. Nothing else in the tree
-       checks that for these five reads. */
+       checks that for these reads. */
     for (const [name, read] of [
       ["tweets", (r: typeof pgArticleReader) => r.loadTweets(slug)],
       ["glossary", (r: typeof pgArticleReader) => r.loadGlossary(slug)],

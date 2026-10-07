@@ -699,25 +699,25 @@ Three kinds of site deliberately do **not**:
   answering; `/api/public/…` answers 404 for a piece that is not shared. Those
   callers read the status before deciding, and throwing would report an ordinary
   state as a fault.
-  **Ten artefact reads no longer get that 404.** "Not made yet" is their usual answer, and a browser prints every 4xx
-  in red: failures that were not failures on every ordinary page load. The ten are quiz, citations
-  and crossrefs (`useQuizRead`, `useCitationsRead`, `useCrossrefs`, mounted on every owner's
-  article view whichever mode is open), then Simple, Ideas, FAQ, Timeline, Debate, Glossary and
-  Quotes (`useSimple`, `useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`,
-  `useGlossaryRead`, `useQuotesRead`). They send `NONE_YET_AS_NULL_HEADER` (`src/types.ts`) and the
-  server answers `200` with a `null` body (`orNullWhenNotMadeYet`, `src/routes.ts`), which each
-  reads as it read the 404 — and still reads a 404 the same way, for the minutes of a deploy.
+  **No artefact read gets that 404 any more.** "Not made yet" is their usual answer, and a browser
+  prints every 4xx in red: failures that were not failures on every ordinary page load. All sixteen
+  reads — the list is [`src/store/artefact-not-made-yet.ts`](../../src/store/artefact-not-made-yet.ts)
+  — send `NONE_YET_AS_NULL_HEADER` (`src/types.ts`) and the server answers `200` with a `null` body
+  (`orNullWhenNotMadeYet`, `src/routes.ts`), which each hook reads as it read the 404 — and still
+  reads a 404 the same way, for the minutes of a deploy. That includes the two side reads of
+  `/api/sketch/`, Illustrated's readiness check and the Sketch chip's caption.
   Only a body that is exactly `null` is "none yet"; a reply without its artefact is a fault, and
-  does not replace what is on screen. Without the header the answer is the 404 it always was,
+  does not replace what is on screen. Three readers report no fault to the reader and keep their
+  own handling: `useRelations` draws no words, the readiness check says `unknown` (never `ready`),
+  and the caption stays silent. Without the header the answer is the 404 it always was,
   because a tab left open across the deploy would show an error for a `null`; "no such article"
   is a 404 either way. `apiFetch` does not keep the `null` for offline, as it never kept the 404.
-  **Six reads still answer a 404 whatever is sent**; the list, and what is left to do for each, is
-  in [`src/store/artefact-not-made-yet.ts`](../../src/store/artefact-not-made-yet.ts). Moving one
-  over is two places that must land together: the helper at its route, and its name in
-  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if they
-  disagree.
+  A new artefact read is two places that must land together: the helper at its route, and its
+  name in `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if
+  they disagree.
   [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md),
-  [261006h](../plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md).
+  [261006h](../plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md),
+  [261007n](../plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md).
 - **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the
   Supabase settings probe in `lib/supabase.ts` both treat a non-2xx as *nothing
   to show*, which is not a thing to tell anybody about.

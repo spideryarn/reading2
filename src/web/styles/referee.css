@@ -209,6 +209,39 @@
    earns. */
 .ref-scan-caveat { color: var(--ink-faint); }
 
+/* **Ask Opus about these** (plan 261007l): the button, what it can and cannot
+   do, progress, and the summary — under the headline, above the rows. */
+.ref-scan-ask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+}
+.ref-scan-ask .ref-scan-line + .ref-scan-line { margin-top: 0; }
+.ref-scan-summary { color: var(--ink); }
+/* **One row's opinion.** The verdict words are ours; the reason is the
+   model's (voices.css) and was steered by text written to fool it, so its box
+   is drawn so it cannot disguise anything: direction isolated, long runs
+   broken, and **clipped** independently of the verdict, so combining marks
+   cannot paint over trusted words even when the reason wraps. */
+.ref-scan-opinion {
+  display: block;
+  margin: 0.1rem 0 0;
+  color: var(--ink);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+.ref-scan-opinion[data-verdict="none"] { color: var(--ink-faint); }
+.ref-scan-opinion-verdict { font-weight: 600; }
+.ref-scan-opinion-reason {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-soft);
+  unicode-bidi: isolate;
+}
+
 /* The sub-modes: the part-switcher every mode shares, `.summ-views` /
    `.summ-view-btn` (mode-band.css § the part-switcher, plan 261007h § F2), so
    their look is not here; `.ref-views` / `.ref-view-btn` stay on them as hooks.

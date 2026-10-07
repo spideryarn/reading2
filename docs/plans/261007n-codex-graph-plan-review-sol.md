@@ -1,0 +1,11 @@
+1. **P1 — Rule 6 misstates the live duplicate rule.** `bucketWindowCards` rejects duplicate **slots**, and `CodexUsageCard` rejects duplicate **bucket IDs**. Duration-only detection misses both. Reject ambiguous buckets/slots first, then duplicate durations; cut affected lines and show reasons. A shared pure helper would keep card and chart consistent.
+
+2. **P2 — Rules 4, 5 and 7 need explicit continuity requirements.** “Forms no series” or “named row” must also cut existing lines. Add tests for null attribution, disappearing buckets/durations, unknown windows, and account A → B → A. Each surviving series must have a valid point in every intervening record. Rules 1–3 otherwise fit the existing contract.
+
+3. **P2 — Agree with rule 8 as a pass-time convention; qualify the rationale.** Claude timestamps pass start; Codex `readAt` timestamps reply receipt. Concurrent calls do not guarantee negligible separation, and `runs` already enforce breaks independently of coordinates. Label the axis as pass time, retain validation against `readAt`, and test unequal timestamps without rechecking expiry at source time or now.
+
+4. **P2 — Empty states must be per chart.** Model-specific points can exist without any general points. Testing only “no Codex point at all” would leave an empty general chart. Give general and model-specific groups independent point checks and explanatory empty states.
+
+5. **P2 — Bucket order must not determine appearance.** The plan notes varying order but leaves legend order and colours unspecified. Sort displayed series by identity and assign stable styles; distinguish accounts with dash patterns or another visible encoding. Keep points in file order.
+
+6. **P2 — Stacking is right for phones; the extracted renderer needs small safeguards.** Reserve a gutter for percentage labels, let long bucket labels wrap anywhere, and preserve readable stroke/marker sizes under `preserveAspectRatio="none"`. Keep the simpler shared chart limited to drawable runs, labels/styles and shared spans; provider-specific notices can stay outside it.

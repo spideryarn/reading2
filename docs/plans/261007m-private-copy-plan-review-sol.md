@@ -1,0 +1,15 @@
+1. **F1 — P1, established: the cost sentence is wrong when ownership is unknown.** The offer says “Uses one article from your allowance” ([plan:28](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/docs/plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md:28)), but explicitly remains available before the shelf loads or after lookup failure ([plan:44](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/docs/plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md:44)). An existing owner therefore sees a false price, potentially indefinitely. Use conditional wording: **“A new copy uses one article from your allowance. If you already have it, opening it is free.”**
+
+2. **F2 — P1, established: archived copies never produce “Open your copy.”** The reused cache reads `/api/library` ([link-facts.ts:324](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/web/link-facts.ts:324)), which excludes archived articles ([pg.ts:2365](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/store/pg.ts:2365)). The server’s repeat lookup includes them ([find-article.ts:83](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/store/find-article.ts:83)). A reader with an archived copy gets the Add offer even after successful loading. Either use an authoritative lookup covering archived copies, or narrow the promise: cached matches get a direct link; other cases go through the free repeat path.
+
+3. **F3 — P2, established placement limitation: the offer disappears at the Chat dead end on narrow screens.** A covering mode panel hides `.shared-notice` ([narrow-window.css:368](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/web/styles/narrow-window.css:368)). Someone opening Chat directly can see the restriction without seeing the proposed escape. The banner is reasonable on Metadata and on arrival, but its claimed findability needs qualification. A small pointer to Metadata from the restriction would address this without copying the whole offer across eleven sites.
+
+The eligibility rules look correct: confirmed owners never reach this banner; private-link access and the 401 fallback are excluded; `webSource(meta)` uses the published address and does not substitute an upload’s guessed source. New articles default to private ([schema.ts:276](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/db/schema.ts:276)).
+
+An already-published matching article cannot spend a slot through the plain `{url}` request: the repeat answer precedes reservation ([routes.ts:11590](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/routes.ts:11590)). There remains the previously accepted race where publication occurs after that lookup; the route explicitly documents it ([routes.ts:11582](/var/tmp/spideryarn-worktrees/qi-jp2r4be8-private-copy/src/routes.ts:11582)).
+
+The simpler design remains viable: an **“Add or open your own copy”** link with conditional pricing, letting `/add` resolve repeats. Cached direct links can be an optional convenience.
+
+Read-only; the existing `link-facts` suite passed all 19 tests.
+
+**Verdict: ready with changes.**

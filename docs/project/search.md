@@ -1601,7 +1601,9 @@ cannot:
 - [`SearchPanel`](../../src/web/SearchPanel.tsx) takes a `SearchAccess` union whose visitor arm
   carries **none of the four verbs**. There is no `onDelete` to call, rather than a disabled button.
   The three fetch fields — `loaded`, `loadError`, `error` — are on the owner's arm too, because they
-  are facts about a request a visitor never makes.
+  are facts about a request a visitor never makes. Its one field, `copy`, is not a verb: it draws
+  a signed-in visitor's *Add a private copy to your shelf*, a link to `/add/`, where the owner's
+  box would be ([261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md)).
 - `?match=` is **pinned** to `meaning` in `useSearchMode`
   ([`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)),
   in the component, whatever the URL says. Hiding the toggle would not have been enough: `?match=`

@@ -238,9 +238,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      folded together, the cost of marking an answer would silently include a
      second call on a different tier. */
   "quiz-verdict": "interactive request work",
-  /* The four referee stages. A peer reviewer is waiting on each —
+  /* The referee jobs. A peer reviewer is waiting on each —
      docs/project/referee-mode.md. */
   "referee-mirror": "interactive request work",
+  "referee-hidden-check": "interactive request work",
   "referee-criteria": "interactive request work",
   "referee-claims": "interactive request work",
   "referee-candidates": "interactive request work",

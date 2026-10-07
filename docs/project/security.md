@@ -1080,6 +1080,23 @@ findings are held; each was watched red against a mutated panel before it was be
 The scan is also **not** what stops an injected instruction from working. Nothing does. It is a way
 for a referee to find out that somebody tried.
 
+**Since 2026-10-07 a model sees the hidden fragments, on request, as an annotation.** Inside Hidden
+text, *Ask Opus about these* sends the scan's flagged rows — never the article — to Opus for an
+opinion on each
+([referee-mode.md § Ask Opus about these](referee-mode.md#ask-opus-about-these), plan
+[261007l](../plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md)).
+That puts the attacker's own words in front of a model on purpose, so it is built on the same
+footing as the fence above: hardening, not a defence. What holds is structural. The answer adds a
+line under a row and nothing else — the rows, their order, their count, the headline and the chip's
+mark are computed from the scan alone, by code that never sees the answer, so an attacker who talks
+Opus round gets at worst a misleading line under a row that is still there. The input is chosen by
+the server (no request body; the scan re-read after the ownership check) and capped field by field
+and in total where the prompt is built; the fragments are fenced; the answer is validated against
+the rows that were sent and bound to their exact inputs; and the reason is drawn with invisible and
+bidi characters as code points, isolated, in a clipped box. It costs a model call, so unlike the
+scan route this one carries spend attribution. `tests/hidden-check-panel.test.tsx`,
+`tests/referee-hidden-check.test.ts` and `tests/referee-hidden-check-route.test.ts` hold it.
+
 ## The bibliographic registries are outside sources too <a id="registries"></a>
 
 **Crossref, DataCite and OpenAlex send us strings that end up on the page** — a cited work's title,

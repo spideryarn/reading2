@@ -407,7 +407,7 @@ describe("a quick row", () => {
 
   /** F6: a visitor sees the tag and the hits, and nothing that asks. */
   it("shows a visitor the tag and no thorough", async () => {
-    await mount({ access: { kind: "visitor" }, runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
+    await mount({ access: { kind: "visitor", copy: { signedIn: false, sessionUnconfirmed: false, sharedBy: "public", copyFrom: null } }, runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
     expect(container.querySelector(".srch-saved-kind")?.textContent?.trim()).toBe("quick");
     expect(thorough()).toBeNull();
     expect(container.querySelectorAll(".srch-hit")).toHaveLength(1);

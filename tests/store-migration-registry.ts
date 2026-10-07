@@ -3287,6 +3287,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-mirror-route.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
+  /* Hidden text's Opus check (plan 261007l): `referee-scan-route`'s seeding,
+     four small raw documents under their own content-addressed names, and a
+     stubbed `fetch`. Private for that suite's reasons. */
+  "tests/referee-hidden-check-route.test.ts": "private-postgres",
   /* Three streaming referee routes held open mid-stream. Private rather than
      shared because it backdates `attempt_started_at` and `created_at` on this
      article's rows to reach the sweep's age branch, which a peer suite reading

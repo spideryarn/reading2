@@ -123,6 +123,7 @@ import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { media } from "./media.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
+import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -220,7 +221,15 @@ export type SearchAccess =
       onRecolour(id: string, colour: number | null): void;
       onDelete(id: string): void;
     }
-  | { kind: "visitor" };
+  | {
+      kind: "visitor";
+      /**
+       * Who this visitor is, for the private-copy offer drawn where the
+       * owner's box is (plan 261007m). Search is the mode Greg's report was
+       * about, so it is the dead end the offer most needs to reach.
+       */
+      copy: PrivateCopyFacts;
+    };
 
 interface Props {
   access: SearchAccess;
@@ -404,6 +413,13 @@ export function SearchPanel({
           typing={own.typing}
           quietMount={quietMount}
         />
+      )}
+      {/* **And in its place, for a signed-in visitor, their own copy**, in
+          which the box works. On a phone this band covers the banner that
+          also carries it, so without this line a visitor in Search sees no way
+          out at all (browser check, plan 261007m). Nothing for anyone else. */}
+      {access.kind === "visitor" && (
+        <PrivateCopy {...access.copy} className="srch-copy" />
       )}
 
       {/* Two slots, because a search clears only the second — useSearch.ts §
