@@ -600,6 +600,33 @@ describe("no free way into a minimal paper", () => {
     expect(before).toEqual({ searches: 0, criteria: 0 });
   });
 
+  // Review regression: the removed gate could see an article before metadata
+  // published its first revision. These cases require Postgres and were not
+  // run in the C6 review sandbox.
+  it.each([
+    ["search", { criterion: "entropy", kind: "meaning" }],
+    ["referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses an unpublished minimal paper on %s before writing a run", async (family, body) => {
+    const unpublished = `unpublished-minimal-${randomUUID()}`;
+    const [row] = await getDb().insert(articles).values({
+      ownerId: READER, slug: unpublished, processing: "minimal",
+    }).returning({ id: articles.id });
+    try {
+      const reply = await call(READER, "POST", `/api/${family}/${unpublished}`, body);
+      expect(reply.status).toBe(409);
+      expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+      expect((await call(DUPER, "POST", `/api/${family}/${unpublished}`, body)).status).toBe(404);
+      const counts = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs where article_id = ${row!.id}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria where article_id = ${row!.id}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      expect(counts.rows).toEqual([{ searches: 0, criteria: 0 }]);
+    } finally {
+      await getDb().delete(articles).where(eq(articles.id, row!.id));
+    }
+  });
+
   /**
    * **The guard behind `enqueue`'s**, for a path round it nobody has found yet:
    * a full re-read inserted straight into the queue, with no reservation and

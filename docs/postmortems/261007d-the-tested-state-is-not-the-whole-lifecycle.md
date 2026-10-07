@@ -1,0 +1,40 @@
+# The tested state is not the whole lifecycle
+
+Up: [postmortems.md](../project/postmortems.md). Found in the 2026-10-07 write-capable review of
+[C6](../plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md).
+Root causes independently traced in a review subagent. These are reviewer conclusions, not
+product-owner decisions.
+
+Three request paths were correct for a settled state and wrong across a transition. The class
+is **equivalence tested only in a settled lifecycle state**: a preflight observation is mistaken
+for the eventual request outcome.
+
+- **Minimal paper, before publication.** `4912e4de5` deleted an article-state gate in favour of a
+  published-revision read. The characterization published every minimal paper first, when both
+  reads agree. Before publication the article exists but the inner join finds nothing: 409 became
+  404. The fix asks the existing owner-scoped processing reader only on a failed revision read.
+  Successful requests retain their saved query. The pure regression went red before the fix;
+  Postgres route cases are written but unrun in the network-restricted review sandbox.
+- **Stream, after headers.** `d7efdead8` correctly preserved the transmitted 200 but let it
+  determine log severity after an unexpected throw. The original tests asserted status and
+  capture, overlooking the operator's warning/error filter. The fix preserves wire status in
+  fields and uses mapped failure status for severity. Four assertions went red first and pass.
+- **Upload, after Stop.** `5c046561a` added cancellation to `expired` and a 410 preflight response
+  without updating the failed-claim classification inherited from `e9a8392cd` (later extracted in
+  `38503e9b5`). Stop wins the conditional mutation, yet the loser was told somebody was importing
+  the file. The fix explicitly classifies an expired row as expired. The route race test now
+  expects the existing 410; Postgres proof remains unrun here.
+
+These fixes belong at the authoritative read/outcome boundaries, rather than in additional
+preflight guards. The state machines already choose the correct winner.
+
+Countermeasures, ranked by ease against value:
+
+1. **Test immediately before and after each relevant transition.** Added before-publication,
+   post-header severity and Stop-between-look-and-claim cases. A characterization that covers only
+   the final state does not license deleting the earlier guard for every state.
+2. **Check independent observations together.** Delivered status, log level and capture are
+   different contracts; assert all three. Forced route outcomes need a real-store counterpart.
+3. **Rejected: restore the successful-path duplicate gate, add locks or write a second request
+   log.** These add cost without fixing the mistaken outcome classification. Preserve the existing
+   boundaries and make their answers correct.

@@ -667,11 +667,11 @@ describe("a claim that lost the race, on the full-import path", () => {
     expect(reply.body.error).toBe("No such upload");
   });
 
-  /* **Forced, because the real claim cannot say `expired` here.** This path
+  /* **Forced to cover grant expiry independently of Stop.** This path
      claims with `arrived: true`, which drops the grant's expiry from the
      `WHERE` (src/store/pg-uploads.ts § `claimUploadIn`), so a pending row always
-     wins and any other status is `taken`. The branch is real code on both
-     sides of the change, so it is pinned; it is not a state a reader can reach. */
+     wins despite an elapsed grant. A row already marked `expired` by Stop
+     still loses with `expired`, as the separate case below proves. */
   it("is a 410 when the claim says the grant expired", async () => {
     const uploadId = await ready("lost-expired.pdf", "2");
     const was = race.forced;
@@ -683,20 +683,17 @@ describe("a claim that lost the race, on the full-import path", () => {
     expect(reply.body.error).toBe(UPLOAD_MISSING.message);
   });
 
-  /* **And what a Stop that got in between is told today: the wrong sentence.**
-     `cancelUpload` leaves the row `expired`; the claim reads any status but
-     `pending` as `taken`; nothing was made, so the answer is the 409 for an
-     upload "already being turned into an article". `resolveExistingUpload`
-     answers the same row 410 when it gets there first. Pinned as it is, not as
-     it should be: the answer is the claim's, in the store, and both the block
-     this replaced and `answerALostClaim` pass it on alike. */
-  it("is a 409 when a Stop got in between, which is the claim's answer and not a good one", async () => {
+  /* Stop marks the row `expired`. Losing to it must answer the same 410 as
+     `resolveExistingUpload` does when Stop arrives before the initial look.
+     Updated in the C6 review; requires Postgres and was not run in the review
+     sandbox. */
+  it("is a 410 when a Stop got in between", async () => {
     const uploadId = await ready("lost-stopped.pdf", "6");
     const reply = await racing(uploadId, async () => {
       expect(await cancelUpload(uploadId, OWNER)).toBe(true);
     });
-    expect(reply.status).toBe(409);
-    expect(reply.body.error).toBe("That upload is already being turned into an article.");
+    expect(reply.status).toBe(410);
+    expect(reply.body.error).toBe(UPLOAD_MISSING.message);
   });
 
   it("is the winner's job when it got as far as one", async () => {

@@ -37,15 +37,15 @@ a second on several of them for a failure to *record* the result, and
 `grep -c 'captureFailure(' src/routes.ts`, and note the trailing `(`: without it the import line is
 counted too and the answer is one too many.
 
-**The rule for the request seams is the status we answered with**, `>= 500` — the same threshold
+**The rule for the request seams is the status assigned to the failure**, `>= 500` — the same threshold
 `logRequest` uses to choose between `warn` and `error`, so the log and the tracker cannot come to
 disagree about what counts as a fault.
 
-**One case where they do differ, on purpose: a handler that throws after its response has started.**
-The status the catch works out (500, say) still decides whether to capture, so the fault is reported
-once. But the response is left alone — no JSON, no change to `statusCode`, and it is ended only if
-nobody ended or destroyed it — so the request line says the status the reader received (usually a
-stream's 200) with the error beside it, at `info`. Until 2026-10-07 the catch wrote its JSON
+**A handler can fail after its response has started.** The catch's failure status decides both
+capture and log severity, while the request line records the status the reader actually received
+(usually a stream's 200). The fault is reported once. The response is left alone — no JSON, no
+change to `statusCode`, and it is ended only if nobody ended or destroyed it.
+Until 2026-10-07 the catch wrote its JSON
 regardless: `setHeader` threw `ERR_HTTP_HEADERS_SENT` out of it, the line said 500 for a 200, and
 [`src/vercel.ts`](../../src/vercel.ts)'s outer catch filed a second event about headers.
 [`tests/serve-api-after-headers.test.ts`](../../tests/serve-api-after-headers.test.ts).

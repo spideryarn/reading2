@@ -45,6 +45,7 @@ import { withAddedEntries } from "../glossary-added.js";
 import { relocateEntries } from "../glossary-occurrences.js";
 import { decodeAuthors } from "../authors.js";
 import { NOT_READ_YET } from "../messages.js";
+import { processingOf } from "../minimal-paper.js";
 import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
@@ -2831,7 +2832,15 @@ const rawPgArticleReader: ArticleReader = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
-    if (!found) throw notFound(slug);
+    if (!found) {
+      // A minimal ingest creates the article before publishing its first
+      // revision. The join above cannot distinguish that paper from absence.
+      // Only this unsuccessful read needs the extra owner-scoped lookup.
+      if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
+        throw new NotProcessed(NOT_READ_YET.message);
+      }
+      throw notFound(slug);
+    }
     /* **A minimal paper is not an article yet, and every reader of one is told
        so the same way** — `NotProcessed`, a 409 carrying the paper's title,
        authors and abstract, where this used to be the 404 below (it has no
@@ -4255,12 +4264,11 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Sketch picture on its own — the Postgres half of `loadSketch`.
+   * The Sketch picture on its own.
    *
    * Three inputs like `loadIdeas` above, and the same reason for the third: the
    * fingerprint covers the tree as well as the blocks, so comparing only the
-   * blocks here would call a re-sectioned article's picture current while the
-   * filesystem store called it stale.
+   * blocks here would call a re-sectioned article's picture current.
    */
   async loadSketch(slug: string): Promise<SketchFound> {
     requireSlug(slug);
@@ -4288,8 +4296,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Illustrated plates on their own — the Postgres half of
-   * `loadIllustrated`. docs/project/diagram.md § Illustrated.
+   * The Illustrated plates on their own. docs/project/diagram.md § Illustrated.
    *
    * **Two artefacts, not one article.** `loadSketch` above compares its scene
    * with the blocks and the tree; this compares its plates with the *scene*,
@@ -4311,7 +4318,7 @@ const rawPgArticleReader: ArticleReader = {
 
     const illustrated = found.revision.illustrated as Illustrated | null;
     /* An empty plate list counts as none — the same hole `SHAPE` closes at the
-       store boundary and `loadIllustrated` closes on the filesystem. */
+       store boundary. */
     if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
       throw new ArtefactNotMadeYet(
         `No illustration for "${slug}" yet. Paint one with ` +

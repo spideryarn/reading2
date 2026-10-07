@@ -108,6 +108,7 @@ it("a stream that finished and then threw is left as the 200 it was", async () =
   expect(vi.mocked(captureFailure).mock.calls.map((c) => c[0])).toEqual([fault]);
   /* One request line, saying what the reader received, and carrying the fault. */
   expect(stage.lines.map((l) => l.fields.status)).toEqual([200]);
+  expect(stage.lines.map((l) => l.level)).toEqual(["error"]);
   expect(stage.lines[0]?.fields.err).toBe(fault);
 });
 
@@ -124,6 +125,7 @@ it("a stream still open when its handler threw is ended, and nothing is written 
   expect(wire()).not.toContain('"error"');
   expect(vi.mocked(captureFailure).mock.calls.map((c) => c[0])).toEqual([fault]);
   expect(stage.lines.map((l) => l.fields.status)).toEqual([200]);
+  expect(stage.lines.map((l) => l.level)).toEqual(["error"]);
 });
 
 it("a response the reader already dropped is not ended a second time", async () => {
@@ -153,6 +155,31 @@ it("a refusal thrown after the headers is not reported, and still writes nothing
   await expect(handleApi(req, res)).resolves.toBe(true);
   expect(res.statusCode).toBe(200);
   expect(wire()).not.toContain("No such thing.");
+  expect(captureFailure).not.toHaveBeenCalled();
+  expect(stage.lines.map((l) => [l.level, l.fields.status])).toEqual([["warn", 200]]);
+});
+
+it("an authored provider failure after headers is still logged as a fault", async () => {
+  const providerFault = Object.assign(new Error("Provider failed."), { status: 502 });
+  stage.serve = async (res) => {
+    startStream(res);
+    throw providerFault;
+  };
+  const { req, res } = exchange();
+  await expect(handleApi(req, res)).resolves.toBe(true);
+  expect(res.statusCode).toBe(200);
+  expect(stage.lines.map((l) => [l.level, l.fields.status])).toEqual([["error", 200]]);
+  expect(vi.mocked(captureFailure).mock.calls.map((c) => c[0])).toEqual([providerFault]);
+});
+
+it("control: a successful stream stays at info", async () => {
+  stage.serve = async (res) => {
+    startStream(res);
+    res.end("event: done\ndata: {}\n\n");
+  };
+  const { req, res } = exchange();
+  await expect(handleApi(req, res)).resolves.toBe(true);
+  expect(stage.lines.map((l) => [l.level, l.fields.status])).toEqual([["info", 200]]);
   expect(captureFailure).not.toHaveBeenCalled();
 });
 

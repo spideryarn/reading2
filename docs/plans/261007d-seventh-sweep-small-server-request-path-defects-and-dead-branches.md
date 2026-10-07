@@ -64,8 +64,10 @@ terminal frame and reconcile what was stored, and this cannot do either.
 `setHeader` does nothing, and a function that does nothing cannot throw `ERR_HTTP_HEADERS_SENT`,
 which is why no existing test could have seen this.
 
-**Left as it is, and written down:** the request line for such a fault is at `info`, because its
-level follows the status the reader received (200). The capture is what reports it.
+**Corrected in code review:** the first build logged such a fault at `info`, because its level
+followed the status the reader received (200). The review keeps that wire status in the line but
+uses the catch's failure status for severity, as `logging.md` requires. Four new assertions were
+red before the fix; the successful-stream control remains `info`.
 [sentry-error-monitoring.md § What reaches it](../project/sentry-error-monitoring.md#what-reaches-it-and-what-does-not)
 says so.
 
@@ -91,6 +93,14 @@ exactly what chat sends for the same paper. Pinned on both routes in
 [`tests/minimal-paper.test.ts`](../../tests/minimal-paper.test.ts), including that no `search_runs`
 or `referee_criteria` row is written.
 
+**Code review found a case that pin missed:** an article born minimal has no published revision
+until metadata finishes. The old gate saw its processing state; `loadArticle`'s revision join
+did not, so these two routes changed from 409 to 404. `loadArticle` now asks the existing
+owner-scoped `processingOf` only when the revision read finds nothing, preserving the saved read
+on the successful path. The pure reader regression was red first and is green; two Postgres
+route cases also pin the refusal, zero written runs and the other owner's 404, but were not run
+in the review sandbox.
+
 ## 5. One parse of the query string
 
 `query.get("anchors")`. The two comments that said "four route families" read a query string lost
@@ -100,20 +110,19 @@ the number; ten rows do, and the next one would have made any number wrong again
 
 The block's comments moved onto `answerALostClaim`, where both callers now read them.
 
-**Two things the characterisation found, both left as they are and pinned:**
+**Two things the characterisation found:**
 
-- **`expired` → 410 cannot be reached on the full-import path through the real claim.** That path
+- **An elapsed grant alone cannot produce `expired` on the full-import path.** That path
   claims with `arrived: true`, which drops the grant's expiry from the `WHERE`, so a pending row
-  always wins and any other status is `taken`. The test forces the claim's answer to cover the
-  branch.
-- **A Stop that lands between the route's look and the claim is answered with the wrong sentence**:
+  always wins despite an elapsed grant. The test forces the claim's answer to cover that branch
+  independently of Stop; an already `expired` row now returns `expired` below.
+- **A Stop that landed between the route's look and the claim was answered with the wrong sentence**:
   409 *"That upload is already being turned into an article."* `claimUploadIn`
-  (`src/store/pg-uploads.ts`) reads every status but `pending` as `taken`, an upload the reader
+  (`src/store/pg-uploads.ts`) read every status but `pending` as `taken`, an upload the reader
   cancelled included. `resolveExistingUpload` answers the same row 410 when it gets there first.
-  **Not fixed here**: it is the store's answer, both the old block and the helper pass it on alike,
-  and changing it is a behaviour change this cluster's rule does not cover. The fix is one line in
-  `claimUploadIn` (a row whose status is `expired` answers `expired`), with the test
-  *"is a 409 when a Stop got in between"* flipped to 410.
+  **Fixed in code review, with explicit review authorization:** `claimUploadIn` now answers
+  `expired` for an expired row, and the Stop test expects the same 410 and existing sentence as
+  the earlier lookup. That Postgres test was updated but not run in the review sandbox.
 
 ## 7. "None yet is not a 404": half done, and why
 
@@ -167,17 +176,15 @@ history is still the reason.
 | `src/store/public-reader.ts`, the comments' `status: "done"` | "constant by construction: the query refuses every other value" | The query admits `'none'` and `'done'`, this writes `done` for both, and that is harmless only because the DTO drops the field. The code is unchanged, as the review said it should be |
 | `src/routes.ts`, above `GET /api/metadata/:slug` | "stat-ing every file for it" | What `articleMetadata` costs today: the step rows, and every block read, cleaned and hashed |
 
-**Left, on purpose.** `grep -c filesystem src/store/pg.ts` is 43 after this: the loaders' "while
-the filesystem store called it stale" comments are history, which the new header now says. A few
-others are in the present tense about code that is gone, and were found too late to check each one
-against its code, so they were not rewritten:
+**Checked in code review:** `readSketchFile` still exists in `src/sketch.ts` and rejects empty
+scenes, so its reference stays. The Sketch and Illustrated descriptions of a current second
+store, the nonexistent `sameMark` pointer and the constant public-comment status claim were
+corrected. Moved upload comments now describe the deletion race, the interval before `noteSlug`
+and the in-flight winner correctly; the comment retry explanation no longer assigns every
+23503 to reminted block ids.
 
-- `pg.ts` § `loadSketch`: "`readSketchFile` closes on disk" (no such function is defined in `src/`);
-- `pg.ts` § `loadIllustrated`: "`loadIllustrated` closes on the filesystem";
-- `pg-comments.ts` § `create`: "`sameMark` in src/comments.ts is the filesystem half of this" (no
-  `sameMark` there);
-- `src/public-types.ts` § *What is not here*: "the public read filters to finished rows in SQL, so
-  `status` would be a constant", which for comments has the same `'none'` exception as above.
+The review's root causes and the checks that would catch these lifecycle gaps are in
+[261007d](../postmortems/261007d-the-tested-state-is-not-the-whole-lifecycle.md).
 
 ## Mutations
 

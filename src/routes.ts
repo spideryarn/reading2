@@ -6549,8 +6549,8 @@ async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<Up
      answered it moved out to `resolveExistingUpload`, and without this line
      a vanished record fell through the `taken` branch to "already being
      turned into an article" — a sentence about a record that is not there.
-     Not reachable through the route, which resolves first; reachable by
-     anything that calls this directly, which is what makes it worth stating. */
+     Reachable through the route if the record disappears between the
+     initial look and the claim. */
   if (why === "unknown") throw httpError(404, "No such upload");
   if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
   /* `taken`. If the first claim got as far as a job, that job is the answer —
@@ -6577,7 +6577,7 @@ async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<Up
    * retention only covers the ingests that never completed: a *successful*
    * import's job is trimmed like any other success, and that is the case a
    * reader actually comes back to. What is durable here is the **article**,
-   * and the upload record has named it since the moment `enqueue` returned —
+   * and `noteSlug` names it on the upload record just after `enqueue` returns —
    * upload records are never trimmed by count, so the record outlives the job
    * by design. (This used to add "swept on their grant", which was simply
    * false: `sweepable` in src/source.ts has no production caller and nothing
@@ -6590,9 +6590,8 @@ async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<Up
    */
   const fresh = await readUpload(uploadId, currentOwnerId());
   if (fresh?.slug) return { kind: "article", slug: fresh.slug };
-  /* A claim with nothing at all to show for it: `enqueue` threw between the
-     claim and `noteSlug`. The reader chooses the file again, which is cheap
-     and correct. */
+  /* A claim with no job or slug yet: the winner's `enqueue` may still be in
+     flight or may have failed. */
   throw httpError(409, "That upload is already being turned into an article.");
 }
 
@@ -7846,6 +7845,7 @@ function logRequest(
   status: number,
   started: number,
   err?: unknown,
+  failureStatus?: number,
 ): void {
   /* **A stack only where a stack tells you something.**
    *
@@ -7887,8 +7887,11 @@ function logRequest(
      `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
      request that called no model gets no extra fields at all. */
   Object.assign(fields, spendFields(currentSpend() ?? emptySpend()));
-  if (status >= 500) line.error(fields, msg);
-  else if (status >= 400) line.warn(fields, msg);
+  // Headers may already carry 200 when the handler fails. Keep that wire
+  // status in the fields, but keep the failure visible at its severity.
+  const severityStatus = failureStatus ?? status;
+  if (severityStatus >= 500) line.error(fields, msg);
+  else if (severityStatus >= 400) line.warn(fields, msg);
   else line.info(fields, msg);
 }
 
@@ -8004,6 +8007,7 @@ async function serveApi(
      no set of call sites to keep in step. It reads `res.statusCode`, which
      `send` has just set, so the exit points do not have to report anything. */
   let failure: unknown;
+  let failureStatus: number | undefined;
   try {
     /**
      * **The public namespace, dispatched before the gate and inside this `try`.**
@@ -8135,7 +8139,8 @@ async function serveApi(
     // mapped to a status, handed to the client and forgotten, so a production
     // 500 left nothing behind to read.
     failure = err;
-    /* **The rule is the status we answered with, not who chose it.** If this
+    failureStatus = status;
+    /* **The rule is the failure's status, not who chose it.** If this
        request logged at `error` level it goes to Sentry, and `logRequest` uses
        exactly the same threshold two lines down — so the two can never drift
        into disagreeing about what a fault is.
@@ -8196,7 +8201,7 @@ async function serveApi(
     send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
-    logRequest(method, path, res.statusCode, started, failure);
+    logRequest(method, path, res.statusCode, started, failure, failureStatus);
   }
 }
 

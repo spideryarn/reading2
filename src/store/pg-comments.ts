@@ -294,8 +294,7 @@ const rawPgCommentStore: CommentStore = {
         /* The placement is part of what "the same Save" means, for the reason
            the body is: a second POST under a stored id carrying a *different*
            valence is a re-score, not a retry, and `create` overwriting it would
-           delete a judgement the referee already made. `sameMark` in
-           src/comments.ts is the filesystem half of this. */
+           delete a judgement the referee already made. */
         stored.criterionId === input.criterionId &&
         stored.valence === input.valence &&
         /* And the colour, for the same reason: the same id resent with a
@@ -326,8 +325,9 @@ const rawPgCommentStore: CommentStore = {
        below. Until 2026-10-07 a second retry sat in a `catch` for SQLSTATE
        23505; it could not run, and it tested a `.code` Drizzle's wrapper does
        not carry (db-errors.ts § `violatesConstraint`). Anything that does throw
-       is a real failure and leaves at once: 23503 in particular is the block
-       identity FK, which means stage 3 re-minted ids and has to be seen.
+       leaves at once, through `write`'s placement-error translation. An
+       unmapped foreign-key failure must be seen; the block identity FK can
+       expose stage 3 breaking identity preservation.
        tests/store-comments.test.ts § "a minted id that is already a row". */
     for (let attempt = 0; ; attempt++) {
       const stored = await db.transaction(async (tx) => {
