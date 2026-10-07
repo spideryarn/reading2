@@ -240,6 +240,7 @@ const QUOTES: QuotesRead = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
   retryRead: async () => {},
   reload: async () => {},
@@ -609,6 +610,25 @@ describe("a list, then a failed refresh", () => {
   });
 });
 
+describe("a failed recheck, then an ordinary refresh", () => {
+  /* An ordinary `reload` or `refresh` makes no transition at its start: only
+     Try again clears the sentence before the answer is in. */
+  it("keeps the previous failure on screen while the refresh is out", async () => {
+    answer(serves(list("Measure first")));
+    await mount(["band", "probe"]);
+    answer(broken());
+    await refreshed();
+
+    const refresh = hold();
+    await refreshAll();
+    expect(screen()).toEqual(LIST_RECHECK("Measure first", FIRST_FAILURE));
+    expect(seen()).toEqual({ is: "list, recheck failed", error: FIRST_FAILURE, names: ["Measure first"], ...NO_FLAGS });
+
+    await refresh.land(serves(list("Theory follows", {}, AT.second)));
+    expect(screen()).toEqual(LIST("Theory follows"));
+  });
+});
+
 /**
  * **Today's behaviour, pinned, and an open question for the owner** (Opus's
  * WCO6; Q-retry-button in the seventh sweep's umbrella). After "none yet", a
@@ -734,6 +754,23 @@ describe("what arrives with the answer", () => {
       expect(screen().badge).toBe(profiled ? "written" : "none");
     },
   );
+
+  /* Removing the footer's stale gate turned nothing red until this was added
+     (found in stage 2b of the spike; the gap was in the original code too):
+     the footer carries a current list's job, the banner a stale one's. */
+  it.each([
+    ["a current list's running job shows in the footer", {}, true],
+    ["a stale list's running job shows in its banner, and the footer stays away", { stale: true }, false],
+  ] as [string, Flags, boolean][])("%s", async (_name, flags, foot) => {
+    answer(serves(list("Measure first", flags)));
+    await mount(["band"]);
+    expect(screen().foot).toBe(false);
+    jobs = [job("somebody-started-this", ["ideas"], "running")];
+    await mount(["band"]);
+    expect(screen().foot).toBe(foot);
+    expect(screen().older).toBe(!foot);
+    expect(screen().names).toEqual(["Measure first"]);
+  });
 
   it("keeps an artefact with no ideas in it as a list, not as none yet", async () => {
     const empty = list("unused");
@@ -1036,6 +1073,27 @@ describe("a reply for an article the hook has moved on from", () => {
     await flush();
     expect(seen()).toEqual({ is: "list", error: null, names: ["From the second article"], ...NO_FLAGS });
     expect(screen()).toEqual(LIST("From the second article"));
+  });
+});
+
+describe("a reply whose headers arrive after the move", () => {
+  /* What the `current()` check straight after the fetch is for. The checks
+     after it already keep an obsolete reply out of the state; this one stops
+     its body being read, parsed and logged at all (src/web/lib/api.ts §
+     `readJson`). */
+  it("is not read: the first article's body is left alone", async () => {
+    const first = hold(SLUG);
+    answer(serves(list("From the second article", {}, AT.second, OTHER)), OTHER);
+    await mount(["band", "probe"], SLUG);
+    await mount(["band", "probe"], OTHER);
+    expect(seen().names).toEqual(["From the second article"]);
+
+    const late = json(list("From the first article"));
+    const text = vi.spyOn(late, "text");
+    await first.land(() => late);
+    expect(text).not.toHaveBeenCalled();
+    expect(late.bodyUsed).toBe(false);
+    expect(seen().names).toEqual(["From the second article"]);
   });
 });
 
