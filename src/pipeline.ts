@@ -788,11 +788,13 @@ export interface StepContext {
  * > A stage stops writing. It returns a product. A short commit afterwards
  * > writes the product, checks it, and finishes the step.
  *
- * On the filesystem that buys nothing — there is no transaction to hold — and
- * that is exactly why the shape lands first, with nothing converted, so the
- * boundary exists before anything depends on it (docs/plans/260827aa-delete-the-importer.md
- * § D1a). Under Postgres it is the difference between a step's artefacts, its
- * postcondition and its completion committing together or one at a time.
+ * On the filesystem store, which was the only one when this shape landed and
+ * went on 2026-09-05, that bought nothing — there was no transaction to hold —
+ * and that is exactly why the shape landed first, with nothing converted, so
+ * the boundary existed before anything depended on it
+ * (docs/plans/260827aa-delete-the-importer.md § D1a). Under Postgres it is the
+ * difference between a step's artefacts, its postcondition and its completion
+ * committing together or one at a time.
  *
  * **`parts` is optional and `UNCONVERTED_STEPS` is what makes that safe.** A
  * stage that still writes its own files during `run` returns `{ detail }` alone,
@@ -802,9 +804,10 @@ export interface StepContext {
  * success. See `checkProduct` in src/store/session.ts.
  *
  * `stamp` is what the store records about this run, passed straight to `write`.
- * It is separate from `parts` because on the filesystem the stamp is a field
- * *inside* the artefact and the argument is checked against it rather than
- * stored (src/store/artifacts.ts § `write`).
+ * It is separate from `parts` because the store keeps it apart from the
+ * artefact, on the step's run row. (On the filesystem store, until 2026-09-05,
+ * the stamp was a field *inside* the artefact and the argument was checked
+ * against it rather than stored.)
  */
 export interface StepProduct {
   /** One line about what happened, kept on the finished step and shown to the reader. */
@@ -931,7 +934,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    * has since changed — with a green tick over it.
    *
    * A step that can answer the real question answers it here. `tweets` does,
-   * by comparing the `sourceHash` it stored against the blocks on disk, plus
+   * by comparing the `sourceHash` it stored against the blocks as they are now, plus
    * its prompt version and model id — which is exactly what
    * architecture.md#storage has always specified for a cached artefact and what
    * nothing had implemented.
@@ -2927,25 +2930,27 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * first ingest and every anchor in the database stops naming anything.
        *
        * `previousBlocksFrom` asks the store instead, and refuses rather than
-       * minting when a baseline that should be there is not. On the filesystem
-       * it reads the same file as before; in Postgres it reads the block rows
-       * `beginDraftIn` copied into this draft from the published revision.
+       * minting when a baseline that should be there is not. It reads the
+       * block rows `beginDraftIn` copied into this draft from the published
+       * revision. (On the filesystem store, until 2026-09-05, it read the same
+       * file as before.)
        *
        * **Which HTML this consumes is `BLOCKS_INPUT_HTML` in src/blocks.ts —
        * stage 2's, `extractedHtml`, never stage 3's own `stampedHtml`**, and
-       * that only becomes a real choice when the input stops being a path: on
-       * disk `extractedHtml` and `stampedHtml` are the same file. Landing D
-       * has to honour it; the reasoning is on the constant.
+       * that became a real choice when the input stopped being a path: on
+       * disk, until 2026-09-05, `extractedHtml` and `stampedHtml` were the
+       * same file. The reasoning is on the constant.
        */
       const previous = await previousBlocksFrom(store, ctx.slug);
       /* **Stage 2's document, named through the constant rather than spelled
          here**, and this is the read `blocksMatchTheirHtml` above makes its
          judgement against — the two have to be the same document or the guard
-         is comparing this run's output with a different run's input. On the
-         filesystem `extractedHtml` and `stampedHtml` resolve to one file, so
-         this reads what stage 3 itself last wrote; in Postgres they are two
-         columns and this is stage 2's. That difference is the whole reason the
-         constant exists (src/blocks.ts § `BLOCKS_INPUT_HTML`). */
+         is comparing this run's output with a different run's input. They
+         are two columns and this is stage 2's. On the filesystem store, until
+         2026-09-05, `extractedHtml` and `stampedHtml` resolved to one file, so
+         the same read returned what stage 3 itself last wrote; that difference
+         is the whole reason the constant exists
+         (src/blocks.ts § `BLOCKS_INPUT_HTML`). */
       const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
       if (extracted === null) {
         /* `ours`, not `blocked`: nobody refused us anything, we simply cannot
@@ -3133,8 +3138,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      *
      * **The Postgres artefact store needs no special case for this**, and an
      * earlier version of this comment said it did. `has` means readable outputs
-     * plus a `done` run row, uniformly, in both stores; with no stamp,
-     * `stepIsDone` returns true once `has` does, in both stores. Teaching
+     * plus a `done` run row, uniformly; with no stamp,
+     * `stepIsDone` returns true once `has` does. Teaching
      * storage a private freshness rule for `structure` would put the pipeline's logic
      * in the storage layer *and* walk straight back into the hazard above, by a
      * different door. GPT Sol, 2026-08-28;
@@ -3559,10 +3564,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 4.5 — the article's own images, fetched and kept beside it.
      src/collect-assets.ts does the work; src/assets.ts is its pure half.
 
-     **The only step with no model call and a network cost**, which is why it is
-     in DEFAULT_INGEST_STEPS while the four after `arc` are not: nobody has to
+     **A step that hosts the article's images**, included in
+     DEFAULT_INGEST_STEPS without an extra request: nobody has to
      ask for it, because leaving it undone means every reader's browser
-     announces itself to the publisher's CDN once per image, per read.
+     announces itself to the publisher's CDN once per image, per read. It is
+     not free of model calls, as this said until 2026-10-07: for a PDF,
+     `recoverPdfFigures` asks a model to locate the figures
+     (`openRouterFigureLocator`, logged below as `figuresLocateCalls`).
 
      It reads stage 4's `blocks.json` rather than the extracted HTML, so it
      fetches exactly the URLs the reader will ask for — and so its freshness is
@@ -3949,10 +3957,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * everything up to `arc` makes the article readable, and everything after it
    * is a thing somebody asks for.
    *
-   * A **converted** step, like `sketch` and unlike its eight other neighbours:
+   * A **converted** step, like every step now in this registry:
    * `generateQuotes` writes nothing and this returns the artefact as `parts`.
-   * A step that wrote `<dir>/quotes.json` inside `run` works on a laptop and
-   * cannot work through a store that puts the artefact in a Postgres column.
+   * A step that wrote `<dir>/quotes.json` inside `run` worked on the
+   * filesystem store (gone 2026-09-05) and cannot work through one that puts
+   * the artefact in a Postgres column, which is now the only kind.
    */
   quotes: {
     name: "quotes",
@@ -4669,8 +4678,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    *
    * **The first converted step in this pipeline, and for a while the only one.**
    * It returns `parts` and writes no file of its own. That is not a flourish —
-   * a step that writes `<dir>/sketch.json` inside `run` works on a laptop and
-   * cannot work through a store that puts the artefact in a Postgres column,
+   * a step that writes `<dir>/sketch.json` inside `run` worked on the
+   * filesystem store (gone 2026-09-05) and cannot work through one that puts
+   * the artefact in a Postgres column, which is now the only kind,
    * and `PipelineStep`'s types make the safe answer the one you get by doing
    * nothing. Every other article-reading stage followed it on 2026-08-31, and
    * the stages that acquire and cut the article rather than read it — `fetch`,
@@ -4874,7 +4884,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          *would we paint this again* and *may we paint it now*. A finished
          illustration whose Sketch has since drifted stays `done`, so nothing
          re-runs on its own and this sentence only ever appears when somebody
-         actually asked. Both stores agree, because `stamp` is untouched. */
+         actually asked. `stamp` is untouched. */
       if (sketchIsStale(sketch, article.blocks, article.tree, article.meta ?? null)) {
         refuseToIllustrate("stale-sketch");
       }

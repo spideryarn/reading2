@@ -330,20 +330,33 @@ export function readHealthStats(health: unknown): Stat[] {
     }
   }
 
-  const disk = health["disk"];
-  if (isRecord(disk)) {
+  /* Two filesystems, one row each. `/home` is a separate, much smaller volume
+     on the box and the one that fills; a machine without one sends
+     `{ kind: "none" }` (or, from an older server, nothing) and gets no row. */
+  const mounts = [
+    { key: "disk", label: "Disk used", mount: "/", what: "How full the root filesystem is." },
+    {
+      key: "homeDisk",
+      label: "Home disk used",
+      mount: "/home",
+      what: "How full /home is. On the box it is a separate, smaller volume: checkouts, transcripts and caches live there, and a full one fails commits.",
+    },
+  ] as const;
+  for (const { key, label, mount, what } of mounts) {
+    const disk = health[key];
+    if (!isRecord(disk) || disk["kind"] === "none") continue;
     const tip: Tip = {
-      head: "Disk used",
-      what: "How full the root filesystem is.",
-      how: `Amber at ${THRESHOLDS.diskUsed.strained}% and red at ${THRESHOLDS.diskUsed.critical}% — ordinary sysadmin defaults rather than anything measured about this box.`,
+      head: label,
+      what,
+      how:`Amber at ${THRESHOLDS.diskUsed.strained}% and red at ${THRESHOLDS.diskUsed.critical}% — ordinary sysadmin defaults rather than anything measured about this box.`,
     };
     if (disk["kind"] === "value") {
       const percent = numberAt(disk, "usePercent");
       const usedKiB = numberAt(disk, "usedKiB");
       const totalKiB = numberAt(disk, "totalKiB");
       out.push({
-        key: "disk",
-        label: "Disk used",
+        key,
+        label,
         value: percent === null ? "—" : `${Math.round(percent)}%`,
         /* Used of total, not free of total: Greg's rule applies to the sub-line
            as much as to the number, and a tile that said "52%" over "139 GiB
@@ -353,8 +366,8 @@ export function readHealthStats(health: unknown): Stat[] {
            only the size beside it. */
         sub:
           usedKiB === null || totalKiB === null
-            ? "on /"
-            : `${formatKiB(usedKiB)} of ${formatKiB(totalKiB)} on /`,
+            ? `on ${mount}`
+            : `${formatKiB(usedKiB)} of ${formatKiB(totalKiB)} on ${mount}`,
         tone:
           percent === null
             ? "unknown"
@@ -369,7 +382,7 @@ export function readHealthStats(health: unknown): Stat[] {
           : { bar: percentBar(percent, [THRESHOLDS.diskUsed.strained, THRESHOLDS.diskUsed.critical]) }),
       });
     } else {
-      out.push(unreadable("disk", "Disk used", String(disk["why"] ?? "no reason given"), tip));
+      out.push(unreadable(key, label, String(disk["why"] ?? "no reason given"), tip));
     }
   }
 

@@ -1,0 +1,2 @@
+Filesystem    1024-blocks Used Available Capacity iused ifree %iused  Mounted on
+map auto_home           0    0         0   100%       0     0     -   /System/Volumes/Data/home

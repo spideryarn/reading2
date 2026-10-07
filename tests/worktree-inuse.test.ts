@@ -277,6 +277,19 @@ describe("cwdUsersUnder", () => {
     if (scan.kind === "checked") expect(scan.found.map((f) => f.pid)).toEqual([71]);
   });
 
+  it("does not block on the hourly box tidy, which hides its cwd while it runs", () => {
+    /* box-tidy.service runs as the user with two capabilities, and a process
+       holding capabilities is not dumpable, so its cwd is unreadable for the
+       few seconds it runs each hour. Seen 2026-10-07: a worktree removal that
+       coincided with it refused with "pid … (node-MainThread) is yours and
+       hides its working directory". The script names itself `box-tidy`, and
+       its unit runs it from /, never from a worktree. */
+    const proc = fakeProc({ 701: { start: 1, cwd: { opaque: "EACCES" }, comm: "box-tidy" } });
+    const scan = cwdUsersUnder(proc, TREE, new Set());
+    expect(scan).toMatchObject({ kind: "checked", ambient: 1, unplaceable: [] });
+    expect(composeInUse({ kind: "unlocked" }, scan).kind).toBe("idle");
+  });
+
   it("COUNTS, and does not block on, a RECOGNISED ambient daemon that hides its cwd", () => {
     /* Measured on this box 2026-09-09: 6 of 208 same-uid processes are
        permanently opaque — systemd --user, (sd-pam), two sshd, two postgrest.
