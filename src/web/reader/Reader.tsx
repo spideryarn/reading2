@@ -1053,6 +1053,20 @@ export function Reader({
   );
   const debateThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
   const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  /* **The command bar's *Ask the guide: “…”* row** (plan 261007j F6): the
+     reader's own typed sentence, sent to this article's one guide — opened if
+     it exists, begun if not (`ChatHandoffToGuide`). It sends, because the row
+     is a press on the reader's own words and says that it sends; the bar
+     offers it only once the fast pick answered that no row fits. */
+  const askTheGuide = useCallback(
+    (sentence: string) => {
+      const question = sentence.trim();
+      if (question === "") return;
+      setChatHandoff({ slug, target: "guide", question, send: true });
+      showBand("chat");
+    },
+    [slug, showBand],
+  );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
      and on a Citations row**, beside Dig deeper, which is unchanged. Each
@@ -2750,6 +2764,8 @@ export function Reader({
         /* The bar's suggested lens row: Debate's own handoff, so the question
            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
+        /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
+        askGuide: isOwner ? askTheGuide : undefined,
         /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
         modes: chipModes,
       }),
@@ -2768,6 +2784,7 @@ export function Reader({
       moreQuotes,
       openQuickSearch,
       suggestedLensInChat,
+      askTheGuide,
       chipModes,
     ],
   );

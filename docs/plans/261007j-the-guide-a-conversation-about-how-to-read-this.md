@@ -184,39 +184,68 @@ seven.
 ## Stages
 
 ### Stage 0: plan review
-- [ ] GPT Sol, read-only.
+- [x] GPT Sol, read-only.
 
 ### Stage 1: the `guide` kind, server side
-- [ ] Migration: `chat_threads_kind` CHECK gains `guide`; `chat_threads_one_guide` partial unique
+- [x] Migration: `chat_threads_kind` CHECK gains `guide`; `chat_threads_one_guide` partial unique
       index. Generated, read, `db:chain`.
-- [ ] `ThreadKind`, `THREAD_KINDS`, and a guide that is single-thread but **not** a Learn view
+- [x] `ThreadKind`, `THREAD_KINDS`, and a guide that is single-thread but **not** a Learn view
       (narrow the Learn-only uses of `SINGLE_THREAD_KINDS` to a `LearnKind`).
-- [ ] `GUIDE_SYSTEM`, `readItFor`, the shelf-count line and the mode-words section, `toolsFor`,
+- [x] `GUIDE_SYSTEM`, `readItFor`, the shelf-count line and the mode-words section, `toolsFor`,
       `kindWords`, web search off, `visible` refused as for other non-chat kinds.
-- [ ] Store: `countArticles(owner)` reusing `onTheShelf()`.
-- [ ] Tests red first: kind round-trips, one per article, prompt carries count and modes and not
+- [x] Store: `countArticles(owner)` reusing `onTheShelf()`.
+- [x] Tests red first: kind round-trips, one per article, prompt carries count and modes and not
       web search, a guide thread refuses `visible`.
 
 ### Stage 2: the buttons and the band
-- [ ] `mode`, `quick-search`, `purpose` proposal ids through `command-proposal.ts`,
+- [x] `mode`, `quick-search`, `purpose` proposal ids through `command-proposal.ts`,
       `chat-commands.ts` (guide-only for `purpose`), runners in the reading and chat executors,
       `COMMAND_CHIPS` lines.
-- [ ] Chat band: the guide openable and sendable (send the open thread's kind; no `visible`),
+- [x] Chat band: the guide openable and sendable (send the open thread's kind; no `visible`),
       pinned first, own icon and source, own greeting.
-- [ ] Tests: chipFor accepts/refuses each; a press runs the runner; the band sends kind `guide`.
+- [x] Tests: chipFor accepts/refuses each; a press runs the runner; the band sends kind `guide`.
 
 ### Stage 3: the ways in
-- [ ] First open: the mark plus band-room opens `?mode=chat&thread=<guide>` and no modal.
-- [ ] The bar's *Ask the guide* row for an unmatched sentence; a handoff that targets the guide and
+- [x] First open: the mark plus band-room opens `?mode=chat&thread=<guide>` and no modal.
+- [x] The bar's *Ask the guide* row for an unmatched sentence; a handoff that targets the guide and
       sends.
-- [ ] A small paid eval of the guide prompt (a handful of readers × two articles): asks why when
+- [x] A small paid eval of the guide prompt (a handful of readers × two articles): asks why when
       missing, introduces for a first-timer, buttons valid, no summary in place of reading.
 
 ### Stage 4: docs, browser, bookkeeping
-- [ ] chat-tools.md, chat-llm-help-commands-vision.md § Where we are, reader-profile.md, help page,
+- [x] chat-tools.md, chat-llm-help-commands-vision.md § Where we are, reader-profile.md, help page,
       privacy page if the shelf count counts as new data sent (it is a number, not words).
 - [ ] Sonnet subagent: desktop, iPad, phone.
-- [ ] GPT Sol code review; full suite; push; note; queue entries; `done qi-gjvvvc6n`.
+- [x] Queue entries: qi-kc47m5pw (Q-guide-acts), qi-yfa6gs7m (Q-guide-first-open), qi-7cgxpdda (Help pages in the prompt), qi-263b6cpp (one agent behind the bar).
+- [ ] Full suite; push; note; `done qi-gjvvvc6n`.
+
+### Stages as built (the boxes above are the plan's words; what differs is here)
+
+- Stage 1 (`7b34efc06`): `countArticles` became `articlesOpenedBefore` (F7); GPT Sol: land with
+  its fixes, [CR1–CR3](261007j-stage-1-code-review-sol.md).
+- Stage 2 (`1d3b6e2d5`): no `purpose` button (F5); `?guide=1` opens the guide; GPT Sol: land with
+  its fixes, [CR1–CR4](261007j-stage-2-code-review-sol.md) — CR1 kept experimental modes out of
+  proposals when the switch is off.
+- Stage 3: the first-open coordinator (`src/web/first-open-purpose.ts`), the bar's *Ask the guide*
+  row, and the eval [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md):
+  23/32 → 29/32 after five prompt fixes, median 128 → 93 words, no injected token drawn as a button
+  in either run.
+
+### A rule-doc edit proposed, not made
+
+security-map.md is an entry point, so a new row is Greg's to approve
+([edit-important-docs.md](../reusable/edit-important-docs.md)). GPT Sol's F8 asked for it. Proposed
+row, under `src/chat-tools.ts`, the existing cell extended:
+
+> `isSlug` on the model's slug, URL-length cap on the model's URL; **`runTool` refuses any tool not
+> in `toolsFor(kind)`, so a conversation's tool list is a boundary and not a suggestion**
+
+and a new row:
+
+> [`src/web/chat-commands.ts`](../../src/web/chat-commands.ts) + [`command-proposal.ts`](../../src/web/command-proposal.ts) |
+> `chipFor` — what a model's `[cmd:…]` token may become: an id on `CHAT_PROPOSABLE`, an argument
+> its own command accepts, a mode the reader can open here now, checked at the draw and again at
+> the press. A press is the only way any of it runs
 
 ## Log
 

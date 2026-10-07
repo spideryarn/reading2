@@ -789,10 +789,11 @@ it.
   default once.
 - **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
   experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
-  switch on. The default still waits for the settings store's answer, because that is where
+  switch on. The ordinary default still waits for the settings store's answer, because that is where
   "signed in" comes from. If settings are already loaded, the address is settled before paint;
   otherwise the default waits for them, whether the article payload has arrived yet or not. The
-  shelf does not load settings itself. A store that never answers means no default.
+  shelf does not load settings itself. A store that never answers means no ordinary default; the
+  marked add-page path below does not depend on that unrelated read.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
@@ -801,6 +802,16 @@ it.
   **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
   none, once, which is what Greg asked for
   ([marginalia.md § Relation words](marginalia.md#relation-words)).
+- **Or the guide, when the add page asked why and nobody said**, since 2026-10-07
+  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4). While the
+  add page's *ask why* mark names this article, the default waits for the owner's purpose read, and
+  one coordinator decides ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): a reason
+  stored, or a read that failed, gets the table above; no reason with room for a band gets
+  `?mode=chat&guide=1` (and `&margin=1` where the table would have had it) and no modal; no reason
+  on a phone gets the modal over the article alone, as before. The coordinator registers before the
+  settings answer, so the purpose read can land first and a settings failure cannot strand the
+  decision. A failed read keeps the mark, so the next load asks with the
+  modal, which is what it always did ([reader-profile.md](reader-profile.md)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

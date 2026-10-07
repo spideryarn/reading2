@@ -253,6 +253,19 @@ describe("the privacy page", () => {
     expect(models).toContain('{ job: "command-suggest", id: QUICK_MODEL_OPENROUTER');
   });
 
+  it("says the guide is told roughly how many other articles you have opened", () => {
+    /* Plan 261007j, GPT Sol's F7: a derived account datum sent to the chat
+       model, below the cache breakpoint (src/guide.ts § experienceLine). The
+       model name was already on the page, so only this sentence notices the
+       disclosure going. Held to the code: if the line goes, this claim should. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "for the guide in Chat, which is also told roughly how many other articles you have opened here (none, a few, or many)",
+    );
+    const guide = readFileSync(path.join(ROOT, "src/guide.ts"), "utf8");
+    expect(guide).toContain("export function experienceLine");
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

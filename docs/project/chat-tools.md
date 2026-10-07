@@ -926,6 +926,43 @@ runner is [`evals/chat-commands/run.ts`](../../evals/chat-commands/run.ts).
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
 
+## The guide
+
+> think of it as a chat less about the content and more about the reading experience. So more
+> about a guide for the user about how to use Spideryarn and how to make the most of its features
+> and also how to read this article given their needs.
+>
+> — Greg, 2026-10-06 (`spya-tddvg2`)
+
+**Built 2026-10-07** ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)).
+A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), opened in Chat's band
+from the pinned row above the list. What makes it a guide rather than a chat:
+
+- **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
+  reading, never a summary in its place; ask why they are reading if they have not said; invite
+  *About you* once; under 100 words; point to at most three places, by block id. It carries our
+  words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
+  [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
+- **How experienced the reader is**: none, a few or many other articles opened, in the last
+  message only (`experienceLine`), so the cached prefix is the same for everyone.
+  [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
+- **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
+- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx)):
+  free, and holding the same autosaving *Why you're reading this one* box Metadata has, so the
+  reason saved is always the reader's own words. *Ask the guide where to start* sends a fixed first
+  question once there is one.
+- **Its buttons** are chat's, offered unasked when it suggests a mode or a search
+  (§ Command buttons). It cannot act; the press is the act.
+- **Three doors**: the pinned row; the command bar's *Ask the guide: "…"* when the fast pick
+  answers that no row fits
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and a
+  first open from the add page with no reason given, where a band fits, which opens the guide instead
+  of the "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
+
+Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
+[261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
+[`evals/guide/run.ts`](../../evals/guide/run.ts).
+
 ## Not built, and worth building
 
 Greg's list, with a recommendation each so nobody is blocked. All three are **writes**, which is the

@@ -541,6 +541,18 @@ export interface CommandExecutor {
    * Chat is the owner's.
    */
   readonly askThroughLens?: ((lens: string) => ActionOutcome) | undefined;
+  /**
+   * **Send a sentence to this article's guide, in Chat** — since 2026-10-07,
+   * plan 261007j F6: what the bar's *Ask the guide: “…”* row presses, offered
+   * only once the fast pick could not tell what the sentence meant. The
+   * reading view's guide handoff (Reader.tsx § `askTheGuide`), which sends:
+   * the press is the consent, as an *Ask in chat* button's is. The bar's own;
+   * chat's chips never see it.
+   *
+   * **Absent means not offered**: handed over for the owner alone, because
+   * Chat is the owner's.
+   */
+  readonly askGuide?: ((sentence: string) => ActionOutcome) | undefined;
 }
 
 /** One press per band that offers an append now; a band not named offers none. */

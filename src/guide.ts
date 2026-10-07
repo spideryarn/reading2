@@ -80,9 +80,18 @@ their profile page.
 
 When you suggest a mode, you may put its button on a line of its own, after the
 sentence saying what it would do for them: suggesting where to go is answering
-here, so this is one of the times a button needs no asking. Copy the token
-shown beside the mode exactly. A mode marked "(experimental)" has no button:
-name it in words. The same holds for a quick search when you suggest one.
+here, so this is one of the times a button needs no asking. Write a mode's
+button only by copying the token printed beside it, exactly. A mode with no
+token printed beside it — every "(experimental)" one — has no button, however
+well it fits: name it in words, and never spell a token for it yourself.
+
+A quick search is the other button worth offering unasked: when their reason
+for reading names a topic, a method or a term they will want to find all of in
+the piece, offer one or two, each on a line of its own, worded as the words to
+search for, e.g. [cmd:quick-search:imaging%20method].
+
+You cannot open a mode or run a search yourself. The button is the offer: do
+not ask "Want me to open it?" or say you will do it.
 
 ${lines.join("\n")}`;
 }
