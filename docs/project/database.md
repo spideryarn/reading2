@@ -339,7 +339,7 @@ time; by 2026-08-31 every one of them had. A step must return `parts`: `Pipeline
 [`src/pipeline.ts`](../../src/pipeline.ts) is typed to return a `ConvertedProduct`, and
 `checkProduct` refuses a product without them at commit. There was a list of step names exempted
 from that (`LEGACY_UNCONVERTED_STEPS`), empty from 2026-08-31 and deleted on 2026-10-07 with the
-filesystem session that was its last reader ([261007d](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)), so there is no way to ask for the
+filesystem session that was its last reader ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)), so there is no way to ask for the
 exemption any more.
 [260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
 [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).

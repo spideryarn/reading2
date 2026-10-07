@@ -766,7 +766,7 @@ What that means in practice:
   `anotherJobCarriesLabelsIn` (`pg-jobs.ts`), which counts another active, non-cancelling job of the
   same owner on the article with a `labels` step, and never the job that is ending. Until 2026-10-07
   only the sweep asked, so a live failure wrote `failed` over a successor still queued
-  ([261007d](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)).
+  ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)).
 - **`structure` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.

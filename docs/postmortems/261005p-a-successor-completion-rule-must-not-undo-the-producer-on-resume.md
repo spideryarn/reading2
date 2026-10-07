@@ -45,7 +45,7 @@ Its red-then-green evidence remains unearned.
 > to rejecting every awaiting tree, *a handed-back import finishes without rebuilding its stand-in*
 > fails with `job … did not finish in 120 advances`, and the unit case fails as it did then. All 8
 > pass with the fix back.
-> [The plan](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
+> [The plan](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
 
 ## Countermeasures, ranked by ease against value
 

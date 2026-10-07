@@ -10,7 +10,7 @@
  * `tests/store-session.test.ts`, which drove them through `fsStoreSession`: a
  * second session, over the filesystem and with no transaction, that nothing
  * but that test had called since 2026-09-05. Both were deleted on 2026-10-07
- * (docs/plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md
+ * (docs/plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md
  * has the case-by-case table). These four are the cases that assert a rule the
  * one remaining session depends on and that nothing else in the suite held.
  * The session-level ones (a carried artefact left alone, the release that

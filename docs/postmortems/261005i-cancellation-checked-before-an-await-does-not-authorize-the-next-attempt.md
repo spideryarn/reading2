@@ -40,7 +40,7 @@ runtime validation remains outstanding.
 > (`expected 2 to be 1`). All 260 pass with both lines back. The Messages loop's check now has a
 > test of its own too: *a Stop as the backoff finishes leaves one row, and opens no attempt 2* in
 > [messages-stream.test.ts](../../tests/messages-stream.test.ts), red with that line deleted.
-> [The plan](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
+> [The plan](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
 
 Countermeasures, ranked by cost and value:
 

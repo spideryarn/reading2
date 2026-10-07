@@ -838,7 +838,7 @@ export interface StepProduct {
  * argument was about the refusal, and the refusal is what stayed: it is
  * unconditional in the type here and in `checkProduct`. What went is the way
  * to opt out of it, whose last reader was the filesystem session
- * (docs/plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
+ * (docs/plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
  * GPT Sol's rule is unchanged: the unsafe answer must never be the one you get
  * by doing nothing.
  */

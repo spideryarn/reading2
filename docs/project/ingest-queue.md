@@ -2553,7 +2553,7 @@ Five things about it are worth knowing before touching it.
   the flag
   ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
   The session itself (`fsStoreSession`) outlived them, called by one test and nothing else, until
-  2026-10-07 ([261007d](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md));
+  2026-10-07 ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md));
   [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is what says
   this line opens what it says it opens.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach

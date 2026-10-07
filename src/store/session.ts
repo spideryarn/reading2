@@ -29,7 +29,7 @@
  * filesystem and with no transaction in it (`fsStoreSession`), lived here
  * until 2026-10-07; only a test had called it since the filesystem store went
  * on 2026-09-05
- * (docs/plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
+ * (docs/plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
  */
 import type { PipelineStep, StepContext, StepProduct } from "../pipeline.js";
 import { ProductRefused } from "./artifacts.js";

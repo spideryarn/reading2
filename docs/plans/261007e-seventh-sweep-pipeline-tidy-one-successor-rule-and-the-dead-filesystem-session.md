@@ -3,6 +3,9 @@
 Status as of 2026-10-07: all four items built, one commit each. Not pushed: a GPT
 review comes first.
 
+**The four commits name this file `261007d`**, which is what it was called until `dev` was merged
+in and another plan turned out to hold that letter. It is `261007e`.
+
 ## Goal
 
 Cluster **C8** of the [seventh sweep](261006m-seventh-codebase-sweep-depth-umbrella.md), with what
