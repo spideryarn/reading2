@@ -399,6 +399,34 @@ describe("the schema keeps the promises the plan makes", () => {
   });
 
   /**
+   * **The block-identity foreign key has an index to check itself with.**
+   *
+   * Deleting an article deletes every one of its `block_identities` rows, and
+   * for each one Postgres looks in `revision_blocks` for `(article_id,
+   * block_id)`. Until 2026-10-07 nothing led on those columns, so each lookup
+   * read the whole primary-key index: timed on a 141-block article in a
+   * 233,000-row table, that one trigger was 3.2 to 3.8 s of the delete, and 6 ms
+   * with this index (docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+   * § Stage 1).
+   *
+   * The definition, not the name: an index called this on `(block_id)` alone, or
+   * with the columns the other way round and a `where`, would keep the name and
+   * lose the point. A plan is not asserted, because a minted test database is
+   * too small for the planner to prefer any index.
+   */
+  it("the block-identity foreign key is indexed, so deleting an article does not scan every block", async () => {
+    const { rows } = await pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes
+        where schemaname = 'spideryarn'
+          and tablename = 'revision_blocks'
+          and indexname = 'revision_blocks_article_block'`,
+    );
+    expect(rows.map((r) => r.indexdef)).toEqual([
+      "CREATE INDEX revision_blocks_article_block ON spideryarn.revision_blocks USING btree (article_id, block_id)",
+    ]);
+  });
+
+  /**
    * **"The two are never both readable" is a constraint now, not a comment.**
    *
    * `article_visibility_at_delete` is only safe as a *second* answer to what an

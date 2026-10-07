@@ -1576,6 +1576,18 @@ export const revisionBlocks = spideryarn.table(
     primaryKey({ columns: [t.revisionId, t.blockId] }),
     /** GIN, because this column is queried with `@@` and never selected. */
     index("revision_blocks_fts").using("gin", t.fts),
+    /**
+     * Serves `revision_blocks_identity_fk` below, and nothing else. Deleting an
+     * article cascades to every one of its `block_identities` rows, and for
+     * each one Postgres asks whether a `revision_blocks` row still names
+     * `(article_id, block_id)`. The primary key leads on `revision_id`, so
+     * without this that question read the whole primary-key index once per
+     * block id: measured 2026-10-07 on a 141-block article in a 233,000-row
+     * table, 3.2 to 3.8 s of a 3.2 to 3.9 s delete, and 6 ms of about 50 ms with it
+     * (docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+     * § Stage 1).
+     */
+    index("revision_blocks_article_block").on(t.articleId, t.blockId),
     unique("revision_blocks_revision_ordinal").on(t.revisionId, t.ordinal),
     check("revision_blocks_ordinal", sql`${t.ordinal} >= 0`),
     /**
@@ -1630,10 +1642,14 @@ export const revisionBlocks = spideryarn.table(
       foreignColumns: [articleRevisions.articleId, articleRevisions.id],
     }).onDelete("cascade"),
     /**
-     * No cascade, and no `restrict` either — identities are never deleted, so
-     * this FK only ever fires on an id that was never minted. That is a real
-     * bug (stage 3 re-minting instead of carrying ids forward) and it should
-     * fail loudly rather than insert.
+     * No cascade, and no `restrict` either. An identity is deleted only when
+     * its whole article is, and then this is checked at the end of the
+     * statement, by which time the block rows have gone with their revision
+     * (docs/project/database.md § `restrict` and `no action`); the index
+     * `revision_blocks_article_block` above is what makes that check cheap.
+     * Otherwise it fires on an insert naming an id that was never minted. That
+     * is a real bug (stage 3 re-minting instead of carrying ids forward) and it
+     * should fail loudly rather than insert.
      */
     foreignKey({
       name: "revision_blocks_identity_fk",
