@@ -37,6 +37,28 @@ export interface HiddenCheckApi {
   ask(): void;
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/** Check every field the panel reads before treating a transport value as an answer. */
+function isResult(value: unknown): value is HiddenCheckResult {
+  if (!isObject(value) || !Array.isArray(value.judgments) ||
+      !isCount(value.unanswered) || !isCount(value.notSent) || value.notSent > value.unanswered ||
+      typeof value.model !== "string") return false;
+  return value.judgments.every((judgment: unknown) => {
+    if (!isObject(judgment) || !isObject(judgment.row)) return false;
+    const row = judgment.row;
+    return typeof row.key === "string" &&
+      Array.isArray(row.paths) && row.paths.every((p: unknown) => typeof p === "string") &&
+      isCount(row.count) && row.count > 0 && isCount(row.totalPaths) &&
+      row.totalPaths >= row.paths.length && row.totalPaths <= row.count &&
+      (judgment.verdict === "probably-harmless" || judgment.verdict === "worth-a-look") &&
+      typeof judgment.reason === "string" && judgment.reason.trim() !== "";
+  });
+}
+
 /** Zero or more `delta`, then exactly one `done` or `error`; anything else is a failure. */
 async function readRun(
   body: ReadableStream<Uint8Array>,
@@ -49,12 +71,9 @@ async function readRun(
       continue;
     }
     if (event.name === "done") {
-      const data = event.data as Partial<HiddenCheckResult> | null;
       /* Checked rather than cast: a `done` from a server that has moved on
-         would otherwise draw as "Opus checked none of these". */
-      if (data && Array.isArray(data.judgments) && typeof data.unanswered === "number") {
-        return data as HiddenCheckResult;
-      }
+         must not crash the panel or draw an unknown verdict as harmless. */
+      if (isResult(event.data)) return event.data;
       throw new ReaderFacingError("The check finished with an answer this page could not read. Try again.");
     }
     if (event.name === "error") {

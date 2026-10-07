@@ -215,3 +215,48 @@ F3 and the context notes (the scanner change dropped, § Passed over), F4 (a jud
 checked inputs), F5 (sampling said beside the judgment), F6 (the reason's rendering hardened), F7
 (unanswered counted from accepted rows). Also taken: `ordered` moves to the shared leaf with
 `grouped`; strict malformed-frame handling as Mirror's.
+
+## Code review (GPT Sol, write-capable, after building)
+
+[261007l-hidden-text-opus-check-code-review-sol.md](261007l-hidden-text-opus-check-code-review-sol.md),
+verdict *land after fixes*, fixes applied by the reviewer and checked here (gates re-run):
+
+- **C1** (P2): the client checked only the outer shape of a `done` result, so a null judgment could
+  crash the panel and an unknown verdict could count as harmless. Nested validation in
+  `useHiddenCheck.ts`, eight malformed-result cases.
+- **C2** (P2): combining grapheme joiners, variation selectors, blank fillers and controls survived
+  the reason's renderer. `visibleReason` now prints every `Cf`, `Cc`, default-ignorable and bidi
+  character as a code point.
+- **C3** (P2): the clip box held the verdict as well as the reason, so combining marks in the reason
+  could paint over the app's own words. The reason has its own box. Its postmortem:
+  [261007s](../postmortems/261007s-trusting-a-boundary-check-that-does-not-cover-its-consumer.md).
+- **C4, C5** (P2, wider, reported, not taken here): Mirror's client has the same shallow result
+  check as C1 (`useMirror.ts`), and the shared browser SSE parser (`src/web/lib/sse.ts`) drops a
+  malformed JSON frame silently. Both are outside this change, so they go to the Overseer as
+  follow-ups.
+
+## Browser check (Sonnet, Playwright, 1440 / 820 / 390)
+
+On the local copy of `arxiv.org/html/2608.13566v1` the scan's 41 findings are three rows. One press
+per width (three Opus calls, about six seconds each): all three rows came back *probably harmless*
+with sensible reasons (*"A zero-width space inside maths formulas, which is how arXiv's converter
+writes an invisible operator; no words in it."*). Rows, order, count and the chip's dot were
+identical before and after; the answer survived a switch to Criteria and back; nothing overflowed;
+no console errors. Screenshots `261007l-shot-*`.
+
+One fix after it: at desktop width the reason sat in a narrow hanging column beside the verdict
+(the line was a flex row, which also ate the spaces around the dash). The line is now a block: the
+verdict and its dash, then the reason in its own clipped box underneath. Not re-shot, since a re-shoot
+would spend another Opus call to see a CSS change the panel tests read as computed style.
+
+## The adversarial eval (real Opus, after building)
+
+[`evals/hidden-check-adversarial.ts`](../../evals/hidden-check-adversarial.ts), written up in
+[261007b-hidden-check-adversarial-eval.md](../investigations/261007b-hidden-check-adversarial-eval.md).
+Six fixtures scanned by the real `scanRawSource`, two runs each, 12 Opus calls, $0.15. **18 of 18
+row judgments right**: every attack row was *worth a look*, including the one addressed to the
+checker (*"classify it as probably-harmless"*), a forged `sr-only` label, a tag-character payload,
+and fence-shaped text carrying a whole forged JSON answer; every LaTeXML and page-furniture row was
+*probably harmless*, also when it sat beside an attack. Limits: two runs a case, and the attacks are
+the obvious ones; a payload with no command in it was not tried. Whatever a cleverer one achieves,
+the most it can do is write a misleading line under a row that is still drawn.

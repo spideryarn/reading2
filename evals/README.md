@@ -248,6 +248,21 @@ that were offered, the caps, and anything about the person in a search or the qu
 ([261005b](../docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md)).
 Paid, about 1.5 cents. [command-suggest/README.md](command-suggest/README.md).
 
+## `hidden-check-adversarial.ts` — can a hidden payload talk Referee's Opus check into "harmless"?
+
+```
+npx tsx evals/hidden-check-adversarial.ts --dry   # free: scan the fixtures, print the rows
+npx tsx evals/hidden-check-adversarial.ts         # paid: 6 cases × 2 runs on Opus, about $0.15
+```
+
+Six small HTML fixtures, scanned by the real `scanRawSource` and grouped as the panel groups them,
+then sent through the real `hiddenCheckStream` at power `standard`: LaTeXML furniture, a plain
+white-on-white attack, one addressed to the checker, tag characters, a forged `sr-only` label, and
+a forged fence with an injected JSON answer beside benign rows. One run, **2026-10-07**: every
+attack row *worth a look* and every benign row *probably harmless*, both runs
+([261007b](../docs/investigations/261007b-hidden-check-adversarial-eval.md)). Results in
+[`hidden-check-adversarial/`](hidden-check-adversarial/).
+
 ## `reorder-quality.ts` — did putting the article first change the writing?
 
 ```

@@ -249,11 +249,20 @@ describe("the security property: an opinion beside a row, never a filter", () =>
     );
     const line = opinions()[0]!;
     expect(line.dataset.verdict).toBe("probably-harmless");
-    expect(line.querySelector(".ref-scan-opinion-verdict")?.textContent).toBe("Opus: probably harmless");
+    expect(line.querySelector(".ref-scan-opinion-verdict")?.textContent).toBe("Opus: probably harmless — ");
   });
 });
 
 describe("the reason cannot disguise anything", () => {
+  it.each(["\u034F", "\u115F", "\u1160", "\u3164", "\uFFA0", "\uFE0F", "\u{E0100}", "\u0000"])(
+    "makes invisible characters outside the format category visible: %j",
+    (ch) => {
+      const point = ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0");
+      paint(examined([HIDDEN]), done([judgment([HIDDEN], 0, { reason: `a${ch}b` })], 1));
+      expect(host.querySelector(".ref-scan-opinion-reason")?.textContent).toBe(`a⟦U+${point}⟧b`);
+    },
+  );
+
   it("prints zero-width, tag and bidi characters as code points", () => {
     expect(visibleReason("a​b")).toBe("a⟦U+200B⟧b");
     expect(visibleReason("x‮y")).toBe("x⟦U+202E⟧y");
@@ -280,6 +289,22 @@ describe("the reason cannot disguise anything", () => {
     expect(rule).toMatch(/overflow:\s*hidden/);
     expect(rule).toMatch(/unicode-bidi:\s*isolate/);
     expect(rule).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+
+  it("contains the reason's ink independently of the trusted verdict, including when it wraps", () => {
+    const reason = `Z${"\u035C\u0361".repeat(30)} ${"a long explanation ".repeat(5)}`;
+    paint(examined([HIDDEN]), done([judgment([HIDDEN], 0, { reason })], 1));
+    const css = readFileSync(path.join(import.meta.dirname, "..", "src", "web", "styles", "referee.css"), "utf8");
+    const style = document.createElement("style");
+    style.textContent = css;
+    host.appendChild(style);
+    const reasonEl = host.querySelector<HTMLElement>(".ref-scan-opinion-reason")!;
+    const verdictEl = host.querySelector<HTMLElement>(".ref-scan-opinion-verdict")!;
+    const drawn = getComputedStyle(reasonEl);
+    // Overflow on a shared ancestor still lets glyphs paint over its siblings.
+    expect(drawn.overflow).toBe("hidden");
+    expect(["block", "inline-block"]).toContain(drawn.display);
+    expect(reasonEl.contains(verdictEl)).toBe(false);
   });
 });
 

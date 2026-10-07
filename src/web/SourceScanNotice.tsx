@@ -710,11 +710,12 @@ function AskOpus({ check, groups }: { check: HiddenCheckApi; groups: readonly Sc
 /**
  * Characters that draw nothing or reorder what is around them: format
  * characters (zero-width spaces and joiners, soft hyphens, tag characters,
- * the bidi embeddings and isolates) and every bidi control. A model's reason
+ * the bidi embeddings and isolates), default-ignorable characters (including
+ * variation selectors and blank fillers), and controls. A model's reason
  * may quote the fragment it judged, and the fragment may be built of exactly
  * these, so they are shown as code points rather than left to act.
  */
-const INVISIBLE_OR_REORDERING = /[\p{Cf}\p{Bidi_Control}\u{E0000}-\u{E007F}]/gu;
+const INVISIBLE_OR_REORDERING = /[\p{Cf}\p{Cc}\p{Default_Ignorable_Code_Point}\p{Bidi_Control}\u{E0000}-\u{E007F}]/gu;
 
 /** The model's reason, with every invisible or reordering character printed as its code point. */
 export function visibleReason(reason: string): string {
@@ -725,9 +726,9 @@ export function visibleReason(reason: string): string {
 }
 
 /**
- * **One row's line**: the app's words for the verdict, then the model's reason
- * in the model's face (docs/project/fonts.md), isolated in a `<bdi>` and inside
- * a box that clips, so a stack of combining marks cannot paint over the row
+ * **One row's line**: the app's words for the verdict, then, on the line
+ * under them, the model's reason in the model's face (docs/project/fonts.md),
+ * isolated in a `<bdi>` and inside a box that clips, so a stack of combining marks cannot paint over the row
  * above. Says how many places were shown when the row has more than were sent.
  */
 function Opinion({ opinion }: { opinion: HiddenJudgment | null }) {
@@ -744,8 +745,8 @@ function Opinion({ opinion }: { opinion: HiddenJudgment | null }) {
     <p className="ref-scan-opinion" data-verdict={verdict}>
       <span className="ref-scan-opinion-verdict">
         {who}: {VERDICT_WORDS[verdict]}
+        {" — "}
       </span>
-      {" — "}
       <bdi className="ref-scan-opinion-reason">{visibleReason(reason)}</bdi>
     </p>
   );

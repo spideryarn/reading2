@@ -223,10 +223,10 @@
 /* **One row's opinion.** The verdict words are ours; the reason is the
    model's (voices.css) and was steered by text written to fool it, so its box
    is drawn so it cannot disguise anything: direction isolated, long runs
-   broken, and **clipped**, so a stack of combining marks stays inside its own
-   line instead of painting over the row above. tests/hidden-check-panel.test.tsx
-   reads these three declarations. */
+   broken, and **clipped** independently of the verdict, so combining marks
+   cannot paint over trusted words even when the reason wraps. */
 .ref-scan-opinion {
+  display: block;
   margin: 0.1rem 0 0;
   color: var(--ink);
   overflow: hidden;
@@ -235,7 +235,12 @@
 }
 .ref-scan-opinion[data-verdict="none"] { color: var(--ink-faint); }
 .ref-scan-opinion-verdict { font-weight: 600; }
-.ref-scan-opinion-reason { color: var(--ink-soft); unicode-bidi: isolate; }
+.ref-scan-opinion-reason {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-soft);
+  unicode-bidi: isolate;
+}
 
 /* The sub-modes: the part-switcher every mode shares, `.summ-views` /
    `.summ-view-btn` (mode-band.css § the part-switcher, plan 261007h § F2), so

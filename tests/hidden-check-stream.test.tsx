@@ -124,6 +124,23 @@ describe("the terminal contract", () => {
     expect(chars).toBe(40);
   });
 
+  it("accepts a completed judgment with its checked inputs intact", async () => {
+    const data = {
+      ...DONE,
+      judgments: [{ row: { key: "k", count: 39, totalPaths: 39, paths: ["p1", "p2", "p3", "p4", "p5"] },
+        verdict: "worth-a-look", reason: "Hidden words addressed to a reviewer." }],
+    };
+    runBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("done", data));
+        c.close();
+      },
+    });
+    await ask();
+    expect(latest?.status).toBe("done");
+    expect(latest?.result).toEqual(data);
+  });
+
   it("refuses a done frame it cannot read", async () => {
     runBody = () =>
       new ReadableStream<Uint8Array>({
@@ -134,6 +151,28 @@ describe("the terminal contract", () => {
       });
     await ask();
     expect(latest?.status).toBe("failed");
+  });
+
+  it.each([
+    { ...DONE, judgments: [null] },
+    { ...DONE, judgments: [{ row: null, verdict: "worth-a-look", reason: "x" }] },
+    { ...DONE, judgments: [{ row: { key: "k", count: 1, totalPaths: 1, paths: [null] }, verdict: "worth-a-look", reason: "x" }] },
+    { ...DONE, judgments: [{ row: { key: "k", count: 1, totalPaths: 1, paths: ["p"] }, verdict: "harmless", reason: "x" }] },
+    { ...DONE, judgments: [{ row: { key: "k", count: 1, totalPaths: 1, paths: ["p"] }, verdict: "worth-a-look", reason: 42 }] },
+    { ...DONE, unanswered: -1 },
+    { ...DONE, notSent: "0" },
+    { judgments: [], unanswered: 0 },
+  ])("refuses malformed completed results before the panel can read them: %j", async (data) => {
+    runBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("done", data));
+        c.close();
+      },
+    });
+    await ask();
+    expect(latest?.status).toBe("failed");
+    expect(latest?.result).toBeNull();
+    expect(latest?.error).toMatch(/answer this page could not read/);
   });
 
   it("carries the reason from an error frame", async () => {
