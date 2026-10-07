@@ -1100,6 +1100,13 @@
       "when": 1791335787375,
       "tag": "20261007011627_upload_source_guesses_created_at",
       "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1791336047829,
+      "tag": "20261007012047_drop_duplicate_chat_messages_index",
+      "breakpoints": true
     }
   ]
 }

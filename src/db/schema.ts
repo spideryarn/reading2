@@ -4249,6 +4249,11 @@ export const chatMessages = spideryarn.table(
       "chat_messages_attempt_both",
       sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
     ),
+    /* The rule (one message per position in a thread) and also the index a
+       thread's messages are read through, in order. It had a non-unique twin on
+       the same three columns, `chat_messages_thread_ordinal_idx`, from the
+       migration after the one that made this; that was dropped on 2026-10-07,
+       and tests/db-schema.test.ts refuses the next such pair on any table. */
     unique("chat_messages_thread_ordinal").on(t.articleId, t.threadId, t.ordinal),
     check("chat_messages_role", sql`${t.role} in ('user','assistant')`),
     check("chat_messages_status", sql`${t.status} in ('pending','done','error')`),

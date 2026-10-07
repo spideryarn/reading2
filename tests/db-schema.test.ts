@@ -427,6 +427,50 @@ describe("the schema keeps the promises the plan makes", () => {
   });
 
   /**
+   * **No table carries the same index twice.**
+   *
+   * `drizzle/0002` made `chat_messages_thread_ordinal`, UNIQUE on `(article_id,
+   * thread_id, ordinal)`, and `drizzle/0003`, the next migration, made
+   * `chat_messages_thread_ordinal_idx` on the same three columns, not unique.
+   * Both were kept up on every chat message for six weeks, and only the first
+   * was in src/db/schema.ts. The second was dropped on 2026-10-07.
+   *
+   * Asked of the catalog rather than of a list, so it holds for the next table
+   * too: two indexes are the same when they are on one table with the same
+   * method, key columns, operator classes, ordering, expressions and predicate.
+   * Uniqueness is deliberately not part of "the same" — a unique index serves
+   * every read its non-unique twin does, which is the whole finding.
+   *
+   * Watched failing before the drop, naming that pair.
+   */
+  it("no table has two indexes on the same columns in the same order", async () => {
+    const { rows } = await pool.query<{ on_table: string; twins: string[] }>(
+      `select i.indrelid::regclass::text as on_table,
+              array_agg(c.relname::text order by c.relname) as twins
+         from pg_index i
+         join pg_class c on c.oid = i.indexrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'spideryarn'
+        group by i.indrelid, c.relam, i.indkey::text, i.indclass::text, i.indoption::text,
+                 coalesce(pg_get_expr(i.indexprs, i.indrelid), ''),
+                 coalesce(pg_get_expr(i.indpred, i.indrelid), '')
+       having count(*) > 1
+        order by 1`,
+    );
+    expect(rows).toEqual([]);
+
+    /* And the one that stays is the one that enforces something. */
+    const kept = await pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes
+        where schemaname = 'spideryarn' and tablename = 'chat_messages' order by indexname`,
+    );
+    expect(kept.rows.map((r) => r.indexdef)).toEqual([
+      "CREATE UNIQUE INDEX chat_messages_article_id_thread_id_id_pk ON spideryarn.chat_messages USING btree (article_id, thread_id, id)",
+      "CREATE UNIQUE INDEX chat_messages_thread_ordinal ON spideryarn.chat_messages USING btree (article_id, thread_id, ordinal)",
+    ]);
+  });
+
+  /**
    * **"The two are never both readable" is a constraint now, not a comment.**
    *
    * `article_visibility_at_delete` is only safe as a *second* answer to what an

@@ -220,11 +220,50 @@ was the finding: the test accepts any timestamp column as a stand-in and cannot 
 moves. [sql.md § Store when it happened](../project/sql.md#store-when-it-happened) now says to read
 the writers before listing one.
 
+## Stage 5: the duplicate chat-message index goes
+
+A build decision (U22): an index, not data, and re-creatable in one line.
+
+**Both catalogs, read 2026-10-07 01:20 UTC**, from `pg_index` rather than from names:
+
+| index on `chat_messages` | unique | valid | key columns | operator classes | ordering |
+|---|---|---|---|---|---|
+| `chat_messages_thread_ordinal` (the UNIQUE constraint's) | yes | yes | `1 2 4` | `10065 3126 1978` | `0 0 0` |
+| `chat_messages_thread_ordinal_idx` | no | yes | `1 2 4` | `10065 3126 1978` | `0 0 0` |
+
+Identical in production and locally, no predicate and no expression on either, and
+`pg_constraint` has `UNIQUE (article_id, thread_id, ordinal)`, validated. A query grouping every
+index in the schema by table, method, columns, classes, ordering, expressions and predicate found
+this pair and **no other**, in both. Production has 200 chat messages.
+
+**The SQL** (`drizzle/20261007012047_drop_duplicate_chat_messages_index.sql`, made with
+`npm run db:generate -- --custom`, since the index was never in `schema.ts` and drizzle had
+nothing to diff):
+
+```sql
+DROP INDEX "spideryarn"."chat_messages_thread_ordinal_idx";
+```
+
+No `IF EXISTS`, on purpose: a database without the index is not the one this was checked against,
+and a drop that did nothing would print `✓ migrations applied` over that. `npm run db:generate --
+--allow-empty` afterwards answered *no schema changes*, so the snapshot still equals `schema.ts`.
+
+**Tested** (`tests/db-schema.test.ts`): *no table has two indexes on the same columns in the same
+order*, the same grouping query, asked of the catalog so it holds for the next table too; and the
+two indexes left on `chat_messages`, by definition. **Red before the drop**, naming exactly this
+pair.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
+
+**They will run as one transaction**: drizzle's migrator wraps every pending file in one
+(`scripts/deploy-checks.ts` says so, from the installed source), so either all of these land or
+none does. The first holds a lock that blocks writes to `revision_blocks` until that transaction
+commits; the others are metadata changes on tables of 4 to 200 rows.
 
 1. `20261007005448_revision_blocks_article_block_index`
 2. `20261007010230_referee_criteria_shape_all_or_none`
 3. `20261007010954_referee_claims_empty_unless_done`
 4. `20261007011627_upload_source_guesses_created_at`
+5. `20261007012047_drop_duplicate_chat_messages_index`
