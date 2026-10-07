@@ -167,6 +167,29 @@ stays, with his 2026-10-07 answer under it as what replaced it.
   in a commit with no chip in it. The act is now offered and spent only once the drawn thread holds
   that answer as `done`.
 
+- Code review ([GPT Sol](261007p-code-review-sol.md), *land with its fixes*): CR1 (P1) a new
+  guide lost its act when `begin` renamed the thread and remounted the keyed conversation — the act
+  now lives in ChatPanel (`useGuideAct`) and `Answered` carries the starting thread id; red first;
+  postmortem [261007t](../postmortems/261007t-a-completion-event-is-lost-when-its-listener-belongs-to-a-provisional-identity.md).
+  CR2 stale comments. CR3 (an unmarked first open still waits for the settings read) predates this
+  and is left.
+
+## Log
+
+- 2026-10-07: **seen in a browser**, Sonnet subagent, Playwright, 1440 / 820 / 390, local
+  Supabase, six paid turns, no console errors. Passed: a first open lands on the guide's greeting
+  (with the notes at 1440, without at 820, the article alone at 390) and no `/api/chat` on arrival;
+  *"Please open Structure for me"* opened Structure by itself when the answer ended, the answer
+  said *"I've opened Structure for you"*, Back returned to the guide, and reopening the guide from
+  the list re-ran nothing; *"open the Glossary"* drew an *Open Glossary (generates)* button that did
+  not run; a plain chat's *"Open Structure"* only drew a button. **Not seen**: a quick-search
+  button (the model asked a clarifying question instead); the unit tests hold that one never acts.
+  Shots: [first open](261007p-shot-1-first-open-guide-1440.png),
+  [Structure opened](261007p-shot-2-guide-opened-structure-1440.png),
+  [Glossary a button](261007p-shot-3-glossary-button-1440.png),
+  [plain chat](261007p-shot-4-plain-chat-button-only-1440.png),
+  [phone](261007p-shot-5-phone-guide-after-back-390.png).
+
 ## The simpler options passed over
 
 - **Item 1, open a generating mode without arming it** (the band would show its own *Write it*
