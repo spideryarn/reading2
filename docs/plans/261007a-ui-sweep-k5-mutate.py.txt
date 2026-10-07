@@ -24,6 +24,8 @@ M=[
   '{hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}', '<p className="gloss-gate-note">{note}</p>', 'tests/glossary-band-wiring.test.ts'),
  ("M8 no rule for Debate's words", G,
   ".gloss-gate-value.in-words { font-family: inherit; }\n", "", 'tests/debate-panel.test.tsx'),
+ ("M8b the rule for Debate's words only in print (GPT Sol, K5-F2)", G,
+  ".gloss-gate-value.in-words { font-family: inherit; }\n", "@media print {\n  .gloss-gate-value.in-words { font-family: inherit; }\n}\n", 'tests/debate-panel.test.tsx'),
  ("M9 Debate's value without the modifier", 'src/web/DebatePanel.tsx',
   'className="gloss-gate-value in-words"', 'className="gloss-gate-value"', 'tests/debate-panel.test.tsx'),
  ("M10 Quotes' order row under its old class", 'src/web/QuotesPanel.tsx',

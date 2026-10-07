@@ -91,7 +91,8 @@ the element that the next person styles, which is how the copies began.
 **Debate's value: one CSS modifier, no React flag.** `StopBar`'s value is always words (its
 `words` prop is how it is built), so the span is always `gloss-gate-value in-words`, and
 `.gloss-gate-value.in-words { font-family: inherit; }` sits beside the rule it modifies.
-`inherit` is the computed value the span had while its own rule set no face. *Passed over:* a
+`inherit` explicitly selects the parent's computed face, as default inheritance did when no
+other rule specified a face on this span. *Passed over:* a
 contextual rule (`.dbt .gloss-gate-value`), which needs no class at all but would silently
 un-mono any numeric slider Debate later gains, and says nothing at the element about why.
 
@@ -205,7 +206,7 @@ Mutated after the change, each seen red and put back (`261007a-ui-sweep-k5-mutat
 | `.gloss-sort-btn:hover` outside `@media (hover: hover)` | `touch-controls` |
 | Quotes' foot line under its old class; then made conditional | `glossary-band-wiring` (both) |
 | Search's foot line made unconditional | `glossary-band-wiring` |
-| no `.gloss-gate-value.in-words` rule; then no `in-words` on the span | `debate-panel` (both) |
+| no `.gloss-gate-value.in-words` rule; the rule only inside `@media print`; no `in-words` on the span | `debate-panel` (all three) |
 | Quotes' row, Quotes' value, Search's value, Debate's reset: each back under its old class | `quotes-and-citations-compact-header`, `quotes-yours-rows`, `search-results-get-the-room`, `debate-panel` |
 
 `touch-controls` used to hold `.gloss-sort-btn` and `.quotes-rank-btn` to the same floor, hover
@@ -239,9 +240,12 @@ Gates: `npm run typecheck`; `touch-controls`, `glossary-band-wiring`, `css-token
 The claim is "no difference in this matrix". Outside it:
 
 - **Debate's order row on real markup.** Five articles on this box have a stored debate; none has
-  two Reception orders, so the row is never drawn. The script puts the markup `DebatePanel.tsx` §
-  `OrderBar` emits (through `OrderGroup`) into a real Debate band after `.dbt-controls`. Its
-  classes did not change in this cluster.
+  two Reception orders, so the row is never drawn. The script puts a CSS stand-in for
+  `DebatePanel.tsx` § `OrderBar` into a real Debate band after `.dbt-controls`: the same tags and
+  classes, but *as found / stance / date* rather than the panel's *as found / date / stance*,
+  without the buttons' titles, handlers or `OrderGroup`'s scroll/reflow effects. It tests those
+  classes in the band, not the real component's behaviour. The classes did not change in this
+  cluster.
 - **A real phone.** `isMobile` is not a finger: `:active` was produced with mouse events in the
   touch cells too, safe-area insets are zero, and there is no iOS text autosizing.
 - **Hover on a touch screen** (not asked for; `hover: none` there, so the guarded rule is off).
@@ -254,6 +258,13 @@ The claim is "no difference in this matrix". Outside it:
   script. Both rules are unchanged text in the built file.
 - **FAQ without its order row**, where `faq.css`'s `:not(:has(> .gloss-sort))` applies. The
   selector and the class FAQ emits are both unchanged.
+- **Other interaction and loading states:** a held-down range thumb, slider endpoints and a
+  one-stop Quotes track, later order buttons selected or horizontally scrolled, mixed mouse/touch
+  media capabilities, browser zoom, and fallback fonts before the web fonts finish loading.
+  The script verifies Tab focus, but does not assert expected control counts, media capabilities,
+  themes, hovered targets or pressed targets before capturing them. The saved captures were
+  checked during review for the expected counts and hovered/pressed/focused states. Equal
+  incomplete captures on a future run could still compare as equal.
 
 For everything in this list the second witness still holds: the same rules, with the same
 conditions and declarations, in a file where no other rule moved.
@@ -261,10 +272,12 @@ conditions and declarations, in a file where no other rule moved.
 ## What in the umbrella or the brief was not so
 
 - **"About 140 lines gone."** 175 net.
-- **Its list of what names the classes.** `mode-band.css` and `voices.css` name none. Of the
+- **Its list of what names the classes.** `mode-band.css` and `voices.css`, also checked in the
+  census, name none; neither is named in K5's consumer list. Of the
   tests it lists, `css-tokens`, the import-order check, `order-group`,
   `threshold-slider-adopters` and `mode-surface-changes-no-markup` needed no change (the first
-  two name none of the classes; the others name only ones that stay). It misses
+  two name none of the classes; the others name only ones that stay). Its general reference to
+  panel tests does not spell out
   `glossary-band-selection`, `citations-panel`, `faq-panel`, `debate-panel` and
   `search-order-row-and-failed-hint`.
 - **The manifest names `faq.css`, `ThresholdSlider.tsx`, `OrderGroup.tsx` and six panels.** Three
@@ -283,12 +296,52 @@ conditions and declarations, in a file where no other rule moved.
   now sit together in that sheet. Not moved: it would reorder rules for no reader, and the
   comment now says what is true.
 - **`design-css-overview.md` does not say where a band's slider and order row are styled.** A line
-  under its map would help the next mode; it is an entry-point doc whose wording is a rule, so it
-  is left for an approved edit.
+  under its map would help the next mode. A signpost needs no approval under AGENTS.md; that
+  wider doc edit is left outside this cluster.
 - **The fifth sweep's question 3** is as open as it was. This removes the CSS half of its cost
   whichever way it goes: four components, one look, one set of rules.
 - **Search's order row** stays a design of its own (umbrella question 1).
 
 ## Review
 
-*(filled in when GPT Sol's code review returns)*
+[GPT Sol's code review](261007a-ui-sweep-k5-code-review-sol.md)
+([the prompt](261007a-ui-sweep-k5-code-review-prompt.md)), write-capable, one round. Verdict:
+**ready with these fixes**; no P0 or P1. It found no changed cascade winner and no established
+reader-visible difference, re-ran `compare` (zero differences over 76,084 values), and decoded
+both files to check the scene, capture and record counts and the hovered, focused and pressed
+targets. On the questions put to it: the dedup earns its keep ("removes independently maintained
+declarations without introducing component flags or replacement copies"); the glossary prefix is
+awkward in Search but was already the shared convention; the Debate modifier is not one flag too
+many; dropping the old names was right. It changed no stylesheet, so the browser measurement
+stands as run. Its four findings, all accepted; one fix was rewritten:
+
+- **K5-F1 (P2, established): lossy evidence normalization.** The census serialized
+  `.gloss-gate { padding: 1px }` and the same declaration with `!important` identically, because
+  PostCSS stores priority separately from `value`. The serializer now retains `important`;
+  this mutation was seen red before the fix and green afterwards. None of the actual K5
+  declarations had this flag, so the existing browser evidence remains applicable.
+- **K5-F2 (P2, established): syntactic presence substituted for applicability.** The new Debate
+  test accepted its modifier inside `@media print`, where the screen would keep the mono face.
+  It now requires one unconditional inherited-face rule and tests the JSX wiring; that mutation
+  was seen red, and the unmutated test green. Its name describes that structural guarantee,
+  rather than claiming a computed rendering test. **The fix as Sol wrote it imported `postcss`
+  into the test**, which `package.json` does not declare (it is here only as another package's
+  dependency, and no other test imports it). The builder kept the finding and rewrote the check
+  with `enclosing` from `tests/helpers/stylesheets.ts`: the modifier is named exactly once, its
+  rule is the one declaration, and no at-rule encloses it. The print-only mutation is red against
+  that version too (`M8b` in the mutation script).
+- **K5-F3 (P3, established): the injected row was described as exact markup.** Its button order,
+  omitted titles and missing React behaviour differ as recorded above. The script comment and
+  this doc now call it a CSS stand-in; the injection and saved captures are unchanged.
+- **K5-F4 (P3, established): overstated documentation corrections.** The umbrella already
+  referred generally to panel tests, so "misses" overstated its omissions; the wording now
+  distinguishes tests not individually named. The modifier rationale called `inherit` a
+  computed value rather than a specified keyword, and the deferred signpost incorrectly implied
+  approval was required despite AGENTS.md's signposting exception. Those descriptions are
+  corrected here; no rule doc was edited.
+
+Ten targeted test files passed (281 tests). The import-order file passed five cases and could
+not run its Git-spawning case under this sandbox (`spawnSync git EPERM`); the same import scan
+passed with the Git file list supplied separately. The standard typecheck wrapper could not open
+its tsx pipe; direct `tsc --noEmit` passed for all four projects. The touched test passed lint,
+and `git diff --check` passed. No stylesheet changed; no commit was made.

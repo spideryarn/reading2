@@ -36,7 +36,7 @@ for (const [name, css] of sheets()) {
     const media = [];
     for (let p = rule.parent; p && p.type !== "root"; p = p.parent) if (p.type === "atrule") media.unshift(`@${p.name} ${p.params}`);
     const decls = [];
-    rule.walkDecls((d) => decls.push(`${d.prop}: ${d.value.replace(/\s+/g, " ")}`));
+    rule.walkDecls((d) => decls.push(`${d.prop}: ${d.value.replace(/\s+/g, " ")}${d.important ? " !important" : ""}`));
     for (const sel of rule.selectors) {
       if (!NAMES.test(sel)) continue;
       rows.push({ name, order, media: media.join(" "), sel: sel.replace(/\s+/g, " ").trim(), decls: decls.join("; ") });

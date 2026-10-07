@@ -64,7 +64,7 @@ import type { DebateOrder } from "../src/web/debate-order.js";
 import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate } from "../src/public-types.js";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 import {
   CITERS_ABOUT,
   CITERS_HEADING,
@@ -1997,11 +1997,21 @@ describe("Claims, and the relevance bar", () => {
      (glossary.css § the threshold slider; plan 261007a § K5). Both halves: the
      modifier is on the span, and its rule hands the face back. Without either
      the words are drawn as a reading off an instrument, and nothing else here
-     would notice. */
-  it("draws its value in the band's own face, not the other sliders' mono", () => {
+     would notice.
+
+     **One rule, and under no condition** (GPT Sol, K5-F2): the first draft
+     asked only that the rule's text existed, which a copy inside `@media print`
+     satisfies while the screen stays mono. This is still the wiring and not
+     the rendering; the computed face is in the plan's browser measurement. */
+  it("wires its word value to an unconditional inherited-face rule", () => {
     paint(owner({ debate: judged() }), "claims");
     expect(host.querySelector(".dbt-rel .gloss-gate-value")?.className).toBe("gloss-gate-value in-words");
-    expect(readerCssNoComments()).toMatch(/\.gloss-gate-value\.in-words\s*\{\s*font-family:\s*inherit;?\s*\}/);
+    const css = readerCssNoComments();
+    const named = [...css.matchAll(/\.gloss-gate-value\.in-words\b/g)];
+    expect(named, "the modifier is written exactly once").toHaveLength(1);
+    const at = named[0]?.index ?? -1;
+    expect(css.slice(at)).toMatch(/^\.gloss-gate-value\.in-words\s*\{\s*font-family:\s*inherit;?\s*\}/);
+    expect(enclosing(css, at), "inside an at-rule, so not on every screen").toEqual([]);
   });
 
   it("never hides an unjudged row, and its count is the rows drawn", () => {

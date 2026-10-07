@@ -1,5 +1,5 @@
-/* K5: record everything a reader could see of the threshold slider and the
-   order row, so the same run after the dedup can be compared with it.
+/* K5: record computed styles and geometry of the threshold slider and the
+   order row in the chosen scenes and states, for comparison after the dedup.
 
      SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx k5-measure.ts run <label> [--only <scene>]
      npx tsx k5-measure.ts compare <a.json> <b.json> [--common]
@@ -16,12 +16,13 @@
    the scenes both files hold. It exits 1 if anything differs.
 
    The fixtures are articles on this box's shelf with stored results. No stored
-   debate has two Reception orders, so Debate's order row is the markup
-   DebatePanel.tsx § OrderBar emits, put into a real Debate band.
+   debate has two Reception orders, so Debate's order row is an injected CSS
+   stand-in inside a real band (see DEBATE_ORDER_ROW below for its omissions).
 
    Nothing here runs a model: a pressed order chip and a moved slider only
    rewrite the URL (`?order=`, `?conf=` and their siblings), and every non-GET
-   request but the sign-in's is refused in k5-lib.ts whatever is pressed. */
+   request but the sign-in's and the "opened" stamp is refused in k5-lib.ts
+   whatever is pressed. */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -106,7 +107,9 @@ window.k5 = {
 type Capture = Record<string, Record<string, unknown>>;
 type Result = Record<string, Capture | { skipped: string } | string>;
 
-/* DebatePanel.tsx § OrderBar, as OrderGroup.tsx renders it. */
+/* CSS stand-in for DebatePanel.tsx § OrderBar. Same tags and classes, but
+   stance/date are reversed, titles omitted, and no React handlers or
+   OrderGroup scroll/reflow effects run. Retained to match the saved captures. */
 const DEBATE_ORDER_ROW = `<div class="gloss-sort"><div class="gloss-sort-group" role="group" aria-label="Order the sources by"><button type="button" class="gloss-sort-btn on" aria-pressed="true">as found</button><button type="button" class="gloss-sort-btn" aria-pressed="false">stance</button><button type="button" class="gloss-sort-btn" aria-pressed="false">date</button></div></div>`;
 
 const SCENES: { name: string; path: string; view?: string; inject?: { after: string; html: string } }[] = [
