@@ -46,9 +46,17 @@ import {
   type IllustratedFault,
   readStoredIllustrated,
 } from "../illustrated-plate.js";
-import type { Block, BlockId, IllustratedResponse, Job, SketchResponse } from "../types.js";
+import {
+  NONE_YET_AS_NULL_HEADER,
+  type Block,
+  type BlockId,
+  type IllustratedResponse,
+  type Job,
+  type SketchResponse,
+} from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
@@ -266,9 +274,17 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const load = useCallback(async (current: () => boolean) => {
     const started = begin();
     try {
-      const res = await apiFetch(`/api/illustrated/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/illustrated/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<IllustratedResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         // The ordinary case: `illustrated` is off DEFAULT_INGEST_STEPS, so most
         // articles have never had one painted. This is what the button is for.
         setShown(null);
@@ -279,8 +295,12 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
         setStatus("none");
         return;
       }
-      const loaded = await readJson<IllustratedResponse>(res);
-      if (!current()) return;
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` and a painting already on screen stays. */
+      if (typeof loaded?.illustrated !== "object" || loaded.illustrated === null) {
+        throw new MalformedReply("the illustrated reply has no painting");
+      }
 
       const blockText = new Map<BlockId, string>(latest.current.map((b) => [b.id, b.text]));
       const { illustrated: checked, report } = readStoredIllustrated(loaded.illustrated, {
@@ -537,14 +557,24 @@ function useSketchReadiness(slug: string, enabled: boolean, again: string): Sket
     let live = true;
     void (async () => {
       try {
-        const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
+        /* The header, and the two spellings of "none yet" the Sketch's own
+           read accepts (useSketch.ts): `200 null`, or a 404 from a server that
+           predates the header. */
+        const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!live) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<SketchResponse | null>(res);
+        if (!live) return;
+        if (loaded === null) {
           setState({ kind: "absent" });
           return;
         }
-        const loaded = await readJson<SketchResponse>(res);
-        if (!live) return;
+        /* A reply without its Sketch is evidence of nothing, so it goes to
+           `unknown` with any other failure below — never to `ready`. */
+        if (typeof loaded?.sketch !== "object" || loaded.sketch === null) {
+          throw new MalformedReply("the sketch reply has no sketch");
+        }
         /* **Stale before profile**, because that is the order `run` checks them
            in (src/pipeline.ts) and a reader told to fix the second one first
            would fix it and be refused for the first. */

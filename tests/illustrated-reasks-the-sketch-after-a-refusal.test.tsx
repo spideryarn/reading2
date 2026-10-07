@@ -35,7 +35,13 @@ vi.mock("../src/web/lib/api.js", async () => {
     apiFetch: async (url: string) => {
       gets.push(url);
       if (url.startsWith("/api/sketch/") && sketchReady) {
-        return new Response(JSON.stringify({ stale: false, profileChanged: false }), { status: 200 });
+        /* As the route answers: the Sketch and its flags. A reply without the
+           Sketch is no evidence of one, and readiness says `unknown` to it
+           (plan 261007n). */
+        return new Response(
+          JSON.stringify({ sketch: { title: "A sketch", scenes: [] }, stale: false, outdated: false, profileChanged: false }),
+          { status: 200 },
+        );
       }
       return new Response(null, { status: 404 });
     },

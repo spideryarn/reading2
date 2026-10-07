@@ -950,8 +950,8 @@ function saving(
     void copy
       .json()
       .then(async (body) => {
-        /* **"Not made yet" is not kept** — the `200 null` ten artefact
-           reads ask for (`NONE_YET_AS_NULL_HEADER`, src/types.ts).
+        /* **"Not made yet" is not kept** — the `200 null` every artefact
+           read asks for (`NONE_YET_AS_NULL_HEADER`, src/types.ts).
            A copy is filed under reader and URL and replayed as a 200 whatever
            the request's headers, so a kept `null` would reach, offline, a tab
            opened before the deploy, which never asked for one and reads
@@ -988,16 +988,20 @@ function saving(
 }
 
 /**
- * The ten reads that may answer `200 null` for "not made yet" — see the note
- * where it is used, above.
+ * The sixteen reads that may answer `200 null` for "not made yet" — every
+ * artefact read since plan 261007n — see the note where it is used, above.
  *
- * **The same ten as the routes that call `orNullWhenNotMadeYet`** in
- * src/routes.ts, and nothing derives one list from the other: moving a read
- * over is a name here as well as the helper there. Exported for the test that
+ * **The same sixteen as the routes that call `orNullWhenNotMadeYet`** in
+ * src/routes.ts, and nothing derives one list from the other: a new artefact
+ * read is a name here as well as the helper there. Exported for the test that
  * fails when they differ (tests/api-fetch-offline.test.ts).
+ *
+ * The pattern stops at the slug, so an Illustrated plate's bytes
+ * (`/api/illustrated/<slug>/<hash>.<ext>`) are not in it — that route serves
+ * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|glossary|quotes)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {

@@ -597,12 +597,13 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * asked for that.** Returns what `load` returned, or `null` once it has
  * answered — the handler's cue to stop.
  *
- * For ten artefact reads — quiz, crossrefs, citations, and since plan 261006h
- * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
- * their ordinary answer, and as a 404 it was a red line in the console for
- * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
- * src/types.ts says why it is opt-in; src/store/artefact-not-made-yet.ts
- * names the reads not moved.
+ * For every artefact read — quiz, crossrefs and citations first, simple,
+ * ideas, faq, timeline, debate, glossary and quotes in plan 261006h, and
+ * tweets, relations, skim, sketch, illustrated and arc in plan 261007n: "not
+ * made yet" is their ordinary answer, and as a 404 it was a red line in the
+ * console for each one an ordinary page load asked for.
+ * `NONE_YET_AS_NULL_HEADER` in src/types.ts says why it is opt-in;
+ * src/store/artefact-not-made-yet.ts is the list.
  *
  * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
  *   different 404, and stays one whatever the header says; so does every other
@@ -9931,10 +9932,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/tweets\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No thread yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as glossary has it. */
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread),
+        );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10212,14 +10219,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      GET only, and no DELETE: the step replaces, so asking again is
      POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
      **Owner-authenticated, with no anonymous twin and nothing in the public
-     article payload** (Sol P1-4). 404 when there is none. */
+     article payload** (Sol P1-4). None yet is `200 null` to a client that
+     asks, and a 404 to one that does not — `orNullWhenNotMadeYet`. */
   {
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/relations\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadRelations(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadRelations(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -10282,14 +10292,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/skim\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Not `withProfileChanged`**, whose rule does not count a cleared
          profile. A route is exactly what a profile should change, so any
          difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
-         reads start before either is awaited. */
-      const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);
+         reads start before either is awaited.
+
+         **And not a `Promise.all` any more**, because no route yet is
+         `200 null` to a client that asks, and `orNullWhenNotMadeYet` writes
+         that response itself. Inside a `Promise.all` it could send the `null`
+         and then have a failed profile read try to write a second response
+         (GPT Sol's F1 on docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md).
+         So the profile is settled first — its failure is a failure whichever
+         read finishes first, never "none yet" — and the helper is handed the
+         route read already in flight. The empty `catch` only marks that
+         read's rejection as observed while the profile is awaited; the
+         helper still receives the rejection, from the original promise. */
+      const reading = loadSkim(at);
+      reading.catch(() => {});
+      const now = await resolveProfile(at);
+      const found = await orNullWhenNotMadeYet({ req, res }, () => reading);
+      if (!found) return;
       const body: SkimResponse = {
         ...found,
         profileChanged: routeProfileIsStale(
@@ -10547,22 +10572,25 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/sketch\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
         /* `found.sketch` is `unknown` on the wire and a `Sketch` in both stores,
            and the cast is only about reaching `profileHash` for the comparison
            below — the client parses the scene itself on arrival. See
-           SketchResponse in src/types.ts for why the field is not typed here. */
-        send(
-          res,
-          200,
-          await withProfileChanged<SketchResponse>(
+           SketchResponse in src/types.ts for why the field is not typed here.
+
+           No picture yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as glossary has it. */
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<SketchResponse>(
             at,
             () => loadSketch(at),
             (found) => found.sketch as { profileHash?: string | null },
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10588,26 +10616,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
         /* Shaped exactly like `sketch` above, including the cast, which is only
            about reaching `profileHash` — the client parses the plates itself on
-           arrival (IllustratedResponse in src/types.ts).
+           arrival (IllustratedResponse in src/types.ts) — and including the
+           `200 null` for none yet to a client that asks.
 
            **`profileChanged` is about the profile the SKETCH was drawn for**,
            because that is what this artefact inherits (src/illustrated.ts). The
            comparison is the same one either way; what differs is where the hash
            came from, and it came from the Sketch. */
-        send(
-          res,
-          200,
-          await withProfileChanged<IllustratedResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<IllustratedResponse>(
             at,
             () => loadIllustrated(at),
             (found) => found.illustrated as { profileHash?: string | null },
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10650,8 +10679,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/arc\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadArc(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      /* No arc yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadArc(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
