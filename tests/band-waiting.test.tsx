@@ -49,6 +49,28 @@ afterEach(() => {
 const line = () => host.querySelector('[role="status"]');
 
 describe("BandWaiting", () => {
+  it("keeps a formatted sentence's complete footprint hidden before showing it", () => {
+    paint(
+      <BandWaiting>
+        {/* biome-ignore lint/complexity/noUselessFragments: a fragment is an accepted ReactNode whose footprint must survive serialization. */}
+        <>Looking for <em>the questions</em><br />in this article…</>
+      </BandWaiting>,
+    );
+    const ghost = host.querySelector("span.band-waiting-ghost")!;
+    expect(ghost.getAttribute("aria-hidden")).toBe("true");
+    expect(ghost.hasAttribute("data-words"), "markup must not duplicate CSS-generated words").toBe(false);
+    const css = readFileSync("src/web/styles/mode-band.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const ghostRule = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((rule) => rule[1]?.trim() === ".band-waiting-ghost");
+    expect(ghostRule?.[2], "the footprint must remain laid out but invisible").toMatch(/visibility:\s*hidden/);
+    expect(ghost.querySelector("em")?.textContent, "formatting must reserve its real footprint").toBe("the questions");
+    expect(ghost.querySelector("br"), "the hidden footprint must keep explicit line breaks").not.toBeNull();
+    expect(ghost.textContent).toBe("Looking for the questionsin this article…");
+    wait(SLOW_AFTER_MS);
+    expect(host.querySelector(".band-waiting-ghost")).toBeNull();
+    expect(line()?.querySelector("em")?.textContent).toBe("the questions");
+    expect(line()?.querySelector("br")).not.toBeNull();
+  });
+
   it("lets the unseen sentence shrink just like the visible sentence, keeping only the spinner fixed", () => {
     // jsdom cannot measure wrapping, but it can establish the flex sizing that
     // controls it. The browser geometry regression checks the resulting heights.

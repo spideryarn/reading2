@@ -1282,7 +1282,7 @@ const DESIGN_ORDERS = ["In the article", "Most important", "A–Z"] as const;
  *
  * One each, from the real class or component, and not a copy of every mode's
  * use of it: the page is long already, and a copy per mode would be a second
- * thing to keep current. What holds the modes to these is a test per family
+ * thing to keep current. Tests check the shared pieces and some listed callers
  * (docs/project/controls.md § Controls that do the same job look the same);
  * this is where you look before drawing a new one.
  *
@@ -1371,8 +1371,9 @@ function ControlsAcrossModes() {
         real="JobProgress → Button outline / sm"
         rule={
           <>
-            one button for anything that starts a model call: 32px, 8px corners, the orange wash
-            on hover. <code className="design-token">aria-disabled</code> looks as unavailable as{" "}
+            the usual button for a model call: 32px, 8px corners, the orange wash on hover.
+            Citations' Dig deeper uses the same outline button at 24px (xs), matching its row.{" "}
+            <code className="design-token">aria-disabled</code> looks as unavailable as{" "}
             <code className="design-token">disabled</code> and keeps its tooltip. Its running,
             slow, stopping and failed states are in § Job progress, above.
           </>

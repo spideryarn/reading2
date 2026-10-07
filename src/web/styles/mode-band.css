@@ -266,9 +266,10 @@
   align-items: center;
   gap: 0.4rem;
 }
-/* Before the 600ms: the spinner and sentence laid out but unseen, so the empty
-   line is already its own height (BandWaiting.tsx). `content` rather than text,
-   so nothing is in the live region to announce early. */
+/* Before the 600ms: the spinner and sentence laid out but unseen, so the line
+   is already its own height (BandWaiting.tsx). Plain words use CSS `content`;
+   formatted children retain their markup. Both ghosts are also aria-hidden,
+   so neither has accessible words to announce early. */
 .band-waiting-ghost {
   visibility: hidden;
 }

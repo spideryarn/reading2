@@ -320,7 +320,7 @@ will eventually have to decide whether they are a system or an accident:
   Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
   shows, and how to put a new one in its voice.
 - **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
-  the shared piece for each kind and the test that holds callers to it; then why a button in this
+  the shared piece for each kind and checks of the pieces and listed callers; then why a button in this
   app had a 2px white `outset` border and no pointer cursor for months, what our hand-written
   substitute for Tailwind's preflight covers, and the heights and radii the controls agree on.
 - **[narrow-windows.md](narrow-windows.md)** — a row of things whose widths you do not control must

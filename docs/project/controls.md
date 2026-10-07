@@ -27,7 +27,7 @@ neutrally.** Look at `/design` § Controls across modes before drawing one; it s
 below, live. The families came from plan
 [261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md).
 
-| a control that… | the shared piece | the test that holds callers to it |
+| a control that… | the shared piece | tests of the piece or its listed callers |
 |---|---|---|
 | switches a mode's parts | `.summ-views` / `.summ-view-btn`, [`mode-band.css`](../../src/web/styles/mode-band.css) | [`part-switchers-share-one-bar`](../../tests/part-switchers-share-one-bar.test.ts) |
 | starts a model call | [`JobProgress`](../../src/web/JobProgress.tsx), or shadcn `Button` outline / sm | [`run-buttons-and-text-boxes-agree`](../../tests/run-buttons-and-text-boxes-agree.test.ts) |
@@ -38,8 +38,9 @@ below, live. The families came from plan
 | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
 | floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, [`tokens.css`](../../src/web/styles/tokens.css) | none yet |
 
-A test holds the callers it lists; a new mode is held only once it is added there. "Use your
-judgment" is meant: Skim's ‹ › is a pager, not a part-switcher, and keeps its own shape.
+Some tests check the shared piece itself; the caller checks hold only the callers they list.
+A new mode needs adding to those checks. "Use your judgment" is meant: Skim's ‹ › is a pager,
+not a part-switcher, and keeps its own shape.
 
 ## The reset covered a minority of what it named
 

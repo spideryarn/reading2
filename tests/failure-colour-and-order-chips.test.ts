@@ -15,17 +15,97 @@
  *
  * ## What this does NOT prove
  *
- * It is a text scanner. It says the listed selectors are written in
+ * The failure-colour checks are a text scanner. They say the listed selectors are written in
  * `var(--danger)` and that no later, more specific rule ending in the same
  * class paints them another colour (Diagram's override was exactly that); it
  * cannot see a failure drawn under a class nobody listed here. The census
  * behind the list is in the plan's § What landed, and the browser measurements
  * (computed colour and contrast on each site's actual ground) are the evidence
  * that it renders.
+ *
+ * The order checks also parse the six listed callers: the five OrderGroup
+ * rows retain the component and its chip class, and Search retains its own
+ * named group and chip class. Each chip retains aria-pressed. Negative
+ * controls remove the component/group or one chip's class to prove the guard
+ * sees drift. This does not discover a new caller or prove browser layout.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import type { JSXAttribute, JSXElement, JSXOpeningElement } from "@babel/types";
 import { describe, expect, it } from "vitest";
 import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { parseSource, walkAst } from "./helpers/ts-ast.js";
+
+const ORDER_CALLERS = [
+  { mode: "Glossary", file: "src/web/GlossaryPanel.tsx", label: "Order the terms by" },
+  { mode: "Quotes", file: "src/web/QuotesPanel.tsx", label: "Order the quotes by" },
+  { mode: "Citations", file: "src/web/CitationsPanel.tsx", label: "Order the citations by" },
+  { mode: "FAQ", file: "src/web/FaqPanel.tsx", label: "Order the questions by" },
+  { mode: "Debate", file: "src/web/DebatePanel.tsx", label: "Order the sources by" },
+] as const;
+
+function attribute(tag: JSXOpeningElement, name: string): JSXAttribute | undefined {
+  return tag.attributes.find((a): a is JSXAttribute => a.type === "JSXAttribute" && a.name.name === name);
+}
+
+/** Literal portions of a class string, without matching comments or another element. */
+function attributeText(tag: JSXOpeningElement, name: string): string {
+  const value = attribute(tag, name)?.value;
+  if (value?.type === "StringLiteral") return value.value;
+  if (value?.type === "JSXExpressionContainer" && value.expression.type === "TemplateLiteral") {
+    return value.expression.quasis.map((q) => q.value.cooked ?? q.value.raw).join(" ");
+  }
+  return "";
+}
+
+function assertOrderCaller(source: string, label: string, search = false): void {
+  const groups: JSXElement[] = [];
+  walkAst(parseSource(source), (node) => {
+    if (node.type !== "JSXElement") return;
+    const element = node as unknown as JSXElement;
+    const tag = element.openingElement;
+    if (tag.name.type !== "JSXIdentifier") return;
+    const isGroup = search
+      ? tag.name.name === "div" && attributeText(tag, "className").split(/\s+/).includes("srch-sort-group")
+      : tag.name.name === "OrderGroup";
+    if (isGroup && attributeText(tag, search ? "aria-label" : "label") === label) groups.push(element);
+  });
+  expect(groups, `the named order group: ${label}`).toHaveLength(1);
+  const group = groups[0]!;
+  if (search) expect(attributeText(group.openingElement, "role")).toBe("group");
+  else expect(attribute(group.openingElement, "selected")).toBeDefined();
+  const buttons: JSXOpeningElement[] = [];
+  walkAst(group, (node) => {
+    if (node.type !== "JSXOpeningElement") return;
+    const tag = node as unknown as JSXOpeningElement;
+    if (tag.name.type === "JSXIdentifier" && tag.name.name === "button") buttons.push(tag);
+  });
+  expect(buttons.length, `${label} has order chips`).toBeGreaterThan(0);
+  for (const tag of buttons) {
+    expect(attributeText(tag, "className").split(/\s+/), label).toContain(search ? "srch-sort-btn" : "gloss-sort-btn");
+    expect(attribute(tag, "aria-pressed"), `${label}: each chip announces its chosen state`).toBeDefined();
+  }
+}
+
+describe("the listed order callers retain the shared piece", () => {
+  for (const caller of ORDER_CALLERS) {
+    const source = readFileSync(caller.file, "utf8");
+    it(`${caller.mode} retains OrderGroup and every chip's shared class and pressed state`, () => {
+      assertOrderCaller(source, caller.label);
+    });
+    it(`${caller.mode}: removing OrderGroup or a chip class is rejected`, () => {
+      expect(() => assertOrderCaller(source.replace(/OrderGroup/g, "OtherGroup"), caller.label)).toThrow();
+      expect(() => assertOrderCaller(source.replace("gloss-sort-btn", "other-sort-btn"), caller.label)).toThrow();
+    });
+  }
+  const search = readFileSync("src/web/SearchPanel.tsx", "utf8");
+  it("Search retains its named group and every chip's shared class and pressed state", () => {
+    assertOrderCaller(search, "Order the passages by", true);
+  });
+  it("Search: removing its group class or one chip class is rejected", () => {
+    expect(() => assertOrderCaller(search.replace('className="srch-sort-group"', 'className="other-sort-group"'), "Order the passages by", true)).toThrow();
+    expect(() => assertOrderCaller(search.replace("srch-sort-btn", "other-sort-btn"), "Order the passages by", true)).toThrow();
+  });
+});
 
 interface Rule {
   selectors: string[];
