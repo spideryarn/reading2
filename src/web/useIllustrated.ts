@@ -26,7 +26,7 @@
  * established server-side against the real Sketch at the time it was written,
  * so **for a stored artefact its own plate order is the Sketch's order**. What
  * that costs is the unknown-scene check, which has nothing left to say about
- * our own file; what it keeps is the check the browser is actually here to make
+ * our own stored artefact; what it keeps is the check the browser is here to make
  * — every vignette's block id against *this* article's ids, and every quote
  * against that block's own text, so no row in the *what it depicts* list can
  * jump somewhere that does not contain what the reader just read.
@@ -51,6 +51,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type IllustratedStatus = "loading" | "ready" | "none" | "error";
@@ -107,6 +108,11 @@ export interface UseIllustrated {
   starting: boolean;
   /** The run in flight was started automatically. */
   automatic: boolean;
+  /**
+   * *Paint again* was pressed on the painting still on screen, and has neither
+   * replaced it nor failed — the repaint waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /**
    * **Paint it if nobody has** — unforced, for the automatic run and for the
    * button in the empty state.
@@ -173,6 +179,8 @@ export interface UseIllustrated {
    * sentence it replaces, and true.
    */
   drawThenPaint(note?: string): Promise<void>;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   cancel(id: string): void;
@@ -207,6 +215,15 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * **Which stored painting is on screen**, for *Paint again*'s hold
+   * (rewrite-hold.ts). `Illustrated` has no clock of its own, so this is the
+   * stored value itself, as the server sent it — useSketch.ts § `drawn` says
+   * why it is never the response beside it, nor the checked plates.
+   */
+  const [painted, setPainted] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * **Keyed on the ids, and the prose is read through a ref.**
@@ -227,6 +244,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `order` is the trigger and not an input — the ids decide WHEN to re-read, and `latest.current` supplies what to read against. Removing it, as the rule suggests, would leave the picture validated against the article it arrived with for ever.
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/illustrated/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -239,6 +257,8 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        setPainted(null);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -263,11 +283,16 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       if (checked.plates.length === 0) {
         setIllustrated(null);
         setFaults(report.faults);
+        setPainted(null);
+        landed(started, res, null);
         setStatus("none");
         setError(null);
         return;
       }
 
+      const identity = JSON.stringify(loaded.illustrated);
+      setPainted(identity);
+      landed(started, res, identity);
       setIllustrated(checked);
       setFaults(report.faults);
       setStale(loaded.stale);
@@ -286,7 +311,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       // § load has the reasoning, and it is the same one.
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug, order]);
+  }, [slug, order, begin, landed]);
 
   const { reload, refresh } = useOrderedRead(load);
 
@@ -309,7 +334,9 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
      are still new evidence, and `queue.failed` is rebuilt on every render. */
   const [refusals, setRefusals] = useState(0);
   const start = useCallback(async (run: Parameters<typeof queue.start>[0]) => {
-    if (await queue.start(run) === null) setRefusals((n) => n + 1);
+    const made = await queue.start(run);
+    if (made === null) setRefusals((n) => n + 1);
+    return made;
   }, [queue.start]);
 
   const ensure = useCallback(
@@ -318,15 +345,23 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     },
     [start],
   );
+  /* **The forced verb holds the painting it was pressed on** (rewrite-hold.ts),
+     as useSketch.ts § `regenerate` does, and for the dearest run there is. The
+     two unforced verbs are offered only with nothing painted, so there is no
+     painting for them to hold. */
+  const hold = useRewriteHold({ slug, step: "illustrated", identity: painted, queue, fresh, refresh });
+  const held = hold.run;
   const regenerate = useCallback(
     async (note?: string) => {
-      await start({
-        force: true,
-        ...(profileChanged ? { precededBy: ["sketch"] as const } : {}),
-        ...withNote(note),
-      });
+      await held(() =>
+        start({
+          force: true,
+          ...(profileChanged ? { precededBy: ["sketch"] as const } : {}),
+          ...withNote(note),
+        }),
+      );
     },
-    [start, profileChanged],
+    [start, held, profileChanged],
   );
   const drawThenPaint = useCallback(
     async (note?: string) => {
@@ -408,13 +443,15 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     drawThenPaint,
+    refresh,
     retryRead,
     cancel: queue.cancel,
   };

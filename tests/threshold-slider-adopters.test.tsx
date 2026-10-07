@@ -155,6 +155,8 @@ function citationsOwner(): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
+    rewriting: false,
+    refresh: async () => {},
     findNote: null,
     investigating: null,
     investigateStage: null,

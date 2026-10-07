@@ -632,13 +632,21 @@ One press must not buy two rewrites. A finished job leaves the queue before its 
 read, and until that read lands the old text is still on screen with its old `profileChanged` — so
 Regenerate would be offered again. From the press until the new artefact is read, **every forced
 control in that mode is held**: the panel's Regenerate, and *Write it again*, *Find them again*,
-*Find more* / *Write a new list* beside the text, on a stale or unprofiled artefact too. Quiz,
-Summary, Thread, Ideas, Glossary and Sketch.
+*Find more* / *Write a new list* beside the text, on a stale or unprofiled artefact too. It began
+with the modes whose Regenerate is in this panel (Quiz, Summary, Thread, Ideas, Glossary and
+Sketch), and since 2026-10-07 it also holds the forced controls that are not: Illustrated's *Paint
+again*, Quotes' *Find more* and *Choose them again*, and the button on the stale banner in Timeline,
+FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)). **Skim's forced run is the one
+not held yet**; it waits on a change to the same hook.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose
 it. Three things release it: a read **the server answered** shows a different artefact; the job
-failed or was cancelled; or the job is listed as over and a read *started after that* shows the same
-artefact. A read answered from the offline copy is not the server's word and releases nothing. While
+failed or was cancelled; or the job is over and a read *started after that* shows the same
+artefact. *Over* is the job listed as finished, or the job engine saying so with the mode closed: it
+heard the job end, or found it gone from a list asked after the job was made. Until 2026-10-07 only
+the first counted, so a job that failed while the mode was closed and was trimmed from the list
+before it reopened left the control dead until a reload. A read answered from the offline copy is not
+the server's word and releases nothing. While
 the mode is held with nothing running it says the new version hasn't loaded yet and offers *Try
 again*, which only reads.
 

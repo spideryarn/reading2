@@ -107,6 +107,8 @@ function quotesOwner(q: Quotes, profiled = false): QuotesOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
+    rewriting: false,
+    refresh: async () => {},
   };
 }
 
@@ -238,6 +240,8 @@ function citeOwner(c: Citations): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
+    rewriting: false,
+    refresh: async () => {},
     findNote: null,
     investigating: null,
     investigateStage: null,

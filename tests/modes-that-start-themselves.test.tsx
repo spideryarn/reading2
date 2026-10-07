@@ -390,6 +390,7 @@ const SETTLED_EMPTY_QUOTES_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
   retryRead: async () => {},
   reload: async () => {},

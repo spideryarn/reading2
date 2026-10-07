@@ -66,6 +66,7 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -797,19 +798,32 @@ export function QuotesPanel({
    *   identical request the automatic run makes, or the two carry different
    *   `work_key`s and the reader pays twice. useQuotes.ts § `ensure`.
    */
-  const rerun = (label: string, again = false) => (
-    <div className="quotes-run">
-      <Progress
-        job={owner?.job ?? null}
-        starting={owner?.starting ?? false}
-        failed={owner?.failed ?? null}
-        stalled={owner?.stalled ?? false}
-        onRun={() => (again ? owner?.regenerate() : owner?.ensure()) ?? Promise.resolve()}
-        onCancel={(id) => owner?.cancel(id)}
-        label={label}
-      />
-    </div>
-  );
+  /* A forced run has finished and its list is not here yet: the forced button
+     gives way to a read, never to a second paid run — GlossaryPanel.tsx §
+     `MoreRow` is the sibling for the appending verb. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const newList =
+    owner && waiting && !owner.error ? (
+      <RewriteWaiting line="The new quotes haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : null;
+  const rerun = (label: string, again = false) =>
+    again && newList ? (
+      newList
+    ) : (
+      <div className="quotes-run">
+        <Progress
+          job={owner?.job ?? null}
+          starting={owner?.starting ?? false}
+          failed={owner?.failed ?? null}
+          stalled={owner?.stalled ?? false}
+          onRun={() => (again ? owner?.regenerate() : owner?.ensure()) ?? Promise.resolve()}
+          /* With `error` set the retry is `ReadError`'s; the button stays held. */
+          runDisabled={again && (owner?.rewriting ?? false)}
+          onCancel={(id) => owner?.cancel(id)}
+          label={label}
+        />
+      </div>
+    );
 
   /**
    * **Find more** — the forced run on a list written from this same article,
@@ -841,7 +855,7 @@ export function QuotesPanel({
     offered: owner !== null && quotesFindMoreOffered(owner),
     press: () => void pressFindMore(),
   });
-  const findMore = (
+  const findMore = newList ?? (
     <div className="quotes-run">
       <Progress
         job={owner?.job ?? null}
@@ -849,6 +863,7 @@ export function QuotesPanel({
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
         onRun={pressFindMore}
+        runDisabled={owner?.rewriting ?? false}
         onCancel={(id) => owner?.cancel(id)}
         label="Find more"
         runningLabel="Finding more…"
@@ -984,7 +999,7 @@ export function QuotesPanel({
           owner?.status === "ready" &&
           owner.outdated &&
           !owner.stale &&
-          (owner.job || owner.starting || owner.failed) ? (
+          (owner.job || owner.starting || owner.failed || newList) ? (
           <div className="quotes-foot">{rerun("Choose them again", true)}</div>
         ) : null}
         </>
@@ -1645,6 +1660,8 @@ function Progress(props: {
   failed: StepFailure | null;
   stalled: boolean;
   onRun(): Promise<void>;
+  /** `JobProgress.runDisabled`: the forced run is held (rewrite-hold.ts). */
+  runDisabled?: boolean;
   onCancel(id: string): void;
   label: string;
   /** What the button says while its run is going. *Choosing…* unless said. */

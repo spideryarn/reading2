@@ -187,7 +187,7 @@ line under *The modes in the band* says it.
   no `useAutoRun` claims, and the sweep in `every-mode-draws-its-surface` counts an unclaimed token as
   a spend still owed. A fourth `ModeActivation` kind, `arrival`, says what is true: the band starts
   itself, a press arms nothing, and `modeGenerates` stays true.
-- **Browser check** (Sonnet, Playwright, "Life is Short"; shots in [260929f-shots/](260929f-shots/)):
+- **Browser check** (Sonnet, Playwright, "Life is Short"; shots were in `260929f-shots/`, deleted from the tree on 2026-10-07 by `7e597a72c` and kept in git history):
   the band measured 544px at 1440 and 1100px, the prose beside it at 544px, no sideways scroll; an
   old thread showed the Metadata line, and a re-run wrote six linked posts in ~13s; four of five
   first links landed on the matching paragraph (the fifth on a related one), each jump flashed the
