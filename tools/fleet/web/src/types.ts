@@ -1773,7 +1773,12 @@ function quotedIn(asks: string, text: string): boolean {
   return normaliseSpace(text).includes(normaliseSpace(asks));
 }
 
-const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "opus", "greg", "overseer", "self"];
+
+/** A holder off the wire; `fable`, retired by Greg on 2026-09-28, from an older server reads as the `opus` that replaced it. */
+function recipientOffTheWire(u: unknown): ProposalRecipient | undefined {
+  return u === "fable" ? "opus" : PROPOSAL_RECIPIENTS.find((r) => r === u);
+}
 
 /**
  * An item's proposal, every arm in full (plan 260910f Stage 2) — restated
@@ -1791,7 +1796,7 @@ function parseAttentionProposal(raw: unknown): AttentionProposal | null {
   switch (raw["kind"]) {
     case "proposed": {
       const id = nonBlank(raw["id"]);
-      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === raw["recipient"]);
+      const recipient = recipientOffTheWire(raw["recipient"]);
       const reason = nonBlank(raw["reason"]);
       const asks = nonBlank(raw["asks"]);
       const by = parseProposalAuthor(raw["by"]);

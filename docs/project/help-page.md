@@ -136,6 +136,9 @@ with a caption, and a few GIFs where the thing being explained is a movement —
 > with nice caption. Even better if some of those could be animated gifs, if that will help make it
 > clearer to the reader.
 
+**Adding or refreshing Help pictures needs no approval.** Greg, 2026-10-07, on the eight modes
+still without one (`qi-hyx8fden`): *"yes. You don't need my permission for this going forwards"*.
+
 - **In a page:** one Markdown image, alone in its paragraph, with its caption as the image's title
   in quotes — [`spine.md`](../../src/web/help/pages/spine.md) has one. The alt is for somebody who
   cannot see it; the title is the caption under it. The path is relative to the page's file

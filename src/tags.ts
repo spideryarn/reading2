@@ -3,8 +3,11 @@
  *
  * Pure, and imported by both halves: the store refuses what this refuses, and
  * the editor refuses it first, so a reader never types a tag that comes back as
- * a 400. The database holds the same rules as a CHECK on `article_tags.tag`
- * (src/db/schema.ts), so a script that skips this module is refused too.
+ * a 400. The database holds the same spelling rules as a CHECK on
+ * `article_tags.tag` (src/db/schema.ts), so a script that skips this module is
+ * refused too — all but the length, where the CHECK is a ceiling of 600 that
+ * only catches a runaway and `TAG_MAX_LENGTH` is the limit
+ * (docs/project/sql.md § "Except a size limit").
  *
  * - **Spelling**: NFC, trimmed, inner whitespace collapsed to one space,
  *   1–`TAG_MAX_LENGTH` characters, no comma and no control character. The

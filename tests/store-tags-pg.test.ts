@@ -5,8 +5,8 @@
  * What only a database can show: that the cap holds when two edits race (the
  * row lock is the whole argument, and its absence is invisible to a serial
  * test), that a stranger's article answers 404 rather than taking the tag, and
- * that the CHECK refuses what `normaliseTag` refuses for a writer that skipped
- * it.
+ * that the CHECK holds the spelling rules for a writer that skipped
+ * `normaliseTag`, with a length ceiling far above the app's limit.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,7 +17,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { articleTags, articles } from "../src/db/schema.js";
 import { currentOwnerId, EVAL_OWNER_ID } from "../src/owner.js";
 import { pgTagStore } from "../src/store/pg-tags.js";
-import { TAGS_PER_ARTICLE, TAGS_PER_EDIT } from "../src/tags.js";
+import { TAG_MAX_LENGTH, TAGS_PER_ARTICLE, TAGS_PER_EDIT } from "../src/tags.js";
 import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -139,17 +139,21 @@ describe("the reader's own tags", () => {
     expect(await pgTagStore.tagsFor(SLUG)).toHaveLength(TAGS_PER_ARTICLE);
   });
 
-  it("is refused by the database for a writer that skips normaliseTag", async () => {
+  it("holds spelling and a high ceiling for a writer that skips normaliseTag", async () => {
     const db = getDb();
-    for (const tag of ["", "Upper", " lead", "trail ", "two  spaces", "a,b", "tab\there", "x".repeat(41)]) {
+    for (const tag of ["", "Upper", " lead", "trail ", "two  spaces", "a,b", "tab\there"]) {
       await expect(db.insert(articleTags).values({ articleId: ARTICLE_ID, tag }), JSON.stringify(tag))
         .rejects.toThrow();
     }
-    /* And accepts what it would store: forty characters, inner spaces, accents. */
+    await expect(db.insert(articleTags).values({ articleId: ARTICLE_ID, tag: "x".repeat(601) }))
+      .rejects.toMatchObject({ cause: { code: "23514", constraint: "article_tags_spelling" } });
+    /* The product's limit belongs to normaliseTag; the database allows more. */
     await clearMine();
     await db.insert(articleTags).values([
       { articleId: ARTICLE_ID, tag: "x".repeat(40) },
+      { articleId: ARTICLE_ID, tag: "x".repeat(TAG_MAX_LENGTH + 1) },
       { articleId: ARTICLE_ID, tag: "café au lait" },
     ]);
+    expect(await pgTagStore.tagsFor(SLUG)).toContain("x".repeat(TAG_MAX_LENGTH + 1));
   });
 });

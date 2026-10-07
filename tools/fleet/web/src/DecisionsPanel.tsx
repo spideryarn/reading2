@@ -82,6 +82,8 @@ const CLASS_TONE: Record<DecisionWireClass, Tone> = {
 
 const ADVISER_LABEL: Record<DecisionWireAdviser, string> = {
   sol: "GPT Sol",
+  opus: "Opus",
+  // History: a decision made before Greg retired Fable (2026-09-28) says who really advised it.
   fable: "Fable",
   nobody: "Nobody",
 };

@@ -24,7 +24,8 @@
  * the question count alone will often tell a judge which arm is which. The
  * screens below are there to be read beside it, not instead.
  *
- * Reads articles from the local database, read-only. Writes JSON under
+ * Reads articles from the local database, and writes nothing there beyond the
+ * `ai_calls` row each paid call records. Writes JSON under
  * `evals/results/quiz-build-up/<arm>/`.
  */
 
@@ -313,7 +314,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const at = rest.indexOf("--arm");
     const slugs = rest.filter((_, i) => i !== at && i !== at + 1);
     if (slugs.length === 0) throw new Error("generate needs at least one slug");
-    await generate(arm, slugs);
+    loadEnvLocal();
+    const { withLedger } = await import("../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, slugs));
     process.exit(0);
   } else if (cmd === "report") {
     report();

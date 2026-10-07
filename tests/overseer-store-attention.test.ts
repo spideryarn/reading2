@@ -80,7 +80,7 @@ const LIST: AttentionList = {
       proposal: {
         kind: "proposed",
         id: "fp-1:v2",
-        recipient: "fable",
+        recipient: "opus",
         reason: "it is a question of wording",
         asks: "Say the word and I'll shut it down.",
         by: { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" },
@@ -297,6 +297,13 @@ describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
     return readWithProposal({ ...PROPOSED, asks }, { kind: "prose", excerpt, why: "it named an action and stopped" });
   }
 
+  test("reads a proposal made for Fable, before Greg retired it (2026-09-28), as one for Opus", () => {
+    const list = readWithProposal({ ...PROPOSED, recipient: "fable" });
+    expect(list.kind).toBe("list");
+    if (list.kind !== "list") return;
+    expect(list.items[0]?.proposal).toEqual({ ...PROPOSED, recipient: "opus" });
+  });
+
   test("refuses a quote that is not in the same item's excerpt — the card would call it the sentence the proposal is about (F15)", () => {
     expect(readWithQuote("Tell me which one.", "This text is not in the excerpt.").kind).toBe("unknown");
   });
@@ -354,7 +361,7 @@ describe("an item's proposal on the checkpoint (plan 260910f Stage 2)", () => {
     ["an author that is not the model", { kind: "proposed", id: "i", recipient: "sol", reason: "r", asks: QUOTE, by: { kind: "person", model: "Greg", via: "overseer" }, reach: { kind: "available" } }],
     ["an author via somebody else", { kind: "unplaced", id: "i", why: "w", by: { ...BY, via: "greg" } }],
     ["an unplaced answer with no why", { kind: "unplaced", id: "i", by: BY }],
-    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "fable", reason: "r", asks: QUOTE, by: BY, reach: { kind: "unavailable" } }],
+    ["a reach whose why is missing", { kind: "proposed", id: "i", recipient: "opus", reason: "r", asks: QUOTE, by: BY, reach: { kind: "unavailable" } }],
     ["an off with no why", { kind: "off" }],
     ["a proposal that is not an object", "fable"],
   ])("refuses %s — the list degrades to `unknown`, never a proposal half-read", (_name, proposal) => {

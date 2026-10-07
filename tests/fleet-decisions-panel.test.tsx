@@ -397,6 +397,14 @@ describe("the record's distinctions are visible", () => {
     expect(text).toContain("docs/plans/260909e-decisions-made.md");
   });
 
+  it("names Opus as an adviser, and keeps Fable on a decision made before Greg retired it", async () => {
+    await renderPanel(decisionsView({ rows: [{ ...ROW, record: { ...ROW.record, advisers: ["sol", "opus"] } }] }));
+    const opener = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    if (opener === null) throw new Error("the decision row disclosure was not drawn");
+    await act(async () => opener.click());
+    expect(host.textContent).toContain("GPT Sol, Opus");
+  });
+
   it("draws the instant at which the payload was composed", async () => {
     await renderPanel(decisionsView());
     expect(host.textContent).toContain("Composed at 2026-09-09T11:20:00.000Z");

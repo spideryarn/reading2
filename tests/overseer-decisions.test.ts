@@ -224,6 +224,13 @@ describe("strict event parsing", () => {
     }
   });
 
+  test("records Opus as an adviser, and still reads Fable on a decision made before Greg retired it (2026-09-28)", () => {
+    // Fable stays as written: who advised a past decision is history, not a route.
+    for (const advisers of [["opus"], ["sol", "opus"], ["sol", "fable"], ["fable"]]) {
+      expect(parseEvent(JSON.stringify({ ...decided(), advisers }))).toMatchObject({ advisers });
+    }
+  });
+
   test("rejects nobody alongside another adviser", () => {
     expect(parseEvent(JSON.stringify({ ...decided(), advisers: ["nobody", "sol"] }))).toBeNull();
   });

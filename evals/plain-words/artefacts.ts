@@ -48,9 +48,10 @@
  * - **Referee claims** is `runClaims`, which returns its claims and persists
  *   nothing (the route does that).
  *
- * **Nothing is written to the database** — not even spend: no spend collector
- * is open, so each call logs "in no total" and the `ai_calls` ledger (and
- * `npm run cost`) never sees it. Each generator's file is written as soon as it lands, and an
+ * **Nothing is written to the database but spend**: `generate` runs inside
+ * `withLedger`, so each call is an `ai_calls` row and shows in `npm run cost`
+ * (before 2026-10-07 no collector was open and the spend went unrecorded; an
+ * eval's spend is now refused without one). Each generator's file is written as soon as it lands, and an
  * existing file is never overwritten — a re-run skips it — so one generator
  * failing costs one generator.
  *
@@ -242,9 +243,10 @@ interface ArmFile {
   sketchFrom?: string;
   /**
    * What the generator's own run says it used, where it says (the Anthropic-SDK
-   * stages do; quiz-mark, search, Learn, help and the referee do not). The
-   * calls reach no spend ledger (see the header), so this is the only record of
-   * what an arm cost. Absent on the first `before` files, which predate it.
+   * stages do; quiz-mark, search, Learn, help and the referee do not). Runs
+   * from before 2026-10-07 reached no spend ledger (see the header), so for
+   * them this is the only record of what an arm cost. Absent on the first
+   * `before` files, which predate it.
    */
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
   items: Item[];
@@ -733,7 +735,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (bad.length > 0) throw new Error(`--only: no generator called ${bad.join(", ")}`);
       only = new Set(names as Generator[]);
     }
-    await generate(arm, only);
+    loadEnvLocal();
+    const { withLedger } = await import("../../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, only));
   } else if (cmd === "report") {
     report();
   } else if (cmd === "pairs") {

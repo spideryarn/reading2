@@ -586,7 +586,9 @@ anything, or spends money. That is the reason the write tools below are not buil
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
 reader's data". Since 2026-10-03 an answer can *offer* a write or a spend as a button, and the
 sentence above is unchanged by it, because a button is pressed by the reader and called by nothing:
-[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses).
+[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses). The guide's one exception,
+since 2026-10-07, keeps it too: the only button that presses itself is one that moves the reader
+and writes and spends nothing ([§ The guide](#the-guide)).
 
 ## A transcript cannot be published by column allowlist, and that is why chat is not shared
 
@@ -952,12 +954,26 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   reason saved is always the reader's own words. *Ask the guide where to start* sends a fixed first
   question once there is one.
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
-  (§ Command buttons). It cannot act; the press is the act.
+  (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
+  [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on
+  q-tyvutf: *"yes. err on the side of capability for the guide, unless there's high risk/stakes"*).
+  When a guide answer finishes arriving in this tab, from a turn this tab started, with the guide
+  on screen, the first of its buttons that only moves the reader runs as if pressed: a jump, or a
+  mode that makes nothing and writes nothing (`modeActsAlone` in
+  [`src/acts-alone.ts`](../../src/acts-alone.ts) — not one that generates, and not Search, whose
+  opening tidies the reader's saved searches). Everything else stays a press: a quick search, a
+  find, a look-up, a tag, a bookmark, a generating mode. The prompt marks each mode *Opens at once*
+  or *Button* from the same rule, and tells the guide to say *"I've opened…"* for the first kind
+  only. A transcript loaded, recovered or put back never acts, nor does a stopped or cut-off
+  answer, nor a band stepped aside on a phone
+  ([`src/web/guide-acts.ts`](../../src/web/guide-acts.ts)). Chat itself never acts: its context
+  can hold fetched pages, and nobody asked.
 - **Three doors**: the pinned row; the command bar's *Ask the guide: "…"* when the fast pick
   answers that no row fits
-  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and a
-  first open from the add page with no reason given, where a band fits, which opens the guide instead
-  of the "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and
+  **every first open of an article, where a band fits** (since 2026-10-07, in Summary's place —
+  [url-state.md](url-state.md#an-article-never-opened-here-arrives-at-a-default)), which also
+  stands in for the add page's "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
 
 Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
 [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and

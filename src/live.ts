@@ -1808,7 +1808,9 @@ function priceTranscriptionRow(
  * Free text with a length limit rather than a closed union, because the list of
  * reasons belongs to `useLiveConversation.ts` and a server-side union that
  * lagged it would refuse a true report about how a conversation ended. The
- * length bound is the actual defence, and it matches the CHECK on the column.
+ * length bound is the actual defence; the CHECK on the column is a ceiling far
+ * above it that only catches a runaway (docs/project/sql.md § "Except a size
+ * limit").
  */
 export function realtimeCloseReason(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null;

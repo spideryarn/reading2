@@ -71,7 +71,7 @@ describe("opening an article this browser has no key for", () => {
   it("applies the default once under StrictMode and does not reapply on a switch change", () => {
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
     history.replaceState(null, "", "/read/x");
     setting.on = false;
     act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
@@ -85,22 +85,22 @@ describe("opening an article this browser has no key for", () => {
     act(() => root.render(<Page slug="y" />));
     Object.assign(setting, { on: true, loaded: true });
     act(() => root.render(<Page slug="y" />));
-    expect(location.pathname + location.search).toBe("/read/y?mode=summary&margin=1");
+    expect(location.pathname + location.search).toBe("/read/y?mode=chat&guide=1&margin=1");
     expect(window.localStorage.getItem(KEY)).toBe("");
   });
 
-  it("arrives in Summary with the notes, for a reader whose switch is on", () => {
+  it("arrives in the guide with the notes, for a reader whose switch is on", () => {
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
-    expect(location.pathname + location.search).toBe("/read/x?mode=summary&margin=1");
+    expect(location.pathname + location.search).toBe("/read/x?mode=chat&guide=1&margin=1");
   });
 
-  it("arrives in Summary with the notes when the switch is off too", () => {
+  it("arrives in the guide with the notes when the switch is off too", () => {
     /* Summary alone until 2026-10-05, when Marginalia left the switch
        (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
     Object.assign(setting, { on: false, loaded: true, signedIn: true });
     open();
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("waits for the switch's answer, then applies it", () => {
@@ -109,7 +109,7 @@ describe("opening an article this browser has no key for", () => {
     expect(location.search).toBe("");
     Object.assign(setting, { on: true, loaded: true });
     open();
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("leaves a reader who moved while it was waiting alone", () => {
@@ -148,7 +148,7 @@ describe("opening one it has seen", () => {
     }
     navigate("/read/x");
     open();
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("keeps the existing restoration on metadata and does not restore again on a view change", () => {
@@ -201,7 +201,7 @@ describe("opening one it has seen", () => {
     root = createRoot(host);
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("and a second signed-out visit is not a first open again", () => {
@@ -225,6 +225,6 @@ describe("opening one it has seen", () => {
     root = createRoot(host);
     history.replaceState(null, "", "/read/x");
     act(() => root.render(<Page slug="x" readerId={B} />));
-    expect(location.search, "the next reader gets the default, not the first one's view").toBe("?mode=summary&margin=1");
+    expect(location.search, "the next reader gets the default, not the first one's view").toBe("?mode=chat&guide=1&margin=1");
   });
 });

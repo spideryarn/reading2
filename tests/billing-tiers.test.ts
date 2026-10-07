@@ -553,7 +553,7 @@ describe("the seeded tiers", () => {
     }
   });
 
-  /* Whole units. A price ending in 37 pence is a converted number that escaped
+  /* Multiples of 50 cents. A price ending in 37 pence is a converted number that escaped
      rather than a chosen one — see billing.md on why amounts are chosen. */
   it("prices in round numbers", async () => {
     for (const t of await readTiers()) {

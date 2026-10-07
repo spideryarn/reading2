@@ -133,8 +133,10 @@ it("another tab signs A out then B in: B never inherits A's address across the r
   await become(null);
   expect(location.search, "sign-out must remove A's article state").toBe("");
   await become("B");
-  expect(location.search).toBe("?mode=summary&margin=1");
-  expect(window.localStorage.getItem(lastViewKey("x", "B"))).toBe("?mode=summary&margin=1");
+  expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+  /* Chat's mode and `guide` are never put back (last-view.ts §
+     `NEEDS_AN_EXPLICIT_PRESS`, `NEVER_REMEMBERED`), so B's saved view is the notes. */
+  expect(window.localStorage.getItem(lastViewKey("x", "B"))).toBe("?margin=1");
   expect(window.localStorage.getItem(lastViewKey("x", "A"))).toBe(A_VIEW);
   await become(null);
   await become("A");
@@ -171,7 +173,7 @@ it("one reader returning from the shelf keeps the saved place and gets the defau
   await move("/read/x");
   expect(location.search).toBe(A_VIEW);
   await move("/read/y");
-  expect(location.search).toBe("?mode=summary&margin=1");
+  expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   await move("/read/y");
   expect(window.localStorage.getItem(lastViewKey("y", "A"))).toBe("");
   await move("/profile");

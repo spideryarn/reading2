@@ -99,7 +99,7 @@ describe("labels.json — the set itself", () => {
 
   it("covers each of the five recipients at least once", () => {
     const recipients = new Set(labels.map((l) => l.recipient).filter((r) => r !== null));
-    expect([...recipients].sort()).toEqual(["fable", "greg", "overseer", "self", "sol"]);
+    expect([...recipients].sort()).toEqual(["greg", "opus", "overseer", "self", "sol"]);
   });
 });
 
@@ -167,7 +167,7 @@ describe("the mechanical inbox — what it says without a model", () => {
     "overseer-turn-tails/no-input-box-codex-tui.txt": "nothing",
     "overseer-turn-tails/no-input-box-job-shell.txt": "nothing",
     "overseer-turn-tails/question-no-mark-sol-sort-order.txt": "nothing",
-    "overseer-turn-tails/question-no-mark-fable-empty-state-wording.txt": "nothing",
+    "overseer-turn-tails/question-no-mark-opus-empty-state-wording.txt": "nothing",
     "overseer-turn-tails/question-no-mark-greg-drop-remote-column.txt": "nothing",
     "overseer-turn-tails/question-overseer-merge-dev-first.txt": "question-mark",
     "overseer-turn-tails/question-overseer-whose-failures.txt": "question-mark",

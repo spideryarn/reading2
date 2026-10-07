@@ -77,7 +77,7 @@ const askedSomething: ClassifierVerdict = {
 const askedNothing: ClassifierVerdict = { kind: "no-question", why: "a status report" };
 
 /** A version-2 answer about the shut-it-down fixture, naming `recipient`. Its quote IS in that fixture's tail. */
-function proposing(recipient: "sol" | "fable" | "greg" | "overseer" | "self"): ClassifierVerdict {
+function proposing(recipient: "sol" | "opus" | "greg" | "overseer" | "self"): ClassifierVerdict {
   return {
     ...askedSomething,
     recipient,
@@ -850,13 +850,13 @@ describe("the day budget and the prompt version (plan 260910f D3–D6)", () => {
     expect(result.list.items).toHaveLength(1);
   });
 
-  it("files what it re-read under the version it was HANDED, so a version-2 pass never files under 1", async () => {
+  it("files what it re-read under the version it was HANDED, so a proposal-aware pass never files under 1", async () => {
     const memory = staleOf(await remembered());
     const { sessions, capture } = fleetOf([["asks", pane("ended-prose-question-shut-it-down.txt")]]);
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
+      classify: async () => ({ verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       memory,
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
@@ -899,7 +899,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
   it("marks every prose item `off`, naming the variable, when proposals are not enabled (D7)", async () => {
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
+      classify: async () => ({ verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       now: NOW,
     });
@@ -914,7 +914,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     const result = await runAttentionPass({
       sessions,
       capture,
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
+      classify: async () => ({ verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       usage: USAGE_OK,
@@ -926,8 +926,8 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
       kind: "proposed",
       // The model is part of the identity (GPT Sol's F18): two models' proposals about one tail are two proposals.
       id: `${fingerprint}:v${PROPOSAL_PROMPT_VERSION}:${ATTENTION_CLASSIFIER_MODEL}`,
-      recipient: "fable",
-      reason: "it is fable's kind of question",
+      recipient: "opus",
+      reason: "it is opus's kind of question",
       asks: "Say the word and I'll shut it down.",
       by: BY,
       reach: { kind: "not-checked", why: expect.any(String) },
@@ -950,6 +950,48 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     expect(proposal.by).toEqual(BY);
     // …and the forgery was not remembered either.
     expect(JSON.stringify([...result.memory.verdicts.values()])).not.toContain("Greg");
+  });
+
+  it("withholds a version-2 route until it is re-read under version 3, then gives it a version-3 identity", async () => {
+    const fleet = asks();
+    const old = await runAttentionPass({
+      ...fleet,
+      classify: async () => ({ verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
+      maxCalls: 1,
+      promptVersion: 2,
+      now: NOW,
+    });
+    const waiting = await runAttentionPass({
+      ...fleet,
+      memory: old.memory,
+      classify: async () => { throw new Error("the budget must withhold this call"); },
+      maxCalls: 0,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    expect(waiting.breakdown.stale).toBe(1);
+    expect(onlyItem(waiting.list).proposal.kind).toBe("not-reached");
+
+    let calls = 0;
+    const refreshed = await runAttentionPass({
+      ...fleet,
+      memory: waiting.memory,
+      classify: async () => {
+        calls += 1;
+        return { verdict: proposing("greg"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
+      },
+      maxCalls: 1,
+      promptVersion: PROPOSAL_PROMPT_VERSION,
+      now: NOW,
+    });
+    expect(calls).toBe(1);
+    const fingerprint = [...refreshed.memory.verdicts.keys()][0];
+    expect(onlyItem(refreshed.list).proposal).toMatchObject({
+      kind: "proposed",
+      id: `${fingerprint}:v3:${ATTENTION_CLASSIFIER_MODEL}`,
+      recipient: "greg",
+    });
+    expect([...refreshed.memory.verdicts.values()][0]?.promptVersion).toBe(3);
   });
 
   it("draws `unplaced` as its own arm, never promoted to Greg (D8)", async () => {
@@ -1044,14 +1086,14 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
   it("remembers recipient, reason and quote with the verdict, and never `reach` (D14)", async () => {
     const result = await runAttentionPass({
       ...asks(),
-      classify: async () => ({ verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
+      classify: async () => ({ verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL }),
       maxCalls: 10,
       promptVersion: PROPOSAL_PROMPT_VERSION,
       usage: USAGE_LIMITED,
       now: NOW,
     });
     const remembered = [...result.memory.verdicts.values()][0]?.verdict;
-    expect(remembered).toMatchObject({ recipient: "fable", reason: "it is fable's kind of question", asks: "Say the word and I'll shut it down." });
+    expect(remembered).toMatchObject({ recipient: "opus", reason: "it is opus's kind of question", asks: "Say the word and I'll shut it down." });
     expect(JSON.stringify(remembered)).not.toContain("reach");
     expect(JSON.stringify(remembered)).not.toContain("unavailable");
   });
@@ -1061,7 +1103,7 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
     let calls = 0;
     const classify = async (): Promise<ClassifyOutcome> => {
       calls += 1;
-      return { verdict: proposing("fable"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
+      return { verdict: proposing("opus"), spend: { ...NO_SPEND, calls: 1 }, model: ATTENTION_CLASSIFIER_MODEL };
     };
     let memory: AttentionMemory | undefined;
     const reaches: string[] = [];
@@ -1078,8 +1120,8 @@ describe("the proposal on each item (plan 260910f D1, D3, D7, D8, D9, D14)", () 
       memory = result.memory;
       const proposal = onlyItem(result.list).proposal;
       if (proposal.kind !== "proposed") throw new Error(`expected proposed, got ${proposal.kind}`);
-      // Missing capability is SHOWN, never substituted: Fable stays the recipient.
-      expect(proposal.recipient).toBe("fable");
+      // Missing capability is SHOWN, never substituted: Opus stays the recipient.
+      expect(proposal.recipient).toBe("opus");
       reaches.push(proposal.reach.kind);
     }
     expect(reaches).toEqual(["not-checked", "unavailable", "not-checked"]);

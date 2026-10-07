@@ -13,7 +13,8 @@
  * half of it that matters.
  */
 import { describe, expect, it } from "vitest";
-import { readEvents, StreamStalled } from "../src/web/lib/sse.js";
+import { MalformedReply } from "../src/web/lib/reader-facing.js";
+import { readAnswerStream, readEvents, StreamStalled } from "../src/web/lib/sse.js";
 
 const enc = new TextEncoder();
 
@@ -147,5 +148,29 @@ describe("what the clock does not break", () => {
     });
     for await (const _ of readEvents(body, { stallMs: 500 })) break;
     expect(cancelled).toBe(true);
+  });
+});
+
+/* GPT Sol's C5 on plan 261007l: a `data:` line that is not JSON used to be
+   dropped in `parseFrame`, so a stream that lost a frame looked exactly like
+   one that never sent it — docs/reusable/silent-success.md. Our server writes
+   every frame with `JSON.stringify` (`sse` in src/routes.ts), so one that does
+   not parse is this app's bug, and the stream fails with it. */
+describe("a frame that is not JSON", () => {
+  const malformed = () =>
+    chunks(['event: delta\ndata: {"text":"a"}\n\n', "event: done\ndata: {not json\n\n"], 0);
+
+  it("fails the stream as a MalformedReply rather than vanishing", async () => {
+    const names: string[] = [];
+    const reading = (async () => {
+      for await (const e of readEvents(malformed())) names.push(e.name);
+    })();
+    await expect(reading).rejects.toBeInstanceOf(MalformedReply);
+    expect(names).toEqual(["delta"]);
+  });
+
+  it("fails readAnswerStream the same way, not as an early end", async () => {
+    const answer = readAnswerStream(malformed(), { delta() {}, done: (d) => d });
+    await expect(answer).rejects.toBeInstanceOf(MalformedReply);
   });
 });

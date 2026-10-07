@@ -75,7 +75,10 @@ const logger = log("store");
 
 export type VoucherEmailKind = "gift" | "claimed";
 
-/** The longest `detail` the table allows. */
+/**
+ * The longest `detail` we keep. The table's CHECK is a ceiling far above it
+ * that only catches a runaway (docs/project/sql.md § "Except a size limit").
+ */
 const DETAIL_MAX = 200;
 
 /** The idempotency key Resend is given. One per delivery, never per attempt. */

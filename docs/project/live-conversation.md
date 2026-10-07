@@ -26,7 +26,7 @@ reader can read the whole thing back a week later. That is the requirement every
 
 - [§ The controls must say what is happening](#the-controls-must-say-what-is-happening) — the Live button's states and wording
 - [§ Where the pieces are](#where-the-pieces-are) — which file does what; start here to find code
-- [§ Which model, and why not GPT-Live yet](#which-model-and-why-not-gpt-live-yet) — the engine choice
+- [§ The default model, and why it is not GPT-Live](#the-default-model-and-why-it-is-not-gpt-live) — the engine choice
 - [§ The audio never touches our server](#the-audio-never-touches-our-server) — the privacy and cost shape
 - [§ The meter](#the-meter) — what the usage meter counts and shows
 - [§ The three orderings, and why each is a rule](#the-three-orderings-and-why-each-is-a-rule) — why turns can land out of order
@@ -128,7 +128,7 @@ became a turn in a conversation. GPT Sol refused the first version of the second
 that shipped is the one it recommended instead. The second engine is
 [261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
 
-## Which model, and why not GPT-Live yet
+## The default model, and why it is not GPT-Live
 
 `gpt-realtime-2.1` (`LIVE_MODEL` in [`src/live.ts`](../../src/live.ts)) at **low reasoning
 effort**, with a spoken prompt that asks for one or two sentences, no pleasantries, and thinking

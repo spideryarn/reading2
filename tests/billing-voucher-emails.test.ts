@@ -1512,11 +1512,18 @@ describe("their name, which opens the email", () => {
     /* Refused first, cleaned second: trimming does not rescue an over-long request. */
     expect((await make(`${"x".repeat(80)} `)).status).toBe(400);
     expect((await make(7)).status).toBe(400);
-    /* And the table says the same, for a writer that skipped the route. */
+    /* The 80 is the route's alone. The table's CHECK is a ceiling far above it
+       that only catches a runaway (docs/project/sql.md § "Except a size
+       limit", plan 261007q), so the limit can move without a migration. */
+    const past = await pool.query<{ recipient_name: string }>(
+      "insert into spideryarn.billing_vouchers (email, articles, created_by, recipient_name) values ($1, 1, $2, $3) returning recipient_name",
+      [emailOf(OTHER), CREATOR_A, "x".repeat(81)],
+    );
+    expect(past.rows[0]?.recipient_name).toBe("x".repeat(81));
     await expect(
       pool.query(
         "insert into spideryarn.billing_vouchers (email, articles, created_by, recipient_name) values ($1, 1, $2, $3)",
-        [emailOf(OTHER), CREATOR_A, "x".repeat(81)],
+        [emailOf(OTHER), CREATOR_A, "x".repeat(10_001)],
       ),
     ).rejects.toThrow(/billing_vouchers_recipient_name_length/);
   });

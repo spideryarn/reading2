@@ -1446,9 +1446,10 @@ Read the clock and the message as answering **different questions**: the clock s
 slow, the assertion says what failed.
 
 **A wedged row's second symptom points at the database.** The suite it blocks hangs — 316 seconds
-on 2026-08-31, against 6 once the row was gone — and the *next* run then skips itself with
+on 2026-08-31, against 6 once the row was gone — and the *next* run then skipped itself with
 `DATABASE_URL is set but these tests are skipping: could not reach it: Connection terminated due to
-connection timeout`. That reads as a sick database and is a knock-on from the hung run: Postgres was
+connection timeout`. Since `pgReady` throws rather than skips, the same knock-on arrives as a
+failure, `Nothing answered on that DATABASE_URL`, `could not reach it: …`. That reads as a sick database and is a knock-on from the hung run: Postgres was
 fine throughout, answering in 15ms on 32 of 100 connections. **Clear the row before believing
 anything about the database.**
 
@@ -1460,8 +1461,8 @@ everything else references.
 **Do not filter test output you may need later.** Capture the run
 to a file and grep the file.
 
-**If you add a suite that starts a job**, take the lock: `pgReady` first, then `takeRunLock` only when
-it reports reachable — a suite that is about to skip must not sit holding it. The one exception is a
+**If you add a suite that starts a job**, take the lock: `pgReady` first, then `takeRunLock` only once
+it has returned — a suite that is about to fail must not sit holding it. The one exception is a
 suite long enough to dominate the queue; `tests/store-roundtrip.test.ts` runs 63 seconds and is left
 out for exactly that reason, with the reasoning in the helper's header.
 

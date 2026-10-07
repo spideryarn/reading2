@@ -608,10 +608,15 @@ export const articleTags = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.tag] }),
-    /** src/tags.ts § `normaliseTag`: TAG_MAX_LENGTH, trimmed, lowercase, no comma, no control. */
+    /**
+     * src/tags.ts § `normaliseTag`: trimmed, lowercase, no comma, no control.
+     * The length is `TAG_MAX_LENGTH`'s to hold; 600 here only catches a runaway
+     * and keeps the key under btree's ~2,704-byte entry limit even at four
+     * bytes a character (docs/project/sql.md § "Except a size limit").
+     */
     check(
       "article_tags_spelling",
-      sql`char_length(${t.tag}) between 1 and 40 and ${t.tag} = btrim(${t.tag}) and ${t.tag} = lower(${t.tag}) and ${t.tag} !~ '[,[:cntrl:]]' and ${t.tag} !~ '\\s\\s'`,
+      sql`char_length(${t.tag}) between 1 and 600 and ${t.tag} = btrim(${t.tag}) and ${t.tag} = lower(${t.tag}) and ${t.tag} !~ '[,[:cntrl:]]' and ${t.tag} !~ '\\s\\s'`,
     ),
   ],
 );
@@ -3383,7 +3388,7 @@ export const realtimeSessions = spideryarn.table(
     closedAt: timestamp("closed_at", { withTimezone: true }),
     /**
      * Why it ended, in the browser's own vocabulary — `hung_up`, `idle`,
-     * `session_cap`, `error`. Free text with a length bound rather than a CHECK,
+     * `session_cap`, `error`. Free text rather than an allowed-values CHECK,
      * because the list belongs to a React hook this stage may not edit and a
      * constraint that lags it would refuse a true report.
      */
@@ -3406,7 +3411,9 @@ export const realtimeSessions = spideryarn.table(
       "realtime_sessions_connected_after_issue",
       sql`${t.connectedAt} is null or ${t.connectedAt} >= ${t.issuedAt}`,
     ),
-    check("realtime_sessions_close_reason_len", sql`length(${t.closeReason}) <= 64`),
+    /* src/live.ts § `realtimeCloseReason` holds it to 64; this only catches a
+       runaway (docs/project/sql.md § "Except a size limit"). */
+    check("realtime_sessions_close_reason_len", sql`length(${t.closeReason}) <= 10000`),
     /** A running total of seconds is never negative; the mark only moves up. */
     check("realtime_sessions_voice_seconds_not_negative", sql`${t.voiceSecondsReported} >= 0`),
   ],
@@ -4658,10 +4665,12 @@ export const glossaryLookups = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
-    /* `MAX_ASKED_TERM` (src/asked-term.ts), the box's own bound. */
+    /* Non-empty. The length is `MAX_ASKED_TERM`'s (src/asked-term.ts), the
+       box's own bound; 10,000 here only catches a runaway (docs/project/sql.md
+       § "Except a size limit"). */
     check(
       "glossary_lookups_added_name_length",
-      sql`${t.addedName} is null or char_length(${t.addedName}) between 1 and 80`,
+      sql`${t.addedName} is null or char_length(${t.addedName}) between 1 and 10000`,
     ),
     check(
       "glossary_lookups_entry_id_format",
@@ -4779,9 +4788,11 @@ export const citationFinds = spideryarn.table(
       "citation_finds_lookup_paper_does",
       sql`(${t.lookupPaperDoes} is null) = (${t.lookupPaperDoesQuote} is null) and (${t.lookupPaperDoes} is null or ${t.lookupSupport} is not null)`,
     ),
+    /* src/citation-lookup.ts holds the model's answer to 240 and 400; these
+       only catch a runaway (docs/project/sql.md § "Except a size limit"). */
     check(
       "citation_finds_lookup_lengths",
-      sql`coalesce(char_length(${t.lookupPaperDoes}), 0) <= 240 and coalesce(char_length(${t.lookupSupportQuote}), 0) <= 400 and coalesce(char_length(${t.lookupPaperDoesQuote}), 0) <= 400 and coalesce(${t.lookupExcerptWords}, 0) >= 0`,
+      sql`coalesce(char_length(${t.lookupPaperDoes}), 0) <= 1000000 and coalesce(char_length(${t.lookupSupportQuote}), 0) <= 1000000 and coalesce(char_length(${t.lookupPaperDoesQuote}), 0) <= 1000000 and coalesce(${t.lookupExcerptWords}, 0) >= 0`,
     ),
   ],
 );
@@ -5190,10 +5201,10 @@ export const quizAttempts = spideryarn.table(
     /** The question's words when it was answered — see the header. */
     question: text("question").notNull(),
     /**
-     * The reader's words as they went to the marker, trimmed. **4,000 is
-     * `MAX_QUIZ_ANSWER_CHARS`** in src/types.ts, which the route enforces
-     * first; `char_length` counts code points and the route counts UTF-16
-     * units, so this never refuses an answer the route let through.
+     * The reader's words as they went to the marker, trimmed. The route holds
+     * them to `MAX_QUIZ_ANSWER_CHARS` (src/types.ts); the CHECK below is only
+     * non-empty and a ceiling of a million that catches a runaway
+     * (docs/project/sql.md § "Except a size limit").
      */
     answer: text("answer").notNull(),
     /** The mark, exactly as the reader saw it. */
@@ -5201,7 +5212,7 @@ export const quizAttempts = spideryarn.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 4000`),
+    check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 1000000`),
     /** The one read: this batch's latest answer to each question. */
     index("quiz_attempts_latest").on(t.articleId, t.batchId, t.questionId, t.createdAt.desc()),
   ],
@@ -5424,9 +5435,9 @@ export const feedback = spideryarn.table(
      * was Greg's call to reverse that: *"I think it's fine (and even
      * advantageous) to store the url with the Feedback"*. What it cost was a
      * migration for every new page, and a 500 on a valid report whenever its
-     * four hand-mirrored copies drifted. `isWebUrl` at the seam
-     * (src/urls.ts) and the length CHECK below are what replace it, and this
-     * column is `text` because a URL has no vocabulary to close.
+     * four hand-mirrored copies drifted. `isWebUrl` (src/urls.ts) and the
+     * route's length limit replace it; the CHECK below only catches a runaway.
+     * This column is `text` because a URL has no vocabulary to close.
      *
      * The whole address reaches Sentry too, deliberately — see
      * docs/project/privacy.md § What a bug report carries, which is where the
@@ -5471,14 +5482,16 @@ export const feedback = spideryarn.table(
      */
     diagnosticsVersion: integer("diagnostics_version"),
     /**
-     * A screenshot the reader pasted in — already downscaled, and capped here in
-     * **decoded** bytes because client-side downscaling is not validation.
+     * A screenshot the reader pasted in — already downscaled, and held by the
+     * route to `MAX_FEEDBACK_SCREENSHOT_BYTES` in **decoded** bytes, because
+     * client-side downscaling is not validation.
      *
      * `bytea` and not a bucket reference: it is small, it is bounded, and a
      * reference would give the report a second place to be incomplete.
-     * 2,000,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
-     * in `feedback_screenshot_size` below for the same reason the answer cap
-     * is (this line said 400,000 after both had moved). The filename and content type
+     * `feedback_screenshot_size` below is 50 MiB, the largest object we take
+     * anywhere (`uploads_claimed_bytes`): a ceiling that only catches a runaway,
+     * not the product's limit (docs/project/sql.md § "Except a size limit",
+     * plan 261007q). The filename and content type
      * are never stored — the route writes a constant pair, so a client-supplied
      * MIME type or filename can never be forwarded.
      */
@@ -5569,9 +5582,10 @@ export const feedback = spideryarn.table(
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
     /**
-     * **Non-empty and capped**, which is the whole of what this column
-     * promises. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same 2048, and
-     * it is written out here for the runtime-import reason above.
+     * **Non-empty, and under a ceiling**, which is the whole of what this
+     * column promises. The 2048 a reader can send is `MAX_FEEDBACK_URL_CHARS`
+     * in src/types.ts, held by the route; 10,000 here only catches a runaway
+     * (docs/project/sql.md § "Except a size limit", plan 261007q).
      *
      * That the value is an `http(s)` address is `isWebUrl`'s job at the route,
      * not this constraint's: a URL grammar in SQL would be a second, worse
@@ -5579,36 +5593,30 @@ export const feedback = spideryarn.table(
      */
     check(
       "feedback_url_shape",
-      sql`${t.url} is null or (length(btrim(${t.url})) > 0 and length(${t.url}) <= 2048)`,
+      sql`${t.url} is null or (length(btrim(${t.url})) > 0 and length(${t.url}) <= 10000)`,
     ),
     /**
-     * Non-empty when present, and **capped**.
+     * Non-empty, and under a ceiling of a million characters.
      *
-     * The cap is the one that matters: it is what stops one paste of an entire
-     * article becoming an attachment on its way to Sentry. In the database as
-     * well as in the route, because a rule enforced in TypeScript holds only for
-     * the callers that went through that TypeScript.
+     * **The ceiling is not the product's limit.** What stops one paste of an
+     * entire article becoming an attachment on its way to Sentry is
+     * `MAX_FEEDBACK_BODY_CHARS` (20,000) in the dialog and the route. Greg,
+     * 2026-10-07: *"I don't see the point of including a character/size limit
+     * on fields. or if we're going to, make it very high"* — so this only
+     * catches a runaway, and the reader's limit moves without a migration
+     * (docs/project/sql.md § "Except a size limit", plan 261007q).
+     * tests/feedback-store.test.ts files one past the product's limit and
+     * refuses one past this.
      *
-     * **20,000 is `MAX_FEEDBACK_BODY_CHARS`** in src/types.ts. Written out here
-     * rather than imported for the reason the vocabularies above are — and
-     * pinned to that constant behaviourally by tests/feedback-store.test.ts,
-     * which writes exactly the cap and exactly one character more.
-     *
-     * **It was 12,072 until 2026-10-07, three old answers.** The backfill of
+     * **It may never go below 12,072**, three old answers: the backfill of
      * 2026-09-02 glued three answers, each capped at 4,000
-     * (`MAX_LEGACY_FEEDBACK_ANSWER_CHARS`), under their headings, and three full
-     * ones come to exactly that, so the cap may never go below it: a lower CHECK
-     * would fail on a row that was legal when it was filed. GPT Sol's review of
-     * that plan, 2026-09-02.
-     *
-     * Since plan 261007j it is 20,000, the same number the reader meets in the
-     * dialog and the route (`MAX_FEEDBACK_ANSWER_CHARS`): fifteen minutes of
-     * dictation, and still short of a long article. Greg said yes to it,
-     * 2026-10-07.
+     * (`MAX_LEGACY_FEEDBACK_ANSWER_CHARS`), under their headings, so a lower
+     * CHECK would fail on a row that was legal when it was filed. GPT Sol's
+     * review of that plan, 2026-09-02.
      */
     check(
       "feedback_body_shape",
-      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 20000`,
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,
     ),
     /**
      * The third closed vocabulary, written out by hand for the reason the two
@@ -5640,7 +5648,7 @@ export const feedback = spideryarn.table(
     ),
     check(
       "feedback_screenshot_size",
-      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 2000000`,
+      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 52428800`,
     ),
     /**
      * An event id without a time it was mirrored would be a row that says Sentry
@@ -5711,7 +5719,7 @@ export const feedbackShippedEmails = spideryarn.table(
     check("feedback_shipped_emails_attempts", sql`${t.attempts} >= 1`),
     check(
       "feedback_shipped_emails_detail_length",
-      sql`${t.detail} is null or char_length(${t.detail}) <= 200`,
+      sql`${t.detail} is null or char_length(${t.detail}) <= 10000`,
     ),
   ],
 );
@@ -5771,15 +5779,14 @@ export const feedbackQuestionAnswers = spideryarn.table(
       "feedback_question_answers_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
-    /* Non-empty and capped, in `feedback_body_shape`'s style. 20,000 is
-       `MAX_FEEDBACK_ANSWER_CHARS` in src/types.ts, the cap the reply box and
-       the route hold a reply to; tests/feedback-store.test.ts writes exactly
-       the cap and one character more. It was 12,000 until plan 261007j raised
-       the constant, and the two have to move together: a route that takes
-       more than the column would turn a long reply into a database error. */
+    /* Non-empty and under a ceiling, in `feedback_body_shape`'s style. The
+       reply box and the route hold a reply to `MAX_FEEDBACK_ANSWER_CHARS`
+       (src/types.ts); the million here only catches a runaway, so the two no
+       longer have to move together (docs/project/sql.md § "Except a size
+       limit", plan 261007q). */
     check(
       "feedback_question_answers_body_shape",
-      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 20000`,
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,
     ),
   ],
 );
@@ -6311,14 +6318,14 @@ export const billingVouchers = spideryarn.table(
     /* Bounded, because this is the one number in the table that raises what a
        free account may spend. The route validates the same range. */
     check("billing_vouchers_articles_range", sql`${t.articles} between 1 and 1000`),
-    check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 500`),
+    check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 1000000`),
     check(
       "billing_vouchers_recipient_note_length",
-      sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 500`,
+      sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 1000000`,
     ),
     check(
       "billing_vouchers_recipient_name_length",
-      sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 80`,
+      sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 10000`,
     ),
     /* An article without the slug it was named by would make a replay of its
        create look like one with no starter. The other way round is the deleted
@@ -6394,7 +6401,7 @@ export const billingVoucherEmails = spideryarn.table(
       sql`${t.status} in ('queued', 'sending', 'sent', 'skipped', 'failed')`,
     ),
     check("billing_voucher_emails_attempts", sql`${t.attempts} >= 0`),
-    check("billing_voucher_emails_detail_length", sql`${t.detail} is null or char_length(${t.detail}) <= 200`),
+    check("billing_voucher_emails_detail_length", sql`${t.detail} is null or char_length(${t.detail}) <= 10000`),
     /* A gift knows its recipient from the moment it is queued. */
     check("billing_voucher_emails_gift_has_recipient", sql`${t.kind} <> 'gift' or ${t.recipient} is not null`),
     /* Reserved means a lease was taken. */
@@ -7324,7 +7331,7 @@ export const bibliographicRecords = spideryarn.table(
   (t) => [
     check(
       "bibliographic_records_id",
-      sql`length(${t.id}) <= 300 and ${t.id} = lower(${t.id}) and (
+      sql`length(${t.id}) <= 600 and ${t.id} = lower(${t.id}) and (
             ${t.id} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
             or ${t.id} ~ '^arxiv:([0-9]{4}[.][0-9]{4,5}|[a-z-]+([.][a-z]{2})?/[0-9]{7})$'
           )`,
@@ -7370,7 +7377,7 @@ export const bibliographicRecords = spideryarn.table(
       "bibliographic_records_shape",
       sql`case
             when ${t.state} = 'found' then ${t.source} is not null and ${t.title} is not null
-              and length(${t.title}) between 1 and 1000
+              and length(${t.title}) between 1 and 10000
               and ${t.authorsFamily} is not null and ${t.doi} is not null and ${t.fetchedAt} is not null
             when ${t.state} = 'not-found' then ${t.fetchedAt} is not null
               and num_nonnulls(${t.source}, ${t.title}, ${t.authorsFamily}, ${t.authorsGiven}, ${t.year}, ${t.venue}, ${t.doi}) = 0
@@ -7491,7 +7498,7 @@ export const citationIndexLookups = spideryarn.table(
   (t) => [
     check(
       "citation_index_lookups_work_id",
-      sql`length(${t.workId}) <= 300 and ${t.workId} = lower(${t.workId})
+      sql`length(${t.workId}) <= 600 and ${t.workId} = lower(${t.workId})
           and ${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'`,
     ),
     check("citation_index_lookups_state", sql`${t.state} in ('found', 'not-indexed')`),
@@ -7504,7 +7511,7 @@ export const citationIndexLookups = spideryarn.table(
               and ${t.returned} is not null and ${t.returned} >= 0
               and ${t.dropped} is not null and ${t.dropped} between 0 and ${t.returned}
               and ${t.capped} is not null
-              and ${t.targetTitle} is not null and length(${t.targetTitle}) between 1 and 1000
+              and ${t.targetTitle} is not null and length(${t.targetTitle}) between 1 and 10000
               and ${t.targetAuthors} is not null and cardinality(${t.targetAuthors}) <= 20
               and array_position(${t.targetAuthors}, null) is null
             else num_nonnulls(${t.openalexId}, ${t.citedByCount}, ${t.returned}, ${t.dropped},
@@ -7550,7 +7557,7 @@ export const citationIndexCiters = spideryarn.table(
       "citation_index_citers_doi",
       sql`${t.doi} is null or (${t.doi} = lower(${t.doi}) and ${t.doi} ~ '^10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$')`,
     ),
-    check("citation_index_citers_title", sql`length(${t.title}) between 1 and 1000`),
+    check("citation_index_citers_title", sql`length(${t.title}) between 1 and 10000`),
     check(
       "citation_index_citers_authors",
       sql`cardinality(${t.authors}) <= 20 and array_position(${t.authors}, null) is null

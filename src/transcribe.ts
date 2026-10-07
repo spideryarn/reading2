@@ -73,6 +73,7 @@
  * rule that keeps a reader's question and the article's prose out of the log
  * covers a transcript exactly as well. docs/project/logging.md.
  */
+import { UnrecordedSpendRefused } from "./ai-spend.js";
 import { stripFillers } from "./dictation-fillers.js";
 import { errorFields, log, since } from "./log.js";
 import { canRetry, providerHttpFailure } from "./messages.js";
@@ -356,6 +357,9 @@ export async function transcribeWith(
       { signal: abort },
     );
   } catch (err) {
+    /* An eval with no ledger open, stopped before it spent: its message says
+       what to add, and the reader-facing wording below would hide that. */
+    if (err instanceof UnrecordedSpendRefused) throw err;
     if (err instanceof ProviderRefused) {
       /* **The provider's body never reaches this line**, and the first version
          of this got it exactly backwards: it wrote 300 characters of the

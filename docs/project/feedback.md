@@ -355,10 +355,11 @@ this is what the app does with it.
   question id this build has no file for is a 400. **A reply to a question already marked answered
   is accepted**: it may have been typed in a tab opened before that deploy, and the words are kept.
 - **The row.** `feedback_question_answers`, keyed `(owner_id, id)`: the question's id, the words
-  (at most 12,000 characters, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the `environment` the server
-  itself was running in, which is what lets the script tell a production row from a local one. **A
-  reply is not a report**: it is never in the Earlier list, on `/admin/feedback`, in Sentry, in the
-  endings map or in a shipped email, and it is not rate-limited (the route is admin-only, and an
+  (at most 20,000 characters through the route, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the
+  `environment` the server itself was running in, which is what lets the script tell a production
+  row from a local one. **A reply is not a report**: it is never in the Earlier list, on
+  `/admin/feedback`, in Sentry, in the endings map or in a shipped email, and it is not
+  rate-limited (the route is admin-only, and an
   admin has no cap).
 - **When it fails.** The words stay in the box. A 404 means the page is newer than the server that
   answered (a rollback, or the minutes of a deploy) and says to copy the words, reload and reply
@@ -760,16 +761,16 @@ canvas and written out as a PNG, so what matters is how big a PNG of those pixel
 poor at photographs: a page with a cover image on it is one to three megabytes at 1600 pixels. So
 [`src/web/feedback-screenshot.ts`](../../src/web/feedback-screenshot.ts) tries long edges of 1600,
 1280, 1024, 800 and 640 in turn, never larger than the picture arrived, and sends the first whose
-PNG is under 90% of the stored limit. Only if 640 does not fit is the reader told it is too big,
+PNG is under 90% of the app's limit. Only if 640 does not fit is the reader told it is too big,
 and with these numbers no real picture gets there: 640 × 640 of uncompressed noise is 1.64 MB.
 The 10% is headroom, because the server writes the file again and its copy can be a little bigger.
 
-**What we store is at most 2,000,000 bytes** — `MAX_FEEDBACK_SCREENSHOT_BYTES` in
-[`src/types.ts`](../../src/types.ts), and the `feedback_screenshot_size` CHECK on the table, which
-have to move together. It was 400,000, which sent a photographic page at about 640 pixels or not at
-all. **It is not Greg's 5 MB because of how the picture travels**: as base64 inside a JSON request,
-and Vercel refuses a request over 4.5 MB before our code runs. Two megabytes is 2.67 MB on the wire;
-five would be 6.7 MB. The plan is
+**The app accepts at most 2,000,000 bytes** — `MAX_FEEDBACK_SCREENSHOT_BYTES` in
+[`src/types.ts`](../../src/types.ts), enforced by the route. The table's CHECK is a much higher
+ceiling against runaway writes ([sql.md](sql.md#get-the-database-to-do-the-work)), so changing the
+app's limit needs no migration. **It is not Greg's 5 MB because of how the picture travels**: as
+base64 inside a JSON request, and Vercel refuses a request over 4.5 MB before our code runs. Two
+megabytes is 2.67 MB on the wire; five would be 6.7 MB. The plan is
 [261003k](../plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md).
 
 ## Trying it locally

@@ -2,8 +2,8 @@
  * The two COMPOSITIONS of the attention pass — tools/overseer/attention-cli.ts.
  *
  * `runAttentionPass` defaults its prompt version to 1, and `classifyTail` picks
- * its prompt from its own options, so a caller that chose version 2 and forgot
- * to say so in either place files a version-1 answer under version 2, or the
+ * its prompt from its own options, so a caller that chose the proposal-aware prompt and forgot
+ * to say so in either place files a version-1 answer under the proposal version, or the
  * other way round (plan 260910f D3; the comment at
  * `AttentionPassOptions.promptVersion`). The unit tests of the pass cannot see
  * that, because they hand it a version themselves. So this drives the daemon's
@@ -50,7 +50,7 @@ function seams(proposals: boolean): { seams: AttentionSeams; systems: string[] }
     const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
     systems.push(body.messages[0]?.content ?? "");
     // A version-2-shaped answer whatever was asked: under version 1 the extra
-    // fields must be ignored, under version 2 they must be read.
+    // fields must be ignored; under the proposal-aware prompt they must be read.
     const content = JSON.stringify({
       asked: true,
       topic: "whether to shut the idle stack down",
@@ -58,7 +58,7 @@ function seams(proposals: boolean): { seams: AttentionSeams; systems: string[] }
       kind: "irreversible",
       answerable: "phone",
       answerableWhy: "",
-      recipient: "fable",
+      recipient: "opus",
       reason: "it is a question of wording",
       asks: "Say the word and I'll shut it down.",
     });
@@ -104,7 +104,7 @@ async function runCommand(root: string, s: AttentionSeams): Promise<AttentionLis
 }
 
 describe("OVERSEER_PROPOSALS reaches both halves of both compositions", () => {
-  it("the daemon's runner: on ⇒ version 2 asked, filed and proposed", async () => {
+  it("the daemon's runner: on ⇒ proposal-aware prompt asked, filed and proposed", async () => {
     const root = tempRoot();
     const { seams: s, systems } = seams(true);
     const run = attentionRunner(root, "test-instance", s);
@@ -126,7 +126,7 @@ describe("OVERSEER_PROPOSALS reaches both halves of both compositions", () => {
     expect(onlyProposalKind(list)).toBe("off");
   });
 
-  it("the hand-run command: on ⇒ version 2 asked, filed and proposed", async () => {
+  it("the hand-run command: on ⇒ proposal-aware prompt asked, filed and proposed", async () => {
     const root = tempRoot();
     const { seams: s, systems } = seams(true);
     const list = await runCommand(root, s);
@@ -167,7 +167,7 @@ describe("the hand run's words for a proposal (GPT Sol's F16)", () => {
           proposal: {
             kind: "proposed",
             id: "fp:v2:Greg",
-            recipient: "fable",
+            recipient: "opus",
             reason: "it is a question of wording",
             asks: "Say the word and I'll shut it down.",
             by: { kind: "model", model: "Greg", via: "overseer" },

@@ -86,7 +86,8 @@ being shown somebody else's price. They were set at roughly GBP/USD 1.35 and EUR
 up to whole units, which lands each about 4–8% above spot — headroom on purpose, because a price
 set at spot goes underwater the moment the rate moves and **Stripe prices cannot be edited**. Two
 properties `tests/billing-tiers.test.ts` pins against the real rows: every active tier is priced in
-every currency any tier offers, and the amounts are whole units — the prosumer-tool convention
+every currency any tier offers, and the amounts are round — multiples of 50 cents, which the seeded
+whole units satisfy — the prosumer-tool convention
 (Linear, Copilot, Notion) rather than the `.99` of consumer subscriptions. The seeded numbers also
 keep a 5× ratio between tiers in every currency, so the pricing page tells one story everywhere.
 
@@ -411,19 +412,25 @@ payload above rather than from a boolean.
 > [!WARNING]
 > **The live row predates the column.** `cancel_at` landed after the cancellation webhook had already
 > been delivered, and `/profile` never resyncs from Stripe, so the one live cancelled subscription
-> reads `cancel_at = null` until something syncs that customer again. See
+> then read `cancel_at = null` until something synced that customer again. Its current state is
+> unverified; see
 > [The live row that needs a backfill](#the-live-row-that-needs-a-backfill).
 
 ### The live row that needs a backfill
 
-**One production row, and nothing automatic will fix it.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
+**Resolved; this section is history.** Read on production on 2026-10-07 (read-only): the row says
+`status = canceled`, `cancel_at = current_period_end = 2026-10-03 11:37 UTC`. Stripe ended the
+subscription on its scheduled day and `customer.subscription.deleted`, which is in `HANDLED_EVENTS`,
+resynced it ([`src/billing/webhook.ts`](../../src/billing/webhook.ts)). Nothing below needs doing.
+
+**The original gap, in one production row.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
 cancelled on 2026-09-03; the `customer.subscription.updated` webhook that carried the cancellation
-was delivered and handled *before* `cancel_at` existed as a column, so the row now reads
-`cancel_at = null` under a subscription Stripe has scheduled to end on 3 October. `/profile`
+was delivered and handled *before* `cancel_at` existed as a column, so the row then read
+`cancel_at = null` under a subscription Stripe had scheduled to end on 3 October. `/profile`
 [never resyncs from Stripe](#what-a-reader-sees), so nobody looking at the page can cause the row to
 catch up.
 
-**The recommendation is to make Stripe tell us again, not to type the date in.** Re-deliver that
+**If it is still stale, the recommendation is to make Stripe tell us again, not to type the date in.** Re-deliver that
 event from the Stripe Dashboard (Developers → Events → the `customer.subscription.updated` for that
 subscription → *Resend*), or make any change to the subscription that Stripe emits an event for.
 `syncSubscriptionFromStripe` then does exactly what it does for everyone else — asks Stripe what is
@@ -1570,8 +1577,8 @@ any time. See [admin.md](admin.md).
 - **Comp subscriptions** for journalists and QA. Until then the only exemption is the hardcoded
   admin check.
 - **Backfilling the one live cancelled row** — see
-  [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). The code is fixed; the
-  row predates the column.
+  [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). Resolved: the row
+  resynced when the subscription ended on 2026-10-03 (read 2026-10-07).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.

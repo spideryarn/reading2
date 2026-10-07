@@ -40,8 +40,8 @@ const QUOTE = "Tell me which wording you'd rather and I'll use it.";
 const PROPOSED = {
   kind: "proposed",
   id: "fp-1:v2",
-  recipient: "fable",
-  reason: "it is a question of wording, which Fable is for",
+  recipient: "opus",
+  reason: "it is a question of wording, which Opus is for",
   asks: QUOTE,
   by: BY,
   reach: { kind: "unavailable", why: "the last usage pass found this account's Claude limit hit" },
@@ -133,6 +133,13 @@ describe("the browser's parser", () => {
     expect(list.items[0]?.proposal).toEqual({ kind: "not-reported" });
   });
 
+  it("reads a proposal made for Fable, before Greg retired it (2026-09-28), as one for Opus", () => {
+    const list = listOf(read([proseItem({ ...PROPOSED, recipient: "fable" })]));
+    expect(list.kind).toBe("list");
+    if (list.kind !== "list") return;
+    expect(list.items[0]?.proposal).toEqual(PROPOSED);
+  });
+
   it("refuses a malformed proposal, every arm strictly, rather than half-drawing one", () => {
     for (const proposal of [
       { kind: "sent" },
@@ -180,11 +187,11 @@ describe("the card", () => {
     draw([proseItem(PROPOSED)]);
     const text = host.textContent ?? "";
     expect(text).toContain("Proposed: ask Opus");
-    expect(text).toContain("it is a question of wording, which Fable is for");
+    expect(text).toContain("it is a question of wording, which Opus is for");
     expect(text).toContain(QUOTE);
     expect(text).toContain("openai/gpt-5.6-luna");
     expect(text).toContain("nothing has been sent");
-    // Missing capability is SHOWN, never substituted: it still says Fable.
+    // Missing capability is SHOWN, never substituted: it still says Opus.
     expect(text).toMatch(/not available/i);
 
     // NO NEW CONTROL. The only buttons are the stretched link that SELECTS the

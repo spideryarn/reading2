@@ -279,18 +279,26 @@ export const DECLARATIONS: readonly Declaration[] = [
        docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
     wire: "transcription",
     metered: false,
-    why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam and is metered. It simply never opens a collector, so every call warns \"no spend collector open\" and the row is dropped. One `withLedger(\"eval\", …)` fixes it, in a file another agent was actively writing on the day this was found.",
+    why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam. It opens no collector, so since 2026-10-07 its gateway calls are refused before spending. One `withLedger(\"eval\", …)` would record them; the credential declaration remains until that conversion.",
   },
   /* **The two halves of the 2026-09-03 model bake-off**, and the same story as
      `dictation-bench-vocabulary-sources` above: both call `transcribeWith`, so
-     every call goes through the seam and is metered — they simply never open a
-     collector, so each one warns "no spend collector open" and its row is
-     dropped. The fix for all three is one `withLedger("eval", …)` each, and it
+     their transcription calls go through the seam — they simply never open a
+     collector, so those calls used to warn "no spend collector open" and drop
+     their rows. The fix for all three is one `withLedger("eval", …)` each, and it
      is deliberately not being done here: the sibling's entry has said so since
      2026-08-28, and doing it for two files and not the third would leave the
      directory half-converted with nothing saying which half. Worth doing as one
      small job across the three, under the `eval` kind rather than `dictation`,
-     so a few hundred eval calls do not land in the product's cost report. */
+     so a few hundred eval calls do not land in the product's cost report.
+
+     **Since 2026-10-07 none of the three can spend that way.** `beginSpend`
+     refuses a gateway call from a script or an eval with no ledger open
+     (`UnrecordedSpendRefused`, src/ai-spend.ts). The benches catch failures and
+     can continue, but those gateway calls spend nothing until wrapped. The entries stay
+     because the files still name a credential, and `gate-models.ts` still makes
+     raw diagnostic requests no wrapper meters; those requests can still spend —
+     docs/plans/261007o-openrouter-spend-the-ledger-does-not-record.md. */
   {
     id: "dictation-gate-models",
     kind: "unscoped",
@@ -304,7 +312,7 @@ export const DECLARATIONS: readonly Declaration[] = [
        *gates* is the production one, and that is now a transcription. */
     wire: "transcription",
     metered: false,
-    why: "Asks which candidate models can serve the production request at all, before the bake-off spends an hour finding out. Calls `transcribeWith`, so it is through the seam and metered; it opens no collector. Its `diagnose` half sends raw fetches the app never would, on purpose — that is where the answer to 'why not OpenAI on the chat endpoint?' comes from. docs/plans/260903i-which-model-transcribes-dictation.md and 260907c.",
+    why: "Asks which candidate models can serve the production request at all, before the bake-off spends an hour finding out. Calls `transcribeWith` with no collector, so since 2026-10-07 those gateway calls are refused. Its `diagnose` half still sends raw unmetered fetches the app never would, on purpose — that is where the answer to 'why not OpenAI on the chat endpoint?' comes from. docs/plans/260903i-which-model-transcribes-dictation.md and 260907c.",
   },
   {
     /* **The one file in this repo that spends on two accounts in one run, and
@@ -575,7 +583,7 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
   {
     file: "tools/overseer/attention-classify.ts",
     account: "OPENROUTER_API_KEY — the same key as the app's, and therefore INSIDE the OpenRouter spend cap, but on rows the app's ledger never sees",
-    what: "The Overseer's attention pass: one `openai/gpt-5.6-luna` call per newly-ended agent turn, asking whether that turn handed a person a decision. Measured 2026-09-08 — a cold pass over 25 sessions is 10 calls and $0.0036, an unchanged fleet is free, and a live fleet turns over ~8 of 12 ended tails in four minutes, so the running cost is roughly $0.50–$1.00/day at a two-minute cadence.\n\nEvery call is reserved first against a hard day ceiling shared by the daemon and every hand run — 1,500 calls / 3,000,000 tokens / $1.50 per UTC day, `DAY_CEILING` in tools/overseer/model-budget.ts, with a cooldown after a 402 or 429 (plan 260910f D4–D5). `OVERSEER_PROPOSALS=1` selects a proposal-aware prompt (version 2): the SAME one call, with a longer system prompt, that also names who holds the answer, why, and the sentence that asks — so it costs more prompt tokens per call and no extra calls, and one cold re-read of the fleet when first enabled. `scripts/attention-eval.ts` spends through the same seam (`paidClassifier`) on a day budget of its own in a fresh temp directory, so scoring the 25-item labelled set (cents) never spends the daemon's day; it runs only when a person runs it.",
+    what: "The Overseer's attention pass: one `openai/gpt-5.6-luna` call per newly-ended agent turn, asking whether that turn handed a person a decision. Measured 2026-09-08 — a cold pass over 25 sessions is 10 calls and $0.0036, an unchanged fleet is free, and a live fleet turns over ~8 of 12 ended tails in four minutes, so the running cost is roughly $0.50–$1.00/day at a two-minute cadence.\n\nEvery call is reserved first against a hard day ceiling shared by the daemon and every hand run — 1,500 calls / 3,000,000 tokens / $1.50 per UTC day, `DAY_CEILING` in tools/overseer/model-budget.ts, with a cooldown after a 402 or 429 (plan 260910f D4–D5). `OVERSEER_PROPOSALS=1` selects a proposal-aware prompt (version 3; version 2 routed to the retired Fable): the SAME one call, with a longer system prompt, that also names who holds the answer, why, and the sentence that asks — so it costs more prompt tokens per call and no extra calls, and one cold re-read of the fleet when first enabled. `scripts/attention-eval.ts` spends through the same seam (`paidClassifier`) on a day budget of its own in a fresh temp directory, so scoring the 25-item labelled set (cents) never spends the daemon's day; it runs only when a person runs it.",
     why: "It cannot go through `src/ai-call.ts` and it cannot go through `declaredFetch` either, and for one reason: docs/project/overseer-direction.md § Principles says the Overseer must not depend on the product database or on anything under `src/`, and both seams live there. That is the whole point of the tool — the thing you reach for when the product is broken cannot be built on the product. So it has its own thin client, one endpoint, a hard `maxCalls` ceiling per pass, and both cost pockets read back from the gateway and printed (`callCost`). It is here as well as in the test's ALLOWED map for the reason the entry above gives: a green test is not a register, and an allow-list says a file MAY spend without saying what it spends. If a second file under tools/overseer/ ever needs a line here, that is a fork of this seam and should be refused rather than listed.",
     since: "2026-09-08",
   },

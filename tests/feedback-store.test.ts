@@ -561,14 +561,14 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
   });
 
   /**
-   * **The closed vocabulary, and the caps, checked against the database
-   * rather than against themselves.**
+   * **The closed vocabulary, checked against the database rather than against
+   * itself.** (The length CHECKs no longer copy a product limit; see the
+   * ceilings below.)
    *
    * There were two vocabularies until 2026-09-02, when `route_kind` became a
    * URL and stopped being one — src/db/schema.ts § `url`.
-   * `FEEDBACK_ENVIRONMENTS` and
-   * `MAX_FEEDBACK_ANSWER_CHARS` live in src/types.ts, where the dialog and the
-   * route read them, and the CHECK constraints in src/db/schema.ts write the
+   * `FEEDBACK_ENVIRONMENTS` lives in src/types.ts, where the dialog and the
+   * route read it, and the CHECK constraints in src/db/schema.ts write the
    * same values out by hand — because building them from these arrays would make
    * the schema import src/types.ts at runtime, and src/store/public-slug.ts
    * imports the schema, so the public read path's import graph would grow a node
@@ -601,29 +601,37 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
   });
 
   /**
-   * **The cap on the address, from the database's side.**
-   *
-   * `route_kind` was a closed vocabulary until 2026-09-02, and the loop above
-   * used to walk it. There is nothing to walk now — a URL has no vocabulary —
-   * so what is left to hold is the pair of things `feedback_url_shape` really
-   * promises: `null` is allowed (a bundle older than the change), and 2048 is
-   * the ceiling. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same number,
-   * and this is the test that notices when the two stop agreeing.
+   * **The database's ceilings, which are not the product's limits.** Greg,
+   * 2026-10-07: *"I don't see the point of including a character/size limit on
+   * fields. or if we're going to, make it very high"* — docs/project/sql.md §
+   * Get the database to do the work. The reader's limits
+   * (`MAX_FEEDBACK_URL_CHARS`, `MAX_FEEDBACK_BODY_CHARS`,
+   * `MAX_FEEDBACK_SCREENSHOT_BYTES`) live in the dialog and the route, and
+   * tests/feedback-route.test.ts holds them there. Each CHECK sits far above its
+   * limit and only catches a runaway, so each test below proves both halves: one
+   * past the product's limit is filed, which is what lets the limit move without
+   * a migration, and one past the ceiling is refused, so the CHECK still can.
+   * Plan 261007q.
    */
-  it("takes an address of exactly the cap, refuses one more, and allows none at all", async () => {
-    const pad = (n: number) => `https://www.spideryarn.com/read/a?q=${"x".repeat(n)}`;
-    const exact = pad(MAX_FEEDBACK_URL_CHARS - pad(0).length);
-    expect(exact).toHaveLength(MAX_FEEDBACK_URL_CHARS);
+  const URL_CEILING = 10_000;
+  const BODY_CEILING = 1_000_000;
+  const SCREENSHOT_CEILING = 52_428_800;
 
+  it("takes an address past the product's limit, refuses one past the ceiling, and allows none at all", async () => {
+    const pad = (n: number) => `https://www.spideryarn.com/read/a?q=${"x".repeat(n)}`;
+    const past = pad(MAX_FEEDBACK_URL_CHARS + 1 - pad(0).length);
+    expect(past).toHaveLength(MAX_FEEDBACK_URL_CHARS + 1);
     const filed = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id: mintId(), url: exact })),
+      pgFeedbackStore.submit(report({ id: mintId(), url: past })),
     );
     expect(filed.kind).toBe("created");
     await clear();
 
     expect(
       await violation(() =>
-        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), url: `${exact}x` }))),
+        runAsOwner(ALICE, () =>
+          pgFeedbackStore.submit(report({ id: mintId(), url: pad(URL_CEILING + 1 - pad(0).length) })),
+        ),
       ),
     ).toBe("feedback_url_shape");
     await clear();
@@ -636,37 +644,28 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(old.kind).toBe("created");
   });
 
-  it("takes a body of exactly the database's cap, and refuses one character more", async () => {
-    /* **`MAX_FEEDBACK_BODY_CHARS`, the number written into the CHECK.** Equal to
-       the reader's `MAX_FEEDBACK_ANSWER_CHARS` since plan 261007j (20,000), and
-       never below 12,072: the migration that made one box out of three glued
-       three separately-capped answers together, and a lower CHECK would make a
-       row that was legal when it was filed illegal afterwards. */
-    expect(MAX_FEEDBACK_BODY_CHARS).toBe(20_000);
-    const atTheCap = "x".repeat(MAX_FEEDBACK_BODY_CHARS);
+  it("takes a body past the product's limit, and refuses one past the ceiling", async () => {
+    /* Never below 12,072 either: the migration that made one box out of three
+       glued three separately-capped answers together, and a lower CHECK would
+       make a row that was legal when it was filed illegal afterwards. */
     const filed = await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id: mintId(), body: atTheCap })),
+      pgFeedbackStore.submit(report({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_BODY_CHARS + 1) })),
     );
     expect(filed.kind).toBe("created");
-    /* One over, and the database is what says no — a paste of an entire article
-       must not be able to become an attachment on its way to Sentry, and a rule
-       enforced only in TypeScript holds only for the callers that went through
-       that TypeScript. */
     expect(
       await violation(() =>
-        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), body: `${atTheCap}x` }))),
+        runAsOwner(ALICE, () =>
+          pgFeedbackStore.submit(report({ id: mintId(), body: "x".repeat(BODY_CEILING + 1) })),
+        ),
       ),
     ).toBe("feedback_body_shape");
   });
 
-  /* The constant in src/types.ts and the number written into the CHECK are two
-     copies that a migration has to keep equal — it went from 400,000 to two
-     megabytes on 2026-10-03 — so the pair is held here against the real table.
-     Zeros rather than a picture: the column counts octets and nothing else. */
-  it("takes a screenshot of exactly the database's cap, and refuses one byte more", async () => {
+  /* Zeros rather than a picture: the column counts octets and nothing else. */
+  it("takes a screenshot past the product's limit, and refuses one byte past the ceiling", async () => {
     const filed = await runAsOwner(ALICE, () =>
       pgFeedbackStore.submit(
-        report({ id: mintId(), screenshot: new Uint8Array(MAX_FEEDBACK_SCREENSHOT_BYTES) }),
+        report({ id: mintId(), screenshot: new Uint8Array(MAX_FEEDBACK_SCREENSHOT_BYTES + 1) }),
       ),
     );
     expect(filed.kind).toBe("created");
@@ -674,7 +673,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       await violation(() =>
         runAsOwner(ALICE, () =>
           pgFeedbackStore.submit(
-            report({ id: mintId(), screenshot: new Uint8Array(MAX_FEEDBACK_SCREENSHOT_BYTES + 1) }),
+            report({ id: mintId(), screenshot: new Uint8Array(SCREENSHOT_CEILING + 1) }),
           ),
         ),
       ),
@@ -1225,16 +1224,21 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       expect(await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([]))).toEqual([]);
     });
 
-    it("takes a reply of exactly the cap, and the database refuses one character more", async () => {
-      const at = await runAsOwner(ALICE, () =>
-        pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) })),
+    /* The reply box's limit is the route's to hold (`MAX_FEEDBACK_ANSWER_CHARS`);
+       the CHECK is a ceiling far above it that only catches a runaway — the
+       ceilings above, plan 261007q. */
+    it("takes a reply past the product's limit, and the database refuses one past the ceiling", async () => {
+      const past = await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })),
       );
-      expect(at.kind).toBe("created");
-      await expect(
-        runAsOwner(ALICE, () =>
-          pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })),
+      expect(past.kind).toBe("created");
+      expect(
+        await violation(() =>
+          runAsOwner(ALICE, () =>
+            pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(BODY_CEILING + 1) })),
+          ),
         ),
-      ).rejects.toThrow();
+      ).toBe("feedback_question_answers_body_shape");
       await expect(
         runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "   " }))),
       ).rejects.toThrow();
