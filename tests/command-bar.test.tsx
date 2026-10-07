@@ -1543,8 +1543,9 @@ describe("off the reading view", () => {
 /**
  * **Help, as a row in the bar** — docs/plans/261002b-help-page.md § After GPT
  * Sol's plan review, R8: the footer, the command bar, and the Dock link were
- * the three ways in. Since 2026-10-04 the row replaces the Dock link for an
- * owner; the link stays for a visitor, who has no command bar (plan 261004j).
+ * the three ways in. An owner has both the row and the Dock link (the link
+ * was a visitor's only from 2026-10-04 to 2026-10-07 — plans 261004j, 261007e);
+ * a visitor has no command bar, so only the link.
  *
  * `help` was already one of Feedback's aliases, and it stays one: somebody who
  * types it may well mean *something is wrong*. But the page whose name it is

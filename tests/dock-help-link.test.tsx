@@ -1,19 +1,26 @@
 // @vitest-environment jsdom
 /**
- * **The Dock's Help link: on a visitor's bar only, and it opens at the part
- * about where you are.** It was on every bar from 2026-10-02
+ * **The Dock's Help link: on every bar, and it opens at the part about where
+ * you are.** It was on every bar from 2026-10-02
  * (docs/plans/261002b-help-page.md § After GPT Sol's plan review, R5 and R8).
  * Greg, 2026-10-04 (spya-dev7pf): *"We don't need to show the help icon in the
  * bottom bar of reading view … I'm trying to avoid cluttering that bottom bar,
  * but of course we also want to make sure that if people need help, they can
- * get to it."* So it left the bar of anyone who has the command bar, whose
- * Help row opens the same section, and stayed for a visitor, who has none —
- * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ * get to it."* So for three days it was on a visitor's bar only, the one bar
+ * with no command bar
+ * (docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
+ * Then Greg, 2026-10-06 (spya-ucftjt): *"I think in a previous message I
+ * suggested that you hide the help icon from the bottom bar. I'm second
+ * guessing that. Maybe it does make sense to keep it down there towards the
+ * bottom right."* So it is on every bar again from 2026-10-07 —
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
  *
  * Four claims, each of which a plausible refactor could break silently:
  *
- *  - **The owner's bar has no Help control, and still has Commands.** The two
- *    are one trade: the link may go only where the command bar is.
+ *  - **The owner's bar has exactly one Help control, and still has
+ *    Commands.** The link came back beside the command bar's Help row, not
+ *    in place of it; a gate left behind, or the link drawn in two arms, is
+ *    what this would notice.
  *  - **Every visitor gets it**, signed in or not, on the reading view and on
  *    the Metadata page. The bar has three gates already (visitor, signed in, a
  *    drawer) and a link placed inside the wrong one vanishes for exactly the
@@ -119,20 +126,32 @@ function drawer(visitor: boolean): Record<string, unknown> {
 }
 
 describe("the Help link in the Dock", () => {
-  /* The trade, both halves in one case: no Help control, and the Commands
-     button whose Help row replaces it. */
-  it("is not drawn for the owner, who has the command bar instead", () => {
+  /* Both doors, on every bar the owner has: one Help link (`helpLink()`
+     insists on exactly one) and the Commands button whose Help row opens the
+     same section. */
+  it("is drawn once for the owner, beside the command bar, on every bar", () => {
     for (const mode of ["plain", "chat"]) {
       bar({ mode });
-      expect(named("Help"), `an owner's bar in ${mode} draws Help`).toHaveLength(0);
+      helpLink();
       expect(named("Commands"), "the owner's bar has no Commands button").toHaveLength(1);
     }
     bar({ mode: "chat", drawer: drawer(false) });
-    expect(named("Help")).toHaveLength(0);
+    helpLink();
     expect(named("Commands")).toHaveLength(1);
     metadataBar({});
-    expect(named("Help"), "an owner's Metadata bar draws Help").toHaveLength(0);
+    expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
     expect(named("Commands")).toHaveLength(1);
+  });
+
+  /* The owner's link is the visitor's link: one rule for which section,
+     whoever is reading. */
+  it("follows the band on the owner's bar just as it does on a visitor's", () => {
+    bar({ mode: "plain" });
+    expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
+    bar({ mode: "chat" });
+    expect(helpLink().getAttribute("href")).toBe("/help#mode-chat");
+    bar({ mode: "glossary", drawer: drawer(false) });
+    expect(helpLink().getAttribute("href")).toBe("/help#mode-glossary");
   });
 
   it("opens at the section for the mode the band is in", () => {

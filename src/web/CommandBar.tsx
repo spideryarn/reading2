@@ -1145,10 +1145,10 @@ function experimentalOutcome(result: ExperimentalSaveOutcome): ActionOutcome {
 /**
  * **The Help page, opened at the part about where you are standing** —
  * docs/plans/261002b-help-page.md § After GPT Sol's plan review, R8: the
- * footer, this row and the Dock's Help link were the three ways in. Since
- * 2026-10-04 this row is **the** way in from the bar for anyone who has it:
- * the Dock's link is drawn only for a visitor, who does not (Dock.tsx §
- * `DockHelp`, plan 261004j).
+ * footer, this row and the Dock's Help link were the three ways in, and are
+ * again: the Dock's link is on every bar since 2026-10-07, after three days
+ * on a visitor's only (Dock.tsx § `DockHelp`, plans 261004j and 261007e). A
+ * visitor has no command bar, so for them the link is the one in the bar.
  *
  * Not in `APP_PAGES` because its href is not the same everywhere: it is the
  * section for the mode the band is in (`CommandBarArticle` § `help`). And

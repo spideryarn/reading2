@@ -145,10 +145,11 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             your own article, that is followed by the <strong>Commands</strong> button. Next come
             the mode buttons, then <strong>Comments</strong> and <strong>Metadata</strong>. When you
             are signed in, it also has the <strong>Experimental</strong> switch and{" "}
-            <strong>Feedback</strong>. To come back to this page from your own article, press{" "}
-            <strong>Commands</strong> and type <em>help</em>, or follow <strong>More in Help</strong>{" "}
-            in a mode’s (i). On an article somebody shared with you there is no{" "}
-            <strong>Commands</strong> button, and the bar has a <strong>Help</strong> link instead.
+            <strong>Feedback</strong>. Every bar has a <strong>Help</strong> link near its
+            right-hand end, which opens this page at the part about the mode you are in.
+            On your own article you can also press <strong>Commands</strong> and type{" "}
+            <em>help</em>, and wherever a mode has an (i), its card ends in{" "}
+            <strong>More in Help</strong>.
           </li>
         </ul>
         <p>
