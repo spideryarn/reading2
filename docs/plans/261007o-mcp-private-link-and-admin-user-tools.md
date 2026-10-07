@@ -143,7 +143,7 @@ people the agent never sees.
 ## Review
 
 **Plan review (GPT Sol, 2026-10-07):** `VERDICT: go with changes`, four findings,
-[261007o-plan-review-sol.md](261007o-plan-review-sol.md). All taken: F1 (a `POST` after a re-read
+[261007o-mcp-plan-review-sol.md](261007o-mcp-plan-review-sol.md). All taken: F1 (a `POST` after a re-read
 can still replace a link made in between) → `keepExisting` decided under the row lock, with a
 database test of two at once (red when the check is removed); F2 (handing over a captured key skips
 the post-approval session check) → a fresh `GET` after the yes, key-free error on any change; F3 →
@@ -151,7 +151,7 @@ the post-approval session check) → a fresh `GET` after the yes, key-free error
 wording names "an AI assistant of their choosing" and the OpenRouter line is qualified.
 
 **Code review (GPT Sol, write-capable, 2026-10-07):**
-[261007o-code-review-sol.md](261007o-code-review-sol.md). Two P2s, both fixed by Sol with a red test
+[261007o-mcp-code-review-sol.md](261007o-mcp-code-review-sol.md). Two P2s, both fixed by Sol with a red test
 first: C1, a long title pushed the slug off the end of a truncated dialog line, so the slug is now
 its own line; C2, `list_users` ranked a user by an old read over a newer sign-in, so it now takes
 the latest of the dates. Sol's postmortems:

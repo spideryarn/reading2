@@ -1,8 +1,8 @@
 You are reviewing built code in the Spideryarn repo (cwd), and you may fix what you find.
 
 The plan: docs/plans/261007o-mcp-private-link-and-admin-user-tools.md (your own plan review is
-docs/plans/261007o-plan-review-sol.md; its four findings were taken, see the plan).
-The diff: docs/plans/261007o-code-review.diff (against HEAD; the plan file itself is new and untracked).
+docs/plans/261007o-mcp-plan-review-sol.md; its four findings were taken, see the plan).
+The diff: docs/plans/261007o-mcp-code-review.diff (against HEAD; the plan file itself is new and untracked).
 
 What was built: three MCP tools in src/mcp/tools.ts (create_private_link, list_users, user_activity);
 an optional `keepExisting` on POST /api/article/:slug/share-link (src/routes.ts parseShareLinkRequest,
