@@ -228,9 +228,21 @@ tenth is the showcase"); it is not a hook and was not touched.
 - **The builder left Retry's bypass unreproduced.** `JobProgress` re-ran a failed job without
   going through `useRewriteHold`, reopening the completion-read gap for that run. The
   write-capable review reproduced and repaired the shared seam; see below.
-- **The command bar's *Run again* rows and Metadata's re-run rows force a step with an artefact
-  possibly on screen in another tab or behind them.** They are excluded from the guard with their
-  reasons; whether they want a hold of some kind is a separate question.
+- **The command bar's *Run again* row buys a second run over a held mode** (GPT Sol's C4).
+  `CommandBar.tsx` § `rerunRows` posts `stepRunRequest(slug, step, { force: true })` straight
+  through the queue and then navigates to Metadata; it never asks the mode's hold. **Reproduced at
+  the row's action, not in the drawn bar:** with FAQ held (the rewrite finished, its GET still in
+  the air), running the `rerun-faq` command out of `besideTheModes` posts a second
+  `{ steps: ["faq"], force: ["faq"] }` while the mode's own controls stay held. It is pinned as a
+  known-open defect in `tests/rewrite-hold.test.tsx` § *pins C4*, in the form
+  `tests/adversarial-shapes.test.ts` uses: the pin goes red when the row is fixed. Not reproduced:
+  the keystrokes in the real `Dock`, and the same press on any other step (the row's code is one
+  `map` over `METADATA_RERUN_STEPS`, so it is read as the same). `CommandBar.tsx` was not changed.
+  The fix is small in shape and a decision in substance: the hold is keyed by `(slug, step)` in a
+  module, so the row could refuse while one is held, but it would need a sentence to say why.
+- **Metadata's re-run rows** force a step with an artefact possibly on screen in another tab or
+  behind them. Excluded from the guard with their reason; whether they want a hold is a separate
+  question, and not reproduced here.
 - **A browser pass.** None was made in this cluster; the caller arranges one.
 
 ## Done when
@@ -275,6 +287,60 @@ The six shared-job/doc-link regression suites passed **90 tests**. The 18 typed-
 passed **726 tests** before the two new panel cases; the complete FAQ/Citations suites then passed
 **157 tests**. Those suite counts overlap. `node --import tsx scripts/typecheck.ts` passed all four
 projects and covered all 3,344 source files. No network, full `npm test`, browser pass or commit.
+
+## Review status
+
+**GPT Sol's code review: "ship with these fixes applied, for the scoped stage."** Four findings;
+the prompt and the answer are beside this file
+([prompt](261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one-code-review-prompt.md),
+[answer](261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one-code-review-sol.md)).
+
+- **C1, Retry reopened the paid-run gap in all twelve hold users: fixed by the reviewer**, at the
+  `useStepJob` / hold seam. Checked again afterwards by disabling the one registration line: 32
+  cases red (the ten mounted *Retry holds…*, their ten offline twins, the twelve picture-hook seam
+  cases), green restored. A Retry that is refused, one whose job fails, and one pressed twice each
+  release or stay single; all three are cases in the suite.
+- **C2, `faq.md` and `citations.md` overstated Metadata's exclusivity: fixed by the reviewer.**
+- **C3, a job that ended unseen and was trimmed left a dead control: fixed after the review**, in
+  `rewrite-hold.ts` (about ten lines, no new state machine, no new wording). `run` now also asks
+  the job engine's `watchTerminal`, which outlives every band and answers once: the job is listed
+  as over, or it is missing from a list asked after the POST answered. Either sets `over` on the
+  hold, and rule 3 releases on the same fresh read it always needed. It was shared by all twelve
+  rows, not the six new ones. How long a failed row stays listed: `KEEP_FINISHED` is 50 finished
+  jobs per reader, failures and successes interleaved by finish time
+  (`src/store/pg-jobs.ts` § `trimFinished`), so the path needed some 25 to 50 later endings before
+  the band reopened; rare, and a dead control when it happened. Red first on all twelve rows
+  (*expected 'disabled' to be 'enabled'*), and two mutations each turn all twelve red: ignoring
+  `over`, and releasing the moment the engine speaks (which lets a read asked earlier, or the
+  offline copy, release). It cannot release early in the case the hold exists for: the engine
+  speaks only once the server's job is finished (a job still going cannot be forgotten), and the
+  read must start after a band has seen that. A job that succeeded and was trimmed is released by
+  the same read, which carries the new identity.
+- **C4, the command bar's *Run again* bypasses every hold: not fixed, reproduced and pinned.** See
+  § Left.
+
+One thing the review's own edit got wrong: its `key` on the test's adapter did not pass
+`npm run typecheck` (TS2352 in `tests/tsconfig.json`), though its report says the typecheck
+passed. The cast was narrowed in the commit that took its fixes.
+
+**New reader-facing wording, following the existing six, for Greg to veto; keeping them was the
+orchestrator's call:**
+
+- *The new quotes haven't loaded yet.*
+- *The new timeline hasn't loaded yet.*
+- *The new search hasn't loaded yet.* (Debate)
+- *The new citations haven't loaded yet.*
+
+**Not built, and why:**
+
+- **The loaded branches of the Sketch and Illustrated views on `JobProgress`.** It would reverse
+  three written-down choices (no Stop beside a picture, nothing drawn when nothing runs, a grey
+  failure rather than a red one), and each needs a decision. § The loaded branches, above.
+- **Skim's hold** waits for C10b, which changes the same hook.
+
+**The guard's known blind spots:** a computed key, `{ ["force"]: true }`, and a `force` assigned
+after the object is built, `request.force = true`. Neither is in the tree today; the guard reads
+object literals only, and says so in the test.
 
 ## What the documents got wrong
 
