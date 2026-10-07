@@ -36,7 +36,7 @@ below, live. The families came from plan
 | says the band is waiting | [`BandWaiting`](../../src/web/BandWaiting.tsx) | [`band-waiting`](../../tests/band-waiting.test.tsx), [`band-waiting-layout`](../../tests/band-waiting-layout.test.tsx) |
 | says something failed | [`ReadError`](../../src/web/ReadError.tsx) or `.gloss-error`, in `--danger` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
 | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
-| floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, [`tokens.css`](../../src/web/styles/tokens.css) | none yet |
+| floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, or a shape of its own with its alpha times `--shadow-strength`, [`tokens.css`](../../src/web/styles/tokens.css) | [`elevation-shadows-soften-in-light`](../../tests/elevation-shadows-soften-in-light.test.ts) |
 
 Some tests check the shared piece itself; the caller checks hold only the callers they list.
 A new mode needs adding to those checks. "Use your judgment" is meant: Skim's ‹ › is a pager,

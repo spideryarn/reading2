@@ -390,7 +390,7 @@ svg.band-waiting-ghost { flex: none; }
   border: 1px solid var(--rule-strong);
   border-left: 3px solid var(--highlight);
   border-radius: var(--radius);
-  box-shadow: 0 8px 22px -6px oklch(0 0 0 / 0.55);
+  box-shadow: 0 8px 22px -6px oklch(0 0 0 / calc(0.55 * var(--shadow-strength)));
   font-family: var(--font-ui);
   /* 3s, which is `HERALD_MS`: held for the first 2.5, faded over the last 0.5.
      The timer in ModeHerald.tsx is what removes it; this is only how it looks
