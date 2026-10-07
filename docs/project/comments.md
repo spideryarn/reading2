@@ -483,9 +483,11 @@ not to a row, so a table cell is the wrong shape for it anyway. The dialog
 ([`CommentDialog.tsx`](../../src/web/CommentDialog.tsx)) touches none of that: **nothing in
 `fitView` changed for this feature.**
 
-The cost is that only one answer is visible at a time, and there is no way to see every comment on
-the article at once. Marginal cards or a column remain the better long-term answer — this is
-explicitly "until we come up with a better plan".
+The cost was that only one answer is visible at a time, and at first there was no way to see every
+comment on the article at once. Marginal cards or a column remain the better long-term answer — this is
+explicitly "until we come up with a better plan". Two views have since arrived beside the dialog: the
+[drawer](#the-drawer) lists every comment, and [Marginalia](marginalia.md) puts each one level with
+its block.
 
 ### Copying the passage <a id="copying-the-passage"></a>
 
@@ -812,7 +814,8 @@ Two shared shells have since been built on those pieces:
   The glossary and Citations read their answers through it.
 
 The hand-rolled loops in [`src/search.ts`](../../src/search.ts) and the referee runners
-(`src/referee-claims-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`), and the
+(`src/referee-claims-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`, and
+`src/referee-hidden-check.ts`, which copies Mirror's), and the
 client hooks that loop over `readEvents` themselves, are older copies of the same shape. Some of
 them carry structured items rather than text deltas, which is a real difference —
 [`src/ai-call.ts`](../../src/ai-call.ts)'s header names `search`'s strict JSON read as one.
@@ -1245,8 +1248,11 @@ nothing to poll.
    already taken, each reply came back under a **new** id. Result: two model calls paid for, two orphan
    comments saved, the original still marked `error`, and a dialog spinning forever on an id
    nothing would ever answer. Every individual piece reported success. The fix is two-layered — the
-   updater is pure now, *and* the store is idempotent on the id, so a duplicated POST resets the
-   comment in place instead of appending. [`tests/store-comments.test.ts`](../../tests/store-comments.test.ts)
+   updater is pure now, *and* *Try again* posts to the answer route, whose `beginAnswer` resets the
+   comment in place instead of appending (a second press while its answer lease is live gets a
+   409). The create route is idempotent on the id too: the same Save twice hands back the stored
+   free row while its status is `none`, and anything else under a taken id is a 409, never an
+   overwrite. [`tests/store-comments.test.ts`](../../tests/store-comments.test.ts)
    pins the server half.
 
 The last of those is the shape [silent-success.md](../reusable/silent-success.md) describes almost
@@ -1367,7 +1373,7 @@ rather than blanked, and if none survives the key comes off entirely.
   keeps the list of what it is actually answering, and anything else that is `pending` is swept to
   `error` with a message. Without the sweep, a comment orphaned by a `npm run dev` restart reloads
   as a spinner that never stops. `sweepOrphaned` in [`src/routes.ts`](../../src/routes.ts) supplies
-  that list; the rule itself is `sweepPending` on each store.
+  that list; the rule itself is `sweepPending` on the store.
 - **A dead attempt heals on the next *Try again*, without a read first.** The sweep only runs on
   `GET /api/comments/:slug`, and the retry button does not do a `GET` — so `beginAnswer` claims an
   abandoned row itself. See the store contract above.
@@ -1396,7 +1402,8 @@ rather than blanked, and if none survives the key comes off entirely.
   words, and a follow-up box hands the question to a chat rather than growing a thread in the dialog
   ([§ pushing back](#pushing-back)). Anything more is a chatbot with the article in the context
   window, which is [an explicit anti-goal](vision.md#anti-goals).
-- **Comments are per-article, not per-reader.** There is one reader.
+- **Comments are per-article and per-reader.** Each row is stamped with its owner, and a reader
+  sees only their own, bar what a [shared link](#a-shared-link-carries-them-since-2026-09-04) shows.
 
 ## Where the chat panel sits <a id="chat-dock"></a>
 
@@ -1493,7 +1500,7 @@ belongs:
 | Where the answer goes | a dialog over the prose, anchored to the words | the band beside the prose |
 | The anchor back to the text | the quote itself | block ids the model cites |
 | Stored as | `comments`, one flat table | `chat_threads` / `chat_messages` |
-| Transport | one POST, the answer comes back with it | a stream |
+| Transport | a JSON POST to save; a separate POST streams an answer | a stream |
 
 **Comments are the narrower and safer feature**, and the one whose scoping vision.md's anti-goals
 actually argue for. Chat is the one that had to earn its place; the argument is in

@@ -101,8 +101,8 @@ model. So:
 ## Schema
 
 Canonical definition: `Tree` and `TreeNode` in [`src/types.ts`](../../src/types.ts). What follows
-is an abridged copy for reading, and it lags: fields arrive there first (`question` and `treatment`,
-for instance, are not below), so read the type before relying on what a node can carry. The tree is
+is an abridged copy for reading, and it lags: fields arrive there first, so read the type before
+relying on what a node can carry. The tree is
 stored as the `tree` column of the article's revision ([database.md](database.md)); it was
 `data/<slug>/tree.json` until the filesystem store went on 2026-09-05, which is why "`tree.json`"
 still names it in this doc and in code comments.
@@ -114,6 +114,7 @@ interface Tree {
   slug: string;
   rootId: NodeId;
   nodes: Record<NodeId, TreeNode>;   // flat map, NOT nested
+  provisional?: "headings" | "awaiting-structure";
 }
 
 interface TreeNode {
@@ -124,9 +125,12 @@ interface TreeNode {
   range: [BlockId, BlockId];   // inclusive; children exactly partition it
   title: string;               // 2–6 words. Internal nodes.
   gist?: string;               // ONE sentence, stage 5. Never on leaves.
+  question?: string;           // § The question under the claim
   navLabel?: string;           // leaves only — the paragraph row's text (Structure, Spine)
   summary?: string;
   sourceHeading?: string;
+  titleFrom?: "opening-words";
+  treatment?: "supplement";    // the apparatus — footnotes and the like
 }
 ```
 
@@ -1496,7 +1500,7 @@ needs none of it, and declining the backfill is what made that the right shape.
 ## Worked example: the derived sidebar
 
 `example/` holds a 34-block slice of the test article. Its `blocks.json` is **real** stage-3 output;
-its `tree.json` is **hand-authored** to this schema as a stand-in until stage 4 exists — it is not
+its `tree.json` is **hand-authored** to this schema as a stand-in written before stage 4 existed — it is not
 model-generated, and its labels are what we want the prompt to produce, not proof that it does.
 
 Collapsed to the heading outline, which is the sidebar's default state

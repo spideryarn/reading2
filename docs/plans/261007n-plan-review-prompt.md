@@ -1,13 +1,9 @@
-Review this plan before it is built: docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md, in the repo you are in. Read-only: do not edit anything.
+You are reviewing a short implementation plan in the Spideryarn repo (this checkout). Read-only: do not edit any file.
 
-Context: the dev OpenRouter key spent ~$120 in October 2026 that the local cost ledger (spideryarn.ai_calls) has no row for. About $79 of that is evals and probes that called models through the gateway (src/ai-call.ts, src/messages-stream.ts) with no persisting spend collector open (src/ai-spend.ts: `collectSpend`, `beginSpend`, `recordSpend`, `persistingSpend`, `write`). The plan proposes that `beginSpend` throw when no persisting collector is open AND the process's entry file (process.argv[1]) is under evals/ or scripts/.
+Plan: docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md
 
-Please read src/ai-spend.ts, the two gateways' calls to `beginSpend` (src/ai-call.ts Meter constructor ~line 1558, src/messages-stream.ts ~646), src/cli-ledger.ts, src/spend-declarations.ts (the `unscoped` kind and its test tests/no-undeclared-spend.test.ts), tests/setup/no-provider-calls.ts, and docs/project/cost-tracking.md.
+Its predecessor, already landed, is docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md; follow its pattern. Relevant code: src/routes.ts (orNullWhenNotMadeYet, and the GET routes for tweets, relations, skim, sketch, illustrated, arc), src/store/artefact-not-made-yet.ts, src/web/lib/api.ts (NONE_YET_AS_NULL), src/web/useTweets.ts, useSkim.ts, useRelations.ts, useArc.ts, useSketch.ts, useIllustrated.ts, and tests/none-yet-is-not-a-404-route.test.ts, tests/api-fetch-offline.test.ts, tests/none-yet-is-not-a-404-hooks.test.tsx.
 
-Questions:
-1. Is throwing in `beginSpend` safe at both call sites — is it before any network I/O, and does any caller catch-and-continue in a way that would turn the refusal into a silent skip or, worse, a call that proceeds unmetered? Are there other gateway entry points that spend without going through `beginSpend` (embeddings, images, transcription, decisions wires)?
-2. Is "entry file under evals/ or scripts/" the right discriminator? What processes run with such an entry that legitimately call the gateway with no persisting collector — e.g. scripts/stage.ts or anything under scripts/ that runs the job worker, the dev server, a deploy, readiness loops, the overseer? Would any of them break? Is there a better discriminator that is still not a flag somebody must remember?
-3. Does `persistingSpend()` mean what the plan needs (a sink present and not closed)? A sink that only pushes to an in-memory array passes it — the plan handles that by converting those evals, but say if that is a hole worth closing differently.
-4. Anything the plan misses or gets wrong, and anything simpler that would do the same job.
+Check: (1) is any reader of these six URLs missing from the plan (grep the whole repo, including the public reader, MCP server, offline prefetch, tools/)? (2) does any route's surrounding logic (withProfileChanged, skim's parallel resolveProfile, illustrated's plate route, sendPlate) make the wrap wrong or unsafe? (3) does Illustrated belong on the list? (4) anything in the hooks (useArc's fromPayload, useSketchReadiness, useSketchCaption) where null handling would change what a reader sees? (5) anything else wrong or missing.
 
-Answer with numbered findings, each with file:line evidence and a severity, then a one-line verdict.
+Answer with a verdict (build / build with changes / don't), then numbered findings with priority P0-P3, file:line evidence, and the fix. Be brief.

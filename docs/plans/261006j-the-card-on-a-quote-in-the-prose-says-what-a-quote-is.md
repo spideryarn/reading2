@@ -159,6 +159,18 @@ and this report (asking for a tooltip where one already is) is a little evidence
 it gives discoverability and costs cards appearing unasked over long quotes. Left at 900ms here; a
 queue entry marked as needing Greg carries the question.
 
+**Answered, 2026-10-06** — Greg on the question: *"use your judgment"*. The Overseer chose 600ms,
+between the glossary's 320ms and 900ms, and it landed on 2026-10-07 (queue item `qi-78gf6x87`):
+`QUOTE_OPEN_MS` in src/web/ProseHoverCard.tsx, with the reasoning in
+[quotes.md](../project/quotes.md).
+
+Browser check after the change (Sonnet subagent, Playwright, local `dev-admin`, an article with 30
+quotes): the card opened about 600ms after the pointer came to rest, at 1440 and at 820; a term
+still opened at about 320ms. In a simulated read (273 pointer steps across the paragraph with ten
+quotes, a 200–400ms pause at each), it opened 5 times, each on a quote under a resting pointer,
+and always above the pointer, so it covered lines already read and never the one being read. At
+390 a tap on a bare quote selected it and opened no card. Not checked: a real person reading.
+
 ## Reviews
 
 - **Plan review, GPT Sol**:

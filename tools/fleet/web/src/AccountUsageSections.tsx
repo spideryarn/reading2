@@ -52,6 +52,7 @@
  */
 import type { ReactNode } from "react";
 
+import { isGeneralCodexBucket } from "./codex-buckets";
 import { Explain, type Tip } from "./Tooltip";
 import type { AccountUsageSection, AccountUsageView, ClockSkew, UsageWindowCard } from "./types";
 import { ago, CodexBucketSection, CodexResetCreditsCard, WindowStatCard } from "./UsagePanel";
@@ -83,11 +84,6 @@ function windowLabel(name: string): string {
   if (name === "five_hour") return "5 hours";
   if (name === "seven_day") return "7 days";
   return name;
-}
-
-/** The one Codex bucket that is about the whole subscription rather than one model. */
-function isGeneralBucket(limitId: string): boolean {
-  return limitId === "codex";
 }
 
 /**
@@ -216,8 +212,8 @@ function CodexSection({ section, asOf, skew }: { section: Extract<AccountUsageSe
     );
   }
   const buckets = section.reading.buckets;
-  const general = buckets.filter((bucket) => isGeneralBucket(bucket.limitId));
-  const specific = buckets.filter((bucket) => !isGeneralBucket(bucket.limitId));
+  const general = buckets.filter((bucket) => isGeneralCodexBucket(bucket.limitId));
+  const specific = buckets.filter((bucket) => !isGeneralCodexBucket(bucket.limitId));
   return (
     <div className="tw:mt-1">
       {general.length === 0 ? (

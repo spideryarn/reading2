@@ -140,6 +140,8 @@ import { scanArticleSource } from "./source-scan.js";
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
 import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
+import { hiddenCheckStream, isReaderLeft as isHiddenCheckReaderLeft } from "./referee-hidden-check.js";
+import { grouped, ordered } from "./scan-groups.js";
 /* A pure predicate. It was imported this way so as not to drag the
    filesystem store (gone 2026-09-05) into a file that had to work with either
    one — the same rule the `withEdit` / `withRetry` import above states. The
@@ -597,12 +599,13 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * asked for that.** Returns what `load` returned, or `null` once it has
  * answered — the handler's cue to stop.
  *
- * For ten artefact reads — quiz, crossrefs, citations, and since plan 261006h
- * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
- * their ordinary answer, and as a 404 it was a red line in the console for
- * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
- * src/types.ts says why it is opt-in; src/store/artefact-not-made-yet.ts
- * names the reads not moved.
+ * For every artefact read — quiz, crossrefs and citations first, simple,
+ * ideas, faq, timeline, debate, glossary and quotes in plan 261006h, and
+ * tweets, relations, skim, sketch, illustrated and arc in plan 261007n: "not
+ * made yet" is their ordinary answer, and as a 404 it was a red line in the
+ * console for each one an ordinary page load asked for.
+ * `NONE_YET_AS_NULL_HEADER` in src/types.ts says why it is opt-in;
+ * src/store/artefact-not-made-yet.ts is the list.
  *
  * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
  *   different 404, and stays one whatever the header says; so does every other
@@ -1367,7 +1370,8 @@ function sse(res: ServerResponse): {
    * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, `runMirror`, `streamHelpAnswer`,
+   *                           `markOneAnswer`, `runMirror`, `runHiddenCheck`,
+   *                           `streamHelpAnswer`,
    *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
@@ -5687,6 +5691,67 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
   }
 }
 
+/* ------------------------------------- referee hidden text: the Opus check --
+   The Hidden text sub-mode's *Ask Opus about these*: the scan's flagged rows,
+   never the article, one opinion per row, nothing stored.
+   docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md,
+   and src/referee-hidden-check.ts, which is the thinking. */
+
+/**
+ * `POST /api/referee/hidden-check/:slug`, **no body**, SSE out — Mirror's
+ * shape (`runMirror` above), and its frames: zero or more `delta` carrying
+ * only `{ chars }`, then `done` with the validated result or `error` with a
+ * reader sentence.
+ *
+ * **The server chooses what is sent.** No body is read: the rows are
+ * re-derived from `scanArticleSource(slug)` — cached in process, so not a
+ * second nine-second parse — after the same `shelfStore.read(slug)` ownership
+ * question the scan route asks first. A body naming fragments would let a
+ * tampered client put words in front of Opus that the scan never found.
+ *
+ * **Nothing to check spends nothing**: no source, a PDF, or no findings is a
+ * 409 with a sentence, before any header. The panel does not draw the button
+ * in those states, so only a stale tab gets here.
+ */
+async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> {
+  /* Ownership first, before a byte of the manuscript is read — the scan
+     route's order, and `sendSource`'s. */
+  await shelfStore.read(slug);
+  const { scan } = await scanArticleSource(slug);
+  /* The panel's rows, numbered the panel's way: src/scan-groups.ts is the one
+     definition both sides use. */
+  const groups = scan !== null && scan.examined === "html-source-only" ? grouped(ordered(scan.findings)) : [];
+  if (groups.length === 0) {
+    throw httpError(409, "The source check flagged nothing in this document, so there is nothing to ask Opus about.");
+  }
+  /* For the article's High-powered AI setting, which `powerFor` then
+     overrides for this job: it is Opus on every article. */
+  const article = await loadArticle(slug);
+
+  /* `gone` goes to the model call: nothing is stored, so an answer that
+     finishes after the referee has left has nowhere to go. Mirror's decision,
+     for Mirror's reason. */
+  const { frame, gone } = sse(res);
+  let chars = 0;
+  try {
+    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug, signal: gone })) {
+      if (event.type === "delta") {
+        chars += event.text.length;
+        frame("delta", { chars });
+        continue;
+      }
+      const { type: _type, ...result } = event;
+      frame("done", result);
+    }
+  } catch (err) {
+    if (!isHiddenCheckReaderLeft(err)) captureFailure(err, { route: "referee-hidden-check", slug });
+    /* No partial text: nothing in half an object has been validated. */
+    frame("error", { error: sayToReader(err, { route: "referee-hidden-check", slug }) });
+  } finally {
+    res.end();
+  }
+}
+
 /* ------------------------------------------------ reading the path apart --
    TWO functions, and picking the wrong one is a path traversal.
 
@@ -9931,10 +9996,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/tweets\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No thread yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as glossary has it. */
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread),
+        );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10212,14 +10283,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      GET only, and no DELETE: the step replaces, so asking again is
      POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
      **Owner-authenticated, with no anonymous twin and nothing in the public
-     article payload** (Sol P1-4). 404 when there is none. */
+     article payload** (Sol P1-4). None yet is `200 null` to a client that
+     asks, and a 404 to one that does not — `orNullWhenNotMadeYet`. */
   {
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/relations\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadRelations(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadRelations(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -10282,14 +10356,25 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/skim\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Not `withProfileChanged`**, whose rule does not count a cleared
          profile. A route is exactly what a profile should change, so any
          difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
-         reads start before either is awaited. */
-      const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);
+         reads start before either is awaited.
+
+         If no Skim route has been made, a client that asks gets `200 null`;
+         `orNullWhenNotMadeYet` writes that response itself. Await the
+         artefact first, outside `Promise.all`, so absence takes precedence
+         over a profile failure and cannot be followed by a second response.
+         Observe the profile rejection while the artefact is awaited; only a
+         made route needs the profile, as with `withProfileChanged`. */
+      const profile = resolveProfile(at);
+      void profile.catch(() => {});
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
+      if (found === null) return;
+      const now = await profile;
       const body: SkimResponse = {
         ...found,
         profileChanged: routeProfileIsStale(
@@ -10547,22 +10632,25 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/sketch\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
         /* `found.sketch` is `unknown` on the wire and a `Sketch` in both stores,
            and the cast is only about reaching `profileHash` for the comparison
            below — the client parses the scene itself on arrival. See
-           SketchResponse in src/types.ts for why the field is not typed here. */
-        send(
-          res,
-          200,
-          await withProfileChanged<SketchResponse>(
+           SketchResponse in src/types.ts for why the field is not typed here.
+
+           No picture yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as glossary has it. */
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<SketchResponse>(
             at,
             () => loadSketch(at),
             (found) => found.sketch as { profileHash?: string | null },
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10588,26 +10676,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
         /* Shaped exactly like `sketch` above, including the cast, which is only
            about reaching `profileHash` — the client parses the plates itself on
-           arrival (IllustratedResponse in src/types.ts).
+           arrival (IllustratedResponse in src/types.ts) — and including the
+           `200 null` for none yet to a client that asks.
 
            **`profileChanged` is about the profile the SKETCH was drawn for**,
            because that is what this artefact inherits (src/illustrated.ts). The
            comparison is the same one either way; what differs is where the hash
            came from, and it came from the Sketch. */
-        send(
-          res,
-          200,
-          await withProfileChanged<IllustratedResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<IllustratedResponse>(
             at,
             () => loadIllustrated(at),
             (found) => found.illustrated as { profileHash?: string | null },
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -10650,8 +10739,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/arc\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadArc(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      /* No arc yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadArc(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -11418,6 +11510,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
       await runMirror(slugPart(captures, 1), res);
+    },
+  },
+
+  /* Hidden text's Opus check. POST only, for Mirror's reason: a run is a model
+     call the referee asks for and nothing is stored. `article: "first-capture"`
+     because it pays, and the cost report has to say which paper it was about. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/referee\/hidden-check\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await runHiddenCheck(slugPart(captures, 1), res);
     },
   },
 

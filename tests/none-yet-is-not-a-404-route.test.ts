@@ -1,11 +1,13 @@
 /**
- * **"Not made yet" is a `200 null` to a client that asks for one** — the ten
- * artefact reads in `ROUTES` below. Quiz, crossrefs and citations first
+ * **"Not made yet" is a `200 null` to a client that asks for one** — the
+ * sixteen artefact reads in `ROUTES` below. Quiz, crossrefs and citations first
  * (docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md §
- * Stage 1), the other seven after
- * (docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md).
+ * Stage 1), seven more after
+ * (docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md),
+ * and the last six — tweets, relations, Skim, Sketch, Illustrated and Arc —
+ * in docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md.
  *
- * 1. **With the header, an article that has none of the ten answers
+ * 1. **With the header, an article that has none of the sixteen answers
  *    `200 null`** — no 4xx for the browser to print in red.
  * 2. **Without it, the same read is still a 404**, which is what a tab left
  *    open across the deploy expects.
@@ -64,6 +66,12 @@ const ROUTES = [
   "debate",
   "glossary",
   "quotes",
+  "tweets",
+  "relations",
+  "skim",
+  "sketch",
+  "illustrated",
+  "arc",
 ] as const;
 
 let bare: ScratchArticle | undefined;
@@ -112,7 +120,7 @@ beforeAll(async () => {
     }
   };
   bare = await scratchArticleInPg(BARE, { ownerId: TEST_OWNER, mutate: strip });
-  /* And the two of the six reads not moved that the corpus article carries. */
+  /* And the two of the last six that the corpus article carries. */
   await setOnCurrentRevision(bare, { tweets: null, arc: null });
   withQuiz = await scratchArticleInPg(WITH_QUIZ, { ownerId: TEST_OWNER });
   await setOnCurrentRevision(withQuiz, EMPTY as never);
@@ -170,7 +178,7 @@ async function get(url: string, asks: boolean) {
   };
 }
 
-describe("an article with none of the ten", () => {
+describe("an article with none of the sixteen", () => {
   for (const route of ROUTES) {
     it(`${route}: 200 null to a client that asks`, async () => {
       const res = await get(`/api/${route}/${BARE}`, true);
@@ -187,22 +195,13 @@ describe("an article with none of the ten", () => {
 });
 
 /**
- * **The six reads not moved: a 404 whatever the client asks.** Tweets,
- * relations, Skim, Sketch, Illustrated and Arc. Pinned on 2026-10-07, when the
- * seventh sweep set out to finish the move and found it cannot be done on the
- * server alone: a route that answers the header needs its name in the offline
- * cache's `NONE_YET_AS_NULL` (src/web/lib/api.ts) in the same change, and
- * tests/api-fetch-offline.test.ts fails when the two differ
- * (docs/plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md § 7).
- *
- * What did land is the loader's half: each of the six now throws
- * `ArtefactNotMadeYet`, the type `orNullWhenNotMadeYet` looks for, in place of
- * a plain error with `status: 404`. The second case below was red before that,
- * on all six. **The first case is the one that must change when a read is
- * moved**: "with the header" becomes `200 null`, and its name leaves `STILL_404`
- * for `ROUTES` above.
+ * **The last six loaders say "not made yet" with the type the helper reads.**
+ * Tweets, relations, Skim, Sketch, Illustrated and Arc threw a plain error with
+ * `status: 404` until plan 261007d; `orNullWhenNotMadeYet` passes anything
+ * that is not an `ArtefactNotMadeYet` through as the error it is, so the route
+ * cases above rest on this.
  */
-const STILL_404 = {
+const LAST_SIX = {
   tweets: loadTweets,
   relations: loadRelations,
   skim: loadSkim,
@@ -211,19 +210,8 @@ const STILL_404 = {
   arc: loadArc,
 } as const;
 
-describe("the six reads not moved yet", () => {
-  for (const [route, load] of Object.entries(STILL_404)) {
-    it(`${route}: a 404 with the header and without it, and the same one`, async () => {
-      const asked = await get(`/api/${route}/${BARE}`, true);
-      const plain = await get(`/api/${route}/${BARE}`, false);
-      expect(plain.status).toBe(404);
-      expect(asked.status).toBe(404);
-      expect(asked.body).toBe(plain.body);
-      /* "Not made yet", not "no such article": the sentence names the step. */
-      expect(JSON.parse(plain.body).error).toMatch(/ yet\. .* POST \/api\/jobs /);
-      expect(plain.body).not.toBe((await get(`/api/${route}/${NO_SUCH}`, false)).body);
-    });
-
+describe("the last six loaders", () => {
+  for (const [route, load] of Object.entries(LAST_SIX)) {
     it(`${route}: the loader says "not made yet" with the type the helper reads`, async () => {
       const err = await runAsOwner(TEST_OWNER, () => load(BARE)).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(ArtefactNotMadeYet);
@@ -232,6 +220,13 @@ describe("the six reads not moved yet", () => {
       const none = await runAsOwner(TEST_OWNER, () => load(NO_SUCH)).catch((e: unknown) => e);
       expect(none).not.toBeInstanceOf(ArtefactNotMadeYet);
       expect((none as { status?: number }).status).toBe(404);
+    });
+
+    it(`${route}: the legacy 404 names the step, and is not "no such article"`, async () => {
+      const plain = await get(`/api/${route}/${BARE}`, false);
+      expect(plain.status).toBe(404);
+      expect(JSON.parse(plain.body).error).toMatch(/ yet\. .* POST \/api\/jobs /);
+      expect(plain.body).not.toBe((await get(`/api/${route}/${NO_SUCH}`, false)).body);
     });
   }
 });
@@ -285,12 +280,14 @@ describe("a valid but empty artefact is an artefact", () => {
 });
 
 describe("the other artefacts the corpus article has", () => {
-  for (const route of ["glossary", "ideas"] as const) {
+  /* Route, and the field its answer carries the artefact in. */
+  const CARRIED = { glossary: "glossary", ideas: "ideas", tweets: "thread", arc: "arc" } as const;
+  for (const [route, field] of Object.entries(CARRIED)) {
     it(`${route}: served, whether or not the client asks`, async () => {
       for (const asks of [true, false]) {
         const res = await get(`/api/${route}/${WITH_QUIZ}`, asks);
         expect(res.status, `asks=${asks}`).toBe(200);
-        expect((JSON.parse(res.body) as Record<string, unknown>)[route], `asks=${asks}`).toBeTruthy();
+        expect((JSON.parse(res.body) as Record<string, unknown>)[field], `asks=${asks}`).toBeTruthy();
         expect(res.cacheControl, `asks=${asks}`).toBe("private, no-store");
       }
     });

@@ -132,7 +132,6 @@
  * sensitive prose this app has ever held, and src/comments.ts already says so
  * about the same rows.
  */
-import { randomUUID } from "node:crypto";
 import type { Block, Comment } from "./types.js";
 /* **The shapes live next door, and this file is why.** Everything below builds
    or checks one of them, but the panel that draws them is in the browser, and
@@ -179,6 +178,7 @@ import {
 import { type ModelPower, modelFor } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import { plainWords } from "./plain-words.js";
+import { fenced as fencedBy, newFence } from "./prompt-fence.js";
 /* **`parseHits` is named for search and is not about hits.** It pulls exactly
    one JSON object out of a reply that may have a code fence or a chatty
    preamble around it, by walking forward from the first `{` to its own matching
@@ -1121,24 +1121,9 @@ export const MIRROR_OUTPUT_SCHEMA = {
 validateAnthropicJsonSchema(MIRROR_OUTPUT_SCHEMA);
 assertNoBlockIdEnums(MIRROR_OUTPUT_SCHEMA, []);
 
-/**
- * **A delimiter the document cannot forge.**
- *
- * Everything quoted into the prompt — the paper's words and the referee's —
- * used to sit between triple quotes, which is a string a paper can simply
- * contain. The cross-family review's finding 3 wrote the attack out: a passage
- * closes the delimiter, addresses the model, and asks for a valid-schema remark
- * whose note is a verdict on the paper. The validator would have taken it,
- * because for `specificity` and `tone` it checks the kind, a known comment id
- * and a non-empty note, and cannot read English.
- *
- * A fresh UUID per call is the standard answer and the honest one: the document
- * was written before this run existed, so it cannot contain this token, and the
- * model is told that only these lines delimit quoted material. What it does not
- * do is make the note trustworthy — see the header, which says plainly what the
- * validator verifies and what it does not.
- */
-const newFence = (): string => `spya-fence-${randomUUID()}`;
+/* **A delimiter the document cannot forge** — `newFence` and `fenced` live in
+   src/prompt-fence.ts since 2026-10-07, where the Hidden text Opus check uses
+   them too (plan 261007l). The reasoning that was here is there, unchanged. */
 
 /**
  * The messages one run sends, as a value a test can inspect.
@@ -1174,12 +1159,9 @@ export function buildMirrorMessages(
      cap the next caller forgets. `mirrorCriteria` is idempotent, so the two
      cost nothing between them. */
   const criteria = mirrorCriteria(rawCriteria);
-  /* Removing the marker from the content is belt as well as braces: the token
-     is a fresh UUID that nothing in the document can guess, so this only
-     matters if one ever leaks — a retry that reused it, a fence echoed back in
-     an error. Cheap, and it makes the invariant "the number of marker lines is
-     decided by this function" true by construction rather than by argument. */
-  const fenced = (text: string) => `${fence}\n${text.split(fence).join("")}\n${fence}`;
+  /* The marker is stripped from the content as well — src/prompt-fence.ts
+     says why that is belt as well as braces. */
+  const fenced = (text: string) => fencedBy(fence, text);
 
   /* **Each block once**, however many comments are anchored to it. Sixty
      comments on one long block used to send that block sixty times — the

@@ -259,8 +259,8 @@ from that shape:
   are instances of it under the floor: 62 of 111 such searches came back empty. The fallback
   fills 50 of them, with 71% of what it shows judged right, and it cannot change a search that
   finds anything, because it is read only when the list is empty. Its hits print their own scores
-  and nothing else marks them; because the score is rounded to an integer, a value just under 0.7
-  can print as 70. The same thing typed as a question already scores far higher ("what were the
+  and nothing else marks them; because the score is rounded to an integer, a value just under the floor
+  can print as the floor itself (70 as built, 65 since 2026-10-04). The same thing typed as a question already scores far higher ("what were the
   results?": 0.93). All of it, with the rules passed over, is in
   [261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md); the
   plan is [261003o](../plans/261003o-quick-search-falls-back-to-a-lower-floor-when-nothing-clears-it.md).
@@ -629,9 +629,11 @@ band, from
 >
 > — Greg, 2026-08-25
 
-The cost is the one 260826a-chat-mode.md already stated: **the granularity columns are gone while you
-search, not shrunk.** You cannot read the L1 gists and the results list at the same time. It is a
-real loss on a wide screen and it is the deal the band is.
+The cost was the one 260826a-chat-mode.md already stated: **the granularity columns were gone while
+you searched, not shrunk.** You could not read the L1 gists and the results list at the same time. It
+was a real loss on a wide screen and it was the deal the band is — until the gist columns themselves
+were removed on 2026-09-29
+([granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view)).
 
 ## The bottom bar
 
@@ -1599,7 +1601,9 @@ cannot:
 - [`SearchPanel`](../../src/web/SearchPanel.tsx) takes a `SearchAccess` union whose visitor arm
   carries **none of the four verbs**. There is no `onDelete` to call, rather than a disabled button.
   The three fetch fields — `loaded`, `loadError`, `error` — are on the owner's arm too, because they
-  are facts about a request a visitor never makes.
+  are facts about a request a visitor never makes. Its one field, `copy`, is not a verb: it draws
+  a signed-in visitor's *Add a private copy to your shelf*, a link to `/add/`, where the owner's
+  box would be ([261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md)).
 - `?match=` is **pinned** to `meaning` in `useSearchMode`
   ([`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)),
   in the component, whatever the URL says. Hiding the toggle would not have been enough: `?match=`

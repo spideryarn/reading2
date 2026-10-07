@@ -3359,6 +3359,29 @@ export const SHARED_BY_PRIVATE_LINK =
   "This is a private link. This article isn't listed anywhere, and nobody can see it without the link.";
 
 /**
+ * **A signed-in visitor's way out of read-only**: their own private copy of a
+ * public article, imported onto their shelf. Greg, 2026-10-06: *"B yes probably
+ * it would be nice to be able to add a private copy to your own shelf"* (plan
+ * 261006k). The press opens the add page, which starts the import at once, so
+ * the line says what it uses before the press rather than after.
+ * docs/plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md.
+ */
+export const PRIVATE_COPY_WHY = "Want to search it, or chat with it?";
+export const PRIVATE_COPY_ADD = "Add a private copy to your shelf";
+/**
+ * Conditional, because the add is also shown to a reader whose copy the client
+ * could not see: before the shelf has loaded, if it could not be read, or when
+ * their copy is archived (`/api/library` lists no archived article, the
+ * server's repeat lookup finds one). The server charges none of them (plan
+ * 261007k), so the line must not say it will. GPT Sol, plan review F1 and F2.
+ */
+export const PRIVATE_COPY_COST =
+  "A new copy uses one article from your allowance; if you already have one, opening it is free.";
+/** The same reader, who already has an article at this address. Nothing is spent. */
+export const PRIVATE_COPY_HELD = "You already have your own copy of this.";
+export const PRIVATE_COPY_OPEN = "Open your copy";
+
+/**
  * The ask, and it is to join rather than to unlock this page.
  *
  * The New York Times' own reported figure is that free registration lifted paid
@@ -4548,8 +4571,8 @@ export const OWNED_ARTEFACT = {
  * The dash after the list does the same job for the first half.
  *
  * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
- * rather than being dropped. Only six artefacts can carry a `profileHash` and
- * all six are in the table, so this is unreachable today — but a silently
+ * rather than being dropped. Every artefact that can carry a `profileHash` is
+ * in the table, so this is unreachable today — but a silently
  * shortened list is the failure that would matter here, since the whole point
  * of the sentence is that it is complete.
  */

@@ -73,8 +73,9 @@
   cursor: pointer;
 }
 /* **The stepper is the mode's main control**, so a size up from the house 36px — Greg, 2026-09-28:
-   "Make the back/forward buttons a bit bigger". `--control-h-lg`, controls.md § The numbers. */
-.skim-arrow { width: var(--control-h-lg); height: var(--control-h-lg); padding: 0; }
+   "Make the back/forward buttons a bit bigger". `--control-h-lg`, controls.md § The numbers, with
+   a 44px floor: 2.75rem is 33px at a 12px root (plan 261007m, GPT Sol's C2). */
+.skim-arrow { width: max(44px, var(--control-h-lg)); height: max(44px, var(--control-h-lg)); padding: 0; }
 .skim-arrow:disabled { opacity: 0.4; cursor: default; }
 .skim-arrow:not(:disabled):hover,
 .skim-door-btn:hover { border-color: var(--highlight); }

@@ -191,7 +191,8 @@ gesture lives in `useHoverCard.ts`.
 same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
-open, so a quote — a passage the reader rests in while reading — waits 900ms where a word waits
+open, so a quote — a passage the reader rests in while reading — waits 600ms (900ms until
+2026-10-07; [quotes.md](quotes.md) says why it changed) where a word waits
 320ms. A warm swap and a tap are unchanged.
 
 It was also the first tooltip here to **take pointer events**, because its card carries a link out

@@ -129,7 +129,7 @@ contains exactly one `text/html` POST between the change landing and the backfil
 **Production could not have hit this, for two independent reasons**, and one of them is verified:
 
 1. Ingest does not run on Vercel at all — stage 1 dies at `mkdir '/var/data'`, confirmed on the live
-   site 2026-08-27 ([deployment.md](../project/deployment.md#what-does-not-work-in-production-yet)).
+   site 2026-08-27 ([deployment.md](../project/deployment.md#what-did-not-work-in-production-at-first)).
    Verified by reading that section, not by re-running it.
 2. The remote `sources` bucket was created on 2026-08-27 by the curl command in
    [deployment.md](../project/deployment.md#the-sources-bucket-has-to-exist-on-the-remote-too), whose

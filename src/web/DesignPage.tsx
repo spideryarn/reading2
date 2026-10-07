@@ -1332,7 +1332,8 @@ function ControlsAcrossModes() {
         <li>
           Floats over something? <code className="design-token">--shadow-pop</code>,{" "}
           <code className="design-token">--shadow-dialog</code> or{" "}
-          <code className="design-token">--shadow-sheet</code>, never a new literal.
+          <code className="design-token">--shadow-sheet</code>; a silhouette of its own writes its
+          alpha times <code className="design-token">--shadow-strength</code>. Never a bare literal.
         </li>
       </ul>
 
@@ -1493,10 +1494,11 @@ function ControlsAcrossModes() {
 
       <Family
         name="Elevation"
-        real="--shadow-pop, --shadow-dialog, --shadow-sheet"
+        real="--shadow-pop, --shadow-dialog, --shadow-sheet, --shadow-strength"
         rule={
           <>
-            three shadows, softer in Light. Not for swatch rings, inset marks, table dividers or
+            three shadows, softer in Light; a shadow with its own shape multiplies its alpha by
+            --shadow-strength, which softens it by roughly the same ratio. Not for swatch rings, inset marks, table dividers or
             focus rings, which are not elevation.
           </>
         }

@@ -1,6 +1,7 @@
 /**
  * **A referee's stream is still running when the request says it is** — the
- * three streaming routes under `/api/referee/`, held open mid-stream and asked
+ * streaming routes under `/api/referee/` (three, and Hidden text's Opus check
+ * since plan 261007l), held open mid-stream and asked
  * two questions a syntactic check cannot answer.
  *
  * ## Why this file exists, and why it exists *before* the refactor it is for
@@ -146,6 +147,9 @@ const gates = vi.hoisted(() => {
     criterion: makeGate(),
     claims: makeGate(),
     mirror: makeGate(),
+    hidden: makeGate(),
+    /** The signal Hidden text's Opus check was handed: `gone`, so leaving stops the paid call. */
+    hiddenSignal: [] as unknown[],
     /** The blocks each criterion run was handed, at the model boundary. */
     criterionSaw: [] as unknown[],
   };
@@ -186,6 +190,36 @@ vi.mock("../src/referee-mirror.js", async (importOriginal) => ({
     gates.mirror.arrive();
     await gates.mirror.hold();
     yield { type: "done", markdown: "done", model: "stub" };
+  },
+}));
+
+/* Hidden text's Opus check (plan 261007l). The scan is stubbed to one flagged
+   row, because the route refuses — with a 409 and no stream — a document with
+   nothing flagged, and this article's own source may have none. */
+vi.mock("../src/referee-hidden-check.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/referee-hidden-check.js")>()),
+  async *hiddenCheckStream(request: { signal?: unknown }) {
+    gates.hiddenSignal.push(request.signal);
+    yield { type: "delta", text: "half an object" };
+    gates.hidden.arrive();
+    await gates.hidden.hold();
+    yield { type: "done", judgments: [], unanswered: 1, notSent: 0, model: "stub" };
+  },
+}));
+
+vi.mock("../src/source-scan.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/source-scan.js")>()),
+  async scanArticleSource() {
+    return {
+      ms: null,
+      scan: {
+        examined: "html-source-only",
+        findings: [{ kind: "colour-on-background", where: "body > p", text: "Hidden.", detail: "color: #fff" }],
+        truncated: 0,
+        unreadableSelectors: 0,
+        blindSpots: ["approximated-cascade"],
+      },
+    };
   },
 }));
 
@@ -878,6 +912,26 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       await call.promise;
       expect(call.settled()).toBe(true);
       expect(call.ended()).toBe(true);
+    });
+  });
+
+  describe("POST /api/referee/hidden-check/:slug", () => {
+    /* Mirror's shape: no lock, so lifetime is what there is to check — a fourth
+       closure that can forget to return its promise — and the paid call must be
+       handed `gone`, since nothing is stored for an answer nobody waits for. */
+    it("holds the request open until the stream is finished, and hands the call the reader's signal", async () => {
+      const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
+      await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
+
+      expect(call.settled(), "the request answered while the stream was still running").toBe(false);
+      expect(call.ended()).toBe(false);
+      expect(gates.hiddenSignal.at(-1)).toBeInstanceOf(AbortSignal);
+
+      gates.hidden.release();
+      await call.promise;
+      expect(call.settled()).toBe(true);
+      expect(call.ended()).toBe(true);
+      expect(call.written()).toContain("event: done");
     });
   });
 

@@ -448,7 +448,7 @@ sign-in for you ([browser-testing-playwright.md § Signing in](browser-testing-p
 To sign in without a Google round trip, use email and password — the local stack has
 `mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
 click. Google needs the port to be on the local redirect allow-list; see
-[setup-dev.md](setup-dev.md#signing-in-needs-four-more) for the two ways that goes quietly wrong.
+[setup-dev.md](setup-dev.md#what-signing-in-needs) for the two ways that goes quietly wrong.
 
 ## The URLs and widths worth checking
 

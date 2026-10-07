@@ -89,12 +89,16 @@ import {
 import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
 
 /**
- * **How long a pointer rests on a quote before its card opens** — about three
- * times the ordinary 320ms, because a quote is often a whole paragraph and the
- * pointer rests in it while the reader reads. A guess to be felt in a browser,
- * not a measurement. Exported for the test that pins it.
+ * **How long a pointer rests on a quote before its card opens** — longer than
+ * the ordinary 320ms, because a quote is often a whole paragraph and the
+ * pointer rests in it while the reader reads, so a fast card would keep
+ * popping up over the text. 900ms from 2026-10-02; 600ms since 2026-10-07,
+ * because a reader asked for a tooltip on quotes that already had one
+ * (spya-tpmde9), which suggests 900ms hid the card from people who would use
+ * it. A guess to be felt in a browser, not a measurement
+ * (docs/project/quotes.md). Exported for the test that pins it.
  */
-export const QUOTE_OPEN_MS = 900;
+export const QUOTE_OPEN_MS = 600;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
 import { REPEAT_PASTE_ON_THE_CARD, worthRetrying } from "../messages.js";

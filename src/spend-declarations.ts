@@ -298,7 +298,7 @@ export const DECLARATIONS: readonly Declaration[] = [
      can continue, but those gateway calls spend nothing until wrapped. The entries stay
      because the files still name a credential, and `gate-models.ts` still makes
      raw diagnostic requests no wrapper meters; those requests can still spend —
-     docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md. */
+     docs/plans/261007o-openrouter-spend-the-ledger-does-not-record.md. */
   {
     id: "dictation-gate-models",
     kind: "unscoped",

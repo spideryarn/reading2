@@ -85,9 +85,25 @@
  * blocks no model call. It is a way for a referee to find out that somebody
  * tried. docs/project/referee-mode.md § rule 5, docs/project/security.md
  * § *A fifth: the manuscript addressing the model*.
+ *
+ * ## Ask Opus about these: an opinion beside a row, never a filter
+ *
+ * Since plan 261007l a referee can press **Ask Opus about these**, and each row
+ * gets one line under it — *probably harmless* or *worth a look*, and why. The
+ * text Opus judges was written by whoever hid it, so **the answer reaches
+ * nothing but those lines**: it travels in `CheckContext`, which only
+ * `Examined` and `Finding` read, and `shown()` — the headline, the counts, the
+ * open default, the chip's mark — never sees it. The rows come from
+ * `grouped(ordered(findings))` (src/scan-groups.ts) and nothing else.
+ * tests/hidden-check-panel.test.tsx renders a hostile "harmless" answer and
+ * checks all of those are unchanged. The verdict words are ours
+ * (`VERDICT_WORDS`); the reason is the model's, drawn so it cannot disguise
+ * anything (`visibleReason`, `.ref-scan-opinion` in referee.css).
+ * docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md.
  */
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 import type {
   BlindSpot,
@@ -97,6 +113,9 @@ import type {
   ScanFinding,
   SourceScan,
 } from "../injection-scan-types.js";
+import type { HiddenJudgment, HiddenVerdict } from "../referee-hidden-check-types.js";
+import { type ScanGroup, checkedInputs, grouped, ordered, sameInputs } from "../scan-groups.js";
+import type { HiddenCheckApi } from "./useHiddenCheck.js";
 import type { SourceScanState } from "./useSourceScan.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { ownLabel, plainWords } from "./lib/own-label.js";
@@ -194,53 +213,10 @@ function visibleEvidence(value: string, cap = Number.POSITIVE_INFINITY): string 
   });
 }
 
-/**
- * **Findings that read the same are one row, with a count.**
- *
- * The key is every field a referee reads except `where`: the kind, the words,
- * the evidence, the label and the caveat. So a payload is never folded into a
- * pile of copies — its words differ from theirs, and it is a row of its own —
- * and a labelled finding is never merged with an unlabelled one, which keeps
- * rule 3's order. On the arXiv paper Greg was reading, 39 rows of one
- * zero-width space each became one. Order is first appearance, over rows
- * already `ordered`, so the unexplained still come first.
- *
- * **Two findings in one row may be two different things in the source** —
- * `text` is capped, and `where` is a four-step hint with no sibling index —
- * so a row never claims they are the same place: it says how many findings it
- * stands for, and lists every distinct source path. A path is capped only when
- * drawn: ids and classes belong to the document, so one must not fill the panel
- * and push the finding's own words out of reach.
- */
-interface Group {
-  key: string;
-  finding: ScanFinding;
-  /** How many findings this row stands for. */
-  count: number;
-  /** Every distinct `where`, in order, all of them shown. */
-  paths: string[];
-}
-
-export function grouped(rows: ScanFinding[]): Group[] {
-  const groups = new Map<string, Group>();
-  for (const finding of rows) {
-    const key = JSON.stringify([
-      finding.kind,
-      finding.text,
-      finding.detail,
-      finding.ordinary ?? null,
-      finding.kind === "visible-instruction" ? finding.caveat : null,
-    ]);
-    const group = groups.get(key);
-    if (group === undefined) {
-      groups.set(key, { key, finding, count: 1, paths: [finding.where] });
-    } else {
-      group.count++;
-      if (!group.paths.includes(finding.where)) group.paths.push(finding.where);
-    }
-  }
-  return [...groups.values()];
-}
+/* `grouped` and `ordered` — identical findings as one row, the unexplained
+   first — are in src/scan-groups.ts since plan 261007l, because the Opus check
+   on the server has to number the rows exactly as this panel draws them. Their
+   reasoning moved with them. */
 
 /** Each gap, said as the thing that was not looked at. */
 const BLIND_SPOT_LABEL: Record<BlindSpot, string> = {
@@ -265,20 +241,6 @@ const WHAT_THIS_IS =
   "arXiv preprints were caught doing that in July 2025. This reads the document's own source and " +
   "looks for those tricks, before any model call and with no model in it. It reports what it " +
   "found. It decides nothing and blocks nothing.";
-
-/**
- * Unexplained first, labelled last, stable within each half.
- *
- * Rule 3 above. `sort` is not used: it would need a comparator that is stable
- * across engines to keep two runs of the same paper in the same order, and two
- * filters are both stable and obviously so.
- */
-function ordered(findings: ScanFinding[]): ScanFinding[] {
-  return [
-    ...findings.filter((f) => f.ordinary === undefined),
-    ...findings.filter((f) => f.ordinary !== undefined),
-  ];
-}
 
 /**
  * **One state of the panel: what it says shut, what it hides, and how worried a
@@ -457,7 +419,26 @@ export function sourceScanMark(state: SourceScanState): SourceScanMark {
   return view.warn ? "found" : "labelled";
 }
 
-export function SourceScanNotice({ state }: { state: SourceScanState }) {
+/**
+ * **The Opus check, for the two components that may read it** — `Examined`
+ * and `Finding`. A context rather than a parameter of `shown()`, so the
+ * headline, the counts, the open default and the chip's mark are computed by
+ * code that cannot reach the answer at all.
+ */
+const CheckContext = createContext<HiddenCheckApi | undefined>(undefined);
+
+export function SourceScanNotice({
+  state,
+  check,
+}: {
+  state: SourceScanState;
+  /**
+   * The Opus check, held by `RefereeBand` beside the scan so a chip change
+   * keeps its answer. Optional: without it there is no button, which is how
+   * the tests that are about the scan alone render the panel.
+   */
+  check?: HiddenCheckApi;
+}) {
   const view = shown(state);
   /**
    * `null` until the referee presses the header, and then theirs.
@@ -501,7 +482,7 @@ export function SourceScanNotice({ state }: { state: SourceScanState }) {
         <p className={`ref-scan-line${view.warn ? " ref-scan-warn" : ""}`}>{view.line}</p>
         {open && (
           <>
-            {view.detail}
+            <CheckContext.Provider value={check}>{view.detail}</CheckContext.Provider>
             {/* Last, and in every state: the tooltip above says this too, and a
                 touch device has no hover to say it with. */}
             <p className="ref-scan-line ref-scan-note">{WHAT_THIS_IS}</p>
@@ -522,12 +503,19 @@ function Examined({
   rows: ScanFinding[];
   labelled: number;
 }) {
+  const check = useContext(CheckContext);
+  const groups = grouped(rows);
   return (
     <>
-      {rows.length > 0 && (
+      {check !== undefined && groups.length > 0 && <AskOpus check={check} groups={groups} />}
+      {groups.length > 0 && (
         <ul className="ref-scan-list">
-          {grouped(rows).map((group) => (
-            <Finding key={group.key} group={group} />
+          {groups.map((group) => (
+            <Finding
+              key={group.key}
+              group={group}
+              opinion={check?.status === "done" && check.result ? opinionFor(group, check.result.judgments) : undefined}
+            />
           ))}
         </ul>
       )}
@@ -584,7 +572,14 @@ function WhatWasNotChecked({ scan }: { scan: HtmlSourceScan }) {
  * last and smaller, under *In the source*. Both stay: the rules say evidence
  * is shown, and a referee who wants to check needs it.
  */
-function Finding({ group }: { group: Group }) {
+function Finding({
+  group,
+  opinion,
+}: {
+  group: ScanGroup;
+  /** Opus's line for this row: absent before a check has finished, `null` when it did not check this row. */
+  opinion?: HiddenJudgment | null | undefined;
+}) {
   const { finding, count, paths } = group;
   const ordinary = finding.ordinary === undefined ? undefined : ownLabel(ORDINARY_LABEL, finding.ordinary);
   const means = ownLabel(KIND_MEANS, finding.kind);
@@ -616,6 +611,7 @@ function Finding({ group }: { group: Group }) {
       {finding.kind === "visible-instruction" && (
         <span className="ref-scan-caveat">{finding.caveat}</span>
       )}
+      {opinion !== undefined && <Opinion opinion={opinion} />}
       <span className="ref-scan-source">
         In the source:{" "}
         {paths.map((path, i) => (
@@ -628,5 +624,130 @@ function Finding({ group }: { group: Group }) {
         <bdi className="ref-scan-detail">{visibleEvidence(finding.detail, MAX_EVIDENCE_TEXT)}</bdi>
       </span>
     </li>
+  );
+}
+
+/* ------------------------------------------------- Ask Opus about these -- */
+
+/** The words a referee reads for each verdict. Ours, never the model's. */
+export const VERDICT_WORDS: Record<HiddenVerdict, string> = {
+  "probably-harmless": "probably harmless",
+  "worth-a-look": "worth a look",
+};
+
+/** What the button does and cannot do, under it. */
+export const ASK_OPUS_NOTE =
+  "Opus reads only the flagged bits below, never the rest of the article, and gives its opinion " +
+  "on each row. It can be fooled by the very text it is judging, so every row stays listed.";
+
+/**
+ * **The judgment for this row, if one was made from exactly what it shows.**
+ *
+ * `null` — *not checked* — when none was, including a judgment whose key
+ * matches but whose paths or counts do not: the group key leaves those out, so
+ * an opinion about one set of places is not shown beside another
+ * (`sameInputs`, src/scan-groups.ts).
+ */
+export function opinionFor(group: ScanGroup, judgments: readonly HiddenJudgment[]): HiddenJudgment | null {
+  const inputs = checkedInputs(group);
+  return judgments.find((j) => sameInputs(j.row, inputs)) ?? null;
+}
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The summary over the rows, counted from the lines the panel actually draws —
+ * so it cannot say "2 harmless" over a panel showing one.
+ */
+export function checkSummary(groups: readonly ScanGroup[], judgments: readonly HiddenJudgment[]): string {
+  let worth = 0;
+  let harmless = 0;
+  let unchecked = 0;
+  for (const group of groups) {
+    const opinion = opinionFor(group, judgments);
+    if (opinion === null) unchecked++;
+    else if (opinion.verdict === "worth-a-look") worth++;
+    else harmless++;
+  }
+  if (worth + harmless === 0) return "Opus did not check any of these rows.";
+  const judged =
+    worth > 0 && harmless > 0
+      ? `${plural(worth, "row", "rows")} worth a look and ${harmless} harmless`
+      : worth > 0
+        ? `${plural(worth, "row", "rows")} worth a look`
+        : `${plural(harmless, "row", "rows")} harmless`;
+  return `Opus judged ${judged}${unchecked > 0 ? `, and did not check ${unchecked}` : ""}.`;
+}
+
+function AskOpus({ check, groups }: { check: HiddenCheckApi; groups: readonly ScanGroup[] }) {
+  const running = check.status === "running";
+  return (
+    <div className="ref-scan-ask">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="ref-scan-ask-btn"
+        onClick={check.ask}
+        disabled={running}
+      >
+        Ask Opus about these
+      </Button>
+      <p className="ref-scan-line ref-scan-note">{ASK_OPUS_NOTE}</p>
+      {running && (
+        <p className="ref-scan-line ref-scan-progress">
+          {check.chars === 0 ? "Reading the flagged bits…" : `Answering… ${check.chars} characters`}
+        </p>
+      )}
+      {check.status === "failed" && check.error && <p className="ref-scan-line ref-scan-warn">{check.error}</p>}
+      {check.status === "done" && check.result && (
+        <p className="ref-scan-line ref-scan-summary">{checkSummary(groups, check.result.judgments)}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Characters that draw nothing or reorder what is around them: format
+ * characters (zero-width spaces and joiners, soft hyphens, tag characters,
+ * the bidi embeddings and isolates), default-ignorable characters (including
+ * variation selectors and blank fillers), and controls. A model's reason
+ * may quote the fragment it judged, and the fragment may be built of exactly
+ * these, so they are shown as code points rather than left to act.
+ */
+const INVISIBLE_OR_REORDERING = /[\p{Cf}\p{Cc}\p{Default_Ignorable_Code_Point}\p{Bidi_Control}\u{E0000}-\u{E007F}]/gu;
+
+/** The model's reason, with every invisible or reordering character printed as its code point. */
+export function visibleReason(reason: string): string {
+  return reason.replace(INVISIBLE_OR_REORDERING, (ch) => {
+    const codePoint = ch.codePointAt(0);
+    return codePoint === undefined ? "" : `⟦U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}⟧`;
+  });
+}
+
+/**
+ * **One row's line**: the app's words for the verdict, then, on the line
+ * under them, the model's reason in the model's face (docs/project/fonts.md),
+ * isolated in a `<bdi>` and inside a box that clips, so a stack of combining marks cannot paint over the row
+ * above. Says how many places were shown when the row has more than were sent.
+ */
+function Opinion({ opinion }: { opinion: HiddenJudgment | null }) {
+  if (opinion === null) {
+    return (
+      <p className="ref-scan-opinion" data-verdict="none">
+        Opus: not checked.
+      </p>
+    );
+  }
+  const { row, verdict, reason } = opinion;
+  const who = row.totalPaths > row.paths.length ? `Opus, from ${row.paths.length} of ${row.totalPaths} places` : "Opus";
+  return (
+    <p className="ref-scan-opinion" data-verdict={verdict}>
+      <span className="ref-scan-opinion-verdict">
+        {who}: {VERDICT_WORDS[verdict]}
+        {" — "}
+      </span>
+      <bdi className="ref-scan-opinion-reason">{visibleReason(reason)}</bdi>
+    </p>
   );
 }

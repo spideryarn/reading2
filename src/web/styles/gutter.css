@@ -875,7 +875,7 @@ td.text.kind-heading .blk-gutter {
      negative margin puts it back over the column it came from. */
   box-sizing: content-box;
   margin: -1px;
-  box-shadow: 0 2px 8px oklch(0 0 0 / 0.35);
+  box-shadow: 0 2px 8px oklch(0 0 0 / calc(0.35 * var(--shadow-strength)));
   pointer-events: auto;
 }
 /* Everything, at full strength, whether or not the pointer is still on the row —

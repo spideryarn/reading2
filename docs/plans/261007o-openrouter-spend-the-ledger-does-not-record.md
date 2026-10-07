@@ -88,7 +88,7 @@ nothing, and says what to add.
 
 ## What GPT Sol's plan review changed
 
-[261007n-plan-review-sol.md](261007n-plan-review-sol.md). The verdict was "revise before
+[261007o-plan-review-sol.md](261007o-plan-review-sol.md). The verdict was "revise before
 building". It found the choke point sound: every wire calls `beginSpend` before `send`, and
 the retry loops rethrow the refusal rather than retrying it. These changed:
 
@@ -135,7 +135,7 @@ the retry loops rethrow the refusal rather than retrying it. These changed:
   `src/structure-slices.ts` pass the refusal on; about thirty evals and probes record. The new
   tests were seen red first. The long-structure dry run was run after the change: 13,780 rows in
   `ai_calls` before and after, and no fake rows.
-- **GPT Sol's code review** ([261007n-code-review-sol.md](261007n-code-review-sol.md)) found one
+- **GPT Sol's code review** ([261007o-code-review-sol.md](261007o-code-review-sol.md)) found one
   real defect and fixed it. Several of the converted evals ran paid calls in parallel under
   `Promise.all`. One failing task closed the collector while its siblings were still buying, and
   their rows were dropped as late. They now drain with `allOrStop` or `allSettled` before

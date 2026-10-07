@@ -59,11 +59,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isArcOutdated } from "../arc-version.js";
-import type { Arc, ArcFound } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER, type Arc, type ArcFound } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 
 /**
  * `absent` is the state this hook exists for, and it is not an error: no arc
@@ -114,15 +115,23 @@ export function useArc(
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * The read itself — the parse, the 404 branch and the stale-reads-as-absent
+   * The read itself — the parse, the none-yet branch and the stale-reads-as-absent
    * rule, which are this hook's own. `current()` after every `await`, before
    * any state is set. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
     try {
-      const res = await apiFetch(`/api/arc/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/arc/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const found = res.status === 404 ? null : await readJson<ArcFound | null>(res);
+      if (!current()) return;
+      if (found === null) {
         /* Not a fault: nobody has written one. The effect below is what turns
            this into a job, and this is the state it waits in. */
         setArc(null);
@@ -131,8 +140,12 @@ export function useArc(
         setStatus("absent");
         return;
       }
-      const found = await readJson<ArcFound>(res);
-      if (!current()) return;
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` and an arc already on screen stays. */
+      if (typeof found?.arc !== "object" || found.arc === null) {
+        throw new MalformedReply("the arc reply has no arc");
+      }
       setStale(found.stale);
       /* **Stale reads as no arc**, deliberately. See `arc` on `UseArc`. */
       setArc(found.stale ? null : found.arc);

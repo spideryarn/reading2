@@ -211,13 +211,14 @@ describe("every stall clock aborts with the shared class", () => {
     expect(holding(/new Error\(\s*["'`]stalled["'`]\s*\)/)).toEqual([]);
   });
 
-  it("the eight runners with a stall clock use `StallReached`", () => {
+  it("the nine runners with a stall clock use `StallReached`", () => {
     expect(holding(/\.abort\(new StallReached\(\)\)/).sort()).toEqual([
       "converse.ts",
       "link-summary.ts",
       "quiz-mark.ts",
       "referee-claims-run.ts",
       "referee-criteria-run.ts",
+      "referee-hidden-check.ts",
       "referee-mirror.ts",
       "search.ts",
       "stream-run.ts",

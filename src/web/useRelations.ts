@@ -34,8 +34,9 @@
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { BlockId, Relation, RelationsResponse } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER, type BlockId, type Relation, type RelationsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
@@ -58,15 +59,27 @@ export function useRelations(slug: string, shown: boolean): RelationsByBlock {
   const load = useCallback(
     async (current: () => boolean) => {
       try {
-        const res = await apiFetch(`/api/relations/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+           is still read the same way, for a server that has not heard of the
+           header — the minutes of a deploy. */
+        const res = await apiFetch(`/api/relations/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const body = res.status === 404 ? null : await readJson<RelationsResponse | null>(res);
+        if (!current()) return;
+        if (body === null) {
           setLoaded(null);
           setStatus("none");
           return;
         }
-        const body = await readJson<RelationsResponse>(res);
-        if (!current()) return;
+        /* Only an explicit `null` means none yet, and a reply without its
+           artefact is published nowhere: a `MalformedReply`, swallowed below
+           like any failed read, so words already drawn stay. */
+        if (typeof body?.relations !== "object" || body.relations === null) {
+          throw new MalformedReply("the relations reply has no relations");
+        }
         setLoaded(body);
         setStatus("ready");
       } catch {

@@ -159,10 +159,11 @@ Two consequences worth knowing:
   writing `.chat, .gloss { … }` is the difference between a slot and two features that happen to
   agree. Each panel keeps a class of its own for whatever only it needs.
 - The Dock's `DockMode` docstring said it should become a `role="radiogroup"` once there were three
-  modes. There are three, and **it stayed a toggle** — see [Dock.tsx](../../src/web/Dock.tsx) for
-  why the count was the wrong trigger. The bar shows two of the three modes, because `hierarchy`
-  (then called `toc`) had no
-  button, and a radiogroup naming two options is a worse lie than `aria-pressed`.
+  modes. When the glossary made three, **it stayed a toggle**, because the count was the wrong
+  trigger: the bar showed two of the three modes, since `hierarchy` (then called `toc`) had no
+  button, and a radiogroup naming two options is a worse lie than `aria-pressed`. It became a
+  `role="radiogroup"` of `aria-checked` buttons the next day, 2026-08-26 (commit `9da8de40e`), and
+  still is — `DockModes` in [Dock.tsx](../../src/web/Dock.tsx).
 
 ## What is generated, and when
 
@@ -1615,10 +1616,8 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 - **Nothing is checked against a source until somebody asks.** `background` is the model's memory
   and `url` is a guess at a canonical page. The per-entry lookup above is the answer, and it is
   reader-initiated by design — but it means an entry nobody has pressed the button on is entirely
-  unverified, and the only thing saying so is the absence of a "checked" block.
-- **A term nobody has pressed the button on is entirely unchecked**, and the only thing saying so is
-  the absence of a "checked" block. That is the cost of making the web reader-initiated, and it is
-  the right cost, but it is a cost.
+  unverified, and the only thing saying so is the absence of a "checked" block. That is the cost of
+  making the web reader-initiated, and it is the right cost, but it is a cost.
 - **A checked answer is written for a dialog, not for an 18rem column.** Reusing `explain` means
   reusing its length rule — *"one or two short paragraphs is usually right"* — which was tuned for
   [`CommentDialog`](comments.md). Measured in a browser at 1,158 characters against a `background` of

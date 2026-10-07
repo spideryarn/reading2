@@ -137,7 +137,7 @@ is a child logger passed down — [logging.md § Fluid Compute](logging.md#fluid
 
 It also means **no instance affinity between requests**. Warm-instance reuse is an optimisation, not
 durable state, which is why writing an artefact to `/tmp` in one step and reading it in the next
-does not work — [deployment.md § What does not work in production yet](deployment.md#what-does-not-work-in-production-yet).
+does not work — [deployment.md § What did not work in production at first](deployment.md#what-did-not-work-in-production-at-first).
 
 ## Related docs
 

@@ -25,7 +25,7 @@
  * docs/project/skim.md.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Job, Skim, SkimResponse } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER, type Job, type Skim, type SkimResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -122,12 +122,16 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     async (current: () => boolean) => {
       const started = begin();
       try {
-        const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). */
+        const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
         /* **Checked and derived before anything is published** (plan 261007e,
            WCO4): `readJson` checks no shape, and an empty 200 is `{}`.
-           A 404 is "none yet", and so is `200 null`, which this route does not
-           send today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+           "None yet" is exactly `null` — never a falsy body — or a 404, from a
+           server that has not heard of the header (the minutes of a deploy). */
         const loaded = res.status === 404 ? null : await readJson<SkimResponse | null>(res);
         if (!current()) return;
         if (loaded === null) {

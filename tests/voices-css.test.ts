@@ -177,6 +177,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".clm-list .clm-claim",
     ".crit-why",
     ".mir-note",
+    ".ref-scan-opinion-reason",
     ".cnd-answer",
     ".cnd-person-name",
     ".cnd-affil-name",

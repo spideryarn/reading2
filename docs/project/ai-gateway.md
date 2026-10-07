@@ -5,7 +5,7 @@ Up: [architecture.md](architecture.md)
 ## In this doc
 
 - [§ What it replaced](#what-it-replaced) — the two-vendor world before OpenRouter (history)
-- [§ One gateway, five wires](#one-gateway-five-wires) — adding a provider or wire; what `provider` means
+- [§ One gateway, a wire for each shape](#one-gateway-a-wire-for-each-shape) — adding a provider or wire; what `provider` means
 - [§ What the Skin gives us](#what-the-skin-gives-us-that-neither-half-had-alone) — why Messages-over-OpenRouter
 - [§ The four things that fail silently](#the-four-things-that-fail-silently) — when a call looks fine and is not
 - [§ What it cost](#what-it-cost) — the three money pockets, credits versus BYOK
@@ -15,7 +15,7 @@ Up: [architecture.md](architecture.md)
   - [§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong) — before summing any duration
   - [§ A transport blip is retried](#transport-retry) — why a call appears as several rows
   - [§ How a stream ends](#stream-end) — aborted, truncated, finished
-- [§ The three calls allowed round the outside](#the-three-calls-allowed-round-the-outside-and-the-test-that-keeps-them-to-three) — what bypasses the gateway
+- [§ The calls allowed round the outside](#the-calls-allowed-round-the-outside-and-the-test-that-keeps-them-declared) — what bypasses the gateway
 - [§ The exception that arrived](#the-exception-that-arrived-and-what-it-costs-the-rule) — OpenAI realtime for live conversation
 - [§ What stops a reader spending our money](#what-stops-a-reader-spending-our-money-and-what-does-not) — caps and abuse
 - [§ A proposed second exception](#a-proposed-second-exception-calls-paid-by-the-readers-chatgpt-plan) — not built
@@ -133,7 +133,7 @@ hand-maintained price table and cache arithmetic that the OpenRouter half did no
 
 Which raised the obvious question — *why are there two halves?*
 
-## One gateway, five wires
+## One gateway, a wire for each shape
 
 The word "provider" used to mean two things at once: **who bills us**, and **what the request looks
 like**. Only the first collapsed.
@@ -147,9 +147,8 @@ like**. Only the first collapsed.
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **decisions** | `/api/alpha/decisions` — a `state` and typed questions in, `{answers}` of probabilities out, no text at all | quick search (`search-quick`, `openRouterDecisions`), since 2026-10-02 — [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second) — and the command bar's pick (`command-pick`), since 2026-10-03. The seam reads two kinds of answer: `noul`, a yes/no as a probability, which quick search asks, and `choice`, one of several named options with a probability for each, which the pick asks. (The pick's second call, `command-pick-words`, is an ordinary **chat** job on GPT Luna — [`src/command-pick-call.ts`](../../src/command-pick-call.ts).) Before quick search only the shelf-topics eval's declared bypass spoke it | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
-The heading still says five: it is kept for the anchors that point at it, and the table, not the
-heading, is the count — six product wires since the decisions one, seven counting live
-conversation's `realtime`.
+The table, not the heading, is the count — six product wires since the decisions one, seven
+counting live conversation's `realtime`. (The heading said "five wires" until 2026-10-07.)
 
 Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
 other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
@@ -1022,7 +1021,7 @@ rounds' — see `src/converse.ts`.
 > [260901g](../plans/260901g-one-stream-end-classification-shared-by-five-callers.md) is the
 > migration that ended it.
 
-## The three calls allowed round the outside, and the test that keeps them to three
+## The calls allowed round the outside, and the test that keeps them declared
 
 "One seam per wire" is what lets `npm run cost` claim it has seen everything. `evals/` broke that
 claim on the morning after it was made — eight sites, on **two** accounts, spending real money into
@@ -1036,7 +1035,7 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
-**And there are two that do neither** — the two live-mode evals and the Codex CLI. They are the case
+**And some do neither** — the first two were the live-mode evals and the Codex CLI. They are the case
 `DECLARATIONS` cannot hold, and for two different reasons: an eval opens a realtime session and talks
 over it, so there is no response body for an `Observer` to read; `run-codex.ts` makes no request at
 all, it spawns a subprocess. They are in `UNMETERED_SPEND` — a reason written down, and no row ever
@@ -1203,7 +1202,7 @@ a session was dispatched to plan it, and it was stood down on this answer.
   failure it converts a runaway into is *every reader loses every paid feature until the month
   turns* — not *the runaway is throttled*. That is the accepted trade, not an oversight.
 - It **does not** cover `OPENAI_API_KEY`, which is a separate billing account — see the entry above
-  in § The three calls allowed round the outside.
+  in § The calls allowed round the outside.
 
 The machinery to build a per-reader cap already exists if this is ever revisited:
 [`src/link-summary.ts`](../../src/link-summary.ts) has a per-owner limiter with a day cap and a

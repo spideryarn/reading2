@@ -22,6 +22,8 @@
  */
 import { MessagesSquare } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 import type { CitedWork, GlossaryEntry, ThreadSummary } from "../types.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
@@ -119,8 +121,9 @@ export function OriginChatMark({
 
 /**
  * **Glossary's and Citations' *Ask in chat*.** The neighbour of Dig deeper,
- * and drawn as it is: the quiet `.gloss-btn`, an icon and a label. Chat's
- * icon from the bar, because the press takes the reader into Chat.
+ * and drawn as it is: the shared outline `Button` at `sm`, with the caller's
+ * `.gloss-btn` hook, an icon and a label. Chat's icon from the bar, because
+ * the press takes the reader into Chat.
  *
  * Never disabled: a chat needs no passage and no finished lookup. **The
  * press sends the question** (since 2026-10-06, Greg's ask in
@@ -142,10 +145,13 @@ export function AskInChatButton({
 }) {
   return (
     <Tooltip placement="bottom" content={<TipNote>{`${label}. ${ASK_IN_CHAT_SAYS}`}</TipNote>}>
-      <button type="button" className={className} aria-label={label} onClick={onAsk}>
+      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sits
+          beside Dig deeper in both callers, which is `outline`/`sm`, and a
+          28px `.gloss-btn` beside a 32px Button read as two kinds of thing. */}
+      <Button type="button" variant="outline" size="sm" className={className} aria-label={label} onClick={onAsk}>
         <MessagesSquare size={iconSize} aria-hidden="true" />
         {ASK_IN_CHAT}
-      </button>
+      </Button>
     </Tooltip>
   );
 }

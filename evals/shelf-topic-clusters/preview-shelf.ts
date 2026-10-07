@@ -271,7 +271,7 @@ async function main(): Promise<void> {
          Since 2026-10-07 a collector with no sink is refused its call
          (`UnrecordedSpendRefused`, src/ai-spend.ts), so the choice is spelled
          out rather than left as an absence. About a cent, once per run —
-         docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md. */
+         docs/plans/261007o-openrouter-spend-the-ledger-does-not-record.md. */
       await collectSpend(() => induce(shelf, out), { attribution: { scopeKind: "eval" }, sink: async () => {} });
     } catch {
       /* Provider errors can include returned text. Do not print one beside a

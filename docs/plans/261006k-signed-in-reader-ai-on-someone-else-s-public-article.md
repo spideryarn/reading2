@@ -220,6 +220,26 @@ answers that, and you may want that number to differ by plan.
 
 ## Questions for Greg
 
+**Answered so far: B.**
+
+> B yes probably it would be nice to be able to add a private copy to your own shelf (perhaps in
+> Metadata)
+>
+> — Greg, 2026-10-06
+
+Built as [261007m](261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md) (queue item
+`qi-jp2r4be8`): the offer is in the visitor's banner, which the Metadata page draws too, and in
+the band a visitor meets on Chat, Search and the other owner's modes.
+
+**E, C and D: not now.**
+
+> it's fine if signed-in visitors reading someone else's public articles can't use AI modes for now
+>
+> — Greg, 2026-10-07
+
+So nothing more is built; the private copy (B) is the route to AI for a visitor who wants it. The
+options below stay as the record, for if this comes back.
+
 **1. Which of these, if any?**
 
 - **A.** Leave it. A signed-in visitor reads what the owner made, and cannot search.

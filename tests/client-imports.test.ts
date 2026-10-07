@@ -507,6 +507,19 @@ const SHARED = new Set([
      would be the one a referee reads.
      See src/injection-scan-types.ts and docs/project/referee-mode.md § rule 5. */
   "injection-scan-types.js",
+  /* The rows the Hidden text panel draws — `ordered` and `grouped` — and what
+     the Opus check was shown of each (`checkedInputs`, `sameInputs`). On the
+     list because it imports `injection-scan-types.js`, types only, and nothing
+     else. Being on it is the point: the server numbers the rows it sends Opus,
+     the panel shows each answer beside the row it names, and two copies of the
+     numbering would put an opinion beside the wrong row. Moved out of
+     src/web/SourceScanNotice.tsx by plan 261007l. */
+  "scan-groups.js",
+  /* What the Opus check answers with: declarations only, on the model of
+     `referee-mirror-types.js`, importing a type from `scan-groups.js` above.
+     The server module reaches the gateway and `node:crypto`.
+     See src/referee-hidden-check-types.ts. */
+  "referee-hidden-check-types.js",
   /* Where in a model's answer a block id counts as a citation. On the list
      because it qualifies: it imports `urls.js`, already here, plus
      `mdast-util-from-markdown` — which is the dompurify case exactly, a package

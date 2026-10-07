@@ -455,6 +455,8 @@ nothing else has a copy of.
   [web-client.md § Shared code (client)](docs/project/web-client.md#shared-code-client), which also
   name the older copies not to imitate — and when two designs work, take the one with fewer parts
   touching each other.
+- **Controls that do the same job look the same in every mode** (Greg, 2026-10-07):
+  [controls.md § Controls that do the same job look the same](docs/project/controls.md#controls-that-do-the-same-job-look-the-same).
 - **Simplest version first.** Take the simpler product decision, get a v1 working end to end, and
   add the complexity or the optimisation later, once something shows it is needed. When a choice
   would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan

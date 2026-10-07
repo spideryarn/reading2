@@ -1,7 +1,7 @@
 # OpenRouter spend the ledger does not record
 
 Up: [investigations.md](../project/investigations.md). Queue item `qi-5baq4mhn`. The fix is
-[plan 261007n](../plans/261007n-openrouter-spend-the-ledger-does-not-record.md). The machinery is
+[plan 261007o](../plans/261007o-openrouter-spend-the-ledger-does-not-record.md). The machinery is
 described in [cost-tracking.md](../project/cost-tracking.md); the previous audit, which checked
 the rows that *were* written, is
 [261005a](261005a-cost-tracking-audit-accuracy-and-completeness.md).
@@ -127,7 +127,7 @@ ledger's total and the list of live processes every three minutes, from 18:24 to
 2026-10-07. Neither total moved in that window. It confirmed nothing and saw no leak, so it was not
 kept. It called OpenRouter directly, which `tests/no-undeclared-spend.test.ts` rightly flags.
 
-**What the fix does to the four kinds of loss** (described in plan 261007n, below). It stops kinds 1
+**What the fix does to the four kinds of loss** (described in plan 261007o, below). It stops kinds 1
 and 2 for every eval, now and later: a missing collector, or a collector with no sink. Kind 3 is
 stopped only where it was converted by hand. A sink that keeps rows in memory still passes the
 check, because the check asks whether a sink is there, not whether it writes to the database. One
@@ -144,7 +144,7 @@ The three dictation evals declared `unscoped` in `src/spend-declarations.ts` sho
 known. What it lacked was a mechanism: by October it was costing more than all the job steps put
 together.
 
-**The fix (plan 261007n).** A gateway call from a process whose entry file is under `evals/` or
+**The fix (plan 261007o).** A gateway call from a process whose entry file is under `evals/` or
 `scripts/` is refused when no collector that writes rows is open. The refusal happens before a byte
 goes over the wire. A new eval that forgets the ledger now stops at its first call, for nothing,
 and says what to add, instead of spending into no total.

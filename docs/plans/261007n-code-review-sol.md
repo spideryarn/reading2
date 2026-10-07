@@ -1,19 +1,25 @@
-1. **High — a failed parallel task could still lose paid siblings’ ledger rows.** At [answers.ts:158](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/evals/plain-words/answers.ts:158) and [spike-parts.ts:376](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/evals/long-documents/spike-parts.ts:376), `Promise.all` rejected while other calls continued, closing their collector too early. Fixed this pattern in seven converted evals by draining siblings before rethrowing. Mocked regressions failed before the fixes and passed afterward.
+**Verdict: land with fixes.** No P0/P1 findings. The database-backed gate still needs verification outside this sandbox.
 
-2. **Medium — the closed-collector test exercised the wrong state.** [unrecorded-spend-refused.test.ts:79](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/tests/unrecorded-spend-refused.test.ts:79) invoked its callback outside the captured async scope, testing “no collector.” Fixed it to retain that scope. Also added coverage for inner sinkless collectors, structure-slice refusal propagation, and real/fake `evalSpend` sinks.
+1. **P2 — Skim gave profile failure precedence over absence.** [src/routes.ts:10309](/var/tmp/spideryarn-worktrees/261007-not-made-yet-reads-and-quote-delay/src/routes.ts:10309). Fixed: observe the profile rejection, await the artefact first, return on exact null, then await the profile. Tests cover both failure orders, one response, a pending profile, and made-Skim profile failures. Fixed the garbled comment and updated the plan/postmortem. Eight tests failed before the fix.
 
-3. **Low — stale comments contradicted the change.** Examples: [calls.ts:7](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/evals/long-structure/calls.ts:7), [guide/run.ts:18](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/evals/guide/run.ts:18), and [spend-declarations.ts:295](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/src/spend-declarations.ts:295). Corrected the database-write promises, caller count, and claim that dictation benches stop immediately—raw diagnostics can still spend.
+2. **P2 — Tests missed replies decoded after switching articles.** [tests/none-yet-is-not-a-404-hooks.test.tsx:619](/var/tmp/spideryarn-worktrees/261007-not-made-yet-reads-and-quote-delay/tests/none-yet-is-not-a-404-hooks.test.tsx:619). Removing readiness’s post-parse guard survived all 245 original tests. Added 15 cases across all eight reads, explicitly proving decoding started before switching articles.
 
-No further functional defect found in fake detection, environment ordering, collector nesting, shutdown ordering, symlink classification, or server/test exemptions.
+3. **P3 — Wider stale count comments, reported only.** [src/messages.ts:4551](/var/tmp/spideryarn-worktrees/261007-not-made-yet-reads-and-quote-delay/src/messages.ts:4551) says six artefacts beside an eight-entry table; [tests/store-parity.test.ts:455](/var/tmp/spideryarn-worktrees/261007-not-made-yet-reads-and-quote-delay/tests/store-parity.test.ts:455) says five reads beside a six-read loop. Left unchanged because these files are outside the commit.
 
-Checks run:
+All eight client reads passed inspection for headers, exact null handling, validation before publication, and guards after awaits. Valid-response behavior is preserved.
 
-- `npx vitest run` on the eight core/regression files: **237 tests passed**.
-- Additional relevant eval/doc suites: **52 tests passed**.
-- `npm run typecheck`: blocked by sandbox tsx IPC permissions. Equivalent `node --import tsx scripts/typecheck.ts`: **all four projects and coverage passed**.
-- Scoped Biome lint and `git diff --check`: **passed**.
-- `no-undeclared-spend` and `plain-words-wiring`: blocked by sandbox `spawnSync git EPERM`.
+| Mutation | Result |
+|---|---|
+| Remove Sketch header | 2 failures |
+| Replace Sketch’s null check with truthiness | 6 failures |
+| Remove Illustrated from offline pattern | 3 failures |
+| Convert generic route 404s to absence | 10 failures |
+| Remove readiness post-parse guard | Originally survived; now 2 failures |
+| Remove caption post-parse guard | 1 failure |
+| Remove main Sketch post-parse guard | 2 failures |
 
-Added a [root-cause postmortem](/var/tmp/spideryarn-worktrees/openrouter-unledgered-spend/docs/postmortems/261007s-a-failed-parallel-task-closes-accounting-before-its-siblings-finish.md). Changes remain uncommitted; no paid APIs or production databases were accessed.
+Every mutation was reverted by editing.
 
-**Verdict: fixes applied; no remaining blocking finding in the reviewed scope, with two scan checks sandbox-blocked.**
+Gates: **729 tests passed across seven requested suites**. The full eight-suite command failed during setup: local Postgres/Docker access was blocked. `npm run typecheck` hit blocked `tsx` IPC; the same script via `node --import tsx` passed all four projects. Doc links: 18 passed. Scoped lint: no errors, six informational findings. Diff check passed.
+
+No commits, Git state changes, or deployment.

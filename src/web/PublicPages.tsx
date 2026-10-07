@@ -174,7 +174,14 @@ export function PublicMetadataPage({
             does not disclose which absence was behind it. */}
         <SourceRow url={webSource(meta)} guess={article.sourceGuess} />
 
-        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />
+        {/* The banner carries the private-copy offer, which is what puts it on
+            this page, where Greg suggested it (plan 261007m). */}
+        <SharedNotice
+          signedIn={signedIn}
+          sessionUnconfirmed={sessionUnconfirmed}
+          sharedBy={sharedBy}
+          copyFrom={webSource(meta)}
+        />
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>

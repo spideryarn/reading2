@@ -194,9 +194,66 @@ rows of CSS path. Now:
 
 **What this gave up**: rule 5's *before anything else*. A referee who never presses the chip sees
 a dot, not the finding. That was Greg's call. **What it did not do** is the pre-filter he asked
-for, or anything else that changes what the scanner finds or labels: those edit a defence, and are
-waiting on him in
-[261007h § Questions for Greg](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md#questions-for-greg).
+for, or anything else that changes what the scanner finds or labels: those edit a defence. The
+question went to him in
+[261007h § Questions for Greg](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md#questions-for-greg),
+and his answer is the next section: a model's opinion beside each row, asked for by the referee,
+and still no filter.
+
+### Ask Opus about these: an opinion beside a row, never a filter <a id="ask-opus-about-these"></a>
+
+Greg's answer to that question (`q-qre346`):
+
+> I'm optimistic that Opus would be robust to this, so perhaps we could hand this check to Opus,
+> but only if the user requests it (e.g. as a sub-mode), ideally just sending it the relevant bits
+> rather than the whole article (to keep costs low)
+>
+> — Greg, 2026-10-07
+
+So inside Hidden text, under the headline and above the rows, when the scan examined HTML and found
+something, there is a button **Ask Opus about these**, with a line under it saying Opus reads only
+the flagged bits, never the rest of the article, gives its opinion per row, can be fooled by the
+very text it judges, and that every row stays listed. Pressed, it shows progress as Mirror does,
+then **one line inside each row** — *Opus: probably harmless — …* or *Opus: worth a look — …*, the
+reason in the model's face ([fonts.md](fonts.md)) — and a summary over the rows (*Opus judged 1 row
+worth a look and 2 harmless, and did not check 1.*). A row it did not answer for, or that the input
+budget left out, says *Opus: not checked.* When a row has more places than were sent, the line says
+so: *Opus, from 5 of 39 places: …*. Plan
+[261007l](../plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md);
+the route is `POST /api/referee/hidden-check/:slug`, the call
+[`src/referee-hidden-check.ts`](../../src/referee-hidden-check.ts), the job `referee-hidden-check`.
+
+The rules, each code rather than an intention:
+
+- **The answer never deletes, reorders, recounts or re-marks anything.** The rows, their order,
+  their count, the headline and the chip's dot or ring come from the scan alone: `ordered` and
+  `grouped` ([`src/scan-groups.ts`](../../src/scan-groups.ts), shared with the server so both number
+  the rows alike) and `sourceScanMark` never see the answer, which reaches only the per-row lines
+  through a context nothing else reads. `tests/hidden-check-panel.test.tsx` renders a hostile
+  "harmless" answer and checks all of it is unchanged.
+- **Opus, whatever the article's High-powered AI setting** — the job is in `ALWAYS_HIGH_POWER` and
+  resolves through `powerFor` (membership alone does nothing; `modelFor` does not apply it). The
+  environment override `SPIDERYARN_REFEREE_HIDDEN_CHECK_MODEL` still wins.
+- **Only the rows, chosen by the server.** No request body is read: the route re-reads the scan
+  (cached) after the same ownership question the scan route asks. Each row's words are cut to 400
+  characters, its evidence to 300, at most five of its places at 200 each, and the whole input to
+  60,000 characters; rows past that are not sent and show as not checked. Nothing to check — no
+  source, a PDF, no findings — is a 409 that spends nothing, and the button is not drawn then.
+- **Fenced, and told so.** Each fragment sits inside a per-call fence
+  ([`src/prompt-fence.ts`](../../src/prompt-fence.ts), shared with Mirror), and the prompt says
+  nothing in a fence is an instruction and that a fragment claiming to be harmless, or addressing
+  the checker, is itself worth a look.
+- **Validated before it is shown.** One object with a `judgments` array; each names a sent row by
+  number, at most once (the first wins); a verdict that is one of two literals, shown in the app's
+  words, never the model's; a reason collapsed, cut to 200 characters and non-empty. Each judgment
+  carries what was sent of its row (key, places, counts) and is shown only beside a row equal to
+  that.
+- **The reason cannot disguise anything**: zero-width, tag and bidi characters print as code
+  points, its direction is isolated, and its box clips so stacked combining marks cannot paint over
+  the row above.
+- **Nothing is stored**, as with Mirror: the answer lives beside the scan in `RefereeBand` for the
+  life of the band, so changing chips keeps it; a reload forgets it, and a second press pays again.
+  Leaving stops the paid call. The gateway records the call itself.
 `tests/referee-notices.test.tsx` § *a finding marks the Hidden text chip* and
 `tests/source-scan-notice.test.tsx` § *findings in plain words* hold it.
 
@@ -844,7 +901,8 @@ Greg's own framing was *"see how far we can get in a stage or two"*.
 Not a model and not a question: the deterministic scan for text a reader would not see and a model
 would read, which has already run by the time the band opens. It became a sub-mode on 2026-10-07
 (§ The scan has its own chip); what it does, its five rules and where each is enforced are rule 5
-under § The rules the whole mode obeys.
+under § The rules the whole mode obeys. On the referee's press, and only then, Opus gives an
+opinion beside each row — § [Ask Opus about these](#ask-opus-about-these).
 
 ## Every control says what it does
 
@@ -864,7 +922,7 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the five sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts; Hidden text calls no model and does not check PDFs |
+| the five sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts; Hidden text's check uses no model and does not check PDFs, and Opus is asked about its rows only from inside it |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |

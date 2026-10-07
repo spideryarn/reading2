@@ -40,9 +40,9 @@ const RUN_BUTTONS = [
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-ask-go", size: "sm" },
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-dig", size: "sm" },
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-more-go", size: "sm" },
-  /* Citations' *Dig deeper* sits on a row of 24px controls (*Ask in chat*, the
-     Scholar link), so it is the same button at the row's size. */
-  { file: "src/web/CitationInvestigation.tsx", hook: "cite-investigate", size: "xs" },
+  /* Citations' *Dig deeper* is the same `sm` button as *Ask in chat* beside it,
+     one size in Glossary and Citations (plan 261007m S2, qi-h2cneb4y). */
+  { file: "src/web/CitationInvestigation.tsx", hook: "cite-investigate", size: "sm" },
 ] as const;
 
 /** The whole opening tag that starts at `start`, braces and quotes respected. */

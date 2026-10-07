@@ -1403,6 +1403,7 @@ export function ConversationBand({
          in useChat.ts). So its DELETE is never held waiting for a name, and
          never races this tab's own write. Plan 261001m. */
       canStartOver={learning && current !== null && settled(current)}
+      startingOver={learning && resetting !== "idle"}
       onRename={rename}
       onDelete={(id) => {
         /* **Start over.** The conversation leaves the screen at once, and the

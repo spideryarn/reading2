@@ -835,9 +835,10 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   cell, a spine segment and an arrow key use.
 - **Keyboard** → the picture is one tab stop, not one per node, and the arrows
   move inside it: ↑ / ↓ step through the drawn order **and take the article with
-  them**, Home / End jump to the ends, Enter jumps the article. **←** closes an
-  open node and otherwise goes to its parent; **→** opens a closed one and
-  otherwise steps into its first child.
+  them**, Home / End jump to the ends, Enter jumps the article. On Force, **←**
+  moves focus to the parent; **→** does nothing, because no bubble reports children.
+  On Drift and Trail, **← / →** step backward / forward and take the article with them.
+  Neither opens or closes anything (see the folding line below).
   That is the [W3C tree-view pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/),
   and it is written out rather than inherited because SVG has no `ul` and no
   `button` — which is also why each node carries `aria-level`, `aria-setsize` and
@@ -849,7 +850,8 @@ that takes 300ms and cannot be wrong about which build it was looking at.
 - **Folding a part away is gone**, and saying so is the point of this line. The
   chevron on a Tree row was the only way in that ever worked; ← and → look like
   a second way and are not one, because `layoutForce` gives every bubble
-  `hasChildren: false` and both key branches require it. So the collapse set is
+  `hasChildren: false`, so → cannot enter a child, while ← only moves focus to a parent.
+  The collapse set is
   now a constant — `walk`, `buildGraph` and `DiagramOptions` all still honour
   one, and the panel has nothing to drive it with.
 - **Where you are** is a ring on the deepest node you are inside, and on Drift
@@ -896,12 +898,15 @@ to each other and the cost of missing is going somewhere you did not mean to.
 Under the picture rather than over it, for the same reason the whole footer card
 is there.
 
-They are **outlines, not filled buttons**, and that is a correction. The first
-version gave them `--surface-raised`, which at 160×44 is two mid-grey slabs in a
-panel where every other control is a thin border — they read as *disabled* while
-live, which is the same mistake
-[design-css-overview.md](design-css-overview.md) records against the shelf's
-primary button. The fill now arrives on hover, where it means something.
+They are **Quotes' and Skim's 44px squares** since 2026-10-07: the raised ground, the
+`--rule-strong` border and the house radius, centred round the readout, with a `max(44px, …)`
+floor so a small root size cannot shrink them (plan
+[261007m § S3](../plans/261007m-design-consistency-follow-ups-five-queued-items.md); Greg,
+2026-10-07: *"controls that do the same job should look the same in every mode"*). Until then
+each filled a third of the panel, about 160×44, as a thin outline — because the very first
+version had filled them at that size and two big grey slabs read as *disabled*. At 44×44 the
+fill is the other steppers' and does not. What stays Diagram's own: the chevrons point up and
+down, an end is `aria-disabled`, and the readout is a tab stop for its card.
 
 **They step by distinct row, not by node**, and that is the one piece of design
 in them. `layout.nodes` is in preorder, so on Force the root, part 1 and
@@ -1252,9 +1257,11 @@ reduction algorithms"* — and they answer different questions.
   topics with k-means and gives each topic a column. A subject the article
   returns to is a second stack of dots in the same column, a long way further
   down — which is the thing no other picture in this app can show.
-  **Within a lane, sideways means how central to the topic that paragraph is**:
-  the core is a tight column down the middle, marginal members lean out, and
-  which way they lean is which neighbouring topic they lean towards. That is a
+  **Within a lane, sideways is the paragraph's own first principal component**,
+  the axis Spread uses, rescaled to the lane — not how central it is to its
+  topic. Lanes are ordered by the median paragraph position of their members, not by
+  semantic distance ([`orderLanes`](../../src/projection.ts)); the lane next door need not be the
+  nearest topic. That is a
   fact, not jitter — and a reader cannot tell the two apart by looking, which is
   exactly why the pixels are spent on something true.
 - **Spread** (`?dx=spread`) puts every paragraph on the first principal
@@ -1388,7 +1395,7 @@ swallowed the article cannot squash everything else to the minimum.
 ### They are a list, not a tree
 
 Force is a `role="tree"` of `treeitem`s with levels, sibling counts, and
-Left/Right meaning close and open. These two cannot honour that:
+Left/Right as described above, without folding. These two cannot honour a tree contract:
 276 paragraphs are not a hierarchy and there is nothing to open. So they are a
 `listbox` of `option`s, and all four arrow keys step one paragraph. Inheriting
 the tree contract would have been a role describing a widget the code does not
@@ -1416,7 +1423,7 @@ known, and the first thing to fix here; GPT Sol's finding on the built code.
 
 Like Force, this is a fetch a reader can start without pressing anything that
 says what it will do, so the gate is narrow: exactly these two pictures, never
-the other six.
+the other three.
 
 **In the browser, laying out 276 dots costs 2.7ms** — measured on `constitution`,
 2026-08-27, both pictures, averaged over 200 runs. That matters because the
@@ -1453,7 +1460,7 @@ it had `owners-only`.
 
 **What made this the one judgement call in that table** was never the band — the default picture is
 drawn from the tree already on the page and costs nothing — but the panel, which mounts hooks that
-POST. Force is the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
+POST. Force was then the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
 recorded as "real work and not slice 1a's", and it turned out to be a prop:
 [`DiagramPanel`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union, and the visitor arm
 
