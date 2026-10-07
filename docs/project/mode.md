@@ -479,7 +479,22 @@ Then the residue nothing refuses at compile time:
   ([261004c](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
   The panel draws [`ReadError`](../../src/web/ReadError.tsx) with the hook's `retryRead`, and the
   panel is a row in *[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx)*,
-  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion. A
+  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion.
+  **Once the server has said "none yet" for this article, a failed read does not unsay it**: a
+  failed refresh or a failed *Try again* ends at `none`, with the failure shown beside the empty
+  state and its Generate button, never at `error`. Only a failed *opening* read — nothing ever
+  answered — ends at `error`. Each hook keeps the slug the server last said "none yet" for in a
+  `saidNoneFor` ref, read by its catch; Thread's `answered` ref (`useTweets.ts`) was the
+  precedent. The cost, accepted: the reader can start a run while the app does not know whether
+  one has landed since — and so can a mode press made in that state, which `useAutoRun` reads as
+  *none* and spends on, once. Twelve modes dropped the button there until the owner's answer:
+
+  > ok, i'll go along with you on this. I don't quite follow
+  >
+  > — Greg, 2026-10-07, relayed by the Overseer
+
+  ([261007f](../plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md);
+  the rows are "Try again answered by another failure, after none yet" in the matrix test.) A
   forced verb goes through `useRewriteHold`
   ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
   [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),

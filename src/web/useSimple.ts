@@ -17,7 +17,7 @@
  * die with the view so a press cannot be spent after the reader has left it,
  * and a visitor reads the paragraphs off the public payload with no hook at all.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   isSimpleParagraphs,
   NONE_YET_AS_NULL_HEADER,
@@ -153,6 +153,14 @@ export function useSimple(slug: string): UseSimple {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /* `current()` after every `await`, before any state is set: false means this
      reply is about an article the hook has since moved on from. */
@@ -178,6 +186,7 @@ export function useSimple(slug: string): UseSimple {
           setProfileChanged(false);
           landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
@@ -200,7 +209,7 @@ export function useSimple(slug: string): UseSimple {
         setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the paragraphs away — only the
            opening read has nothing to fall back on. useFaq.ts, useDebate.ts. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
     [slug, begin, landed],

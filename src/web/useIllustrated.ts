@@ -236,6 +236,14 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const profileChanged = shown?.profileChanged ?? false;
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **Keyed on the ids, and the prose is read through a ref.**
@@ -267,6 +275,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
         setFaults([]);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -294,6 +303,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
         setShown(null);
         setFaults(report.faults);
         landed(started, res, null);
+        saidNoneFor.current = slug;
         setStatus("none");
         setError(null);
         return;
@@ -320,7 +330,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, order, begin, landed]);
 

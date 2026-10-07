@@ -24,7 +24,7 @@
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
  * docs/project/skim.md.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Job, Skim, SkimResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
@@ -108,6 +108,14 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
   const [waitingRun, setWaitingRun] = useState<"ensure" | "regenerate" | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /* The read. `current()` after every `await`: src/web/useOrderedRead.ts. */
   const load = useCallback(
@@ -131,6 +139,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
           setNotOnRoute(0);
           landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
@@ -155,7 +164,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         if (!current()) return;
         setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the route away — useFaq.ts. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
     [slug, begin, landed],

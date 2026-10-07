@@ -26,7 +26,7 @@
  * It is the same rule applied at both ends of a wire that has a database and a
  * year in the middle of it.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -131,6 +131,14 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **Keyed on the ids, not on the array.** `blockOrder` is derived in the
@@ -160,6 +168,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         setFaults([]);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -181,6 +190,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         setShown(null);
         setFaults(report.faults);
         landed(started, res, null);
+        saidNoneFor.current = slug;
         setStatus("none");
         setError(null);
         return;
@@ -212,7 +222,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, order, begin, landed]);
 

@@ -630,15 +630,24 @@ describe("a failed recheck, then an ordinary refresh", () => {
 });
 
 /**
- * **Today's behaviour, pinned, and an open question for the owner** (Opus's
- * WCO6; Q-retry-button in the seventh sweep's umbrella). After "none yet", a
- * failed read and a failed *Try again*, the *Find the ideas* button is gone:
- * the retry goes back to *asking*, and a failure with nothing known is
- * *failed*. Tweets keeps its button through the same sequence. Whichever way
- * the owner answers, this is the test that changes.
+ * **After "none yet", a failed *Try again* keeps the button** — the owner's
+ * answer to the seventh sweep's question 4 (Opus's WCO6), relayed by the
+ * Overseer:
+ *
+ * > ok, i'll go along with you on this. I don't quite follow
+ * >
+ * > — Greg, 2026-10-07
+ *
+ * The server has already said there are none, and a failure since does not
+ * unsay it, so the retry ends where Tweets' always did: the empty state with
+ * its *Find the ideas* button, and the failure beside it. While the retry is
+ * out it still looks (*asking*), as before. Until 2026-10-07 this test pinned
+ * the other ending — *failed*, and no button. docs/project/mode.md § The
+ * artefact, if the mode shows one;
+ * docs/plans/261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md.
  */
-describe("none yet, then a failed refresh (today's behaviour; the retry's lost button is an open question)", () => {
-  it("keeps the empty state through the refresh, and loses it to the retry", async () => {
+describe("none yet, then a failed refresh and a failed Try again", () => {
+  it("keeps the empty state and its button through both, with the newest failure beside it", async () => {
     answer(noneYet);
     await mount(["band", "probe"]);
 
@@ -649,25 +658,25 @@ describe("none yet, then a failed refresh (today's behaviour; the retry's lost b
     await refresh.land(broken());
     expect(screen()).toEqual(NONE_RECHECK(FIRST_FAILURE));
 
-    /* Try again: looking, and no button. */
+    /* Try again: looking, while the GET is out. */
     const retry = hold();
     await press("Try again");
     await act(async () => void read?.retryRead());
     expect(screen()).toEqual(ASKING);
     expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
 
-    /* A second failure: the error alone. */
+    /* A second failure: the empty state and its button, and the failure. */
     await retry.land(broken(SECOND_FAILURE));
-    expect(screen()).toEqual(FAILED(SECOND_FAILURE));
-    expect(seen()).toEqual({ is: "failed", ...KNOWN_NOTHING, error: SECOND_FAILURE });
+    expect(screen()).toEqual(NONE_RECHECK(SECOND_FAILURE));
+    expect(seen()).toEqual({ is: "none, recheck failed", ...KNOWN_NOTHING, error: SECOND_FAILURE });
 
-    /* A failure over *failed* is still *failed*, in the newest words. */
+    /* Another failure changes only the words. */
     answer(broken(FIRST_FAILURE));
     await refreshed();
-    expect(screen()).toEqual(FAILED(FIRST_FAILURE));
-    expect(seen().is).toBe("failed");
+    expect(screen()).toEqual(NONE_RECHECK(FIRST_FAILURE));
+    expect(seen().is).toBe("none, recheck failed");
 
-    /* And the way back: the read answers "none yet", and the button returns. */
+    /* And the way back: the read answers "none yet", and the failure goes. */
     answer(noneYet);
     await press("Try again");
     await act(async () => void read?.retryRead());
@@ -675,6 +684,20 @@ describe("none yet, then a failed refresh (today's behaviour; the retry's lost b
     expect(screen()).toEqual(NONE);
     expect(seen()).toEqual({ is: "none", ...KNOWN_NOTHING });
     expect(posted, "no read, failed or retried, ever spends").toEqual([]);
+  });
+
+  it("a failed opening read stays failed through a failed Try again: nothing was ever answered", async () => {
+    answer(broken());
+    await mount(["band", "probe"]);
+    expect(screen()).toEqual(FAILED(FIRST_FAILURE));
+
+    answer(broken(SECOND_FAILURE));
+    await press("Try again");
+    await act(async () => void read?.retryRead());
+    await flush();
+    expect(screen()).toEqual(FAILED(SECOND_FAILURE));
+    expect(seen()).toEqual({ is: "failed", ...KNOWN_NOTHING, error: SECOND_FAILURE });
+    expect(posted).toEqual([]);
   });
 });
 

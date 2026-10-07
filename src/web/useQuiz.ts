@@ -366,6 +366,14 @@ export function useQuizRead(slug: string): QuizRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **The kept answers, as two records that never write to each other.**
@@ -455,6 +463,7 @@ export function useQuizRead(slug: string): QuizRead {
         setFromServer(NOTHING_KEPT);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -495,7 +504,7 @@ export function useQuizRead(slug: string): QuizRead {
          unconditional `error` here would let a flaky connection blank a list
          that was still perfectly good. Same guard, same reason, as
          useTimeline.ts and useIdeas.ts. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, begin, landed]);
 

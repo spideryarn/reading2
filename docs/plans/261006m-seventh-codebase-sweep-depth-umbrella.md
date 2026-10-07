@@ -458,6 +458,9 @@ applies the fix is cheap: carry the existing check to the other side and keep bo
    modes remove their Generate button and Tweets keeps it. Keeping it lets the reader spend on a
    run while the app does not know whether a result already exists. *Recommend:* keep the button
    everywhere; a possible duplicate run is cheaper than a dead end. Per hook, a few lines each.
+   **Answered 2026-10-07: keep it** (*"ok, i'll go along with you on this. I don't quite
+   follow"*, relayed by the Overseer). Built in
+   [261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 1.
 5. **One old rate-limit record in production** (from 2026-09-29, no reader text in it) belongs to a
    limit that no longer exists. The database's list of allowed limit names cannot be tidied while
    it is there. *Recommend:* leave both; deleting it buys nothing at runtime.

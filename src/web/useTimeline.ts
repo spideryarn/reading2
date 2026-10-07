@@ -36,7 +36,7 @@
  *
  * See docs/plans/260831i-timeline-mode.md and src/timeline.ts.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Timeline, TimelineResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -143,6 +143,14 @@ export function useTimelineRead(slug: string): TimelineRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * The read itself — the parse, the "none yet" branch and the error copy, which are
@@ -172,6 +180,7 @@ export function useTimelineRead(slug: string): TimelineRead {
         setOutdated(false);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -198,7 +207,7 @@ export function useTimelineRead(slug: string): TimelineRead {
          flaky connection blank a list that was still perfectly good. Only the
          opening read has nothing to fall back on, and the message is shown
          either way. Same guard, same reason, as useIdeas.ts and useGlossary.ts. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, begin, landed]);
 

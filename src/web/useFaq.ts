@@ -20,7 +20,7 @@
  *
  * docs/project/faq.md, docs/plans/260916d-faq-mode.md.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Faq, FaqResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -111,6 +111,14 @@ export function useFaqRead(slug: string): FaqRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -139,6 +147,7 @@ export function useFaqRead(slug: string): FaqRead {
           setOutdated(false);
           landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
@@ -161,7 +170,7 @@ export function useFaqRead(slug: string): FaqRead {
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
            nothing to fall back on. Same guard as useDebate.ts. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
     [slug, begin, landed],
