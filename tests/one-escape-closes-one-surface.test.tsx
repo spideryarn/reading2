@@ -94,6 +94,7 @@ const { CommentDialog } = await import("../src/web/CommentDialog.js");
 const { ChatDialog } = await import("../src/web/ChatDialog.js");
 const { BlockGutter } = await import("../src/web/BlockGutter.js");
 const { Dock } = await import("../src/web/Dock.js");
+const { DockQuickSearch } = await import("../src/web/DockQuickSearch.js");
 const { useHoverCard } = await import("../src/web/useHoverCard.js");
 const { HOVER_DELAY } = await import("../src/web/useHoverCard.js");
 const { EXPERIMENTAL_OFF } = await import("./helpers/experimental-fixtures.js");
@@ -1144,6 +1145,34 @@ describe("a composing Escape closes none of the three dialogs", () => {
 
 describe("a composing Escape does not close the Dock drawer", () => {
   for (const { how, init } of COMPOSING) {
+    it(`cancels a search box's native clear even though capture contains the key (${how})`, () => {
+      paint(
+        <>
+          {drawer()}
+          <DockQuickSearch slug="a-piece" searching={false} onOpen={() => {}} />
+        </>,
+      );
+      const box = need<HTMLInputElement>("input.dock-qs-input");
+      act(() => box.focus());
+      typeInto(box, "日本語の");
+      const heard: string[] = [];
+      const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+      document.addEventListener("keydown", watch);
+      let escapeKey: KeyboardEvent;
+      try {
+        escapeKey = composingKey(box, "Escape", init);
+      } finally {
+        document.removeEventListener("keydown", watch);
+      }
+      expect(heard).toEqual([]);
+      expect(closed).toEqual([]);
+      expect(escapeKey.defaultPrevented, "capture swallowed the search handler's native-clear cancellation").toBe(true);
+      expect(box.value).toBe("日本語の");
+      expect(document.activeElement).toBe(box);
+      expect(composingKey(box, "Escape", {}).defaultPrevented).toBe(false);
+      expect(closed).toEqual(["drawer"]);
+    });
+
     it(`the drawer stays, and so does the dialog behind it (${how})`, () => {
       paint(
         <>
@@ -1152,7 +1181,7 @@ describe("a composing Escape does not close the Dock drawer", () => {
           {drawer()}
         </>,
       );
-      composingKey(need("#the-prose"), "Escape", init);
+      expect(composingKey(need("#the-prose"), "Escape", init).defaultPrevented).toBe(false);
       expect(closed).toEqual([]);
       expect(host.querySelector(".cmt-dialog")).toBeTruthy();
     });
@@ -1171,6 +1200,39 @@ describe("a composing Escape does not close the Dock drawer", () => {
 });
 
 describe("a composing key in a dialog's own box changes nothing in it", () => {
+  const contained = [
+    { name: "Annotate", node: annotate, selector: ".annotate-dialog textarea" },
+    { name: "Comment's note", node: comment, selector: ".cmt-dialog textarea.cmt-note" },
+    { name: "Comment's follow-up", node: comment, selector: '.cmt-dialog input[type="text"]' },
+  ];
+  for (const subject of contained) {
+    for (const { how, init } of COMPOSING) {
+      it(`${subject.name} contains a composing Escape while its draft is dirty (${how})`, () => {
+        paint(subject.node());
+        const box = need<HTMLTextAreaElement | HTMLInputElement>(subject.selector);
+        typeInto(box, "日本語の");
+        const heard: string[] = [];
+        const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+        document.addEventListener("keydown", watch);
+        try {
+          expect(composingKey(box, "Escape", init).defaultPrevented).toBe(false);
+        } finally {
+          document.removeEventListener("keydown", watch);
+        }
+        expect(heard, "the composing Escape escaped the box").toEqual([]);
+        expect(box.value).toBe("日本語の");
+        expect(closed).toEqual([]);
+        /* Ordinary Escape still restores/clears, then the now-clean box lets
+           the following Escape close the dialog. */
+        composingKey(box, "Escape", {});
+        expect(box.value).toBe(subject.name === "Comment's note" ? COMMENT.body : "");
+        expect(closed).toEqual([]);
+        composingKey(box, "Escape", {});
+        expect(closed).toHaveLength(1);
+      });
+    }
+  }
+
   for (const { how, init } of COMPOSING) {
     it(`Annotate keeps what was typed on Escape (${how})`, () => {
       paint(annotate());
@@ -1196,9 +1258,8 @@ describe("a composing key in a dialog's own box changes nothing in it", () => {
       typeInto(ask, "日本語の");
       composingKey(ask, "Escape", init);
       expect(need<HTMLInputElement>('.cmt-dialog input[type="text"]').value).toBe("日本語の");
-      /* The box sits in a form whose submit asks the AI. The browser's implicit
-         submission is the default action of this keydown, so cancelling it is
-         what stops a candidate being sent as a question. */
+      /* jsdom does not perform implicit submission. This flag verifies the
+         form precaution, not an observed browser submission during composition. */
       expect(composingKey(ask, "Enter", init).defaultPrevented).toBe(true);
       expect(closed).toEqual([]);
     });
@@ -1230,6 +1291,18 @@ describe("a composing key in a dialog's own box changes nothing in it", () => {
   }
 
   /* The controls: without the flag, each of these is the old behaviour. */
+  it("leaves an ordinary masthead Enter uncancelled and the form still saves", () => {
+    const saved: Array<string | null | undefined> = [];
+    paint(<TitleEditor title="A Science of Bumps" onDone={(title) => saved.push(title)} />);
+    const input = need<HTMLInputElement>('input[aria-label="Title"]');
+    typeInto(input, "骨相学");
+    expect(composingKey(input, "Enter", {}).defaultPrevented).toBe(false);
+    /* jsdom has no implicit Enter submission; exercise the same form path
+       explicitly after checking the key handler leaves its default intact. */
+    act(() => input.form?.requestSubmit());
+    expect(saved).toEqual(["骨相学"]);
+  });
+
   it("and an ordinary Escape still clears Annotate's box and cancels the rename", () => {
     paint(
       <>

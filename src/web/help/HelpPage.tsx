@@ -364,6 +364,7 @@ function HelpContents({
   onGo: (anchor: HelpAnchor) => void;
 }) {
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && query !== "") e.stopPropagation();
     /* A key an input method is using is not ours: its Enter accepts a
        candidate and its Escape dismisses the list. A `type="search"` box is
        also emptied by the browser itself on Escape (measured in Chrome,
@@ -380,7 +381,6 @@ function HelpContents({
          (PageContents.tsx), so an empty box's Escape reaches whoever else
          listens — the command bar, the feedback dialog. */
       e.preventDefault();
-      e.stopPropagation();
       onQuery("");
     }
   };

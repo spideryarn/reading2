@@ -1951,7 +1951,13 @@ export function Dock({
       if (e.key !== "Escape") return;
       if (document.querySelector("dialog[open]") !== null) return;
       e.stopImmediatePropagation();
-      if (isImeComposing(e)) return;
+      if (isImeComposing(e)) {
+        /* Capture also prevents the search box's handler from cancelling the
+           browser's native Escape clear. Keep that protection here while the
+           drawer owns the key, without cancelling it in other kinds of box. */
+        if (e.target instanceof HTMLInputElement && e.target.type === "search") e.preventDefault();
+        return;
+      }
       onPanel(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });

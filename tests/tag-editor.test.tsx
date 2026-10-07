@@ -176,6 +176,32 @@ describe("TagEditor", () => {
     expect(save).toHaveBeenCalledWith({ remove: ["b"] });
   });
 
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("contains a composing Escape with suggestions open (%s)", async (_how, init) => {
+    const save = vi.fn(async () => []);
+    paint([], save);
+    await type("仮");
+    expect(box().getAttribute("aria-expanded")).toBe("true");
+    const heard: string[] = [];
+    const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+    document.addEventListener("keydown", watch);
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    try {
+      await act(async () => { box().dispatchEvent(escapeKey); });
+    } finally {
+      document.removeEventListener("keydown", watch);
+    }
+    expect(heard).toEqual([]);
+    expect(escapeKey.defaultPrevented).toBe(false);
+    expect(box().getAttribute("aria-expanded")).toBe("true");
+    expect(box().value).toBe("仮");
+    expect(save).not.toHaveBeenCalled();
+    await press("Escape");
+    expect(box().getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("does nothing on Enter in an empty box", async () => {
     const save = vi.fn(async () => []);
     paint([], save);

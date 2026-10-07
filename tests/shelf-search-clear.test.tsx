@@ -255,18 +255,26 @@ describe("the shelf search's clear cross", () => {
     await show("/?q=attention");
     box().focus();
     const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
-    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
-    await act(async () => {
-      box().dispatchEvent(enter);
-      box().dispatchEvent(escape);
-    });
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    const heard: string[] = [];
+    const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+    document.addEventListener("keydown", watch);
+    try {
+      await act(async () => {
+        box().dispatchEvent(enter);
+        box().dispatchEvent(escapeKey);
+      });
+    } finally {
+      document.removeEventListener("keydown", watch);
+    }
+    expect(heard).toEqual(["Enter"]);
     await settle();
     expect(box().value).toBe("attention");
     expect(document.activeElement).toBe(box());
     expect(enter.defaultPrevented).toBe(false);
     /* Cancelled, because a `type="search"` box is emptied by the browser itself
        on Escape; jsdom has no such default, so this flag is all it can show. */
-    expect(escape.defaultPrevented).toBe(true);
+    expect(escapeKey.defaultPrevented).toBe(true);
   });
 
   it("is the only cross: the browser's own is hidden on this box", async () => {

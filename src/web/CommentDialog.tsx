@@ -871,6 +871,8 @@ export function CommentDialog({
                a half-typed question without warning. Stopped here so the first
                Escape clears the box and the second closes the panel. */
             onKeyDown={(e) => {
+              // Preserve the nonempty box's Escape ownership before returning.
+              if (e.key === "Escape" && followUp) e.stopPropagation();
               /* A key an input method is using is not ours. Its Escape keeps
                  the question; its Enter accepts a candidate, so the form's
                  implicit submit, which asks the AI, is cancelled
@@ -880,7 +882,6 @@ export function CommentDialog({
                 return;
               }
               if (e.key === "Escape" && followUp) {
-                e.stopPropagation();
                 setFollowUp("");
               }
             }}
@@ -1157,6 +1158,8 @@ function CommentBody({
       }}
       onBlur={commit}
       onKeyDown={(e) => {
+        // A changed note contains Escape, including the input method's key.
+        if (e.key === "Escape" && draft !== saved.current) e.stopPropagation();
         /* A key an input method is using is not ours: its Escape dismisses a
            candidate list and must not put the stored words back. */
         if (isImeComposing(e)) return;
@@ -1169,7 +1172,6 @@ function CommentBody({
            away an uncommitted edit without warning. The first Escape puts the
            stored words back; the second closes the panel. */
         if (e.key === "Escape" && draft !== saved.current) {
-          e.stopPropagation();
           setDraft(saved.current);
         }
       }}

@@ -419,18 +419,26 @@ describe("the search box above it (83)", () => {
     const narrowed = entries();
     expect(narrowed.length).toBeGreaterThan(0);
     const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
-    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
-    await act(async () => {
-      searchBox()?.dispatchEvent(enter);
-      searchBox()?.dispatchEvent(escape);
-    });
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    const heard: string[] = [];
+    const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+    document.addEventListener("keydown", watch);
+    try {
+      await act(async () => {
+        searchBox()?.dispatchEvent(enter);
+        searchBox()?.dispatchEvent(escapeKey);
+      });
+    } finally {
+      document.removeEventListener("keydown", watch);
+    }
+    expect(heard).toEqual(["Enter"]);
     await settle();
     expect(searchBox()?.value).toBe("download");
     expect(entries()).toEqual(narrowed);
     expect(enter.defaultPrevented).toBe(false);
     /* Cancelled, because a `type="search"` box is emptied by the browser itself
        on Escape; jsdom has no such default, so this flag is all it can show. */
-    expect(escape.defaultPrevented).toBe(true);
+    expect(escapeKey.defaultPrevented).toBe(true);
   });
 });
 

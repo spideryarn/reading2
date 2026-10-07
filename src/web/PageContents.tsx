@@ -478,6 +478,7 @@ export function PageContents({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Escape" && query !== "") e.stopPropagation();
           /* A key an input method is using is not ours: its Enter accepts a
              candidate and its Escape dismisses the list. A `type="search"`
              box is also emptied by the browser itself on Escape (measured in
@@ -494,7 +495,6 @@ export function PageContents({
             /* Only when there is something to clear, so an Escape in an empty
                box still reaches whatever else on the page listens for it. */
             e.preventDefault();
-            e.stopPropagation();
             setQuery("");
           }
         }}

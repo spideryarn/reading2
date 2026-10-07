@@ -28,13 +28,15 @@ document- or window-level Escape listener, found by grepping `"Enter"`, `"Escape
 | `useEscapeToClose.ts` (Chat, Comment and Annotate dialogs; `window`, bubble) | a composing Escape closed the panel | **fixed**, centrally |
 | `Dock.tsx`, the drawer's listener (`window`, capture) | a composing Escape closed the drawer, before any box could object | **fixed**; the guard is after `stopImmediatePropagation`, so the key is still contained |
 | `Dock.tsx` `useMetadataEscape` | already refuses a composing key and any key while typing | leave |
+| `Dock.tsx` `useMetadataChord` (`window`, bubble) | modified Enter opens Metadata, but already refuses composition and typing through `isModChord` and `isTyping` | leave |
 | `Dock.tsx` `useCommandBarChord`, `fold.ts`, `keynav.ts`, `DockQuickSearch`'s `/`, `TermJump`'s G | not Enter or Escape, and each already refuses composition or typing | leave |
 | `BlockGutter.tsx` (`document`, bubble) | a composing Escape shuts the "…" disclosure | leave: not K2's file; costs a disclosure, never text |
 | `useHoverCard.ts` (`document`, capture) | a composing Escape shuts an open hover card | leave: not K2's file; costs a card, never text |
 | `BlockLinkCard.tsx` (`document`) | the same for a link's hover card | leave: the same |
 | `TermJump.tsx` `onEscape` (`document`) | sends focus back to the paragraph, but only while focus is in the glossary list after a G jump; no text box is in that list | leave: not reachable while composing |
-| Floating UI `useDismiss` (`Tooltip`, `ProfilePanel`, Search's colour picker) | the library's own; not ours to guard | leave. `ProfilePanel` holds a text box: not measured, see § Left |
-| Radix `Popover` in `ShelfTags.tsx` (`onEscapeKeyDown`) | **a composing Escape closes the tag popover and drops the typed tag**: Radix hears Escape on `document` before `TagEditor` can | **not fixed: `ShelfTags.tsx` is in no cluster's manifest.** One line there closes it, see § Left |
+| Floating UI `useDismiss` (`Tooltip`, `ProfilePanel`, Search's colour picker) | the installed library tracks `compositionstart` / `compositionend` and refuses Escape until composition settles, with a 5ms grace on WebKit | leave; browser behaviour not measured, see § Left |
+| Radix `Popover` in `ShelfTags.tsx` (`onEscapeKeyDown`) | **a composing Escape can close the tag popover when suggestions are hidden**: Radix hears Escape on `document` before `TagEditor` can; its existing expanded-list check already prevents dismissal while suggestions are shown | **not fixed: `ShelfTags.tsx` is in no cluster's manifest.** One composition check there closes it, see § Left |
+| `ModeHerald.tsx` (`document`, capture) | any key inside the band, including composing Enter or Escape, dismisses the introductory herald | leave: outside K2's manifest; its existing first-use behaviour |
 | Native `<dialog>` (Lightbox, Feedback, command bar, Sketch, Illustrated) | the platform's close request | leave: not a listener |
 
 ### Text boxes
@@ -57,7 +59,7 @@ document- or window-level Escape listener, found by grepping `"Enter"`, `"Escape
 | `CommandBar.tsx` | read only `nativeEvent.isComposing`, after `preventDefault`; its arrows moved the selection while the input method's own list was open | **fixed**: the helper, first, before any `preventDefault` |
 | Debate's lens box, Candidates' box | already right (`isImeComposing`, `isSendEnter`) | leave |
 | Quiz, Feedback, ProfileBox, the Add page: ⌘/Ctrl-Enter | a modified Enter is not how a candidate is accepted | leave (the umbrella's own example) |
-| Annotate's and Comment's ⌘/Ctrl-Enter | the same; and both now return on any composing key first | covered by the guard above |
+| Annotate's and Comment's ⌘/Ctrl-Enter | the same; both preserve their conditional Escape containment before returning on a composing key | covered by the guard above |
 | Sign-in email, new-password first box: Enter moves focus | a focus move, in boxes nobody composes in | leave (the umbrella's own example) |
 | Glossary's "ask a term" box (`GlossaryPanel.tsx`) | no key handler. `type="search"`, so Chrome empties it on a composing Escape; in a form whose submit runs a model call | **not fixed: K4 owns the file.** See § Left |
 | Criteria's two one-line boxes (`CriteriaPanel.tsx`), the Add-article URL box, the voucher forms | no key handler; each in a form | leave: not K2's files, and implicit submit on a composing Enter is a hypothesis, see § Left |
@@ -71,17 +73,18 @@ nothing to clear (Annotate's box when empty, Comment's follow-up when empty, Com
 unchanged); any press made outside a box while a dialog or the drawer is open; and every box at
 all while the drawer is open, since its listener runs first. What they cannot cover is a box whose
 own handler acts before the key reaches `window`: the clears, cancels and saves in the table above.
-Those are the per-box edits, one line each.
+Those require per-box guards, after any conditional or unconditional propagation stop.
 
 ## What landed
 
-- The two shared listeners, then the twelve handlers above, each one `isImeComposing` test.
+- The two shared listeners and the fourteen per-box handlers above use `isImeComposing`.
 - **Found in the browser, not in the plan: a `type="search"` box is emptied by Chrome itself on
   Escape.** With the handler's guard alone, Help's and the shelf's boxes still lost their text on a
   composing Escape, because the handler used to `preventDefault` the key and no longer did. So the
   five search-type boxes in this cluster (`SearchPanel`, `DockQuickSearch`, `Library`, `HelpPage`,
   `PageContents`) cancel a composing Escape and do nothing else with it. jsdom has no such default,
-  so the unit tests can only assert the flag.
+  so the unit tests can only assert the flag. The drawer cancels the same default for a composing
+  Escape targeted at a search input: its capture listener prevents the input's handler from running.
 - `PageContents.tsx`'s entries: `outline-none` replaced by a 2px outline at offset −2px in
   `--highlight-text`, the idiom `BackLink.tsx` uses plus the negative offset. The colour change on
   focus stays.
@@ -163,17 +166,24 @@ second writes a title, if the fix were wrong). All four are covered by the unit 
 
 ## Left, and why
 
-- **`ShelfTags.tsx`: a composing Escape closes the tag popover and drops the typed tag** (C: Radix
-  listens on `document`, and `onEscapeKeyDown` there asks only whether the suggestion list is
-  open). Not in any cluster's manifest, so not edited. The fix is one test in that callback:
+- **`ShelfTags.tsx`: a composing Escape can close the tag popover when suggestions are hidden**
+  (C: Radix listens on `document`, and `onEscapeKeyDown` there protects only an expanded suggestion
+  list). With suggestions shown, the existing check already prevents dismissal. Not in any
+  cluster's manifest, so not edited. The fix is one test in that callback:
   `preventDefault` when the event is composing.
 - **`GlossaryPanel.tsx`'s "ask a term" box**: `type="search"` with no key handler, so a composing
   Escape empties it in Chrome, as Help's did. K4 owns the file.
 - **Forms outside this cluster** (`GlossaryPanel`'s ask box, `CriteriaPanel`'s two one-line boxes,
   the Add-article URL box, the voucher forms, sign-in): implicit submit on a composing Enter is H,
   not reproduced, for the reason above.
+- **The new-password form** (`SetNewPassword.tsx`): the first box's Enter moves focus as listed
+  above; the second can submit implicitly. Composing submission remains unmeasured, like the
+  other forms outside this cluster.
 - **`ProfilePanel`'s popover** holds a text box and closes through Floating UI's `useDismiss`.
-  Whether that library ignores a composing Escape was not measured.
+  The installed implementation tracks composition events and protects Escape; browser behaviour
+  was not measured.
+- **`ModeHerald.tsx`** dismisses its introductory card on any key inside the band, including a
+  composing Enter or Escape. Outside K2's manifest; no change made.
 - **The four `document` listeners** (`BlockGutter`, `useHoverCard`, `BlockLinkCard`, `TermJump`):
   a composing Escape can still shut a hover card or a disclosure. None loses text.
 - `DockQuickSearch.tsx` § `isQuickSearchKey` and `TermJump.tsx` spell the composition test out by
@@ -182,4 +192,30 @@ second writes a title, if the fix were wrong). All four are covered by the unit 
 
 ## Review status
 
-GPT Sol code review: pending.
+[GPT Sol code review](261007a-ui-sweep-k2-code-review-sol.md) of `67ce4c833`, one round, all three findings kept and none overruled. It found two defects, fixed red-first in this worktree:
+
+- **Early-return guards bypassed conditional event ownership.** Seven handlers (Annotate,
+  Comment's note and follow-up, TagEditor, Library, Help and PageContents) returned before their
+  existing conditional `stopPropagation`. The drafts survived but composing Escape reached
+  `document` where an ordinary Escape was contained. Fourteen cases, one per handler and flag,
+  failed on that propagation difference. The stops now precede the composition guards under
+  exactly their old conditions. TagEditor's native-flag bypass predates this candidate; the
+  candidate extended it to 229. The other six bypasses were introduced here. The original tests
+  checked draft state and panel closure without watching the intermediate listener tier.
+- **Capture swallowed native-default protection.** With a real `DockQuickSearch` mounted beside
+  the drawer, both composition spellings reached the drawer's capture stop but left
+  `defaultPrevented` false, because the input handler never ran. The drawer now cancels this
+  default only for a composing Escape targeted at a search input. These tests establish the
+  missing cancellation; the consequent Chrome clear follows from the browser measurement above,
+  and was not remeasured during review.
+
+The census also gained the Metadata Enter chord, the herald's dismissal listener and the
+new-password form, and qualified ShelfTags' hidden-suggestion case and Floating UI's existing
+composition tracking. Wider behaviour was left alone.
+
+Final validation: 330 tests passed across eleven single-file runs (the ten touched candidate
+test files and `doc-links`). Typechecking passed for all four projects and covered 3338 source
+files. `npm run typecheck` could not create tsx's IPC socket in the review sandbox, so the same
+script was run as `node --import tsx scripts/typecheck.ts`. Scoped lint checked twelve files with
+no errors and three informational complexity notices. `git diff --check` passed. No browser,
+whole-suite run or commit was made. Verdict: **ready with these fixes**.

@@ -161,6 +161,8 @@ export function TagEditor({
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one keyboard protocol, kept together so its precedence is visible
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Preserve the open list's Escape ownership, including a composing key.
+    if (!busy && e.key === "Escape" && shown) e.stopPropagation();
     /* Enter is how an IME accepts its current composition. Treating that same
        event as our submit would save a partial CJK tag. */
     if (isImeComposing(e)) return;
@@ -191,7 +193,6 @@ export function TagEditor({
       /* Close the list, and stop there: a popover around this box closes on
          the next Escape, not on this one. */
       e.preventDefault();
-      e.stopPropagation();
       setOpen(false);
     }
   }

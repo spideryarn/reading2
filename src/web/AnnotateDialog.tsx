@@ -639,6 +639,8 @@ export function AnnotateDialog({
             readOnly={dictate.readOnly}
             onChange={(e) => changeBody(e.target.value)}
             onKeyDown={(e) => {
+              // Keep a dirty box's Escape contained even during composition.
+              if (e.key === "Escape" && body) e.stopPropagation();
               /* A key an input method is using is not ours. Its Escape
                  dismisses a candidate list and must not empty the box; the
                  window listener below asks the same and leaves the panel up. */
@@ -648,7 +650,6 @@ export function AnnotateDialog({
                  Escape clears the box and the second closes the panel — the
                  same two-stage escape the follow-up box has. */
               if (e.key === "Escape" && body) {
-                e.stopPropagation();
                 changeBody("");
                 return;
               }

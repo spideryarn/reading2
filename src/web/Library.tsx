@@ -1225,6 +1225,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              with nothing behind it. */
           enterKeyHint="search"
           onKeyDown={(e) => {
+            if (e.key === "Escape" && value !== "") e.stopPropagation();
             /* A key an input method is using is not ours: its Enter accepts a
                candidate and its Escape dismisses the list. A `type="search"`
                box is also emptied by the browser itself on Escape (measured in
@@ -1241,7 +1242,6 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
                  box still reaches whatever else on the page listens for it —
                  the same rule as PageContents.tsx's box. */
               e.preventDefault();
-              e.stopPropagation();
               onChange("");
             }
           }}
