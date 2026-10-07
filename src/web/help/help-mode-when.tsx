@@ -14,8 +14,8 @@
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { MODES, type Mode } from "../../modes.js";
 import { MODE_LABEL } from "../../title-text.js";
-import { modeAnchor } from "./help-anchors.js";
-import { HelpAnchorLink, onePageHref, type HelpHrefFor } from "./help-parts.js";
+import { helpHref, modeAnchor } from "./help-anchors.js";
+import { PageLink } from "./help-parts.js";
 
 /**
  * **"Reach for it when…"**, one line per mode, for the table in "Which mode
@@ -50,12 +50,10 @@ const CELL = "tw:border-b tw:border-rule tw:py-1.5 tw:align-top tw:text-left";
  * **The "Which mode when" table**, every mode in `MODES` order. Two columns
  * that wrap rather than scroll: on a 390px phone the name column takes only
  * its longest word, and the experimental marker sits under the name rather
- * than beside it so it does not widen that column.
- *
- * `hrefFor` says where a mode's name links to: one page of fragments unless
- * the caller says otherwise (help-parts.tsx § HelpHrefFor).
+ * than beside it so it does not widen that column. A mode's name is a link
+ * to its page.
  */
-export function ModesTable({ hrefFor = onePageHref }: { hrefFor?: HelpHrefFor }) {
+export function ModesTable() {
   return (
     <table className="tw:w-full tw:border-collapse tw:text-sm">
       <thead>
@@ -72,7 +70,7 @@ export function ModesTable({ hrefFor = onePageHref }: { hrefFor?: HelpHrefFor })
         {MODES.map((m) => (
           <tr key={m}>
             <th scope="row" className={`${CELL} tw:pr-3 tw:font-normal`}>
-              <HelpAnchorLink href={hrefFor(modeAnchor(m))}>{MODE_LABEL[m]}</HelpAnchorLink>
+              <PageLink href={helpHref(modeAnchor(m))}>{MODE_LABEL[m]}</PageLink>
               {MODE_CATALOG[m].experimental && (
                 <span className="tw:block tw:text-xs tw:text-ink-faint">experimental</span>
               )}

@@ -2619,19 +2619,19 @@ const NOT_A_MODE = {
 } as const;
 
 /**
- * **Where the Help link opens**: the section for the mode the band is in, or
+ * **Where the Help link opens**: the page of Help for the mode the band is in, or
  * the reading view's when there is no band to explain.
  *
- * Plain has a section of its own (`mode-plain`), but in Plain the screen is the
+ * Plain has a page of its own (`mode-plain`), but in Plain the screen is the
  * reading view and nothing else, so that is what a reader pressing Help there
  * is asking about. Marginalia's column with no band is the same case — it is a
  * column beside the prose, not a mode the band is in — and it arrives here as
  * `plain`, because `mode` is the band (`BandMode` excludes it). Off the reading
  * view `mode` is undefined, and the page you are on is not a mode either.
  *
- * Through `helpHref`, never a hand-built `/help#…`: a mode retired or a section
- * renamed then turns this red at typecheck rather than into a link that opens
- * at the top (help-anchors.ts § Typed). Exported for the tests.
+ * Through `helpHref`, never a hand-built `/help/…`: a mode retired or a page
+ * renamed then turns this red at typecheck rather than into a link to a page
+ * that is not there (help-anchors.ts § Typed). Exported for the tests.
  */
 export function helpHrefFor(mode: BandMode | undefined): string {
   if (mode === undefined || mode === "plain") return helpHref("the-reading-view");
@@ -3562,7 +3562,7 @@ function DockCommandBar({
  * > to make sure that if people need help, they can get to it.
  *
  * So from 2026-10-04 it was drawn on a visitor's bar only: gone wherever the
- * command bar is, whose Help row opens the same section (`helpRow` in
+ * command bar is, whose Help row opens the same page (`helpRow` in
  * CommandBar.tsx), and kept for a visitor, who has no command bar
  * (`DockCommands`, `DockCommandBar`) —
  * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
@@ -3583,7 +3583,7 @@ function DockCommandBar({
  * the app rather than about this article, and the two are the conventional
  * pair — *how does this work* and *this does not work*.
  *
- * **Contextual**: `href` is `helpHrefFor`'s, the section for the mode the band
+ * **Contextual**: `href` is `helpHrefFor`'s, the page of Help for the mode the band
  * is in, or the reading view's in Plain and off the reading view. A real link
  * in the same tab, so Back returns to the article with its address, mode and
  * place intact, and ⌘-click opens Help beside it.

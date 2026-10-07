@@ -2,6 +2,7 @@
 title: Telling us something
 summary: How to send us a problem or a suggestion, and exactly what is sent with it.
 keywords: feedback bug report problem suggestion idea contact help broken error screenshot diagnostics support shipped
+related: whats-new, faq-missing-parts
 ---
 
 When you are signed in, the **Feedback** button is at the right-hand end of the bottom bar in the

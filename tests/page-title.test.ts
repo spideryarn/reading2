@@ -188,6 +188,16 @@ describe("the pages either side of an article", () => {
   });
 });
 
+describe("Help", () => {
+  /* tests/site-pages.test.ts holds the first to what the server pre-renders
+     for `/help`; a page of Help is not pre-rendered and leads with its own
+     heading. */
+  it("is one word for the contents, and the page's heading first for a page of it", () => {
+    expect(pageTitle({ kind: "help" })).toBe(`Help${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "help", page: "Reading the spine" })).toBe(`Reading the spine${SEP}Help${SEP}${APP_NAME}`);
+  });
+});
+
 describe("every title, whatever the page", () => {
   const every = [
     { kind: "library" },
@@ -204,6 +214,7 @@ describe("every title, whatever the page", () => {
     { kind: "pricing" },
     { kind: "contact" },
     { kind: "help" },
+    { kind: "help", page: "Reading the spine" },
     { kind: "landing" },
     { kind: "not-found" },
     { kind: "login" },

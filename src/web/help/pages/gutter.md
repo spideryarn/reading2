@@ -2,6 +2,7 @@
 title: The margin beside each paragraph
 summary: The controls that appear beside a paragraph when you point at it or tap it, and what each one does.
 keywords: gutter icons paragraph link copy permalink bookmark chat ask ai help question mark dots more
+related: comments, linking-to-a-passage, spine
 ---
 
 The narrow margin beside each paragraph stays empty until you point at the paragraph (or tap it on a

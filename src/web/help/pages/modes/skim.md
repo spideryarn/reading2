@@ -1,5 +1,6 @@
 ---
 keywords: skimming quick read route spiral trajectory stops depth gist more most tour fast overview
+related: mode-quotes, mode-structure
 ---
 
 ## When to use it

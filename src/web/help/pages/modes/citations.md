@@ -1,5 +1,6 @@
 ---
 keywords: references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance
+related: mode-debate, faq-beyond-the-article
 ---
 
 ## When to use it

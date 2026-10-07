@@ -2,6 +2,7 @@
 title: Comments and bookmarks
 summary: How to highlight words, write a note on them, bookmark a paragraph, and find or remove what you have marked.
 keywords: comment note annotate highlight bookmark mark save passage select text ask ai question drawer list delete
+related: gutter, sharing, your-data
 ---
 
 **Select a few words in the article** and they are highlighted in yellow straight away. A box opens

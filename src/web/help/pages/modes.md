@@ -2,6 +2,7 @@
 title: Which mode when
 summary: A table of every mode and when to reach for it, so you can pick by the question you have.
 keywords: choose pick compare list overview bottom bar buttons what does each do
+related: experimental-features, the-reading-view, first-article
 ---
 
 The buttons in the bottom bar are the modes. Each shows the same article a different way, in a panel

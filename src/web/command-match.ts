@@ -29,7 +29,11 @@ import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Mode } from "../modes.js";
 import { type ArgumentKind, PICK_SLUG, type PickKey, type PickOption } from "../command-pick.js";
+import { HELP_HREF } from "./router.js";
 import { subModeWords, type SubMode } from "./sub-modes.js";
+
+/** `/help`, or one page of it: router.ts § `helpRoute`. See `pickKey`. */
+const HELP_PAGE_PATH = new RegExp(`^${HELP_HREF}(?:/[^/]+)?/?$`);
 
 /**
  * **What a row that is not a mode has to carry** — its own words, because
@@ -380,17 +384,28 @@ export function commandId(command: Command): string {
  * **The id is `commandId` with everything about *this* visit taken out of a
  * page's address**, so one list on the server serves every article and every
  * place in it: the slug becomes `PICK_SLUG`, and the query string and the
- * fragment go. `page:/read/my-paper/metadata?at=spya-k3m9qt` and the Help row's
- * `page:/help#glossary` are sent as `page:/read/:slug/metadata` and
- * `page:/help`. Nothing else in an id varies by article.
+ * fragment go, and so does which page of Help. `page:/read/my-paper/metadata?at=spya-k3m9qt`
+ * and the Help row's `page:/help/mode-glossary` are sent as
+ * `page:/read/:slug/metadata` and `page:/help`. Nothing else in an id varies
+ * by article.
+ *
+ * **Help is one row whatever page of it the row opens.** The bar has a single
+ * Help row, whose address is the page for the mode the reader is in
+ * (`/help/mode-glossary`, and `/help#mode-glossary` until 2026-10-07, when the
+ * fragment rule above covered it). The server's list holds `page:/help` once;
+ * a key it does not hold is dropped (src/command-pick-call.ts § knownOptions),
+ * so without this the row would silently stop being something a model can
+ * pick. One segment only, as the router reads it. GPT Sol, plan review, R1:
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
  *
  * A key is for matching, never for acting: what runs is the row the bar holds
- * today, found again by this function (CommandBar.tsx).
+ * today, found again by this function (CommandBar.tsx), with its own `href`.
  */
 export function pickKey(command: Command, slug?: string): PickKey {
   const { label } = commandText(command);
   if (command.kind !== "page") return { id: commandId(command), label };
   const path = command.href.split(/[?#]/, 1)[0] ?? "";
+  if (HELP_PAGE_PATH.test(path)) return { id: `page:${HELP_HREF}`, label };
   const own = slug === undefined ? null : `/read/${encodeURIComponent(slug)}`;
   const shared =
     own !== null && (path === own || path.startsWith(`${own}/`)) ? `/read/${PICK_SLUG}${path.slice(own.length)}` : path;

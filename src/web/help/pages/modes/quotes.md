@@ -1,5 +1,6 @@
 ---
 keywords: quotations excerpts best lines highlights highlighter memorable sentences purple important striking keep
+related: mode-skim
 ---
 
 ## When to use it

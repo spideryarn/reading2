@@ -2,6 +2,7 @@
 title: Your shelf, and the topics above it
 summary: How to search, sort and filter the articles you have added, and where the topics above them come from.
 keywords: library home homepage articles list sort order filter unread table cards topics tags categories find
+related: adding-articles, sharing, faq-find-archived
 ---
 
 Your shelf is every article you have added. The search box above it does two jobs: it narrows the

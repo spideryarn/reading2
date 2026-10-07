@@ -27,16 +27,16 @@
  * `**strong**`, `*emphasis*`, `` `code` ``, links, and one piece of HTML:
  * `<kbd>…</kbd>`. The elements that come out are exactly the ones the words
  * were made of when they were TSX (`p`, `ul`, `li`, `strong`, `em`, `code`,
- * `kbd`, `a`), with no class of their own: HelpPage.tsx § HelpSectionView
+ * `kbd`, `a`), with no class of their own: HelpPage.tsx § `WORDS_CLASS`
  * styles them once, by element.
  *
- * ## Links are final addresses, and the page decides what to do with them
+ * ## Links are final addresses, and every one is checked
  *
  * A file says `/help/spine`, `/help/questions#faq-older-profile`, `/pricing`,
  * so it reads correctly on GitHub and to a model handed it raw. A `/help/…`
- * link is turned back into its anchor and given to the caller's `hrefFor`
- * (help-parts.tsx § HelpHrefFor), and one that names no live anchor throws.
- * Any other site path is the router's `Link`.
+ * link is turned back into its anchor, and one that names no live anchor
+ * throws: that is the guard a typed `HelpRef` gave when the words were TSX.
+ * Every link is the router's `Link` (help-parts.tsx § PageLink).
  *
  * ## The tokens
  *
@@ -61,10 +61,10 @@ import { MODE_CATALOG } from "../../mode-catalog.js";
 import { MODES } from "../../modes.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { CHANGELOG_LABEL, HELP_HREF } from "../router.js";
-import { resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
+import { helpHref, resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
 import { MODE_WHEN, ModesTable } from "./help-mode-when.js";
 import { helpPageBody } from "./help-pages.js";
-import { HelpAnchorLink, HelpSub, PageLink, type HelpHrefFor } from "./help-parts.js";
+import { HelpSub, PageLink } from "./help-parts.js";
 
 /* ───────────────────────────── the tokens ───────────────────────────── */
 
@@ -235,7 +235,6 @@ export function targetOf(url: string, where: string): Target {
 /* ───────────────────────────── as React ───────────────────────────── */
 
 interface Ctx {
-  hrefFor: HelpHrefFor;
   /** Which file, for the message when something in it is refused. */
   where: string;
 }
@@ -266,12 +265,11 @@ function drawInline(node: PhrasingContent, key: number, ctx: Ctx): ReactNode {
     case "link": {
       const target = linkTarget(node, ctx.where);
       const children = drawInlines(node.children, ctx);
-      return target.kind === "help" ? (
-        <HelpAnchorLink key={key} href={ctx.hrefFor(target.anchor)}>
-          {children}
-        </HelpAnchorLink>
-      ) : (
-        <PageLink key={key} href={target.href}>
+      /* `helpHref` of the anchor and not the file's own spelling: they are
+         the same today (`targetOf` refuses anything else), and if the two
+         ever part, the address code builds is the one that is kept working. */
+      return (
+        <PageLink key={key} href={target.kind === "help" ? helpHref(target.anchor) : target.href}>
           {children}
         </PageLink>
       );
@@ -301,11 +299,13 @@ function drawList(list: List, key: number, ctx: Ctx): ReactNode {
 function drawBlock(node: RootContent, key: number, ctx: Ctx): ReactNode {
   switch (node.type) {
     case "paragraph":
-      if (isTableToken(node)) return <ModesTable key={key} hrefFor={ctx.hrefFor} />;
+      if (isTableToken(node)) return <ModesTable key={key} />;
       return <p key={key}>{drawInlines(node.children, ctx)}</p>;
     case "heading":
       /* One level, drawn as the small subheading a mode's two halves have
-         always had. A page's own title is its front matter, never a `#`. */
+         always had. A page's own title is its front matter, never a `#`.
+         A mode's own two headings do not come this way: the page draws
+         those itself (§ renderHelpModeHalves). */
       if (node.depth !== 2) throw new Error(`Help page ${ctx.where}: only ## headings are drawn`);
       return <HelpSub key={key}>{drawInlines(node.children, ctx)}</HelpSub>;
     case "list":
@@ -319,12 +319,9 @@ function drawBlocks(nodes: readonly RootContent[], ctx: Ctx): ReactNode {
   return nodes.map((node, i) => drawBlock(node, i, ctx));
 }
 
-/**
- * **One file's body as elements.** `where` names the file in any error.
- * `hrefFor` is where a link to another Help anchor should point.
- */
-export function renderHelpMarkdown(markdown: string, hrefFor: HelpHrefFor, where: string): ReactNode {
-  return drawBlocks(fromMarkdown(markdown).children, { hrefFor, where });
+/** **One file's body as elements.** `where` names the file in any error. */
+export function renderHelpMarkdown(markdown: string, where: string): ReactNode {
+  return drawBlocks(fromMarkdown(markdown).children, { where });
 }
 
 /** The two headings a mode's file may have, spelled exactly so. */
@@ -333,7 +330,7 @@ type ModeHalf = keyof typeof MODE_HEADINGS;
 
 /**
  * **A mode's file, as its two halves**, each null when the file leaves it out
- * (the page draws nothing for a null: help-parts.tsx § HelpModeExtra). The
+ * (the page draws nothing for a null: help-content.tsx § helpBody). The
  * headings are not drawn here: the page puts its own above each half, as it
  * always has.
  *
@@ -341,11 +338,7 @@ type ModeHalf = keyof typeof MODE_HEADINGS;
  * whole half under the wrong name or drop it: nothing before the first
  * heading, only these two headings, each at most once, in this order.
  */
-export function renderHelpModeHalves(
-  markdown: string,
-  hrefFor: HelpHrefFor,
-  where: string,
-): Record<ModeHalf, ReactNode | null> {
+export function renderHelpModeHalves(markdown: string, where: string): Record<ModeHalf, ReactNode | null> {
   const halves: Record<ModeHalf, RootContent[] | null> = { whenToUse: null, reading: null };
   let into: RootContent[] | null = null;
   for (const node of fromMarkdown(markdown).children) {
@@ -365,7 +358,7 @@ export function renderHelpModeHalves(
     into = [];
     halves[half] = into;
   }
-  const ctx: Ctx = { hrefFor, where };
+  const ctx: Ctx = { where };
   return {
     whenToUse: halves.whenToUse === null ? null : drawBlocks(halves.whenToUse, ctx),
     reading: halves.reading === null ? null : drawBlocks(halves.reading, ctx),

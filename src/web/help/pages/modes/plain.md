@@ -1,5 +1,6 @@
 ---
 keywords: article text only close exit back to reading no panel clean distraction free default
+related: the-reading-view
 ---
 
 ## When to use it

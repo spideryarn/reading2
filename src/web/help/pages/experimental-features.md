@@ -2,6 +2,7 @@
 title: Experimental features
 summary: How to turn on the features that are still being built, and what you get when you do.
 keywords: beta labs unfinished new switch toggle flask hidden modes missing more modes settings turn on
+related: modes, whats-new
 ---
 
 Some features are still being built, and stay hidden until you turn on **Experimental features**.

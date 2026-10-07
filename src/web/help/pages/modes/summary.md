@@ -1,5 +1,6 @@
 ---
 keywords: summarise short version tldr gist overview plain english simple brief fuller explain level length thread tweets twitter x bluesky social share post copy numbered
+related: mode-structure, reader-profile
 ---
 
 ## When to use it

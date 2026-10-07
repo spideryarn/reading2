@@ -250,6 +250,53 @@ describe("searchSections's question furniture", () => {
   });
 });
 
+/* Help gives each page its words as well (page-search.ts § Help does search
+   the text). Metadata gives none, so everything above this is unchanged by
+   it. GPT Sol, plan review of 261007e, R4. */
+describe("searchSections reads a section's body last", () => {
+  const pages: SearchableSection[] = [
+    { id: "spine", label: "Reading the spine", keywords: "heat rail", aside: "", body: "A part that fills half the piece fills half the strip." },
+    { id: "keyboard", label: "Keyboard shortcuts", keywords: "keys", aside: "", body: "Press the spine key to jump. Proportional type is not used here." },
+    { id: "touch", label: "On a phone", keywords: "tablet", aside: "Reading by touch", body: "The strip is narrower." },
+  ];
+  const ask = (q: string) => searchSections(q, pages, []);
+
+  it("finds a page by a phrase that only its words hold", () => {
+    expect(ask("fills half the strip")).toEqual(["spine"]);
+    expect(ask("narrower")).toEqual(["touch"]);
+  });
+
+  it("puts a page found by its words below every page found by its name, keywords or aside", () => {
+    /* `spine` is the first page's name and only a word in the second's body. */
+    expect(ask("spine")).toEqual(["spine", "keyboard"]);
+    /* Even when the body's page comes first on the page, and the other's hit is only its aside. */
+    expect(ask("reading")).toEqual(["spine", "touch"]);
+    expect(ask("strip touch")).toEqual(["touch"]);
+  });
+
+  it("puts a page that needed its words for any one word below one that needed them for none", () => {
+    /* `a` has one word in its name, which outweighs both of `b`'s asides on a
+       plain sum; but it needed its body for the other, so it comes second. */
+    const both: SearchableSection[] = [
+      { id: "a", label: "Spine", keywords: "", aside: "", body: "press the keys" },
+      { id: "b", label: "Other", keywords: "", aside: "spine keys", body: "" },
+    ];
+    expect(searchSections("spine keys", both, [])).toEqual(["b", "a"]);
+  });
+
+  it("stems, takes a prefix and uses the synonym table in a body as anywhere else", () => {
+    expect(ask("filling")).toEqual(["spine"]);
+    expect(ask("narrow")).toEqual(["touch"]);
+    expect(searchSections("slimmer", pages, [["slimmer", "narrower"]])).toEqual(["touch"]);
+  });
+
+  it("changes nothing for a section with no body", () => {
+    const bare = pages.map(({ body: _body, ...rest }) => rest);
+    expect(searchSections("spine", bare, [])).toEqual(["spine"]);
+    expect(searchSections("narrower", bare, [])).toEqual([]);
+  });
+});
+
 /* `groupsOf` keeps the last group a stem appears in, silently — so a word in
    two groups loses its first meaning with no error. Checked on stems, since two
    spellings can stem to one word. GPT Sol, plan review of 261002c, P2. */

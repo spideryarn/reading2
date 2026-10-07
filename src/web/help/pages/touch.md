@@ -2,6 +2,7 @@
 title: Phones and tablets
 summary: What works differently on a phone or tablet, from tapping twice on the spine to selecting words.
 keywords: phone mobile ipad tablet touch small screen narrow landscape portrait home screen gestures long press tap twice
+related: keyboard, the-reading-view
 ---
 
 Spideryarn works best on a large screen. On a phone or tablet, these work differently:

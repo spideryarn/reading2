@@ -2,6 +2,7 @@
 title: The parts of the reading view
 summary: The parts of the screen while you read: the spine, the article, a mode’s panel, Marginalia and the bottom bar.
 keywords: layout screen columns panel left right bottom bar buttons where what am i looking at interface overview
+related: spine, gutter, modes, keyboard
 ---
 
 - **The spine** is the thin strip down the left edge: a map of the whole article, each part as tall

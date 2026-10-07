@@ -37,18 +37,24 @@ against the code is left out rather than guessed.
 
 ## Where the words live
 
-All in `src/web/help/`, as TSX — there is no Markdown renderer in the client, and a page we write
-ourselves does not need one.
+All in `src/web/help/`. **Since 2026-10-07 the words are Markdown, one file per anchor, under
+`src/web/help/pages/`**, and Help is a contents page at `/help` with a page for each topic, mode and
+guide at `/help/<anchor>` and the questions together at `/help/questions` — plan
+[261007e](../plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md).
+(The rest of this doc still describes the one long page it was before, and is being rewritten as
+that plan's next stage; where the two disagree, the plan and the code are right.)
 
 - [`help-anchors.ts`](../../src/web/help/help-anchors.ts) — every anchor, the `HelpAnchor` type,
-  `helpHref(anchor)`, and the aliases for retired anchors.
-- [`help-content.tsx`](../../src/web/help/help-content.tsx) — the groups that say the sections'
-  order. The sections themselves are split by kind: topics are a `Record<HelpTopic, …>` in
-  [`help-topics.tsx`](../../src/web/help/help-topics.tsx), modes a `Record<Mode, …>` (and the
-  "Which mode when" table) in [`help-modes.tsx`](../../src/web/help/help-modes.tsx), the questions in
-  [`help-faq.tsx`](../../src/web/help/help-faq.tsx), shared bits in
+  `helpHref(anchor)`, the aliases for retired anchors, and what an address under `/help` shows.
+- [`help-pages.ts`](../../src/web/help/help-pages.ts) — the four tables that load the files: topics
+  a `Record<HelpTopic, …>`, modes a `Record<Mode, …>`, the questions and the guides.
+  [`help-markdown.tsx`](../../src/web/help/help-markdown.tsx) draws a file, and
+  [`help-mode-when.tsx`](../../src/web/help/help-mode-when.tsx) is the "Which mode when" table.
+- [`help-content.tsx`](../../src/web/help/help-content.tsx) — the groups that say the pages' order,
+  and each page's title, line and words gathered into one shape; shared bits in
   [`help-parts.tsx`](../../src/web/help/help-parts.tsx).
-- [`HelpPage.tsx`](../../src/web/help/HelpPage.tsx) — the page: contents, search, arrival.
+- [`HelpPage.tsx`](../../src/web/help/HelpPage.tsx) — what draws it: the contents page, a page,
+  search, arrival.
 
 **A mode's section does not restate the mode.** Its heading is `MODE_LABEL`, and its first two
 paragraphs are `MODE_CATALOG`'s `description` and `how` — the same words as the dock's card and the

@@ -1573,20 +1573,20 @@ describe("the help command", () => {
     }
   });
 
-  /* The same section the Dock's Help link opens at, because the two are built
+  /* The same page of Help the Dock's Help link opens, because the two are built
      from one function — a reader who learned one door has learned the other. */
-  it("goes to the section for the mode the band is in, and in Plain to the reading view", () => {
+  it("goes to the page for the mode the band is in, and in Plain to the reading view's", () => {
     reading({ mode: "glossary" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#mode-glossary");
+    expect(location.pathname + location.hash).toBe("/help/mode-glossary");
 
     history.replaceState(null, "", "/read/a-piece");
     reading({ mode: "plain" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#the-reading-view");
+    expect(location.pathname + location.hash).toBe("/help/the-reading-view");
   });
 });

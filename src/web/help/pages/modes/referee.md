@@ -1,5 +1,6 @@
 ---
 keywords: peer review reviewer reviewing paper manuscript criteria claims assess evaluate journal conference critique
+related: for-reviewers, comments
 ---
 
 ## When to use it

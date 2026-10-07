@@ -2,6 +2,7 @@
 title: Waiting for a mode
 summary: Why a mode takes a while the first time you open it, what starts the AI writing, and what High-powered AI is.
 keywords: slow loading how long cost generate run again cached stored free first time high powered opus
+related: plans, faq-why-slow-first-time, faq-does-a-mode-use-my-allowance
 ---
 
 **The first time you open most modes, the AI writes what they show.** That usually takes seconds and

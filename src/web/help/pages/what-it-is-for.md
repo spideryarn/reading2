@@ -2,6 +2,7 @@
 title: What Spideryarn is for
 summary: What Spideryarn is for: helping you read a piece properly rather than replacing it with a summary, and a good way to use it.
 keywords: about purpose why what is spideryarn summary summarise read deeply understand ai reading tool
+related: first-article, the-reading-view, ai-words, faq-is-the-ai-reading-for-me
 ---
 
 Spideryarn helps you read a piece properly. It does not replace it with a summary. Everything the AI

@@ -2,6 +2,7 @@
 title: Jumping around, and getting back
 summary: How the back button above the bottom bar, and your browser’s Back, return you to where you were before a jump.
 keywords: back return go back lost where was i jump undo history back button previous place
+related: spine, keyboard, linking-to-a-passage
 ---
 
 Following a link to a passage, clicking the spine, choosing a search result: each of these is a

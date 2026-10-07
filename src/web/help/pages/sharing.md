@@ -2,6 +2,7 @@
 title: Sharing an article, and the public shelf
 summary: The two ways to let other people read an article, a private link and making it public, and what each lets them see.
 keywords: share public publish link private link key send someone some people friend colleague visitor see comments bookmarks chats profile private padlock globe shared articles unshare stop turn off unlisted
+related: linking-to-a-passage, comments, faq-shared-personalised
 ---
 
 Every article starts **private**. The padlock beside the title means it is not public. Sending

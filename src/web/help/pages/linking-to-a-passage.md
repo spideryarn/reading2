@@ -2,6 +2,7 @@
 title: Linking to a passage
 summary: How to copy a link that opens the article at the same place in the same mode, or at one exact paragraph.
 keywords: share link url send copy permalink paragraph passage address bar open at mode reload where i left
+related: sharing, gutter, jumping-around
 ---
 
 The address bar always holds where you are and how you are looking: the section on your screen, the

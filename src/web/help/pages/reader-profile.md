@@ -2,6 +2,7 @@
 title: Your reader profile
 summary: What telling the AI about yourself, and why you are reading, changes in what it writes for you.
 keywords: about me background expertise interests who i am personalise tailored why reading purpose written for you older
+related: ai-words, faq-older-profile, faq-shared-personalised
 ---
 
 On [your profile](/profile), **About you** tells the AI who is reading: your background, what you

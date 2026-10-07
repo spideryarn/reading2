@@ -2,6 +2,7 @@
 title: The AI’s words and the author’s
 summary: How to tell the author’s words from the AI’s, and how closely each mode stays tied to the article.
 keywords: ai generated written author original trust grounded hallucination accurate source check verify typeface font which is ai
+related: waiting-and-cost, reader-profile, faq-is-the-ai-reading-for-me
 ---
 
 **The main column is always the author’s text, word for word.** Spideryarn never rewrites it.

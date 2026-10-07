@@ -1,5 +1,6 @@
 ---
 keywords: terms definitions define jargon words meaning underline dotted vocabulary people places concepts dictionary
+related: mode-chat
 ---
 
 ## When to use it

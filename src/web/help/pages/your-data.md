@@ -2,6 +2,7 @@
 title: Your data: export, archive, delete
 summary: How to export an article, the difference between archiving and deleting, and where the privacy page is.
 keywords: privacy export download zip delete remove erase archive account gdpr copy backup what you keep
+related: sharing, reader-profile
 ---
 
 **Export.** On an article’s Metadata page, **Export this article** downloads a zip of everything we

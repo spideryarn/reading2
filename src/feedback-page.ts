@@ -85,6 +85,9 @@ function webAddress(url: string | null): URL | null {
   return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed : null;
 }
 
+/** One page of Help: `/help/<one segment>`. `/help` itself is in `FIXED_PAGES`. */
+const HELP_PAGE = /^\/help\/[^/]+$/;
+
 /** An article's reading page: `/read/<slug>`, and not its `/metadata`. */
 const READING_PAGE = /^\/read\/[^/]+$/;
 
@@ -95,6 +98,14 @@ export function feedbackPageLabel(url: string | null): string | null {
   const path = parsed.pathname.length > 1 ? parsed.pathname.replace(/\/$/, "") : parsed.pathname;
   if (FIXED_PAGES.has(path)) return path;
   if (path === "/add" || path.startsWith("/add/")) return "/add";
+  /* **A page of Help is just `/help`**, for `/add`'s reason. The router gives
+     Help any one segment under it without judging it, and Help draws itself
+     there whether or not the segment names a page (src/web/help/help-anchors.ts
+     § `resolveHelpPage`), so the segment is whatever somebody typed. One
+     segment only: the router has no address deeper than that.
+     docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md,
+     R2. */
+  if (HELP_PAGE.test(path)) return "/help";
   /* `/read/public` is slug-shaped, so the public shelf comes out of this arm too. */
   const article = /^\/read\/([^/]+)(\/metadata)?$/.exec(path);
   if (!article) return null;

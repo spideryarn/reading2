@@ -2,6 +2,7 @@
 title: Plans, prices and the free allowance
 summary: What counts against your allowance and what does not, with the details that are easy to miss.
 keywords: pricing pay subscription free allowance limit quota how many articles upgrade cancel billing money
+related: waiting-and-cost, faq-does-a-mode-use-my-allowance
 ---
 
 Your allowance counts **adding articles**, not reading them. A link you paste or a file you upload

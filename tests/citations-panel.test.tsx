@@ -6,9 +6,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
-import { HELP_MODES } from "../src/web/help/help-modes.js";
-import { HELP_FAQ } from "../src/web/help/help-faq.js";
+import { helpModeReadingWords, helpWords } from "./helpers/help-words.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
@@ -185,23 +183,23 @@ describe("the score orders", () => {
   });
 
   it("Help distinguishes new confident scores from older lists and treats absence as no usable score", () => {
-    const modes = renderToStaticMarkup(createElement("div", null, HELP_MODES.citations.reading));
+    const modes = helpModeReadingWords("citations");
     expect(modes).toMatch(/new lists/i);
     expect(modes).toMatch(/older lists/i);
     expect(modes).toMatch(/relevance was scored/i);
-    const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
+    const faq = helpWords("faq-beyond-the-article");
     expect(faq).toMatch(/no usable.*score/i);
   });
 
   it("Help says whose count a row's citation count is, what it leaves out, and that it is not influence", () => {
     /* Plan 261005i. The row's own words, so a reader can match the sentence to what they see. */
-    const modes = renderToStaticMarkup(createElement("div", null, HELP_MODES.citations.reading));
+    const modes = helpModeReadingWords("citations");
     expect(modes).toContain("cited 357 times · Crossref");
     expect(modes).toMatch(/DOI/);
     expect(modes).toMatch(/lower than Google Scholar/);
     expect(modes).toMatch(/no citations recorded/);
     expect(modes).toMatch(/does not change the order/);
-    const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
+    const faq = helpWords("faq-beyond-the-article");
     expect(faq).toMatch(/Crossref/);
   });
   it("sort descending, with a work missing that score last", () => {

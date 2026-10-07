@@ -73,9 +73,12 @@ const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.Des
    almost nobody opens — docs/project/changelog.md § The page. */
 const loadChangelog = () =>
   import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
-/* `/help`'s reason is the changelog's in miniature: a long page of prose, one
-   section per mode, that a reader opens when stuck rather than on every visit —
-   so not in the first download. docs/plans/261002b-help-page.md. */
+/* `/help`'s reason is the changelog's in miniature: pages of prose, one per
+   mode and topic, that a reader opens when stuck rather than on every visit —
+   so not in the first download. One chunk for all of them: every address
+   under `/help` is this one component, which asks the router which page
+   (help/HelpPage.tsx § One component for every address under `/help`).
+   docs/plans/261002b-help-page.md. */
 const loadHelp = () => import("./help/HelpPage.js").then((m) => ({ default: m.HelpPage }));
 
 
@@ -311,9 +314,14 @@ export function App() {
        LazyPage.tsx. */
     if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
     /* Since 2026-10-02, for the changelog's reason and more so: Help is the
-       page we send somebody to — `/help#spine` in an answer to a question —
+       page we send somebody to — `/help/spine` in an answer to a question —
        and a stranger who has not signed up is the reader with most to learn
-       from it. Bare and lazy, like the changelog above. help/HelpPage.tsx. */
+       from it. Bare and lazy, like the changelog above. help/HelpPage.tsx.
+
+       **One `routeKey` for every page of Help, on purpose**, here and in the
+       signed-in arm: the page is not remounted from one to the next, so the
+       search box keeps its words, and its arrival effect is keyed on the page
+       instead (help/HelpPage.tsx § Arriving). */
     if (route.kind === "help") return <LazyPage load={loadHelp} routeKey="help" />;
     /* Since 2026-09-07, and signed out for a stronger reason than any of them:
        somebody deciding whether to trust us with what they read is exactly the

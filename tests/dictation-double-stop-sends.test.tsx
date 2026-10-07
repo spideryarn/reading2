@@ -48,7 +48,7 @@ vi.mock("../src/web/useDictation.js", () => ({
 
 const { useDictationField, DOUBLE_PRESS_MS } = await import("../src/web/useDictationField.js");
 const { DictationButton } = await import("../src/web/DictationStrip.js");
-const { HELP_MODES } = await import("../src/web/help/help-modes.js");
+const { helpModeReadingWords } = await import("./helpers/help-words.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -349,8 +349,8 @@ describe("the button, while the words are on their way", () => {
 
 describe("the reader's help", () => {
   it("names every box where double Stop sends", () => {
-    act(() => root.render(HELP_MODES.chat.reading));
-    const words = host.textContent ?? "";
+    /* The words of Chat's Help page from "Reading it" on, where the boxes are named. */
+    const words = helpModeReadingWords("chat");
     expect(words).toMatch(/Feedback/);
     expect(words).toMatch(/follow-up/);
     expect(words).toMatch(/quiz answer/);

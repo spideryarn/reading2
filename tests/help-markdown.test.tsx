@@ -8,7 +8,7 @@
  * The files are ours, so the machinery throws on anything it does not draw
  * rather than drawing it wrongly, and tests/help-page.test.tsx turns a throw
  * into a red test by rendering the page. That only works if the throws
- * happen, and the 46 real files are all well formed, so none of them shows
+ * happen, and the 50 real files are all well formed, so none of them shows
  * one. These are the refusals, each seen.
  */
 import { renderToStaticMarkup } from "react-dom/server";
@@ -19,7 +19,7 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
-import { HELP_ANCHORS, type HelpAnchor } from "../src/web/help/help-anchors.js";
+import { HELP_ANCHORS, helpHref } from "../src/web/help/help-anchors.js";
 import { readFrontMatter } from "../src/web/help/help-front-matter.js";
 import {
   expandHelpTokens,
@@ -30,8 +30,7 @@ import {
 } from "../src/web/help/help-markdown.js";
 import { HELP_TOPIC_FILES, HELP_TOPIC_PAGES } from "../src/web/help/help-pages.js";
 
-const fragment = (a: HelpAnchor): string => `#${a}`;
-const html = (md: string, hrefFor = fragment): string => renderToStaticMarkup(<>{renderHelpMarkdown(md, hrefFor, "t")}</>);
+const html = (md: string): string => renderToStaticMarkup(<>{renderHelpMarkdown(md, "t")}</>);
 
 describe("the front matter", () => {
   const shape = { required: ["title", "keywords"], optional: ["related"] } as const;
@@ -67,13 +66,16 @@ describe("drawing a file", () => {
     const out = html("A **b** *c* `d` <kbd>E</kbd>.\n\n- one\n  - inner\n- two\n\n## Sub");
     expect(out).toContain("<p>A <strong>b</strong> <em>c</em> <code>d</code> <kbd>E</kbd>.</p>");
     expect(out).toContain("<ul><li>one<ul><li>inner</li></ul></li><li>two</li></ul>");
-    expect(out).toMatch(/<h4[^>]*>Sub<\/h4>/);
+    expect(out).toMatch(/<h2[^>]*>Sub<\/h2>/);
   });
 
-  it("gives a Help link's anchor to hrefFor, and leaves another page's path alone", () => {
+  it("draws a link to a page of Help, to a question, and to another page of the site", () => {
     const md = "[a](/help/spine) [b](/help/questions#faq-older-profile) [c](/pricing)";
-    expect(html(md)).toMatch(/href="#spine".*href="#faq-older-profile".*href="\/pricing"/);
-    expect(html(md, (a) => `/x/${a}`)).toMatch(/href="\/x\/spine".*href="\/x\/faq-older-profile"/);
+    expect(html(md)).toMatch(
+      /href="\/help\/spine".*href="\/help\/questions#faq-older-profile".*href="\/pricing"/,
+    );
+    /* A Help link's address is `helpHref` of the anchor it names. */
+    expect(html("[a](/help/spine)")).toContain(`href="${helpHref("spine")}"`);
   });
 
   it.each([
@@ -99,11 +101,11 @@ describe("drawing a file", () => {
   });
 
   it("splits a mode's file into its two halves, and a missing half is null", () => {
-    const both = renderHelpModeHalves("## When to use it\n\nA.\n\n## Reading it\n\nB.", fragment, "t");
+    const both = renderHelpModeHalves("## When to use it\n\nA.\n\n## Reading it\n\nB.", "t");
     expect(renderToStaticMarkup(<>{both.whenToUse}</>)).toBe("<p>A.</p>");
     expect(renderToStaticMarkup(<>{both.reading}</>)).toBe("<p>B.</p>");
-    expect(renderHelpModeHalves("## Reading it\n\nB.", fragment, "t").whenToUse).toBeNull();
-    expect(renderHelpModeHalves("## When to use it\n\nA.", fragment, "t").reading).toBeNull();
+    expect(renderHelpModeHalves("## Reading it\n\nB.", "t").whenToUse).toBeNull();
+    expect(renderHelpModeHalves("## When to use it\n\nA.", "t").reading).toBeNull();
   });
 
   it.each([
@@ -112,7 +114,7 @@ describe("drawing a file", () => {
     ["the halves out of order", "## Reading it\n\nB.\n\n## When to use it\n\nA.", /repeated or out of order/],
     ["a half twice", "## Reading it\n\nB.\n\n## Reading it\n\nC.", /repeated or out of order/],
   ])("a mode's file throws on %s", (_name, md, message) => {
-    expect(() => renderHelpModeHalves(md, fragment, "t")).toThrow(message);
+    expect(() => renderHelpModeHalves(md, "t")).toThrow(message);
   });
 });
 
@@ -131,7 +133,7 @@ describe("the tokens", () => {
   it("the table is drawn as a table, with a row for every mode", () => {
     const out = html("{{modes-table}}");
     expect(out).toContain("<table");
-    for (const m of MODES) expect(out).toContain(`href="#mode-${m}"`);
+    for (const m of MODES) expect(out).toContain(`href="/help/mode-${m}"`);
   });
 
   it("expandHelpTokens leaves Markdown, with the table as a list and no token behind", () => {

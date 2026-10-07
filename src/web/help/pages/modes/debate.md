@@ -1,5 +1,6 @@
 ---
 keywords: critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar angle angles lens steer
+related: mode-citations, faq-beyond-the-article
 ---
 
 ## When to use it

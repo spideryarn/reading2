@@ -2,6 +2,7 @@
 title: Reading the spine
 summary: What each mark on the strip down the left edge means, and how to point at it and click it to get around.
 keywords: rail strip map overview where am i position progress ticks lines heat coloured marks colours orange box results visuals legend meaning
+related: jumping-around, gutter, mode-structure
 ---
 
 The spine is the thin strip down the left edge: the whole article squeezed to the height of your

@@ -2,6 +2,7 @@
 title: Keyboard shortcuts
 summary: The command bar and what you can type or say into it, and the keys for moving around an article.
 keywords: keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list
+related: touch, jumping-around
 ---
 
 - <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd> opens the **command bar**. Type the name of a mode, a

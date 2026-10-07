@@ -2,6 +2,7 @@
 title: Adding an article
 summary: How to add an article from a web address or a file, and what to try when one will not come in.
 keywords: add import paste url link pdf upload file html save page paywall failed error stuck bookmarklet new article
+related: shelf, plans, first-article
 ---
 
 Paste a web address into **Add an article** on your shelf and press **Add**. You can leave off the

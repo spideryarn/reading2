@@ -1,5 +1,6 @@
 ---
 keywords: assumptions premises propositions key points takeaways background knowledge prerequisites concepts assumes
+related: reader-profile, mode-marginalia
 ---
 
 ## When to use it

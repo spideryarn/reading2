@@ -1,5 +1,6 @@
 ---
 keywords: outline contents table of contents tree map hierarchy sections parts shape headings navigate overview
+related: spine, mode-summary
 ---
 
 ## When to use it

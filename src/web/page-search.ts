@@ -27,12 +27,23 @@
  * double per place and no factor falls to a half, so a synonym in the name
  * still beats a whole word in the keywords. Ties keep page order.
  *
- * **Not the text inside a section.** A hit there would promise "the right
- * place" (Greg's words) and then land on the section's heading, which for *AI
- * processing* is screens above the line; and half the sections unmount their
- * body when shut, so it would find some words and not others. Landing on the
- * matching line is the deferred version, with a model or embedding for
- * paraphrase after it. GPT Sol, plan review; plan 261001s § The search box.
+ * **Not the text inside a section, on Metadata.** A hit there would promise
+ * "the right place" (Greg's words) and then land on the section's heading,
+ * which for *AI processing* is screens above the line; and half the sections
+ * unmount their body when shut, so it would find some words and not others.
+ * Landing on the matching line is the deferred version, with a model or
+ * embedding for paraphrase after it. GPT Sol, plan review; plan 261001s § The
+ * search box.
+ *
+ * **Help does search the text, since 2026-10-07** (`SearchableSection.body`),
+ * because neither reason holds there any more. A result is a whole page, and a
+ * page is short, so landing at its top is landing on the place; and the words
+ * are constants read from the files, mounted or not. It also has to: while
+ * Help was one long page, a reader with a remembered phrase had the browser's
+ * Find, and Find cannot see a page that is not open. Words found only in a
+ * body rank below everything found the old way — see `searchSections`. GPT
+ * Sol, plan review, R4:
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
  */
 
 /**
@@ -46,6 +57,12 @@ export interface SearchableSection {
   keywords: string;
   /** The heading's one-line answer, e.g. "$0.0123 · 12 calls". */
   aside: string;
+  /**
+   * The section's own words, as plain text — **only where a result is the
+   * whole of what it names**, which today is a Help page. Metadata leaves it
+   * out; the top of this file says why the two differ.
+   */
+  body?: string;
 }
 
 /**
@@ -161,6 +178,13 @@ function synonymsOf(term: string, groups: GroupIndex): Set<string> {
 /** Where in a section a word was found, best first. */
 const FIELD_WEIGHT = { label: 8, keywords: 4, aside: 2 } as const;
 type Field = keyof typeof FIELD_WEIGHT;
+/**
+ * A word found only in the section's `body`. Half of `aside`, as each place is
+ * half the one above — but that is only the order *among* sections that needed
+ * their body. Such a section is listed after every section that did not, by
+ * `searchSections`, whatever the sums come to.
+ */
+const BODY_WEIGHT = 1;
 /** Above a half, so the place a word was found outranks how — see the top. */
 const PREFIX_FACTOR = 0.8;
 const SYNONYM_FACTOR = 0.6;
@@ -197,6 +221,16 @@ function hit(term: string, synonyms: Set<string>, have: readonly string[]): numb
  * lives. The code review preferred strict AND here; "nothing matched" is the
  * exact complaint this answers, so a near answer wins. Plan 261002c § After
  * GPT Sol's code review.
+ *
+ * **A section that needed its `body` comes after every section that did
+ * not.** A word counts in the body only when the name, the keywords and the
+ * aside all missed it, and a section with any such word is ranked below all
+ * the others, however well its other words did. So whenever a query was
+ * answered before its page gave its sections a body, that answer is still the
+ * top of the list, in the same order, and the body only adds rows beneath.
+ * (What does change: a word that only a body knows is no longer a word no
+ * section answers, so it is not set aside.) A section with no body, which is
+ * every one on Metadata, is unaffected.
  */
 export function searchSections(
   query: string,
@@ -218,20 +252,28 @@ export function searchSections(
       keywords: words(section.keywords),
       aside: words(section.aside),
     };
-    const scores = expanded.map(({ term, synonyms }) => {
+    const body = section.body === undefined ? [] : words(section.body);
+    /* Which query words only the body answered: § the last paragraph above. */
+    const fromBody: boolean[] = [];
+    const scores = expanded.map(({ term, synonyms }, i) => {
       let best = 0;
       for (const field of Object.keys(FIELD_WEIGHT) as Field[]) {
         best = Math.max(best, FIELD_WEIGHT[field] * hit(term, synonyms, fields[field]));
       }
-      return best;
+      fromBody[i] = best === 0;
+      return best > 0 ? best : BODY_WEIGHT * hit(term, synonyms, body);
     });
-    return { id: section.id, order, scores };
+    return { id: section.id, order, scores, fromBody };
   });
   const answering = (wanted: readonly number[]) =>
     rows
       .filter((r) => wanted.every((i) => (r.scores[i] ?? 0) > 0))
-      .map((r) => ({ ...r, score: wanted.reduce((sum, i) => sum + (r.scores[i] ?? 0), 0) }))
-      .sort((a, b) => b.score - a.score || a.order - b.order)
+      .map((r) => ({
+        ...r,
+        score: wanted.reduce((sum, i) => sum + (r.scores[i] ?? 0), 0),
+        neededBody: wanted.some((i) => r.fromBody[i] === true),
+      }))
+      .sort((a, b) => Number(a.neededBody) - Number(b.neededBody) || b.score - a.score || a.order - b.order)
       .map((r) => r.id);
   const every = terms.map((_, i) => i);
   const found = answering(every);

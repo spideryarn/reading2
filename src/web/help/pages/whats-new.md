@@ -2,6 +2,7 @@
 title: What’s new
 summary: Where to find the list of every update to Spideryarn.
 keywords: changelog updates new features release notes changes recent version what changed
+related: feedback, experimental-features
 ---
 
 [{{whats-new-label}}](/changelog) lists every update to Spideryarn, newest first, in plain words.

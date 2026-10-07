@@ -2,16 +2,18 @@
  * **Every Help page's Markdown file, by the anchor it is the page for.**
  *
  * One Markdown file per anchor under src/web/help/pages/: a topic at the top, a
- * mode under `modes/`, a question under `questions/`. This file imports each
- * with Vite's `?raw`, as ChangelogPage.tsx does its data, and reads the front
- * matter. No React here: the renderer is help-markdown.tsx.
+ * mode under `modes/`, a question under `questions/`, a guide under `guides/`.
+ * This file imports each with Vite's `?raw`, as ChangelogPage.tsx does its
+ * data, and reads the front matter. No React here: the renderer is
+ * help-markdown.tsx.
  * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
  * § The Markdown, and how it becomes a page.
  *
- * ## Forty-six imports written out, and not `import.meta.glob`
+ * ## Every import written out, and not `import.meta.glob`
  *
- * The three tables are `Record<HelpTopic, …>`, `Record<Mode, …>` and
- * `Record<FaqId, …>`, with every key and every import explicit. That is the
+ * The four tables are `Record<HelpTopic, …>`, `Record<Mode, …>`,
+ * `Record<FaqId, …>` and `Record<HelpGuide, …>`, with every key and every
+ * import explicit. That is the
  * point of them: **a new mode with no Help file is a type error** here, the
  * same guard `HELP_MODES` gave when the words were TSX. A glob would find
  * whatever files happen to exist and say nothing about the one that does not.
@@ -24,7 +26,17 @@
  * upload, so an import into it builds everywhere except Vercel.
  */
 import { MODES, type Mode } from "../../modes.js";
-import { FAQ_IDS, HELP_TOPIC_IDS, resolveHelpAnchor, type FaqId, type HelpAnchor, type HelpTopic } from "./help-anchors.js";
+import {
+  FAQ_IDS,
+  HELP_GUIDE_IDS,
+  HELP_TOPIC_IDS,
+  helpAnchorKind,
+  resolveHelpAnchor,
+  type FaqId,
+  type HelpAnchor,
+  type HelpGuide,
+  type HelpTopic,
+} from "./help-anchors.js";
 import { readFrontMatter, splitList } from "./help-front-matter.js";
 
 import whatItIsForMd from "./pages/what-it-is-for.md?raw";
@@ -73,6 +85,10 @@ import faqBeyondTheArticleMd from "./pages/questions/faq-beyond-the-article.md?r
 import faqOlderProfileMd from "./pages/questions/faq-older-profile.md?raw";
 import faqFindArchivedMd from "./pages/questions/faq-find-archived.md?raw";
 import faqSharedPersonalisedMd from "./pages/questions/faq-shared-personalised.md?raw";
+import guideFirstArticleMd from "./pages/guides/first-article.md?raw";
+import guideForStudentsMd from "./pages/guides/for-students.md?raw";
+import guideForReviewersMd from "./pages/guides/for-reviewers.md?raw";
+import guideForExpertsMd from "./pages/guides/for-experts.md?raw";
 
 /** The topics' files, as written. Total over `HelpTopic`. */
 export const HELP_TOPIC_FILES: Record<HelpTopic, string> = {
@@ -132,6 +148,14 @@ export const HELP_FAQ_FILES: Record<FaqId, string> = {
   "faq-shared-personalised": faqSharedPersonalisedMd,
 };
 
+/** The guides' files, as written. Total over `HelpGuide`. */
+export const HELP_GUIDE_FILES: Record<HelpGuide, string> = {
+  "first-article": guideFirstArticleMd,
+  "for-students": guideForStudentsMd,
+  "for-reviewers": guideForReviewersMd,
+  "for-experts": guideForExpertsMd,
+};
+
 /** A topic's file, read: what the contents page and the search box need, and the words. */
 export interface HelpTopicPage {
   title: string;
@@ -139,11 +163,14 @@ export interface HelpTopicPage {
   summary: string;
   /** The words a reader might search for that the title does not say. */
   keywords: string;
-  /** The pages its *See also* lists. Empty until the cross-links are written. */
+  /** The pages its *See also* lists, in the order the file gives them. */
   related: readonly HelpAnchor[];
   /** The Markdown under the front matter. */
   body: string;
 }
+
+/** A guide's file: the same four lines and a body as a topic's. */
+export type HelpGuidePage = HelpTopicPage;
 
 /** A question's file. No summary: the question is its own. */
 export type HelpFaqPage = Omit<HelpTopicPage, "summary">;
@@ -177,6 +204,16 @@ function readTopic(id: HelpTopic): HelpTopicPage {
   return { title: meta.title, summary: meta.summary, keywords: meta.keywords, related: relatedAnchors(meta.related, id), body };
 }
 
+function readGuide(id: HelpGuide): HelpGuidePage {
+  const name = `guides/${id}`;
+  const { meta, body } = readFrontMatter(
+    HELP_GUIDE_FILES[id],
+    { required: ["title", "summary", "keywords"], optional: ["related"] },
+    name,
+  );
+  return { title: meta.title, summary: meta.summary, keywords: meta.keywords, related: relatedAnchors(meta.related, name), body };
+}
+
 function readFaq(id: FaqId): HelpFaqPage {
   const { meta, body } = readFrontMatter(HELP_FAQ_FILES[id], { required: ["title", "keywords"], optional: ["related"] }, id);
   return { title: meta.title, keywords: meta.keywords, related: relatedAnchors(meta.related, id), body };
@@ -196,7 +233,7 @@ export function byId<K extends string, V>(ids: readonly K[], read: (id: K) => V)
   return Object.fromEntries(ids.map((id) => [id, read(id)])) as Record<K, V>;
 }
 
-/* **Read once, when the Help chunk loads.** Forty-six short files and no
+/* **Read once, when the Help chunk loads.** Fifty short files and no
    Markdown parsing yet, only the front matter. Reading here rather than on
    first use means a malformed file fails every test that imports Help, not
    only the one that happens to open that page. */
@@ -207,11 +244,33 @@ export const HELP_TOPIC_PAGES: Record<HelpTopic, HelpTopicPage> = byId(HELP_TOPI
 export const HELP_FAQ_PAGES: Record<FaqId, HelpFaqPage> = byId(FAQ_IDS, readFaq);
 /** Every mode's page. */
 export const HELP_MODE_PAGES: Record<Mode, HelpModePage> = byId(MODES, readMode);
+/** Every guide's page. */
+export const HELP_GUIDE_PAGES: Record<HelpGuide, HelpGuidePage> = byId(HELP_GUIDE_IDS, readGuide);
 
-/** The Markdown body behind any anchor: a topic's, a question's, or a mode's. */
+/**
+ * **The file behind any anchor, read**: the three things every kind of file
+ * has. What only some have (a title, a summary) is asked of the kind's own
+ * table.
+ */
+export function helpPage(anchor: HelpAnchor): HelpModePage {
+  const kind = helpAnchorKind(anchor);
+  switch (kind.kind) {
+    case "topic":
+      return HELP_TOPIC_PAGES[kind.id];
+    case "faq":
+      return HELP_FAQ_PAGES[kind.id];
+    case "guide":
+      return HELP_GUIDE_PAGES[kind.id];
+    case "mode":
+      return HELP_MODE_PAGES[kind.mode];
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
+/** The Markdown body behind any anchor. */
 export function helpPageBody(anchor: HelpAnchor): string {
-  if (Object.hasOwn(HELP_TOPIC_PAGES, anchor)) return HELP_TOPIC_PAGES[anchor as HelpTopic].body;
-  if (Object.hasOwn(HELP_FAQ_PAGES, anchor)) return HELP_FAQ_PAGES[anchor as FaqId].body;
-  /* Neither, so `mode-<id>`: `HelpAnchor` has no fourth member. */
-  return HELP_MODE_PAGES[anchor.slice("mode-".length) as Mode].body;
+  return helpPage(anchor).body;
 }

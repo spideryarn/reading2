@@ -1,5 +1,6 @@
 ---
 keywords: margin notes annotations sidenotes right column questions assumes introduces side notes
+related: mode-ideas, comments
 ---
 
 ## When to use it
