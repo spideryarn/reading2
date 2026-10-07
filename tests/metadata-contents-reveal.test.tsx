@@ -339,6 +339,26 @@ describe("the search box above it (83)", () => {
     ).toBeTruthy();
   });
 
+  /* **Where it is in the page, by its neighbours.** On a window too narrow for
+     a margin the nav is drawn in the column, so its place in the markup is its
+     place on the screen: under the title and the Archive/Share row, above the
+     first section. "Somewhere in `main`" would pass with it at the foot of the
+     page. Greg, 2026-10-06, report `spya-vwf00u`;
+     docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */
+  it("sits in the page's column, after the Archive/Share row and before the first section", () => {
+    const list = nav();
+    const actions = host.querySelector('main [data-testid="metadata-top-actions"]');
+    const first = host.querySelector("main [data-section]");
+    if (!list || !actions || !first) throw new Error("missing the nav, the actions or a section");
+    expect(list.closest("main")).toBe(host.querySelector("main"));
+    expect(actions.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* Nothing between the actions and the list but what the page already put
+       under the title, and no section above it. */
+    expect(list.previousElementSibling).toBe(actions);
+    expect(list.closest("[data-section]")).toBeNull();
+  });
+
   it("narrows the list to what matches, by a synonym, and Enter opens and flashes the first", async () => {
     const all = entries();
     await type("download");

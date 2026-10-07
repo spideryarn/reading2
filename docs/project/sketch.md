@@ -89,6 +89,14 @@ middle of it. The same pass is where a region's door gets *derived* when the
 model did not write one, which is why both ends of that wire agree about which
 names are pressable without the artefact on disk having to change.
 
+**A stored value the check leaves no scene of is "none", and "none" carries no facts.** The hook
+holds the picture, which stored value it is, and its four flags (stale, outdated, profiled,
+profile changed) as one value that is there or not, so the flags cannot stay behind a picture that
+has gone; until 2026-10-07 that branch cleared the picture and left the last one's flags standing.
+What the check refused is kept apart, because with nothing to draw it is the only account of why.
+[`useIllustrated.ts`](../../src/web/useIllustrated.ts) is built the same way
+([261007e § 3](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
+
 **Reachability is two numbers, and they answer different questions.** A scene
 nothing opens is a scene the reader can never get to — the plainest silent
 success this feature produced, unnoticed through six runs, and the reason

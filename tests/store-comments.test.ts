@@ -24,8 +24,8 @@
  * Skips loudly when there is no database — see tests/db-schema.test.ts.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { and, eq, sql } from "drizzle-orm";
 
 import { CommentIdTaken, NotAnExplanation } from "../src/comments.js";
 import { closeDb, getDb } from "../src/db/client.js";
@@ -41,6 +41,25 @@ import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
+
+/**
+ * **`mintUniqueId`, steerable.** It passes straight through unless a case has
+ * queued ids, and then it hands those back *without asking whether they are
+ * taken* — the only way to make the store mint an id that is already a row,
+ * which random minting does one time in a billion. The three cases under
+ * "a minted id that is already a row" are the only ones that queue anything.
+ */
+const minting = vi.hoisted(() => ({ next: [] as string[], calls: 0 }));
+vi.mock("../src/ids.js", async (original) => {
+  const actual = await original<typeof import("../src/ids.js")>();
+  return {
+    ...actual,
+    mintUniqueId: (taken: Set<string>, random?: () => number) => {
+      minting.calls += 1;
+      return minting.next.shift() ?? actual.mintUniqueId(taken, random);
+    },
+  };
+});
 
 const SLUG = "store-comments-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c0";
@@ -360,6 +379,88 @@ describe("the Postgres comment store", () => {
       start: 0,
     });
     expect(stored.id).toMatch(/^spya-[a-z][a-z0-9]{5}$/);
+  });
+
+  /**
+   * **A minted id that is already a row** — what `create` does about it, pinned
+   * on 2026-10-07 as the licence for deleting a `catch` (SVO6 in
+   * docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md).
+   *
+   * The minting loop used to carry a second retry: `catch (err) { if (err.code
+   * !== "23505" …) throw err }`, for a unique violation. It could not run. The
+   * insert is `on conflict (article_id, id) do nothing`, and that primary key is
+   * the table's only unique index, so a collision is *no row*, not an error —
+   * the `if (!stored) continue` path these cases walk. All four were green with
+   * the catch in place and are green without it; nothing observable moved.
+   *
+   * The last case is the premise rather than the behaviour. **If it goes red,
+   * somebody has given `comments` a second unique key**, and an insert can then
+   * raise 23505 on a constraint `do nothing` does not name: decide what `create`
+   * should do about that before changing the expectation.
+   */
+  describe("a minted id that is already a row", () => {
+    const TAKEN = "spya-mmm222";
+    const FRESH = "spya-mmm333";
+
+    const row = async (id: string) =>
+      (
+        await getDb()
+          .select()
+          .from(commentsTable)
+          .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)))
+      )[0];
+
+    it("is minted again, and the row under it is left alone", async () => {
+      await pgCommentStore.create(SLUG, { id: TAKEN, blockId: BLOCK_ID, quote: "first", start: 0, body: "mine" });
+      const before = await row(TAKEN);
+      minting.next = [TAKEN, FRESH];
+      minting.calls = 0;
+      const stored = await pgCommentStore.create(SLUG, { blockId: BLOCK_ID, quote: "second", start: 3 });
+      expect(stored.id).toBe(FRESH);
+      expect(stored.quote).toBe("second");
+      expect(minting.calls).toBe(2);
+      expect(await row(TAKEN)).toEqual(before);
+    });
+
+    it("gives up after three tries, with the refusal a taken id gets", async () => {
+      const before = await row(TAKEN);
+      minting.next = [TAKEN, TAKEN, TAKEN, "spya-mmm444"];
+      minting.calls = 0;
+      await expect(
+        pgCommentStore.create(SLUG, { blockId: BLOCK_ID, quote: "third", start: 5 }),
+      ).rejects.toBeInstanceOf(CommentIdTaken);
+      /* Three, not four: the fourth queued id is still there to be drained. */
+      expect(minting.calls).toBe(3);
+      expect(minting.next).toEqual(["spya-mmm444"]);
+      minting.next = [];
+      expect(await row(TAKEN)).toEqual(before);
+      expect(await row("spya-mmm444")).toBeUndefined();
+    });
+
+    it("does not retry a failure that is not a collision", async () => {
+      /* The block-identity FK, through the minting path this time (the case
+         below, "refuses a comment on a block id that was never minted", takes
+         the supplied-id path). One mint, then the error: a retry here would be
+         three inserts of a row that can never be written. */
+      minting.next = [];
+      minting.calls = 0;
+      await expect(
+        pgCommentStore.create(SLUG, { blockId: "spya-zzz998", quote: "anchored to nothing", start: 0 }),
+      ).rejects.toThrow();
+      expect(minting.calls).toBe(1);
+    });
+
+    it("rests on the primary key being the table's only unique index", async () => {
+      const unique = (await getDb().execute(sql`
+        select i.relname as indexname
+        from pg_index x
+        join pg_class t on t.oid = x.indrelid
+        join pg_namespace n on n.oid = t.relnamespace
+        join pg_class i on i.oid = x.indexrelid
+        where n.nspname = 'spideryarn' and t.relname = 'comments' and x.indisunique
+      `)) as unknown as { rows: { indexname: string }[] };
+      expect(unique.rows.map((r) => r.indexname)).toEqual(["comments_article_id_id_pk"]);
+    });
   });
 
   it("mints its own id when the client's is malformed, rather than storing it", async () => {

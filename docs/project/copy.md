@@ -490,6 +490,30 @@ reaches them as `PAGE_FAULT`. That is the cost, and the fix is one word at the
 throw site; `tests/describe-fetch-failure.test.ts` refuses one in any file that
 calls `describeFetchFailure`.
 
+**Eleven more catches joined on 2026-10-07**
+([261007a K4](../plans/261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)): the four
+kept-answer streams (Glossary's two, Citations' *Investigate*, the quiz's mark), Diagram's two
+reads, Skim's purpose box, *View the original*, the bar's tag commands, the admin's cost read and
+the export download. Three things that work settled:
+
+- **`readAnswerStream` says who each throw is for**: the `error` frame and a body that ends early
+  are `ReaderFacingError`s; a `done` frame its caller refuses is a `MalformedReply`, so the reader
+  gets `PAGE_FAULT` and not an invitation to pay for a second answer when the first was kept.
+- **A body read that is not `readJson` marks its own lost connection.** `res.blob()` dying
+  part-way rejects with a bare `TypeError`; *View the original* and the export mark it where it
+  happens, as `readJson` does.
+- **One code, last.** A control that appends its own code (`[source-open]`, `[export-failed]`) does
+  so only when the reason carries none, so a lost connection under Export ends `[net-down]`.
+
+**And a save that rejected is not a save that failed.** The server answers a PATCH after the
+write, so a reply lost on the way back rejects over a sentence that was stored. Skim's purpose box
+reads what is stored before it says which (`storedPurpose` in
+[`purpose.ts`](../../src/web/purpose.ts), a fresh server 200 only): there, it carries on; not
+there, *These words are not what is saved for this article…* with the reason (what the read
+showed, never "that was not saved": another tab can replace a save that landed); no answer,
+*Couldn't tell whether that was saved…*, with no code, as the delete control below says it. The other purpose boxes still say
+*Not saved — …* for every rejection.
+
 **The server's half, for streams.** The client trusts the server's two reader
 channels — the `{ error }` of a refused request and the `error` frame of a
 stream — as sentences for a reader, because that is what they are for. Until

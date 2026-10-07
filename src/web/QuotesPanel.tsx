@@ -982,6 +982,17 @@ export function QuotesPanel({
                false only at the ceiling. */
             addable={quotesAppendOnOffer(owner)}
             findMore={findMore}
+            /* A job at the ceiling was not started by Find more, which is not
+               offered there: it is a forced re-run from Metadata. So its
+               status, and the way to ask again when it never became a job,
+               are the rewrite's (`rerun`), as on an outdated list below.
+               `rewriting` too: a run that has ended with its list unread is
+               the hold's waiting line, which `rerun` draws (rewrite-hold.ts). */
+            elsewhere={
+              owner.job || owner.starting || owner.failed || owner.rewriting
+                ? rerun("Choose them again", true)
+                : null
+            }
           />
         ) : /* **Status only, on an outdated list.** Its banner went on
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
@@ -1172,7 +1183,7 @@ function RankBar({
   onRank(rank: QuoteRank): void;
 }) {
   return (
-    <div className="quotes-rank">
+    <div className="gloss-sort">
       <OrderGroup label="Order the quotes by" selected={rank}>
         {/* No "order" word in front since 2026-10-01, as in Glossary; the
             group's `aria-label` still says it to a screen reader. */}
@@ -1180,7 +1191,7 @@ function RankBar({
           <button
             key={option.key}
             type="button"
-            className={`quotes-rank-btn${rank === option.key ? " on" : ""}`}
+            className={`gloss-sort-btn${rank === option.key ? " on" : ""}`}
             aria-pressed={rank === option.key}
             title={option.title}
             onClick={() => onRank(option.key)}
@@ -1241,12 +1252,12 @@ function BarSlider({
   const count = `${visible.length} of ${quotes.length}`;
 
   return (
-    <div className="quotes-bar">
-      <div className="quotes-bar-row">
-        <label className="quotes-bar-label" htmlFor="quotes-bar">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="quotes-bar">
           bar
         </label>
-        <span className="quotes-bar-value">
+        <span className="gloss-gate-value">
           {bar.toFixed(2)} · {withYours(count, yours)}
         </span>
         {/* Only once there is something to undo. A reset that is always there is
@@ -1254,7 +1265,7 @@ function BarSlider({
         {moved && (
           <button
             type="button"
-            className="quotes-bar-reset"
+            className="gloss-gate-reset"
             title={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             aria-label={`Reset the bar to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             onClick={() => onBar(null)}
@@ -1271,7 +1282,7 @@ function BarSlider({
           meaningless against a re-run list, where a score is still a score. */}
       <input
         id="quotes-bar"
-        className="quotes-bar-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         max={Math.max(stops.length - 1, 0)}
@@ -1288,7 +1299,7 @@ function BarSlider({
       {/* Always, never conditionally: present wherever the slider is, absent
           wherever it is not. A line that is sometimes missing for a *different*
           reason teaches the reader nothing. */}
-      <p className="quotes-bar-note">{note}</p>
+      <p className="gloss-gate-note">{note}</p>
     </div>
   );
 }
@@ -1609,6 +1620,7 @@ function Foot({
   running,
   addable,
   findMore,
+  elsewhere,
 }: {
   list: Quotes;
   /** False until the first job poll; neither a button nor the cap claim is true yet. */
@@ -1622,6 +1634,15 @@ function Foot({
    */
   addable: boolean;
   findMore: ReactElement;
+  /**
+   * The progress, Stop or failure of a run that is going or has failed (or
+   * the line that says its new list has not loaded), or null when there is
+   * none. Drawn at the ceiling **in place of** its
+   * sentence, which until 2026-10-07 stood where a running job's Stop and a
+   * failed one's Retry would have been (plan 261007a § K4). Under the
+   * ceiling `findMore` already carries the same status.
+   */
+  elsewhere: ReactElement | null;
 }) {
   /* **Said, because otherwise a Find more that found nothing looks exactly
      like a button that did nothing** — the job finishes, the list is the same
@@ -1632,7 +1653,7 @@ function Foot({
     <div className="quotes-foot">
       {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
       {addable ? (loaded ? findMore : null) : (
-        <p className="quotes-quiet">That is as many as we keep for one article.</p>
+        elsewhere ?? <p className="quotes-quiet">That is as many as we keep for one article.</p>
       )}
     </div>
   );

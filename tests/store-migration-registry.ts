@@ -1758,14 +1758,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "default `repeatable read` so a passing assertion cannot be the database's own default " +
       "agreeing with the bug. Nothing about it is filesystem; the two sites are `contextPaths`.",
   },
-  "tests/store-session.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "D1a — the commit seam **on the filesystem, where there is no transaction to hold**, and its " +
-      "sharpest case is a refusal over an artefact carried from a previous run, because against an " +
-      "empty directory a refusal proves nothing. The Postgres half of the same seam already lives " +
-      "in `store-pg-session.test.ts`.",
-  },
   "tests/store-uploads-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
@@ -3925,6 +3917,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "JSONL file with no foreign key anywhere, and the Postgres half overrides it with " +
         "`currentOwnerId()` on every fixture. `ai_calls_owner_id_users_id_fk` is real, so the " +
         "constraint exists — nothing reaches it with this id.",
+    },
+  },
+  "tests/referee-routes-postgres.test.ts": {
+    "07852712-f444-4aec-bd4a-b70403c8c03d": {
+      kind: "no-row-needed",
+      why:
+        "`outsider` is a request owner for the one case that asks whether somebody who does not " +
+        "own the article is turned away before `comments_criterion_fk` is ever consulted. Both " +
+        "calls made as him, `refereeCriteriaStore.remove` and `commentStore.create`, must reject " +
+        "with a 404 from the article lookup, and the case then checks that no comment and no " +
+        "criterion changed. If either call ever got as far as its write, the insert would name " +
+        "him in `comments.owner_id` and this entry would have to become `seeded`.",
     },
   },
   "tests/store-jobs-parity.test.ts": {

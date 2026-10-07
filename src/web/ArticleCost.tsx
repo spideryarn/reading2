@@ -31,6 +31,7 @@ import { CARD } from "./card.js";
 import { taskOf } from "../cost-cube.js";
 import { currentStepName } from "../step-order.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export type ArticleCostLoad =
   | { kind: "loading" }
@@ -75,7 +76,9 @@ export function useArticleCost(slug: string): ArticleCostLoad {
         const cost = await readJson<ArticleCost>(res);
         if (live) setState({ slug, load: { kind: "ready", cost } });
       } catch (e) {
-        if (live) setState({ slug, load: { kind: "failed", message: (e as Error).message } });
+        /* The server's refusal passes through; a lost connection or a bug is
+           said in our words, not its own (lib/describe-failure.ts). */
+        if (live) setState({ slug, load: { kind: "failed", message: describeFetchFailure(e as Error) } });
       }
     })();
     return () => {

@@ -13,18 +13,35 @@
  * sees exactly what it saw before, and so that `guardDbStore` lets it through
  * untranslated (src/store/db-errors.ts § Six things pass, the first).
  *
- * Thrown by ten loaders in src/store/pg.ts: `loadQuiz`, `loadCrossrefs` and
- * `loadCitations`, and since plan 261006h `loadSimpleSummary`, `loadIdeas`,
- * `loadFaq`, `loadTimeline`, `loadDebate`, `loadGlossary` and `loadQuotes`.
- * **"Not made" is each loader's own test**, and for three it is wider than an
- * empty column: `loadFaq`, `loadSimpleSummary` and `loadDebate` throw this for
- * a stored document they cannot use as well.
+ * Thrown by sixteen loaders in src/store/pg.ts. **"Not made" is each loader's
+ * own test**, and for several it is wider than an empty column: `loadFaq`,
+ * `loadSimpleSummary`, `loadDebate`, `loadRelations` and `loadSkim` throw this
+ * for a stored document they cannot use, and `loadSketch` and
+ * `loadIllustrated` for one with nothing in it.
  *
- * The loaders for tweets, relations, Skim, Sketch and Arc still throw a plain
- * error for the same fact; moving one over is this class at its throw, the
- * helper at its route and its name in `NONE_YET_AS_NULL` (src/web/lib/api.ts).
+ * ## Which reads answer `200 null`, and which do not yet
+ *
+ * **This is the one list; the other places that used to carry a copy point
+ * here.** (There were three copies, each naming five reads when there were
+ * six: Illustrated was missing from all of them.)
+ *
+ * - **Ten routes answer the header**: `loadQuiz`, `loadCrossrefs` and
+ *   `loadCitations`, and since plan 261006h `loadSimpleSummary`, `loadIdeas`,
+ *   `loadFaq`, `loadTimeline`, `loadDebate`, `loadGlossary` and `loadQuotes`.
+ * - **Six do not, and answer a 404 whatever the client sends**: `loadTweets`,
+ *   `loadRelations`, `loadSkim`, `loadSketch`, `loadIllustrated` and `loadArc`.
+ *   Their loaders have thrown this class since 2026-10-07; their routes do not
+ *   call `orNullWhenNotMadeYet`. Nothing written anywhere says they should
+ *   stay 404s. What is left for each is two edits **that must land together**:
+ *   the helper at its route, and its name in `NONE_YET_AS_NULL`
+ *   (src/web/lib/api.ts), so the offline cache does not keep the `null`.
+ *   tests/api-fetch-offline.test.ts fails when one is done without the other,
+ *   and tests/none-yet-is-not-a-404-route.test.ts § `STILL_404` pins the six
+ *   as they are.
+ *
  * docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md,
- * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md.
+ * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md,
+ * docs/plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md.
  */
 export class ArtefactNotMadeYet extends Error {
   readonly status = 404;

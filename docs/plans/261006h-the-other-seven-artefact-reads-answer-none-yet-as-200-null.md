@@ -130,6 +130,8 @@ production change, none after). Things decided on the way:
 - **Not one convention yet.** Tweets, relations, Skim, Sketch and Arc still answer a plain 404 for
   "not made yet". The docs and the header's comment name them. Moving them is the same three edits
   each plus a name in the offline pattern, and the test now fails if one is done without the other.
+  *(Corrected 2026-10-07: there are six, not five. Illustrated was missing from this list and
+  from both comments. The one list is now in `src/store/artefact-not-made-yet.ts`.)*
 - **Browser check** (Sonnet subagent, Playwright, local `dev-admin`, 1440 / 820 / 390, a dev server
   on this worktree at `a78132470`). On an article with none of the ten made, every view opened by
   URL: **all ten URLs were seen requested at every width**, each `200`, body `null`,

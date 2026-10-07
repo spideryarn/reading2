@@ -1,6 +1,8 @@
 /**
- * The reader's global profile **and their settings** — the Postgres half. src/store/fs.ts's
- * `fsReaderStore` (a thin wrap of src/profile.ts) is the other.
+ * The reader's global profile **and their settings**, in Postgres. Until
+ * 2026-09-05 this was one half of two: `fsReaderStore` in src/store/fs.ts, a
+ * thin wrap of src/profile.ts, was the other, and went with the filesystem
+ * store.
  *
  * One row per `owner_id`, upserted rather than read-modify-written, for the
  * same reason src/store/pg-lookups.ts gives for glossary lookups: a "read the
@@ -12,8 +14,8 @@
  *
  * That still holds now the row carries two things: **each write names one
  * column** and leaves the other where it was, so a profile save and a settings
- * change cannot overwrite each other. The filesystem half has to merge by hand
- * to get the same property — src/profile.ts § `patchReaderFile`.
+ * change cannot overwrite each other. The filesystem half had to merge by hand
+ * to get the same property.
  *
  * **Never logged**, and for the same reason as the per-article half: this
  * string is the reader's own description of themselves. See

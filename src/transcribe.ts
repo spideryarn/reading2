@@ -117,10 +117,13 @@ const MIN_AUDIO_BASE64 = 2_000;
  * A transcription endpoint gives no way to constrain the answer's shape, so the
  * one property still worth enforcing is that a transcript is roughly the size of
  * the thing that was said. **The number is a heuristic and not a measurement**,
- * which matters because everything else in this file's comments is measured: the
- * recorder stops at five minutes, speech is conventionally reckoned at ~150
- * words a minute, so a very talkative 750 words is ~5,000 characters and this is
- * four times that. Nobody has measured the longest real dictation. A reply
+ * which matters because everything else in this file's comments is measured.
+ * It was sized when one request could carry five minutes: speech is
+ * conventionally reckoned at ~150 words a minute, so a very talkative 750 words
+ * is ~5,000 characters and this is four times that. Since 2026-09-29 a request
+ * is one **part** of at most two minutes (`PART_MS`, `web/mic-recording.ts`), so
+ * it is looser still, and the fifteen-minute cap on a whole dictation does not
+ * reach it. Nobody has measured the longest real dictation. A reply
  * longer than this is not a long dictation, it is a model that started writing —
  * the failure the old schema existed to make obvious, arriving by a different
  * door.

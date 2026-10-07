@@ -636,8 +636,10 @@ control in that mode is held**: the panel's Regenerate, and *Write it again*, *F
 with the modes whose Regenerate is in this panel (Quiz, Summary, Thread, Ideas, Glossary and
 Sketch), and since 2026-10-07 it also holds the forced controls that are not: Illustrated's *Paint
 again*, Quotes' *Find more* and *Choose them again*, and the button on the stale banner in Timeline,
-FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)). **Skim's forced run is the one
-not held yet**; it waits on a change to the same hook.
+FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)), and Skim's *Plan it again*
+([261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md);
+[skim.md](skim.md) says what that hold does about the Quotes and Ideas a route's job may make
+first). Every artefact hook with a forced run now has one.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose
 it. Three things release it: a read **the server answered** shows a different artefact; the job
@@ -874,7 +876,25 @@ state: it is not in the URL and is not remembered, so the three start shut on ev
 read-outs are fed by fetches the page owns, so shutting a section cancels nothing.
 
 **The contents list and its search box are in the left margin**, as on Metadata, from 1024px wide
-up; an iPad in portrait and a phone do not get them. Pressing an entry opens that section if it is
+up. **Below that they are above the page**, in its own column: the search box, then a *Contents*
+button that opens the list, shut until pressed. On `/profile` that is under the one-line
+introduction and above *Account*; on Metadata, under the title and the Archive/Share row and above
+the first section. An iPad in portrait and a phone did not get them at all until 2026-10-07:
+
+> On something like a portrait iPhone, obviously it's not wide enough. So perhaps we should then
+> put the search bar and table of contents above the actual contents of the page, like the metadata
+> or the profile page, because I think that's a useful piece of functionality for helping people
+> navigate.
+>
+> — Greg, 2026-10-06, feedback report `spya-vwf00u`
+
+It is one `<nav>` with two placements, not two lists, which is why each page mounts it inside
+`<main>` at the narrow one's spot. A typed query shows its matches without *Contents* being
+pressed, and the button is not drawn while it does. Shut by default is the one product choice in
+it: about fifteen rows a finger can press are a phone's whole first screen.
+[Plan 261007c](../plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md).
+
+Pressing an entry opens that section if it is
 shut, scrolls to it and flashes it. 261003k left this as a question, and Greg's answer was:
 
 > Q-profile-contents-list I don't understand the question. Probably B

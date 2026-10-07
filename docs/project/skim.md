@@ -178,6 +178,30 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   will be. The Metadata row names only `skim`, so it never buys Quotes or Ideas, and refuses
   in the row when there are no Quotes.
 
+  **One press, one route** (since 2026-10-07,
+  [261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
+  From the press until the new route has been read, *Plan it again* is held, in the banner and in
+  the status foot: the rewrite hold every other forced verb has
+  ([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+  Before it, the button was live over the old route between the job ending and its read landing,
+  and two clicks in one tick made two forced requests. Held with nothing running, the band says
+  *The new route hasn't loaded yet.* and offers *Try again*, which only reads.
+
+  **What the hold does about the Quotes and the Ideas.** It is keyed by the article and the `skim`
+  step, and it follows the one job the press made. When that job chooses the Quotes or finds the
+  Ideas first, the hold lasts through them while that job runs. Failure or cancellation in a
+  prerequisite releases it too. It holds nothing of theirs: *Find more* in Quotes and Regenerate
+  in Ideas have holds of their own, under their own steps, and a held one of those does not hold
+  *Plan it again*. A press made while the Quotes or Ideas read is still out is kept as an intent and made once, when
+  they answer; the hold starts when the request is made. The unforced run (the empty state's
+  button, the automatic run, *Plan the route for this*) is never held.
+
+  **A reply is checked before it is published** (the same plan). The read asks that a reply has a
+  route with a list of stops, which is what the server itself requires before it answers 200; a
+  404 and a `200 null` both mean none yet. Anything else is a failed read: the route on screen and
+  its banners stay, and the band says so with *Try again* —
+  [`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx).
+
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
 written under `trajectory/7` and unchanged in `skim/8` (whose request adds a strict JSON schema):
 
@@ -340,7 +364,9 @@ no purpose, a small box, *What do you want from this piece?*, and **Plan the rou
 saves the purpose and only then re-plans the route (unforced — the stamp's profile hash is what
 re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
 with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
-cannot be read, and no second ask under the stale or profile-changed banner.
+cannot be read, and no second ask under the stale or profile-changed banner. A save whose reply is
+lost is checked against what is stored before the box says whether it was saved
+([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
 **Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,

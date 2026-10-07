@@ -26,7 +26,7 @@ import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
 import { blockRow, rowsForBlockIds } from "./rows.js";
 import { arrivalAnchor, subscribeArrivalAnchor } from "./scroll.js";
-import { isFolded } from "./fold.js";
+import { isFoldedAway } from "./fold.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
 const FOCUS_LINE = 0.4;
@@ -84,12 +84,13 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
       );
       /* A folded section is never the one in focus (fold.ts). The table's
          ResizeObserver below already hears a fold, since it changes the
-         table's height. */
+         table's height. `isFoldedAway`, not `isFolded`: the first section
+         starts on the masthead's echo, hidden with its section on screen. */
       const focusRow =
         sections[
           activeSectionIndex(tops, focusLine, (i) => {
             const s = sections[i];
-            return s !== undefined && isFolded(s.blockId);
+            return s !== undefined && isFoldedAway(s.blockId);
           })
         ]?.row ?? 0;
       if (focusRow === last) return;

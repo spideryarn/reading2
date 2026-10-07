@@ -46,10 +46,11 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { COULD_NOT_REACH, PAGE_FAULT } from "../src/messages.js";
+import { COULD_NOT_REACH, PAGE_FAULT, THREAD_RECHECK_FAILED } from "../src/messages.js";
 import type { Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type { Article, Block, BlockId } from "../src/types.js";
+import { MalformedReply } from "../src/web/lib/reader-facing.js";
 
 const OWNER = { id: "owner-1", email: "owner@example.com" };
 
@@ -440,6 +441,8 @@ const BODIES: Record<string, unknown> = {
 type Answer =
   /** 200 with `BODIES[kind]`. */
   | "ok"
+  /** 200 with exactly this body, whatever it is. */
+  | { body: unknown }
   /** 404 — nobody has asked for one. The default. */
   | "missing"
   /** `fetch` rejects the way a dropped connection does, in Safari's words. */
@@ -465,6 +468,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 function artefactResponse(kind: string, answer: Answer): Response {
+  if (typeof answer === "object") return json(answer.body);
   if (answer === "transport") throw new TypeError(BROWSER_WORDS);
   if (answer === "fault") throw new Error(FAULT_WORDS);
   if (answer === "null-artefact") return json({ [kind]: null, stale: true, outdated: true, profileChanged: true });
@@ -517,6 +521,10 @@ const { useIdeasRead } = await import("../src/web/useIdeas.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuizRead } = await import("../src/web/useQuiz.js");
+const { useTweets } = await import("../src/web/useTweets.js");
+const { useSkim } = await import("../src/web/useSkim.js");
+const { useSketch } = await import("../src/web/useSketch.js");
+const { useIllustrated } = await import("../src/web/useIllustrated.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -853,6 +861,342 @@ describe.each([
     expect(seen.read.status).toBe("ready");
     expect(seen.artefact).toEqual(kept);
     expect(posts).toEqual([]);
+  });
+});
+
+/* ------------------------------------------ a picture's flags go with the picture --
+
+   **A reply that was read and found to hold nothing drawable is "none", and
+   "none" carries no flags.** Both picture hooks have a second way to `none`
+   besides the 404: the stored value came back and the checker kept no scene
+   (Sketch) or no plate (Illustrated). That branch cleared the picture and left
+   `stale`, `outdated`, `profiled` and `profileChanged` as the previous picture
+   had them. What the checker refused (`faults`) is kept on purpose: it is the
+   only thing that says why there is nothing to draw. Plan 261007e § 3. */
+
+const FLAGGED = { stale: true, outdated: true, profileChanged: true };
+const BLOCK_IDS = BLOCKS.map((block) => block.id);
+
+describe.each([
+  {
+    name: "Sketch",
+    kind: "sketch",
+    use: () => {
+      const read = useSketch(SLUG, BLOCK_IDS);
+      return { read, picture: read.sketch };
+    },
+    /* Something the checker refuses whole, so there are faults to keep. */
+    nothingDrawable: { title: "t", caption: "c", scenes: ["not a scene"] },
+  },
+  {
+    name: "Illustrated",
+    kind: "illustrated",
+    use: () => {
+      const read = useIllustrated(SLUG, BLOCKS);
+      return { read, picture: read.illustrated };
+    },
+    nothingDrawable: {
+      ...(BODIES.illustrated as { illustrated: object }).illustrated,
+      plates: "not a list",
+    },
+  },
+])("$name: a checked-empty answer carries none of the last picture's flags", ({ kind, use, nothingDrawable }) => {
+  const stored = (BODIES[kind] as Record<string, object>)[kind]!;
+  const flagsOf = (read: ReturnType<typeof use>["read"]) => ({
+    stale: read.stale,
+    outdated: read.outdated,
+    profiled: read.profiled,
+    profileChanged: read.profileChanged,
+  });
+
+  it("flagged picture, then nothing drawable, then a fresh picture with flags of its own", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    expect(seen.read.status).toBe("ready");
+    expect(seen.picture).not.toBeNull();
+    expect(flagsOf(seen.read)).toEqual({ stale: true, outdated: true, profiled: true, profileChanged: true });
+
+    answers = { [kind]: { body: { [kind]: { ...nothingDrawable, profileHash: "a-profile" }, ...FLAGGED } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("none");
+    expect(seen.read.error).toBeNull();
+    expect(seen.picture).toBeNull();
+    expect(seen.read.faults.length, "what the checker refused is the only account of the emptiness").toBeGreaterThan(0);
+    expect(flagsOf(seen.read), "the previous picture's flags, beside no picture").toEqual({
+      stale: false,
+      outdated: false,
+      profiled: false,
+      profileChanged: false,
+    });
+
+    answers = { [kind]: { body: { [kind]: stored, stale: false, outdated: true, profileChanged: false } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.picture).not.toBeNull();
+    expect(flagsOf(seen.read)).toEqual({ stale: false, outdated: true, profiled: false, profileChanged: false });
+    expect(posts).toEqual([]);
+  });
+
+  it("a 404 after a flagged picture clears the flags and the faults", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    /* Through the checked-empty answer first, so there are faults for the 404 to clear. */
+    answers = { [kind]: { body: { [kind]: nothingDrawable, ...FLAGGED } } };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.faults.length).toBeGreaterThan(0);
+    answers = { [kind]: "missing" };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("none");
+    expect(seen.picture).toBeNull();
+    expect(seen.read.faults).toEqual([]);
+    expect(flagsOf(seen.read)).toEqual({ stale: false, outdated: false, profiled: false, profileChanged: false });
+  });
+
+  it("a failed re-read keeps the picture and its flags", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: { body: { [kind]: { ...stored, profileHash: "a-profile" }, ...FLAGGED } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    const kept = seen.picture;
+    answers = { [kind]: "transport" };
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.read.error).not.toBeNull();
+    expect(seen.picture).toBe(kept);
+    expect(flagsOf(seen.read)).toEqual({ stale: true, outdated: true, profiled: true, profileChanged: true });
+  });
+});
+
+/* **Thread and Skim, which published a reply before checking it** (WCO4, plan
+   261007e). Their envelope's key is not their path's word, and Skim's hook
+   stands on two other reads, so they are rows of their own. `readJson` checks
+   no shape: an empty 200 is `{}`, and a reply with no artefact used to be
+   committed as one (Thread ended `ready` with no thread; Skim ended `ready`
+   with `undefined` for a route).
+
+   **`200 null` is not one of the broken ones** (the umbrella's U15). It is how
+   a route says "none yet" under `NONE_YET_AS_NULL_HEADER`; neither of these
+   routes sends it today, and a reader of one must not call it a fault. */
+const CORPUS = path.resolve(import.meta.dirname, "fixtures", "data-root", "data");
+
+describe.each([
+  {
+    kind: "tweets",
+    needs: [] as string[],
+    use: () => {
+      const read = useTweets(SLUG);
+      return { read, artefact: read.thread, flags: [read.stale, read.profileChanged] };
+    },
+    /* Thread's own sentence for any failed re-read of a thread it has (useTweets.ts § the catch). */
+    recheck: THREAD_RECHECK_FAILED.message,
+    /* Thread starts by arrival: "none yet" is its cue to write one, a 404's or a null's alike. */
+    onNone: [{ slug: SLUG, steps: ["tweets"] }] as unknown[],
+    broken: [
+      {},
+      [],
+      "a thread",
+      { stale: true, profileChanged: true },
+      { thread: null, stale: true, profileChanged: true },
+      { thread: "a thread", stale: true, profileChanged: true },
+    ] as unknown[],
+  },
+  {
+    kind: "skim",
+    needs: ["quotes", "ideas"],
+    use: () => {
+      const read = useSkim(SLUG, useQuotesRead(SLUG), useIdeasRead(SLUG));
+      return {
+        read,
+        artefact: read.skim,
+        flags: [read.stale, read.outdated, read.profileChanged, read.notOnRoute > 0],
+      };
+    },
+    recheck: PAGE_FAULT.message,
+    onNone: [] as unknown[],
+    broken: [
+      {},
+      [],
+      "a route",
+      { stale: true, outdated: true, profileChanged: true, notOnRoute: 3 },
+      { skim: null, stale: true, outdated: true, profileChanged: true, notOnRoute: 3 },
+      /* The server refuses a route with no `stops` list as a 404 (`loadSkim`); so does the page. */
+      { skim: { ...STAMP, profileHash: null }, stale: true, outdated: true, profileChanged: true, notOnRoute: 3 },
+    ] as unknown[],
+  },
+])("$kind: a reply is checked before it is published", ({ kind, needs, use, recheck, onNone, broken }) => {
+  let seen!: ReturnType<typeof use>;
+  function Probe() {
+    seen = use();
+    return null;
+  }
+  const ready = (answer: Answer): Record<string, Answer> => ({
+    ...Object.fromEntries(needs.map((need) => [need, "ok" as Answer])),
+    [kind]: answer,
+  });
+  async function mount(answer: Answer) {
+    answers = ready(answer);
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+  }
+
+  const expectMalformedReply = () => {
+    /* PAGE_FAULT alone also accepts a missing import's ReferenceError. Pin
+       the deliberate refusal, through the real catch's diagnostic. */
+    expect(console.error).toHaveBeenCalledWith(expect.any(String), expect.any(MalformedReply));
+  };
+
+  it.each(["empty", "legacy"] as const)("accepts a stored %s artefact", async (variant) => {
+    /* The current writers refuse empty output, but the store can still
+       answer 200 for an empty array or an older producer's object. */
+    const envelope = BODIES[kind] as Record<string, object>;
+    const key = kind === "tweets" ? "thread" : "skim";
+    const artefact = {
+      ...envelope[key],
+      ...(kind === "tweets"
+        ? { version: "tweets/1", tweets: variant === "empty" ? [] : ["A stored legacy post."] }
+        : { version: "trajectory/1", stops: variant === "empty" ? [] : [{ quoteId: "spya-qte234", depth: 1, role: "An old stop" }] }),
+    };
+    await mount({ body: { ...envelope, [key]: artefact } });
+    expect(seen.read.status).toBe("ready");
+    expect(seen.read.error).toBeNull();
+    expect(seen.artefact).toEqual(artefact);
+    expect(posts).toEqual([]);
+  });
+
+  it.each(broken.map((body) => ({ body, says: JSON.stringify(body) })))(
+    "a malformed revalidation ($says) keeps the accepted answer and its flags, and says so",
+    async ({ body }) => {
+      await mount("ok");
+      const kept = seen.artefact;
+      expect(kept).toBeTruthy();
+      expect(seen.read.status).toBe("ready");
+
+      vi.mocked(console.error).mockClear();
+
+      answers = ready({ body });
+      await act(async () => seen.read.refresh());
+      await settle(2);
+      expect(seen.read.error).toBe(recheck);
+      expectMalformedReply();
+      expect(seen.read.status).toBe("ready");
+      expect(seen.artefact, "a rejected reply replaced the loaded artefact").toBe(kept);
+      expect(seen.flags, "a rejected reply's flags were published").toEqual(seen.flags.map(() => false));
+
+      const before = gets[kind] ?? 0;
+      answers = ready("ok");
+      await act(async () => seen.read.retryRead());
+      await settle(2);
+      expect((gets[kind] ?? 0) - before).toBe(1);
+      expect(seen.read.error).toBeNull();
+      expect(seen.read.status).toBe("ready");
+      expect(seen.artefact).toEqual(kept);
+      expect(posts).toEqual([]);
+    },
+  );
+
+  it.each(broken.map((body) => ({ body, says: JSON.stringify(body) })))(
+    "a malformed opening read ($says) is a failed read, not an artefact",
+    async ({ body }) => {
+      await mount({ body });
+      expectMalformedReply();
+      expect(seen.read.status).toBe("error");
+      expect(seen.read.error).toBe(PAGE_FAULT.message);
+      expect(seen.artefact).toBeNull();
+      expect(posts).toEqual([]);
+    },
+  );
+
+  it("reads 200 null as none yet, exactly as it reads a 404", async () => {
+    await mount("missing");
+    const after404 = [...posts];
+    expect(after404).toEqual(onNone);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    posts = [];
+    resetActivations();
+    jobEngine.reset();
+
+    await mount({ body: null });
+    expect(seen.read.status).toBe("none");
+    expect(seen.read.error).toBeNull();
+    expect(seen.artefact).toBeNull();
+    expect(posts).toEqual(after404);
+
+    answers = ready("ok");
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.artefact).toBeTruthy();
+
+    answers = ready({ body: null });
+    await act(async () => seen.read.refresh());
+    await settle(2);
+    expect(seen.read.status).toBe("none");
+    expect(seen.read.error).toBeNull();
+    expect(seen.artefact).toBeNull();
+    expect(seen.flags).toEqual(seen.flags.map(() => false));
+    expect(posts.filter((post) => post.force), "absence is never a forced run").toEqual([]);
+  });
+});
+
+/* **The envelopes the server really sends pass.** The corpus holds two stored
+   threads, each wrapped here as `GET /api/tweets/:slug` wraps one (`loadTweets`
+   then `withProfileChanged`, src/routes.ts). It holds no Skim route, so Skim's
+   real envelope is argued from `loadSkim`, which answers 404 unless `skim.stops`
+   is a list: the one thing the page asks of a route. */
+describe("tweets: every thread stored in the fixture corpus is accepted", () => {
+  const stored = readdirSync(CORPUS).filter((slug) => {
+    try {
+      readFileSync(path.join(CORPUS, slug, "tweets.json"));
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  it("finds some", () => {
+    expect(stored.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each(stored)("%s", async (slug) => {
+    const thread = JSON.parse(readFileSync(path.join(CORPUS, slug, "tweets.json"), "utf8")) as { tweets: unknown[] };
+    let seen!: ReturnType<typeof useTweets>;
+    function Probe() {
+      seen = useTweets(SLUG);
+      return null;
+    }
+    answers = { tweets: { body: { thread, stale: false, profileChanged: false } } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    expect(seen.error).toBeNull();
+    expect(seen.status).toBe("ready");
+    expect(seen.thread?.tweets).toHaveLength(thread.tweets.length);
   });
 });
 

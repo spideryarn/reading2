@@ -493,6 +493,26 @@ describe("the acceptance endpoints", () => {
     expect(out.status).toBe(404);
   });
 
+  /* **An id that is not a UUID is the same 404, not a 500** (2026-10-07, SVO2 in
+     docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md).
+     The route patterns admit `[\\w-]+`, and `find` bound whatever arrived to a
+     `uuid` column, so Postgres refused the comparison (SQLSTATE 22P02) and a
+     typo became `[db-failed]` and a Sentry report. Watched red on all three
+     paths, 500 each, before `find` asked `isUuid`. The well-formed unknown id
+     above and the real sessions throughout this file are the controls: a guard
+     that refused everything would turn those red instead. */
+  it.each(["connected", "usage", "close"])(
+    "answers a session id that is not a UUID with the same 404, on /%s",
+    async (verb) => {
+      const body = verb === "usage" ? turn() : verb === "close" ? { reason: "hangup" } : {};
+      const out = await post(`/api/live/not-a-uuid/${verb}`, body);
+      expect(out.status).toBe(404);
+      const control = await post(`/api/live/00000000-0000-4000-8000-00000000dead/${verb}`, body);
+      expect(control.status).toBe(404);
+      expect(out.body).toEqual(control.body);
+    },
+  );
+
   it("records the close, with the browser's own word for why", async () => {
     const id = await ticket("spya-lbaaae");
     expect((await post(`/api/live/${id}/close`, { reason: "session_cap" })).status).toBe(200);

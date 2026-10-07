@@ -1,0 +1,36 @@
+-- This migration runs no SQL, on purpose. It exists for the snapshot beside it.
+-- docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md § Stage 6
+--
+-- Five indexes and five CHECKs were written by hand in earlier migrations and
+-- never declared in src/db/schema.ts:
+--
+--   jobs_queued_idx, jobs_lease_idx, jobs_owner_created_idx     0001
+--   chat_threads_article_updated_idx,
+--   search_runs_article_created_idx                              0003
+--   ai_calls_provider_account_known                              0023, widened in 20260902150952
+--   ai_calls_cost_source_known, ai_calls_one_cost_source         0023
+--   ai_calls_price_version_iff_computed                          0025
+--   ai_calls_byok_upstream_only                                  20260902141103
+--
+-- They are declared now. `drizzle-kit generate` diffs schema.ts against the
+-- previous snapshot, which had never heard of them, so it wrote five
+-- CREATE INDEX and five ADD CONSTRAINT statements for objects that already
+-- exist: applied to a database built from this folder, the first one failed
+-- with `relation "chat_threads_article_updated_idx" already exists`.
+--
+-- **They are deleted here rather than made idempotent**, for the reason
+-- 0030_drop_summary_steer.sql gives: the earlier migrations already did that
+-- work, on every database this chain has ever built, and a second migration
+-- claiming to do it again is a lie about what changed when.
+--
+-- `meta/20261007012654_snapshot.json` is kept exactly as generated, and it is
+-- the point: it records all ten, so the next `db:generate` diffs against what
+-- is there. Not made with `--custom`, which would have written a copy of the
+-- PREVIOUS snapshot and left the ten undeclared for the next generate to
+-- re-emit.
+--
+-- That the declarations describe the objects that exist, and not ten slightly
+-- different ones, was checked rather than assumed: in a scratch database built
+-- from this folder, the ten were dropped and the ten generated statements run
+-- in their place, and pg_get_indexdef / pg_get_constraintdef gave the same
+-- text before and after. tests/db-schema.test.ts holds each definition.

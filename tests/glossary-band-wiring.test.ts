@@ -232,7 +232,7 @@ describe("the threshold wiring", () => {
        reader nothing, so neither of the first two may be behind a `note &&`. */
     expect(glossaryPanel).toMatch(/<ThresholdSlider\s[^>]*note=\{gateNote\(hiddenCount, entries\.length\)\}/);
     expect(thresholdSlider).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
-    expect(quotesPanel).toMatch(/<p className="quotes-bar-note">\{note\}<\/p>/);
+    expect(quotesPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
     for (const panel of [glossaryPanel, thresholdSlider, quotesPanel, searchPanel]) {
       expect(panel).not.toMatch(/\{note && </);
     }
@@ -241,7 +241,7 @@ describe("the threshold wiring", () => {
        (Greg, spya-eqcbay; tests/search-results-get-the-room.test.tsx is the
        behaviour). The condition is the count, never the string. */
     expect(searchPanel).toMatch(
-      /\{hiddenCount > 0 && <p className="srch-gate-note">\{note\}<\/p>\}/,
+      /\{hiddenCount > 0 && <p className="gloss-gate-note">\{note\}<\/p>\}/,
     );
   });
 

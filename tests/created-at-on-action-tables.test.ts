@@ -31,6 +31,7 @@ import { pgCitationInvestigationStore } from "../src/store/pg-citation-investiga
 import { pgGlossaryHiddenStore } from "../src/store/pg-glossary-hidden.js";
 import { pgGlossaryLookupStore } from "../src/store/pg-lookups.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
+import { pgSourceGuessStore } from "../src/store/pg-source-guesses.js";
 import type { CitationFind, CitationInvestigation, GlossaryLookup } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -45,6 +46,7 @@ await pgReady({
     { table: "spideryarn.glossary_lookups", column: "created_at" },
     { table: "spideryarn.citation_finds", column: "created_at" },
     { table: "spideryarn.citation_investigations", column: "created_at" },
+    { table: "spideryarn.upload_source_guesses", column: "created_at" },
   ],
 });
 
@@ -294,5 +296,55 @@ describe("citation_investigations.created_at", () => {
     const after = await timesOf("citation_investigations", "at", byEntry(entry));
     expect(after.moving).toBe(LATER);
     expect(after.createdAt).toBeNull();
+  });
+});
+
+/**
+ * **The sixth table, added 2026-10-07** (seventh sweep, DB4). Until then
+ * `claimed_at` stood in as this table's "when", and it is not one: every
+ * reclaim re-stamps it and `release` sets it to the Unix epoch so the row is
+ * reclaimable at once. `claimed_at` still means exactly that — the eligibility
+ * clock — and `created_at` is the first claim, which no store names.
+ */
+describe("upload_source_guesses.created_at", () => {
+  const mine = sql`article_id = ${ARTICLE_ID}`;
+  const EPOCH = new Date(0).toISOString();
+
+  it("is stamped on the first claim and kept through a release and a reclaim, while `claimed_at` moves", async () => {
+    const claimed = await asOwner(() => pgSourceGuessStore.claim(SLUG, { staleMs: 60_000 }));
+    if (claimed.kind !== "claimed") throw new Error(`the first claim was ${claimed.kind}`);
+    const first = await timesOf("upload_source_guesses", "claimed_at", mine);
+    expectRecent(first.createdAt, startedAt);
+    expectRecent(first.moving, startedAt);
+
+    // The release that used to erase the table's only real time.
+    expect(await asOwner(() => pgSourceGuessStore.release(SLUG, claimed.token, { refund: true }))).toBe(true);
+    const released = await timesOf("upload_source_guesses", "claimed_at", mine);
+    expect(released.moving).toBe(EPOCH);
+    expect(released.createdAt).toBe(first.createdAt);
+
+    await pause(20);
+    const again = await asOwner(() => pgSourceGuessStore.claim(SLUG, { staleMs: 60_000 }));
+    expect(again.kind).toBe("claimed");
+    const reclaimed = await timesOf("upload_source_guesses", "claimed_at", mine);
+    expectRecent(reclaimed.moving, startedAt);
+    expect(reclaimed.createdAt).toBe(first.createdAt);
+  });
+
+  it("stays null on a row from before the column, when it is reclaimed and answered", async () => {
+    /* The row the case above left, put in the state a row that predates the
+       column is in, and stale so that it can be claimed again. */
+    await getDb().execute(
+      sql`update spideryarn.upload_source_guesses
+             set created_at = null, claimed_at = to_timestamp(0), attempts = 1 where ${mine}`,
+    );
+    const claimed = await asOwner(() => pgSourceGuessStore.claim(SLUG, { staleMs: 60_000 }));
+    if (claimed.kind !== "claimed") throw new Error(`the reclaim was ${claimed.kind}`);
+    expect((await timesOf("upload_source_guesses", "claimed_at", mine)).createdAt).toBeNull();
+
+    await asOwner(() =>
+      pgSourceGuessStore.finish(SLUG, claimed.token, { status: "none", why: "no-match", searches: 1, model: "m" }),
+    );
+    expect((await timesOf("upload_source_guesses", "finished_at", mine)).createdAt).toBeNull();
   });
 });
