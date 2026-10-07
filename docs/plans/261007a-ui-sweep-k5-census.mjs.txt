@@ -1,0 +1,67 @@
+/* K5 census: every rule, in any stylesheet (or in a built CSS file), whose
+   selector names a slider or order-row class; grouped by "shape" (the selector
+   with the family prefix replaced), so identical copies line up.
+     node k5-census.mjs src            # the source sheets, in import order
+     node k5-census.mjs built <file>   # one emitted stylesheet
+   Prints a canonical listing; two listings can be diffed as text. */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import postcss from "/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/node_modules/postcss/lib/postcss.mjs";
+
+const ROOT = "/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a";
+const NAMES = /(gloss-gate|srch-gate|quotes-bar|dbt-bar|gloss-sort|quotes-rank|srch-sort)/;
+const [mode, file] = process.argv.slice(2);
+const canon = process.argv.includes("--canon");
+
+/* The families' names mapped onto one, to ask "are these the same rule?". */
+const shape = (sel) =>
+  sel
+    .replace(/\.(gloss-gate|srch-gate|quotes-bar|dbt-bar)(?![\w])/g, ".SLIDER")
+    .replace(/\.(gloss-gate|srch-gate|quotes-bar|dbt-bar)-/g, ".SLIDER-")
+    .replace(/\.(gloss-sort|quotes-rank)-btn/g, ".ORDER-btn")
+    .replace(/\.(gloss-sort|quotes-rank)(?![\w-])/g, ".ORDER");
+
+function sheets() {
+  if (mode === "built") return [[path.basename(file), readFileSync(file, "utf8")]];
+  const entry = readFileSync(`${ROOT}/src/web/styles.css`, "utf8");
+  return [...entry.matchAll(/@import "\.\/styles\/([\w-]+\.css)"/g)].map((m) => [m[1], readFileSync(`${ROOT}/src/web/styles/${m[1]}`, "utf8")]);
+}
+
+const rows = [];
+let order = 0;
+for (const [name, css] of sheets()) {
+  postcss.parse(css).walkRules((rule) => {
+    order++;
+    if (!NAMES.test(rule.selector)) return;
+    const media = [];
+    for (let p = rule.parent; p && p.type !== "root"; p = p.parent) if (p.type === "atrule") media.unshift(`@${p.name} ${p.params}`);
+    const decls = [];
+    rule.walkDecls((d) => decls.push(`${d.prop}: ${d.value.replace(/\s+/g, " ")}`));
+    for (const sel of rule.selectors) {
+      if (!NAMES.test(sel)) continue;
+      rows.push({ name, order, media: media.join(" "), sel: sel.replace(/\s+/g, " ").trim(), decls: decls.join("; ") });
+    }
+  });
+}
+
+if (canon) {
+  /* For comparing two trees: the selector under its family-free shape, with
+     its condition and declarations; sorted, with duplicates collapsed. */
+  const lines = new Set(rows.map((r) => `${r.media ? `${r.media} | ` : ""}${shape(r.sel)} { ${r.decls} }`));
+  console.log([...lines].sort().join("\n"));
+} else {
+  for (const r of rows) console.log(`${r.name}\t#${r.order}\t${r.media || "-"}\t${r.sel}\t{ ${r.decls} }`);
+  console.log(`\n${rows.length} selector occurrences`);
+  const by = new Map();
+  for (const r of rows) {
+    const k = `${r.media ? `${r.media} | ` : ""}${shape(r.sel)}`;
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(r);
+  }
+  console.log("\n--- groups (shape: copies; identical?) ---");
+  for (const [k, list] of by) {
+    const same = new Set(list.map((r) => r.decls)).size === 1;
+    console.log(`${k}\t${list.length}\t${same ? "identical" : "DIFFER"}\t${list.map((r) => `${r.sel}@${r.name}`).join(", ")}`);
+    if (!same) for (const r of list) console.log(`    ${r.sel}: { ${r.decls} }`);
+  }
+}

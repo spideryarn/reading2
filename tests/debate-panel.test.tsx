@@ -64,6 +64,7 @@ import type { DebateOrder } from "../src/web/debate-order.js";
 import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate } from "../src/public-types.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 import {
   CITERS_ABOUT,
   CITERS_HEADING,
@@ -1985,10 +1986,22 @@ describe("Claims, and the relevance bar", () => {
      *"Nothing is hidden by this threshold."* is gone. */
   it("hides nothing until the reader moves it, and says nothing while it hides nothing", () => {
     paint(owner({ debate: judged() }), "claims");
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 3 of 3 judged");
-    expect(host.querySelector(".dbt-rel .dbt-bar-note")).toBeNull();
+    expect(host.querySelector(".dbt-rel .gloss-gate-value")?.textContent).toBe("bears loosely · 3 of 3 judged");
+    expect(host.querySelector(".dbt-rel .gloss-gate-note")).toBeNull();
     expect(text()).not.toContain("Nothing is hidden by this threshold.");
-    expect(host.querySelector(".dbt-rel .dbt-bar-reset")).toBeNull();
+    expect(host.querySelector(".dbt-rel .gloss-gate-reset")).toBeNull();
+  });
+
+  /* The value is words, so it is not mono: the one thing this bar does not
+     share with every other band's slider, whose classes it carries
+     (glossary.css § the threshold slider; plan 261007a § K5). Both halves: the
+     modifier is on the span, and its rule hands the face back. Without either
+     the words are drawn as a reading off an instrument, and nothing else here
+     would notice. */
+  it("draws its value in the band's own face, not the other sliders' mono", () => {
+    paint(owner({ debate: judged() }), "claims");
+    expect(host.querySelector(".dbt-rel .gloss-gate-value")?.className).toBe("gloss-gate-value in-words");
+    expect(readerCssNoComments()).toMatch(/\.gloss-gate-value\.in-words\s*\{\s*font-family:\s*inherit;?\s*\}/);
   });
 
   it("never hides an unjudged row, and its count is the rows drawn", () => {
@@ -1997,8 +2010,8 @@ describe("Claims, and the relevance bar", () => {
     /* Its N of M counts the rows the AI judged: one drawn of three. The
        unjudged row is still on the list but is not made to look as though it
        cleared "bears directly". */
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 1 of 3 judged");
-    expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toBe(
+    expect(host.querySelector(".dbt-rel .gloss-gate-value")?.textContent).toBe("bears directly · 1 of 3 judged");
+    expect(host.querySelector(".dbt-rel .gloss-gate-note")?.textContent).toBe(
       "2 answers to its claims are hidden by this threshold. Drag the slider left to show them.",
     );
     /* The claim's own count is the rows under it, and so is the segment's. */
@@ -2007,7 +2020,7 @@ describe("Claims, and the relevance bar", () => {
     expect(card()).toContain("2 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
     expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
-    expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
+    expect(host.querySelector(".dbt-rel .gloss-gate-reset")).not.toBeNull();
   });
 
   /* GPT Sol round 2 of 260929h, R2: with every judged row hidden and an
@@ -2027,8 +2040,8 @@ describe("Claims, and the relevance bar", () => {
     });
     paint(owner({ debate: allJudgedHidden }), "claims", "prioritised", new Map(), { relevance: "directly" });
     expect(rowTitles()).toContain("Unjudged");
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 0 of 2 judged");
-    const note = host.querySelector(".dbt-rel .dbt-bar-note")?.textContent ?? "";
+    expect(host.querySelector(".dbt-rel .gloss-gate-value")?.textContent).toBe("bears directly · 0 of 2 judged");
+    const note = host.querySelector(".dbt-rel .gloss-gate-note")?.textContent ?? "";
     expect(note).not.toMatch(/^All /);
     expect(note).toBe("2 answers to its claims are hidden by this threshold. Drag the slider left to show them.");
   });
@@ -2050,11 +2063,11 @@ describe("Claims, and the relevance bar", () => {
     paint(owner({ debate: allPartly }), "claims", "prioritised", new Map(), { relevance: "directly" });
     expect(host.querySelectorAll(".dbt-item")).toHaveLength(0);
     expect(host.querySelector(".dbt-rel")).not.toBeNull();
-    expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toMatch(/^All 2 answers to its claims are hidden/);
+    expect(host.querySelector(".dbt-rel .gloss-gate-note")?.textContent).toMatch(/^All 2 answers to its claims are hidden/);
     /* A list the reader's own setting emptied is not a search that found nothing. */
     expect(host.querySelector(".dbt-empty")).toBeNull();
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
-    press(host.querySelector(".dbt-rel .dbt-bar-reset"));
+    press(host.querySelector(".dbt-rel .gloss-gate-reset"));
     expect(relevanced).toEqual([null]);
     /* …and untouched, the same rows show the bar too. */
     paint(owner({ debate: allPartly }), "claims");
@@ -2094,11 +2107,11 @@ describe("Claims, and the relevance bar", () => {
     ];
     const debate = shared({ claims: { rows, sourceNotPublishable: 0 } } as Partial<PublicDebate>);
     paintShared(debate, "claims");
-    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 2 of 2 judged");
+    expect(host.querySelector(".dbt-rel .gloss-gate-value")?.textContent).toBe("bears loosely · 2 of 2 judged");
     expect(rowTitles()).toEqual(["Direct", "Loose"]);
     paintShared(debate, "claims", "prioritised", { relevance: "directly" });
     expect(rowTitles()).toEqual(["Direct"]);
-    expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
+    expect(host.querySelector(".dbt-rel .gloss-gate-reset")).not.toBeNull();
   });
 });
 

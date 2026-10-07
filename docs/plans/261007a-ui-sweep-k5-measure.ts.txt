@@ -1,0 +1,399 @@
+/* K5: record everything a reader could see of the threshold slider and the
+   order row, so the same run after the dedup can be compared with it.
+
+     SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx k5-measure.ts run <label> [--only <scene>]
+     npx tsx k5-measure.ts compare <a.json> <b.json> [--common]
+
+   `run` writes two gzipped files beside itself: k5-measure-<label>.json.gz
+   (compact: the named properties, the boxes, the scroll widths, and a hash of
+   every computed longhand) and k5-measure-<label>-full.json.gz (every longhand,
+   for finding which property a differing hash is about; about 100 MB unzipped,
+   so it is not committed). In the compact file a state holds only what differs
+   from `rest` in the same scene (from `moved-rest`, once the slider has been
+   moved), which loses nothing and keeps the file small enough to commit. `compare` reads either
+   kind and prints each difference, ignoring only the fields named `cls` (the
+   class strings, which the dedup renames on purpose). `--common` compares only
+   the scenes both files hold. It exits 1 if anything differs.
+
+   The fixtures are articles on this box's shelf with stored results. No stored
+   debate has two Reception orders, so Debate's order row is the markup
+   DebatePanel.tsx § OrderBar emits, put into a real Debate band.
+
+   Nothing here runs a model: a pressed order chip and a moved slider only
+   rewrite the URL (`?order=`, `?conf=` and their siblings), and every non-GET
+   request but the sign-in's is refused in k5-lib.ts whatever is pressed. */
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { gunzipSync, gzipSync } from "node:zlib";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/* Both generations of names, so one script reads the tree before and after. */
+const SLIDER = ".gloss-gate, .srch-gate, .quotes-bar, .dbt-bar";
+const ORDER = ".gloss-sort, .quotes-rank, .srch-sort";
+
+/* Every property any of the rules sets, plus font, colour, box and layout. */
+const NAMED = [
+  "display", "position", "box-sizing", "width", "height", "min-width", "min-height", "max-width", "max-height",
+  "margin-top", "margin-right", "margin-bottom", "margin-left",
+  "padding-top", "padding-right", "padding-bottom", "padding-left",
+  "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "border-top-left-radius", "border-top-right-radius", "border-bottom-left-radius", "border-bottom-right-radius",
+  "background-color", "background-image", "color", "opacity", "accent-color", "cursor",
+  "font-family", "font-size", "font-weight", "font-style", "font-variant-numeric", "line-height", "letter-spacing",
+  "text-transform", "text-align", "text-decoration-line", "white-space-collapse", "text-wrap-mode",
+  "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "flex-basis", "align-items", "align-self", "justify-content",
+  "row-gap", "column-gap", "overflow-x", "overflow-y", "scrollbar-width",
+  "outline-style", "outline-width", "outline-color", "outline-offset", "box-shadow",
+  "transition-property", "transition-duration", "vertical-align", "visibility", "z-index",
+];
+
+const IN_PAGE = `
+window.k5 = {
+  path(el, root) {
+    const parts = [];
+    for (let n = el; n && n !== root; n = n.parentElement) {
+      const i = Array.prototype.indexOf.call(n.parentElement.children, n);
+      parts.unshift(n.tagName.toLowerCase() + ":" + i);
+    }
+    return parts.join("/");
+  },
+  one(el, named) {
+    const cs = getComputedStyle(el);
+    const all = {};
+    for (let i = 0; i < cs.length; i++) all[cs[i]] = cs.getPropertyValue(cs[i]);
+    const pick = {};
+    for (const p of named) pick[p] = cs.getPropertyValue(p);
+    const r = el.getBoundingClientRect();
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+    return {
+      cls: typeof el.className === "string" ? el.className : el.className.baseVal,
+      tag: el.tagName.toLowerCase(),
+      text: own,
+      rect: [r.left, r.top, r.width, r.height].map((v) => Math.round(v * 100) / 100),
+      scroll: [el.scrollWidth, el.clientWidth, el.scrollHeight, el.clientHeight, el.scrollLeft],
+      matches: [":hover", ":active", ":focus", ":focus-visible"].filter((s) => el.matches(s)).join(" "),
+      style: pick,
+      all,
+    };
+  },
+  capture(named, slider, order) {
+    const out = {};
+    const kinds = [["slider", slider], ["order", order]];
+    for (const [kind, sel] of kinds) {
+      const roots = [...document.querySelectorAll(sel)].filter((r) => !r.parentElement.closest(sel));
+      roots.forEach((root, i) => {
+        const band = root.closest(".mode-band");
+        out[kind + i + "@parent"] = Object.assign(window.k5.one(root.parentElement, named), { text: "" });
+        out[kind + i] = window.k5.one(root, named);
+        for (const el of root.querySelectorAll("*")) out[kind + i + "/" + window.k5.path(el, root)] = window.k5.one(el, named);
+        if (band) {
+          const b = band.getBoundingClientRect();
+          out[kind + i + "@band"] = { cls: band.className, rect: [b.left, b.top, b.width, b.height].map((v) => Math.round(v * 100) / 100), scroll: [band.scrollWidth, band.clientWidth, band.scrollHeight, band.clientHeight, band.scrollLeft] };
+        }
+      });
+    }
+    out["@page"] = { scroll: [document.documentElement.scrollWidth, document.documentElement.clientWidth], theme: document.documentElement.dataset.theme, coarse: matchMedia("(pointer: coarse)").matches, hover: matchMedia("(hover: hover)").matches, focused: document.activeElement ? document.activeElement.tagName.toLowerCase() : "" };
+    return out;
+  },
+};
+`;
+
+type Capture = Record<string, Record<string, unknown>>;
+type Result = Record<string, Capture | { skipped: string } | string>;
+
+/* DebatePanel.tsx § OrderBar, as OrderGroup.tsx renders it. */
+const DEBATE_ORDER_ROW = `<div class="gloss-sort"><div class="gloss-sort-group" role="group" aria-label="Order the sources by"><button type="button" class="gloss-sort-btn on" aria-pressed="true">as found</button><button type="button" class="gloss-sort-btn" aria-pressed="false">stance</button><button type="button" class="gloss-sort-btn" aria-pressed="false">date</button></div></div>`;
+
+const SCENES: { name: string; path: string; view?: string; inject?: { after: string; html: string } }[] = [
+  { name: "glossary", path: "/read/vb-spya-vu3xen?mode=glossary" },
+  { name: "citations", path: "/read/vb-spya-vu3xen?mode=citations" },
+  { name: "faq", path: "/read/noema-mythology-of-conscious-ai?mode=faq" },
+  { name: "quotes", path: "/read/vb-spya-vu3xen?mode=quotes" },
+  { name: "search", path: "/read/levin-self-improvising-memory-spya-gj60pu?mode=search&runs=spya-w0e3ct" },
+  { name: "debate-claims", path: "/read/levin-self-improvising-memory-spya-gj60pu?mode=debate", view: "Claims" },
+  { name: "debate-reception-injected-order-row", path: "/read/arxiv-1902-spya-pfud4c?mode=debate", view: "Reception", inject: { after: ".mode-band .dbt-controls", html: DEBATE_ORDER_ROW } },
+];
+
+async function run(label: string, only?: string) {
+  const { open, BASE, blocked } = await import("./k5-lib.ts");
+  const compact: Record<string, Result> = {};
+  const full: Record<string, Result> = {};
+  const cells = [
+    { width: 1440, height: 900, touch: false },
+    { width: 390, height: 844, touch: true },
+  ].flatMap((c) => (["dark", "light"] as const).map((theme) => ({ ...c, theme })));
+
+  for (const cell of cells) {
+    const cellName = `${cell.width}x${cell.height}-${cell.touch ? "coarse" : "fine"}-${cell.theme}`;
+    const { browser, page } = await open(cell);
+    for (const scene of SCENES.filter((s) => !only || s.name === only)) {
+      const key = `${cellName}/${scene.name}`;
+      const states: Result = {};
+
+      const settle = async () => {
+        await page.waitForSelector(".mode-band", { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState("networkidle", { timeout: 6_000 }).catch(() => {});
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+        await page.waitForTimeout(900);
+        await page.addScriptTag({ content: IN_PAGE });
+        if (scene.inject) {
+          await page.evaluate(({ after, html }) => {
+            const at = document.querySelector(after);
+            if (!at) throw new Error("nowhere to put the injected row: " + after);
+            at.insertAdjacentHTML("afterend", html);
+          }, scene.inject);
+          await page.waitForTimeout(150);
+        }
+      };
+      const snap = async (state: string) => {
+        await page.waitForTimeout(150);
+        states[state] = (await page.evaluate(([n, s, o]) => (window as any).k5.capture(n, s, o), [NAMED, SLIDER, ORDER] as const)) as Capture;
+      };
+      const count = (sel: string) => page.locator(sel).count();
+      const park = async () => {
+        await page.mouse.move(1, 1);
+      };
+      /** Land on a control with a real Tab: script focus only finds its place in
+       *  the order, a real Shift+Tab leaves and a real Tab comes back. */
+      const tabTo = async (sel: string, nth: number): Promise<boolean> => {
+        const there = await page.evaluate(
+          ([s, n]) => {
+            const el = document.querySelectorAll<HTMLElement>(s as string)[n as number];
+            if (!el) return false;
+            el.focus({ preventScroll: true });
+            (window as any).k5target = el;
+            return document.activeElement === el;
+          },
+          [sel, nth] as const,
+        );
+        if (!there) return false;
+        const landed = () => page.evaluate(() => document.activeElement === (window as any).k5target && (window as any).k5target.matches(":focus-visible"));
+        await page.keyboard.press("Shift+Tab");
+        await page.keyboard.press("Tab");
+        if (await landed()) return true;
+        /* The other way round, for a control whose neighbour before it moves
+           focus on (a list that takes focus and hands it down). */
+        await page.evaluate(() => (window as any).k5target.focus({ preventScroll: true }));
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Shift+Tab");
+        return landed();
+      };
+
+      /* --- reach the scene, then reload its own address so nothing is hovered or focused --- */
+      await page.goto(`${BASE}${scene.path}`, { waitUntil: "domcontentloaded" });
+      await settle();
+      if (scene.view) {
+        const seg = page.locator(".summ-view-btn", { hasText: scene.view }).first();
+        if ((await seg.count()) > 0) await seg.click();
+        await page.waitForTimeout(400);
+      }
+      const ORDER_BTN = `:is(${ORDER}) button[aria-pressed]`;
+      if ((await count(`:is(${SLIDER})`)) === 0) {
+        const chip = page.locator(ORDER_BTN, { hasText: /^prioritised$/ }).first();
+        if ((await chip.count()) > 0) await chip.click();
+        await page.waitForTimeout(400);
+      }
+      const home = page.url();
+      states.url = home.replace(BASE, "");
+      await park();
+      await page.goto(home, { waitUntil: "domcontentloaded" });
+      await settle();
+
+      const sliders = await count(`:is(${SLIDER})`);
+      const buttons = await count(ORDER_BTN);
+      states.found = `${sliders} slider(s), ${await count(`:is(${ORDER})`)} order row(s), ${buttons} order button(s)`;
+      await snap("rest");
+
+      /* --- the order buttons: each one hovered, focused, pressed --- */
+      const pressedIdx = await page.evaluate((s) => [...document.querySelectorAll(s)].findIndex((b) => b.getAttribute("aria-pressed") === "true"), ORDER_BTN);
+      const unpressedIdx = buttons > 1 ? (pressedIdx === 0 ? 1 : 0) : -1;
+      for (const [role, idx] of [["on", pressedIdx], ["off", unpressedIdx]] as const) {
+        if (idx < 0) continue;
+        const btn = page.locator(ORDER_BTN).nth(idx);
+        if (!cell.touch) {
+          await btn.hover();
+          await snap(`order-${role}-hover`);
+          await park();
+        }
+        if (await tabTo(ORDER_BTN, idx)) await snap(`order-${role}-focus`);
+        else states[`order-${role}-focus`] = { skipped: "a real Tab did not land on it" };
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        /* Pressed: mouse down on it, read, then let go somewhere else so no click fires. */
+        const box = await btn.boundingBox();
+        if (box) {
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.down();
+          await snap(`order-${role}-active`);
+          await page.mouse.move(1, 1);
+          await page.mouse.up();
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        }
+        if (page.url() !== home) states[`order-${role}-moved-the-url`] = page.url().replace(BASE, "");
+      }
+
+      /* --- the slider: focused, moved, and its reset --- */
+      if (sliders > 0) {
+        const RANGE = `:is(${SLIDER}) input[type=range]`;
+        const RESET = `:is(${SLIDER}) button`;
+        if (!cell.touch) {
+          await page.locator(RANGE).first().hover();
+          await snap("range-hover");
+          await park();
+        }
+        if (await tabTo(RANGE, 0)) {
+          await snap("range-focus");
+          for (const k of ["ArrowRight", "ArrowLeft", "ArrowLeft"]) {
+            if ((await count(RESET)) > 0) break;
+            await page.keyboard.press(k);
+            await page.waitForTimeout(250);
+          }
+          if ((await count(RESET)) > 0) {
+            await snap("moved-range-focused");
+            const moved = page.url();
+            states["moved-url"] = moved.replace(BASE, "");
+            await park();
+            await page.goto(moved, { waitUntil: "domcontentloaded" });
+            await settle();
+            await snap("moved-rest");
+            if (!cell.touch) {
+              await page.locator(RESET).first().hover();
+              await snap("reset-hover");
+              await park();
+            }
+            if (await tabTo(RESET, 0)) await snap("reset-focus");
+            else states["reset-focus"] = { skipped: "a real Tab did not land on it" };
+            await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+            const box = await page.locator(RESET).first().boundingBox();
+            if (box) {
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+              await page.mouse.down();
+              await snap("reset-active");
+              await page.mouse.move(1, 1);
+              await page.mouse.up();
+            }
+          } else states.moved = { skipped: "no arrow key moved the slider off its default" };
+        } else states["range-focus"] = { skipped: "a real Tab did not land on it" };
+      }
+
+      full[key] = states;
+      compact[key] = slimScene(states);
+      const s = compact[key]!;
+      console.log(`${key}: ${s.found}; states: ${Object.keys(s).filter((k) => !["url", "found"].includes(k)).map((k) => (typeof s[k] === "object" && "skipped" in (s[k] as object) ? `${k}(SKIPPED)` : k)).join(", ")}`);
+    }
+    await browser.close();
+  }
+  /* An embedded video's own beacons are refused too; only ours are worth reading. */
+  const ours = blocked.filter((b) => b.includes(new URL(BASE).host));
+  console.log(`refused non-GET requests: ${blocked.length}, of which to this app: ${ours.length}`, JSON.stringify(ours));
+  write(path.join(HERE, `k5-measure-${label}.json.gz`), compact);
+  write(path.join(HERE, `k5-measure-${label}-full.json.gz`), full);
+}
+
+const read = (file: string) => JSON.parse((file.endsWith(".gz") ? gunzipSync(readFileSync(file)) : readFileSync(file)).toString("utf8"));
+const write = (file: string, data: unknown) => writeFileSync(file, gzipSync(JSON.stringify(data)));
+
+/** The compact form of one scene: every longhand becomes a hash, and every
+ *  state after the first of its kind keeps only what differs from its base
+ *  (`rest`, or `moved-rest` once the slider has been moved and the page
+ *  reloaded). Lossless given the base, which is in the same file. */
+function slimScene(states: Result): Result {
+  const hashed: Result = {};
+  for (const [state, cap] of Object.entries(states)) {
+    if (typeof cap === "string" || "skipped" in cap) {
+      hashed[state] = cap;
+      continue;
+    }
+    const c: Capture = {};
+    for (const [el, rec] of Object.entries(cap as Capture)) {
+      const { all, ...rest } = rec as { all?: Record<string, string> };
+      /* Sorted first: Chrome lists the custom properties in an order that
+         changes from one load to the next, and the hash is of the values. */
+      const sorted = all ? JSON.stringify(Object.entries(all).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) : "";
+      c[el] = all ? { ...rest, allHash: createHash("sha256").update(sorted).digest("hex").slice(0, 16), allCount: Object.keys(all).length } : rest;
+    }
+    hashed[state] = c;
+  }
+  const out: Result = {};
+  let base: Capture | undefined;
+  for (const [state, cap] of Object.entries(hashed)) {
+    if (typeof cap === "string" || "skipped" in cap) {
+      out[state] = cap;
+      continue;
+    }
+    if (state === "rest" || state === "moved-rest" || !base) {
+      out[state] = cap;
+      if (state === "rest" || state === "moved-rest") base = cap as Capture;
+      continue;
+    }
+    const slim: Capture = {};
+    for (const [el, rec] of Object.entries(cap as Capture)) {
+      const was = base[el];
+      if (!was) {
+        slim[el] = rec;
+        continue;
+      }
+      const d: Record<string, unknown> = {};
+      for (const [f, v] of Object.entries(rec)) {
+        if (f === "style") {
+          const sd: Record<string, unknown> = {};
+          for (const [prop, pv] of Object.entries(v as Record<string, string>)) if ((was.style as Record<string, string> | undefined)?.[prop] !== pv) sd[prop] = pv;
+          if (Object.keys(sd).length) d.style = sd;
+        } else if (JSON.stringify(was[f]) !== JSON.stringify(v)) d[f] = v;
+      }
+      if (Object.keys(d).length) slim[el] = d;
+    }
+    for (const el of Object.keys(base)) if (!(el in (cap as Capture))) slim[el] = { gone: true };
+    out[state] = slim;
+  }
+  return out;
+}
+
+/** Rebuild a compact file from a full one, without a browser. */
+function recompact(fullPath: string, outPath: string) {
+  const full = read(fullPath) as Record<string, Result>;
+  write(outPath, Object.fromEntries(Object.entries(full).map(([k, v]) => [k, slimScene(v)])));
+}
+
+function compare(aPath: string, bPath: string, common: boolean) {
+  const a = read(aPath);
+  const b = read(bPath);
+  if (common) {
+    for (const k of Object.keys(a)) if (!(k in b)) delete a[k];
+    for (const k of Object.keys(b)) if (!(k in a)) delete b[k];
+    console.log(`comparing the ${Object.keys(a).length} scene(s) both files hold`);
+  }
+  const diffs: string[] = [];
+  let leaves = 0;
+  const walk = (x: unknown, y: unknown, at: string) => {
+    if (at.endsWith(".cls")) return;
+    if (x !== null && y !== null && typeof x === "object" && typeof y === "object") {
+      for (const k of new Set([...Object.keys(x as object), ...Object.keys(y as object)])) {
+        walk((x as Record<string, unknown>)[k], (y as Record<string, unknown>)[k], `${at}.${k}`);
+      }
+      return;
+    }
+    leaves++;
+    if (x !== y) diffs.push(`${at}: ${JSON.stringify(x)} -> ${JSON.stringify(y)}`);
+  };
+  walk(a, b, "");
+  for (const d of diffs.slice(0, 200)) console.log(d);
+  console.log(`${diffs.length} difference(s) over ${leaves} compared values (class strings ignored)`);
+  process.exit(diffs.length ? 1 : 0);
+}
+
+const flags = process.argv.slice(2).filter((a) => a.startsWith("--"));
+const onlyAt = process.argv.indexOf("--only");
+const only = onlyAt > 0 ? process.argv[onlyAt + 1] : undefined;
+const [mode, x, y] = process.argv.slice(2).filter((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--only");
+if (mode === "run" && x) await run(x, only);
+else if (mode === "compare" && x && y) compare(x, y, flags.includes("--common"));
+else if (mode === "recompact" && x && y) recompact(x, y);
+else {
+  console.error("usage: k5-measure.ts run <label> [--only <scene>] | compare <a> <b> [--common] | recompact <full> <out>");
+  process.exit(2);
+}
