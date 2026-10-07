@@ -37,6 +37,7 @@ import {
   Dock,
   type ExperimentalVariant,
   fitSignature,
+  splitForMore,
   toggleVariant,
   visibleModes,
 } from "../src/web/Dock.js";
@@ -197,9 +198,14 @@ describe("who sees it at all", () => {
     expect(theSwitch().closest(".dock-modes")).toBeNull();
     expect(theSwitch().getAttribute("role")).toBeNull();
     expect(theSwitch().getAttribute("aria-checked")).toBeNull();
-    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i). */
+    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i), and
+       five modes are under More since 2026-10-07 (plan 261007c) — so the count
+       that would move if the switch were drawn among the modes is the bar's
+       drawn list, and every mode is still offered. */
+    const bar = splitForMore(visibleModes(true, "plain"), "plain");
+    expect(bar.drawn.length + bar.menu.length).toBe(MODES.length);
     expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
-      MODES.length,
+      bar.drawn.length,
     );
   });
 });
@@ -517,7 +523,7 @@ describe("the fit signature", () => {
      constant here so that every difference below is the switch's — that term
      has its own file, tests/dock-corner-controls.test.tsx § the fit signature. */
   const sig = (variant: ExperimentalVariant | null) =>
-    fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null, variant, true);
+    fitSignature(splitForMore(visibleModes(false, "plain"), "plain"), "plain", noop, undefined, null, variant, true);
 
   it("no switch is a different bar from a switch", () => {
     expect(sig(null)).not.toBe(sig("ready"));

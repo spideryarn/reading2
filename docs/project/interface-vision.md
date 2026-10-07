@@ -204,14 +204,24 @@ Each step is useful on its own, and none commits us to the next.
 
 ## Decluttering the bottom bar
 
-Greg wants fewer buttons on the bottom bar, and is still deciding how. On 2026-10-04, asked whether
-to build an "Extracts" menu:
+Greg wants fewer buttons on the bottom bar. On 2026-10-04, asked whether to build an "Extracts"
+menu:
 
 > this needs more thought from me before we're ready to proceed. perhaps write up somewhere in a
 > vision or appropriate doc that we're interested in finding ways to declutter the bottom bar (and
 > this is part of that)
 
-So this is a goal, not a plan. What has happened and what is on the table:
+So this is a goal rather than one plan. One part of it is now decided and built, the **More
+button**. Greg, 2026-10-06 (spya-dest8x):
+
+> there's a whole bunch of modes in the middle that people probably don't need to open that often.
+> I'm thinking of the glossary, FAQ, ideas, timeline, quotes, because a lot of them have been folded
+> into other larger modes, or meta modes like skim and marginalia. Or they're just visible in the
+> text. […] And so for those, I wonder if we could maybe gather them together and create either a
+> dot dot dot or a more button in their place. And if you click on them, it sort of expands upwards
+> to let them choose from those.
+
+What has happened and what is on the table:
 
 - **Done:** Tweets left the bar and became Summary's Thread
   ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)).
@@ -220,10 +230,15 @@ So this is a goal, not a plan. What has happened and what is on the table:
   The quick-search box and icon stay; removing them (Greg's option C on Q-bar-3) is still open.
   Separately, the same day, a narrow or touch bar stopped drawing the icon alone
   ([261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md)).
-- **Proposed, not decided** (all in queue item `qi-5ay85q7d` and the plan above): one *Extracts*
-  button opening a menu of Quotes, Glossary and Ideas; or a merged *Lists* mode with sub-modes; or
-  leaving the bar alone and leaning on the command bar. Folding those lists into Marginalia was
-  weighed and argued against, because a phone has no Marginalia column.
+- **Done:** Quotes, Glossary, FAQ, Ideas and Timeline left the bar for a **More** button, whose
+  menu opens upwards ([261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)). Nothing was
+  removed: each is still a mode, still in the command bar, and drawn in the bar again while it is
+  the open one. This **supersedes the *Extracts* menu** proposed in queue item `qi-5ay85q7d` (one
+  button for Quotes, Glossary and Ideas), and with it the merged *Lists* mode and the "leave the bar
+  alone" option weighed beside it. Folding those lists into Marginalia was weighed then and argued
+  against, because a phone has no Marginalia column.
+- **Still open:** the other half of `qi-5ay85q7d`, a filter on which kinds of note Marginalia
+  shows. Not built, and waiting on Greg.
 - **Related:** folding Citations into Debate as a sub-mode
   ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md) Part 2), and the command
   bar taking a sentence ([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)),

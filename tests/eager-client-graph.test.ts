@@ -628,6 +628,11 @@ const SHARED_WITH_READER = [
      (DesignPage.tsx § LogoAnimations). Costs the reader nothing: it is a leaf
      whose only imports are React's own. */
   "src/web/logo-animation.ts",
+  /* Arrived 2026-10-07 at no cost: two class strings and one small hook that
+     were inline in `ShelfEntry.tsx` (here already) until the bottom bar's More
+     menu became the second user of them (plan 261007c). It imports only
+     `react`. */
+  "src/web/menu.ts",
   "src/web/monitoring.ts",
   "src/web/offline.ts",
   "src/web/page-title.ts",

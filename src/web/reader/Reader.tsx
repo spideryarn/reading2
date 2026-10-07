@@ -166,6 +166,7 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
+import { useDockEntrance } from "./dock-entrance.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -343,6 +344,9 @@ export function Reader({
    * stranger's at zero.
    */
   const experimental = useExperimental();
+  /* Whether this mount plays the bottom bar's entrance: the first reading
+     view of the page's lifetime, and no later one (dock-entrance.ts). */
+  const dockEntrance = useDockEntrance();
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -4386,6 +4390,7 @@ export function Reader({
       <Dock
         slug={slug}
         view="article"
+        entrance={dockEntrance}
         /* Which modes the bar draws at all — Dock.tsx § experimental, and the
            hook call at the top of this component. */
         experimental={experimental}

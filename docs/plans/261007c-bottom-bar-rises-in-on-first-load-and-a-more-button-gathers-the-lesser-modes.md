@@ -1,6 +1,6 @@
 # The bottom bar rises in when an article loads, and a More button gathers the lesser modes
 
-*Status as of 2026-10-07: planned, not built — evidence: no `dock-more` or `dock-enter` in `src/`.*
+*Status as of 2026-10-07: built on the worktree branch, code review and browser check pending — evidence: `splitForMore` and `DockMore` in `src/web/Dock.tsx`, `dock-enter` in `styles/dock.css`.*
 
 Up: [plans.md](../project/plans.md). Report `spya-dest8x` (Sentry SPIDERYARN-READING2-E6), from Greg
 as admin; Overseer queue item `qi-wpkewsk3`.
@@ -220,4 +220,31 @@ Both halves are built as one stage, because they are small and share `Dock.tsx`.
 
 ## Log
 
-(filled in as stages land)
+**2026-10-07, the build (Opus subagent).** Both halves, in one commit. The stage checklists above
+were written before the plan review and still say "per slug" in two places; D7 is what was built
+(once per page load).
+
+What the builder decided that the plan had not:
+
+- **The menu is not modal** (`modal={false}`). PR-2 assumed Radix's modal default; a modal menu
+  blocks every other press in a bar that is meant to stay operable over its own drawer, and its
+  scroll lock pads `body` and shifts the bar's right-hand end. Focus in, focus back, Escape and an
+  outside press still work.
+- **Each menu item carries the mode's one-line description** under its name, because the five lost
+  their hover cards by moving. One `<span>` to remove if the plain list reads better.
+- **A mouse pick does not return focus to More; a keyboard pick does**, matching the bar buttons'
+  blur after a click.
+- **↓ on a focused More opens the menu** rather than stepping the article (Radix's behaviour);
+  `keyboard.md` now says so.
+- `ShelfEntry.tsx`'s menu styling and finger-press handling moved to a shared `src/web/menu.ts`
+  rather than being copied.
+- `scripts/measure-cpu.ts` opens More for a gathered mode and exits 1 when a requested mode has no
+  door at all. Edited, not run.
+
+Known and accepted: with a gathered mode open, its button stands beside Skim, a few buttons left of
+More (D3 with D6). If the page opens on `?panel=…`, the drawer stands over an absent bar for the
+first second.
+
+Tests: `tests/dock-more.test.tsx` and `tests/dock-entrance.test.tsx` are new and were seen red;
+twenty-two existing files that walk the bar were updated, the sweeps through
+`tests/helpers/dock-more.ts` so that they assert the set of modes visited (PR-10).

@@ -42,6 +42,7 @@ import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
+import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "./menu.js";
 import { exactly, publishedOf } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { ShelfTags } from "./ShelfTags.js";
@@ -1201,16 +1202,9 @@ function openLabel(entry: LibraryEntry, hasWebUrl: boolean): string {
     : "Open the original page (no address recorded)";
 }
 
-/**
- * One menu item's look: finger-sized, and quiet until it is the one in focus.
- *
- * `min-h-10` — 40px, the house number for a thumb
- * (docs/project/narrow-windows.md § What a control owes a finger); the row's
- * icons were 28px. `data-highlighted` and `data-disabled` are the attributes
- * Radix writes, so the item needs no state of its own to know either.
- */
-const ITEM =
-  "tw:flex tw:min-h-10 tw:cursor-default tw:select-none tw:items-center tw:gap-2.5 tw:rounded-[3px] tw:px-2.5 tw:py-1.5 tw:text-sm tw:leading-snug tw:text-foreground tw:no-underline tw:outline-none tw:data-highlighted:bg-highlight/10 tw:data-disabled:text-muted-foreground";
+/* One menu item's look, and the list's surface: `MENU_ITEM` and `MENU_SURFACE`
+   in menu.ts, shared with the bottom bar's More menu since 2026-10-07. */
+const ITEM = MENU_ITEM;
 
 /**
  * **The five as a menu of words, behind one "⋯"** — what a device with a finger
@@ -1250,36 +1244,9 @@ function ShelfActionsMenu({
   const { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit } = actions;
   const [open, setOpen] = useState(false);
 
-  /**
-   * **A finger press and whether the menu was open when it began** — recorded
-   * at `pointerdown`, and good for one gesture.
-   *
-   * Radix's trigger toggles on `pointerdown` for every pointer type, which is
-   * right for a mouse and wrong for a finger: a finger that lands on "⋯" at the
-   * start of a scroll of the shelf would open the menu, and a tap would draw the
-   * list under the finger before it lifts. So a finger's press is taken at the
-   * click — which is the browser's own verdict that this was a tap and not a
-   * scroll.
-   *
-   * **Decided at `pointerdown`, never read off the click**, because on iOS 18.2
-   * and later a finger's click reports `pointerType` `mouse` (WebKit bug 282988)
-   * while its `pointerdown` says `touch`. That bug is what stopped
-   * `pressCapture` working on an iPad; this is the shape of the fix.
-   *
-   * The starting state matters on a second tap. The trigger is outside the
-   * portalled menu, so Radix's modal dismissal can close the menu during that
-   * `pointerdown`; blindly toggling the latest state at `click` would then open
-   * it again. Remembering `wasOpen` makes the click finish the transition the
-   * finger began: closed to open, or open to closed.
-   *
-   * **One gesture's lifetime**, GPT Sol's plan review: cleared by
-   * `pointercancel` (the browser took the press for a scroll), consumed by the
-   * click that reads it, and ignored by a keyboard's click — `detail === 0` —
-   * because Enter and Space have already toggled the menu through Radix's own
-   * key handler, and a "finger" left over from an earlier scroll must not toggle
-   * it shut again. tests/shelf-actions-menu.test.tsx has a case for each.
-   */
-  const fingerPress = useRef<{ wasOpen: boolean } | null>(null);
+  /* A finger opens it at the click, not at the press: `useFingerPressMenu`
+     (menu.ts), which holds the reasoning and the iOS bug behind it. */
+  const finger = useFingerPressMenu(open, setOpen);
 
   /**
    * Set when Edit title is chosen, so Radix does not hand focus back to the
@@ -1307,24 +1274,7 @@ function ShelfActionsMenu({
              Radix names it from this, and it is the only place the article's
              title reaches it. GPT Sol, 2026-09-15. */
           aria-label={`Actions for ${entry.title}`}
-          onPointerDown={(e) => {
-            const finger = e.pointerType === "touch" || e.pointerType === "pen";
-            fingerPress.current = finger ? { wasOpen: open } : null;
-            /* `preventDefault` is what makes Radix stand aside: its
-               `composeEventHandlers` runs ours first and skips its own toggle
-               when the event comes back prevented (@radix-ui/primitive 1.1.7).
-               It does not suppress the click that follows — the Pointer Events
-               spec keeps the two apart — and that click is where we open. */
-            if (finger) e.preventDefault();
-          }}
-          onPointerCancel={() => {
-            fingerPress.current = null;
-          }}
-          onClick={(e) => {
-            const press = fingerPress.current;
-            fingerPress.current = null;
-            if (press && e.detail !== 0) setOpen(!press.wasOpen);
-          }}
+          {...finger}
           /* **Drawn as a button, not a stray mark** — Greg, 2026-10-01, on an
              iPad: *"Make the triple dot menu for items in my shelf a bit more
              visible. It's very small."* A 22px glyph in the foreground colour
@@ -1344,13 +1294,9 @@ function ShelfActionsMenu({
               editing.current = false;
               e.preventDefault();
             }}
-            /* The tooltip card's surface (styles/tooltip.css § .tooltip) in its
-               tokens — raised, opaque, the strong rule, the same shadow —
-               because this is the same kind of thing, drawn over the shelf.
-               `z-[100]` for the reason `.tooltip-anchor` gives: frontmost,
-               drawer included. Radix copies the content's z-index onto the
-               wrapper it positions. */
-            className="tw:z-[100] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+            /* The surface is `MENU_SURFACE` (menu.ts); the width is this
+               menu's own. */
+            className={`${MENU_SURFACE} tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))]`}
           >
             <DropdownMenu.Item
               className={ITEM}

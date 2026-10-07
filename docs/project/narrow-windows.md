@@ -193,7 +193,11 @@ Three things worth carrying to whatever is built next:
   Anything pinned *above* the bar (the mode band, the overflow fade) reads it directly; anything
   that must clear the bar permanently (`.reader`'s bottom padding, the dialogs) reads `--dock-space`
   instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
-  under the finger scrolling it is worse than a bar in the way.
+  under the finger scrolling it is worse than a bar in the way. One rule holds the bar home whatever
+  the scroll says (`styles/narrow-window.css` § a small device, the `:root:has(...)` guard): while
+  its drawer is open, while focus is in it, while a dialog or a band that covers the article is up,
+  and — since 2026-10-07 — while its own **More menu** is open, which is portalled out of the bar and
+  takes focus with it, so *focus is in the bar* stops being true the moment the list appears.
 
 **The width layout.ts divides is the layout viewport's, not `innerWidth`.** On iPad Safari
 `innerWidth` is the *visual* viewport and shrinks when the page is zoomed in, while every media query

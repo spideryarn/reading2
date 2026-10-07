@@ -179,6 +179,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation, and its `useGoesByItself` for anything else that should go after a few
   seconds but not while it has mouse hover or focus.
+- **`src/web/menu.ts` § `MENU_SURFACE`, `MENU_ITEM`, `useFingerPressMenu`** — a Radix
+  `DropdownMenu`: the list's look, and the three trigger handlers that make a finger open it at the
+  tap rather than at a press that may be a scroll. Two callers, the shelf's "⋯"
+  (`src/web/ShelfEntry.tsx`) and the bottom bar's More (`src/web/Dock.tsx` § `DockMore`).
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
   and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its

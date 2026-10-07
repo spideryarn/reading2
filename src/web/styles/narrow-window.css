@@ -607,9 +607,18 @@
      has the measurements either side, and
      tests/the-dock-hides-in-a-mode-beside-the-article.test.ts fails if any rule
      in this query goes back to asking whether a band is merely open. */
+  /* **`.dock-more-trigger[data-state="open"]`, since 2026-10-07**: the More
+     menu is portalled out of `.dock` and takes focus with it, so
+     `.dock:focus-within` goes false the moment it opens and the bar could
+     slide away from under its own menu (GPT Sol, PR-4 of plan 261007c).
+     (0,2,0), the same as `.dock:focus-within`, so the arithmetic above holds.
+     Dock.tsx § `MORE_OPEN` is the same selector, and
+     tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the two
+     together. */
   :root:has(
     .dock-drawer,
     .dock:focus-within,
+    .dock-more-trigger[data-state="open"],
     .install-hint:focus-within,
     .cmt-dialog,
     .chat-dialog,
