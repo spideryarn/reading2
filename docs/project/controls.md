@@ -10,6 +10,37 @@ Up: [design-css-overview.md](design-css-overview.md)
 Added 2026-08-27, after Greg looked at the shelf and said the buttons were ugly. He was right, and
 the reason turned out to be one line of CSS rather than taste.
 
+## Controls that do the same job look the same
+
+> I'm just trying to sort of look for a tiny bit more consistency across modes and in various places
+>
+> — Greg, 2026-10-06 (report `spya-rgq3f6`)
+
+> yes A probably controls that do the same job should look the same in every mode, though use your
+> judgment. and make a minimal update to docs about aiming for consistency.
+>
+> — Greg, 2026-10-07
+
+**The aim:** a control that does the same job looks the same in every mode, so reuse the shared
+piece rather than drawing a new one. **Orange marks the mode; a part within it is marked
+neutrally.** Look at `/design` § Controls across modes before drawing one; it shows each piece
+below, live. The families came from plan
+[261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md).
+
+| a control that… | the shared piece | the test that holds callers to it |
+|---|---|---|
+| switches a mode's parts | `.summ-views` / `.summ-view-btn`, [`mode-band.css`](../../src/web/styles/mode-band.css) | [`part-switchers-share-one-bar`](../../tests/part-switchers-share-one-bar.test.ts) |
+| starts a model call | [`JobProgress`](../../src/web/JobProgress.tsx), or shadcn `Button` outline / sm | [`run-buttons-and-text-boxes-agree`](../../tests/run-buttons-and-text-boxes-agree.test.ts) |
+| takes the reader's typing in a band | `mode-band.css` § text boxes in the bands | the same test |
+| orders a list | [`OrderGroup`](../../src/web/OrderGroup.tsx) with `.gloss-sort-btn` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
+| says the band is waiting | [`BandWaiting`](../../src/web/BandWaiting.tsx) | [`band-waiting`](../../tests/band-waiting.test.tsx), [`band-waiting-layout`](../../tests/band-waiting-layout.test.tsx) |
+| says something failed | [`ReadError`](../../src/web/ReadError.tsx) or `.gloss-error`, in `--danger` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
+| is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
+| floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, [`tokens.css`](../../src/web/styles/tokens.css) | none yet |
+
+A test holds the callers it lists; a new mode is held only once it is added there. "Use your
+judgment" is meant: Skim's ‹ › is a pager, not a part-switcher, and keeps its own shape.
+
 ## The reset covered a minority of what it named
 
 We do not import Tailwind's preflight (the header of
