@@ -6449,57 +6449,9 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
      started inside the two hours and finished outside them, being told their
      file expired while we are holding it. `UploadStore.claim` has the rest. */
   const claim = await claimUpload(uploadId, { owner, arrived: true });
-  if (!claim.ok) {
-    /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
-       answered it moved out to `resolveExistingUpload`, and without this line
-       a vanished record fell through the `taken` branch to "already being
-       turned into an article" — a sentence about a record that is not there.
-       Not reachable through the route, which resolves first; reachable by
-       anything that calls this directly, which is what makes it worth stating. */
-    if (claim.why === "unknown") throw httpError(404, "No such upload");
-    if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
-    /* `taken`. If the first claim got as far as a job, that job is the answer —
-       this is the same request arriving twice, not a conflict. **Reached only
-       by the genuine race now** — two fresh requests that both saw `pending`
-       before either claimed — because `resolveExistingUpload` answers the
-       common repeat before a slot is ever reserved. */
-    const already = await jobForUpload(uploadId);
-    if (already) return { kind: "job", job: already };
-    /**
-     * **And when the job has gone, the upload record still knows.**
-     *
-     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
-     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
-     * quiz are three more rows on one article — so fifty is a fortnight of
-     * ordinary use rather than a year of it. After that the upload is still
-     * `claimed`, the article is still on the shelf, and this answered *"That
-     * upload is already being turned into an article"* about an article the
-     * reader had finished reading. GPT Sol, reviewing the built stage 1,
-     * finding 5.
-     *
-     * **Answered from the record rather than by keeping the job alive**, and
-     * that is the choice worth writing down. Sparing an upload's job from
-     * retention only covers the ingests that never completed: a *successful*
-     * import's job is trimmed like any other success, and that is the case a
-     * reader actually comes back to. What is durable here is the **article**,
-     * and the upload record has named it since the moment `enqueue` returned —
-     * upload records are never trimmed by count, so the record outlives the job
-     * by design. (This used to add "swept on their grant", which was simply
-     * false: `sweepable` in src/source.ts has no production caller and nothing
-     * deletes an upload record or its staging object. Nothing here depends on
-     * the sweep; the claim was wrong rather than load-bearing.)
-     *
-     * Re-read rather than reusing `record` above: `noteSlug` lands after
-     * `enqueue` returns, so a second request arriving in that window would
-     * otherwise read a record from before the slug was written.
-     */
-    const fresh = await readUpload(uploadId, owner);
-    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
-    /* A claim with nothing at all to show for it: `enqueue` threw between the
-       claim and `noteSlug`. The reader chooses the file again, which is cheap
-       and correct. */
-    throw httpError(409, "That upload is already being turned into an article.");
-  }
+  /* Another request claimed it first, or it is not there to claim. The five
+     answers, and why each is what it is, are `answerALostClaim`'s. */
+  if (!claim.ok) return await answerALostClaim(uploadId, claim.why);
 
   const candidate = slugFromFilename(claim.record.filename) || "document";
   const job = await enqueue({
@@ -6584,18 +6536,62 @@ async function queueAMinimalUpload(uploadId: string): Promise<UploadOutcome> {
 }
 
 /**
- * **A claim that lost, answered** — `queueAnUpload`'s `taken` branch, which
- * the minimal path shares: the job the winner made, else the article its record
- * names, else the 409 nothing can do better than. `unknown` and `expired` are
- * the same 404 and 410 as there.
+ * **A claim that lost, answered** — for both ways of queueing an upload, the
+ * full import (`queueAnUpload`) and the minimal one (`queueAMinimalUpload`):
+ * 404 for no record, 410 for an expired grant, else the job the winner made,
+ * else the article its record names, else the 409 nothing can do better than.
+ * `queueAnUpload` spelled these out for itself until 2026-10-07;
+ * tests/uploads-api.test.ts § "a claim that lost the race" pins each.
  */
 async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<UploadOutcome> {
+  /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
+     answered it moved out to `resolveExistingUpload`, and without this line
+     a vanished record fell through the `taken` branch to "already being
+     turned into an article" — a sentence about a record that is not there.
+     Not reachable through the route, which resolves first; reachable by
+     anything that calls this directly, which is what makes it worth stating. */
   if (why === "unknown") throw httpError(404, "No such upload");
   if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+  /* `taken`. If the first claim got as far as a job, that job is the answer —
+     this is the same request arriving twice, not a conflict. **Reached only
+     by the genuine race now** — two fresh requests that both saw `pending`
+     before either claimed — because `resolveExistingUpload` answers the
+     common repeat before a slot is ever reserved. */
   const already = await jobForUpload(uploadId);
   if (already) return { kind: "job", job: already };
+  /**
+   * **And when the job has gone, the upload record still knows.**
+   *
+   * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+   * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+   * quiz are three more rows on one article — so fifty is a fortnight of
+   * ordinary use rather than a year of it. After that the upload is still
+   * `claimed`, the article is still on the shelf, and this answered *"That
+   * upload is already being turned into an article"* about an article the
+   * reader had finished reading. GPT Sol, reviewing the built stage 1,
+   * finding 5.
+   *
+   * **Answered from the record rather than by keeping the job alive**, and
+   * that is the choice worth writing down. Sparing an upload's job from
+   * retention only covers the ingests that never completed: a *successful*
+   * import's job is trimmed like any other success, and that is the case a
+   * reader actually comes back to. What is durable here is the **article**,
+   * and the upload record has named it since the moment `enqueue` returned —
+   * upload records are never trimmed by count, so the record outlives the job
+   * by design. (This used to add "swept on their grant", which was simply
+   * false: `sweepable` in src/source.ts has no production caller and nothing
+   * deletes an upload record or its staging object. Nothing here depends on
+   * the sweep; the claim was wrong rather than load-bearing.)
+   *
+   * Read now rather than handed in by the caller: `noteSlug` lands after
+   * `enqueue` returns, so a second request arriving in that window would
+   * otherwise read a record from before the slug was written.
+   */
   const fresh = await readUpload(uploadId, currentOwnerId());
   if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  /* A claim with nothing at all to show for it: `enqueue` threw between the
+     claim and `noteSlug`. The reader chooses the file again, which is cheap
+     and correct. */
   throw httpError(409, "That upload is already being turned into an article.");
 }
 
