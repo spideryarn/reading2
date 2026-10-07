@@ -78,6 +78,7 @@ import { WrittenForYou } from "./WrittenForYou.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** How long a copy button says how it went, a tick or a refusal, before going back to normal. */
 const COPIED_MS = 1600;
@@ -169,13 +170,13 @@ export function TweetsPanel({
         />
       )}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for a thread…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for a thread…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has written a thread for this one yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article, and it takes tens of seconds. Written once and kept
+            One model call over the whole article, and it takes tens of seconds. Written once and kept
             — you will not be asked again unless the article changes.
           </p>
           <Run owner={owner} label="Write the thread" />

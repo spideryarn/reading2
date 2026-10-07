@@ -200,10 +200,21 @@ export const SITE_PAGE_ROBOTS_ALLOWS: readonly string[] = SITE_PAGES.flatMap((p)
  * reason `/read/` is. It is served the default shell, and `vercel.json` puts
  * the `noindex` header on it. GPT Sol, code review, 2026-10-05.
  *
+ * **`/help/`, since 2026-10-07, for the same reason.** `/help` is one of our
+ * listed pages and is now a contents page: it links to every page of Help
+ * (`/help/spine`, `/help/mode-glossary`), so a crawler finds them all. They
+ * are served the default shell with the `noindex` header like `/login`, and
+ * like `/login` they must be fetchable for that to be read. A prefix, as
+ * `/read/` is, because the pages under it are many and keep arriving; it does
+ * not match `/help` itself, which keeps its own two lines above. Listing the
+ * pages of Help in search is a separate, deferred piece of work:
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+ * § Deferred, and R6 in its plan review.
+ *
  * `/profile`, the admin pages and the API are linked from no page a crawler
  * can reach, and stay shut.
  */
-export const CRAWLABLE_NOINDEX_ROBOTS_ALLOWS: readonly string[] = ["/login$", "/login?"];
+export const CRAWLABLE_NOINDEX_ROBOTS_ALLOWS: readonly string[] = ["/login$", "/login?", "/help/"];
 
 /**
  * **Our own pictures a search result may show beside one of our pages**: the

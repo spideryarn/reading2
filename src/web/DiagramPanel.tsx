@@ -53,6 +53,7 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -108,6 +109,7 @@ import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { voiceClass, withVoice } from "./voice.js";
 
 /**
@@ -1368,6 +1370,11 @@ export function DiagramPanel({
   const hovering = useRef(false);
   hovering.current = hover !== null;
 
+  /* The kinds row's bar scrolls sideways when the band is too narrow for it;
+     the chosen picture stays in view (useRevealChosen.ts). */
+  const kindBar = useRef<HTMLDivElement>(null);
+  useRevealChosen(kindBar, kind);
+
   /**
    * **The picture scrolls to keep up with the reader.**
    *
@@ -1643,6 +1650,12 @@ export function DiagramPanel({
           docs/project/experimental-features.md. */}
       {owns && (
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
+        {/* **The row, then the bar inside it**: `.diag-kinds` is the band's top
+            row (its padding, its rule, the room for the (i)), and the joined
+            outline of the part-switcher every mode shares (mode-band.css § the
+            part-switcher, plan 261007h § F2) has to be a box of its own. The
+            radiogroup stays on the row, so its radios are where they were. */}
+        <div ref={kindBar} className="diag-kind-bar summ-views">
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
           {visibleKinds(experimental, kind).map((k) => {
             const ui = KIND_UI[k];
@@ -1697,7 +1710,7 @@ export function DiagramPanel({
                      the cost of the tab stops;
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
                   tabIndex={0}
-                  className={`diag-kind${k === kind ? " on" : ""}`}
+                  className={`diag-kind summ-view-btn${k === kind ? " on" : ""}`}
                   onClick={() => {
                     /* **The gesture seam for the sketch**, and the reason the
                        token is minted here rather than in `onKind`: `?diagram=`
@@ -1726,6 +1739,7 @@ export function DiagramPanel({
             );
           })}
         </TooltipGroup>
+        </div>
       </div>
       )}
 
@@ -2341,12 +2355,7 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
       </p>
     );
   }
-  return (
-    <p className="diag-wait" role="status">
-      <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" />
-      Reading the article paragraph by paragraph…
-    </p>
-  );
+  return <BandWaiting className="diag-wait">Reading the article paragraph by paragraph…</BandWaiting>;
 }
 
 /**

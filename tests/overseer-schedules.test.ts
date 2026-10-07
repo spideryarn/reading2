@@ -74,7 +74,17 @@ import {
   type ScheduleConfig,
 } from "../tools/overseer/schedules.js";
 import { AUTHORISED_HASHES, standingJobs } from "../tools/overseer/standing-jobs.js";
-import { activationVerdict, ARMING_ENV_FILE, INSTALLED_UNIT, substitutedUnit, UNIT_SOURCE } from "../scripts/overseer-activate.js";
+import {
+  activationVerdict,
+  attentionOffSince,
+  ARMING_ENV_FILE,
+  INSTALLED_UNIT,
+  SECRETS_ENV_FILE,
+  secretsFileStanding,
+  storeDirOfUnit,
+  substitutedUnit,
+  UNIT_SOURCE,
+} from "../scripts/overseer-activate.js";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -704,6 +714,7 @@ describe("S8-3: the activation command cannot report success on the old unit", (
     requiredJobIds: ["get-ready-to-deploy", "feedback-sweep"],
     sessionJobIds: new Set(["get-ready-to-deploy", "feedback-sweep"]),
     armed: true,
+    attentionOffSinceRestart: false,
   };
 
   test("the happy path is the only one that exits zero", () => {
@@ -786,7 +797,25 @@ describe("S8-3: the activation command cannot report success on the old unit", (
     // silent disarm — S8-8.
     expect(substituted.text).toContain(`EnvironmentFile=${ARMING_ENV_FILE}`);
     expect(substituted.text).not.toContain(`EnvironmentFile=-${ARMING_ENV_FILE}`);
+    // The key file, also with no `-`: a missing key must stop the unit rather
+    // than run a daemon with attention silently off, which is the refusal
+    // scripts/overseer-tools/daemon-launch.sh already made.
+    expect(substituted.text).toContain(`EnvironmentFile=${SECRETS_ENV_FILE}`);
+    expect(substituted.text).not.toContain(`EnvironmentFile=-${SECRETS_ENV_FILE}`);
     expect(INSTALLED_UNIT).toBe("/etc/systemd/system/overseer.service");
+  });
+
+  test("a unit that reads the arming file but not the key file is refused", () => {
+    const refused = substitutedUnit(`[Service]\nUser=@USER@\nEnvironmentFile=${ARMING_ENV_FILE}\n`, "greg");
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.why).toContain(SECRETS_ENV_FILE);
+  });
+
+  test("the daemon saying `attention: off` after the restart fails activation, and so does an unreadable journal", () => {
+    expect(activationVerdict({ ...BASE, attentionOffSinceRestart: true }).ok).toBe(false);
+    expect(activationVerdict({ ...BASE, attentionOffSinceRestart: true }).problems.join()).toContain(SECRETS_ENV_FILE);
+    expect(activationVerdict({ ...BASE, attentionOffSinceRestart: null }).ok).toBe(false);
   });
 
   test("a unit that does not read the arming file is refused before it can be installed", () => {
@@ -798,6 +827,94 @@ describe("S8-3: the activation command cannot report success on the old unit", (
 
   test("no user to substitute is refused rather than installed with a placeholder", () => {
     expect(substitutedUnit("User=@USER@", "").ok).toBe(false);
+  });
+});
+
+describe("the store the activation looks in", () => {
+  test("is the unit's own, not $HOME's, which under sudo is root's", () => {
+    const source = readFileSync(join(REPO, UNIT_SOURCE), "utf8");
+    const substituted = substitutedUnit(source, "greg");
+    expect(substituted.ok).toBe(true);
+    if (!substituted.ok) return;
+    expect(storeDirOfUnit(substituted.text)).toBe("/home/greg/.overseer");
+  });
+
+  test("a unit with no absolute store is refused rather than guessed", () => {
+    expect(storeDirOfUnit("[Service]\nUser=greg\n")).toBeNull();
+    expect(storeDirOfUnit("Environment=OVERSEER_STORE_DIR=.overseer\n")).toBeNull();
+  });
+});
+
+describe("the key file", () => {
+  const good = { exists: true, ownerUid: 0, mode: 0o600, text: "OPENROUTER_API_KEY=sk-or-v1-abc123\n" };
+
+  test("root 0600 with a plain key line is fine", () => {
+    expect(secretsFileStanding(good)).toEqual({ kind: "ok" });
+  });
+
+  test("a later empty assignment or another environment override is refused before stopping the old daemon", () => {
+    for (const extra of ["OPENROUTER_API_KEY=", "OVERSEER_STORE_DIR=/another/store", "OVERSEER_JOBS_ENABLED=1"]) {
+      const standing = secretsFileStanding({ ...good, text: `${good.text}${extra}\n` });
+      expect(standing.kind).toBe("bad");
+      if (standing.kind === "bad") expect(standing.why).not.toContain("sk-or-v1-abc123");
+    }
+  });
+
+  test("the declared mode is exactly 0600, matching provisioning's check", () => {
+    expect(secretsFileStanding({ ...good, mode: 0o400 }).kind).toBe("bad");
+  });
+
+  test("missing, not root's, or readable by anyone else is refused", () => {
+    expect(secretsFileStanding({ ...good, exists: false }).kind).toBe("bad");
+    expect(secretsFileStanding({ ...good, ownerUid: 1000 }).kind).toBe("bad");
+    expect(secretsFileStanding({ ...good, mode: 0o644 }).kind).toBe("bad");
+    expect(secretsFileStanding({ ...good, mode: 0o640 }).kind).toBe("bad");
+  });
+
+  test("unreadable is 'cannot tell', never 'fine'", () => {
+    expect(secretsFileStanding({ ...good, text: null }).kind).toBe("cannot-tell");
+  });
+
+  test("no key line, an empty value, or a quoted one is refused, and the reason never carries the value", () => {
+    for (const text of ["", "OPENROUTER_API_KEY=\n", 'OPENROUTER_API_KEY="sk-or-v1-abc123"\n', "OTHER=1\n"]) {
+      const standing = secretsFileStanding({ ...good, text });
+      expect(standing.kind).toBe("bad");
+      if (standing.kind === "bad") expect(standing.why).not.toContain("sk-or");
+    }
+  });
+});
+
+describe("attention verification reads the new daemon's startup", () => {
+  const since = "2026-10-07T11:00:00.750Z";
+  const invocation = "1234567890abcdef1234567890abcdef";
+  const reply = (stdout: string) => ({ pid: 0, output: [], stdout, stderr: "", status: 0, signal: null });
+
+  test("an empty or incomplete successful journal read cannot prove attention is on", () => {
+    for (const journal of ["", "-- No entries --\n", "Started Overseer.\n"]) {
+      expect(attentionOffSince(since, (command) => reply(command === "systemctl" ? invocation : journal))).toBeNull();
+    }
+  });
+
+  test("old attention-off logs in the same second cannot reject a healthy new invocation", () => {
+    const entries = [
+      { at: Date.parse("2026-10-07T11:00:00.500Z"), id: "old", text: "attention: off — OPENROUTER_API_KEY is not set" },
+      { at: Date.parse("2026-10-07T11:00:00.800Z"), id: invocation, text: "scheduler: OFF — jobs disabled" },
+    ];
+    const queried: string[][] = [];
+    const result = attentionOffSince(since, (command, args) => {
+      if (command === "systemctl") return reply(invocation);
+      queried.push(args);
+      const lower = Number(args[args.indexOf("--since") + 1]!.slice(1)) * 1000;
+      const match = args.find((arg) => arg.startsWith("_SYSTEMD_INVOCATION_ID="))?.split("=")[1];
+      return reply(entries.filter((one) => one.at >= lower && (match === undefined || match === one.id)).map((one) => one.text).join("\n"));
+    });
+    expect(result).toBe(false);
+    expect(queried[0]).toContain(`_SYSTEMD_INVOCATION_ID=${invocation}`);
+    expect(queried[0]).toContain(`@${(Date.parse(since) / 1000).toFixed(3)}`);
+  });
+
+  test("the off warning preceding the new daemon's first checkpoint is still a failure", () => {
+    expect(attentionOffSince(since, (command) => reply(command === "systemctl" ? invocation : "attention: off — OPENROUTER_API_KEY is not set\nscheduler: OFF — jobs disabled\n"))).toBe(true);
   });
 });
 

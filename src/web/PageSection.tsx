@@ -174,9 +174,17 @@ export function Section({
           an action under Enter is the wrong kind of arrival. GPT Sol, plan
           reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
           until the contents list needed the same for all of them. */}
+      {/* A collapsible heading's button carries `tap-target`, the finger's
+          invisible 40px (tap-target.css), and its 14px line leaves that 13px
+          above and below. The 12px under the heading would put the last pixel
+          of it over the body's first control, so under a finger the heading
+          takes at least 14px instead (1rem when larger). A physical floor
+          still holds the 13.5px overhang at the supported 12px root, where
+          the chevron stays 13px: the row grows rather than targets overlapping
+          (Greg, 2026-10-07; plan 261007h § F5a). */}
       <h2
         tabIndex={-1}
-        className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
+        className={`tw:m-0 tw:mb-3 ${collapsible ? "tw:any-pointer-coarse:mb-[max(1rem,14px)] " : ""}tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint`}>
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
              rather than a 12px chevron. `aria-expanded` on the button and
@@ -190,7 +198,7 @@ export function Section({
             type="button"
             onClick={() => setOpen((was) => !was)}
             aria-expanded={showing}
-            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text"
+            className="tap-target tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text"
           >
             {head}
             {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}

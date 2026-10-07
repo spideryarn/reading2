@@ -42,7 +42,7 @@ import { useEffect } from "react";
 
 import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
-import { HomeLink } from "./BackLink.js";
+import { DocumentPage } from "./DocumentPage.js";
 import { Link } from "./Link.js";
 import { PUBLIC_SHARING_HREF, TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -136,11 +136,12 @@ export function PrivacyPage() {
   useTakedownFragment();
 
   return (
-    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* Signed out only: signed in, the corner logo is the way home.
-          BackLink.tsx § `HomeLink`, which also says why "Home" and not "Back". */}
-      <HomeLink className="tw:mb-6" />
-
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
+    <DocumentPage
+      here="privacy"
+      floor
+      className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
+    >
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
       </h1>
@@ -902,6 +903,6 @@ export function PrivacyPage() {
       <div className="tw:flex-1" />
 
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }

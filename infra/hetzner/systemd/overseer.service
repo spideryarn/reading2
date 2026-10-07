@@ -19,14 +19,24 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 After=network-online.target
 Wants=network-online.target
 
-# The rate limit lives in [Unit], not [Service] -- systemd moved it here in v229
-# and a StartLimitBurst= under [Service] is silently ignored.
+# NEVER GIVE UP, and retry slowly instead. Keep both start-limit keys in [Unit].
+# systemd 255 still accepts the legacy StartLimitBurst= in [Service], but
+# StartLimitIntervalSec= there is ignored with a warning.
 #
-# Ten tries five seconds apart, then systemd gives up and the unit sits in
-# `failed`. A genuinely broken build therefore crash-loops VISIBLY in the
-# journal for about a minute and then stops, rather than restarting for ever on
-# a box that has reached load average 391 once already.
-StartLimitIntervalSec=300
+# Until 2026-10-07 this was ten tries in 300s and then `failed` for good. The
+# daemon died of ENOSPC on 2026-10-05 and stayed down 46 hours; under that limit
+# a disk full for an hour leaves the unit failed after the space comes back,
+# so Restart=always alone would not have saved it (GPT Sol,
+# docs/plans/261006m-box-disk-hygiene-plan-review-sol.md, finding 13). An
+# interval of 0 turns the limit off, so StartLimitBurst= below is inert and
+# kept only so a later interval is not unlimited by accident.
+#
+# What the limit was for -- a broken build not restarting every five seconds on
+# a box that has reached load average 391 once already -- is done by the
+# thirty-second RestartSec= under [Service]. infra/hetzner/test-overseer-restart.sh
+# fills a disk and checks both: the old values end `start-limit-hit`, these
+# come back.
+StartLimitIntervalSec=0
 StartLimitBurst=10
 
 [Service]
@@ -69,6 +79,20 @@ Environment=OVERSEER_FLEET_URL=http://127.0.0.1:8787
 # `systemctl show overseer -p Environment` and `overseer status` both report it.
 EnvironmentFile=/etc/overseer.env
 
+# THE KEY, and a different file from the arming on purpose: that one is a
+# decision and 0644, this one is a secret. OPENROUTER_API_KEY, for the attention
+# pass. Root-owned, mode 0600: systemd reads it as root before dropping to
+# User=, so the daemon gets the key and no agent on the box can read the file.
+# Greg approved this place for a secret on 2026-10-07
+# (docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md).
+#
+# No leading `-`, for the same reason as above and the same refusal
+# scripts/overseer-tools/daemon-launch.sh makes: a missing key would otherwise
+# be a daemon running with attention silently off. Provisioning never writes it;
+# infra/hetzner/README.md's rebuild sequence says how, and
+# scripts/overseer-activate.ts refuses without it.
+EnvironmentFile=/etc/overseer-secrets.env
+
 # The checkout's own tsx, not `npx tsx`. npx with no local install goes to the
 # network and fetches SOME tsx; this path either exists or fails loudly, which
 # is the difference between a service that is wrong and one that says so.
@@ -82,7 +106,13 @@ ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/overseer.t
 # moment nobody is watching, and this one's absence is invisible: there is no
 # page to tell you the page is down.
 Restart=always
-RestartSec=5
+# Thirty seconds, fixed. A daemon that cannot start costs two journal lines a
+# minute, and one that can is back within thirty seconds of the cause going
+# away. Passed over: a growing delay (RestartSteps=, RestartMaxDelaySec=). In
+# systemd 255 its counter survives a healthy run and resets only on a stop and
+# start by hand, so after a few crashes spread over weeks every later crash
+# would wait the longest delay (GPT Sol, 261007j plan review, finding 6).
+RestartSec=30s
 
 # scripts/overseer.ts traps SIGTERM, writes its stopping note and releases the
 # lock. Give it room to do that -- a SIGKILL here leaves a lock file the next

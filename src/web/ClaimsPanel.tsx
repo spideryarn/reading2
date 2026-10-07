@@ -133,6 +133,7 @@ import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /* ------------------------------------------------------------------ band -- */
 
@@ -386,12 +387,12 @@ export function ClaimsView({
       </Tooltip>
 
       {api.error && <p className="clm-error">{api.error}</p>}
-      {!api.loaded && <p className="gloss-quiet">Loading…</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading the claims…</BandWaiting>}
 
       {/* The empty state described the sub-mode here until 2026-10-03; the
           band's lead line above the panel says it now (RefereeMode.tsx). */}
 
-      {pending && claims.length === 0 && <p className="gloss-quiet">Reading the paper…</p>}
+      {pending && claims.length === 0 && <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>}
 
       {run?.status === "error" && (
         <p className="clm-error">

@@ -141,7 +141,7 @@
 
    Smaller and quieter than the title, but NOT fainter than `--ink-faint`. The
    step that makes a number subordinate is the size and the colour it already
-   has (0.63 against a title's 0.78 or 0.97); dropping it further is walking
+   has (0.64 against a title's 0.78 or 0.97); dropping it further is walking
    back toward the 1.2:1 that started this. */
 .outln-num {
   grid-column: 1;
@@ -295,7 +295,8 @@
 
 /* **The ink half of the hover, and it sits here so it beats `.read` above.**
    A raised surface under unlifted faint text is a net LOSS of contrast —
-   4.44:1 on `--surface-raised` against 5.27:1 on the band's own `--panel` — so
+   4.44:1 on `--surface-raised` against 5.27:1 on the band's own `--panel` when
+   this was written (0.63; 4.62 and 5.33 since 0.64, plan 261007h) — so
    the pointer was making a row *harder* to read, which is the opposite of what
    a hover is for. Lifting the ink fixes it at the source and takes the whole
    class with it, rather than hunting for a hover grey that happens to be dark

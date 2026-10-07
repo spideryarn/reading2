@@ -18,6 +18,14 @@ cannot complete. This page is the fork in the road and nothing else; each branch
 The extension needs a Chrome that a human has signed into and granted permissions in, so there is no
 version of it that works on a headless server. That is the whole reason the second column exists.
 
+**A screenshot you keep under `docs/` gets `npm run screenshots:compress -- <file>` before you
+commit it.** On either machine, [the script](../../scripts/compress-screenshots.ts) compresses static
+PNG screenshots in this checkout. Quantisation is lossy; the plan's sampled light and dark text
+showed no visible difference ([measurements and scope](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md#3-compressed-screenshots)).
+The `npm test` gate checks tracked and index-added PNGs, including nested folders. It is advisory:
+untracked files and edits made after the test can still enter a commit. Palette format is accepted
+as a convention; it does not prove a file is small or that pngquant ran.
+
 ## On the laptop
 
 - **[claude-in-chrome.md](../reusable/claude-in-chrome.md)** — getting the extension to talk to Claude Code at

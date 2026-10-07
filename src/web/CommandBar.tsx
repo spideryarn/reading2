@@ -237,16 +237,15 @@ export interface CommandBarArticle {
    */
   readonly view: ArticleView;
   /**
-   * **Where the Help row goes from here** — the section for the mode the band
-   * is in, already built by the Dock (`helpHrefFor` in Dock.tsx) and handed
-   * down, for the reason `slug` and `search` are: the Dock's Help link and this
-   * row then cannot open on different sections. (Since 2026-10-04 the link is
-   * drawn only on a visitor's bar, where this row is not; one rule all the same.) A finished href rather than
+   * **Where the Help row goes from here** — the page of Help for the mode the
+   * band is in, already built by the Dock (`helpHrefFor` in Dock.tsx) and
+   * handed down, for the reason `slug` and `search` are: the Dock's Help link
+   * and this row then cannot open different pages. A finished href rather than
    * the mode, because this file imports nothing from Dock.tsx (see the import
-   * there) and the rule for which section is the Dock's to own.
+   * there) and the rule for which page is the Dock's to own.
    *
-   * Optional, and the row falls back to the top of `/help` without it, so a
-   * caller that knows nothing about modes still gets a Help row that works.
+   * Optional, and the row falls back to Help's contents at `/help` without it,
+   * so a caller that knows nothing about modes still gets a Help row that works.
    */
   readonly help?: string | undefined;
   /**
@@ -1167,13 +1166,15 @@ function experimentalOutcome(result: ExperimentalSaveOutcome): ActionOutcome {
 /**
  * **The Help page, opened at the part about where you are standing** —
  * docs/plans/261002b-help-page.md § After GPT Sol's plan review, R8: the
- * footer, this row and the Dock's Help link were the three ways in. Since
- * 2026-10-04 this row is **the** way in from the bar for anyone who has it:
- * the Dock's link is drawn only for a visitor, who does not (Dock.tsx §
- * `DockHelp`, plan 261004j).
+ * footer, this row and the Dock's Help link were the three ways in, and are
+ * again: the Dock's link is on every bar since 2026-10-07, after three days
+ * on a visitor's only (Dock.tsx § `DockHelp`, plans 261004j and 261007e). A
+ * visitor has no command bar, so for them the link is the one in the bar.
  *
  * Not in `APP_PAGES` because its href is not the same everywhere: it is the
- * section for the mode the band is in (`CommandBarArticle` § `help`). And
+ * page of Help for the mode the band is in (`CommandBarArticle` § `help`),
+ * though every one of those is the same row to the server
+ * (command-match.ts § `pickKey`). And
  * placed **straight after this article's own rows** rather than among the app
  * pages, because that is what it is about on an empty query — the thing on
  * screen — and because the app pages end with the changelog, whose place
@@ -2403,7 +2404,7 @@ export function CommandBar({
         if (e.target === ref.current) onClose();
       }}
     >
-      <div className="cmdbar-panel tw:mx-auto tw:mt-[12vh] tw:flex tw:max-h-[70%] tw:w-[min(34rem,92vw)] tw:flex-col tw:overflow-hidden tw:rounded-lg tw:border tw:border-rule tw:bg-surface-raised tw:shadow-lg">
+      <div className="cmdbar-panel tw:mx-auto tw:mt-[12vh] tw:flex tw:max-h-[70%] tw:w-[min(34rem,92vw)] tw:flex-col tw:overflow-hidden tw:rounded-lg tw:border tw:border-rule tw:bg-surface-raised tw:shadow-[var(--shadow-dialog)]">
         {/* The box and its microphone on one line, the rule under both. */}
         <div className="cmdbar-box tw:flex tw:items-center tw:gap-1 tw:border-b tw:border-rule tw:pr-2">
         <input

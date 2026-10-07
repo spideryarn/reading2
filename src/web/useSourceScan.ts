@@ -7,9 +7,10 @@
  *
  * ## Three decisions, and none of them is cosmetic
  *
- * **It is the band's, not a sub-mode's.** A hidden instruction is a fact about
- * the document, and it bears on Criteria, Claims, Mirror and Candidates alike.
- * So `RefereeBand` holds it and every sub-mode is drawn underneath the answer.
+ * **It is fetched by the band, then shown in one sub-mode.** A hidden
+ * instruction is a fact about the document, so `RefereeBand` holds the answer
+ * across chip changes and marks Hidden text from every other panel. The full
+ * answer is drawn only in Hidden text; switching chips never fetches it again.
  *
  * **It never blocks the band.** The scan takes hundreds of milliseconds on a
  * short paper and about nine seconds on a 1.3 MB one, so the band opens at once

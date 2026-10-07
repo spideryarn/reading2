@@ -137,6 +137,12 @@
   border-bottom: 1px solid transparent;
   transition: border-color 180ms ease, background-color 180ms ease;
 }
+/* The new signed-out document shell replaces an inset-aware way home. Keep
+   the row below the notch while the sticky background covers the unsafe area;
+   DocumentPage subtracts this same inset from its floor and adds it to anchors. */
+.site-document-nav > .site-nav {
+  padding-top: var(--safe-top);
+}
 /* Painted only once the page has moved, so the bar is invisible over the hero
    and becomes a surface over content. `animation-timeline: scroll()` does this
    with no scroll listener and no React state; where it is unsupported the bar
@@ -349,27 +355,37 @@
   }
 }
 
-/* ---- scroll reveal ----
-   Finished state as the default rule, so an unsupported browser shows static
-   content: never invisible, never broken. The global prefers-reduced-motion
-   guard in tailwind.css flattens the duration of all of this already. */
-.site-reveal { opacity: 1; transform: none; }
-@supports (animation-timeline: view()) {
-  .site-reveal {
-    animation: site-rise linear both;
-    animation-timeline: view(block);
-    animation-range: entry 0% entry 62%;
-  }
-  @keyframes site-rise {
-    from { opacity: 0.001; transform: translateY(1.4rem); }
-    to { opacity: 1; transform: none; }
-  }
+/* ---- the reveal: once, and then it stays ----
+   Finished state as the default rule, so a page without the script shows
+   static content: never invisible, never broken. Hidden only while
+   src/web/reveal-once.ts has marked a section `data-reveal-waiting` — below
+   the window, being watched — and it rises in on a short TIME-based
+   transition when the script swaps that for `data-shown`.
+
+   **It was a scroll-driven animation until 2026-10-07** (`animation-timeline:
+   view()`), and that is reversible by nature: progress is a function of scroll
+   position, so a section you had already read faded out again as you scrolled
+   back up past it. Plan 261007h, F5c. Being a time-based transition, the
+   global reduced-motion guard in tailwind.css would flatten it — but the
+   script does not hide anything for that reader in the first place, and the
+   block below makes sure. */
+.site-reveal {
+  opacity: 1;
+  transform: none;
+  transition: opacity 600ms ease-out, transform 600ms ease-out;
+}
+.site-reveal[data-reveal-waiting] {
+  opacity: 0;
+  transform: translateY(1.4rem);
 }
 
 /* A scroll-driven animation has no scroll to be driven by on paper, and what it
-   resolves to there is not something the spec pins down. Printing a page whose
-   every section starts at opacity 0 is a good way to get eleven blank sheets,
-   so both of these are turned off outright for print.
+   resolves to there is not something the spec pins down; and a reveal still
+   waiting for its section to be scrolled to never will be. Printing a page
+   whose every section starts at opacity 0 is a good way to get eleven blank
+   sheets, so all of these are turned off outright for print — opacity and
+   transform as well as the animation, because the reveal is not an animation
+   any more and `animation: none` alone would leave a waiting one hidden.
 
    The same override is what a screenshot harness should set before capturing a
    full page — Playwright's full-page capture stitches without scrolling, so
@@ -382,6 +398,7 @@
   .site-tilt,
   .site-nav {
     animation: none !important;
+    transition: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
@@ -407,6 +424,7 @@
   .site-tilt,
   .site-nav {
     animation: none !important;
+    transition: none !important;
     opacity: 1 !important;
     transform: none !important;
   }

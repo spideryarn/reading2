@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "have a look at https://arxiv.org/html/2609.01481v1 (imported into
+    https://www.spideryarn.com/read/arxiv-2609-01481v1-spya-sjatfv?mode=summary&summary=fuller )
+    I want to be able to copmare what they're doing, with what we're doing here with the Overseer
+    in this repo. Run @docs/reusable/write-tutorial.md"
+
+    Generated: 2026-10-07
+    Audience:  somebody who knows Spideryarn and how it is built day to day, and has never read the
+               Overseer's code or docs
+    Written to: docs/reusable/write-tutorial.md
+
+    Sources read:
+      arXiv 2609.01481v1, "Harness-of-Harness: Multi-Day Autonomous Software Development with
+        Continual Improvement" -- the whole of sections 1-6, Tables 1-3, appendix A.1-A.5
+      docs/project/overseer.md                 the runbook: the four gates, the tick, deploying, dispatching
+      docs/project/overseer-direction.md       intro, What we are going towards, The horizon,
+                                               What the Overseer is, the augmentation section, Principles
+      docs/reusable/engineering-manager.md     the per-job loop: plan doc, stages, GPT Sol, debrief
+      docs/plans/261003b-earlier-tab-counts-on-the-pills.md and its -plan-review-sol / -code-review-sol
+      docs/user-feedback/261001_1831-earlier-tab-counts-on-the-pills.md, 261002-recheck-all-reports.md
+      git: 157a4c74d and f9935b44a (both on origin/main as of 2026-10-07)
+
+    State when written: dev at 71f95f535. The Overseer's scheduler (OVERSEER_JOBS_ENABLED) was off
+    and the deterministic rules propose rather than act, per overseer.md on that date. Check those
+    against overseer.md before trusting this page: that doc changes weekly.
+
+    SECOND REQUEST (2026-10-07): "Can you update the tutorial to compare it to
+    ~/dev/gdconsult_work/mindstone/MindstoneRebel/coding-agent-instructions/ CHIEF_ENGINEER and the
+    remote server fleet workflow in there, and also mindstone/fleet-overseer-landing-board . Then push
+    and reopen in browser."
+    Sources for that: coding-agent-instructions (MindstoneRebel, adb0fa247, 2026-09-26) --
+      workflows/CHIEF_ENGINEER/CHIEF_ENGINEER.md sections 1-5 and 7 (last changed f5417384b,
+      2026-09-23), CHIEF_ENGINEER_AUTONOMOUS.md, activities/reviewer.md (reviewers are read-only),
+      diagrams/chief_engineer_workflow.mermaid, docs/REMOTE_AGENT_FLEET.md (2026-08-16, last changed
+      2026-09-08); fleet-overseer-landing-board (4bd8a922b, 2026-09-22) -- README.md, EXTRACTION.md,
+      docs/project/vision.md (Greg, 2026-09-13), docs/merger/DISCREPANCIES.md (J1-J21, X1-X4).
+
+    Reviewed by GPT Sol (high effort) 2026-10-07: 16 findings, each checked against the paper and the
+    docs and applied. The important ones: the first "what to borrow" item claimed nobody re-reviews
+    Sol's fixes, when engineering-manager.md and codex-cli-as-subagent.md already require the next
+    round to treat them as unreviewed code (reframed as "check that it happens"); the benchmarks are
+    not all greenfield (5 of 15 FrontierSWE tasks optimise existing systems); objective selection was
+    compared at the wrong level (HoH's planner works within a fixed brief, like our job agents);
+    Table 2 matches pass counts, not budgets; the paper's planner prompt forbids reading code.
+    Diagrams checked in headless Chrome (dark, 1280px and 500px): three label collisions in Figure 2
+    fixed; no horizontal page overflow at 500px.
+
+    Second GPT Sol review (high effort), of the Mindstone section, 2026-10-07: 11 findings, each checked
+    and applied. The important ones: the landing board's gates have diverged from ours (there the
+    Overseer may not deploy, works in the primary checkout, and may authorise routine fixes of its own
+    devising -- its overseer.md gate 3); the first Figure 5 ranked systems on one autonomy scale the
+    sources do not support (redrawn as "what each may decide on its own"); CHIEF_ENGINEER's
+    convergence rule has a one-off arbitrated extension and a separate Closer step. Figures 4 and 5
+    checked in headless Chrome.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Harness-of-Harness (arXiv 2609.01481) set beside Spideryarn's Overseer and Mindstone's Chief Engineer, remote fleet and landing board: what each one wraps around a coding agent, where their loops line up, where they deliberately differ, and what we might borrow.">
+<title>Harness-of-Harness and Our Fleets</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-human:   #b45309; --c-human-fill:   #fdf1dc;
+    --c-claude:  #1d4ed8; --c-claude-fill:  #e2ebfe;
+    --c-gpt:     #6d28d9; --c-gpt-fill:     #eee9fd;
+    --c-store:   #3a3f47; --c-store-fill:   #f1efeb;
+    --c-prod:    #15803d; --c-prod-fill:    #ddf5e3;
+    --c-warn:    #b3261e; --c-warn-fill:    #fdeaea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-human:   #f0b167; --c-human-fill:   #3a2c17;
+      --c-claude:  #8fb6ff; --c-claude-fill:  #1b2740;
+      --c-gpt:     #b79cf5; --c-gpt-fill:     #271e3d;
+      --c-store:   #d9d7d2; --c-store-fill:   #2a2c31;
+      --c-prod:    #7fd396; --c-prod-fill:    #142b1c;
+      --c-warn:    #f38b84; --c-warn-fill:    #351a19;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-underline-offset: 2px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  blockquote { margin: 1rem 0; padding: .2rem 0 .2rem 1rem; border-left: 3px solid var(--rule);
+               color: var(--ink-soft); max-width: 46rem; }
+  blockquote p { margin: .4rem 0; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; max-width: 50rem; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn   { border-left-color: var(--c-warn);  background: var(--c-warn-fill); }
+  .callout.key    { border-left-color: var(--c-prod);  background: var(--c-prod-fill); }
+  .callout.model  { border-left-color: var(--c-gpt);   background: var(--c-gpt-fill); }
+  .callout.decide { border-left-color: var(--c-human); background: var(--c-human-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 720px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  .s-human  { fill: var(--c-human-fill);  stroke: var(--c-human);  }
+  .s-claude { fill: var(--c-claude-fill); stroke: var(--c-claude); }
+  .s-gpt    { fill: var(--c-gpt-fill);    stroke: var(--c-gpt);    }
+  .s-store  { fill: var(--c-store-fill);  stroke: var(--c-store);  }
+  .s-prod   { fill: var(--c-prod-fill);   stroke: var(--c-prod);   }
+  .s-lane   { fill: none; stroke: var(--rule); }
+  .s-frame  { fill: none; stroke: var(--ink-soft); stroke-dasharray: 6 5; stroke-width: 1.3; }
+  .box { stroke-width: 1.5; }
+  .t   { fill: var(--ink); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-s { fill: var(--ink-soft); font: 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-b { fill: var(--ink); font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 650; }
+  .t-m { fill: var(--ink); font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-hd { fill: var(--ink-soft); font: 12px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; letter-spacing: .08em; }
+  .t-acc { fill: var(--accent); font: 12.5px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 650; }
+  .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+  .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+  .ln-acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .dash { stroke-dasharray: 5 4; }
+  .ah { fill: var(--ink-soft); }
+  .ah-acc { fill: var(--accent); }
+
+  .key-row { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; font-size: .84rem; color: var(--ink-soft); margin: .4rem 0 1rem; }
+  .key-row span::before { content: ""; display: inline-block; width: .8rem; height: .8rem; border-radius: 2px;
+                          vertical-align: -.1rem; margin-right: .35rem; border: 1.5px solid; }
+  .k-human::before  { background: var(--c-human-fill);  border-color: var(--c-human)  !important; }
+  .k-claude::before { background: var(--c-claude-fill); border-color: var(--c-claude) !important; }
+  .k-gpt::before    { background: var(--c-gpt-fill);    border-color: var(--c-gpt)    !important; }
+  .k-store::before  { background: var(--c-store-fill);  border-color: var(--c-store)  !important; }
+  .k-prod::before   { background: var(--c-prod-fill);   border-color: var(--c-prod)   !important; }
+
+  table { border-collapse: collapse; width: 100%; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+  .tbl-scroll { overflow-x: auto; }
+  .tbl-scroll table { min-width: 40rem; }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  .same { color: var(--c-prod); font-weight: 650; }
+  .diff { color: var(--c-warn); font-weight: 650; }
+  .part { color: var(--c-human); font-weight: 650; }
+</style>
+</head>
+<body>
+
+<h1>Harness-of-Harness and our fleets</h1>
+<p class="lede">A paper that wraps a coding agent in a planner → developer → tester loop and lets it build
+a game for days with nobody watching, set beside the machinery that runs Spideryarn's own fleet of
+coding agents — and beside its Mindstone relatives, the Chief Engineer workflow, the remote agent
+fleet and the landing board. Where they line up, where they part, and what is worth borrowing.</p>
+<p class="meta">Skim: 10 minutes (TL;DR, mental models, Pass 1, the two comparison tables, judgement).
+Deep dive: 35 minutes. Written 2026-10-07 against dev at <code>71f95f5</code>.</p>
+
+<div class="callout key">
+  <p class="title">TL;DR</p>
+  <p>The paper's <strong>Harness-of-Harness</strong> (HoH) takes one ordinary coding agent and runs it
+  three times per round — once to <em>plan</em> a small increment, once to <em>build</em> it, once to
+  <em>test</em> it independently — and passes the test report forward to the next round's planner. Over
+  three rounds that lifts benchmark scores by 52% on average (a relative gain). In a separate case,
+  given game-specific tools as well, 70 rounds built a playable shooter; people only restored the
+  network when it dropped.</p>
+  <p>Our equivalent of one HoH loop is <strong>a single job</strong> run the way
+  <code>engineering-manager.md</code> says: plan doc → build → GPT Sol review. The
+  <strong>Overseer</strong> sits a layer <em>above</em> that — it runs 20–35 such jobs at once and
+  handles what the paper never faces: shared machines, usage limits, deploys, and a human who keeps
+  the consequential product calls. Within the loop, the sharpest difference is the tester: HoH's may
+  not touch the code it judges, and ours fixes what it finds.</p>
+  <p>In the Mindstone repositories, <strong>CHIEF_ENGINEER</strong> is HoH's closest relative: a
+  coordinator that never edits code, with separate planner, builders and several read-only reviewers
+  from different model families. The <strong>remote agent fleet</strong> is the earlier, unsupervised
+  version of our fleet, and the <strong>landing board</strong> is our Overseer, copied on 2026-09-10 and
+  heading towards an Overseer per person on a shared machine.</p>
+</div>
+
+<h2 id="models">Mental models</h2>
+
+<div class="callout model">
+  <p class="title">HoH is a three-person studio working in shifts on one game</p>
+  <p>The producer reads the brief and last night's bug report and writes today's to-do sheet. The
+  programmer is the only one allowed to touch the code. The tester gets a locked copy, plays it, and
+  writes the bug report. Then they swap the sheet and go round again. None of them remembers yesterday
+  — everything they know is in the folder they pass along.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">The Overseer is the site foreman of thirty contractors, each running their own studio</p>
+  <p>The foreman does almost no building. They decide who starts when, keep two crews off the same
+  wall, ration the electricity, check finished crews actually tidied up before leaving, and are the
+  only one allowed to hand the keys to the client. What gets built is the client's call — the
+  foreman's job list comes from the client's queue, not from the foreman's own ideas.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">Both of them keep their memory in the folder, not in their head</p>
+  <p>HoH's agents forget everything between invocations; the plan, the code and the test evidence
+  carry the project. The Overseer runbook says the same thing of itself: <em>"Your context is a cache,
+  not the record."</em> The record is files on disk. This is the deepest thing the two share.</p>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">Pass 1 — the two shapes, in one picture each</a></li>
+    <li><a href="#pass2">Pass 2 — the parts, side by side</a></li>
+    <li><a href="#mindstone">Pass 2b — the Mindstone relatives: CHIEF_ENGINEER, the remote fleet, the landing board</a></li>
+    <li><a href="#pass3">Pass 3 — one real job, followed through both lenses</a></li>
+    <li><a href="#pass4">Pass 4 — the evidence, and the hard parts</a></li>
+    <li><a href="#judgement">Judgement — what to borrow, risks, open questions</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix — glossary and where things live</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>If you only want the comparison:</strong> <a href="#pass1">Pass 1</a> then
+      <a href="#table">the table</a>.</p>
+    <p><strong>If you want to know whether the paper's numbers are believable:</strong>
+      <a href="#results">The results</a> and <a href="#caveats">what the numbers don't say</a>.</p>
+    <p><strong>If you're deciding what to change in our process:</strong>
+      <a href="#borrow">What to borrow</a> and <a href="#opposite">where we deliberately do the opposite</a>.</p>
+    <p><strong>If you want to see it on a real piece of work:</strong> <a href="#pass3">Pass 3</a>.</p>
+    <p><strong>If you want the Mindstone comparison:</strong> <a href="#mindstone">Pass 2b</a>, its
+      <a href="#mindstone-loop">loop table</a> and <a href="#mindstone-fleet">fleet table</a>.</p>
+  </div>
+</nav>
+
+<!-- ================================================================== PASS 1 -->
+<h2 id="pass1"><span class="pass">Pass 1</span>The two shapes</h2>
+
+<h3>HoH: one agent, three hats, round and round</h3>
+<p>HoH does not change the coding agent at all. It takes an off-the-shelf one (Codex, OpenCode or Pi
+in the paper) and calls it three separate times per round, each time with a different role prompt
+and different permissions. The paper calls each round a <strong>loop</strong>.</p>
+<p>Two things cross from one loop to the next: <strong>the code</strong> (the next developer starts
+from where the last one stopped, rather than from scratch) and <strong>the evidence</strong> (the
+tester's report of what works, what doesn't, and what must not break). The human writes the spec once
+and is then out of the picture.</p>
+
+<div class="key-row">
+  <span class="k-human">a person</span><span class="k-claude">an agent invocation</span>
+  <span class="k-gpt">a different model family</span><span class="k-store">files / state</span>
+  <span class="k-prod">production</span>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 340" role="img" aria-labelledby="f1t">
+  <title id="f1t">The Harness-of-Harness loop: planner, developer and QA tester, with code and evidence carried between loops</title>
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    <marker id="a1acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-acc"/></marker>
+  </defs>
+
+  <rect x="10" y="40" width="120" height="70" rx="6" class="box s-human"/>
+  <text x="70" y="66" text-anchor="middle" class="t-b">Spec (PRD)</text>
+  <text x="70" y="86" text-anchor="middle" class="t-s">written once,</text>
+  <text x="70" y="102" text-anchor="middle" class="t-s">never edited</text>
+
+  <rect x="170" y="40" width="160" height="70" rx="6" class="box s-claude"/>
+  <text x="250" y="64" text-anchor="middle" class="t-b">Project Planner</text>
+  <text x="250" y="84" text-anchor="middle" class="t-s">picks the next increment</text>
+  <text x="250" y="100" text-anchor="middle" class="t-s">may not edit code</text>
+
+  <rect x="400" y="40" width="160" height="70" rx="6" class="box s-claude"/>
+  <text x="480" y="64" text-anchor="middle" class="t-b">Developer</text>
+  <text x="480" y="84" text-anchor="middle" class="t-s">the only writer</text>
+  <text x="480" y="100" text-anchor="middle" class="t-s">tests as it goes</text>
+
+  <rect x="630" y="40" width="160" height="70" rx="6" class="box s-claude"/>
+  <text x="710" y="64" text-anchor="middle" class="t-b">QA Tester</text>
+  <text x="710" y="84" text-anchor="middle" class="t-s">locked, read-only copy</text>
+  <text x="710" y="100" text-anchor="middle" class="t-s">plays it + reads it</text>
+
+  <line x1="130" y1="75" x2="167" y2="75" class="ln" marker-end="url(#a1)"/>
+  <line x1="330" y1="75" x2="397" y2="75" class="ln" marker-end="url(#a1)"/>
+  <text x="364" y="30" text-anchor="middle" class="t-s">dev doc</text>
+  <line x1="560" y1="75" x2="627" y2="75" class="ln" marker-end="url(#a1)"/>
+  <text x="594" y="30" text-anchor="middle" class="t-s">candidate</text>
+
+  <rect x="400" y="190" width="160" height="60" rx="6" class="box s-store"/>
+  <text x="480" y="215" text-anchor="middle" class="t-b">Project workspace</text>
+  <text x="480" y="236" text-anchor="middle" class="t-s">code, assets, git</text>
+
+  <line x1="480" y1="110" x2="480" y2="187" class="ln" marker-end="url(#a1)"/>
+  <text x="488" y="155" class="t-s">writes</text>
+  <path d="M560,215 L690,215 L690,113" class="ln" marker-end="url(#a1)"/>
+  <text x="600" y="207" class="t-s">frozen copy</text>
+  <path d="M400,215 L270,215 L270,113" class="ln-dash" marker-end="url(#a1)"/>
+  <text x="290" y="207" class="t-s">reads only</text>
+
+  <path d="M760,110 L760,290 L200,290 L200,113" class="ln-acc" marker-end="url(#a1acc)"/>
+  <text x="480" y="312" text-anchor="middle" class="t-acc">evidence bundle → the next loop's planner (what passed, what failed, what must not break)</text>
+  <text x="790" y="334" text-anchor="end" class="t-s">×3 loops on benchmarks · ×70 loops for the game</text>
+</svg>
+</div>
+<figcaption>Figure 1. One HoH loop. Every blue box is the <em>same</em> agent and model, called three
+times with different instructions and permissions. A small deterministic program (the paper calls it
+the Runtime) freezes each role's inputs and enforces who may write what.</figcaption>
+</figure>
+
+<h3>Ours: three layers, and the loop is the middle one</h3>
+<p>At the top is Greg, who has the ideas and makes the product calls. At the bottom are the jobs —
+each one a single Claude Code session working in its own copy of the repository, running
+<strong>its own version of the HoH loop</strong>: write a plan doc, have GPT Sol review it, build, have
+Sol review the code, commit, push.</p>
+<p>In the middle is the <strong>Overseer</strong>: one permanently running Claude session plus a small
+background program that keeps a log on disk. It starts jobs from Greg's queue, nudges stuck ones,
+pauses the fleet before the usage limits run out, removes finished worktrees, and is the only thing
+allowed to deploy to production.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 450" role="img" aria-labelledby="f2t">
+  <title id="f2t">Spideryarn's three layers: Greg, the Overseer, and many job sessions, each with its own review loop</title>
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+
+  <rect x="290" y="10" width="220" height="56" rx="6" class="box s-human"/>
+  <text x="400" y="34" text-anchor="middle" class="t-b">Greg</text>
+  <text x="400" y="54" text-anchor="middle" class="t-s">ideas · product calls · veto</text>
+
+  <line x1="400" y1="66" x2="400" y2="117" class="ln" marker-end="url(#a2)"/>
+  <text x="410" y="96" class="t-s">the queue = permission to start</text>
+
+  <rect x="250" y="120" width="300" height="64" rx="6" class="box s-claude"/>
+  <text x="400" y="146" text-anchor="middle" class="t-b">The Overseer</text>
+  <text x="400" y="167" text-anchor="middle" class="t-s">one permanent session + a daemon</text>
+
+  <rect x="20" y="120" width="180" height="64" rx="6" class="box s-store"/>
+  <text x="110" y="146" text-anchor="middle" class="t-b">~/.overseer/</text>
+  <text x="110" y="167" text-anchor="middle" class="t-s">register, events, decisions</text>
+  <line x1="248" y1="152" x2="203" y2="152" class="ln-dash" marker-end="url(#a2)"/>
+  <line x1="203" y1="152" x2="248" y2="152" class="ln-dash" marker-end="url(#a2)"/>
+
+  <rect x="600" y="120" width="180" height="64" rx="6" class="box s-prod"/>
+  <text x="690" y="146" text-anchor="middle" class="t-b">Production</text>
+  <text x="690" y="167" text-anchor="middle" class="t-s">npm run deploy</text>
+  <line x1="550" y1="152" x2="597" y2="152" class="ln" marker-end="url(#a2)"/>
+  <text x="574" y="174" text-anchor="middle" class="t-s">only it</text>
+
+  <rect x="10" y="228" width="780" height="124" rx="8" class="s-frame"/>
+  <text x="778" y="342" text-anchor="end" class="t-hd">EACH OF THESE ≈ ONE HOH LOOP, RUN BY ONE AGENT</text>
+
+  <rect x="25" y="256" width="230" height="64" rx="6" class="box s-claude"/>
+  <text x="140" y="280" text-anchor="middle" class="t-m">fb95-earlier-tab-counts</text>
+  <text x="140" y="302" text-anchor="middle" class="t-s">plan → build → review</text>
+
+  <rect x="285" y="256" width="230" height="64" rx="6" class="box s-claude"/>
+  <text x="400" y="280" text-anchor="middle" class="t-m">261003a-gpt-live-…</text>
+  <text x="400" y="302" text-anchor="middle" class="t-s">plan → build → review</text>
+
+  <rect x="545" y="256" width="230" height="64" rx="6" class="box s-claude"/>
+  <text x="660" y="280" text-anchor="middle" class="t-b">… 20–35 at once</text>
+  <text x="660" y="302" text-anchor="middle" class="t-s">each in its own worktree</text>
+
+  <line x1="330" y1="184" x2="150" y2="253" class="ln" marker-end="url(#a2)"/>
+  <line x1="400" y1="184" x2="400" y2="253" class="ln" marker-end="url(#a2)"/>
+  <line x1="470" y1="184" x2="650" y2="253" class="ln" marker-end="url(#a2)"/>
+  <text x="250" y="208" text-anchor="end" class="t-s">start · steer · pause · close</text>
+
+  <rect x="25" y="370" width="110" height="64" rx="6" class="box s-gpt"/>
+  <text x="80" y="396" text-anchor="middle" class="t-b">GPT Sol</text>
+  <text x="80" y="416" text-anchor="middle" class="t-s">reviews, fixes</text>
+  <rect x="145" y="370" width="110" height="64" rx="6" class="box s-claude"/>
+  <text x="200" y="396" text-anchor="middle" class="t-b">Subagents</text>
+  <text x="200" y="416" text-anchor="middle" class="t-s">browser, Opus</text>
+  <line x1="80" y1="367" x2="80" y2="323" class="ln" marker-end="url(#a2)"/>
+  <line x1="200" y1="367" x2="200" y2="323" class="ln" marker-end="url(#a2)"/>
+
+  <rect x="285" y="370" width="490" height="64" rx="6" class="box s-store"/>
+  <text x="530" y="396" text-anchor="middle" class="t-b">Shared by every job</text>
+  <text x="530" y="416" text-anchor="middle" class="t-s">one box · one test database · one dev server · two usage budgets</text>
+</svg>
+</div>
+<figcaption>Figure 2. HoH has the bottom two rows' worth of idea and none of the top two. The dashed
+frame is where the paper's contribution lives in our system; everything above and beside it is what
+running many such loops at once, for a real product, adds.</figcaption>
+</figure>
+
+<div class="callout key">
+  <p class="title">The one-sentence comparison</p>
+  <p>HoH is a <strong>loop</strong>. The Overseer is a <strong>scheduler and safety officer for many
+  loops</strong>. The fair comparison is HoH against one of our jobs; the Overseer is the part of our
+  system the paper has no counterpart for.</p>
+</div>
+
+<!-- ================================================================== PASS 2 -->
+<h2 id="pass2"><span class="pass">Pass 2</span>The parts, side by side</h2>
+
+<p>Each HoH idea, matched to its nearest equivalent here. <span class="same">Same</span> means we
+arrived at the same idea; <span class="part">partly</span> means we have a version of it;
+<span class="diff">opposite</span> means we chose differently on purpose.</p>
+
+<div class="tbl-scroll" id="table">
+<table>
+<thead><tr><th>HoH idea</th><th>Our nearest equivalent</th><th></th></tr></thead>
+<tbody>
+<tr><td><strong>Plan before you build</strong>: a Planner writes a dev doc with scope and
+  acceptance checks before any code changes.</td>
+  <td>A plan doc in <code>docs/plans/</code> before the work starts, reviewed by Sol before anything
+  is built.</td><td class="same">Same</td></tr>
+<tr><td><strong>Small, locally complete increments</strong> — one coherent thing per loop, no drive-by
+  refactors.</td>
+  <td>"A small number of stages, each ending at a good stopping point." But we also say: fix what the
+  work turns up, <em>now</em>.</td><td class="part">Partly</td></tr>
+<tr><td><strong>Repair and grow in the same loop</strong> — every plan must fix outstanding problems
+  <em>and</em> add one new capability, so the project doesn't stall in endless patching.</td>
+  <td>No equivalent rule. Jobs are either a feature or a fix, chosen by Greg.</td><td class="part">Partly</td></tr>
+<tr><td><strong>Independent QA</strong> — a separate invocation that did not write the code decides
+  whether it passes.</td>
+  <td>GPT Sol reviews every plan and every stage. We add a different <em>model family</em>; HoH adds a
+  locked copy the tester cannot change. Two different kinds of independence, and nobody has compared
+  them.</td><td class="same">Same idea, different kind</td></tr>
+<tr><td><strong>QA is read-only on a frozen copy</strong> — "read-only access prevents the QA stage
+  from silently repairing the candidate it is meant to evaluate."</td>
+  <td>Since 2026-09-09 the Sol code reviewer <strong>fixes what it finds</strong>, in place; the job
+  agent reads its diff and runs the checks, and the next review round is told to treat those fixes as
+  unreviewed code.</td><td class="diff">Opposite</td></tr>
+<tr><td><strong>Same model in every role.</strong></td>
+  <td>Claude builds, GPT reviews, Opus arbitrates product wording — mixing families on purpose.</td>
+  <td class="diff">Opposite</td></tr>
+<tr><td><strong>Constrain outputs, not workflows</strong> — say what each role must hand back; let it
+  decide how.</td>
+  <td>We prescribe a lot of process (<code>engineering-manager.md</code>, red-first tests,
+  merge-never-rebase) <em>and</em> require outputs (a debrief with one of three named endings).</td>
+  <td class="part">Partly</td></tr>
+<tr><td><strong>Memory in files, shown via a short index</strong> ("progressive disclosure"): the
+  agent sees a categorised list first and opens details only when relevant.</td>
+  <td><code>CLAUDE.md</code> is a signpost to seven entry-point docs, each a map of the docs beneath
+  it. Exactly the same pattern, arrived at independently.</td><td class="same">Same</td></tr>
+<tr><td><strong>Evidence carried to the next loop</strong> — test reports, an issue table with reopen
+  history.</td>
+  <td>Within a job: the plan doc and Sol's review files. Across jobs: postmortems, user-feedback notes,
+  the Overseer's decision log. No single issue table with "reopened" counts.</td><td class="part">Partly</td></tr>
+<tr><td><strong>Single writer</strong> — within a loop, only the Developer touches the code.</td>
+  <td>Within a job, two writers: the job agent, then Sol with its fixes. (Separately, at the fleet
+  level, dozens of jobs share one repository in their own worktrees, which is where rules like
+  "commit by name" and "never throw away uncommitted work" come from. HoH runs one project, so it
+  never meets that.)</td>
+  <td class="diff">Opposite</td></tr>
+<tr><td><strong>Roll back to a verified state</strong> after a big regression.</td>
+  <td>Forbidden in practice: no <code>git reset</code>, never <code>vercel rollback</code>. A bad
+  deploy goes to Greg; a mistake is undone by editing forward.</td><td class="diff">Opposite (forced)</td></tr>
+<tr><td><strong>The planner chooses the next increment itself</strong> — within a fixed brief a
+  person wrote.</td>
+  <td>Our job agent chooses its stages within work Greg authorised — the same. One level up, the
+  Overseer may not <em>originate</em> work at all: <em>"nothing dispatched that Greg did not
+  queue."</em> HoH has no level where that question arises.</td><td class="same">Same (one level up: ours only)</td></tr>
+<tr><td><strong>No human after the spec.</strong> "Human involvement was limited to restoring network
+  or API availability."</td>
+  <td>Greg is in the loop by design. The Overseer may take low-stakes calls and log product defaults
+  for him to veto; anything consequential or durable — a schema, a prompt, a published sentence, a
+  dropped case — waits for him.</td><td class="diff">Opposite</td></tr>
+<tr><td>— (not addressed)</td>
+  <td>Usage limits, box load, concurrency, deploys, credentials, who may say what in whose voice.
+  This is most of the Overseer.</td><td class="diff">Ours only</td></tr>
+</tbody>
+</table>
+</div>
+
+<details>
+<summary>The three HoH roles, in a little more detail</summary>
+<p><strong>Project Planner.</strong> Reads the fixed spec and the previous loop's evidence. (The main
+text says it reads the code for context too; the benchmark prompt in the appendix says the opposite —
+<em>"do not … inspect production code"</em> — and has it pick at most three priorities, blockers and
+regressions first.) Writes a <em>development document</em>: a small set of related tasks, the existing
+behaviour that must be preserved, and observable checks for "done". It is told to be <em>bounded</em>
+(not too much at once, so failures are easy to localise) but <em>locally complete</em> (include every
+change needed for the new thing to actually work and be testable).</p>
+<p><strong>Developer.</strong> Starts from the previous loop's code ("warm start"), implements the dev
+doc, and tests as it goes: baseline the behaviour, change, re-run, look at nearby things that might
+have broken. Its own tests only decide whether it is ready to hand over — they do not count as
+acceptance.</p>
+<p><strong>QA Tester.</strong> Gets the code frozen and read-only, plus the results of build and smoke
+checks. Turns the spec and the dev doc into specific checkable claims, then tests each one from
+outside (play the game, press the keys, look at the screen) and from inside (read the code, logs,
+config). A claim is "verified" only if a recorded observation supports it; anything else is logged as
+a gap, never assumed to pass. Its report is the next loop's evidence.</p>
+<p>A small deterministic <strong>Runtime</strong> wraps all three: it fixes what each may read and
+write, and checks the output against a schema (retrying if it doesn't match). In the long game run,
+code and each role's output were also committed after every stage; the benchmark runs had no extra
+version control.</p>
+</details>
+
+<details>
+<summary>The Overseer's parts, in a little more detail</summary>
+<p><strong>The store, not the transcript, is the memory.</strong> A daemon owns a clock and writes
+<code>~/.overseer/</code>: which sessions exist, an event log, a decision log. The Overseer session
+auto-compacts, and compaction drops the boring bookkeeping first — "which is exactly the pause you
+issued forty minutes ago". So it reads the store rather than remembering.</p>
+<p><strong>Four gates</strong> bound what it may decide for Greg: (1) never hide who decided — every
+message it sends is stamped as its own, never Greg's; (2) answer facts, route judgement (technical to
+Sol, wording to Opus), default low-stakes product calls and log them for veto — except anything that
+outlives the branch, which waits; (3) never the irreversible, and never work of its own devising;
+(4) never spend what it is rationing.</p>
+<p><strong>The tick</strong>, every half hour or so: read usage and box load; close out finished jobs
+(debrief first); then pull from the queue if there is room. Usage-wise the instruction is to "surf
+close to the edge" — use the limits, not hoard them — and slow down only if a window won't last until
+it resets.</p>
+<p><strong>Deterministic rules before judgement</strong>: a session stuck in the wrong permission mode,
+a shell command unchanged for hours, box pressure. These need no model call and account for most of
+the fleet time actually lost.</p>
+<p><strong>Deploying</strong>: pull, read every new migration, write release notes, check
+<code>/help</code>, <code>npm run deploy</code>, and then check that three things agree — exit code,
+target database, and the commit production reports serving.</p>
+</details>
+
+<!-- ================================================================== MINDSTONE -->
+<h2 id="mindstone"><span class="pass">Pass 2b</span>The Mindstone relatives</h2>
+
+<p>The same problem has been worked on three more times nearby, in the Mindstone repositories. Two are
+direct relatives of ours, and one is closer to HoH than anything we run:</p>
+<ul>
+  <li><strong>CHIEF_ENGINEER</strong> (in <code>coding-agent-instructions/workflows/</code>, last changed
+    2026-09-23) — Mindstone's version of one job's loop, and a much heavier one than ours. A
+    coordinating agent, the <em>Chief</em>, that never touches code itself and runs a crew: a planner,
+    implementers, several reviewers from different model families, specialists, and an arbitrator who
+    settles disagreements.</li>
+  <li><strong>The remote agent fleet</strong> (<code>docs/REMOTE_AGENT_FLEET.md</code>, from
+    2026-08-16) — a dozen Chief Engineer jobs on a cloud machine, one terminal tab each, which keep
+    running when the laptop shuts. No supervisor: <em>you</em> are the Overseer, flicking between tabs.</li>
+  <li><strong>fleet-overseer-landing-board</strong> (last changed 2026-09-22) — <strong>our own
+    Overseer and dashboard, copied out of this repo on 2026-09-10</strong> and made general for Mindstone
+    machines. It is absorbing the best of Josh's coordinator and "landing board" (his system for
+    supervising sessions and landing their code), and heading towards several people on one machine,
+    each with their own Overseer.</li>
+</ul>
+
+<div class="callout model">
+  <p class="title">The Chief Engineer is a site manager who never picks up a tool</p>
+  <p>Every change, down to a one-line fix, goes to a builder. One to three inspectors from different
+  firms, depending on how risky the job is, check each stage without seeing each other's notes. When
+  their findings need weighing up, a referee recommends a way forward. The Chief's job is to route the
+  work, keep the site diary, and know when to call the client.</p>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 910 440" role="img" aria-labelledby="f4t">
+  <title id="f4t">Four levels of organising coding agents, and which of HoH, Spideryarn and Mindstone fills each</title>
+
+  <text x="295" y="28" text-anchor="middle" class="t-hd">HOH (THE PAPER)</text>
+  <text x="535" y="28" text-anchor="middle" class="t-hd">SPIDERYARN</text>
+  <text x="775" y="28" text-anchor="middle" class="t-hd">MINDSTONE</text>
+
+  <text x="10" y="80" class="t-b">Many people,</text>
+  <text x="10" y="98" class="t-b">many boxes</text>
+  <text x="10" y="170" class="t-b">A fleet on</text>
+  <text x="10" y="188" class="t-b">one box</text>
+  <text x="10" y="260" class="t-b">One job's</text>
+  <text x="10" y="278" class="t-b">loop</text>
+  <text x="10" y="350" class="t-b">One agent</text>
+  <text x="10" y="368" class="t-b">run</text>
+
+  <rect x="180" y="50" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="295" y="93" text-anchor="middle" class="t-s">not addressed</text>
+  <rect x="420" y="50" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="535" y="93" text-anchor="middle" class="t-s">not addressed (one person)</text>
+  <rect x="660" y="50" width="240" height="76" rx="6" class="box s-claude dash"/>
+  <text x="780" y="74" text-anchor="middle" class="t-b">landing board, next</text>
+  <text x="780" y="94" text-anchor="middle" class="t-s">an Overseer per person, one box</text>
+  <text x="780" y="112" text-anchor="middle" class="t-s">per product · partly built</text>
+
+  <rect x="180" y="140" width="230" height="76" rx="6" class="s-frame"/>
+  <text x="295" y="183" text-anchor="middle" class="t-s">not addressed (one project)</text>
+  <rect x="420" y="140" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="535" y="164" text-anchor="middle" class="t-b">The Overseer</text>
+  <text x="535" y="184" text-anchor="middle" class="t-s">daemon + permanent session,</text>
+  <text x="535" y="202" text-anchor="middle" class="t-s">four gates, deploys</text>
+  <rect x="660" y="140" width="240" height="76" rx="6" class="box s-claude"/>
+  <text x="780" y="164" text-anchor="middle" class="t-b">mindstone-fleet → landing board</text>
+  <text x="780" y="184" text-anchor="middle" class="t-s">Aug: tabs, you supervise · Sep:</text>
+  <text x="780" y="202" text-anchor="middle" class="t-s">our Overseer + Josh's ideas</text>
+
+  <rect x="180" y="230" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="295" y="254" text-anchor="middle" class="t-b">Planner → Developer → QA</text>
+  <text x="295" y="274" text-anchor="middle" class="t-s">one model in every role,</text>
+  <text x="295" y="292" text-anchor="middle" class="t-s">repeated 3 to 70 times</text>
+  <rect x="420" y="230" width="230" height="76" rx="6" class="box s-claude"/>
+  <text x="535" y="254" text-anchor="middle" class="t-b">engineering-manager</text>
+  <text x="535" y="274" text-anchor="middle" class="t-s">plan → build → Sol review;</text>
+  <text x="535" y="292" text-anchor="middle" class="t-s">Sol fixes what it finds</text>
+  <rect x="660" y="230" width="240" height="76" rx="6" class="box s-claude"/>
+  <text x="780" y="254" text-anchor="middle" class="t-b">CHIEF_ENGINEER</text>
+  <text x="780" y="274" text-anchor="middle" class="t-s">planner, implementers, read-only</text>
+  <text x="780" y="292" text-anchor="middle" class="t-s">reviewers, specialists, arbitrator</text>
+
+  <rect x="180" y="320" width="230" height="76" rx="6" class="box s-store"/>
+  <text x="295" y="344" text-anchor="middle" class="t-b">An off-the-shelf harness</text>
+  <text x="295" y="364" text-anchor="middle" class="t-s">Codex, OpenCode or Pi,</text>
+  <text x="295" y="382" text-anchor="middle" class="t-s">each with one model</text>
+  <rect x="420" y="320" width="230" height="76" rx="6" class="box s-store"/>
+  <text x="535" y="344" text-anchor="middle" class="t-b">Claude Code, Codex</text>
+  <text x="535" y="364" text-anchor="middle" class="t-s">plus Claude subagents</text>
+  <text x="535" y="382" text-anchor="middle" class="t-s">(Sonnet, Opus)</text>
+  <rect x="660" y="320" width="240" height="76" rx="6" class="box s-store"/>
+  <text x="780" y="344" text-anchor="middle" class="t-b">Pi, Claude Code, Codex, Cursor</text>
+  <text x="780" y="364" text-anchor="middle" class="t-s">a selector picks the model and</text>
+  <text x="780" y="382" text-anchor="middle" class="t-s">which subscription pays</text>
+
+  <text x="455" y="428" text-anchor="middle" class="t-s">Dashed outline: not addressed. Dashed blue: planned, partly built.</text>
+</svg>
+</div>
+<figcaption>Figure 4. Four levels, three projects. HoH works only at the bottom two levels. The
+landing board's fleet level started as a copy of ours, which is why those two cells say so much the
+same thing.</figcaption>
+</figure>
+
+<h3 id="mindstone-loop">The loop: HoH, our jobs and CHIEF_ENGINEER</h3>
+
+<div class="tbl-scroll">
+<table>
+<thead><tr><th></th><th>HoH</th><th>Spideryarn job</th><th>CHIEF_ENGINEER</th></tr></thead>
+<tbody>
+<tr><td><strong>Who plans</strong></td>
+  <td>A Planner run that may not edit code.</td>
+  <td>The job agent writes the plan doc itself.</td>
+  <td>A Planner subagent (the Chief plans alone only for light work), then the plan is critiqued
+  before anything is built.</td></tr>
+<tr><td><strong>Who builds</strong></td>
+  <td>The Developer, the only writer.</td>
+  <td>The job agent, or subagents and Codex it hands work to.</td>
+  <td>Implementer subagents only: <em>"The Chief never edits code itself — every change, down to a
+  one-liner, goes to an implementer."</em></td></tr>
+<tr><td><strong>Who judges</strong></td>
+  <td>One QA run, same model, on a locked read-only copy.</td>
+  <td>GPT Sol: a different model family, and it fixes what it finds.</td>
+  <td>One to three general reviewers from different families, plus specialists (a devil's advocate,
+  completeness, runtime safety…). They read the plan and the code, run in parallel, and do not see
+  each other's reports, so their views stay independent. Reviewers are read-only; the same batch may
+  include a testing implementer that writes tests. When the findings conflict or confidence is low, an
+  Arbitrator recommends what to do next.</td></tr>
+<tr><td><strong>When is it good enough</strong></td>
+  <td>The tester's evidence, with no threshold; the loop count is a budget.</td>
+  <td>Two review rounds per stage, then the agent decides; an overruled P0 or P1 goes to Opus or
+  Greg first.</td>
+  <td>Numbers: 95% confidence about intent before planning; move on after a confirming round with no
+  new important findings and every reviewer at 90% or above; after three rounds of the same kind,
+  restructure or escalate, unless the Arbitrator grants one final extension. The tooling enforces only
+  part of this.</td></tr>
+<tr><td><strong>How heavy</strong></td>
+  <td>Always three runs per loop.</td>
+  <td>One reviewer per stage, always.</td>
+  <td>Light, medium (the default) or heavy, as starting points the Chief adjusts. Heavy starts with three
+  reviewer families plus a devil's advocate and three to five other specialists.</td></tr>
+<tr><td><strong>Memory</strong></td>
+  <td>Dev doc, evidence bundle, the workspace.</td>
+  <td>The plan doc and Sol's review files in <code>docs/plans/</code>.</td>
+  <td>A planning folder per task: <code>PLAN.md</code>, an append-only status ledger written by a
+  script, and one report file per subagent — <em>"writing the file is the definition of done"</em>.</td></tr>
+<tr><td><strong>Which model, and who pays</strong></td>
+  <td>One fixed harness and model.</td>
+  <td>By convention: Claude builds, Sol reviews, Opus arbitrates wording.</td>
+  <td>A selector script picks the model per task and routes it across subscriptions, skipping
+  accounts that have hit their limits. Every report must state which model actually ran.</td></tr>
+<tr><td><strong>The human</strong></td>
+  <td>None after the spec.</td>
+  <td>Greg, for product calls; questions asked up front.</td>
+  <td>Two modes. Normally the user can be asked at set stopping points. Unattended, the run ends with
+  an "escalation" outcome rather than waiting or inventing an approval.</td></tr>
+<tr><td><strong>Repeated?</strong></td>
+  <td>Yes: 3 to 70 loops on the same thing.</td>
+  <td>Once per stage.</td>
+  <td>Per stage: build, review, refine, repeated until the reviewers settle; then a review of the whole
+  change, and a separate "Closer" that runs every check before the push and reports without fixing.
+  The plan is expected to grow new stages as the run learns.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout key">
+  <p class="title">CHIEF_ENGINEER is HoH's closest relative, not our job loop</p>
+  <p>It keeps HoH's split — planning, building and judging are different agents — and HoH's rule that
+  the judge may not edit. Then it multiplies the judging: several model families instead of one, and
+  specialists on top. Our <code>engineering-manager.md</code> is the light cousin: one agent plans and
+  builds, one reviewer from another family checks it and fixes it. So the two houses have already run
+  the comparison the paper raises — <em>should the reviewer be allowed to fix?</em> — in opposite
+  directions, and nobody has compared the results.</p>
+</div>
+
+<h3 id="mindstone-fleet">The fleet: our Overseer, the remote fleet and the landing board</h3>
+
+<div class="tbl-scroll">
+<table>
+<thead><tr><th></th><th>Spideryarn Overseer</th><th>Remote fleet (Aug 2026)</th><th>Landing board (Sep 2026)</th></tr></thead>
+<tbody>
+<tr><td><strong>Who supervises</strong></td>
+  <td>The Overseer: one permanent session plus a daemon.</td>
+  <td>You. One terminal tab per job; jobs survive the laptop closing.</td>
+  <td>The same Overseer, copied from here. Its daemon runs <strong>record-only</strong> on the team
+  machine: both switches that would let it act are off, and arming them is Greg's call.</td></tr>
+<tr><td><strong>How jobs start</strong></td>
+  <td>From Greg's queue, in waves.</td>
+  <td>You write a prompt file per job; one command launches them all, staggered so a dozen setups
+  don't run the machine out of memory.</td>
+  <td>The queue, or a button on the page that also tells the Overseer.</td></tr>
+<tr><td><strong>Getting code in</strong></td>
+  <td>Each job pushes to <code>dev</code>; only the Overseer deploys to production.</td>
+  <td>Each job pushes for itself once its checks pass — permission written into the prompt, with a
+  machine-wide lock so a dozen jobs finishing together don't trip over each other.</td>
+  <td>Production stays Greg's: unlike ours, this Overseer may not deploy. Josh's design, being weighed:
+  a queue that lets one branch land at a time, only when the machine has room. Greg's vision adds a merge queue: push early, and a separate agent periodically tests
+  everything and promotes it.</td></tr>
+<tr><td><strong>Who may start new work</strong></td>
+  <td>Never the Overseer: only what Greg queued.</td>
+  <td>Only you.</td>
+  <td>Mostly the same gate, with a narrow exception ours lacks: it may authorise routine fixes of its own
+  devising, recorded as its own authority and listed for Greg to audit (Greg, 2026-09-11: <em>"the
+  whole point is that you can do the low-level work so that I don't have to"</em>). Josh's loops that
+  generated product ideas, and his "learn from the owner's decisions" machinery, were excluded. And
+  Greg's 2026-09-13 vision says: <em>"New ideas get added to an Ideas Queue, and the Overseer
+  prioritises and instructs agents to work on them."</em></td></tr>
+<tr><td><strong>People</strong></td>
+  <td>One.</td>
+  <td>One.</td>
+  <td>Several on one box, each with a "cell" — their own dashboard, Overseer and sessions. Cells for
+  colleagues are built; cells that can see or talk to each other are not.</td></tr>
+<tr><td><strong>What it has that ours lacks</strong></td>
+  <td>—</td>
+  <td>Nothing: it is the earlier, simpler idea.</td>
+  <td>Taken from Josh, in part: an ask to Greg must say what was checked; a blocker records who owns it
+  and what happens next. Next in line: confirming a message really arrived in a session, rather than
+  assuming it did. Its own: onboarding a colleague in two commands.</td></tr>
+</tbody>
+</table>
+</div>
+
+<details>
+<summary>How the four fit together, in time</summary>
+<p><strong>16 August 2026:</strong> the remote fleet — a dozen Chief Engineer jobs on a Mindstone cloud
+machine, each in its own tmux session (a terminal that keeps running on the server), each shown as one
+iTerm tab on the laptop. Greg's brief: <em>"I want to be able to shut my laptop and open it back up and
+everything carries on going in the background."</em> No supervisor, no dashboard.</p>
+<p><strong>7–10 September:</strong> the fleet dashboard and the Overseer are built here, in Spideryarn,
+on our own Hetzner box.</p>
+<p><strong>10 September:</strong> a verbatim snapshot of that tooling (627 files at commit
+<code>f77b3115</code>) becomes <code>fleet-overseer-landing-board</code>, with Greg's gates as the
+operating rules and Josh's coordinator as a register of ideas to step through — 21 places where his
+system differs, each marked adopt, revisit, defer or exclude.</p>
+<p><strong>13 September:</strong> Greg's vision for it: <em>"We want to be Product Owners, not
+babysitters."</em> One box per product, several people per box, an Overseer per person, and each
+Overseer running several Chief Engineers — <em>"each running multiple subagents."</em> That is four
+levels of nesting, where HoH has two.</p>
+<p><strong>Since:</strong> the two copies have been changed separately, so a fix in one is not
+automatically in the other.</p>
+</details>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 200" role="img" aria-labelledby="f5t">
+  <title id="f5t">What each system is allowed to decide on its own</title>
+  <text x="20" y="28" class="t-hd">WHAT EACH IS ALLOWED TO DECIDE ON ITS OWN</text>
+
+  <rect x="20" y="48" width="160" height="110" rx="6" class="box s-human"/>
+  <text x="100" y="74" text-anchor="middle" class="t-b">Remote fleet</text>
+  <text x="100" y="98" text-anchor="middle" class="t-s">nothing: you write</text>
+  <text x="100" y="116" text-anchor="middle" class="t-s">every prompt</text>
+
+  <rect x="195" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="275" y="74" text-anchor="middle" class="t-b">Our Overseer</text>
+  <text x="275" y="98" text-anchor="middle" class="t-s">orders queued work;</text>
+  <text x="275" y="116" text-anchor="middle" class="t-s">small calls, logged for</text>
+  <text x="275" y="134" text-anchor="middle" class="t-s">veto; it deploys</text>
+
+  <rect x="370" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="450" y="74" text-anchor="middle" class="t-b">Landing board's</text>
+  <text x="450" y="98" text-anchor="middle" class="t-s">routine fixes it may</text>
+  <text x="450" y="116" text-anchor="middle" class="t-s">authorise itself, on</text>
+  <text x="450" y="134" text-anchor="middle" class="t-s">record; never deploys</text>
+
+  <rect x="545" y="48" width="160" height="110" rx="6" class="box s-claude"/>
+  <text x="625" y="74" text-anchor="middle" class="t-b">HoH</text>
+  <text x="625" y="98" text-anchor="middle" class="t-s">the next increment,</text>
+  <text x="625" y="116" text-anchor="middle" class="t-s">within one brief,</text>
+  <text x="625" y="134" text-anchor="middle" class="t-s">for 70 loops</text>
+
+  <rect x="720" y="48" width="160" height="110" rx="6" class="box s-store"/>
+  <text x="800" y="74" text-anchor="middle" class="t-b">Josh's coordinator</text>
+  <text x="800" y="98" text-anchor="middle" class="t-s">new product ideas</text>
+  <text x="800" y="116" text-anchor="middle" class="t-s">from its own loops;</text>
+  <text x="800" y="134" text-anchor="middle" class="t-s">excluded by Greg</text>
+
+  <text x="450" y="188" text-anchor="middle" class="t-s">Not a scale: HoH decides inside one product brief, the others across a whole fleet.</text>
+</svg>
+</div>
+<figcaption>Figure 5. Who may decide what without asking. Greg's 2026-09-13 vision, in which the
+Overseer prioritises an Ideas Queue, would sit somewhere among the middle three; how far it stretches
+is the open question in judgement item 6.</figcaption>
+</figure>
+
+<!-- ================================================================== PASS 3 -->
+<h2 id="pass3"><span class="pass">Pass 3</span>One real job, through both lenses</h2>
+
+<p>On 2026-10-01 Greg filed a feedback report from inside Spideryarn (report <code>spya-yj2vdr</code>):
+the <em>Earlier</em> tab of the Feedback dialog said "Showing your 50 most recent" — was that true? And
+could the Shipped / Not shipped pills show a count? Here is what happened, with the HoH role each step
+corresponds to.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 920 360" role="img" aria-labelledby="f3t">
+  <title id="f3t">The life of feedback report spya-yj2vdr across Greg, the Overseer, the job agent, GPT Sol and production, with the matching HoH role under each step</title>
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+  </defs>
+
+  <text x="8" y="50" class="t-hd">GREG</text>
+  <text x="8" y="110" class="t-hd">OVERSEER</text>
+  <text x="8" y="170" class="t-hd">JOB AGENT</text>
+  <text x="8" y="230" class="t-hd">GPT SOL</text>
+  <text x="8" y="290" class="t-hd">PROD</text>
+  <line x1="0" y1="76" x2="920" y2="76" class="s-lane"/>
+  <line x1="0" y1="136" x2="920" y2="136" class="s-lane"/>
+  <line x1="0" y1="196" x2="920" y2="196" class="s-lane"/>
+  <line x1="0" y1="256" x2="920" y2="256" class="s-lane"/>
+  <line x1="0" y1="316" x2="920" y2="316" class="s-lane"/>
+
+  <rect x="100" y="22" width="108" height="48" rx="5" class="box s-human"/>
+  <text x="154" y="42" text-anchor="middle" class="t">files report</text>
+  <text x="154" y="60" text-anchor="middle" class="t-m">spya-yj2vdr</text>
+
+  <rect x="215" y="82" width="108" height="48" rx="5" class="box s-claude"/>
+  <text x="269" y="102" text-anchor="middle" class="t">sweep, queue,</text>
+  <text x="269" y="120" text-anchor="middle" class="t">schedule job</text>
+
+  <rect x="330" y="142" width="108" height="48" rx="5" class="box s-claude"/>
+  <text x="384" y="162" text-anchor="middle" class="t">writes plan,</text>
+  <text x="384" y="180" text-anchor="middle" class="t">checks prod</text>
+
+  <rect x="445" y="202" width="108" height="48" rx="5" class="box s-gpt"/>
+  <text x="499" y="222" text-anchor="middle" class="t">plan review:</text>
+  <text x="499" y="240" text-anchor="middle" class="t">two P1s</text>
+
+  <rect x="560" y="142" width="108" height="48" rx="5" class="box s-claude"/>
+  <text x="614" y="162" text-anchor="middle" class="t">builds, tests,</text>
+  <text x="614" y="180" text-anchor="middle" class="t-m">157a4c7</text>
+
+  <rect x="675" y="202" width="108" height="48" rx="5" class="box s-gpt"/>
+  <text x="729" y="222" text-anchor="middle" class="t">code review,</text>
+  <text x="729" y="240" text-anchor="middle" class="t">fixes <tspan class="t-m">f9935b4</tspan></text>
+
+  <rect x="790" y="262" width="120" height="48" rx="5" class="box s-prod"/>
+  <text x="850" y="282" text-anchor="middle" class="t">Overseer</text>
+  <text x="850" y="300" text-anchor="middle" class="t">deploys</text>
+
+  <line x1="208" y1="58" x2="232" y2="80" class="ln" marker-end="url(#a3)"/>
+  <line x1="323" y1="118" x2="347" y2="140" class="ln" marker-end="url(#a3)"/>
+  <line x1="438" y1="178" x2="462" y2="200" class="ln" marker-end="url(#a3)"/>
+  <line x1="553" y1="214" x2="577" y2="192" class="ln" marker-end="url(#a3)"/>
+  <line x1="668" y1="178" x2="692" y2="200" class="ln" marker-end="url(#a3)"/>
+  <line x1="783" y1="238" x2="807" y2="260" class="ln" marker-end="url(#a3)"/>
+
+  <text x="8" y="342" class="t-hd">HOH ≈</text>
+  <text x="154" y="342" text-anchor="middle" class="t-acc">the spec</text>
+  <text x="269" y="342" text-anchor="middle" class="t-s">(no analogue)</text>
+  <text x="384" y="342" text-anchor="middle" class="t-acc">Planner</text>
+  <text x="499" y="342" text-anchor="middle" class="t-acc">QA of the plan</text>
+  <text x="614" y="342" text-anchor="middle" class="t-acc">Developer</text>
+  <text x="729" y="342" text-anchor="middle" class="t-acc">QA, but writes</text>
+  <text x="850" y="342" text-anchor="middle" class="t-s">(no analogue)</text>
+</svg>
+</div>
+<figcaption>Figure 3. Report <code>spya-yj2vdr</code>, 1–3 October 2026. Orange labels along the
+bottom are the HoH role each step plays; grey ones have no counterpart in the paper.</figcaption>
+</figure>
+
+<ol>
+  <li><strong>Greg files the report.</strong> In HoH terms this is the spec — but note how small it is.
+    HoH specs are whole products ("a five-minute bomb-defusal mission with 18 enemies"); ours are one
+    question and one suggestion.</li>
+  <li><strong>The Overseer picks it up.</strong> A sweep of the feedback queue checks the report really
+    is Greg's (a script proves it against the production database, because anyone can forge a Sentry
+    event), adds it to the queue, and schedules a session named <code>fb95-earlier-tab-counts</code>
+    to start later in a wave so it doesn't collide with others. <em>HoH has nothing here</em>: it only
+    ever runs one project, so there is nothing to schedule.</li>
+  <li><strong>The job agent plans.</strong> It answers Greg's question first — yes, the line was true,
+    because it only appears when the filtered query finds a 51st row. Reading production (read-only) on
+    3 October with the shipped list from Greg's build gave 115 not shipped. Then it writes the plan: a count on each pill, and the cap line rewritten to say "of your 115".
+    <em>This is HoH's Planner</em>, including its insistence on checkable acceptance conditions.</li>
+  <li><strong>Sol reviews the plan</strong> and finds two serious problems. The sharp one: the list and
+    the counts would come from two separate database queries, so a report filed between them could
+    make the screen say "Showing your 50 most recent of 50" — conspicuously false. Fix: one
+    transaction. <em>HoH has no review of the plan itself</em>; its QA only looks at built code.</li>
+  <li><strong>The agent builds and commits</strong> (<code>157a4c7</code>), testing as it goes.
+    <em>HoH's Developer.</em></li>
+  <li><strong>Sol reviews the code — and fixes it.</strong> It found that a repository-wide test
+    would fail on the new kind of transaction, that the client accepted an impossible combination
+    ("50 most recent of your 45"), and that the pill's text read <code>Not shipped1</code> to a screen
+    reader. It fixed all of these in place, with tests (<code>f9935b4</code>). <em>This is HoH's QA,
+    with the one thing HoH forbids</em> — the tester repairing the candidate. Our rules call for a
+    second round that treats those fixes as unreviewed code; this job's record shows one code review.</li>
+  <li><strong>The Overseer deploys.</strong> Both commits are on <code>main</code>. <em>HoH has no
+    deploy</em>: its artifact is a repository at the end of the run.</li>
+</ol>
+
+<div class="callout">
+  <p class="title">What this example shows</p>
+  <p>The middle four steps are recognisably the HoH loop, run once. What we add around it — provenance
+  checks, scheduling, a plan review, a cross-family reviewer, a deploy gate — is where most of our
+  machinery lives. What HoH adds that we don't have is the <em>second, third … seventieth</em> loop on
+  the same thing: our jobs typically run the loop once per stage and stop.</p>
+</div>
+
+<!-- ================================================================== PASS 4 -->
+<h2 id="pass4"><span class="pass">Pass 4</span>The evidence, and the hard parts</h2>
+
+<h3 id="results">What the paper measured</h3>
+<p>Three benchmarks (games in Godot; open-ended software tasks; rebuilding a program from its binary),
+three agent/model pairs, and a comparison of "run the agent once" against "run HoH for three loops".</p>
+<ul>
+  <li><strong>Every configuration improved on every benchmark.</strong> Codex + GPT-5.5 on the game
+    benchmark went from 49.6 to 71.5 (out of 100); the weakest pair, OpenCode + DeepSeek, from 26.9 to
+    49.0.</li>
+  <li><strong>It keeps improving past three loops</strong>, at least on one benchmark. Comparing Codex's
+    own checkpoints against each other on FrontierSWE, its "dominance" (how often it beats a randomly
+    picked other checkpoint) rose from 39% at loop 3 to 73% at loop 10, peaking at 76% at loop 9.
+    That is a different comparison pool from the main table, so the numbers don't line up with it.</li>
+  <li><strong>It isn't just "more turns".</strong> The same agent told to "keep going" for three passes
+    reached 58.2; HoH reached 64.8 in two loops, using fewer tokens (5.7M vs 6.3M per task).</li>
+  <li><strong>Each carried-over ingredient matters about equally.</strong> Freezing the first plan cost
+    8 points; replanning without the test evidence cost 6; rebuilding from scratch each loop cost 8 —
+    and a third more tokens.</li>
+  <li><strong>The 70-loop game</strong>: 81 issues recorded, 65 closed, 16 still open, and
+    <strong>17 reopened</strong> after a later change broke something already verified.</li>
+</ul>
+
+<details id="caveats">
+<summary>What the numbers don't say</summary>
+<ul>
+  <li><strong>The baseline is weak by our standards.</strong> "Vanilla" is one ordinary pass of the
+    agent, without HoH's separate planner and tester (the agent may still plan and test inside that
+    pass). Nobody here works like that. The paper shows structure beats no structure; it doesn't
+    compare against other structured loops (MetaGPT, ChatDev and AgileCoder are cited, not run).</li>
+  <li><strong>Mostly greenfield.</strong> The game and program-rebuild tasks start from a spec; five of
+    the 15 FrontierSWE tasks optimise an existing system. None looks like ours: a change to a large,
+    living codebase with other agents' work in flight.</li>
+  <li><strong>One long-run case.</strong> The 70-loop claim rests on a single game, with no comparison
+    condition. It shows the loop doesn't fall apart; it doesn't show it beats anything.</li>
+  <li><strong>17 reopens out of 81</strong> is a lot of regression. HoH does try to prevent it — each
+    plan names what must not break, and the tester checks it — and when that fails, the reopened issue
+    carries its history to the next planner. Still, "no humans" here comes with a standing backlog of
+    known breakage.</li>
+  <li><strong>Cost isn't reported in money.</strong> Tokens only, with a note that providers count
+    cached tokens differently. For Codex on the game benchmark, three loops used about 3.25 times the
+    tokens of one pass (8.4M against 2.6M per task).</li>
+</ul>
+</details>
+
+<h3>The hard parts each system is built around</h3>
+<p><strong>HoH's hard problem is drift over time.</strong> One agent, very long project: it forgets
+earlier decisions, repeats work, patches the same thing forever, or declares victory early. Every HoH
+mechanism — fresh invocations, evidence passed forward, increments that must both fix and grow, a
+tester who can't take the developer's word — is aimed at that.</p>
+<p><strong>The Overseer's hard problem is many things at once, safely.</strong> Thirty agents on one
+machine and two subscription budgets: agents silently stuck at a permission prompt (34.9 agent-hours
+lost over four days before that was fixed), test suites colliding on the shared database, a fleet that
+pauses and never wakes, a supervisor that burns the quota it is meant to protect. And a human whose
+authority mustn't leak: the runbook's worry is <em>"telling another agent to do what you may not"</em>
+— a sentence like "finish this work" is innocent text and an unlimited capability.</p>
+<p>Both share one: <strong>things that report success while doing nothing.</strong> HoH's tester
+records "insufficient evidence" as a gap rather than a pass. Our equivalent is the house rule that a
+check you have never seen fail is not evidence, and the Overseer's insistence that a deploy isn't done
+until three independent signals agree.</p>
+
+<!-- ================================================================== JUDGEMENT -->
+<h2 id="judgement">Judgement</h2>
+
+<h3 id="borrow">What might be worth borrowing</h3>
+
+<div class="callout decide">
+  <p class="title">1. Check we actually re-review the reviewer's fixes</p>
+  <p>HoH's tester is read-only "to prevent the QA stage from silently repairing the candidate it is
+  meant to evaluate". Ours writes fixes — a trade Greg chose on 2026-09-09 for the round trips it saves
+  — and our rules already cover the hazard: the job agent reads the diff, and the next review round is
+  told to treat Sol's fixes as unreviewed code written by someone else. The open question is whether
+  that second round happens: the worked example's record shows one code review. <strong>Costs</strong>
+  a look through recent plans' review files. <strong>Gives</strong> either reassurance, or the case for
+  making the second round a checked step rather than a written one.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">2. Run the loop more than once on the same thing</p>
+  <p>The paper's most interesting result is that loops 4–10 kept paying. Our jobs run plan → build →
+  review per stage, then stop. For the things where quality is open-ended — a new mode, a prompt, a
+  visual design — a second and third round, each starting from a fresh <em>black-box</em> test report
+  ("drive the browser, list what's wrong against the plan's acceptance checks"), might be where the
+  value is. The paper's long run also leaned on game-specific tools for driving and testing the game;
+  extra loops alone are not the whole recipe. <strong>Costs</strong> roughly linear spend per extra
+  loop. <strong>Gives</strong> polish that one pass doesn't reach.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">3. One issue ledger with "reopened"</p>
+  <p>HoH's issue table makes regressions <em>first-class</em>: a reopened item carries its own earlier
+  verification history. We have the pieces scattered (postmortems, feedback notes, a recheck table of
+  every report), but no one place that says "this was verified on the 1st and broke on the 5th".
+  <strong>Costs</strong> another store to keep honest. <strong>Gives</strong> a regression rate we could
+  actually watch.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">4. Measure whether our loop pays, the way they did</p>
+  <p>Their Table 2 — the same agent and model, the same number of passes, with and without the
+  structure, with token use reported alongside — is the kind of evidence we don't have for our own
+  process. We believe Sol reviews are worth it (and keep finding P1s like the
+  two-queries one above), but we've never run a matched comparison. A small one on a handful of
+  feedback reports would tell us which steps earn their cost.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">5. Compare our two review styles, which already exist side by side</p>
+  <p>CHIEF_ENGINEER keeps the reviewers read-only and runs several families in parallel; our jobs use
+  one reviewer that also fixes. The two repositories prescribe opposite answers to the question the
+  paper raises. Reading a handful of real runs from each — which caught the bugs that later turned
+  into postmortems, and at what cost in time and usage — would settle it better than the paper can.
+  <strong>Costs</strong> an afternoon of an agent's reading. <strong>Gives</strong> evidence for
+  whichever way we go next.</p>
+</div>
+
+<div class="callout decide">
+  <p class="title">6. Decide the Ideas Queue question before it is built</p>
+  <p>The landing board's vision has the Overseer <em>prioritise</em> a queue of ideas. Its runbook
+  already lets it order queued work and authorise routine fixes of its own; what is undecided is whether
+  the vision means more — choosing which product ideas are worth doing at all, which edges towards what
+  Greg excluded from Josh's system. That would be a new decision, and is easier to make before the code
+  exists. (Here, the Overseer has neither the exception nor the vision.)</p>
+</div>
+
+<h3 id="opposite">Where we deliberately do the opposite, and should keep doing so</h3>
+<ul>
+  <li><strong>Nobody originating the work.</strong> HoH's planner picks increments, but always within
+    a brief a person wrote; our job agents do the same. What the Overseer is forbidden is the level
+    above — starting work nobody asked for. In a product, choosing what to build is the job Greg kept. <em>"My job is basically new ideas"</em> is why gate 3 says "is it in
+    the queue?". A middle path exists and is already partly built: a slow lane of work Greg has
+    approved in principle (<code>overseer-queue.md</code>), which the Overseer may pick from in a lull.</li>
+  <li><strong>Same model everywhere.</strong> HoH needs it for a clean experiment. We want the
+    opposite — a reviewer from a different family is less likely to share the builder's blind spots.
+    Greg, 2026-09-30: if Sol runs out, <em>"I'd rather we stop working than risk pushing lower-quality
+    stuff."</em></li>
+  <li><strong>Rolling back to the last good state.</strong> Sensible for one writer; destructive with
+    thirty, because the "bad" commit may be braided with someone else's good work.</li>
+</ul>
+
+<h3>Risks and fragilities, seen in the paper's light</h3>
+<ul>
+  <li><strong>Our evidence doesn't travel between jobs as well as theirs travels between loops.</strong>
+    Inside a job the plan doc is the memory; the next job on the same area starts from the docs and
+    whatever postmortems someone remembered to write. HoH's ablation says losing the evidence costs
+    about 6 points.</li>
+  <li><strong>"Process prescribed" can crowd out "outcome checked".</strong> HoH checks every role's
+    output against a schema and retries. Our debrief's three endings are a shape we ask for, not one a
+    program checks.</li>
+  <li><strong>Much of the Overseer is still proposing rather than acting</strong> as of this writing:
+    the scheduler that would dispatch standing jobs is switched off, and the deterministic rules write
+    proposals that no surface shows anyone yet. The comparison above is between a paper's running
+    system and a partly armed one.</li>
+</ul>
+
+<h3>Open questions</h3>
+<ul>
+  <li>Would a HoH-style "keep going until the tester runs out of complaints" mode suit a specific kind
+    of job here — a new reading mode built from scratch, say — where the spec is ours and fixed?</li>
+  <li>Is the second review round — the one that checks Sol's own fixes — happening in practice?</li>
+  <li>Does the Overseer want the paper's "every increment must both repair and grow" rule when it
+    chooses what to pull from the queue — or is ease × value already the better rule for a product?</li>
+</ul>
+
+<!-- ================================================================== FAQ -->
+<h2 id="faq">FAQ</h2>
+
+<details>
+<summary>Which of our systems is most like HoH?</summary>
+<p>At the loop level, Mindstone's CHIEF_ENGINEER: separate agents plan, build and judge, and the judges
+may not edit — HoH's shape, with more judges. It differs in looping per planned stage (build, review,
+refine until the reviewers settle) rather than over the whole product, and in having numeric stopping
+rules (95% intent, 90% reviewer confidence, three rounds plus at most one arbitrated extension) where
+HoH has a loop budget. Its unattended mode is the nearest thing either house has to HoH's
+"no human after the spec", and even there a decision it cannot take ends the run as an escalation.</p>
+</details>
+
+<details>
+<summary>Is the landing board the same code as our Overseer?</summary>
+<p>It started as a byte-for-byte copy of ours on 2026-09-10 and has been changed separately since, for
+Mindstone machines, several people per box, and some of Josh's mechanisms. The four gates share their
+principles, but the wording has diverged in both directions: there, deploying stays with Greg and the
+Overseer works in the main checkout and may authorise routine fixes itself; here, the Overseer deploys
+and authorises nothing of its own. Neither copy pulls the other's fixes automatically.</p>
+</details>
+
+<details>
+<summary>Is the Overseer a "harness of harnesses" too?</summary>
+<p>Literally, yes — it drives Claude Code and Codex sessions, which are harnesses. But the paper's
+term means a <em>loop</em> around one harness. Our closest match to that is a single job run by
+<code>engineering-manager.md</code>. The Overseer is one level further out again.</p>
+</details>
+
+<details>
+<summary>The paper used GPT-5.6 Sol for its game. Isn't that our reviewer?</summary>
+<p>The same model family, in a different role. In HoH it plays all three roles (planner, developer,
+tester). Here the usual arrangement is Claude builds and Sol reviews, so that builder and reviewer
+don't share a family — though Sol also writes its review fixes, and Codex can be handed building work
+when Claude's usage limits are tight.</p>
+</details>
+
+<details>
+<summary>Could we just run HoH on Spideryarn?</summary>
+<p>On a greenfield sub-project with a fixed spec, probably — that's what it's for. On the main product,
+three things get in the way: it assumes a single writer, it picks its own objectives, and it is happy
+to roll back. All three conflict with rules we hold for good reasons (a shared tree, Greg's ownership of
+product scope, never destroying work).</p>
+</details>
+
+<details>
+<summary>Where does the human sit in each?</summary>
+<p>HoH: writes the spec, then fixes the network when it drops. Ours: the source of every job, the
+owner of every product call, and the reviewer of the decisions the Overseer took on their behalf —
+which the runbook says must be visible: <em>"A week with zero vetoes is a red flag, not a clean
+bill."</em></p>
+</details>
+
+<!-- ================================================================== APPENDIX -->
+<h2 id="appendix">Appendix</h2>
+
+<h3>Glossary</h3>
+<div class="tbl-scroll">
+<table>
+<tbody>
+<tr><td><strong>Harness</strong></td><td>The program around a model that gives it tools and runs its
+  actions — Claude Code, Codex CLI, OpenCode, Pi.</td></tr>
+<tr><td><strong>Loop</strong> (HoH)</td><td>One round of plan → develop → test.</td></tr>
+<tr><td><strong>Warm start</strong> (HoH)</td><td>Each loop's developer starts from the previous code
+  rather than an empty folder.</td></tr>
+<tr><td><strong>Evidence bundle</strong> (HoH)</td><td>The tester's structured report: each claim,
+  what was observed, and whether it's verified, failed or unproven.</td></tr>
+<tr><td><strong>Runtime</strong> (HoH)</td><td>The small deterministic program that enforces each
+  role's permissions and output format.</td></tr>
+<tr><td><strong>Job / session</strong> (ours)</td><td>One Claude Code conversation doing one piece of
+  work, in its own worktree.</td></tr>
+<tr><td><strong>Worktree</strong></td><td>A separate checkout of the repository on the same machine, so
+  agents don't edit each other's files.</td></tr>
+<tr><td><strong>GPT Sol</strong></td><td>OpenAI's model, run through Codex CLI, used for every plan
+  and code review — the cross-family check.</td></tr>
+<tr><td><strong>The queue</strong></td><td>The list of work Greg has authorised. Being in it is what
+  lets the Overseer start a job.</td></tr>
+<tr><td><strong>Gate</strong></td><td>One of the Overseer's four principles bounding what it may decide
+  on Greg's behalf.</td></tr>
+<tr><td><strong>Chief</strong> (CHIEF_ENGINEER)</td><td>The coordinating agent in Mindstone's workflow:
+  routes work to subagents, keeps the planning folder, never edits code.</td></tr>
+<tr><td><strong>Arbitrator</strong> (CHIEF_ENGINEER)</td><td>A subagent that reads the reviewers'
+  reports and the code and writes the recommendation when they disagree.</td></tr>
+<tr><td><strong>Specialist</strong> (CHIEF_ENGINEER)</td><td>A narrow focus applied to a kind of work —
+  a security reviewer, a completeness researcher, a testing implementer, a devil's advocate.</td></tr>
+<tr><td><strong>Cell</strong> (landing board)</td><td>One person's own dashboard, Overseer and
+  sessions on a shared machine.</td></tr>
+<tr><td><strong>Landing</strong></td><td>Getting a finished branch's code into the shared branch, in
+  Josh's system through a queue that lets one land at a time.</td></tr>
+<tr><td><strong>P0 / P1 / P2</strong></td><td>A reviewer's severity labels: must fix / should fix /
+  worth considering.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Where things live</h3>
+<ul>
+  <li>The paper: <a href="https://arxiv.org/html/2609.01481v1">arXiv 2609.01481v1</a> — and in
+    Spideryarn at <code>/read/arxiv-2609-01481v1-spya-sjatfv</code>.</li>
+  <li><code>docs/project/fleet-and-overseer-overview.md</code> — the hub: which of the fleet and
+    Overseer docs to open for what.</li>
+  <li><code>docs/project/overseer.md</code> — the Overseer's runbook: gates, tick, deploying.</li>
+  <li><code>docs/project/overseer-direction.md</code> — why it is shaped the way it is.</li>
+  <li><code>docs/project/overseer-queue.md</code> — the slow lane of approved, deferred work.</li>
+  <li><code>docs/reusable/engineering-manager.md</code> — the per-job loop (our HoH loop).</li>
+  <li><code>docs/reusable/codex-cli-as-subagent.md</code> — how a Sol review is run, and why it writes.</li>
+  <li><code>docs/plans/261003b-earlier-tab-counts-on-the-pills*.md</code> — the worked example's plan
+    and both reviews.</li>
+</ul>
+<p>In the Mindstone repositories (under <code>~/dev/gdconsult_work/mindstone/</code>):</p>
+<ul>
+  <li><code>MindstoneRebel/coding-agent-instructions/workflows/CHIEF_ENGINEER/CHIEF_ENGINEER.md</code>
+    — the Chief Engineer workflow; <code>CHIEF_ENGINEER_AUTONOMOUS.md</code> beside it is the
+    unattended mode, <code>MODEL_ROSTER.md</code> which model does what.</li>
+  <li><code>MindstoneRebel/coding-agent-instructions/docs/REMOTE_AGENT_FLEET.md</code> — the remote
+    fleet: tmux per job, iTerm tabs, mosh.</li>
+  <li><code>fleet-overseer-landing-board/README.md</code> — what is built and what is not;
+    <code>docs/project/vision.md</code> is Greg's 2026-09-13 vision, and
+    <code>docs/merger/DISCREPANCIES.md</code> the 21 differences from Josh's coordinator.</li>
+</ul>
+
+</body>
+</html>

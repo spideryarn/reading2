@@ -435,7 +435,7 @@ export function SortChips<T>({
  * is the lower layer and must not reach up into a page's components.
  */
 const MENU_SURFACE =
-  "tw:z-[100] tw:min-w-[12rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]";
+  "tw:z-[100] tw:min-w-[12rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[var(--shadow-pop)]";
 
 /** One row of either menu — `ShelfActionsMenu`'s `ITEM`, for the same reason. */
 const MENU_ITEM =

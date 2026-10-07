@@ -210,8 +210,8 @@ interface Props {
  *
  * **The criteria are fetched here rather than threaded in**, and that is a
  * decision. `CriteriaBand` only mounts on the `criteria` sub-mode, so a list
- * lifted out of it would be empty on Mirror, Claims and Candidates — three of
- * the four places a referee selects prose. Mounting the existing hook here
+   * lifted out of it would be empty on Mirror, Claims, Candidates and Hidden
+   * text — four of the five places a referee selects prose. Mounting the existing hook here
  * costs one GET, and only when a referee actually selects a passage.
  */
 export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) {
@@ -222,7 +222,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
    * Read here rather than threaded in, for the reason the criteria themselves
    * are fetched here: this section is mounted from `CommentDialog` and
    * `AnnotateDialog`, which are nowhere near `RefereeBand` and are open on all
-   * four sub-modes. A prop would have to be carried through two dialogs that
+   * five sub-modes. A prop would have to be carried through two dialogs that
    * have nothing else to do with Referee mode.
    *
    * It has to be the mode's, and that is GPT Sol's finding 4 rather than

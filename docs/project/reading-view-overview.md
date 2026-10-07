@@ -171,7 +171,7 @@ asked for less motion gets the bar at once. Which mount plays it is
   prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
   it for the confidence unit, the colours, or the URL parameters.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
-  them a verdict: four sub-modes, an evidence base with two numbers in it, and a confidentiality
+  them a verdict: five sub-modes, an evidence base with two numbers in it, and a confidentiality
   notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: the mode, its chips, the three
   computed pictures, the five that were cut, and what a visitor sees. Open it for any picture but

@@ -69,7 +69,7 @@ function rows(archived: boolean): readonly Command[] {
         slug: "a-piece",
         search: "at=spya-k3m9qt",
         view: "article",
-        help: "/help#glossary",
+        help: "/help/mode-glossary",
         shelfRow: {
           archive: {
             at: archived ? "2026-10-01T00:00:00.000Z" : null,

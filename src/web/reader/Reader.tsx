@@ -174,6 +174,7 @@ import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
+import { SkipToModes } from "./SkipToModes.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -3923,6 +3924,9 @@ export function Reader({
         } as CSSProperties
       }
     >
+      {/* First in the reader, so it is the first Tab stop: past the spine and
+          the prose to the mode switch. SkipToModes.tsx. */}
+      <SkipToModes />
       {fit.spine !== "off" && (
         <Spine
           outline={outline}
@@ -4171,7 +4175,7 @@ export function Reader({
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
           key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all four of its sub-modes: the criteria
+          /* **Referee mode only**, and all five of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}

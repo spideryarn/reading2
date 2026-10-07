@@ -19,14 +19,14 @@
  *   boot unless lingering is on for the account — nothing in this repo enables
  *   lingering, so the box would come back up with the Overseer down and no page
  *   to say so.
- * - **`StartLimit*` in `[Unit]`, never `[Service]`.** systemd moved those keys
- *   in v229 and **ignores them silently** in `[Service]`, which turns a
- *   deliberate "crash-loop visibly and then stop" into "restart for ever".
+ * - **`StartLimit*` in `[Unit]`, never `[Service]`.** Keep the policy together:
+ *   systemd 255 accepts legacy `StartLimitBurst` in `[Service]`, but ignores
+ *   `StartLimitIntervalSec` there with a warning.
  *
  * docs/plans/260908b-overseer-store-and-clock.md § S5.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,7 +129,7 @@ describe.each(UNITS)("$file", ({ file, delimiter }) => {
     expect(section(unit, "Service")).toContain("Restart=always");
   });
 
-  it("rate-limits restarts in [Unit], where systemd reads those keys", () => {
+  it("keeps both start-limit settings in [Unit] (the Overseer disables the limit)", () => {
     const startLimits = (key: string) => ({
       unit: section(unit, "Unit").filter((l) => l.startsWith(`${key}=`)),
       service: section(unit, "Service").filter((l) => l.startsWith(`${key}=`)),
@@ -137,8 +137,8 @@ describe.each(UNITS)("$file", ({ file, delimiter }) => {
     for (const key of ["StartLimitBurst", "StartLimitIntervalSec"]) {
       const found = startLimits(key);
       expect(found.unit).toHaveLength(1);
-      // In [Service] systemd ignores it WITHOUT SAYING SO, so a unit with the
-      // key in the wrong place reads as rate-limited and is not.
+      // Burst has a legacy [Service] alias, IntervalSec does not. Keep both
+      // in [Unit], so their effect cannot depend on that compatibility split.
       expect(found.service).toEqual([]);
     }
   });
@@ -308,6 +308,21 @@ describe("the overseer unit", () => {
     // reads and not the paragraph above it explaining the choice.
     expect(section(unit, "Service")).toContain("EnvironmentFile=/etc/overseer.env");
     expect(section(unit, "Service")).not.toContain("EnvironmentFile=-/etc/overseer.env");
+  });
+
+  it("never gives up restarting, and retries every thirty seconds", () => {
+    // A disk full for an hour used to leave the unit `failed` for good: ten
+    // starts in 300s and systemd stops trying (Sol, 261006m finding 13).
+    // infra/hetzner/test-overseer-restart.sh is the end-to-end check of these.
+    expect(section(unit, "Unit")).toContain("StartLimitIntervalSec=0");
+    expect(section(unit, "Service")).toContain("RestartSec=30s");
+  });
+
+  it("REQUIRES its key file, which is not the arming file", () => {
+    expect(section(unit, "Service")).toContain("EnvironmentFile=/etc/overseer-secrets.env");
+    expect(section(unit, "Service")).not.toContain("EnvironmentFile=-/etc/overseer-secrets.env");
+    // The key never appears in the unit, in any form.
+    expect(unit).not.toMatch(/OPENROUTER_API_KEY=/);
   });
 
   it("never hardcodes the arming, so an ordinary restart is not a re-arm", () => {
@@ -604,4 +619,139 @@ describe("box-tidy test overrides", () => {
       expect(unset).toContain(`BOX_TIDY_${name}`);
     }
   });
+});
+
+// ─── /etc/tmpfiles.d/tmp.conf: /tmp ages out after 7 days, and what is kept longer.
+// docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md
+const TMPFILES_CONF = readFileSync(`${REPO}infra/hetzner/tmpfiles.d/tmp.conf`, "utf8");
+const tmpfilesRules = TMPFILES_CONF.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
+
+describe("infra/hetzner/tmpfiles.d/tmp.conf", () => {
+  it("is byte-for-byte what provision.sh installs", () => {
+    expect(heredocBody(PROVISION, "TMPFILES_TMP_CONF")).toBe(TMPFILES_CONF);
+  });
+
+  it("ages /tmp at 7 days, keeps scratchpads at 30, and never ages tmux's socket", () => {
+    expect(tmpfilesRules).toEqual([
+      "D /tmp 1777 root root 7d",
+      "e /tmp/claude-[0-9] - - - 30d",
+      "e /tmp/claude-[0-9]*[0-9] - - - 30d",
+      "e /tmp/playwright_chromiumdev_profile-* - - - 30d",
+      "e /tmp/com.google.Chrome.* - - - 30d",
+      "e /tmp/.org.chromium.Chromium.* - - - 30d",
+      "x /tmp/tmux-*",
+      "x /tmp/codex-bwrap-synthetic-mount-targets-*",
+      "x /tmp/codex-daemon-*",
+    ]);
+  });
+});
+
+describe("provisioning verifies the effective /tmp age", () => {
+  const checkLine = PROVISION.split("\n").find((line) => line.startsWith('check "/tmp ages out after 7 days"'))!;
+  const checkFunction = PROVISION.split("\n").find((line) => line.startsWith("check() {"))!;
+  function verify(config: string, producerStatus = 0) {
+    const root = mkdtempSync(path.join(tmpdir(), "tmpfiles-verify-"));
+    try {
+      mkdirSync(path.join(root, "bin"));
+      const fixture = path.join(root, "config");
+      writeFileSync(fixture, config);
+      writeFileSync(path.join(root, "bin/systemd-tmpfiles"), '#!/bin/sh\ncat "$TMPFILES_VERIFY_FIXTURE"\nexit "$TMPFILES_VERIFY_EXIT"\n', { mode: 0o755 });
+      return spawnSync("bash", ["-c", `say() { :; }; fail=0; ${checkFunction}\n${checkLine}\nexit "$fail"`], {
+        encoding: "utf8",
+        env: { ...process.env, PATH: `${root}/bin:${process.env.PATH ?? ""}`, TMPFILES_VERIFY_FIXTURE: fixture, TMPFILES_VERIFY_EXIT: String(producerStatus) },
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  it("rejects a printed 7-day rule shadowed by an earlier /tmp entry", () => {
+    expect(checkLine).toBeDefined();
+    expect(verify("d /tmp 1777 root root 30d\nD /tmp 1777 root root 7d\n").status).not.toBe(0);
+    expect(verify("D /tmp 1777 root root 7d\n").status).toBe(0);
+  });
+
+  it("rejects a failed config reader even if its partial output looks correct", () => {
+    expect(checkFunction).toBeDefined();
+    expect(verify("D /tmp 1777 root root 7d\n", 1).status).not.toBe(0);
+  });
+});
+
+describe("the restart test's claims", () => {
+  it("reports its worst-case recovery wait honestly", () => {
+    const script = readFileSync(`${REPO}infra/hetzner/test-overseer-restart.sh`, "utf8");
+    // 24 attempts, each sleeping 5s and, when active, another 10s.
+    const minutes = Number(script.match(/waiting up to (\d+) minutes/)?.[1]);
+    expect(minutes).toBeGreaterThanOrEqual((24 * (5 + 10)) / 60);
+  });
+
+  it("does not infer never failed from one blocked-state sample", () => {
+    const script = readFileSync(`${REPO}infra/hetzner/test-overseer-restart.sh`, "utf8");
+    expect(script).not.toContain("never failed");
+  });
+});
+
+describe("systemd 255 compatibility comments", () => {
+  it("does not describe the supported legacy StartLimitBurst placement as silently ignored", () => {
+    const unit = unitFromRepo("overseer.service");
+    expect(unit).not.toMatch(/StartLimitBurst= under\s*# \[Service\] is silently ignored/);
+    const root = mkdtempSync(path.join(tmpdir(), "start-limit-parser-"));
+    try {
+      const file = path.join(root, "probe.service");
+      writeFileSync(file, "[Service]\nExecStart=/bin/true\nStartLimitBurst=10\nStartLimitIntervalSec=0\n");
+      const ran = spawnSync("systemd-analyze", ["verify", file], { encoding: "utf8" });
+      if (ran.error?.message.includes("ENOENT")) return;
+      expect(ran.stderr).toContain("Unknown key name 'StartLimitIntervalSec'");
+      expect(ran.stderr).not.toContain("Unknown key name 'StartLimitBurst'");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+const hasTmpfiles = spawnSync("systemd-tmpfiles", ["--version"]).status === 0;
+
+describe.skipIf(!hasTmpfiles)("the rules, run by systemd-tmpfiles itself", () => {
+  // Keep the real paths and parent mode under --root. Only ages are shortened;
+  // ctime and birth time cannot be backdated, so wait for those too. A second
+  // pass ages the 30-day content out, distinguishing an age from an exclusion.
+  it("cleans idle files and cwd markers, keeps young descendants and every exclusion, and eventually ages the 30-day content", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "tmpfiles-conf-"));
+    const p = (...parts: string[]) => path.join(root, "tmp", ...parts);
+    const retained30 = ["claude-0/proj/scratchpad", "claude-1000/proj/scratchpad", "playwright_chromiumdev_profile-test", "com.google.Chrome.test", ".org.chromium.Chromium.test"];
+    const excluded = ["tmux-1000", "codex-bwrap-synthetic-mount-targets-test", "codex-daemon-test"];
+    const config = path.join(root, "etc/tmpfiles.d/tmp.conf");
+    const clean = (longAge: string) => {
+      writeFileSync(config, `${tmpfilesRules.map((line) => line.replace(/ 7d$/, " 2s").replace(/ 30d$/, ` ${longAge}`)).join("\n")}\n`);
+      return spawnSync("systemd-tmpfiles", ["--root", root, "--clean"], { encoding: "utf8" });
+    };
+    try {
+      mkdirSync(path.dirname(config), { recursive: true });
+      writeFileSync(path.join(root, "etc/passwd"), "root:x:0:0:root:/root:/bin/sh\n");
+      writeFileSync(path.join(root, "etc/group"), "root:x:0:\n");
+      mkdirSync(p(), { mode: 0o1777 });
+      for (const dir of ["fake-codex-Ab12Cd", "old-tree/deep", ...retained30, ...excluded]) mkdirSync(p(dir), { recursive: true });
+      writeFileSync(p("fake-codex-Ab12Cd", "out.json"), "{}");
+      writeFileSync(p("claude-deadbeef-cwd"), "/old/checkout");
+      for (const dir of [...retained30, ...excluded]) writeFileSync(p(dir, "idle.txt"), "untouched");
+      symlinkSync("/missing/browser-pid", p("com.google.Chrome.test", "SingletonLock"));
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      writeFileSync(p("old-tree", "deep", "fresh.txt"), "written just now");
+      const ran = clean("1h");
+      expect(ran.status, ran.stderr).toBe(0);
+      expect(existsSync(p("fake-codex-Ab12Cd"))).toBe(false);
+      expect(existsSync(p("old-tree", "deep", "fresh.txt"))).toBe(true);
+      for (const dir of [...retained30, ...excluded]) expect(existsSync(p(dir, "idle.txt")), dir).toBe(true);
+      // existsSync follows dangling symlinks; read the directory entry itself.
+      expect(readdirSync(p("com.google.Chrome.test"))).toContain("SingletonLock");
+      expect(existsSync(p("claude-deadbeef-cwd"))).toBe(false);
+      const expired = clean("2s");
+      expect(expired.status, expired.stderr).toBe(0);
+      for (const dir of retained30) expect(existsSync(p(dir, "idle.txt")), dir).toBe(false);
+      expect(readdirSync(p("com.google.Chrome.test"))).not.toContain("SingletonLock");
+      for (const dir of excluded) expect(existsSync(p(dir, "idle.txt")), dir).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
 });

@@ -206,7 +206,7 @@ const PDF_META = {
  * Written out rather than imported from SimplePanel.tsx, so a change to it is
  * a change somebody made here on purpose.
  */
-const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this piece yet.";
+const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this one yet.";
 
 /**
  * **A drawing, because the fixture's diagram band is a visitor's default now.**
@@ -940,24 +940,24 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      band rather than the real panel. Which means this row says nothing about
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
-  quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
+  quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this one yet" },
   /* No timeline on the payload either, so this is the *nobody built one*
      sentence rather than the boundary — it moved out of the group below on
      2026-09-04, when the payload grew a flag to be sure with.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
-  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this one yet" },
   /* No route on the payload either, so the *nobody built one* sentence — it
      moved out of the owners-only group below on 2026-09-29, when the payload
      grew a flag for it, exactly as `timeline` did (SPIDERYARN-READING2-56).
      The drawn route is "draws a stored skim from the payload" below.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this piece yet" },
+  skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this one yet" },
   /* And the FAQ and the Citations list, the same day and the same way: out of
      the owners-only group below once the payload grew a flag for each. The
      drawn ones are "draws a stored faq" and "draws a stored citations list"
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this piece yet" },
-  citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this piece yet" },
+  faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this one yet" },
+  citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this one yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -994,7 +994,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      every row's address re-judged at the boundary. On the default fixture there
      is no stored debate, so the band says nobody built one. The drawn one is
      "draws a stored debate" below. */
-  debate: { where: VISITOR_BAND, says: "Nobody has built a debate for this piece yet" },
+  debate: { where: VISITOR_BAND, says: "Nobody has built a debate for this one yet" },
 };
 
 /**
@@ -1137,7 +1137,7 @@ describe("a signed-out browser on a shared document", () => {
     /* No `quotes` key on the payload — nobody built one. This is the state the
        browser pass could not reach, because the article it drove had every
        artefact. */
-    expect(host.textContent).toContain("Nobody has built a set of quotes for this piece yet");
+    expect(host.textContent).toContain("Nobody has built a set of quotes for this one yet");
     expect(host.textContent).not.toContain(PUBLIC_TERM);
 
     await remount();
@@ -1418,7 +1418,7 @@ describe("a signed-out browser on a shared document", () => {
 
   it("tells a visitor no plain-words summary has been made, and asks for none", async () => {
     await open("?mode=summary&summary=fuller");
-    expect(host.textContent).toContain("Nobody has made a plain-words version of this piece yet.");
+    expect(host.textContent).toContain("Nobody has made a plain-words version of this one yet.");
     expect(host.textContent).not.toContain("Write it");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
@@ -1723,7 +1723,7 @@ describe("a signed-out browser on a shared document", () => {
       served = article();
       await open(`?mode=${mode}`);
 
-      expect(host.textContent, mode).toContain(`${noun} was built for this piece`);
+      expect(host.textContent, mode).toContain(`${noun} was built for this one`);
       expect(host.textContent, mode).toContain("came back with nothing in it");
       /* The whole point: not the never-built sentence. */
       expect(host.textContent, mode).not.toContain("Nobody has built");
@@ -1909,7 +1909,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(new URLSearchParams(location.search).get("mode")).toBe("summary");
     expect(new URLSearchParams(location.search).get("summary")).toBe("thread");
     expect(readable(host.querySelector(".mode-band.summ") as Element)).toContain(
-      "Nobody has built a tweet thread for this piece yet",
+      "Nobody has built a tweet thread for this one yet",
     );
   });
 
@@ -1953,7 +1953,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?mode=tweets");
     await until(() => new URLSearchParams(location.search).get("summary") === "thread");
 
-    expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
+    expect(host.textContent).toContain("Nobody has built a tweet thread for this one yet");
     expect(host.textContent).not.toContain("There is a tweet thread");
     expect(host.querySelector(".mode-band.tweets")).toBeNull();
     /* Said inside Summary's own band, under its control — not by the generic
@@ -3115,7 +3115,7 @@ describe("when the reader's own session cannot be confirmed", () => {
       "",
       "?mode=tweets",
       ARTICLE,
-      "Nobody has built a tweet thread for this piece yet",
+      "Nobody has built a tweet thread for this one yet",
     ],
   ])("says it on %s too", async (_name, view, search, payload, canary) => {
     session.user = { id: "somebody", email: "somebody@example.com" };

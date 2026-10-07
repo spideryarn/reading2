@@ -103,7 +103,7 @@
  * referee's own work, which wants thought before it wants code.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 
 import type {
@@ -122,6 +122,7 @@ import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
 import {
@@ -132,6 +133,7 @@ import {
   valenceToken,
   valenceWords,
 } from "./valence.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **Starter packs, taken from real referee forms** — Nature's, PLOS ONE's
@@ -394,7 +396,7 @@ function CriteriaView({
       {api.loadError && <p className="crit-error">{api.loadError}</p>}
       {api.error && <p className="crit-error">{api.error}</p>}
 
-      {!api.loaded && <p className="gloss-quiet">Loading your criteria…</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading your criteria…</BandWaiting>}
       {api.loadFailed && (
         <p className="gloss-quiet">Couldn't load your criteria. Reload to try again.</p>
       )}
@@ -626,6 +628,8 @@ function NewCriterion({
 }) {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<RefereeCriterionKind>("single");
+  const kinds = useRef<HTMLDivElement>(null);
+  useRevealChosen(kinds, kind);
   const [against, setAgainst] = useState("");
   const [favour, setFavour] = useState("");
 
@@ -670,7 +674,9 @@ function NewCriterion({
         onChange={(e) => setText(e.target.value)}
       />
 
-      <div className="crit-kinds" role="radiogroup" aria-label="What kind of criterion">
+      {/* The part-switcher every mode shares (mode-band.css § the
+          part-switcher): a choice of one kind, not an action. */}
+      <div ref={kinds} className="crit-kinds summ-views" role="radiogroup" aria-label="What kind of criterion">
         {/* **`KIND_NOTE` on the chip as well as under the row**, and that is the
             point of wiring the same constant into both rather than writing a
             second sentence: the paragraph below only ever describes the kind
@@ -696,7 +702,7 @@ function NewCriterion({
                    asking for and what tests/arrows-belong-to-the-article.test.tsx
                    sweeps every `role="radio"` in the client for. */
                 tabIndex={0}
-                className={`crit-kind-btn${k === kind ? " on" : ""}`}
+                className={`crit-kind-btn summ-view-btn${k === kind ? " on" : ""}`}
                 onClick={() => setKind(k)}
               >
                 {KIND_LABEL[k]}
@@ -1242,7 +1248,7 @@ function CriterionRow({
       </p>
 
       {row.status === "pending" && row.results.length === 0 && (
-        <p className="gloss-quiet">Reading the paper…</p>
+        <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>
       )}
       {row.status === "error" && (
         <p className="crit-error">

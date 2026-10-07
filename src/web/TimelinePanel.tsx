@@ -74,6 +74,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **How few events before this stops calling itself a timeline.**
@@ -479,7 +480,7 @@ export function TimelinePanel({
 
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the timeline…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the timeline…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">

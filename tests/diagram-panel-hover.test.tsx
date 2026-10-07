@@ -24,6 +24,7 @@ import type { Block, BlockId, Tree } from "../src/types.js";
 import type { DiagramKind } from "../src/web/diagram.js";
 import { DiagramPanel } from "../src/web/DiagramPanel.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
+import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
 /* jsdom lays nothing out: every element is 0×0 and there is no ResizeObserver.
    The panel refuses to draw against a zero width on purpose (a diagram laid out
@@ -237,11 +238,22 @@ describe("a picture with no data yet", () => {
   it("shows the spinner and says what the wait is for", () => {
     // A bare spinner in a 288px band says "something". The reader has just
     // pressed a chip that costs a model call and is owed the sentence.
-    mount("drift");
-    const wait = host.querySelector(".diag-wait");
-    expect(wait, "nothing stands where the picture will be").not.toBeNull();
-    expect(wait?.querySelector(".cmt-spinner"), "no spinner").not.toBeNull();
-    expect(wait?.textContent).toContain("paragraph by paragraph");
+    // The shared wait line (BandWaiting.tsx): its box at once, holding the
+    // picture's place, and the spinner and words once 600ms have gone by.
+    vi.useFakeTimers();
+    try {
+      mount("drift");
+      const wait = host.querySelector(".diag-wait");
+      expect(wait, "nothing stands where the picture will be").not.toBeNull();
+      expect(wait?.textContent, "words before the wait is worth mentioning").toBe("");
+      act(() => {
+        vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+      });
+      expect(wait?.querySelector(".cmt-spinner"), "no spinner").not.toBeNull();
+      expect(wait?.textContent).toContain("paragraph by paragraph");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("announces the wait once, not twice", () => {
@@ -251,7 +263,7 @@ describe("a picture with no data yet", () => {
     mount("drift");
     const live = [...host.querySelectorAll('[role="status"]')];
     expect(live).toHaveLength(1);
-    expect(live[0]?.className).toBe("diag-wait");
+    expect(live[0]?.classList.contains("diag-wait")).toBe(true);
   });
 });
 

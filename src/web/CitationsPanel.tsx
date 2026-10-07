@@ -96,6 +96,7 @@ import {
   type ThresholdResult,
 } from "./threshold.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -1053,13 +1054,13 @@ export function CitationsPanel({
 
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the citations…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has listed the works this piece cites yet.</p>
+          <p>Nobody has listed the works this one cites yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article — under a minute for a short piece, two or three on a long one.
+            One model call over the whole article — under a minute for a short piece, two or three on a long one.
             Found once and kept — you will not be asked again unless the article changes.
           </p>
           {run("Find the citations")}

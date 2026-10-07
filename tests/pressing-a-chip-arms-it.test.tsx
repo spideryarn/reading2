@@ -5,11 +5,11 @@
  * [`tests/modes-that-start-themselves.test.tsx`](./modes-that-start-themselves.test.tsx)
  * holds the rule for the fourteen mode buttons — *a press runs it, arriving does
  * not* — end to end, from a real click to a counted POST. This file holds the
- * same rule for the four controls that are **not** mode buttons and that started
+ * same rule for the controls that are **not** mode buttons and that started
  * running what they open on 2026-09-06
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
- *  - Referee's four sub-mode chips, two of which arm and two of which must not;
+ *  - Referee's five sub-mode chips, one of which arms and four of which must not;
  *  - Learn's Recall | Tutorial | Explore | Quiz toggle;
  *  - Summary's Brief | Fuller | Thread control, whose two lengths arm and whose
  *    **Thread** must not: the thread writes itself on arrival
@@ -25,7 +25,7 @@
  * one there: the mode, the band and the hook are all in the tree, so a counted
  * request is the whole chain working. Here the question is narrower and the tree
  * would be most of the reading view — `RefereeBand` alone wants comments, a
- * source scan, four panels and a router.
+ * source scan, five panels and a router.
  *
  * So what is asserted is `pendingActivation`, and that is not a weaker claim
  * about a different thing: an activation token **is** the seam. The hooks on the
@@ -118,7 +118,7 @@ function click(selector: string): void {
  * tests/arrows-belong-to-the-article.test.tsx already relies on: the band owns
  * `?referee=` and would want a router, and the chips are what a referee presses.
  */
-function mountRefereeChips(view: "criteria" | "claims" | "mirror" | "candidates"): void {
+function mountRefereeChips(view: "criteria" | "claims" | "mirror" | "candidates" | "hidden"): void {
   act(() => {
     root.render(createElement(RefereeViews, { slug: SLUG, view, onView: () => {} }));
   });
@@ -163,6 +163,13 @@ describe("Referee's sub-mode chips", () => {
     mountRefereeChips("claims");
     click(chip("Criteria"));
     click(chip("Mirror"));
+    expect(armed("claims")).toBe(false);
+    expect(armed("candidates")).toBe(false);
+  });
+
+  it("arms nothing when Hidden text is pressed", () => {
+    mountRefereeChips("criteria");
+    click(chip("Hidden text"));
     expect(armed("claims")).toBe(false);
     expect(armed("candidates")).toBe(false);
   });

@@ -81,7 +81,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 8px;
   background: var(--surface-raised);
-  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  box-shadow: var(--shadow-sheet);
 }
 
 /* Its own row above the figure rather than floating over its corner: the figure

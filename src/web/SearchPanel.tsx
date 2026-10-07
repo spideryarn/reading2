@@ -115,8 +115,9 @@ import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { useRenderCount } from "./perf.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { media } from "./media.js";
@@ -565,6 +566,9 @@ const Box = forwardRef<
      simply shared. */
   const box = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => box.current as HTMLInputElement, []);
+  /* The matchers' bar, kept with its chosen one in view (useRevealChosen.ts). */
+  const matchers = useRef<HTMLDivElement>(null);
+  useRevealChosen(matchers, matcher);
 
   /* The box takes focus when the mode opens. A search panel you have to click
      into before typing is a search panel that costs two actions instead of one,
@@ -748,7 +752,10 @@ const Box = forwardRef<
             have switched matcher from a button that has nothing to do with the
             choice. */}
         <div
-          className="srch-matchers"
+          ref={matchers}
+          /* The part-switcher every mode shares (mode-band.css § the
+             part-switcher, plan 261007h § F2). */
+          className="srch-matchers summ-views"
           role="radiogroup"
           aria-label="How to match"
         >
@@ -766,7 +773,7 @@ const Box = forwardRef<
                cost, and why the ARIA authoring practice is being departed from;
                tests/arrows-belong-to-the-article.test.tsx holds it. */
             tabIndex={0}
-            className={`srch-mode${matcher === "words" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "words" ? " on" : ""}`}
             onClick={(e) => switchTo("words", e.detail > 0)}
             title="Match the letters you type. Instant, and free."
           >
@@ -778,7 +785,7 @@ const Box = forwardRef<
             role="radio"
             aria-checked={matcher === "quick"}
             tabIndex={0}
-            className={`srch-mode${matcher === "quick" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "quick" ? " on" : ""}`}
             onClick={(e) => switchTo("quick", e.detail > 0)}
             title="A fast first pass: scores every paragraph in about a second. Whole paragraphs, no reasons."
           >
@@ -790,7 +797,7 @@ const Box = forwardRef<
             role="radio"
             aria-checked={matcher === "meaning"}
             tabIndex={0}
-            className={`srch-mode${matcher === "meaning" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "meaning" ? " on" : ""}`}
             onClick={(e) => switchTo("meaning", e.detail > 0)}
             title="Describe what you are looking for and the model finds it. Costs a model call."
           >
@@ -887,22 +894,14 @@ const Box = forwardRef<
  * Its own component because `useSlow` is a hook and `Saved` returns early.
  */
 function SavedLoading() {
-  const slow = useSlow(true);
   return (
     <div className="srch-empty">
-      {/* `role="status"` rather than a bare paragraph: the words arrive 600ms
-          after the panel does, and a line that appears with no live region
-          around it is silent to a screen reader. It also reads politely — the
-          reader is not interrupted, they are told when they next pause.
-          `srch-waiting` holds the line's height across those 600ms, so the
-          panel does not grow when the sentence lands. GPT Sol, 2026-08-27. */}
-      <p className="srch-working srch-waiting" role="status">
-        {slow && (
-          <>
-            <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
-          </>
-        )}
-      </p>
+      {/* The shared wait line (BandWaiting.tsx), in Search's own hue.
+          `srch-waiting` holds the line's height across the first 600ms, so
+          the panel does not grow when the sentence lands. */}
+      <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin">
+        Fetching your saved searches…
+      </BandWaiting>
     </div>
   );
 }
@@ -1758,9 +1757,11 @@ function Results({
   if (waiting.length > 0 && all.length === 0) {
     return (
       <div className="srch-empty">
-        <p className="srch-working">
-          <LoaderCircle size={13} className="srch-spin" /> Reading the article for you…
-        </p>
+        {/* Find has just been pressed: this line acknowledges that request,
+            like a turn already sent, rather than an opening read. */}
+        <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin" delayMs={0}>
+          Reading the article for you…
+        </BandWaiting>
         <p className="srch-empty-hint">
           The whole piece goes to the model, so this takes a few seconds. You can carry on reading —
           the answer is saved either way.

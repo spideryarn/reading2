@@ -29,41 +29,27 @@
    family or a padding is changing arithmetic that lives in TypeScript, and the
    two will disagree silently. `CHAR_W` there is the number to move. */
 
-/* The three pictures, as one control. Same shape as `.gloss-sort`, because it
-   is the same kind of thing — a small quiet row of exclusive choices under the
-   heading — and a second visual idiom for it would be a third thing to learn. */
-/* Six of them now, in a band that can be 288px. `wrap` rather than a smaller
-   font or a scroller: a control the reader has to scroll to find is a control
-   they do not know exists, and these six are the whole of what this mode does. */
+/* **The pictures, as one control**: the part-switcher every mode shares,
+   `.summ-views` / `.summ-view-btn` (mode-band.css § the part-switcher; plan
+   261007h § F2), inside `.diag-kind-bar`, so its look is not here and
+   `.diag-kind` stays on each button as a hook. Its chosen picture is marked
+   neutrally, not in orange as it was until 2026-10-07: **orange marks the
+   mode; a part within it is marked neutrally**, and the Sketch chip and the
+   dock's Diagram tab in one orange read as one choice.
+
+   `.diag-kinds` is the band's top row around it. Six chips once wrapped here,
+   on the argument that a control the reader has to scroll to find is one they
+   do not know exists; a joined bar cannot wrap, so on a band too narrow for
+   all five it scrolls sideways inside its outline with the chosen one kept in
+   view; a chip cut off at the edge is what says there is more. */
 .diag-kinds {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
 /* The band's top row since its head went, so it clears the band's (i) —
    mode-band.css § `.mode-band > .band-about`. */
 .mode-band.has-about .diag-kinds { padding-right: calc(0.7rem + var(--band-about-room)); }
-.diag-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.45rem;
-  border: 1px solid var(--rule);
-  border-radius: calc(var(--radius) * 0.5);
-  background: transparent;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.83rem;
-  cursor: pointer;
-}
-.diag-kind:hover { color: var(--ink); border-color: var(--rule-strong); }
-.diag-kind.on {
-  border-color: var(--highlight);
-  background: var(--highlight-wash);
-  color: var(--highlight-ink);
-}
 
 /* The second paragraph of a kind's hover card — where it comes from and what it
    costs, under what it shows. Quieter than the blurb above it, because it is

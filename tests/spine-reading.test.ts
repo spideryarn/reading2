@@ -476,14 +476,11 @@ describe("what a reach step wakes", () => {
 describe("the spine's reading-time help", () => {
   it("allows recorded time below the drawing threshold to leave no shading", async () => {
     const { readReach } = await import("../src/web/reading-time.js");
-    const { HELP_TOPICS } = await import("../src/web/help/help-topics.js");
-    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { helpWords } = await import("./helpers/help-words.js");
     /* Twenty seconds spent on 230 words is recorded, but not yet drawn. */
     await mount(new Map([["b0", readReach(20, 230)]]));
     expect(layers()).toHaveLength(0);
-    const help = document.createElement("div");
-    help.innerHTML = renderToStaticMarkup(HELP_TOPICS.spine.body);
-    const words = help.textContent?.replace(/\s+/g, " ") ?? "";
+    const words = helpWords("spine");
     expect(words).not.toContain("No shading means you have not read");
     expect(words).toMatch(/a quick glance.*no shading/i);
   });

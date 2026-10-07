@@ -175,7 +175,7 @@ describe("db:export and a conversation's kind", () => {
     );
   });
 
-  /* The guide's index, from drizzle/20261007092452_guide_thread_kind.sql
+  /* The guide's index, from drizzle/20261007123306_guide_thread_kind.sql
      (plan 261007j). */
   it("enforces one guide per article", async () => {
     const db = getDb();

@@ -157,6 +157,10 @@ It is listed nowhere and the owner can turn it off. The plan is
 closed is in
 [security-map.md § The unauthenticated namespace](security-map.md#the-unauthenticated-namespace-and-the-tripwire-under-it).
 
+**The name is "private link"**, not "shareable link". Greg, 2026-10-07: *"'private link' is much
+clearer, and clearly distinguishes it from a publicly-shared article."* Older feedback reports say
+"shareable link" and mean this.
+
 > When they open a page with a private link, it should say that it's a private link, i.e. not visible to anyone without the link
 >
 > — Greg, 2026-10-05

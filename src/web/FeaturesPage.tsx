@@ -47,6 +47,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
 import { PRICING_HREF } from "./router.js";
@@ -73,6 +74,8 @@ import {
  */
 export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
   useDocumentTitle(pageTitle({ kind: "features" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">
@@ -329,7 +332,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
 
         {/* ------------------------------------------------- for peer reviewers -- */}
         <H2 eyebrow="A mode for one job">For peer reviewers.</H2>
-        {/* docs/project/referee-mode.md, its title and its four sub-modes; the
+        {/* docs/project/referee-mode.md, its title and its five sub-modes; the
             confidentiality sentence is the one the mode itself shows. */}
         <Showcase shot={SHOTS.referee} title="Referee mode." mode="referee" offset under>
           Helps a referee read a paper without reading it for them. Your own criteria, streamed

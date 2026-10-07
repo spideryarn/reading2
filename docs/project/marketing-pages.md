@@ -28,6 +28,8 @@ this sits under.
 | [`src/web/PricingPage.tsx`](../../src/web/PricingPage.tsx) | `/pricing` — the plans, the buttons that buy them (a stranger's go to `/login`, the tier riding in `buy-intent.ts`), the FAQ |
 | [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | `/login` — the sign-in page, in the same `.site` shell since 2026-10-01 ([261001m](../plans/261001m-a-sign-in-page-of-its-own-signposted-from-the-signed-out-pages.md)); [auth.md](auth.md) owns what is in it |
 | [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture all three pages share, so they cannot drift into three — including the Experimental tag, which `Tile`, `Portrait` and `Showcase` draw from `MODE_CATALOG` when given a `mode` |
+| [`src/web/DocumentPage.tsx`](../../src/web/DocumentPage.tsx) | not a marketing page: the shell of `/help`, `/changelog`, `/privacy`, `/contact` and `/opensource`, which borrows `SiteNav` (inside a `display: contents` `.site`) for a signed-out reader since 2026-10-07, and draws nothing above the page signed in, where the corner logo is |
+| [`src/web/reveal-once.ts`](../../src/web/reveal-once.ts) | the `.site-reveal` fade-ins: marks a section shown the first time it enters, and is the only thing that ever hides one |
 | [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these three pages share with every other page that mounts it — `tests/site-footer.test.tsx` § *the pages that mount it* holds the inventory, and is the only place it is written down. This cell used to put a count beside a list it does not own, which went stale exactly as this repo keeps finding. A wordmark, the caller's sentence and a colophon at one end, the links at the other. **One spacing measure since 2026-09-08**, when the `variant="marketing"` knob went — the redesigned row has mass of its own and no longer reads as a page cut off |
 | [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | the three plans, on all three pages — and, since 2026-09-04, the buttons that buy them on `/pricing` and `/profile` |
 | [`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) | the block on `/` and `/features` that sends a stranger to a real shared article — every link in it derived from `/read/public`'s own listing, so an unshared article leaves none behind ([public-shelf.md](public-shelf.md)) |
@@ -121,8 +123,9 @@ in a picture — which is the [silent-success](../reusable/silent-success.md) sh
 eyes.
 
 - **Every reveal below the first viewport comes back blank.** Playwright's `fullPage` stitches
-  without really scrolling, so a `animation-timeline: view()` section never enters the view and keeps
-  its start state.
+  without really scrolling, so a section the reveal script is still waiting on (`data-reveal-waiting`,
+  [`reveal-once.ts`](../../src/web/reveal-once.ts)) never enters the view and stays hidden. Until
+  2026-10-07 the reveal was an `animation-timeline: view()` animation, which failed the same way.
 - **Composited frames come back empty** — a screenshot inside a transformed element renders as its
   own background colour.
 - **`locator.screenshot()` clips to the bounding box, and the raised plan card sticks out of its
@@ -135,17 +138,17 @@ eyes.
 
 So: **capture one viewport at a time, scrolling between shots.** That is what a reader sees anyway.
 If you must take a full-page shot, inject
-`.site-reveal,.site-tilt,.site-nav{animation:none!important;opacity:1!important;transform:none!important}`
+`.site-reveal,.site-tilt,.site-nav{animation:none!important;transition:none!important;opacity:1!important;transform:none!important}`
 first — the same override `@media print` carries, and for the same reason.
 
 Before believing any of it, check the DOM rather than the picture: `naturalWidth`, `complete` and
 computed `opacity` on every `img`. That is what settled it here, after half an hour of believing the
 page was broken when it was not.
 
-## The visual language, and the four rules in it
+## The visual language, and the rules in it
 
 All of it is `site-*` classes in one file, loaded last —
-[`styles/site.css`](../../src/web/styles/site.css) — with the reasoning beside each rule. Four things there are
+[`styles/site.css`](../../src/web/styles/site.css) — with the reasoning beside each rule. Five things there are
 decisions rather than taste, and are the ones to preserve:
 
 - **One glow per page.** Behind the hero, nowhere else. Every comparable site the research surveyed
@@ -153,9 +156,18 @@ decisions rather than taste, and are the ones to preserve:
 - **The hero tilt straightens as you scroll.** A tilted screenshot of a *reading* product is arguing
   against itself held still, so it arrives at an angle and is flat by the time you have read a
   sentence of the page.
-- **Reveals and tilts are authored in their finished state**, with the animation layered behind
-  `@supports (animation-timeline: …)`. Firefox has not shipped scroll-driven animation, so anything
-  authored the other way round is invisible content, not a missing flourish.
+- **Reveals and tilts are authored in their finished state**, with the motion layered on top only
+  where it can run. The tilt is behind `@supports (animation-timeline: …)` — Firefox has not shipped
+  scroll-driven animation, so anything authored the other way round is invisible content, not a
+  missing flourish. The reveal is hidden only on a section
+  [`reveal-once.ts`](../../src/web/reveal-once.ts) has marked as waiting, so no script, no
+  `IntersectionObserver`, reduced motion or print all leave it visible.
+- **A reveal happens once and stays.** Since 2026-10-07 a section rises in (a 600ms transition) the
+  first time it enters the window and is then left alone; the scroll-driven version it replaced
+  faded a section you had already read back out as you scrolled up past it. A section already on
+  screen when the page opens is never hidden. Plan
+  [261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md),
+  F5c; `tests/reveal-once.test.ts`.
 - **Depth comes from a hairline and an inset top highlight, not from a drop shadow.** A black shadow
   on a near-black page does almost nothing; the 1px lit top edge is what makes a dark screenshot read
   as a raised object. The app's own `--background` / `--card` / `--border` are three greys within
@@ -192,6 +204,11 @@ The obvious check passes either way, which is the part worth remembering. Readin
 `reducedMotion: 'reduce'` — and assert that a `no-preference` context *differs*, or the check is
 green for the wrong reason. Verified that way on 2026-09-03: `none` for tilt, reveal and nav under
 `reduce`, and `site-untilt` / `site-rise` / `site-nav-settle` without it.
+
+**The reveal left this story on 2026-10-07.** It is a time-based transition now, not a scroll-driven
+animation, and `reveal-once.ts` hides nothing at all for a reader who asked for less motion — so the
+check for it is that no `.site-reveal` carries `data-reveal-waiting` under `reduce`, and that some do
+on a fresh load without it. The block in `site.css` still lists `.site-reveal` as a backstop.
 
 ## The copy is not yours to write
 

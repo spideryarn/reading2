@@ -130,7 +130,7 @@ import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
@@ -894,20 +894,11 @@ const DISARM_MS = 4000;
  * the panel does not change height when the spinner appears.
  */
 function ChatListLoading({ what = "your conversations" }: { what?: string }) {
-  const slow = useSlow(true);
-  /* `role="status"`, because the words arrive 600ms after the panel does and a
-     line that simply appears is silent to a screen reader. Polite by
-     definition, so the reader is told when they next pause rather than
-     interrupted. GPT Sol, 2026-08-27. */
+  /* The shared wait line, which began as this component: BandWaiting.tsx. */
   return (
-    <div className="chat-loading" role="status">
-      {slow && (
-        <>
-          <LoaderCircle className="cmt-spinner" size={13} />
-          <span>Fetching {what}…</span>
-        </>
-      )}
-    </div>
+    <BandWaiting as="div" className="chat-loading">
+      Fetching {what}…
+    </BandWaiting>
   );
 }
 
