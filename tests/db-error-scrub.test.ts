@@ -36,7 +36,7 @@ import { articles, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { kindOfMessage, STORAGE_BUSY, STORAGE_FAILED, worthRetrying } from "../src/messages.js";
 import { CommentIdTaken, NotAnExplanation } from "../src/comments.js";
-import { guardDbStore } from "../src/store/db-errors.js";
+import { guardDbStore, violatesForeignKey } from "../src/store/db-errors.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -271,6 +271,28 @@ describe("the guard, without a database", () => {
     });
 
     expect(worthRetrying((await failureFrom(wrapped)).message)).toBe(false);
+  });
+
+  it("names a foreign key only before the guard, and only by its own name", async () => {
+    /* `violatesForeignKey`, the 23503 sibling of `violatesConstraint`. Three
+       ways to get it quietly wrong, each of which leaves a refusal the reader
+       should have been given arriving as `[db-failed]` or — worse — the wrong
+       refusal arriving for a real failure: reading only the outermost error
+       (Drizzle's wrapper carries neither field), matching the code without the
+       name, and asking after the guard has already dropped the name. */
+    const refused = (constraint: string, code = "23503") =>
+      new Error("Failed query: …\nparams: …", {
+        cause: Object.assign(new Error("violates foreign key constraint"), { code, constraint }),
+      });
+
+    expect(violatesForeignKey(refused("comments_criterion_fk"), "comments_criterion_fk")).toBe(true);
+    // The same table's other key, and the same name under a different SQLSTATE.
+    expect(violatesForeignKey(refused("comments_identity_fk"), "comments_criterion_fk")).toBe(false);
+    expect(violatesForeignKey(refused("comments_criterion_fk", "23505"), "comments_criterion_fk")).toBe(false);
+    // After the guard: the SQLSTATE is still there and the name is not.
+    const scrubbed = await failureFrom(refused("comments_criterion_fk"));
+    expect((scrubbed as Error & { code?: string }).code).toBe("23503");
+    expect(violatesForeignKey(scrubbed, "comments_criterion_fk")).toBe(false);
   });
 
   it("offers one when the connection never got there", async () => {

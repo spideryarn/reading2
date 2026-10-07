@@ -192,8 +192,8 @@ function isCitation(data: unknown): data is Citation {
  * ## Generations, not a flag
  *
  * **The mechanism now lives in [`useOrderedRead`](./useOrderedRead.ts)**, shared
- * with the seven other artefact readers, which had none of it and each lost the
- * race this hook was fixed for
+ * with the other artefact readers. The seven there were on 2026-09-02 had none
+ * of it, and each lost the race this hook was fixed for
  * (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md
  * § T2.1). The reasoning stays here, because this is where it was worked out and
  * the glossary is the surface that exercises every verb of it.
@@ -916,8 +916,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      request already in flight read the old one. See `refresh` on
      `GlossaryRead` for the sequence this gets wrong the other way. This was the
      one thing the copies did *not* agree about — none of the others had a
-     trailing fetch to reach for — until 2026-09-02, when all eight moved onto
-     src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
+     trailing fetch to reach for — until 2026-09-02, when the eight there were
+     then moved onto src/web/useOrderedRead.ts, whose `refresh` is what is
+     passed here. */
   const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
   const run = useCallback(

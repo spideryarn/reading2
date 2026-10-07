@@ -263,6 +263,23 @@ Then the residue, which is why this page exists:
   [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
+- **What [`Reader.tsx`](../../src/web/reader/Reader.tsx) asks about the mode outside the
+  `modeBand()` switch.** A signpost, not a rule: the switch is compiler-checked, and the plain
+  `mode === "…"` comparisons elsewhere in that file are not, so a new mode that needs one finds
+  them by reading (search the file for `mode ===` and `mode !==`). They decide five kinds of
+  thing: **the chrome** (whether a band is open at all, whether the breadcrumbs are drawn);
+  **what ← and → step through** (Skim's stops, the quiz, the quotes, Structure's sections);
+  **hand-offs that end when the reader leaves a mode** (Chat's, the quiz's arrival, the chat list
+  asked for again on leaving Chat); **the Dock press** (Plain pressed with nothing left to close;
+  a chat opened from the drawer while Chat's band has stepped aside); and **overlays, and what is
+  drawn in the prose** (no floating chat over Chat or Learn; the comment and annotate boxes offer
+  a placement only in Referee; the quote card knowing it is already in Quotes; Skim's door after
+  the current stop).
+  If the mode has **sub-modes**, two typed tables ask for it by themselves: `subModeViews` in
+  `Reader.tsx` (§ `surface`, what counts as the reader having chosen something else) and
+  `SUB_MODE_SELECTS_A_BAND_FOR` in
+  [`ModeBoundary.tsx`](../../src/web/reader/ModeBoundary.tsx) (the reset key: whose band the
+  sub-mode chooses). *The compiler, for the two tables; nothing, for the comparisons.*
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
@@ -467,8 +484,10 @@ Then the residue nothing refuses at compile time:
   ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
   [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),
   every forced control in the panel honours `rewriting`, and the mode is a row in
-  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)* — which nothing checks you
-  added.
+  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)*, whose second half (since
+  2026-10-07) fails a file under `src/web` that writes a `force` into a request and is neither a
+  row's hook nor a named exclusion. It cannot see whether each forced control in your panel honours
+  `rewriting`; the row's `forced` list is where you say which they are.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
   is nothing there**; arriving does not. (One view starts on arrival instead: the thread, since
   2026-10-03 Summary's Thread view rather than a mode, kept the rule Greg asked of its page on

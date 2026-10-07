@@ -91,7 +91,7 @@ way back, and the Dock's mode buttons do not say that the band is merely hidden.
   band actually being hidden, so widening the window lost it. It found no in-band jump that fires
   from a mount or a restore other than Trajectory's.
 - **Browser check** at 390×844 and 1440×900 (Sonnet, Playwright, "How to Do Great Work"; shots in
-  [260929g-shots/](260929g-shots/)): Summary, Structure, Search and a Diagram node each stepped the
+  `260929g-shots/`, deleted from the tree on 2026-10-07 by `7e597a72c` and kept in git history): Summary, Structure, Search and a Diagram node each stepped the
   band aside with the paragraph flashing and "↩ back to ⟨mode⟩" showing; the pill and the Dock
   button each brought the band back as it was — Summary's scroll position and Search's unsent query
   kept; Trajectory stayed open on opening; Diagram's step buttons did not hide it; nothing hid at

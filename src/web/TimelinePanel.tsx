@@ -71,6 +71,7 @@ import {
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
 
@@ -386,14 +387,22 @@ export function TimelinePanel({
    *   request the automatic run makes, or the two carry different `work_key`s
    *   and the reader pays twice. useTimeline.ts § `ensure`.
    */
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new timeline hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="timeline"
@@ -462,7 +471,7 @@ export function TimelinePanel({
         timeline &&
         owner?.status === "ready" &&
         !owner.stale &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="tl-again">{run("Read it again", true)}</div>
         ) : null
       }

@@ -8,8 +8,10 @@
  * is slow, fails, or is answered from the offline copy keeps the old artefact
  * on screen with Regenerate enabled. Pressing it is a second paid run for one
  * result. Quiz grew a hold for this alone (plan 261002f); this is that rule,
- * with the holes GPT Sol found in it closed, for Quiz, Summary, Ideas,
- * Glossary, Thread and Sketch.
+ * with the holes GPT Sol found in it closed, for every mode hook with a forced
+ * verb. Which those are is not listed here: tests/rewrite-hold.test.tsx § ROWS
+ * has a row for each, and § the membership guard names the files that force a
+ * step and are outside it, each with its reason.
  * docs/plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md § 2a.
  *
  * ## Where it lives, and why not in a band or a read
@@ -33,9 +35,10 @@
  *  1. a **fresh** read shows a different identity: the replacement arrived;
  *  2. this press's job is listed as failed or cancelled, or
  *     its POST was refused (the verb releases it there);
- *  3. the job this press made is seen **ended** in a loaded, idle job list, and
- *     a **fresh** read that *started after the band saw that* has landed: the
- *     rewrite ended without replacing it.
+ *  3. the job this press made is **over** — seen ended in a loaded, idle job
+ *     list, or the engine has said so (§ A hold must not outlive every way of
+ *     learning its outcome) — and a **fresh** read that *started after the
+ *     band saw that* has landed: the rewrite ended without replacing it.
  *
  * *Fresh* is two checks the Quiz original did not make:
  *
@@ -58,9 +61,21 @@
  * idle, and the rule-3 read races that poll. A job absent from the list is
  * indistinguishable from one not listed yet (jobEngine.ts § `recordCompletions`),
  * so rule 3 asks for the positive fact: this id, in the list, no longer queued
- * or running. Terminal rows stay listed (`KEEP_FINISHED`, src/jobs.ts); one
- * trimmed before any band saw it ended leaves the hold until a new artefact or
- * a reload.
+ * or running.
+ *
+ * ## A hold must not outlive every way of learning its outcome
+ *
+ * Terminal rows stay listed, but not for ever (`KEEP_FINISHED`, src/jobs.ts).
+ * A job that failed while no band was mounted and was trimmed before one came
+ * back is in no list again, so rules 2 and 3 as first written never fired and
+ * the control was dead until a reload (GPT Sol's C3, plan 261007b). So `run`
+ * also asks the engine, which outlives every band: `watchTerminal` answers
+ * once, when the job is listed as over or is missing from a list *asked after
+ * the POST had answered* — the one absence that does mean gone, since the row
+ * existed by then and a job still going cannot be forgotten. Either answer
+ * sets `over`, and rule 3 takes it from there with the same fresh read. It
+ * cannot release early: the engine speaks only once the server's job is
+ * finished, and the read must start after a band has seen that.
  *
  * ## What this is not
  *
@@ -82,6 +97,8 @@ interface Hold {
   readonly afterRead: number;
   /** `jobEngine.epoch()` when it was made — see the header. */
   readonly epoch: number;
+  /** The engine has said `posted` ended or is gone — § A hold must not outlive…. */
+  readonly over?: true;
 }
 
 const holds = new Map<string, Hold>();
@@ -176,7 +193,7 @@ export function useRewriteHold({
   step: StepName;
   /** What identifies the artefact on screen — `generatedAt`, Quiz's `batchId` — or null with none. */
   identity: string | null;
-  queue: Pick<StepJob<StepName>, "job" | "loaded" | "starting" | "failed" | "ended">;
+  queue: Pick<StepJob<StepName>, "job" | "loaded" | "starting" | "failed" | "ended" | "registerRetryHold">;
   /** The read's own bookkeeping — `useFreshReads`, on whichever hook holds the read. */
   fresh: FreshReads;
   /** The read's `refresh`. Called once, when the job is first seen ended. Never spends. */
@@ -219,7 +236,7 @@ export function useRewriteHold({
     hold.posted !== null &&
     queue.loaded &&
     queue.job === null &&
-    outcome !== null;
+    (outcome !== null || hold.over === true);
   const mark = useRef<number | null>(null);
   if (!ended) mark.current = null;
   else if (mark.current === null) mark.current = begun();
@@ -257,13 +274,28 @@ export function useRewriteHold({
         throw err;
       }
       if (made === null || holds.get(key) !== made) return;
-      if (jobId) holds.set(key, { ...made, posted: jobId });
+      if (jobId) {
+        const posted: Hold = { ...made, posted: jobId };
+        holds.set(key, posted);
+        /* Heard with no band mounted too. Whatever the ending, rule 3 decides. */
+        jobEngine.watchTerminal(jobId, () => {
+          if (holds.get(key) !== posted) return;
+          holds.set(key, { ...posted, over: true });
+          emit();
+        });
+      }
       /* Refused: nothing was made, so there is nothing to wait for. */
       else holds.delete(key);
       emit();
     },
     [key, identity],
   );
+
+  /* JobProgress's Retry uses the same hold, while preserving the retry
+     endpoint and the replacement job's id. The registration belongs to this
+     queue mount; Metadata has no artefact hold to register. */
+  const registerRetryHold = queue.registerRetryHold;
+  useEffect(() => registerRetryHold?.(run), [registerRetryHold, run]);
 
   return {
     /* An offline copy with a different identity does not settle the hold. */
