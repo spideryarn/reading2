@@ -276,9 +276,12 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   on exactly that, and a browser caught it both times while the suite stayed green.
 
   **The utilities layer is out of reach from it.** `@layer theme, base, app, utilities` puts every
-  `tw:` class after the stylesheets, so the four Tailwind-styled fields — sign-in's email and
-  password, the shelf's search, Add URL, and the library's in-place title editor — carry
-  `tw:any-pointer-coarse:text-base` at their own call sites.
+  `tw:` class after the stylesheets, so the Tailwind-styled fields — sign-in's email and
+  password, the shelf's search, Add URL, the library's in-place title editor, and since 2026-10-07
+  the search box above the contents list on Metadata and `/profile` and Help's search box — carry
+  `tw:any-pointer-coarse:text-base` at their own call sites. Grep for the class rather than trust
+  this list. It also wins over a breakpoint variant on the same element (`tw:lg:text-xs`), because
+  Tailwind emits the `any-pointer` block after the breakpoint ones.
 
   **`<select>` joined it on 2026-09-08**, working the second report of the same bug
   (SPIDERYARN-READING2-2H, the Feedback dialog zooming on an iPhone — which the `textarea` half had

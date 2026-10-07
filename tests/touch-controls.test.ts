@@ -34,7 +34,7 @@
  *
  * Nor can it see the whole cascade. It compares specificity between selectors
  * it can find in the sheets this helper walks. Source order, `@layer`
- * (the Tailwind utilities layer outranks all of this, which is why four
+ * (the Tailwind utilities layer outranks all of this, which is why the
  * `tw:`-styled fields carry `tw:any-pointer-coarse:text-base` at their own call
  * sites), inline styles and `font` shorthands are all outside it.
  */

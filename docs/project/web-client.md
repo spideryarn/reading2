@@ -182,7 +182,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
   and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its
-  search from. A page that mounts the list puts `CONTENTS_MARGIN` (same file) on its `<main>`.
+  search from. A page that mounts the list puts `CONTENTS_MARGIN` (same file) on its `<main>`, and
+  mounts it **inside** that `<main>` at the place it should be drawn on a narrow window: below
+  1024px it is a block in the column (a search box and a *Contents* button), and from there up it
+  is fixed in the left margin wherever it was mounted.
   Metadata and `/profile` use both ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
 - **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
