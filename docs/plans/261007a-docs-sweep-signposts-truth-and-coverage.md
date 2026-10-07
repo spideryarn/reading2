@@ -458,3 +458,12 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
   `asked_url` already makes an OSF article findable, when that look-up needs a registered source.
   Two re-checked here (S2 against the Skim migration, S7 against `find-article.ts`). Discovery is
   closed at two rounds.
+- 2026-10-07 — merged `origin/dev` (three conflicts on one fact, in `fleet-dashboard-modes.md` and
+  its two one-line descriptions: `0664f77bd` had made the last unchecked registration a compile
+  error; their side kept). On the merged tree `de1c9b5f9`: `npm run typecheck` clean, `npm test`
+  1,760 files passed and 1 skipped, doc-links 17 of 17. Pushed to `dev` as `17dc16dca` after a
+  second merge that brought only other sessions' commits. Not deployed.
+
+**Where it stands: done enough to stop here.** The signposts were measured and mended, the tree was
+read for what is false, and the two areas with code and no hub have one. What remains is real and
+is not this job's to take without a yes: the batch above, and the splitting of the over-long docs.
