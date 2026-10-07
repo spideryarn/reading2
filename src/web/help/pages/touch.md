@@ -24,4 +24,4 @@ Spideryarn works best on a large screen. On a phone or tablet, these work differ
 
 Anything explained only on hover, like the mode buttons’ descriptions, cannot be reached by touch.
 To make up for it, each mode shows its name and a sentence about it for a few seconds when you open
-it, and this page has the rest.
+it, and its page in Help has the rest.

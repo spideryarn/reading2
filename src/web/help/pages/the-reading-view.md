@@ -17,8 +17,8 @@ related: spine, gutter, modes, keyboard
 - **The bottom bar** starts with the way home (the Spideryarn wordmark). On your own article, that
   is followed by the **Commands** button. Next come the mode buttons, then **Comments** and
   **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
-  Every bar has a **Help** link near its right-hand end, which opens this page at the part about the
-  mode you are in. On your own article you can also press **Commands** and type *help*, and wherever
+  Every bar has a **Help** link near its right-hand end, which opens Help at the page about the mode
+  you are in. On your own article you can also press **Commands** and type *help*, and wherever
   a mode has an (i), its card ends in **More in Help**.
 
 When there is not room for everything, the mode buttons drop their words and show only icons. Point

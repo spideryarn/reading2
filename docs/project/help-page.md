@@ -41,8 +41,28 @@ All in `src/web/help/`. **Since 2026-10-07 the words are Markdown, one file per 
 `src/web/help/pages/`**, and Help is a contents page at `/help` with a page for each topic, mode and
 guide at `/help/<anchor>` and the questions together at `/help/questions` — plan
 [261007e](../plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md).
-(The rest of this doc still describes the one long page it was before, and is being rewritten as
-that plan's next stage; where the two disagree, the plan and the code are right.)
+Greg asked for it, 2026-10-06 (`spya-ucftjt`):
+
+> the help page is really long. I wonder if it would make it more sense to break it up by modes and
+> themes and stuff like that, with lots and lots of linking between. And maybe also try writing some
+> documentations for example, sort of user personas or use cases. … It strikes me that actually it
+> might help if the help pages themselves were .md files that get turned into web pages, and then it
+> would be easier probably to feed those in to the help chatbot.
+
+**A file is front matter and CommonMark**, and the renderer refuses anything else, so a test that
+draws every file catches a slip. Front matter: `title`, `summary` (the line on the contents page) and
+`keywords` (words a reader brings that the title does not say), and optionally `related` (anchors,
+for *See also*). A mode's file has `keywords` only, and its body is up to two sections,
+`## When to use it` and `## Reading it`. Links are site paths (`/help/spine`, `/pricing`), so a file
+reads the same on GitHub and to a model handed it raw. The only HTML is `<kbd>`. Four tokens stand for
+facts kept in code — `{{experimental-modes}}`, `{{public-shelf-label}}`, `{{whats-new-label}}` and
+`{{modes-table}}` — and `help-markdown.tsx` § `expandHelpTokens` gives the plain text with them filled
+in, for anything that wants to read Help rather than draw it.
+
+The groups: Start here · Ways to read (the four guides: your first article, studying a topic,
+reviewing a paper, reading in your own field) · Reading an article · The modes · Your shelf and your
+account · Questions people ask. **A guide states no product fact that another Help page does not
+already state**; it is a route through the pages for one kind of reader, with a link at every step.
 
 - [`help-anchors.ts`](../../src/web/help/help-anchors.ts) — every anchor, the `HelpAnchor` type,
   `helpHref(anchor)`, the aliases for retired anchors, and what an address under `/help` shows.
@@ -56,21 +76,25 @@ that plan's next stage; where the two disagree, the plan and the code are right.
 - [`HelpPage.tsx`](../../src/web/help/HelpPage.tsx) — what draws it: the contents page, a page,
   search, arrival.
 
-**A mode's section does not restate the mode.** Its heading is `MODE_LABEL`, and its first two
+**A mode's page does not restate the mode.** Its heading is `MODE_LABEL`, and its first two
 paragraphs are `MODE_CATALOG`'s `description` and `how` — the same words as the dock's card and the
-band's (i). Help adds only *when to use it* and *how to read it*. So fix a mode's description in the
+band's (i). Its file adds only *when to use it* and *how to read it*. So fix a mode's description in the
 catalog, and Help follows.
 
 ## Anchors are a promise
 
-People will paste `/help#spine` into messages, and the code links into Help by anchor, so:
+People will paste `/help/spine` into messages, and the code links into Help by anchor, so:
 
 - **Every code link to a Help section goes through `helpHref`**, which takes a `HelpAnchor`, so a
-  link to a section that does not exist does not compile. A hand-written `/help#…` string would
-  bypass the type, so do not write one. (The page itself, with no section, is `HELP_HREF`.)
+  link to a page that does not exist does not compile. It returns `/help/<anchor>`, or
+  `/help/questions#<id>` for a question. A hand-written `/help/…` string would bypass the type, so
+  do not write one. (The page itself, with no section, is `HELP_HREF`.)
 - **An anchor is never renamed or deleted.** Retire it by adding an alias in
   `HELP_ANCHOR_ALIASES` to the section that replaced it; arriving at the old one lands on the new.
   A retired mode gets its alias automatically, from `RETIRED_MODES` in src/modes.ts.
+- **The addresses from before 2026-10-07 still land.** Help was one page with a section per anchor,
+  so `/help#spine` is in people's messages; arriving there, the address is replaced with
+  `/help/spine`, and a question's `/help#faq-…` with `/help/questions#faq-…`. Both are tested.
 - `tests/help-page.test.tsx` § `PINNED_ANCHORS` lists every anchor ever shipped, and each must still
   be a section or an alias. Add to it; never take away.
 
@@ -78,8 +102,8 @@ People will paste `/help#spine` into messages, and the code links into Help by a
 
 Three things, from cheapest to dearest:
 
-1. **The compiler.** A new mode without a Help entry is a type error, and so is a new mode missing
-   from the "Which mode when" table. [mode.md § Before you call it finished](mode.md#before-you-call-it-finished)
+1. **The compiler.** A new mode without a Help file is a type error (`help-pages.ts` holds the files
+   in a `Record<Mode, …>`), and so is a new mode missing from the "Which mode when" table. [mode.md § Before you call it finished](mode.md#before-you-call-it-finished)
    lists it.
 2. **Whoever changes what a reader sees updates Help in the same commit**, the way they update a
    doc. [engineering-manager.md § Along the way](../reusable/engineering-manager.md#along-the-way)
@@ -92,22 +116,24 @@ Three things, from cheapest to dearest:
 
 ## Bringing it up to date
 
-The brief for step 3, and for anyone else updating the page:
+The brief for the deploy's step 4, and for anyone else updating Help:
 
 1. Read the entries in the pending release (`src/web/changelog-pending.json`,
    [changelog.md § The pending release](changelog.md#the-pending-release))
    — or, outside a deploy, the commits you are covering.
 2. For each one a reader would notice, ask: does Help say anything that is now false? Is there
    something here a reader could not work out alone? If neither, move on — most entries need nothing.
-3. Edit the section in `src/web/help/`, checking the fact against the code, not the commit message.
-   A new topic gets a new id in `help-anchors.ts`, a place in a group, and a line in `PINNED_ANCHORS`.
+3. Edit the page's file under `src/web/help/pages/`, checking the fact against the code, not the
+   commit message. A new topic gets a new id in `help-anchors.ts`, a file and its import in
+   `help-pages.ts`, a place in a group, and a line in `PINNED_ANCHORS`. A guide that recommends what
+   changed may need its sentence too (`pages/guides/`).
 4. `npx vitest run tests/help-page.test.tsx` and `npm run typecheck`, then commit and push to `dev`.
 
 ## The ways in
 
 - The footer, on every page that has one ([website-text.md](website-text.md)).
 - The command bar's **Help** row (⌘K / Ctrl-K, then *help*).
-- The **Help** link in the dock, just before Feedback, which opens the section for the mode you
+- The **Help** link in the dock, just before Feedback, which opens the page for the mode you
   are in. **On every bar again** since 2026-10-07, an owner's and a visitor's. From 2026-10-04 it
   was on a visitor's bar only, because Greg had asked for it out of the bottom bar (`spya-dev7pf`,
   [261004j](../plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md))
@@ -118,7 +144,7 @@ The brief for step 3, and for anyone else updating the page:
   > second guessing that. Maybe it does make sense to keep it down there towards the bottom right.
   >
   > — Greg, 2026-10-06 (`spya-ucftjt`)
-- **A mode's (i)**, whose card ends in *More in Help →* to that mode's section, since
+- **A mode's (i)**, whose card ends in *More in Help →* to that mode's page, since
   2026-10-02 — the first `Tooltip` card the pointer can enter
   ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)). Not
   every panel has one: a visitor's panel for a mode that is not shared, a panel that failed, and

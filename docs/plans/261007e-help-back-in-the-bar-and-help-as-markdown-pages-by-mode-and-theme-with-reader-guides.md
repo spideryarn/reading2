@@ -139,9 +139,8 @@ Press <kbd>Enter</kbd> …
 - **A page.** The contents list and search box in the left column (folded above the page on a narrow
   window, as now), the page's words, then *See also* (from `related`) and previous / next within
   the group. A mode's page also links to *Which mode when*.
-- **Search** is what it is today: titles and keywords, with Help's synonym table. A result is a
-  link to its page. Searching the bodies is not built: nobody asked, and it can be added to the
-  Markdown later without changing a file.
+- **Search** reads titles and keywords, with Help's synonym table, and, since GPT Sol's R4 below,
+  each page's body too, ranked below both. A result is a link to its page.
 
 ### The four guides
 
@@ -302,6 +301,23 @@ are new words, written by hand from each section.
 
 `tests/help-markdown.test.tsx` stays: the machinery throws on what it does not draw, the real files
 never make it throw, so that test is where each refusal is seen.
+
+## S2b, S3: what landed
+
+Commit `c86510187`. Help is a contents page and a page per topic, mode and guide; the four guides
+are written; every R1 to R7 change above is in, each red first. Choices the builder made that the
+plan left open: arrival is keyed on the resolved page rather than on App's `routeKey`, so the search
+box keeps its words between pages; every Help link is the router's `Link`; previous / next stop at
+the ends of a group; a breadcrumb *Help › group* is the way back to the contents; a mode's *See also*
+always ends with *Which mode when*. Mutations, each restored: `pickKey` not canonicalising (3 red),
+the old-fragment redirect pushing instead of replacing (5 red), arrival keyed on nothing (6 red).
+
+R6 and the deploy: `scripts/deploy.ts` § `verifyRobots` judges the `robots.txt` of the deployment it
+has just made, which carries the new `Allow: /help/`, so the deploy agrees with itself. Nothing
+judges production's `robots.txt` with this commit's rules before promotion.
+
+Two of the guides' sentences were narrowed to what the pages say: Referee, not every mode, "never
+returns a verdict"; and a term stays underlined once the article has a glossary.
 
 ## Reviews
 
