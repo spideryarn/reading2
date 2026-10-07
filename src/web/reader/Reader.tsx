@@ -167,6 +167,7 @@ import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
+import { SkipToModes } from "./SkipToModes.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -3707,6 +3708,9 @@ export function Reader({
         } as CSSProperties
       }
     >
+      {/* First in the reader, so it is the first Tab stop: past the spine and
+          the prose to the mode switch. SkipToModes.tsx. */}
+      <SkipToModes />
       {fit.spine !== "off" && (
         <Spine
           outline={outline}

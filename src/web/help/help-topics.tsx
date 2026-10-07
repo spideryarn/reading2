@@ -356,7 +356,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   keyboard: {
     title: "Keyboard shortcuts",
     keywords:
-      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list",
+      "keys hotkeys arrow up down left right command k ctrl enter escape tab skip to modes g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list",
     body: (
       <>
         <ul>
@@ -414,6 +414,11 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
             Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
             normally does.
+          </li>
+          <li>
+            In an article, the first <kbd>Tab</kbd> shows <strong>Skip to modes</strong>. Press{" "}
+            <kbd>Enter</kbd> and you land on the open mode in the bottom bar, rather than tabbing
+            through every paragraph’s buttons to get there.
           </li>
           <li>
             <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for

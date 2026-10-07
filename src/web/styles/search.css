@@ -377,9 +377,7 @@
   background: var(--surface-raised);
   /* The tooltip's shadow, because it is the same kind of object: a small panel
      lifted off the page near the thing it belongs to. */
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
 }
 .srch-picker-grid {

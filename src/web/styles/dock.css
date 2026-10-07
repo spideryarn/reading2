@@ -358,7 +358,7 @@
   /* The same lift `.cmt-dialog` has: it floats over prose, and a flat panel on
      a dark ground reads as a hole in the article rather than as something in
      front of it. */
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   font-size: 0.75rem;
   line-height: 1.4;
@@ -1011,4 +1011,42 @@
 }
 .tip-soon p.tip-soon-press::before {
   content: "→\00a0";
+}
+
+/* ---------------------------------------------------------- skip to modes --
+   The reading view's first Tab stop (reader/SkipToModes.tsx, plan 261007h §
+   F5b): out of sight until it has focus, then a pill in the top-left corner,
+   over the bars, saying where Enter goes. Here rather than with the reader
+   because it is the dock's way in.
+
+   Off-screen by the clip recipe (`.sr-only`, chat-actions.css), never
+   `display: none`, which would take it out of the Tab order it exists for.
+   Fixed, so it shows wherever the page is scrolled; above everything (the
+   highest layer elsewhere is 100), because a focus mark under a bar is no
+   mark at all. */
+.skip-to-modes {
+  position: fixed;
+  top: calc(var(--safe-top) + 0.5rem);
+  left: calc(var(--safe-left, 0px) + 0.5rem);
+  z-index: 101;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-to-modes:focus {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 0.875rem;
+  text-decoration: none;
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
 }
