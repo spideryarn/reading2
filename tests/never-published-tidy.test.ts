@@ -18,6 +18,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  type Candidate,
   MAX_PER_RUN,
   type NeverPublishedSurvey,
   TidySafetyError,
@@ -78,6 +79,30 @@ async function age(ids: readonly string[]) {
 }
 
 const survey = (quietDays = 7) => surveyNeverPublished(getDb(), { quietDays, ownerId: OWNER });
+
+/** Back the targets up to a throwaway directory, then destroy them as the script does. */
+async function deleteThem(targets: readonly Candidate[]) {
+  const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
+  try {
+    const { backup } = await writeBackup(getDb(), targets.map((t) => t.articleId), dir);
+    return await destroyEach(getDb(), targets, 7, backup);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Until another backend of this database is waiting on a row lock. */
+async function waitUntilSomebodyWaitsForALock(): Promise<void> {
+  const until = Date.now() + 10_000;
+  while (Date.now() < until) {
+    const { rows } = await pool.query(
+      "select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+    );
+    if ((rows[0] as { n: number }).n > 0) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("nothing ever waited for the billing lock");
+}
 
 async function clear(): Promise<void> {
   await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
@@ -179,7 +204,51 @@ describe("--delete refuses", () => {
     await getDb().insert(jobs).values({
       id: mintId(), ownerId: OWNER, slug: a.slug, steps: [], status: "queued", workKey: `work-${mintId()}`,
     });
-    await expect(destroyEach(getDb(), checkDeletion(s, [a.id]), 7)).rejects.toThrow(/no longer eligible/);
+    await expect(deleteThem(checkDeletion(s, [a.id]))).rejects.toThrow(/no longer eligible/);
+    expect(await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, a.id))).toHaveLength(1);
+  });
+
+  it("a title saved while the delete waits for the billing lock: refused under the lock, nothing deleted", async () => {
+    /* Sol's R1. The preliminary re-proof passes; `destroy` then queues behind
+       the owner's billing row, which this test holds on its own connection;
+       a reader's PATCH lands in that window; the lock is released. Only a check
+       taken after the locks, inside the deleting transaction, can see it. */
+    const a = await failedFirstImport("late-title", { identities: 2, checkpoint: true });
+    await age([a.id]);
+    const targets = checkDeletion(await survey(), [a.id]);
+
+    await pool.query("insert into spideryarn.billing_accounts (owner_id) values ($1) on conflict do nothing", [OWNER]);
+    const holder = await pool.connect();
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.billing_accounts where owner_id = $1 for update", [OWNER]);
+      const run = deleteThem(targets).then(() => null, (e: unknown) => e);
+      await waitUntilSomebodyWaitsForALock();
+      await asOwner(() => pgShelfStore.patch(a.slug, { title: "Typed while the delete waited" }));
+      await holder.query("commit");
+      const err = await run;
+      expect(err).toBeInstanceOf(TidySafetyError);
+      expect((err as Error).message).toMatch(/under the lock/);
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+    const [left] = await getDb().select({ title: articles.titleOverride }).from(articles).where(eq(articles.id, a.id));
+    expect(left?.title).toBe("Typed while the delete waited");
+  });
+
+  it("rows the backup does not hold: a block identity minted after the backup was written", async () => {
+    const a = await failedFirstImport("late-identity", { identities: 2 });
+    await age([a.id]);
+    const targets = checkDeletion(await survey(), [a.id]);
+    const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
+    try {
+      const { backup } = await writeBackup(getDb(), [a.id], dir);
+      await getDb().insert(blockIdentities).values({ articleId: a.id, blockId: mintId() });
+      await expect(destroyEach(getDb(), targets, 7, backup)).rejects.toThrow(/not the rows the backup holds.*block_identities: 3 now, 2 backed up/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     expect(await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, a.id))).toHaveLength(1);
   });
 
@@ -198,14 +267,14 @@ describe("--delete", () => {
     const targets = checkDeletion(s, [gone.id]);
     const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
     try {
-      const file = await writeBackup(getDb(), [gone.id], dir);
+      const { file, backup: written } = await writeBackup(getDb(), [gone.id], dir);
       expect(statSync(file).mode & 0o777).toBe(0o600);
       const backup = JSON.parse(readFileSync(file, "utf8"));
       expect(backup.articles.map((r: { id: string }) => r.id)).toEqual([gone.id]);
       expect(backup.block_identities).toHaveLength(5);
       expect(backup.checkpoints).toHaveLength(1);
 
-      const done = await destroyEach(getDb(), targets, 7);
+      const done = await destroyEach(getDb(), targets, 7, written);
       expect(done.map((d) => d.articleId)).toEqual([gone.id]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -31,7 +31,10 @@
  * protection of exactly those ids and must agree. `--delete` then refuses
  * unless the eligible set equals the ids in `--ids` exactly, is no larger than
  * `MAX_PER_RUN`, and a backup of every row that will go has been written. Each
- * article is re-proved immediately before its own `destroy`.
+ * article is then decided again **inside `destroy`'s own transaction, after its
+ * locks** (`DestroyOptions.beforeDelete`): the pinned id, the whole rule, and
+ * the rows about to go against the rows the backup holds. Anything changed, and
+ * that article is refused and the run stops (GPT Sol's R1).
  *
  * **It prints ids, short ids, counts and timestamps** — never a slug (made
  * from a title), a URL or any content. The backup file holds content (a
@@ -42,6 +45,7 @@
  */
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -52,6 +56,7 @@ import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
+import type { DestroyOptions } from "../src/store/contracts.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { draftBacklogTarget } from "./draft-sweep-backlog.js";
 
@@ -335,33 +340,69 @@ export function checkDeletion(survey: NeverPublishedSurvey, pinned: readonly str
   return [...survey.eligible];
 }
 
+/** What the backup file holds besides its header: one array per table, rows as `row_to_json` gave them. */
+export interface BackupRows {
+  readonly articles: Row[];
+  readonly block_identities: Row[];
+  readonly checkpoints: Row[];
+  readonly ai_calls_unlinked: Row[];
+  readonly uploads_left_with_a_stale_slug: Row[];
+}
+
+export interface Backup extends BackupRows {
+  readonly written_at: string;
+  readonly ids: string[];
+}
+
+/**
+ * **Every row the delete removes, and the ids of every row it unlinks**, as
+ * `row_to_json` gives them. One function for both readers — the backup, and the
+ * comparison under the lock — so "the rows match the backup" is a comparison of
+ * like with like.
+ */
+async function dumpRows(tx: Pick<Tx, "execute">, ids: readonly string[]): Promise<BackupRows> {
+  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  const rows = async (q: ReturnType<typeof sql>) => ((await tx.execute(q)).rows as Row[]).map((r) => r.j as Row);
+  return {
+    articles: await rows(sql`select row_to_json(t) as j from spideryarn.articles t where t.id in (${list}) order by t.id`),
+    block_identities: await rows(sql`select row_to_json(t) as j from spideryarn.block_identities t where t.article_id in (${list}) order by t.article_id, t.block_id`),
+    checkpoints: await rows(sql`select row_to_json(t) as j from spideryarn.checkpoints t where t.article_id in (${list}) order by t.article_id, t.namespace, t.key`),
+    ai_calls_unlinked: await rows(sql`select json_build_object('id', t.id, 'article_id', t.article_id) as j from spideryarn.ai_calls t where t.article_id in (${list}) order by t.id`),
+    uploads_left_with_a_stale_slug: await rows(sql`select json_build_object('id', u.id, 'article_id', a.id) as j from spideryarn.uploads u join spideryarn.articles a on a.slug = u.slug where a.id in (${list}) order by u.id`),
+  };
+}
+
+/** The part of a backup that is about one article, in the backup's own order. */
+function backupOf(backup: BackupRows, articleId: string): BackupRows {
+  const mine = (key: string) => (r: Row) => r[key] === articleId;
+  return {
+    articles: backup.articles.filter(mine("id")),
+    block_identities: backup.block_identities.filter(mine("article_id")),
+    checkpoints: backup.checkpoints.filter(mine("article_id")),
+    ai_calls_unlinked: backup.ai_calls_unlinked.filter(mine("article_id")),
+    uploads_left_with_a_stale_slug: backup.uploads_left_with_a_stale_slug.filter(mine("article_id")),
+  };
+}
+
 /**
  * **The backup: every row the delete removes, and the ids of every row it
  * unlinks**, read in one read-only transaction and written as one JSON file.
  * Restoring is inserting these back (articles, then block_identities and
  * checkpoints) and re-pointing `ai_calls.article_id`; the plan has the order.
  * Refuses a directory inside this repository, because the file holds content.
+ * Returns the file and what it holds, read back from the file.
  */
-export async function writeBackup(db: Db, ids: readonly string[], dir: string): Promise<string> {
+export async function writeBackup(
+  db: Db,
+  ids: readonly string[],
+  dir: string,
+): Promise<{ file: string; backup: Backup }> {
   const repo = path.resolve(import.meta.dirname, "..");
   const abs = path.resolve(dir);
   if (abs === repo || abs.startsWith(repo + path.sep)) {
     throw new TidySafetyError("refusing: --backup-dir is inside the repository, and the backup holds content");
   }
-  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
-  const dump = await db.transaction(
-    async (tx) => {
-      const rows = async (q: ReturnType<typeof sql>) => ((await tx.execute(q)).rows as Row[]).map((r) => r.j);
-      return {
-        articles: await rows(sql`select row_to_json(t) as j from spideryarn.articles t where t.id in (${list}) order by t.id`),
-        block_identities: await rows(sql`select row_to_json(t) as j from spideryarn.block_identities t where t.article_id in (${list}) order by t.article_id, t.block_id`),
-        checkpoints: await rows(sql`select row_to_json(t) as j from spideryarn.checkpoints t where t.article_id in (${list}) order by t.article_id, t.namespace, t.key`),
-        ai_calls_unlinked: await rows(sql`select json_build_object('id', t.id, 'article_id', t.article_id) as j from spideryarn.ai_calls t where t.article_id in (${list}) order by t.id`),
-        uploads_left_with_a_stale_slug: await rows(sql`select json_build_object('id', u.id, 'article_id', a.id) as j from spideryarn.uploads u join spideryarn.articles a on a.slug = u.slug where a.id in (${list}) order by u.id`),
-      };
-    },
-    { accessMode: "read only" },
-  );
+  const dump = await db.transaction(async (tx) => await dumpRows(tx, ids), { accessMode: "read only" });
   mkdirSync(abs, { recursive: true, mode: 0o700 });
   const file = path.join(abs, `never-published-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   writeFileSync(file, JSON.stringify({ written_at: new Date().toISOString(), ids, ...dump }), { mode: 0o600, flag: "wx" });
@@ -370,7 +411,7 @@ export async function writeBackup(db: Db, ids: readonly string[], dir: string): 
   if (counted !== ids.length) {
     throw new TidySafetyError(`refusing: the backup holds ${counted} article rows for ${ids.length} ids`);
   }
-  return file;
+  return { file, backup: JSON.parse(readFileSync(file, "utf8")) as Backup };
 }
 
 export interface Destroyed {
@@ -379,31 +420,86 @@ export interface Destroyed {
   readonly attached: Attached;
 }
 
+export type DestroyFn = (slug: string, opts: DestroyOptions) => Promise<unknown>;
+
 /**
- * One `destroy` per article, each re-proved first, stopping at the first
- * refusal. `destroy` opens its own transaction through `getDb()`, so the caller
- * must have aimed `getDb()` at the same database `db` reads (see `main`).
+ * **The decision, taken again where nothing can move** — inside `destroy`'s
+ * transaction, after it holds the owner's billing row and the article row.
+ * Returns why to refuse, or `undefined`.
+ *
+ * Three questions: is the slug still the article that was proved (the pinned
+ * id, not a successor that took the name); does the full rule still admit it
+ * (`proveEligible`, at READ COMMITTED, so it sees everything committed before
+ * the locks were granted); and are the rows about to go exactly the rows the
+ * backup holds. A title or purpose saved between the preliminary proof and the
+ * lock is caught by the second; a checkpoint or model call written in that
+ * window by the third. GPT Sol's R1.
+ */
+export async function refusalUnderTheLock(
+  tx: Pick<Tx, "execute">,
+  target: Candidate,
+  lockedId: string,
+  quietDays: number,
+  backup: BackupRows,
+): Promise<string | undefined> {
+  if (lockedId !== target.articleId) return `its slug now names a different article (${lockedId})`;
+  const proof = await proveEligible(tx, [target.articleId], quietDays);
+  if (!proofIsClean(proof, 1)) return `it is no longer eligible (${JSON.stringify(proof)})`;
+  const now = await dumpRows(tx, [target.articleId]);
+  const then = backupOf(backup, target.articleId);
+  const differ = (Object.keys(now) as (keyof BackupRows)[]).filter((k) => !isDeepStrictEqual(now[k], then[k]));
+  if (differ.length > 0) {
+    return `its rows are not the rows the backup holds (${differ.map((k) => `${k}: ${now[k].length} now, ${then[k].length} backed up`).join("; ")})`;
+  }
+  return undefined;
+}
+
+/**
+ * One `destroy` per article, stopping at the first refusal. Each is re-proved
+ * read-only first (a cheap early refusal), and then **decided again inside
+ * `destroy`'s own transaction, under its locks** (`refusalUnderTheLock`), which
+ * is the check that counts. `destroy` opens its transaction through `getDb()`,
+ * so the caller must have aimed `getDb()` at the same database `db` reads (see
+ * `main`).
  */
 export async function destroyEach(
   db: Db,
   targets: readonly Candidate[],
   quietDays: number,
-  destroy: (slug: string) => Promise<unknown> = (slug) => pgShelfStore.destroy(slug),
+  backup: BackupRows,
+  destroy: DestroyFn = (slug, opts) => pgShelfStore.destroy(slug, opts),
   onDestroyed: (d: Destroyed) => void = () => {},
 ): Promise<Destroyed[]> {
   const done: Destroyed[] = [];
   for (const c of targets) {
-    /* Re-proved now, not trusted from the survey. Publishing needs a job, and a
-       job that appeared since would show here (and a live one is refused again
-       by `destroy` under its lock), so a publication cannot slip between this
-       check and the delete without a job this or `destroy` sees. */
     const proof = await db.transaction(async (tx) => await proveEligible(tx, [c.articleId], quietDays), {
       accessMode: "read only",
     });
     if (!proofIsClean(proof, 1)) {
       throw new TidySafetyError(`refusing ${c.articleId}: it is no longer eligible; ${done.length} already deleted`);
     }
-    await runAsOwner(c.ownerId as OwnerId, () => destroy(c.slug));
+    /* The refusal is kept here as well as thrown: `pgShelfStore` is guarded
+       (src/store/db-errors.ts), and what comes out of it is a scrubbed error,
+       not ours. */
+    let refusal: string | undefined;
+    let checked = false;
+    const beforeDelete: DestroyOptions["beforeDelete"] = async (tx, article) => {
+      refusal = await refusalUnderTheLock(tx, c, article.id, quietDays, backup);
+      if (refusal !== undefined) throw new TidySafetyError(refusal);
+      checked = true;
+    };
+    try {
+      await runAsOwner(c.ownerId as OwnerId, () => destroy(c.slug, { beforeDelete }));
+    } catch (err) {
+      if (refusal !== undefined) {
+        throw new TidySafetyError(`refusing ${c.articleId} under the lock: ${refusal}; ${done.length} already deleted`);
+      }
+      throw err;
+    }
+    if (!checked) {
+      /* A `destroy` that ignored the hook: the article is gone unchecked. Loud. */
+      throw new TidySafetyError(`${c.articleId} was deleted without the check under the lock; stopping`);
+    }
     const d = { articleId: c.articleId, shortId: c.shortId, attached: c.attached };
     done.push(d);
     onDestroyed(d);
@@ -503,8 +599,8 @@ async function main(): Promise<void> {
       console.log("\nNothing to delete.");
       return;
     }
-    const backup = await writeBackup(db, targets.map((t) => t.articleId), backupDir);
-    console.log(`\nBackup: ${backup} (0600; holds content — never commit it)`);
+    const { file: backupFile, backup } = await writeBackup(db, targets.map((t) => t.articleId), backupDir);
+    console.log(`\nBackup: ${backupFile} (0600; holds content — never commit it)`);
 
     /* `destroy` reaches the database through `getDb()`, which reads
        `process.env.DATABASE_URL` after `loadEnvLocal()`. Load the file first,
@@ -514,7 +610,7 @@ async function main(): Promise<void> {
     process.env.DATABASE_URL = url;
 
     console.log("\nDeleting, by pgShelfStore.destroy, one transaction each (counts as surveyed):");
-    await destroyEach(db, targets, quietDays, undefined, (d) => {
+    await destroyEach(db, targets, quietDays, backup, undefined, (d) => {
       console.log(`    ${d.articleId}  ${(d.shortId ?? "-").padEnd(11)}  ${d.attached.blockIdentities} ids, ${d.attached.checkpoints} checkpoints`);
     });
 
@@ -523,7 +619,7 @@ async function main(): Promise<void> {
     const [kept] = (
       await pool.query(
         "select count(*)::int as n from spideryarn.ai_calls where article_id is null and id = any($1::uuid[])",
-        [JSON.parse(readFileSync(backup, "utf8")).ai_calls_unlinked.map((r: { id: string }) => r.id)],
+        [backup.ai_calls_unlinked.map((r) => String(r.id))],
       )
     ).rows as { n: number }[];
     const unlinked = targets.reduce((n, t) => n + t.attached.aiCalls, 0);

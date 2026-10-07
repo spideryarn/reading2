@@ -47,6 +47,7 @@
 
 import { isAdmin, type AdminUser } from "../admin.js";
 import type { OwnerId } from "../owner.js";
+import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
@@ -769,7 +770,27 @@ export interface ShelfStore {
    * render. The slug is the only thing left to say, and the client's next move
    * is to forget it.
    */
-  destroy(slug: string): Promise<{ destroyed: string }>;
+  destroy(slug: string, opts?: DestroyOptions): Promise<{ destroyed: string }>;
+}
+
+/**
+ * **A last word before the row goes, taken under the delete's own locks.**
+ *
+ * `beforeDelete` runs inside `destroy`'s transaction, after the billing row and
+ * the article row are locked and the live-job and stranded-reservation checks
+ * have passed, and before anything is deleted. Throwing refuses the delete and
+ * rolls everything back. It exists for a caller whose reason to delete was
+ * decided earlier and has to be decided again where nothing can move: the
+ * never-published tidy (scripts/never-published-tidy.ts, GPT Sol's R1 on plan
+ * 261007f), whose eligibility proof would otherwise commit before `destroy`
+ * waited for its locks. One deletion path with a hook, not a second copy of
+ * `destroy`'s body. The reader's Delete button passes nothing.
+ */
+export interface DestroyOptions {
+  readonly beforeDelete?: (
+    tx: Pick<Db, "execute">,
+    article: { readonly id: string },
+  ) => Promise<void>;
 }
 
 /**
