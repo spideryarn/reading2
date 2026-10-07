@@ -52,7 +52,7 @@ import { Pool } from "pg";
 
 import type { Db } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
-import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
+import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
@@ -509,15 +509,15 @@ export async function destroyEach(
 
 const days = (ms: number) => `${Math.floor(ms / 86_400_000)}d`;
 
-function printSurvey(survey: NeverPublishedSurvey): void {
-  console.log(`Role:   ${survey.role}`);
-  console.log(`Rule:   never published; no revision, job or reservation; no reader state; nothing moved for ${survey.quietDays} days`);
-  console.log(`\nNever-published articles: ${survey.candidates.length}, eligible: ${survey.eligible.length}`);
-  console.log("  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because");
+function printSurvey(survey: NeverPublishedSurvey, out: (line: string) => void): void {
+  out(`Role:   ${survey.role}`);
+  out(`Rule:   never published; no revision, job or reservation; no reader state; nothing moved for ${survey.quietDays} days`);
+  out(`\nNever-published articles: ${survey.candidates.length}, eligible: ${survey.eligible.length}`);
+  out("  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because");
   const now = Date.now();
   for (const c of survey.candidates) {
     const a = c.attached;
-    console.log(
+    out(
       `  ${c.articleId}  ${(c.shortId ?? "-").padEnd(11)}  ${c.createdAt.toISOString().slice(0, 10)}  ` +
         `${days(now - c.newestActivity.getTime()).padStart(5)}  ${String(a.blockIdentities).padStart(5)}  ` +
         `${String(a.checkpoints).padStart(4)}  ${String(a.aiCalls).padStart(5)}  ${String(a.uploadsBySlug).padStart(7)}  ` +
@@ -525,20 +525,70 @@ function printSurvey(survey: NeverPublishedSurvey): void {
     );
   }
   const sum = (k: keyof Attached) => survey.eligible.reduce((n, c) => n + c.attached[k], 0);
-  console.log(
+  out(
     `\nThe eligible ${survey.eligible.length} would delete: ${sum("blockIdentities")} block identities, ` +
       `${sum("checkpoints")} checkpoints, ${sum("revisions")} revisions, ${sum("jobs")} jobs (cascade / destroy);` +
       ` and unlink ${sum("aiCalls")} ai_calls (kept, article_id set null) and ${sum("uploadsBySlug")} uploads (kept, stale slug).`,
   );
   const p = survey.proof;
-  console.log(`\nThe second query, over those ${survey.eligible.length} ids:`);
-  console.log(`  found ${p.seen}; published ${p.published}; revisions ${p.revisions}; jobs ${p.jobs}; ` +
+  out(`\nThe second query, over those ${survey.eligible.length} ids:`);
+  out(`  found ${p.seen}; published ${p.published}; revisions ${p.revisions}; jobs ${p.jobs}; ` +
     `reservations ${p.reservations}; reader state ${p.readerState}; recent ${p.recent}`);
-  console.log(survey.proven ? `✓ all ${p.seen} found, none protected` : "✗ the two queries disagree. Nothing should be deleted.");
+  out(survey.proven ? `✓ all ${p.seen} found, none protected` : "✗ the two queries disagree. Nothing should be deleted.");
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+/**
+ * **What `main` reaches the world through**, so a test can run the real
+ * orchestration — every refusal in its real order — against its own database
+ * and a `destroy` it can watch. `realDeps` is what the command line gets.
+ */
+export interface MainDeps {
+  /** Where `--prod` (or its absence) points: `draftBacklogTarget`. */
+  readonly target: (prod: boolean) => { url: string | undefined; file: string };
+  readonly connect: (url: string, doDelete: boolean) => { db: Db; end: () => Promise<void> };
+  readonly readText: (file: string) => string;
+  readonly writeBackup: typeof writeBackup;
+  readonly destroy: DestroyFn;
+  /** Aim `getDb()`, which `destroy` uses, at the target. */
+  readonly aimStore: (url: string) => void;
+  /** Tests only: one owner's rows, so a peer's can never join the set. */
+  readonly ownerId?: string;
+  readonly out: (line: string) => void;
+}
+
+export function realDeps(): MainDeps {
+  return {
+    target: draftBacklogTarget,
+    connect: (url, doDelete) => {
+      const pool = new Pool({
+        connectionString: url,
+        max: 1,
+        ssl: sslDecisionFor(url).ssl,
+        application_name: `spideryarn never-published-tidy (${doDelete ? "delete" : "dry run"})`,
+      });
+      return { db: drizzle(pool, { schema }), end: () => pool.end() };
+    },
+    readText: (file) => readFileSync(file, "utf8"),
+    writeBackup,
+    destroy: (slug, opts) => pgShelfStore.destroy(slug, opts),
+    /* `destroy` reaches the database through `getDb()`, which reads
+       `process.env.DATABASE_URL` after `loadEnvLocal()`. Load the file first,
+       then assign, so `.env.local` cannot replace the target afterwards; nothing
+       in this process has called `getDb()` yet, so its pool is built from this. */
+    aimStore: (url) => {
+      loadEnvLocal();
+      process.env.DATABASE_URL = url;
+    },
+    out: (line) => console.log(line),
+  };
+}
+
+/**
+ * The command. Returns the exit code; throws `TidySafetyError` for every
+ * refusal, so nothing is deleted after one.
+ */
+export async function main(args: readonly string[], deps: MainDeps = realDeps()): Promise<number> {
+  const out = deps.out;
   const flag = (name: string) => args.includes(name);
   const value = (name: string) => {
     const i = args.indexOf(name);
@@ -547,46 +597,40 @@ async function main(): Promise<void> {
   const known = new Set(["--prod", "--delete", "--ids", "--backup-dir", "--quiet-days"]);
   const unknown = args.filter((arg, i) => arg.startsWith("--") ? !known.has(arg) : !["--ids", "--backup-dir", "--quiet-days"].includes(args[i - 1] ?? ""));
   if (unknown.length > 0) {
-    console.error("Unknown arguments. This takes --prod, --delete, --ids <file>, --backup-dir <dir>, --quiet-days <n>.");
-    process.exit(1);
+    throw new TidySafetyError("Unknown arguments. This takes --prod, --delete, --ids <file>, --backup-dir <dir>, --quiet-days <n>.");
   }
   const prod = flag("--prod");
   const doDelete = flag("--delete");
   const quietDays = value("--quiet-days") === undefined ? DEFAULT_QUIET_DAYS : Number(value("--quiet-days"));
   if (!Number.isInteger(quietDays) || quietDays < 1) {
-    console.error("--quiet-days must be a whole number of days, at least 1.");
-    process.exit(1);
+    throw new TidySafetyError("--quiet-days must be a whole number of days, at least 1.");
   }
 
   /* `.env.prod` read directly with --prod, `.env.local` without; a shell
      `DATABASE_URL` aims nothing. The same resolution as draft-sweep-backlog. */
-  const { url, file } = draftBacklogTarget(prod);
+  const { url, file } = deps.target(prod);
   if (!url) {
-    console.error(prod ? "--prod needs a .env.prod with a DATABASE_URL." : "DATABASE_URL is not set in .env.local.");
-    process.exit(1);
+    throw new TidySafetyError(prod ? "--prod needs a .env.prod with a DATABASE_URL." : "DATABASE_URL is not set in .env.local.");
   }
-  console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
-  console.log(`Env:    ${file}`);
-  console.log(`Mode:   ${doDelete ? "DELETE" : "dry run (read-only transaction; see the header for --delete)"}`);
+  out(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
+  out(`Env:    ${file}`);
+  out(`Mode:   ${doDelete ? "DELETE" : "dry run (read-only transaction; see the header for --delete)"}`);
+  /* **Production only when asked for by name.** Without this, a production URL
+     pasted into `.env.local` is reached with no `--prod` on the command line
+     at all. Before connecting. GPT Sol's R2. */
+  if (!prod && !isLocalDatabaseUrl(url)) {
+    throw new TidySafetyError(`refusing: ${file} points at a database that is not local, and --prod was not given`);
+  }
 
-  const pool = new Pool({
-    connectionString: url,
-    max: 1,
-    ssl: sslDecisionFor(url).ssl,
-    application_name: `spideryarn never-published-tidy (${doDelete ? "delete" : "dry run"})`,
-  });
-  const db: Db = drizzle(pool, { schema });
-
+  const { db, end } = deps.connect(url, doDelete);
   try {
-    const before = await surveyNeverPublished(db, { quietDays });
-    printSurvey(before);
-    if (!before.proven) {
-      process.exitCode = 1;
-      return;
-    }
+    const surveyOpts = { quietDays, ...(deps.ownerId === undefined ? {} : { ownerId: deps.ownerId }) };
+    const before = await surveyNeverPublished(db, surveyOpts);
+    printSurvey(before, out);
+    if (!before.proven) return 1;
     if (!doDelete) {
-      console.log("\nNothing deleted.");
-      return;
+      out("\nNothing deleted.");
+      return 0;
     }
 
     const idsFile = value("--ids");
@@ -594,46 +638,39 @@ async function main(): Promise<void> {
     if (!idsFile || !backupDir) {
       throw new TidySafetyError("--delete needs --ids <file> (the reviewed list) and --backup-dir <dir>");
     }
-    const targets = checkDeletion(before, parseIdsFile(readFileSync(idsFile, "utf8")));
+    const targets = checkDeletion(before, parseIdsFile(deps.readText(idsFile)));
     if (targets.length === 0) {
-      console.log("\nNothing to delete.");
-      return;
+      out("\nNothing to delete.");
+      return 0;
     }
-    const { file: backupFile, backup } = await writeBackup(db, targets.map((t) => t.articleId), backupDir);
-    console.log(`\nBackup: ${backupFile} (0600; holds content — never commit it)`);
+    const { file: backupFile, backup } = await deps.writeBackup(db, targets.map((t) => t.articleId), backupDir);
+    out(`\nBackup: ${backupFile} (0600; holds content — never commit it)`);
 
-    /* `destroy` reaches the database through `getDb()`, which reads
-       `process.env.DATABASE_URL` after `loadEnvLocal()`. Load the file first,
-       then assign, so `.env.local` cannot replace the target afterwards; nothing
-       in this process has called `getDb()` yet, so its pool is built from this. */
-    loadEnvLocal();
-    process.env.DATABASE_URL = url;
+    deps.aimStore(url);
 
-    console.log("\nDeleting, by pgShelfStore.destroy, one transaction each (counts as surveyed):");
-    await destroyEach(db, targets, quietDays, backup, undefined, (d) => {
-      console.log(`    ${d.articleId}  ${(d.shortId ?? "-").padEnd(11)}  ${d.attached.blockIdentities} ids, ${d.attached.checkpoints} checkpoints`);
+    out("\nDeleting, by pgShelfStore.destroy, one transaction each (counts as surveyed):");
+    await destroyEach(db, targets, quietDays, backup, deps.destroy, (d) => {
+      out(`    ${d.articleId}  ${(d.shortId ?? "-").padEnd(11)}  ${d.attached.blockIdentities} ids, ${d.attached.checkpoints} checkpoints`);
     });
 
-    const after = await surveyNeverPublished(db, { quietDays });
+    const after = await surveyNeverPublished(db, surveyOpts);
     const gone = targets.filter((t) => !after.candidates.some((c) => c.articleId === t.articleId));
-    const [kept] = (
-      await pool.query(
-        "select count(*)::int as n from spideryarn.ai_calls where article_id is null and id = any($1::uuid[])",
-        [backup.ai_calls_unlinked.map((r) => String(r.id))],
-      )
-    ).rows as { n: number }[];
+    const unlinkedIds = backup.ai_calls_unlinked.map((r) => String(r.id));
+    const kept = unlinkedIds.length === 0 ? 0 : num(((
+      await db.execute(sql`select count(*)::int as n from spideryarn.ai_calls where article_id is null and id in (${sql.join(unlinkedIds.map((id) => sql`${id}::uuid`), sql`, `)})`)
+    ).rows as Row[])[0]?.n);
     const unlinked = targets.reduce((n, t) => n + t.attached.aiCalls, 0);
-    console.log(`  ${gone.length} of ${targets.length} gone; ${after.candidates.length} never-published left (${after.eligible.length} eligible)`);
-    console.log(`  ai_calls kept with article_id null: ${kept?.n ?? 0} of ${unlinked}`);
-    if (gone.length !== targets.length || (kept?.n ?? 0) !== unlinked) process.exitCode = 1;
+    out(`  ${gone.length} of ${targets.length} gone; ${after.candidates.length} never-published left (${after.eligible.length} eligible)`);
+    out(`  ai_calls kept with article_id null: ${kept} of ${unlinked}`);
+    return gone.length !== targets.length || kept !== unlinked ? 1 : 0;
   } finally {
-    await pool.end();
+    await end();
   }
 }
 
 if (isMain(import.meta.url)) {
   try {
-    await main();
+    process.exitCode = await main(process.argv.slice(2));
   } catch (err) {
     // Driver errors can carry query text and parameters.
     console.error(err instanceof TidySafetyError ? err.message :

@@ -11,7 +11,7 @@
  * docs/plans/261007f-tidy-the-never-published-production-articles.md.
  */
 
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -20,10 +20,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type Candidate,
   MAX_PER_RUN,
+  type MainDeps,
   type NeverPublishedSurvey,
   TidySafetyError,
   checkDeletion,
   destroyEach,
+  main,
   parseIdsFile,
   surveyNeverPublished,
   writeBackup,
@@ -288,5 +290,67 @@ describe("--delete", () => {
 
     /* Run again: nothing eligible, nothing to do — idempotent. */
     expect((await survey()).eligible).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------- the command itself -- */
+
+/**
+ * `main` with its world replaced by watchers: the real survey, refusals,
+ * backup and `destroy` against this file's own database and owner, with every
+ * call to `connect`, `writeBackup` and `destroy` counted. GPT Sol's R6.
+ */
+function harness(over: Partial<MainDeps> = {}) {
+  const calls = { connect: 0, backup: 0, destroy: [] as string[] };
+  const lines: string[] = [];
+  const deps: MainDeps = {
+    target: () => ({ url: process.env.DATABASE_URL, file: "(the test's .env.local)" }),
+    connect: () => {
+      calls.connect += 1;
+      return { db: getDb(), end: async () => {} };
+    },
+    readText: (file) => readFileSync(file, "utf8"),
+    writeBackup: async (...args) => {
+      calls.backup += 1;
+      return await writeBackup(...args);
+    },
+    destroy: (slug, opts) => {
+      calls.destroy.push(slug);
+      return pgShelfStore.destroy(slug, opts);
+    },
+    aimStore: () => {},
+    ownerId: OWNER,
+    out: (line) => lines.push(line),
+    ...over,
+  };
+  return { deps, calls, lines };
+}
+
+/** A throwaway directory with an ids file in it, and a backup directory beside it. */
+function scratch(ids: readonly string[]) {
+  const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-main-"));
+  const idsFile = path.join(dir, "ids.txt");
+  writeFileSync(idsFile, `# reviewed\n${ids.join("\n")}\n`);
+  return { dir, idsFile, backupDir: path.join(dir, "backup"), done: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+const stillThere = async (id: string) =>
+  (await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, id))).length === 1;
+
+describe("the command refuses, and never reaches destroy", () => {
+  it("a database in .env.local that is not local, without --prod — before it connects", async () => {
+    const a = await failedFirstImport("remote");
+    await age([a.id]);
+    const s = scratch([a.id]);
+    const { deps, calls } = harness({
+      target: () => ({ url: "postgresql://someone:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres", file: ".env.local" }),
+    });
+    try {
+      await expect(main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], deps)).rejects.toThrow(/not local, and --prod was not given/);
+    } finally {
+      s.done();
+    }
+    expect(calls).toEqual({ connect: 0, backup: 0, destroy: [] });
+    expect(await stillThere(a.id)).toBe(true);
   });
 });
