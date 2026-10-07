@@ -1,11 +1,18 @@
 /**
- * The Postgres store. Same questions as src/store/fs.ts, same answers.
+ * The Postgres store, and since 2026-09-05 the only one.
  *
- * "Same answers" is meant literally and is tested literally: tests/store-parity.test.ts
- * asks both stores for every article in `data/` and compares the **API-shaped**
- * result — the `Article` the client receives — not SQL rows. Comparing rows
- * passes while the thing the client gets has changed shape, which is the
- * failure this whole exercise exists to catch.
+ * It was written as the second of two. src/store/fs.ts answered the same
+ * questions from files, and tests/store-parity.test.ts asked both stores for
+ * every article in `data/` and compared the **API-shaped** result — the
+ * `Article` the client receives — not SQL rows. The filesystem store and that
+ * suite's second arm were deleted on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md);
+ * what the suite still holds is in its own header.
+ *
+ * **Many comments below give "what the filesystem store answered" as the reason
+ * for a choice** — which inputs a fingerprint has, why a field is spread
+ * conditionally. They are history, and still the reason: this file was made to
+ * agree with that one, and the shapes it agreed on are the API's.
  *
  * ## Three things here are easy to get subtly wrong
  *
@@ -14,19 +21,21 @@
  *    differently: `JSON.stringify({a: undefined})` is `{}`, but the property is
  *    there for `in` and for `Object.keys`. Postgres gives back `null` where the
  *    file had *nothing*, so every optional field is a conditional spread. This
- *    is the single biggest source of near-miss parity failures.
+ *    was the single biggest source of near-miss parity failures.
  * 2. **Errors carry a status.** `src/routes.ts` turns `status: 404` into a 404;
  *    an untagged throw becomes a 500. So "no such article" must be tagged here
- *    exactly as it was in src/api.ts, or a missing article starts reporting as a
- *    server fault.
+ *    (`notFound`, below), or a missing article starts reporting as a server
+ *    fault.
  * 3. **Staleness is computed at read time, never stored.** A flag written when
  *    the artefact was generated is right up until the moment it matters.
  *
- * ## What is deliberately NOT here
+ * ## What was deliberately not here
  *
- * A fallback to the filesystem. Nothing in this file may catch an error and
- * call into src/store/fs.ts — see docs/plans/260826e-postgres-storage-implementation.md
- * § Rules. It would hide exactly the divergence the parity test is looking for.
+ * A fallback to the filesystem, while there was one. Nothing in this file
+ * caught an error and called into src/store/fs.ts —
+ * docs/plans/260826e-postgres-storage-implementation.md § Rules — because that
+ * would have hidden exactly the divergence the parity test was looking for.
+ * There is nothing to fall back to now: a read that fails here has failed.
  */
 
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -1600,9 +1609,11 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
 /** Stored blocks, made safe to render. Every read but one wants this. */
 function cleanedForReading(blocks: Block[]): Block[] {
   /* The same guard src/api.ts put on the filesystem reader, because there were
-     two `loadArticle`s and guarding one of them passes every test — the fs half
-     is genuinely protected, the suite is green, and the store that is in the
-     middle of *replacing* the filesystem serves old HTML unchecked.
+     two `loadArticle`s and guarding one of them passed every test — the fs half
+     was genuinely protected, the suite was green, and the store that was in the
+     middle of *replacing* the filesystem served old HTML unchecked. (Both
+     src/api.ts and the filesystem reader have since been deleted; this is the
+     one `loadArticle` now, and the guard is no less needed for that.)
 
      `undefined` for the stamp, deliberately, and not because nobody got round
      to it: there is no column to keep one in yet, and absent reads as stale,
@@ -2762,11 +2773,12 @@ export function shareableArtefacts(revision: {
  * the `Pick` was recording nothing except which names existed when it was last
  * edited.
  *
- * **Annotated, not `satisfies`**, for two reasons. `fsArticleReader` in
- * src/store/fs.ts is annotated the same way, and the twin adapters should read
- * the same; and tests/store-seams-have-two-implementations.test.ts finds an
- * adapter by parsing its *type annotation* out of the source, so a `satisfies`
- * clause would make this one invisible to the test that counts sides of a seam.
+ * **Annotated, not `satisfies`**, because
+ * tests/store-seams-have-two-implementations.test.ts finds an adapter by
+ * parsing its *type annotation* out of the source, so a `satisfies` clause
+ * would make this one invisible to that test. (There was a second reason
+ * until 2026-09-05: `fsArticleReader` in src/store/fs.ts was annotated the same
+ * way, and the twin adapters were meant to read the same.)
  * The narrower inferred type buys callers nothing here: every method already
  * returns exactly what the interface declares.
  */

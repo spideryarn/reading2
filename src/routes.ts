@@ -9526,8 +9526,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   // Its own endpoint rather than a field on the article payload: that one is
-  // ~150KB and is fetched on every page, and stat-ing every file for it would
-  // charge every reader for a page almost nobody opens.
+  // fetched on every page, and working out every step's state for it — the
+  // step rows, and every block read, cleaned and hashed to say which steps are
+  // still current (src/store/pg.ts § `articleMetadata`) — would charge every
+  // reader for a page almost nobody opens. (Written about the filesystem
+  // store, where the cost was a `stat` of every file.)
   {
     kind: "pattern",
     method: "GET",

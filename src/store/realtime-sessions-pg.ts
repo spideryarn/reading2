@@ -1,11 +1,10 @@
 /**
  * The live-conversation journal in Postgres — one row per issued session.
  *
- * The filesystem half is [realtime-sessions-fs.ts](realtime-sessions-fs.ts),
- * and it is a genuine second implementation rather than a fallback, like every
- * other pair in this directory: the store flag picks one at boot and the other
- * is never consulted. [index.ts](index.ts) explains why that distinction
- * matters.
+ * The only implementation. There was a filesystem half,
+ * `realtime-sessions-fs.ts`, picked by the store flag at boot; the flag and
+ * that file went with the filesystem store (the store on 2026-09-05, the flag
+ * the day after).
  *
  * ## What may be logged from this file
  *
