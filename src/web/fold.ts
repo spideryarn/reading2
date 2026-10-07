@@ -184,6 +184,17 @@ const listeners = new Set<() => void>();
    old table's passive cleanup, so an unconditional cleanup would erase the new
    article. The token makes that stale cleanup a no-op. */
 let mountedBy: symbol | null = null;
+/* **An open front matter, held across one table's own effect remount.** In
+   development React's StrictMode runs every effect's cleanup and setup again
+   straight after the mount. The cleanup below forgets the article, and with
+   it that a link had just opened the run: the `?at=` restore that opened it
+   runs once per address (useReadingPosition.ts § `synced`), so the remount
+   left a pasted link pointing at a shut run. Production has no StrictMode
+   and never takes this path. Only the same mounted table (its token) gets the
+   run back: its cleanup runs only on unmount, so the one way it sees its own
+   token again is that remount, with the same article. A reader who leaves and
+   comes back is a new mount and arrives with the run shut. */
+let reopenFor: symbol | null = null;
 
 /** The attribute the store's own `<style>` carries, so it can find it again. */
 export const FOLD_STYLE_ATTR = "data-fold";
@@ -374,9 +385,9 @@ export function toggleFrontMatter(): void {
 }
 
 /**
- * **Where a jump to `id` should go if it is not meant to open the front
- * matter**: the first block after the run while `id` is in the shut run, and
- * `id` itself otherwise.
+ * **Where a jump to `id` should go if it is not meant to open anything**:
+ * the first block after the run while `id` is in the shut front matter, the
+ * folded heading over it while a fold hides it, and `id` itself otherwise.
  *
  * A section can start inside the run and carry on past it: the Structure
  * prompt invites one node for the byline and the abstract together
@@ -393,9 +404,20 @@ export function toggleFrontMatter(): void {
  *
  * A run that ends the article has nothing visible to land on, and answers
  * `null`: a wholly hidden section is not a navigation stop.
+ *
+ * **A block a fold hides answers the heading that folded it**, the outermost
+ * one, which is the row still on screen. The reading position is the caller
+ * this is for: `?at=` can hold a paragraph a jump put there, and folding a
+ * heading over it would otherwise leave that hidden id standing for the next
+ * restore to unfold (GPT Sol, code review of 261007d, C8). `step` never gets
+ * this far with one: it drops a folded-away start first.
  */
 export function visibleFrom(id: string): string | null {
-  if (!article || frontWanted || !article.inFront.has(id as BlockId)) return id;
+  if (!article) return id;
+  if (foldedAway.has(id as BlockId)) {
+    return foldsHiding(article.blocks, state.folded, id as BlockId)[0] ?? id;
+  }
+  if (frontWanted || !article.inFront.has(id as BlockId)) return id;
   return article.afterFront;
 }
 
@@ -433,8 +455,10 @@ export function isMastheadEcho(id: string): boolean {
  * is in its own section. A real fold can still cover that row, in which case
  * this function returns true.
  *
- * The shut front matter is the same case further down: a section may start on
- * one of its rows and carry on into the abstract, so its start has no height
+ * The shut front matter is the same case, further down under a title and at
+ * block 0 itself on an article with no title heading (front-matter.ts § Where
+ * it starts): a section may start on one of its rows and carry on into the
+ * abstract, so its start has no height
  * and sits at the top of that section's first visible row. A section wholly
  * inside the run ties with the next section's start and loses to it, as a
  * folded one does. What the front matter adds is `visibleFrom`, above.
@@ -484,10 +508,15 @@ export function useFoldArticle(
   useLayoutEffect(() => {
     mountedBy = mounted.current;
     setFoldArticle(key, blocks, echo, front);
+    const reopen = reopenFor === mounted.current;
+    reopenFor = null;
+    if (reopen) openFrontMatter();
   }, [key, blocks, echo, front]);
   useEffect(
     () => () => {
-      if (mountedBy === mounted.current) clearFoldArticle();
+      if (mountedBy !== mounted.current) return;
+      reopenFor = article !== null && frontWanted ? mounted.current : null;
+      clearFoldArticle();
     },
     [],
   );

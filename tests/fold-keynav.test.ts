@@ -422,6 +422,47 @@ describe("↑ / ↓ and the shut front matter", () => {
     }
   });
 
+  /* **The run starts at block 0**: a web article imported with no title
+     heading (front-matter.ts § Where it starts). There is no echo; b0 and b1
+     are the run, and the first section starts on a hidden row. */
+  const fromTop = ["spya-b0", "spya-b1"] as BlockId[];
+
+  it("reaches the first section's first visible row when the run starts at block 0, and stops there", async () => {
+    /* Sections start at b0 (hidden; it runs on through b2) and b3. */
+    setFoldArticle("slug", blocks, new Set(), fromTop);
+    const leave = standOn(4, 2);
+    await nav([0, 3]);
+    try {
+      press("ArrowUp");
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b2"]);
+      /* The top: nowhere further up, and the key is left to the browser. */
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b2"]);
+      press("ArrowDown");
+      expect(jumps).toEqual(["spya-b3", "spya-b2", "spya-b3"]);
+      expect(isFolded("spya-b0")).toBe(true);
+      expect(isFolded("spya-b1")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
+  it("steps over a first section that is the run and nothing else", async () => {
+    /* Sections start at b0 (b0 and b1: all hidden), b2 and b4. */
+    setFoldArticle("slug", blocks, new Set(), fromTop);
+    const leave = standOn(4, 2);
+    await nav([0, 2, 4]);
+    try {
+      press("ArrowUp");
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b2"]);
+      expect(isFolded("spya-b0")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
   it("still steps over the run when a real fold covers it (the control)", async () => {
     /* No echo: b0 is an ordinary heading, folded over everything up to b3. */
     setFoldArticle("slug", blocks, new Set(), front);

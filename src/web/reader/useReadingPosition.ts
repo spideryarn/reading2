@@ -166,10 +166,12 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
       /* Closing the front matter can leave the address holding a finer block
-         inside it. Canonicalise that held value before asking whether the
-         measured section changed: `positionToWrite` deliberately returns
-         null while two ids are in the same section, but the hidden id must
-         still be replaced or the next restore would open the run again. */
+         inside it, and so can folding a heading over a paragraph a jump put
+         there. Canonicalise that held value before asking whether the
+         measured section changed (fold.ts § `visibleFrom`): `positionToWrite`
+         deliberately returns null while two ids are in the same section, but
+         the hidden id must still be replaced or the next restore would open
+         the run, or the fold, again. */
       const held =
         synced.current === null ? null : (visibleFrom(synced.current) as BlockId | null);
       const next = positionToWrite({

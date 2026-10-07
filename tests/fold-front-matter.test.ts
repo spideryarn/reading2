@@ -11,7 +11,7 @@
  * § How the rows are hidden; each case is a bullet of it, or F5 / F10 of its
  * plan review.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
@@ -292,10 +292,67 @@ describe("visibleFrom: where a block in the shut run lands", () => {
     expect(visibleFrom("spya-n")).toBe("spya-n");
   });
 
+  it("is the outermost folded heading for a block a fold hides, and the block again once it is open", () => {
+    /* sub (h3) under a (h2): both folded, and a1x is under both. */
+    const nested = [...blocks, h("sub", 3), p("a1x")];
+    setFoldArticle("slug", nested, echo, front);
+    toggleFold(id("sub"));
+    expect(visibleFrom("spya-a1x")).toBe("spya-sub");
+    toggleFold(id("a"));
+    expect(visibleFrom("spya-a1x")).toBe("spya-a");
+    expect(visibleFrom("spya-sub")).toBe("spya-a");
+    expect(visibleFrom("spya-a")).toBe("spya-a");
+    revealBlock("spya-a1x");
+    expect(visibleFrom("spya-a1x")).toBe("spya-a1x");
+  });
+
   it("has no visible destination when the run is the end of the article", () => {
     const short = blocks.slice(0, 4);
     setFoldArticle("slug", short, echo, front);
     expect(visibleFrom("spya-n")).toBeNull();
+  });
+});
+
+/**
+ * **A run that starts at block 0**: a web article imported since 649dc7828 has
+ * no title heading, so the first thing in it is the byline (front-matter.ts §
+ * Where it starts). No echo, and the first row of the article is hidden.
+ */
+describe("the front matter at block 0", () => {
+  /*   n, aff        the byline, from the first row
+   *   abs (h2)  abs1
+   *   a (h2)    a1 */
+  const noTitle: Block[] = [p("n"), p("aff"), h("abs", 2), p("abs1"), h("a", 2), p("a1")];
+  const run = ids("n", "aff");
+
+  it("hides the first row, which is not folded away and lands on the first row after the run", () => {
+    setFoldArticle("slug", noTitle, new Set(), run);
+    expect(style()).toBe(rule("n") + rule("aff"));
+    expect(isFolded("spya-n")).toBe(true);
+    expect(isFoldedAway("spya-n")).toBe(false);
+    expect(visibleFrom("spya-n")).toBe("spya-abs");
+  });
+
+  it("is left alone by Fold all, shut and open", () => {
+    setFoldArticle("slug", noTitle, new Set(), run);
+    toggleFoldAll();
+    expect(state().folded.sort()).toEqual(["spya-a", "spya-abs"]);
+    expect(isFoldedAway("spya-n")).toBe(false);
+    expect(state().frontOpen).toBe(false);
+    toggleFrontMatter();
+    expect(state().frontOpen).toBe(true);
+    expect(style()).toBe(rule("abs1") + rule("a1"));
+    toggleFoldAll();
+    expect(style()).toBe("");
+    expect(state().frontOpen).toBe(true);
+  });
+
+  it("is opened by a reveal of block 0", () => {
+    setFoldArticle("slug", noTitle, new Set(), run);
+    revealBlock("spya-n");
+    expect(isFolded("spya-n")).toBe(false);
+    expect(isFolded("spya-aff")).toBe(false);
+    expect(visibleFrom("spya-n")).toBe("spya-n");
   });
 });
 
@@ -319,6 +376,34 @@ describe("the front matter and the mounted table", () => {
     expect(isFolded("spya-aff")).toBe(false);
     act(() => root.render(createElement(Harness, { slug: "slug", run: front })));
     expect(isFolded("spya-aff")).toBe(true);
+    act(() => root.unmount());
+  });
+
+  /* Development only: StrictMode runs the table's cleanup and setup again
+     straight after the mount, after a `?at=` restore may already have opened
+     the run (fold.ts § `reopenFor`). */
+  function Opener({ slug }: { slug: string }) {
+    useFoldArticle(slug, blocks, echo, front);
+    useEffect(() => revealBlock("spya-n"), []);
+    return null;
+  }
+
+  it("keeps a run opened during the mount across StrictMode's effect remount", () => {
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(StrictMode, null, createElement(Opener, { slug: "slug" }))));
+    expect(isFolded("spya-n")).toBe(false);
+    expect(state().frontOpen).toBe(true);
+    act(() => root.unmount());
+  });
+
+  it("is shut again for a reader who leaves the article and comes back to it", () => {
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness, { key: "first", slug: "slug", run: front })));
+    toggleFrontMatter();
+    expect(isFolded("spya-n")).toBe(false);
+    act(() => root.render(null));
+    act(() => root.render(createElement(Harness, { key: "again", slug: "slug", run: front })));
+    expect(isFolded("spya-n")).toBe(true);
     act(() => root.unmount());
   });
 

@@ -424,8 +424,8 @@ describe("fix 5 — the byline is the paper's authors", () => {
     "2610-08790": ["Jiraphon Yenphraphai", "Fang Li", "Tianshuo Xu", "Depu Meng", "Quentin Herau", "Yihan Hu", "Raymond A. Yeh", "Wei Zhan"],
     /* A \thanks footnote set after the personname, not inside it; the second name carries its mark inside. */
     "2610-08785": ["Kevin Zhang", "Stephen Bates"],
-    /* The same footnote, with the affiliations after it. */
-    "2610-08392": ["Ilya Auslender", "Yasaman Heydari", "Asiye Malkoç"],
+    /* The same footnote, with the affiliations after it. The whole block: all six creators. */
+    "2610-08392": ["Ilya Auslender", "Yasaman Heydari", "Asiye Malkoç", "Clara Zaccaria", "Yuri Bozzi", "Lorenzo Pavesi"],
     /* The second name is the text of its own ORCID link. */
     "2610-08750": ["Jose Eduardo Escrig Molina", "Daniel Probst"],
   };
@@ -517,6 +517,8 @@ describe("fix 5 — the byline is the paper's authors", () => {
       }
       for (const inside of [
         "Profile",
+        "ORCID Profile",
+        "View Record",
         "Daniel Probst John Smith",
         "Daniel Probst, John Smith",
         "Daniel Probst and John Smith",
@@ -540,6 +542,14 @@ describe("fix 5 — the byline is the paper's authors", () => {
         '<div class="ltx_authors"><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Jane Roe</span></span><span class="ltx_author_before">, </span></div>',
       );
       expect(names(html)).toBeNull();
+      const before = latexml(
+        '<div class="ltx_authors"><span class="ltx_author_before">, </span><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Jane Roe</span></span></div>',
+      );
+      expect(names(before)).toBeNull();
+      const between = latexml(
+        '<div class="ltx_authors"><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Jane Roe</span></span><span class="ltx_author_before">, </span><span class="ltx_creator ltx_role_author"><span class="ltx_personname">John Doe</span></span></div>',
+      );
+      expect(names(between)).toEqual(["Jane Roe", "John Doe"]);
     });
     it("institutions and icon links marked up as creators (2610.08781): nothing is read", () => {
       const fixture08781 = fx("authors-2610-08781");

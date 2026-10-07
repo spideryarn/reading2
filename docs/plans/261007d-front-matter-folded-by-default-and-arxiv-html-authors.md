@@ -381,6 +381,46 @@ for papers with no such heading "only if the measurement supports it". The secon
 only rule, tightened by Opus's three constructed false positives (a standfirst naming a
 university; a heading using *School* as a noun; a surname that is a word).
 
+## The code review, the browser check, and what followed
+
+**GPT Sol, write-capable, round one**
+([the review](261007d-front-matter-folded-by-default-code-review-sol.md)), verdict *ready to
+push*. It fixed seven P1s itself, red first (C1 to C7: lead words counted anywhere, short
+institution-heavy sentences and labelled content read as bylines, a comma-split byline turning
+*The New York Times* into a name, `?at=` left on a hidden block after shutting the run,
+`visibleFrom` returning a hidden block at the article's end, the ORCID widening held to the
+two-word shape seen, a trailing comma separator). It reported four: C8, the same stale `?at=`
+for an ordinary fold (pre-existing); C9, a fixture holding three of six creators; C10, a vacuous
+test; C11, two docs that said scrolling always writes a section start.
+
+**The browser check** (Sonnet, Playwright on the box, 1440 and 390 wide; screenshots
+`261007d-shot-*.png`) passed on the Attention PDF: arrival on the Abstract, the button, the
+tooltip, arrow keys, Fold all then *Show*, reload. It found two real things:
+
+- **The rule never fired on a new web import.** Since 261007b a new import has no title `h1`
+  at block 0, so block 0 *is* the author paragraph, and the rule required an `h1` there. A fresh
+  import of the reported paper got nothing (`261007d-shot-5-arxiv-html-not-folded.png`). Fixed:
+  when block 0 is not an `h1` the run may start at block 0. Every consumer was tested with block 0
+  hidden; none needed more than `visibleFrom`. An `h1` at block 0 is still the title and never in
+  the run.
+- **`?at=` naming a run block did not open it, in dev only.** React's StrictMode remount cleared
+  the store after the restore had opened the run. Production has no StrictMode. Fixed: the same
+  mounted table gets its open run back on that remount; a reader who leaves and returns arrives
+  shut.
+
+**The round after it** (Opus): C8 fixed in the same few lines (`visibleFrom` maps a folded-away
+paragraph to the heading that folds it), C9, C10 and C11 done. Reading Sol's code found one more
+bug, fixed red first: two known names overlapping (*Jane Roe*, *Jane Roe Smith*) cut a heading to
+nothing. And the local database's full read found three Wikipedia imports whose **infobox table**
+folded on an institution word inside it; only a text block or a heading may now be in the run.
+Two prices pinned as tests, both in the safe direction: a byline with a CJK name, and an
+affiliation ending in a full stop, stay showing. 49 mutants, three equivalent survivors.
+
+**Re-measured**: production unchanged block for block (22 of 49, 45 blocks, none prose, read in
+full again); locally the new-shape arXiv imports now fold. Two things the browser saw are not
+this change: a fact's leading `·` when the facts line wraps (each fact carries its dot), and the
+margin's fixed "where you are" head naming block 0's section at the top of the page.
+
 ## Questions, decisions, assumptions
 
 - **Decided here, for Greg to overturn:** the control is in the masthead and says *Show authors
@@ -402,3 +442,5 @@ university; a heading using *School* as a noun; a surname that is a word).
   wrong. It narrowed the brief's "any `.ltx_note` sibling" to the `\thanks` note the four pages
   actually carry, and traced `2610.08750` to an ORCID-linked name.
 - 2026-10-07: stage 1 built by an Opus subagent; § Built, and what the building changed.
+- 2026-10-07: GPT Sol's code review (C1 to C7 fixed by it); browser check; block 0, the
+  StrictMode reopen, C8 to C11 and an overlap bug fixed; re-measured.

@@ -236,6 +236,70 @@ describe("frontMatter: what must not fold", () => {
     expect(run([title, sentence, abstract])).toEqual([]);
   });
 
+  it("leaves an encyclopedia's infobox, though it names a college", () => {
+    /* A Wikipedia import, under its title (seen on the local database,
+       2026-10-07): an infobox is a table, and the article's own. */
+    const infobox: Block = {
+      ...para("box", "Charles Babbage KH FRS Born 26 December 1791 London, England Education Peterhouse, Cambridge Workplaces Trinity College, Cambridge"),
+      tag: "table",
+      kind: "other",
+    };
+    expect(run([title, para("a", "Contributors"), infobox, abstract])).toEqual([]);
+    expect(run([title, infobox, abstract])).toEqual([]);
+    expect(run([infobox, abstract])).toEqual([]);
+  });
+
+  it("takes nothing but a heading or a paragraph of text into the run", () => {
+    const line = "Department of Computer Science, University of Toronto";
+    for (const kind of ["quote", "code", "media", "caption", "other", "callout"] as const) {
+      expect(run([title, { ...para("a", line), kind }, abstract]), kind).toEqual([]);
+    }
+    expect(run([title, { ...para("a", line), tag: "div" }, abstract])).toEqual(["a"]);
+  });
+
+  it("leaves a line that is only the outlet a comma-split byline names", () => {
+    /* "The Example Review" is a piece of the byline, and not a person. */
+    const meta = { byline: "Jane Doe, The Example Review" };
+    expect(run([title, para("a", "The Example Review"), abstract], meta)).toEqual([]);
+    expect(run([title, para("a", "Jane Doe"), abstract], meta)).toEqual(["a"]);
+  });
+
+  it("opens with a lead only after the words a label is known to have before it", () => {
+    expect(run([title, para("a", "The Authors' Correspondence With The Editor"), abstract])).toEqual([]);
+    expect(run([title, para("a", "For ORCID Users"), abstract])).toEqual([]);
+    expect(run([title, para("a", "Address for correspondence: Jane Roe, 12 High Street, Oxford"), abstract])).toEqual(["a"]);
+  });
+
+  it("excuses the lower case of a short contact line by its colon, its email, or its full stop", () => {
+    expect(run([title, para("a", "Correspondence: available from the first author on request"), abstract])).toEqual(["a"]);
+    expect(run([title, para("a", "* Corresponding author jane.roe@example.org"), abstract])).toEqual(["a"]);
+    expect(run([title, para("a", "†These authors contributed equally to this work."), abstract])).toEqual(["a"]);
+  });
+
+  it("folds an affiliation that ends in a full stop and has no lower-case word", () => {
+    expect(run([title, para("a", "Harvard University, Cambridge, MA."), abstract])).toEqual(["a"]);
+  });
+
+  it("leaves a byline with a word in such a script too, which is the price of that", () => {
+    /* A real byline, and it stays showing: one word with no case is all the
+       rule can see of a sentence in that script, so it cannot be let through. */
+    expect(run([title, para("a", "Xiao Wang (王晓), Tsinghua University"), abstract])).toEqual([]);
+  });
+
+  it("is not stopped by a footnote symbol or a number that stands as a word of its own", () => {
+    expect(run([title, para("a", "† Department of Physics, University of Trento"), abstract])).toEqual(["a"]);
+    expect(run([title, para("a", "1 Department of Physics, University of Trento 2 Fondazione Bruno Kessler"), abstract])).toEqual(["a"]);
+  });
+
+  it("leaves an affiliation that ends in a full stop and has a lower-case word in it", () => {
+    /* The price of telling "Harvard University Press declined." from a place:
+       this one is a place, and it stays showing. */
+    const place = para("a", "Dipartimento di Fisica, University of Trento, via Sommarive 14, Povo, Italy.");
+    expect(run([title, place, abstract])).toEqual([]);
+    const unstopped = para("a", "Dipartimento di Fisica, University of Trento, via Sommarive 14, Povo, Italy");
+    expect(run([title, unstopped, abstract])).toEqual(["a"]);
+  });
+
   it("leaves a title-cased subtitle that mentions correspondence mid-line", () => {
     const subtitle = para(
       "a",
@@ -259,22 +323,96 @@ describe("frontMatter: what must not fold", () => {
     expect(run([title, deck, abstract], { authors: [author("Jane Doe")] })).toEqual([]);
   });
 
+  it("takes out each known name once, though one known name starts another", () => {
+    /* Taking "Jane Roe" out and then fourteen characters more for "Jane Roe
+       Smith" took the rest of the deck with it, and nothing was left to say
+       it was not a list of names. */
+    const meta = { authors: [author("Jane Roe"), author("Jane Roe Smith")] };
+    expect(run([title, para("a", "Jane Roe Smith On Art"), abstract], meta)).toEqual([]);
+    expect(run([title, para("a", "Jane Roe Smith On Art"), abstract], { authors: [...meta.authors].reverse() })).toEqual([]);
+    /* And the two as a list are still one. */
+    expect(run([title, para("a", "Jane Roe Smith and Jane Roe"), abstract], meta)).toEqual(["a"]);
+  });
+
   it("leaves a title-cased subtitle that mentions two of the authors", () => {
     const deck = para("a", "Jane Doe And John Roe Discuss Memory");
     const meta = { authors: [author("Jane Doe"), author("John Roe")] };
     expect(run([title, deck, abstract], meta)).toEqual([]);
   });
 
-  it("folds nothing when block 0 is not an h1", () => {
-    const byline = para("a", "Department of Computer Science, University of Toronto");
+});
+
+/**
+ * **Block 0.** Since 649dc7828 (2026-10-07) a new web import has no `<h1>` of
+ * the title at block 0: the title is only in the masthead, and block 0 is the
+ * first thing the page has. On an arXiv HTML page that is the author list.
+ */
+describe("frontMatter: block 0", () => {
+  const byline = para("a", "Department of Computer Science, University of Toronto");
+
+  it("starts the run at block 0 when that is not an h1", () => {
+    expect(run([byline, abstractHead, abstract])).toEqual(["a"]);
+    const names = para("n", "Jane Roe , John Doe and Mary Major");
+    const meta = { byline: "Jane Roe; John Doe; Mary Major" };
+    expect(run([names, byline, abstractHead, abstract], meta)).toEqual(["n", "a"]);
+  });
+
+  it("takes a known label at block 0 with the lines under it", () => {
+    expect(run([heading("lab", "Authors", "h2"), byline, abstractHead, abstract])).toEqual(["lab", "a"]);
+  });
+
+  it("never puts an h1 at block 0 in the run, though it would pass as a name heading", () => {
+    /* A profile whose title is its author's name. Under the title is the run;
+       the title is the title. */
+    const named = heading("title0", "Jane Roe");
+    const meta = { authors: [author("Jane Roe")] };
+    expect(run([named, byline, abstract], meta)).toEqual(["a"]);
+    /* The same heading one level down is an ordinary name heading. */
+    expect(run([heading("title0", "Jane Roe", "h2"), byline, abstract], meta)).toEqual(["title0", "a"]);
+  });
+
+  it("never puts an h1 at block 0 in the run, though it is a known label", () => {
+    expect(run([heading("title0", "Correspondence"), byline, abstract])).toEqual(["a"]);
+  });
+
+  it("folds nothing when block 0 is neither an h1 nor byline material", () => {
     expect(run([para("furn", "Journal of Things, Vol 3"), title, byline, abstract])).toEqual([]);
     expect(run([heading("h2", "Attention Is All You Need", "h2"), byline, abstract])).toEqual([]);
+    expect(run([abstract, byline])).toEqual([]);
     expect(run([])).toEqual([]);
   });
 
-  it("never puts block 0 in the run, whatever it says", () => {
-    const first = heading("title0", "Department of Computer Science, University of Toronto");
-    expect(run([first, abstract])).toEqual([]);
+  /* What a web essay with no title heading can open with. */
+  it("leaves a dateline", () => {
+    expect(run([para("a", "LONDON, 7 October 2026 (Reuters) -"), abstract])).toEqual([]);
+    expect(run([para("a", "Cambridge, Massachusetts · October 2026"), abstract])).toEqual([]);
+  });
+
+  it("leaves a kicker and a publication's name", () => {
+    expect(run([para("a", "Opinion | Guest Essay"), abstract])).toEqual([]);
+    expect(run([para("a", "MIT Technology Review"), abstract])).toEqual([]);
+    expect(run([para("a", "The Brookings Institution"), abstract])).toEqual([]);
+  });
+
+  it("leaves a note that says where the essay was first given", () => {
+    const note = para("a", "(This essay is derived from a talk at the Harvard Computer Society.)");
+    expect(run([note, abstract])).toEqual([]);
+    const school = para("a", "This talk was given at Harvard Business School in March 2019.");
+    expect(run([school, abstract])).toEqual([]);
+  });
+
+  it("leaves a standfirst that names a university", () => {
+    const standfirst = para("a", "Researchers at Stanford University developed a cheaper method for sequencing tumours.");
+    expect(run([standfirst, abstract])).toEqual([]);
+  });
+
+  /* Known, not fixed, and the same at block 1 under a title (plan § Known, not
+     fixed): a Title Case line with an institution word and no sentence in it
+     cannot be told from an affiliation. */
+  it("folds a Title Case line that names an institution, as it does under a title", () => {
+    expect(run([para("a", "Harvard Business School Working Knowledge"), abstract])).toEqual(["a"]);
+    expect(run([para("a", "Lecture delivered at Harvard University, 12 May 2005"), abstract])).toEqual(["a"]);
+    expect(run([title, para("a", "Harvard Business School Working Knowledge"), abstract])).toEqual(["a"]);
   });
 });
 

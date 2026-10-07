@@ -236,4 +236,27 @@ describe("Structure's current row when a section starts in the shut front matter
     act(() => root.render(<Harness sections={[at(0, T, 1), at(1, R, 2), at(2, V, 3), at(3, B, 4)]} layoutKey="k" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("2");
   });
+
+  /* **The run starts at block 0**: no title heading and no echo, so the first
+     section of the article starts on a hidden row (front-matter.ts § Where it
+     starts). */
+  const noTitle = [
+    { id: R, kind: "text", tag: "p" },
+    { id: V, kind: "text", tag: "p" },
+    { id: B, kind: "text", tag: "p" },
+  ] as Block[];
+
+  it("is the first section when the run starts at block 0 and the section carries on past it", () => {
+    setFoldArticle("slug", noTitle, new Set(), [R as BlockId]);
+    place({ [R]: 20, [V]: 20, [B]: 150 });
+    act(() => root.render(<Harness sections={[at(0, R, 1), at(2, B, 2)]} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+  });
+
+  it("is the second section when the first is the run at block 0 and nothing else", () => {
+    setFoldArticle("slug", noTitle, new Set(), [R as BlockId]);
+    place({ [R]: 20, [V]: 20, [B]: 150 });
+    act(() => root.render(<Harness sections={[at(0, R, 1), at(1, V, 2), at(2, B, 3)]} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("1");
+  });
 });

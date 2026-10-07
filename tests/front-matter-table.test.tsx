@@ -243,6 +243,17 @@ describe("the front matter in the reading view", () => {
     expect(sheet()).toContain(rule(names));
   });
 
+  it("folds from the first row of a web article that has no title heading", async () => {
+    /* Imported since 649dc7828: the title is only in the masthead, and block 0
+       is the page's author list (front-matter.ts § Where it starts). */
+    await draw(article([names, places, abstractHead, abstract]));
+    expect(sheet()).toBe(`${[names, places].map(rule).join("\n")}\n`);
+    expect(button()?.textContent).toBe("Show authors and details");
+    press();
+    expect(sheet()).toBe("");
+    expect(host.querySelector(`tr[data-block="${names.id}"]`)).not.toBeNull();
+  });
+
   it("gives a heading inside the run no chevron", async () => {
     const label = block("labela", "h2", "Authors");
     await draw(article([title, label, names, places, abstractHead, abstract]));

@@ -131,14 +131,20 @@ function authorNames(meta: FrontMatterArticle["meta"]): string[] {
  * `a`). A longer surname ending `a,` without that mark may not.
  */
 function findName(text: string, name: string): number {
+  return findNames(text, name)[0] ?? -1;
+}
+
+/** Every place `name` is in `text` by `findName`'s rule, in order. */
+function findNames(text: string, name: string): number[] {
+  const found: number[] = [];
   for (let at = text.indexOf(name); at >= 0; at = text.indexOf(name, at + 1)) {
     const before = text[at - 1] ?? " ";
     const end = at + name.length;
     const after = text[end] ?? " ";
     const letterMark = /^\p{Ll}(?:[,;]?)[\d*∗†‡§¶‖]/u.test(text.slice(end));
-    if (!LETTER.test(before) && (!LETTER.test(after) || letterMark)) return at;
+    if (!LETTER.test(before) && (!LETTER.test(after) || letterMark)) found.push(at);
   }
-  return -1;
+  return found;
 }
 
 /**
@@ -149,10 +155,9 @@ function findName(text: string, name: string): number {
  * more of the authors.
  */
 function hasNameEvidence(text: string, names: readonly string[]): boolean {
-  const matches = [...new Set(names)].flatMap((name) => {
-    const at = findName(text, name);
-    return at < 0 ? [] : [{ at, name }];
-  });
+  const matches = [...new Set(names)].flatMap((name) =>
+    findNames(text, name).map((at) => ({ at, name })),
+  );
   if (matches.length === 0) return false;
   if (
     matches.some(({ at, name }) => {
@@ -166,10 +171,14 @@ function hasNameEvidence(text: string, names: readonly string[]): boolean {
     return true;
   }
 
-  let rest = text;
-  for (const { at, name } of matches.sort((a, b) => b.at - a.at)) {
-    rest = rest.slice(0, at) + rest.slice(at + name.length);
+  /* Each character is taken out once. Two known names can start at the same
+     place ("Jane Roe" and "Jane Roe Smith"); cut one after the other, the
+     second cut ran on into words that are nobody's name. */
+  const named = new Set<number>();
+  for (const { at, name } of matches) {
+    for (let i = at; i < at + name.length; i++) named.add(i);
   }
+  const rest = Array.from({ length: text.length }, (_, i) => (named.has(i) ? "" : text[i])).join("");
   return !LETTER.test(rest.replace(/\band\b/giu, ""));
 }
 
@@ -276,8 +285,16 @@ function isRunHeading(text: string, names: readonly string[]): boolean {
   });
 }
 
+/**
+ * **A heading or a paragraph of text, and nothing else.** A table, a quote, a
+ * figure or a caption is the article's own even when it names a college: on
+ * the local database three Wikipedia imports folded their infobox, which is a
+ * table directly under the title. No byline in production is anything but a
+ * paragraph (2026-10-07).
+ */
 function isByline(block: Block, names: readonly string[]): boolean {
   if (block.kind === "heading") return isRunHeading(block.text, names);
+  if (block.kind !== "text") return false;
   const text = collapse(block.text);
   return (
     words(text).length <= MAX_BLOCK_WORDS && hasEvidence(text, names) && !readsAsProse(text)
@@ -285,15 +302,22 @@ function isByline(block: Block, names: readonly string[]): boolean {
 }
 
 /**
- * **The ids of one unbroken run of byline blocks after the title, in order.**
- * Empty when there is none.
+ * **The ids of one unbroken run of byline blocks at the top of the article, in
+ * order.** Empty when there is none.
  *
- * Block 0 must be an `h1` and is never in the run: with no title to stand
- * under, leading blocks are not known to be front matter (old PDFs that open
- * with a journal's furniture get nothing folded). The run starts after the
- * masthead's echo, `echo`, when that hides the old wrapper's reading-time line
- * at block 1 (masthead-echo.ts), and takes each following block for as long as
- * `isByline` holds.
+ * **Where it starts.** An `h1` at block 0 is the title and is never in the
+ * run, whatever it says; the run then starts under it, after the masthead's
+ * echo, `echo`, when that hides the old wrapper's reading-time line at block 1
+ * (masthead-echo.ts). With no `h1` there, the run starts at block 0: a web
+ * article imported since 649dc7828 (2026-10-07) has its title only in the
+ * masthead, and block 0 is the first thing the page has, which on an arXiv
+ * HTML page is the author list. Either way it takes each block for as long as
+ * `isByline` holds, so an old PDF that opens with a journal's furniture, or an
+ * essay that opens with its first sentence, gets nothing folded.
+ *
+ * Block 0 hidden is not new to the consumers: the echo already hides it, and
+ * a run row, like an echo row, is not `isFoldedAway` (fold.ts), so the first
+ * section is still named, focused and stepped to by its first visible row.
  *
  * Then three refusals:
  *
@@ -308,9 +332,8 @@ export function frontMatter(
   echo: ReadonlySet<BlockId>,
 ): readonly BlockId[] {
   const { blocks } = article;
-  if (blocks[0]?.tag !== "h1") return NONE;
   const names = authorNames(article.meta);
-  let from = 1;
+  let from = blocks[0]?.tag === "h1" ? 1 : 0;
   while (blocks[from] !== undefined && echo.has(blocks[from]!.id)) from++;
   const run: Block[] = [];
   for (let i = from; i < blocks.length; i++) {
