@@ -369,8 +369,8 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           </p>
           <p>
             Today nothing printed beside them says so, which we think is a gap and intend to close.
-            What we never do is substitute a summary for the writing: at the finest level of zoom
-            the reader is looking at the extracted passage itself, never a model's version of it.
+            What we never do is substitute a summary for the writing: the article a reader reads
+            is the extracted passage itself, never a model's version of it.
             One honest caveat — the text of a <em>PDF</em> is reconstructed rather than simply read
             out, so for those the passage is our best recovery of the page rather than a byte-exact
             copy.

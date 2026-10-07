@@ -832,6 +832,36 @@ re-mints an id that is malformed or collides, and a stream has no response body 
 back.
 Without it the client streams an answer into a row the server has never heard of.
 
+### The stream owns the answer, and nothing else on the row <a id="the-stream-owns-the-answer"></a>
+
+A reader can edit their note, move its placement or recolour it while its explanation is being
+written: the box is mounted whatever the status, and those PATCHes are deliberately not queued
+behind a fifteen-second stream. So two writers share one row and neither waits for the other.
+
+**The rule: each writes its own half.** The answer's half is `status`, `answer`, `citations`,
+`searches`, `model` and `error` (and the tab's own `replacing`); everything else is the reader's.
+
+- **On the server**, the answer's write touches only its own columns, and the `done` frame is the
+  row read back after that write (`settle` in [`src/routes.ts`](../../src/routes.ts) § `answer`).
+  If a newer attempt claimed it before that read, this stream retains its own committed terminal
+  answer over the latest reader fields; it cannot watch the replacement attempt. See
+  [the postmortem](../postmortems/261007b-a-post-write-read-can-belong-to-a-new-attempt.md).
+- **In the tab**, every frame of the stream (`begin`, each `delta`, `done`, and the hook's own
+  failure branch) writes the answer's half onto the row as it is on screen now: `putAnswer` and
+  `withAnswerOf` in [`src/web/useComments.ts`](../../src/web/useComments.ts). The half is replaced,
+  not merged, so a frame with no `error` removes the previous one.
+- **And the other way round**, a PATCH's answer is the whole row as stored when the write
+  committed, which for the length of a stream says `pending` with no answer. If a stream was open
+  at any point while the PATCH was out, only the reader's half of that answer is taken
+  (`landPatch`). With no stream in the way it replaces the whole row, as it always did.
+
+Until 2026-10-07 none of the three held: a note edited mid-stream went back to the old one on
+screen at the next delta and stayed there after `done`, and a PATCH answered after `done` brought
+the spinner back for good. Postgres was right throughout, which is why nothing reported it.
+[Plan 261007b](../plans/261007b-seventh-sweep-chat-and-comment-invariants.md), C;
+`tests/comment-answer-stream-keeps-reader-edits.test.tsx` and
+`tests/comment-answer-stream-lifetime.test.ts`.
+
 ### And it stays where it starts <a id="stays-where-it-starts"></a>
 
 > When I ask a question in a chat or a comment, it starts streaming in the output response from the
