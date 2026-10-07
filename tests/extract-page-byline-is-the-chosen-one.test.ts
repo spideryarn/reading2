@@ -1,9 +1,14 @@
 /**
- * The line under the title in stage 2's page names the same people as
- * `meta.byline`. It used to print Readability's own guess, which on a LaTeXML
- * page (arXiv's HTML) was a cited author or the word "and" while `meta.byline`
- * held the paper's authors.
- * docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md
+ * `meta.byline` on a LaTeXML page (arXiv's HTML) names the paper's authors, and
+ * stage 2's page prints no byline of its own.
+ *
+ * The page used to carry a line under its title, which printed Readability's
+ * own guess: a cited author, or the word "and", while `meta.byline` held the
+ * paper's authors. This file was written to make the two agree
+ * (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
+ * Since 2026-10-07 the page has no such line at all (src/extract.ts §
+ * `debugPage`, plan 261007b), so there is one byline and nothing for it to
+ * disagree with. What is pinned now is that the line stays gone.
  */
 import { describe, expect, it } from "vitest";
 
@@ -31,14 +36,13 @@ ${PROSE}
 </section>
 </article></body></html>`;
 
-describe("the byline line in stage 2's page", () => {
-  it("names the authors meta.byline names", async () => {
+describe("the byline on a LaTeXML page", () => {
+  it("is in meta.byline, and stage 2's page has no byline line of its own", async () => {
     const out = await runExtract({ html: PAGE, url: "https://arxiv.org/html/2610.01988v1", slug: "glueballs" });
     expect(out.meta.byline).toContain("Ada Lovelace");
     expect(out.meta.byline).toContain("Grace Hopper");
-    const line = /<div class="meta">([\s\S]*?)<\/div>/.exec(out.extractedHtml)?.[1] ?? "";
-    expect(line).toContain("Ada Lovelace");
-    expect(line).toContain("Grace Hopper");
-    expect(line).not.toContain("Abbott");
+    expect(out.meta.byline).not.toContain("Abbott");
+    expect(out.extractedHtml).not.toContain('class="meta"');
+    expect(out.extractedHtml).not.toContain("min read");
   });
 });

@@ -838,7 +838,14 @@ carry inline markup (`<i>Drosophila</i>`, `H<sub>2</sub>O`, `<jats:italic>`, Mat
 Every surface draws a title as text, so any of that shows literally. **The rule: an outside title
 is made plain where it is constructed, by `plainTitle` in [`src/html.ts`](../../src/html.ts), and
 stored plain.** This stage applies it in `runExtract` and `runPdfExtract` before the title branches
-into `meta.title`, the page's `<h1>` and the job's title, and `metaColumns` repeats it as a backstop.
+into `meta.title`, the stored page's `<title>` and the job's title, and `metaColumns` repeats it as
+a backstop. (Until 2026-10-07 a web page's title also went into an `<h1>` of ours at the top of the
+stored page's body, which stage 3 made the article's first block. `debugPage` no longer writes that
+`<h1>` or the byline line under it, for new extractions only: [../plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md](../plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md),
+reader report spya-t6cdve. The articles that already have those two blocks keep them in the data,
+and the reading view does not draw them: `mastheadEcho` in
+[`src/web/masthead-echo.ts`](../../src/web/masthead-echo.ts), which also leaves out a first heading
+that says exactly what the masthead says, as a PDF's usually does.)
 The other roads in — search results, link previews, cited works and Referee Criteria — are listed
 in the plan, [../plans/260929e-outside-titles-become-plain-text-at-ingest.md](../plans/260929e-outside-titles-become-plain-text-at-ingest.md).
 `tests/plain-title.test.ts` feeds one marked-up title through every one of them. **A new road for a
@@ -876,8 +883,11 @@ in every generated mode's fingerprint. The plan and what was measured:
 [../plans/261005j-a-small-model-tidies-an-imported-title.md](../plans/261005j-a-small-model-tidies-an-imported-title.md),
 [../investigations/261005b-title-tidying-rule-against-a-small-model.md](../investigations/261005b-title-tidying-rule-against-a-small-model.md).
 
-Only `meta.title` is tidied. The page's `<h1>`, which becomes a block of the prose, keeps the
-author's capitals. When tidying changed the title, the original goes in `Meta.titleOriginal`
+Only `meta.title` is tidied. The stored page's `<title>` keeps the author's capitals, and so does
+any heading the article itself opens with, which is prose. (An article extracted before 2026-10-07
+also has the untidied title as its first block, from the `<h1>` stage 2 used to write: see
+[§ A title from outside is plain text](#a-title-from-outside-is-plain-text).) When tidying changed
+the title, the original goes in `Meta.titleOriginal`
 (`article_revisions.title_original`), and the Metadata page shows it with a button that puts it back
 as the reader's own title. Articles imported before 2026-10-05 are not touched.
 

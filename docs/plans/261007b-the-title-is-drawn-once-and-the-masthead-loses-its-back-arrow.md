@@ -105,8 +105,9 @@ prose table hides those rows. Nothing is removed from the data.
 **The rule.**
 
 - **The wrapper's shape** (every web article imported before Stage 3): block 0 is an `h1` and
-  block 1 is a paragraph that is only our line, ending `~N min read` after a `·` or from its
-  start. Both are ours by construction, since the wrapper always comes first, so this needs no
+  block 1 is a paragraph that is only our line, ending `~N min read` after a `·`. The wrapper
+  writes the `·` even when nobody is named (`· ~141 min read`), so an author's own bare
+  `~5 min read` under an `h1` is kept. Both are ours by construction, since the wrapper always comes first, so this needs no
   comparison with the title, and therefore also works for a visitor, whose payload has the tidied
   title and not the original (Sol F4). Block 1 is hidden. Block 0 is hidden unless the reader has
   renamed the article.
@@ -136,13 +137,34 @@ the store (`isFolded`): arrow keys (`keynav.ts`), the reading position, Structur
 (`useColumnContext.ts`), on-screen sampling, the spine, chat placement. So the store is told the
 echo ids with the article, and:
 
-- they are in its hidden set always, so the one stylesheet hides their cells and every consumer
-  already skips them;
+- they are in its hidden set always, so the one stylesheet hides their cells and `isFolded`
+  answers true for them;
 - an echo heading is not foldable, so *Fold all* folds the sections and cannot shut the whole
   article behind a chevron nobody can see;
 - `revealBlock` cannot open them;
 - the echo ids are part of the store's identity, so a rename, which changes them without changing
   the blocks, takes effect (Sol F8).
+
+**Three consumers ask about a section's start, not about a row, and they get a second question**
+(found while building Stage 2; the first version of this section said every consumer "already
+skips them", which was wrong). Block 0 is where the first section of every article starts
+(`navigableItems` in `src/web/tree.ts` begins at row 0), and block 0 is also the echo. A fold
+hides a whole section, so "the start is folded" rightly means "nothing of this section is on
+screen". An echo hides one row whose section is still on screen. With the echo answering
+`isFolded` true in those three places, the reading position wrote `?at=` as the second section
+while the reader was in the first (so a reload put them a section ahead), Structure marked the
+second section as current, and the up arrow could not reach the start of the article.
+
+So `fold.ts` exports `isFoldedAway(id)`: true only when a fold hides the row, never for an echo.
+`useReadingPosition.ts` (its `skip`), `useColumnContext.ts` (Structure's focus) and `step` in
+`keynav.ts` ask that. Everything else still asks `isFolded`. An echo row needs no skipping in
+those three: it has no height and sits at the top of the first visible row, which is in its own
+section, so the measurement is already right. The up arrow to row 0 and `?at=` naming it then go
+through `scrollToBlock`, which sends them to the top of the page (next paragraph).
+
+One thing this leaves: stepping by single blocks, the first down arrow from the top of the page
+goes to the second visible block, because the first visible one already counts as where the
+reader is. It is on screen under the masthead either way.
 
 **A jump to a hidden block goes to the top of the page** (Sol F6): `?at=`, a search hit, a quote
 or a comment that names an echo block scrolls to the masthead, which is the visible copy of those
@@ -224,3 +246,20 @@ GPT Sol, 2026-10-07, verdict *build with the P0 and P1 fixes*. No P0.
   arbitration on F1; plan rewritten.
 - 2026-10-07: Stage 1 built. Red first: 2 of 37 failed in `tests/dock-corner-controls.test.tsx`
   with the arrow in place, 37 pass without it.
+- 2026-10-07: Stage 2 built by an Opus subagent, which stopped before the store change to report
+  that the design above was wrong for three consumers (§ How a row is hidden); `isFoldedAway` is
+  the result. Red first throughout; 40 mutants across the rule, the store, the three consumers,
+  the jump and `TableView`, all killed, after two survivors each got a test. Three things it
+  changes that the plan did not foresee: an article whose only heading was the wrapper's has no
+  *Fold all* button, since there is nothing left to fold; stepping by single blocks, the first ↓
+  from the top goes to the second visible block, because the first already counts as where the
+  reader is; and `tests/article-end-mark.test.tsx` folded that same lone heading, so it now draws
+  its fixture as renamed.
+- 2026-10-07: Stage 3 built by an Opus subagent, not the fallback: nothing reads the header back
+  out of the page, no fingerprint covers `src/extract.ts` so no existing article is re-extracted
+  by itself, and `articleWithIds` tells models the title from `meta`. 15 tests in 7 files had
+  pinned the header, each a block count down by two or an assertion about the header itself. One
+  thing it changes that the plan did not foresee: a page that extracts to no prose used to yield
+  our two header blocks and so passed `assertSomethingWasProduced`; it now yields none and is
+  refused, which is that guard's purpose. Not traced: what a deliberately re-extracted old
+  article's tree does with the two ids it loses; that is in the queue entry.
