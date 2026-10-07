@@ -39,11 +39,22 @@ describe("Diagram's pager", () => {
     for (const prop of BOX) {
       expect(diagram.get(prop), prop).toBe(quotes.get(prop));
     }
-    /* Quotes' size, with the 44px floor the step bar has always held for a
-       thumb (a 12px root would otherwise make it 33px; GPT Sol's M3). */
-    for (const prop of ["width", "height"] as const) {
-      expect(quotes.get(prop), prop).toBe("var(--control-h-lg)");
-      expect(diagram.get(prop), prop).toBe("max(44px, var(--control-h-lg))");
+  });
+
+  it("holds all three steppers' arrows to one size with a 44px floor", () => {
+    /* `--control-h-lg` is 2.75rem: a reader's 12px root would make it 33px,
+       under a thumb's target. Diagram's bar had held 44px since Greg's iPad
+       ask; Quotes' and Skim's took the same floor (GPT Sol's M3 and C2, plan
+       261007m). */
+    const arrows = [
+      rule("diagram.css", ".diag-step-btn"),
+      rule("quotes.css", ".quotes-arrow"),
+      rule("skim.css", ".skim-arrow"),
+    ];
+    for (const arrow of arrows) {
+      for (const prop of ["width", "height"] as const) {
+        expect(arrow.get(prop), prop).toBe("max(44px, var(--control-h-lg))");
+      }
     }
   });
 
