@@ -249,7 +249,8 @@ not read.
 ## Left
 
 - **The command bar's *Run again* row** still bypasses every hold, Skim's now included. Known,
-  pinned by a test, P1 by Sol's grading, not this cluster's.
+  pinned by a test, P1 by Sol's grading, not this cluster's. Fixed afterwards in
+  [261007i](261007i-command-bar-run-again-row-honours-the-rewrite-hold.md).
 - ***Plan the route for this* over a held route** starts an unforced run for a different reading
   purpose (§ 1). Judged a legitimately different request, and left.
 - **A stored thread that is truthy and not an object** would pass the server and be refused by

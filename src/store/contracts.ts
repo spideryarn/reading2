@@ -2331,7 +2331,8 @@ export type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
-import type { EarlierFeedback } from "../types.js";
+import type { FeedbackEnding } from "../feedback-ending-values.js";
+import type { EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
 export type MyFeedback = Omit<EarlierFeedback, "shipped">;
@@ -2347,6 +2348,66 @@ export interface MyFeedbackPage {
 export interface FeedbackIdFilter {
   ids: readonly string[];
   keep: "in" | "out";
+}
+
+/** The report ids this build has a note for, under the ending each has (src/feedback-ending.ts). */
+export type FeedbackEndingIds = Readonly<Record<FeedbackEnding, readonly string[]>>;
+
+/** One earlier report with what only an admin's list carries from the row: its number, status and mark. */
+export interface MyFeedbackWithStatus extends MyFeedback {
+  number: number;
+  status: EarlierFeedbackStatus;
+  /** ISO, or null. */
+  ignoredAt: string | null;
+}
+
+export interface MyFeedbackStatusPage {
+  reports: MyFeedbackWithStatus[];
+  more: boolean;
+  /** Uncapped, unfiltered, of the same snapshot as `reports`; the four sum to every report the reader filed. */
+  counts: Record<EarlierFeedbackStatus, number>;
+}
+
+/**
+ * **A reply to a question, as the route hands it to the store.** Named field
+ * by field, like `NewFeedback`; the owner is `currentOwnerId()`, never here.
+ */
+export interface NewFeedbackAnswer {
+  /** Client-minted, and the idempotency key. A Spideryarn id. */
+  id: string;
+  /** `q-k3m9qt`. The route has already checked it against the compiled questions. */
+  questionId: string;
+  body: string;
+  /** The server's own, from the mapping a report's comes from. Never the browser's. */
+  environment: FeedbackEnvironment;
+}
+
+/** A reply as it is stored. No owner and no environment: the caller is the owner, and neither is theirs to read back. */
+export interface StoredFeedbackAnswer {
+  id: string;
+  questionId: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * **Three outcomes** (plan 261007d, F15), a union so the route must say which
+ * status each is: written; this owner already sent exactly this, so nothing
+ * was written and the stored row comes back; or this id is already another
+ * reply (a different question or different words), and nothing changed.
+ */
+export type FeedbackAnswerSubmission =
+  | { kind: "created"; answer: StoredFeedbackAnswer }
+  | { kind: "duplicate"; answer: StoredFeedbackAnswer }
+  | { kind: "conflict" };
+
+/** A report a question is about, as much as the question's card shows of it. */
+export interface LinkedFeedbackReport {
+  id: string;
+  number: number;
+  /** The first line of what the reader wrote, cut to a line's length. */
+  firstLine: string;
 }
 
 /** How many reports this reader has filed, and how many of them are among `countIds`. */
@@ -2640,6 +2701,47 @@ export interface FeedbackStore {
    * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
    */
   listMine(limit: number, countIds: readonly string[], filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
+  /**
+   * **`listMine` with a status and a number on each report** — an admin's
+   * Earlier tab, `GET /api/admin/feedback/earlier`.
+   * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+   *
+   * **Owner-scoped exactly as `listMine` is**, and the owner is never an
+   * argument: this is the caller's own list, not a view across owners. That
+   * the caller is an admin is the route's namespace's business, not this
+   * method's.
+   *
+   * `endings` is which report ids have a note and how it ended; with the row's
+   * `ignored_at` that decides each report's status (`EarlierFeedbackStatus` in
+   * src/types.ts has the rule). The status is one SQL expression, used for the
+   * row, the filter and the counts, so the three cannot disagree. `show`
+   * narrows **before** the cap: the newest `limit` reports of that status.
+   * `counts` is per status, uncapped, in the same snapshot as the list.
+   */
+  listMineByStatus(
+    limit: number,
+    endings: FeedbackEndingIds,
+    show: EarlierFeedbackStatus | "all",
+  ): Promise<MyFeedbackStatusPage>;
+  /**
+   * **Store a reply to a question** — `POST /api/admin/feedback/answers`.
+   * Append-only and idempotent on `(owner, id)`; `FeedbackAnswerSubmission`
+   * has the three outcomes. The owner is `currentOwnerId()`. No rate limit:
+   * the only route that calls it is in the admin namespace.
+   */
+  submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission>;
+  /**
+   * **This owner's newest reply to each of these questions**, at most one a
+   * question; a question they have not replied to is simply absent.
+   * Owner-scoped: another admin's reply is never this one's.
+   */
+  newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **The number and first line of these reports, among this owner's own.**
+   * An id the owner did not file (another reader's report, or none) is absent,
+   * so a question about a stranger's report shows nothing of it.
+   */
+  linkedReports(ids: readonly string[]): Promise<LinkedFeedbackReport[]>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.

@@ -1,8 +1,8 @@
 # Seventh codebase sweep: depth, with the second model family
 
-**Status: finished, 2026-10-07. All ten clusters are on `dev`; seven migrations wait for
-production; nothing was deployed and no browser pass was run. § Where this stands says what is
-left, and for whom.**
+**Status: finished, 2026-10-07. All ten clusters, and seven builds from Greg's answers, are on
+`dev`; nine migrations wait for production; nothing was deployed and no browser pass was run.
+§ Greg's answers and § Where this stands say what was built and what is left, and for whom.**
 
 A follow-on to the [sixth sweep](261006j-sixth-codebase-sweep-umbrella.md), which ran no depth stage
 and whose second-family breadth pass was, in its own words, "a weak null, not a clean bill". This
@@ -658,38 +658,78 @@ touched and their neighbours.
   empty state before reading the flags. Left: *Plan the route for this* over a held route starts a
   run for a different purpose, judged a different request.
 
+## Greg's answers, and what was built from them
+
+Greg answered on 2026-10-07, relayed verbatim by the Overseer (the numbering below is this plan's
+revised list, not the batch he saw):
+
+> 1 re Stop, yes, probably best to err on the side of caution, and keep & publish
+> 2 yes, agreed. is there a good reason why we cap at 20 in the first place? I don't think that
+> was an instruction from me
+> 3 ok, i'll go along with you on this. I don't quite follow
+> 4 yes
+> 5 yes, tidy them
+
+And, on the cap of twenty: *"1 agreed"* (never drop a criterion silently; a ceiling of 200; refuse
+past it with a sentence). Question 3b's default (keep refusing a hand delete of a criterion with
+comments) stands. Each became a cluster with its own plan and GPT Sol code review, all on `dev`:
+
+- **Q1, Stop during the last step keeps and publishes** —
+  [261007f-stop-…](261007f-stop-during-the-last-step-keeps-and-publishes.md). Both server paths now
+  publish. An image step stopped part-way is kept but marked not current, so a later run fetches
+  what is missing; Illustrated keeps the last good painting instead of publishing a half-painted
+  set. The review found that a Stop before the last step's work began could still publish; fixed.
+- **Q3a and the cap, Referee criteria are never dropped** —
+  [261007f-referee-…](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+  No add deletes anything; at 200 an add is refused with a sentence giving the real count, and the
+  refused text survives a reload (the review found it did not). C5's full-list refusal is gone.
+- **Q4, the Generate button stays after a failed *Try again*** and **Q6, `queue_state.running_job_id`
+  dropped** — [261007g-keep-…](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md).
+  Twelve hooks; Illustrated's panel had lost its button even earlier, on one failed refresh.
+- **Q8, the never-published production articles** —
+  [261007f-tidy-…](261007f-tidy-the-never-published-production-articles.md). Plan and script ready,
+  three GPT Sol rounds ("not safe", "not safe", "safe to run under the plan's conditions"). **Not
+  run.** Handed to the Overseer: after 2026-10-08 18:31 UTC, once the index migration is in
+  production, Greg told first.
+- **The step budgets** (ruled a bug by the Overseer, not a question) —
+  [261007g-raise-…](261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md) and
+  [261007h-five-more-…](261007h-five-more-step-budgets-to-what-they-measure.md). Images 185→400 s,
+  fetch 150→360 s, ideas 120→600, tweets 90→600, sketch 240→700, debate 120→360, illustrated
+  600→700, each derived from the code's own clocks or token sizes with a test that reads them.
+
 ## Where this stands, 2026-10-07
 
-**Finished, for what it set out to build.** All ten clusters are on `dev`; C7's seven migrations
-are on `dev` and wait for production; nothing was deployed. Eleven builders, twelve GPT Sol code
-reviews (C3 took two rounds), and one read-only review each of the umbrella and of two plans. Three
-reviews said "do not ship" (C3, C5, the umbrella) and were right each time.
+**Finished.** All ten clusters and the seven builds from Greg's answers are on `dev`; nothing was
+deployed. **Nine migrations wait for production** (the schema cluster's seven, another session's
+voucher migration, and the column drop), applied together in one transaction; the read-only
+pre-flight ran clean for all nine
+([261007c-…-production-preflight.sql](261007c-seventh-sweep-schema-production-preflight.sql)).
+A full test run on the merged sweep passed 1,782 of 1,784 files (one failure, another session's,
+fixed).
 
 Not done, in this order of importance:
 
-1. **No browser pass on any cluster.** C2, C4, C5, C10a and C10b change what the client does;
-   their evidence is jsdom and Postgres tests. A pass over Referee criteria (delete one with a
-   comment on it), a comment edited while its explanation streams, and a forced re-run in each of
-   the thirteen modes is the first thing to do before a deploy.
-2. **The seven migrations are not applied to production** (C7, above).
-3. **For Greg**, the revised list in § What the review changed, plus what building added:
-   - **Seven new reader-facing sentences to veto:** the two Referee refusals (C5), and *The new …
+1. **No browser pass on any cluster.** The Overseer will run one before the next deploy. Worth
+   covering: deleting a Referee criterion with a comment on it, adding past 200, a comment edited
+   while its explanation streams, a forced re-run in each of the thirteen modes, a failed *Try
+   again* over "none yet", and Stop during an import's last step.
+2. **The nine migrations are not applied**, and the never-published tidy waits for them.
+3. **For Greg**, still open:
+   - **Eight new reader-facing sentences to veto:** *Your comments are placed on this criterion …*
+     (C5); the two forms of the 200 ceiling (*This article already has 200 criteria, which is as
+     many as it can hold. Delete one to add another.* and its over-200 form); and *The new …
      hasn't loaded yet.* for quotes, timeline, search, citations and route (C10a, C10b).
-   - **A Stop beside a loaded Sketch or painting** (C10a): today a re-run there has no Stop, no
-     retry and no stalled warning. Giving it the shared progress row reverses three recorded
-     decisions, so it wants a yes or no.
-   - **The two step budgets** (C3): the image step is admitted on a 185 s estimate and can run
-     about 360 s; fetch on 150 s. Raising them costs requeue windows; the numbers were not touched.
-   - Question 4 (the Generate button after a failed retry) is not "one line once C9 lands": the
-     union was not adopted, so it is a few lines in each of twelve hooks.
-   - Question 8 was answered "yes, tidy them": the
-     [plan and script](261007f-tidy-the-never-published-production-articles.md) are ready and
-     reviewed (GPT Sol, three rounds), waiting for the index in production and 2026-10-08 18:31 UTC.
-4. **Left, each in its cluster's plan:** the command bar's *Run again* row bypasses every hold
-   (reproduced, pinned by a test that goes red when it is fixed; P1 by Sol's grading and the most
-   valuable thing left); the route opt-in for the last six "none yet" reads; stage 7 of the schema
+   - **A Stop beside a loaded Sketch or painting** (C10a): reverses three recorded decisions.
+   - **Illustrated's brief alone can take longer than a whole claim** (948 s estimated against
+     740 s, before its images): cap the plates or the brief per request, or split the step.
+   - **Nothing tells a reader their Stop came too late**: the card goes from "Stopping…" to "Done —
+     read it".
+4. **Left, each in its cluster's plan:** the route opt-in for the last six "none yet" reads; stage 7 of the schema
    (the published-scalars CHECK); a deleted cross-reference artefact replayed from the offline
    cache; the developer-register 400 sentence a reader can meet in Referee; NEW1.
+5. **Fixed since (2026-10-07):** the command bar's *Run again* row bypassed every hold; it now asks
+   the mode's hold and refuses while one is up
+   ([261007i](261007i-command-bar-run-again-row-honours-the-rewrite-hold.md)).
 
 ## What this run says about the method
 

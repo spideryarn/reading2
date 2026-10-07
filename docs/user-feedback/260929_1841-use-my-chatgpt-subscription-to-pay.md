@@ -1,6 +1,7 @@
 ---
 reports: spya-ddpn5x
 ending: declined
+comment: Set aside: researched and planned, not built. It would take about 6 to 9 weeks and needs OpenAI to let us in first. You said it is out of scope for now (2026-10-01).
 ---
 # Use my ChatGPT subscription to pay, for a cheaper price
 

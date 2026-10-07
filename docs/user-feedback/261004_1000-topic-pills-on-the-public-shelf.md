@@ -1,6 +1,7 @@
 ---
 reports: spya-mdp0em
 ending: awaiting
+comment: Waiting on you: not built. Every way of showing pills on the public shelf edits a security defence, and that shelf has 6 articles where pills need 8. Four options, or did you mean Include public on your own shelf?
 ---
 # Topic pills on the public shelf
 
@@ -26,3 +27,7 @@ Queue entry `qi-8a52pdxh`. Plan:
 [261004j § Part 2](../plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md#part-2-pills-on-the-public-shelf-spya-mdp0em-not-built-a-question-for-greg).
 The other report handled in the same session shipped:
 [its note](261004_1039-shelf-topic-pills-take-in-more-articles.md).
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-deh67j.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

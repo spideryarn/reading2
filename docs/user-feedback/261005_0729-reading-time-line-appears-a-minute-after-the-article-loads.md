@@ -1,6 +1,7 @@
 ---
 reports: spya-dxufdw
-ending: awaiting
+ending: shipped
+comment: You chose A on 2026-10-05: reading time came out from behind Experimental features, for every owner. A switch to turn it off and a way to erase it are not built yet.
 ---
 # The reading-time line appears about a minute after the article loads
 
@@ -14,7 +15,9 @@ Report `spya-dxufdw` (SPIDERYARN-READING2-DB, Sentry confirmed), filed as a sugg
 "Reading level line" was taken to mean the reading-time chart down the spine, and the investigation
 found nothing to say otherwise.
 
-**Ending: Awaiting Greg.** Nothing built. Plan:
+**Ending: Shipped.** Greg chose A on 2026-10-05, and reading time now appears for every owner
+without Experimental features. A control to turn it off and a way to erase stored totals remain
+unbuilt. Plan:
 [261005g](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md).
 
 ## What we found
@@ -31,9 +34,9 @@ way of arriving we tried.
 So, most likely, the line was not late. It is an Experimental feature, and it arrived with the
 switch. While the switch is off nothing is recorded either.
 
-## What is waiting on Greg
+## What Greg decided
 
-Whether reading time should come out from behind the switch, so the line is there on every load and
-the record has no holes from the times the switch was off. Four options, with what each costs, in
-[the plan's § Questions for Greg](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md#questions-for-greg).
-Recommended: all of it, for every owner.
+Greg chose A: all of reading time came out from behind the switch, so the line is there on every
+owner's load and the record has no holes from times the switch was off. The four options and the
+change that landed are in
+[the plan](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md#questions-for-greg).

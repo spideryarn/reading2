@@ -6,3 +6,10 @@
  */
 export const FEEDBACK_ENDINGS = ["shipped", "declined", "awaiting"] as const;
 export type FeedbackEnding = (typeof FEEDBACK_ENDINGS)[number];
+
+/**
+ * The longest a note's `comment:` line may be: one line under a row in the
+ * Earlier tab. Here, in the leaf, because the note compiler refuses a longer
+ * one and the dialog refuses to draw one, and neither may import the other.
+ */
+export const MAX_FEEDBACK_COMMENT_CHARS = 240;

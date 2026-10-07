@@ -781,8 +781,28 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
      up hard because it is a model call and one measurement is one sample. */
   arc: 60_000,
-  /* GUESS. A model call over the whole article, in the same family as `arc`. */
-  tweets: 90_000,
+  /* **Admission estimate from the call's token allowance, since 2026-10-07;
+     it said 90 s and "GUESS" until then.** One streamed Messages call, and nothing in the step times
+     it: `streamMessage` (src/messages-stream.ts) sets no clock of its own, and
+     the SDK's request timeout stops at the response headers. We estimate time
+     from `max_tokens`: `budgetFor` over `threadAnswerTokens` at the longest thread
+     `suggestedLength` allows (15 posts), 42,600 tokens, which
+     `deadlineFor` (src/token-budget.ts) turns into **561 s** at the measured
+     95 tokens a second plus a quarter. This is not a time ceiling: all five
+     steps can select Opus via High-powered AI (src/models.ts), whose rate is
+     not measured here. Prefill, provider waits, slower streams and failed
+     attempts add time this conversion does not cover. Two transport waits
+     total 1.5–2.5 s; failed requests can take much longer than their backoffs.
+     **600 s**, 39 s over that, 140 s under the claim's 740 s.
+
+     **Measured the same day**, production `revision_step_runs`, rows this step
+     ran: 28 runs, median 24.9 s, p90 78.8 s, max **114.7 s** (local max
+     128.5 s, 57 runs) — over the old 90 s in both. This row decides only a
+     job that names `tweets` after another step, which nothing in the app does
+     today (the client, a reset and a publication each queue it alone); a hand-written
+     `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  tweets: 600_000,
   /* GUESS. Fans out over the article; no wall-clock measurement recorded. */
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
@@ -807,8 +827,27 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      distribution and being under kills a call the reader has already bought.
      docs/plans/260928a-trajectory-mode-stage1-real-runs.md. */
   skim: 120_000,
-  /* GUESS, in `glossary`'s family and never measured on its own. */
-  ideas: 120_000,
+  /* **Admission estimate from the call's token allowance, since 2026-10-07;
+     it said 120 s and "GUESS" until then.** One streamed Messages call, timed by nothing in the step
+     (see `tweets` above for why `streamMessage` is not a clock). `max_tokens`
+     is `budgetFor` over `ideasAnswerTokens(MAX_IDEAS)`, 44,600 tokens, which
+     `deadlineFor` turns into **587 s**; transport waits add up to ~2.5 s,
+     excluding failed-request time. **600 s**, 13 s over that, 140 s under the claim's 740 s.
+
+     **This one decides something today**: Skim's job is
+     `["quotes", "ideas", "skim"]` (src/auto-mode-steps.ts), so `ideas` follows
+     `quotes` in one claim. The count is `suggestedIdeas` of the body word
+     count, capped at `MAX_IDEAS` (10), not a count supplied by the model or
+     reader. Measured the same day, production `revision_step_runs`, rows this
+     step ran: 37 runs, median 95.7 s, p90 159.0 s, max **357.8 s** — almost
+     three times the old row. Previously the walk admitted `ideas` with as
+     little as 120 s left, below that observed maximum. Production's worst
+     `quotes` is 51.2 s (42 runs), leaving 688.8 s before other claim
+     overhead, so that runtime alone still admits `ideas`. Hand-back occurs
+     when total claim time before admission exceeds 140 s, including
+     queue/store overhead, not only `quotes` runtime. tests/jobs-lease-budget.test.ts derives the
+     floor. docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  ideas: 600_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
      from `data/_ai-calls.jsonl` as `finishedAt − startedAt`: 78.7s, 95.6s,
      124.9s, 100.8s. Each run is one call under its own `runId`, so the sum and
@@ -871,8 +910,24 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      mid-step kill. Grouped by `runId` from `data/_ai-calls.jsonl` and read as
      `max(finishedAt) − min(startedAt)` — summing durations would have said 408s
      for a batch of three separate articles, which is the trap this table's
-     header warns about from the other direction. */
-  sketch: 240_000,
+     header warns about from the other direction.
+
+     **Raised 240 s → 700 s on 2026-10-07, to the call's estimated full-token time.** Nothing
+     in the step times the call (see `tweets` above). `max_tokens` is
+     `budgetFor` over `SKETCH_ANSWER_TOKENS` (src/sketch.ts), 52,000 tokens,
+     which `deadlineFor` turns into **685 s**; transport waits add up to ~2.5 s, excluding
+     failed-request time. 700 s is 15 s over that and is also the most this table reserves
+     anywhere (`extract`, `structure`, `labels`): the whole window less enough
+     for one step to have preceded it.
+
+     Measured the same day, production `revision_step_runs`, rows this step
+     ran: 25 runs, median 142.7 s, p90 244.8 s, max **335.6 s** (local max
+     182.4 s, 8 runs) — the old 240 s was under production's p90. Nothing in
+     the app puts a step before `sketch` (Illustrated's chain is
+     `["sketch", "illustrated"]`, Sketch first); a hand-written
+     `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  sketch: 700_000,
   /* **MEASURED**, three runs over two articles on 2026-09-03
      (evals/results/illustrated-2026-09-03b/README.md): the brief call took 175s,
      223s and **334s**, and the three plates behind each took 83s at worst. So
@@ -881,24 +936,46 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      Sequential by design: bounded parallelism here would multiply against the
      global job concurrency above.
 
-     **600s, and it is a ceiling rather than a rounding.** Every other row here
-     rounds up hard, usually to twice the worst — this one cannot. Twice 450s is
-     900s, and the deadline a claimant works to is `LEASE_MS - DEADLINE_MARGIN_MS`
-     = 740s, so a budget over that is a step that never fits in a fresh claim and
-     therefore never starts at all: the job would sit `queued` for ever with
-     nothing failing. 600s is the largest round number that leaves the claimant
-     its 140s of unwind, and it is 1.3x the worst measured rather than 2x. The
-     honest reading of that is that **this step is the one with the least
-     headroom in the table**, and the brief call is 86-89% of it.
+     **700 s since 2026-10-07, and it is a reservation, not a ceiling: this
+     step's estimated full-token time does not fit in a claim.** The brief is one streamed call
+     timed by nothing in the step (see `tweets` above); its `max_tokens` is
+     `budgetFor` over `ILLUSTRATED_ANSWER_TOKENS` (src/illustrated.ts), 72,000
+     tokens, which `deadlineFor` turns into **948 s** on its own. Then up to
+     `MAX_PLATES` image calls in sequence, each up to three transport attempts
+     and none with a clock. Production measured the same day
+     (`revision_step_runs`, rows this step ran): 15 runs, median 291.9 s, p90
+     483.0 s, max **739.3 s** — only 0.7 s below a fresh claim's nominal
+     740 s, before that claim's setup, reads and settlement overhead. The 417–450 s worst
+     case above is out of date.
 
-     **So `MAX_PLATES` and this number move together, and neither alone.**
-     Raising the cap to 5 costs another ~35s of plate and eats the margin;
-     raising this past 740s needs `LEASE_MS` raised first, which needs
-     `vercel.json`'s `maxDuration` — 800s today — raised before it, and
-     tests/jobs-lease-budget.test.ts is what refuses the pair being broken.
-     If the brief ever needs to be longer, the lever the plan names is the
-     prompt: cap the vignette count and the length of the compositions. */
-  illustrated: 600_000,
+     **What this number does now, and what it does not.** It decides one
+     shape: Illustrated's own chain, `["sketch", "illustrated"]`, which the
+     client posts when the Sketch is missing or stale. At 600 s it admitted
+     `illustrated` if total elapsed claim time was at most 140 s, on a remnant the brief
+     alone can outlive, and a step that returns after our deadline is
+     discarded and repeated (`transitionAfter`), spending a `REQUEUE_BUDGET`
+     window. At 700 s all measured Sketch runs hand back (production's fastest
+     is 49.6 s, leaving at most 690.4 s) and `illustrated` **waits for a fresh claim**,
+     where it is the first step and runs ungated with the whole 740 s. A
+     Sketch that is current and skipped leaves ~740 s, so that path still
+     admits it in the same claim. An unmeasured Sketch finishing within 40 s
+     total claim time can still admit it. Chains taking over 140 s already handed back; the added cost
+     is one request for chains taking over 40 s and at most 140 s. Release
+     spends no requeue window. The browser immediately asks again, but a busy
+     queue can make it wait (src/web/jobEngine.ts).
+     A budget at or over 740 s would be satisfied by no claim; 700 s is this
+     table's usual "whole window less a preceding step" (`extract`,
+     `structure`, `labels`).
+
+     **The design question this leaves open, not answered here**: even as a
+     claim's first step the brief's estimated full-token time exceeds the claim,
+     and production's worst step runtime nearly uses the whole nominal
+     window. Extending the claim beyond the host's current 800 s window needs `vercel.json`'s `maxDuration` raised first, and
+     tests/jobs-lease-budget.test.ts refuses the pair being broken. The levers
+     inside the step are a cap on plates or on the brief per request, or
+     splitting the brief and the plates into two steps.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  illustrated: 700_000,
   /* **A GUESS, and the honest label matters here more than usual**, because
      nothing this step does is bounded by a parameter.
      ⟨Stage 0/0b, 2026-09-05, docs/plans/260905f-debate-mode-stage-0-spike-results.md⟩
@@ -923,10 +1000,29 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      the `ai_calls` ledger row as the alarm afterwards — and only the first of
      those is a ceiling on spend at all.
 
-     Re-measure at the end of the stage rather than leaving this a guess: the
-     plan says so, and the first runs against the shelf are what will say
-     whether the article-carrying pass is 20 s or 60 s. */
-  debate: 120_000,
+     **Raised 120 s → 360 s on 2026-10-07, and still not a bound.** The step
+     makes up to three non-streamed calls in sequence — the direct pass, the claims
+     pass and the synthesis (src/debate.ts § `generateDebate`) — and none has a
+     clock: `openRouterJson` (src/ai-call.ts) fetches without a timeout, and a
+     transient failure re-asks the whole call, up to `TRANSPORT_ATTEMPTS`.
+     What the code does state is each call's `max_tokens`: `ANSWER_TOKENS`
+     twice and `SYNTHESIS_ANSWER_TOKENS` once, 8,000 each, which `deadlineFor`
+     (src/token-budget.ts) turns into 106 s apiece, **318 s**. The searches run
+     inside the provider and add time no token count describes, so there is
+     no ceiling to derive; 360 s is a single-attempt token-time estimate with an unmeasured
+     42 s allowance for searches and backoffs. Non-streaming does not remove
+     token generation time, but the Sonnet rate does not bound searches, Opus
+     or whole-call retries (up to three attempts per call). The synthesis is
+     skipped when too few rows survive. The reservation is 380 s under the claim's 740 s.
+
+     Measured the same day, production `revision_step_runs`, rows this step
+     ran: 18 runs, median 77.5 s, p90 114.5 s, max **161.6 s** (local max
+     146.7 s, 5 runs), so the old 120 s row was below the observed maximum. Nothing in the
+     app puts a step before `debate`, which
+     is always queued alone; a hand-written `POST /api/jobs` can. Nothing above about
+     spend changes. tests/jobs-lease-budget.test.ts holds the token floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  debate: 360_000,
   /* One Messages call over the whole article, notes and bibliography
      included. **Measured 2026-09-11** on six local runs (ai_calls.duration_ms):
      17 s for a blog post, 63–154 s for three long ones, the slowest writing

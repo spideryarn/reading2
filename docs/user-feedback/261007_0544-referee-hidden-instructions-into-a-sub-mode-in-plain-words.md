@@ -38,5 +38,5 @@ The pre-filter itself was not built. Any change to what the scanner flags is a c
 defence, and the text a small model would judge is written by whoever hid it, so a hidden "this is
 harmless" could talk it into hiding the attack. The plan recommends a deterministic rule instead:
 label a lone zero-width character inside MathML as ordinary typography. That is
-[Q-scan-mathml] in the plan's § Questions for Greg, queue item `qi-xwj659j8`, and a line in
-[awaiting-approval.md](awaiting-approval.md).
+[Q-scan-mathml] in the plan's § Questions for Greg, queue item `qi-xwj659j8`, and the question
+[q-qre346](questions/q-qre346.md) in the Feedback dialog.

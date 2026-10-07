@@ -1,6 +1,6 @@
 {
   "id": "88800ff3-43db-421e-9525-c9e19a431b15",
-  "prevId": "1fc6ba73-7fe3-461f-9ca1-3878fc31a486",
+  "prevId": "3a885f27-30a6-471b-894c-75b67b370309",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4117,6 +4117,23 @@
           "primaryKey": false,
           "notNull": false
         },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "byDefault",
+            "name": "feedback_number_seq",
+            "schema": "spideryarn",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4126,6 +4143,21 @@
         }
       },
       "indexes": {
+        "feedback_number_unique": {
+          "name": "feedback_number_unique",
+          "columns": [
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "feedback_owner_created_idx": {
           "name": "feedback_owner_created_idx",
           "columns": [
@@ -4204,6 +4236,81 @@
         "feedback_mirror_attempted_first": {
           "name": "feedback_mirror_attempted_first",
           "value": "\"spideryarn\".\"feedback\".\"mirrored_at\" is null or \"spideryarn\".\"feedback\".\"mirror_attempted_at\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.feedback_question_answers": {
+      "name": "feedback_question_answers",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "feedback_question_answers_owner_id_id_pk": {
+          "name": "feedback_question_answers_owner_id_id_pk",
+          "columns": [
+            "owner_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "feedback_question_answers_id_format": {
+          "name": "feedback_question_answers_id_format",
+          "value": "\"spideryarn\".\"feedback_question_answers\".\"id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
+        },
+        "feedback_question_answers_question_id_format": {
+          "name": "feedback_question_answers_question_id_format",
+          "value": "\"spideryarn\".\"feedback_question_answers\".\"question_id\" ~ '^q-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
+        },
+        "feedback_question_answers_environment": {
+          "name": "feedback_question_answers_environment",
+          "value": "\"spideryarn\".\"feedback_question_answers\".\"environment\" in ('production', 'preview', 'development', 'test')"
+        },
+        "feedback_question_answers_body_shape": {
+          "name": "feedback_question_answers_body_shape",
+          "value": "length(btrim(\"spideryarn\".\"feedback_question_answers\".\"body\")) > 0 and length(\"spideryarn\".\"feedback_question_answers\".\"body\") <= 12000"
         }
       },
       "isRLSEnabled": false

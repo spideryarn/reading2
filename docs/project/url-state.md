@@ -638,7 +638,12 @@ flew over on the way. `POSITION_SETTLE_MS` is 300ms.
 
 `?at=` always holds a **block id**. Ordinary scrolling writes the id of the **first block of the
 section the reader is in** — depth `leafDepth - 1`, what the reader sees called "Sections"
-(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). A deliberate jump may name a finer block, and the spy preserves it while the reader
+(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). **When that first block is hidden,
+the section's first visible block is written instead**: a section that starts in the front matter
+folded away under the title is written as the first block after it, and an id a fold has since
+hidden is replaced by the folded heading (`visibleFrom` in [`fold.ts`](../../src/web/fold.ts)), so
+that restoring `?at=` never opens something the reader did not open. A deliberate jump may name a
+finer block, and the spy preserves it while the reader
 stays inside that block's section; that is the paragraph below on what the spy writes. Three things
 follow from the unit the spy works in:
 

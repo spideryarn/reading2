@@ -1938,6 +1938,28 @@ when `structure` leaves 185–400 s (excluding 400 s). Below 185 s it already de
 first step and the first step runs ungated.
 [261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
 
+**Five mode budgets followed the same day, sized by tokens rather than clocks.** `ideas`,
+`tweets`, `sketch`, the `illustrated` brief and `debate`'s up to three calls have no wall clock of their
+own: `streamMessage` sets none, the SDK's timeout stops at the response headers, and
+`openRouterJson` fetches without one. What the code does state is each call's `max_tokens`, and
+`deadlineFor` estimates full-token time at a measured Sonnet rate, so these rows reserve that
+estimate with slack. This does not bound Opus, provider waits, slower streams or failed attempts: `ideas`
+120 s → **600 s** (587 s), `tweets` 90 s → **600 s** (561 s), `sketch` 240 s → **700 s** (685 s),
+`debate` 120 s → **360 s** (318 s for one attempt per call, plus searches no token count describes).
+Production's worst runs were over every old row: 357.8 s, 114.7 s, 335.6 s and 161.6 s. Of those four, only
+`ideas` decides anything in today's app, because Skim's job is `quotes → ideas → skim`; the
+others are always queued alone or first, so their rows matter only for a hand-written job.
+**`illustrated` cannot be sized this way**: its brief's estimated full-token time is 948 s, longer than the
+claim, then up to four unclocked image calls, and production's worst run was 739.3 s. Its row went
+600 s → **700 s** as a reservation: after every Sketch duration in the measured sample it hands
+back and starts as a fresh claim's first step, avoiding a late start that risks discard.
+Admission requires total claim time of at most 40 s instead of 140 s; faster, unmeasured Sketch
+runs can still admit it. Only chains in that interval gain a hand-back. Release spends no retry
+window; the extra request can wait for queue capacity. That it can outlive even a whole claim is an open design question (a cap on plates or
+on the brief per request, or two steps). `tests/jobs-lease-budget.test.ts` derives the token floors from
+the steps' exported sizing and pins Illustrated's known timing gap explicitly.
+[261007h](../plans/261007h-five-more-step-budgets-to-what-they-measure.md).
+
 **Stop in the same position is a different signal with a different rule**: a last step that
 returns after the reader's Stop is kept and published —
 [§ A Stop during the last step keeps the article](#a-stop-during-the-last-step-keeps-the-article).
