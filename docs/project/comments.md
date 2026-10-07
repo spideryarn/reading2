@@ -5,9 +5,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 Select a sentence and it is **yours**: bookmarked, with a note on it if you want one, and an
 answer from the model only if you ask for one. Saving costs nothing.
 
-> **Reopened, and turned around, 2026-08-28.** For three days this file described a feature that was
-> closed: selecting a sentence bought an explanation until 2026-08-26, then opened a chat, and there
-> was no way to make a new comment at all. Greg:
+> **Reopened, and turned around, 2026-08-28.** Greg:
 >
 > *"someone might want to simply add bookmarks or comments to the text, without wanting an AI
 > response … you can select some text, and that bookmarks it. You can optionally add a comment. And
@@ -18,13 +16,15 @@ answer from the model only if you ask for one. Saving costs nothing.
 > [260828a-comments-and-bookmarks.md](../plans/260828a-comments-and-bookmarks.md) is the plan, and its GPT Sol
 > review is beside it.
 >
-> **The tick-box became a button on 2026-10-03**, and the box stopped losing drafts. **Since
-> 2026-10-04 a selection is highlighted the moment it is made**, and the box that opens is the
+> **Since 2026-10-04 a selection is highlighted the moment it is made**, and the box that opens is the
 > comment's own — [§ The box a selection opens](#the-selection-box).
 >
 > **Read the rest of this file with that in mind.** Everything it says about *anchoring*,
 > *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
 > has changed is what a selection creates, and what a comment is allowed to hold.
+>
+> How the feature got here, and what each part of it replaced, is in
+> [261007g-comments-history.md](../plans/261007g-comments-history.md).
 
 ## In this doc
 
@@ -188,8 +188,7 @@ and three buttons:
   plain Enter is a newline.
 - **Ask AI** stores it and then opens a chat on those words and sends what was written as its
   first question ([§ Asking the model](#asking-the-model-and-the-link-back)); with nothing written
-  it asks *Explain this passage.* Until 2026-10-06 it pre-filled the composer and waited for Send
-  ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md), D6).
+  it asks *Explain this passage.*
 - **Discard** throws the draft away.
 
 Two questions decide what an exit stores (`hasSomething` and `hasIntent` in `AnnotateDialog.tsx`):
@@ -303,8 +302,7 @@ bookmark. Greg, SPIDERYARN-READING2-9C:
 >
 > — Greg, 2026-10-01
 
-It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
-invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
+Now the dialog is the invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
 the AI about this…"*, and the gutter's chat button says *Chat with the AI*. Closing the dialog
 leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
 strength, the one filled glyph in the column.
@@ -350,7 +348,7 @@ Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/route
   nothing is placed on it. The check and the write are two statements, so `comments_criterion_fk`
   is what notices; `rethrowPlacementError` in
   [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) catches that key by name on `create`
-  and `patchMark` and answers as the route would have. It was a 500 until 2026-10-07. The other
+  and `patchMark` and answers as the route would have. The other
   direction — deleting a criterion comments are placed on — is
   [referee-mode.md § a criterion with comments on it](referee-mode.md#a-criterion-with-comments-on-it).
 - **An out-of-range valence is a 400, never a clamp.** This is the one rule the feature exists for.
@@ -378,9 +376,7 @@ create path uses, so there is one definition of what a placement is and not a se
 
 ### The five operations, and why there are five
 
-There used to be one writer, `create`, which meant both *make this* and *redo this*. That was safe
-only while making one cost a model call, so a colliding id could only ever be a retry. **Once a
-comment is free, a collision is an ordinary event** — and a reset would silently overwrite the
+**Once a comment is free, a collision is an ordinary event** — and a reset would silently overwrite the
 anchor and blank the answer of a comment made in another tab. GPT Sol found this reviewing the
 plan; it is the reason the store contract now names who may write what.
 
@@ -418,10 +414,7 @@ its id across a retry — that is what makes it the same question — so identit
 model call is reporting. Without the token, an attempt that stalled, had its row swept by another
 machine and then woke up would overwrite the retry the reader was watching arrive; with it, that
 write matches no row and `patch` answers `undefined`, which means *you were superseded* rather than
-*something failed*. `pgSearchStore.finish` made the same decision in August, and the two now read
-alike. The filesystem store had no token and needed none — one process, so `begun` in
-`src/comments.ts` could say whether an attempt was live without a clock. That half was deleted on
-2026-09-05; Postgres, and the token, are now the only way.
+*something failed*. `pgSearchStore.finish` made the same decision in August, and the two now read alike.
 
 The legacy answer patch is `AnswerPatch`, six fields wide, not `Partial<Comment>`. A generic patch
 was what let the one remaining writer reach the anchor and the reader's words.
@@ -545,8 +538,7 @@ three reviewing the built code, 2026-09-05.
 **Every copy button in the client goes through one hook since 2026-10-04**:
 [`src/web/useCopy.ts`](../../src/web/useCopy.ts) owns the guard for a browser with no clipboard, the
 three-state outcome, the press token and the timer, and each caller keeps its own glyphs, words and
-announcement. Until then there were eight hand-written copies and they had drifted: the token had
-reached two of them. GPT Sol recommended the hook on 2026-09-05; the plan is
+announcement. GPT Sol recommended the hook on 2026-09-05; the plan is
 [261004e](../plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md),
 and [`tests/use-copy.test.tsx`](../../tests/use-copy.test.tsx) fails if a ninth file reaches for the
 clipboard itself.
@@ -735,8 +727,7 @@ Stepping was always fine, because stepping has the comment in hand. **Arriving w
 comes in from outside — `/read/<slug>?note=<id>` — has only an id, and until 2026-08-26 nothing
 connected it to the article: the dialog opened, and the paragraph it was explaining could be anywhere.
 That is the ordinary shape of a link you *send someone*, because the `?at=` that would have saved it
-is only in the URL if the sender had scrolled. It was found while building the metadata page and left
-open there ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)); it is fixed now.
+is only in the URL if the sender had scrolled.
 
 The rule when a URL carries both: **the note wins.** `?at=` is written by scrolling and says where the
 sender's eye happened to be; `?note=` is only in a URL because somebody opened a dialog. The argument
@@ -768,18 +759,8 @@ survives, **with comments stripped first**. The effect's own explanation names `
 so a guard on the raw file would have been satisfied by prose while the call was gone — the same
 silent pass a `sanitizeStoredBlocks` guard hit on 2026-08-26. Match a call, never a mention.
 
-**Checked in a browser, 2026-08-26**, on `constitution` (22,518 words) at 1300px. A fresh load of
-`?note=` with no `?at=` scrolled from the top to the commented passage and opened the dialog on it,
-then grew `&at=` on its own. With an `?at=` that already had the passage on screen, `scrollY` was
-5073.5 on load and 5073.5 a second later — held still, which is the case that costs no movement. With
-an `?at=` pointing at the article's first block, the note won and `?at=` was overwritten. A `?note=`
-naming nothing rendered normally with no dialog and no console error. One Back went to the library
-rather than through a trail of scroll positions, which is `?at=` replacing rather than pushing.
-
-**One thing that pass could *not* establish**, recorded because a silent gap is worse than a stated
-one: whether the glide reads as travel or as a jolt. Every round trip through the automation tool
-took longer than the 200ms animation, so only "not yet arrived" and "arrived" were ever observable.
-See [browser-testing.md § An animation shorter than your round trip](browser-testing.md#short-animation).
+The browser check of 2026-08-26, and the one thing it could not establish, are in
+[261007g-comments-history.md § A pasted `?note=`](../plans/261007g-comments-history.md#a-pasted-note-brings-its-own-passage-into-view).
 
 ### The web-search badge <a id="search-badge"></a>
 
@@ -882,9 +863,6 @@ behind a fifteen-second stream. So two writers share one row and neither waits f
   at any point while the PATCH was out, only the reader's half of that answer is taken
   (`landPatch`). With no stream in the way it replaces the whole row, as it always did.
 
-Until 2026-10-07 none of the three held: a note edited mid-stream went back to the old one on
-screen at the next delta and stayed there after `done`, and a PATCH answered after `done` brought
-the spinner back for good. Postgres was right throughout, which is why nothing reported it.
 [Plan 261007b](../plans/261007b-seventh-sweep-chat-and-comment-invariants.md), C;
 `tests/comment-answer-stream-keeps-reader-edits.test.tsx` and
 `tests/comment-answer-stream-lifetime.test.ts`.
@@ -944,8 +922,7 @@ the value, since the bug all of this came from was a panel that said "thinking�
 Both from Greg, 2026-08-26, on the same weak answer.
 
 **Dig deeper** (*"Search the web"* until 2026-10-01) — *"maybe add the 'Web search' button to do a
-deeper web search"*. It used to re-ask with an instruction to go and look properly and leave the
-searching to the model. Since 2026-10-01 it is the glossary's and Citations' action too, under one
+deeper web search"*. Since 2026-10-01 it is the glossary's and Citations' action too, under one
 name, and does what that name promises: a web search forced by code, the reader's other articles
 searched beside it, and the answer written by the high-power model whatever the article's switch
 says. What a press does, why, and Greg's words are in
@@ -963,12 +940,7 @@ presses can each buy a search and only one claims the row — accepted, at about
 row state (Sol F12, overruled in the
 [plan](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md)).
 
-It is offered on a comment that has an answer — `done` or `error` — and on **no other**. It used to
-be offered on anything that was not `pending`, which included `status: "none"`: every bookmark and
-every note written without pressing Ask AI. Those are exactly what `beginAnswer` refuses
-with a 409, *"was never a question, so there is nothing to answer"* — so a reader who wrote
-*"what is the evidence for this?"* as a plain comment was offered a button labelled **Search the
-web** and told, on pressing it, that they had never asked anything. Fixed 2026-09-05 while
+It is offered on a comment that has an answer — `done` or `error` — and on **no other**. Fixed 2026-09-05 while
 diagnosing report 1X; `tests/comment-dialog-search-the-web.test.tsx` renders all four statuses, so
 narrowing it too far goes red as well.
 
@@ -1019,7 +991,7 @@ in the list and still openable. Losing the anchor is the safe failure, exactly a
 the prose gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)), counted from `comments` by
 **`blockId` alone** — never from the resolved marks. That is the point of it: the block id is the
 *durable* half of the anchor, so a comment whose quote has been re-extracted away can still have
-somewhere to show, for as long as its block keeps that id.
+somewhere to show, for as long as its block keeps that id. Click it and the dialog opens on the block's first comment in reading order.
 
 **Durable is not immutable, and the difference bit once.** Stage 3 carries an id over by matching a
 new block to an old one **by its text** ([block-ids.md § Surviving stage 2](block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters)),
@@ -1035,7 +1007,7 @@ the comment survives* has the facts right and the causation wrong — that one r
 tooltip on 2026-09-07 before a review caught it. And *what keeps the comment is not the id at all*,
 which was this paragraph's first repair on 2026-09-08, over-corrects in the other direction and
 denies the id the role it actually has. A false mechanism is easy to replace with another one
-([260907b § Stage 3](../plans/260907b-rich-tooltips-on-the-dock-modes.md)). Click it and the dialog opens on the block's first comment in reading order.
+([260907b § Stage 3](../plans/260907b-rich-tooltips-on-the-dock-modes.md)).
 
 Two things follow, and both are easy to get wrong:
 
@@ -1135,7 +1107,7 @@ used to claim the opposite:
 - **Tab is deliberately not trapped**, because the bar behind it is meant to stay reachable. So the
   drawer keeps a labelled `role="dialog"` and carries **no `aria-modal`**: that attribute tells
   assistive technology the rest of the page does not exist, which was a false statement about a bar
-  that is visible, operable and Tab-reachable. It said `true` until 2026-09-06.
+  that is visible, operable and Tab-reachable.
 
 [`tests/the-dock-drawer-is-not-a-modal.test.tsx`](../../tests/the-dock-drawer-is-not-a-modal.test.tsx)
 holds all of it; the reproduction is in
@@ -1307,9 +1279,7 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 
 ## A shared link carries them, since 2026-09-04
 
-**This is the one part of the feature that changed what a promise meant.** Until then the sharing
-card said comments and notes never left, and [privacy.md](privacy.md) said the same in the reader's
-own words. Greg decided they should go out:
+**This is the one part of the feature that changed what a promise meant.** Greg decided they should go out:
 [260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3.
 
 **What a visitor gets:** the passage, the reader's own words, the model's answer, and its citations.
@@ -1333,8 +1303,6 @@ it is deliberately not a `readOnly` boolean beside the callbacks.
   peer review with its context stripped off, which is worse. The row goes.
 - **`status in ('none','done')`.** A `pending` or `error` row published without its error, its retry
   and its polling is an item a visitor cannot act on or understand.
-
-Both were found by GPT Sol reviewing the plan, not by anybody writing the feature.
 
 ### The read is its own query, and that is the interesting constraint
 
@@ -1361,12 +1329,7 @@ rather than blanked, and if none survives the key comes off entirely.
 
 ## Deliberate limits
 
-- **A selection under 2 characters is ignored** — and 2 is the whole floor, deliberately.
-  It was 8 until 2026-09-05, on the ground that *"every one of these costs a model call"*; that
-  reason died on 2026-08-28, when saving became free and the model became a tick-box, and the
-  constant outlived it. Meanwhile it refused `AI`, `GDP`, `Ryle` and `qualia` — the short selection
-  [§ The two questions a selection raises](#the-two-questions) calls *almost always the second
-  question*. What is left at 2 is the one-character skid, kept because a one-character quote is the
+- **A selection under 2 characters is ignored** — and 2 is the whole floor, deliberately. What is left at 2 is the one-character skid, kept because a one-character quote is the
   case `resolveMark` is likeliest to re-anchor over the wrong words
   ([§ Anchoring](#anchoring)). `MIN_SELECTION_CHARS` in
   [`selection.ts`](../../src/web/selection.ts).
@@ -1422,8 +1385,7 @@ rather than blanked, and if none survives the key comes off entirely.
   `fetch` has none of its own, so a request that never comes back would hold the comment `pending`
   for ever. `EXPLAIN_TIMEOUT_MS` in [`src/explain.ts`](../../src/explain.ts); the timeout is
   reported as a sentence, not `AbortError`.
-- **Deleting while the answer is still in the air wins.** The POST returns the whole comment, so
-  storing it used to put back a row the reader had already deleted, mark and all. `useComments`
+- **Deleting while the answer is still in the air wins.** `useComments`
   keeps a tombstone and re-sends the DELETE once the write it was racing has landed.
 - **Selecting inside an existing mark makes a new highlight**, rather than reopening the comment that
   is already there. Marking a narrower part of something you marked before is ordinary; the mark
