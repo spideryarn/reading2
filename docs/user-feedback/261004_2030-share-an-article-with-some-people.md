@@ -1,6 +1,7 @@
 ---
 reports: spya-hwdefp, spya-v322fd
 ending: shipped
+comment: You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-6jwj562v and qi-mgxnj233).
 ---
 # Share an article with some people
 

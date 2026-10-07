@@ -1,5 +1,5 @@
 /**
- * **Referee mode's four sub-modes, named once, in a module that imports
+ * **Referee mode's five sub-modes, named once, in a module that imports
  * nothing.**
  *
  * Three of them help somebody who has been asked to peer-review a piece —
@@ -50,9 +50,19 @@ export const REFEREE_VIEWS = [
      referee's, and the plan's appendix had cut it for exactly that reason
      (§ Appendix — ideas considered and not picked: it serves a different user,
      and a plausible name with a real URL is the thing a model hallucinates
-     best). Greg overruled the cut on 2026-08-31. It stays last in the list
-     because the first three are one person's job and this is somebody else's. */
+     best). Greg overruled the cut on 2026-08-31. It follows the first three,
+     which are one person's job, because this is somebody else's. */
   "candidates",
+  /* **The check of the document's own source for text hidden from the
+     reader** — src/web/SourceScanNotice.tsx. No model, and nothing to start:
+     the scan has already run by the time the band opens. From 2026-10-03 it
+     sat in the band's Notices box, which opened itself on any finding and so
+     put it above Criteria on nearly every arXiv paper. Greg, 2026-10-07
+     (`spya-y6590g`): *"Perhaps squirrel this info away as a sub-mode? It
+     doesn't seem important enough to be right at the top of Criteria."* Last,
+     because it is the one a referee reaches for least.
+     docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md. */
+  "hidden",
 ] as const;
 export type RefereeView = (typeof REFEREE_VIEWS)[number];
 
@@ -66,7 +76,7 @@ export type RefereeView = (typeof REFEREE_VIEWS)[number];
 export const DEFAULT_REFEREE_VIEW: RefereeView = "criteria";
 
 /**
- * **Is this string one of the four?**
+ * **Is this string one of the five?**
  *
  * An unrecognised value is not an error: `refereeParam` parses it to the
  * default, so a link from a future version — or from a past one naming a

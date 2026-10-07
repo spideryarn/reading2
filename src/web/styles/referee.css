@@ -1,7 +1,6 @@
-/* referee.css — Referee mode's band and its four sub-modes: Criteria, Claims,
-   Mirror and Candidates (CriteriaPanel.tsx, ClaimsPanel.tsx, MirrorPanel.tsx,
-   CandidatesPanel.tsx), plus PlaceOnCriterion's colours where they are the
-   panel's rather than the dialog's.
+/* referee.css — Referee mode's band and its five sub-modes: Criteria, Claims,
+   Mirror, Candidates and Hidden text, plus PlaceOnCriterion's colours where
+   they are the panel's rather than the dialog's.
 
    The shell is mode-band.css and the placeholder lines are glossary.css's
    `.gloss-quiet`, so what is here is only what this mode has and no other one
@@ -13,8 +12,8 @@
    the Notices box and the panel. See modes/referee/RefereeMode.tsx
    and docs/project/referee-mode.md. */
 
-/* **The mode's own preamble — the notice and the scan — capped at 40% of the
-   band and scrolling inside it.**
+/* **The mode's own preamble — the confidentiality notice — capped at 40% of
+   the band and scrolling inside it.**
 
    Without this the mode was unusable at an ordinary window size, and had been
    since the scan was wired. `.mode-band` is `position: fixed` with a computed
@@ -47,19 +46,10 @@
    three, since after one reading it is 214px of chrome — but a layout bug is
    not the place to reopen a product decision, so the cap shipped alone.
 
-   **Both boxes are collapsible now**, since 2026-09-02, and Greg asked for it
-   as a product change rather than as a layout fix: the notice opens on a press
-   and the scan opens by itself only when it found something. So the ordinary
-   first screen of this box is two lines rather than 600px, and everything above
-   still holds — the cap and the fade are what keep it honest on the visit where
-   a referee has opened both. The measurements above are of the *open* state and
-   are still the ones to design against. src/web/App.tsx § RefereeBand and
-   src/web/SourceScanNotice.tsx carry why a collapse here is not a dismissal.
-
-   `.ref-scan-list` keeps its own 14rem cap inside this one. Two nested
-   scrollers is not lovely, but the inner cap is what stops a hundred findings
-   from making this box's scrollbar meaningless, and it is the rule that was
-   already there. */
+   Since 2026-10-07 the scan is the Hidden text panel and `.ref-panel` scrolls
+   it. `.ref-brief` holds only the confidentiality notice, which opens on a
+   press and remembers nothing; the cap still protects a short band when that
+   notice is open. */
 .ref-brief {
   /* Shrinkable, so that on a very short band this box gives way rather than the
      panel; `.ref-panel`'s flex basis is 0, so all of the shrinking lands here. */
@@ -67,8 +57,7 @@
   min-height: 0;
   max-height: 40%;
   overflow-y: auto;
-  /* **Overflow has to be discoverable**, and here more than anywhere: what is
-     below the fold in this box is the injection scan's findings. Measured in
+  /* **Overflow has to be discoverable.** Measured in
      Chrome on 2026-09-01, this scroller's `clientWidth` equals its
      `offsetWidth` — the scrollbar is an overlay and takes no width, so a box
      with 616px of content in 254px looks exactly like one that ends where it
@@ -108,9 +97,9 @@
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
-/* **The source scan.** src/web/SourceScanNotice.tsx, first inside Notices,
-   before the confidentiality paragraphs, because it belongs to the mode
-   rather than to a panel: a hidden instruction is a fact about the document.
+/* **The source scan.** src/web/SourceScanNotice.tsx, the Hidden text
+   sub-mode's whole panel since 2026-10-07 (plan 261007h); it was inside
+   Notices before that.
 
    Styled as a notice, not as an error, for the same reason `.ref-notice` above
    is: most articles have nothing in them and the ordinary state of this box is
@@ -118,10 +107,11 @@
    `--ink` rather than a colour — *not checked at all* is neither a finding nor a
    failure, and a red box would make a referee read it as one and dismiss it.
 
-   The list is capped and scrolls. `MAX_FINDINGS` is 100, and a badly built HTML
-   export really can produce that many; a band whose first screen is a wall of
-   navigation chrome is a band a referee stops reading, which is the failure
-   src/injection-scan.ts is most afraid of. */
+   The list is not capped on its own any more: it is the sub-mode's panel and
+   `.ref-panel` is its scroller, so a second scroller inside it would only make
+   a hundred findings harder to read. Identical findings are one row
+   (`grouped` in SourceScanNotice.tsx), which is what keeps a wall of them off
+   the first screen. */
 .ref-scan {
   margin: 0.5rem 0.7rem 0;
   padding: 0.55rem 0.6rem;
@@ -178,8 +168,6 @@
 .ref-scan-list {
   margin: 0.45rem 0 0;
   padding: 0;
-  max-height: 14rem;
-  overflow-y: auto;
   list-style: none;
 }
 /* One block per finding, every field on its own line, because a referee reading
@@ -200,14 +188,22 @@
 .ref-scan-item.explained { opacity: 0.7; }
 .ref-scan-kind { color: var(--ink); font-weight: 600; }
 .ref-scan-tag { color: var(--ink-faint); font-style: italic; }
-.ref-scan-where, .ref-scan-detail {
+/* How many identical findings this row stands for. */
+.ref-scan-count { color: var(--ink-soft); }
+/* What the trick is (`KIND_MEANS`): the sentence that turns the row from a
+   code-point count into something a referee can weigh. Plan 261007h. */
+.ref-scan-means { color: var(--ink-soft); }
+/* The evidence, for whoever goes to look: last, smaller, and the path and
+   code points in mono so they can be searched for in the source. */
+.ref-scan-source {
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.81rem;
+  font-size: 0.79rem;
   overflow-wrap: anywhere;
 }
+.ref-scan-where, .ref-scan-detail { font-family: var(--font-mono); }
 /* The words themselves, which is the thing the referee actually needs to see. */
 .ref-scan-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+.ref-scan-empty { color: var(--ink-faint); font-style: italic; }
 /* Why this one may be innocent — required on the type for a visible
    instruction, and drawn so it cannot be read with the certainty hidden text
    earns. */
@@ -234,14 +230,14 @@
   flex: none;
 }
 .mode-band.has-about > .ref-top { padding-right: calc(0.7rem + var(--band-about-room)); }
-/* `contents`, so the four chips and the Notices button wrap as one run. As a
+/* `contents`, so the five chips and the Notices button wrap as one run. As a
    flex box of its own the group took a whole line once it wrapped, which put
    Notices alone on a third line of the ~300px band an iPad gives this mode
    (116px of top row, measured 2026-10-03). The radiogroup role is on the
    element whatever its box is. */
 .ref-views { display: contents; }
 /* **The notices, as one button.** Quieter than a chip — no fill, no weight —
-   because it is not one of the four and must not read as a fifth. The icon is
+   because it is not a sub-mode and must not read as a sixth chip. The icon is
    the app's ordinary ink, not red: nothing has gone wrong (§ `.ref-notice`). */
 .ref-notices-btn {
   flex: none;
@@ -270,6 +266,9 @@
   color: var(--ink-faint);
   font: inherit;
   font-size: 0.88rem;
+  /* Hidden text is the first two-word chip. Let the row wrap at phone width;
+     never make this one chip two heights tall. */
+  white-space: nowrap;
   cursor: pointer;
 }
 .ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
@@ -283,6 +282,22 @@
   font-weight: 600;
 }
 .ref-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **The Hidden text chip's mark** (`sourceScanMark`): a filled dot when the
+   source scan found something with no everyday explanation, a ring when every
+   finding wears one. Ink rather than red, for `.ref-notice`'s reason: a red
+   mark is read as chrome and dismissed, and most of what sets it is a
+   typesetter's habit rather than an attack. */
+.ref-view-dot {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.3rem;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  vertical-align: 0.15em;
+}
+.ref-view-dot.found { background: var(--ink); }
 
 /* The scroller. `.mode-band` is a fixed flex column from the controls bar to
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`

@@ -1577,8 +1577,9 @@ describe("off the reading view", () => {
 /**
  * **Help, as a row in the bar** — docs/plans/261002b-help-page.md § After GPT
  * Sol's plan review, R8: the footer, the command bar, and the Dock link were
- * the three ways in. Since 2026-10-04 the row replaces the Dock link for an
- * owner; the link stays for a visitor, who has no command bar (plan 261004j).
+ * the three ways in. An owner has both the row and the Dock link (the link
+ * was a visitor's only from 2026-10-04 to 2026-10-07 — plans 261004j, 261007e);
+ * a visitor has no command bar, so only the link.
  *
  * `help` was already one of Feedback's aliases, and it stays one: somebody who
  * types it may well mean *something is wrong*. But the page whose name it is
@@ -1606,20 +1607,20 @@ describe("the help command", () => {
     }
   });
 
-  /* The same section the Dock's Help link opens at, because the two are built
+  /* The same page of Help the Dock's Help link opens, because the two are built
      from one function — a reader who learned one door has learned the other. */
-  it("goes to the section for the mode the band is in, and in Plain to the reading view", () => {
+  it("goes to the page for the mode the band is in, and in Plain to the reading view's", () => {
     reading({ mode: "glossary" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#mode-glossary");
+    expect(location.pathname + location.hash).toBe("/help/mode-glossary");
 
     history.replaceState(null, "", "/read/a-piece");
     reading({ mode: "plain" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#the-reading-view");
+    expect(location.pathname + location.hash).toBe("/help/the-reading-view");
   });
 });

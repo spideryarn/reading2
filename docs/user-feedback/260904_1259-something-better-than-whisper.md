@@ -1,6 +1,7 @@
 ---
 reports: spya-kbzzk8
 ending: declined
+comment: No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.
 ---
 # Is there something better than Whisper?
 

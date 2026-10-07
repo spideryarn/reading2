@@ -279,6 +279,7 @@ describe("declaredTables", () => {
       "citation_investigations",
       "comments",
       "feedback",
+      "feedback_question_answers",
       "feedback_shipped_emails",
       "glossary_hidden_entries",
       "glossary_lookups",
@@ -389,8 +390,9 @@ describe("against a real database", () => {
          since `citation_index_lookups` and `citation_index_citers`, 2026-10-04
          (plan 261004h); forty-eight since `quiz_attempts`, 2026-10-05 (plan
          261005b); forty-nine since `article_share_link_events` the same day
-         (plan 261005e). */
-      expect(report.declaredTables).toBe(49);
+         (plan 261005e); fifty since `feedback_question_answers`, 2026-10-07
+         (plan 261007d). */
+      expect(report.declaredTables).toBe(50);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

@@ -1,159 +1,26 @@
 # Awaiting Greg
 
-Reports that were researched and written up but **not built**, because the call is Greg's — the
-third ending in
+Until 2026-10-07 this file held the list of reports that were researched and written up but **not
+built**, because the call is Greg's — the third ending in
 [feedback-reports.md § Three ways a report ends](../project/feedback-reports.md#three-ways-a-report-ends).
+**That list has moved.** Each thing waiting on Greg is now one file under
+`docs/user-feedback/questions/`, which the Feedback dialog shows him at the top of *Earlier → Needs
+a decision*, with a box to reply in:
+[feedback-reports.md § Asking Greg a question, and acting on his answer](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer).
 
-Their Sentry issues are `ignored`, so they are out of the unresolved queue and **this file is the
-only place they are visible**. The loop reads it first, every run, and says what is on it.
-
-One line each: the date the report arrived, its Sentry short id, one sentence of what is being
-proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
-in this directory records which, and the line comes off.
+What this file still holds: reports that tried something nefarious and that Greg has not seen yet,
+which the feedback sweep reads and counts every run; and the history of what he has answered, and
+what followed.
 
 ## Waiting on Greg now
 
-- 2026-10-06 · SPIDERYARN-READING2-EE (spya-bkkjzy; the report itself shipped: a local MCP server
-  your Mac's Claude apps can run, signed in as you, with a native dialog before anything is sent
-  or published, see [mcp.md](../project/mcp.md); this is its deferred half) · three questions. Q1:
-  should it also work from Cowork on the web or phone? Stay local (recommended for now), a fixed
-  key for you alone (half a day), or OAuth through Supabase's beta OAuth server, the "Allow?" page
-  you described (a day or two); either remote option edits the sign-in gate. Q2: may the agent
-  hold a private link's key? Q3: may it list every reader's email address (privacy page gets a
-  line)? First, before any of it: sign in once with `login` and say whether it worked, since a
-  Google-only account may need *Forgot password* to get a password · qi-n9ntngfq, qi-2a8nh33e ·
-  [261007j § Questions for Greg](../plans/261007j-mcp-server-for-spideryarn-admins-first.md#questions-for-greg) ·
-  [note](261006_2227-mcp-server-for-spideryarn.md)
+**Not listed here any more.** One file per question, in `docs/user-feedback/questions/`:
 
-- 2026-10-06 · SPIDERYARN-READING2-E4 (spya-rvbmss; the report itself shipped: two readers'
-  copies of one article are now tested end to end, this is its deferred half) · two small design
-  questions. Q1: when two readers both share one article, the public shelf shows two identical
-  cards; leave it (recommended, it has not happened yet), show one, label them, or one card that
-  opens to its versions. Q2: in Citations, a stranger's public copy matched by DOI is linked ahead
-  of your own matched only by title; leave it (recommended) or show both · qi-a8wyhr67 ·
-  [261007f § Questions for Greg](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#questions-for-greg) ·
-  [note](261006_2135-two-readers-import-the-same-article.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-E8 (spya-n8cuqq; the report itself shipped: dictation runs
-  fifteen minutes and warns before it stops, this is its deferred half) · should Feedback take a
-  full fifteen minutes of non-stop speech? It takes 12,000 characters now, about thirteen minutes
-  without a pause; past that the words stay in the box and Send is off until you trim. Going to
-  20,000 means raising the database's own cap, which the code describes as what stops a pasted
-  article reaching Sentry, so it was not done unattended. Two choices: leave it at 12,000, or raise
-  both to 20,000 with `/admin/feedback` paged by size (about two hours; recommended) ·
-  qi-8qvg5gwv ·
-  [261007b § Questions for Greg](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md#questions-for-greg) ·
-  [note](261006_2202-dictation-cut-off-at-five-minutes-with-no-sign.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-DW (spya-ar65p3; the report itself shipped as one rule that
-  stops a sideways iPhone enlarging a band's text, this is the review's question) · should the same
-  kind of line be the same size in every mode? Today there are about 65 text sizes, and a row's
-  main line is 14px in Skim, 15px in Glossary and 16.5px in Quiz. Three choices: line up the five
-  or six kinds of line that recur across modes (about a session; recommended), design a full scale
-  for everything (several sessions, not yet defined), or leave it · qi-f8h393sb ·
-  [261006k § Questions for Greg](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md#questions-for-greg) ·
-  [note](261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-DY (spya-uc0asn) · AI (search, for example) for a signed-in
-  reader on somebody else's public article: not built, because it does add complexity and every
-  version that runs AI in place edits a listed security defence. We would pay, not the owner, and
-  nothing limits it today. Five options, A to E, and two questions. Recommended: two small things
-  now that edit no defence (an "Add a private copy to your shelf" button for a signed-in visitor,
-  and the free words search for every visitor), then a quick search in place with a daily limit ·
-  qi-qw7tggag ·
-  [261006k § Questions for Greg](../plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article.md#questions-for-greg) ·
-  [note](261006_1425-ai-for-a-signed-in-reader-on-a-public-article.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-DQ (spya-jghnva; the report itself shipped as `skim/10`, this is
-  its deferred half) · should Skim's cue set a scene more often? What shipped sets one only when the
-  quote leans on words it does not explain. A wording that sets one on every cue was preferred 64 to
-  19 for preparing the reader, but gave the finding away about twice as often and got the context
-  wrong in one cue in ten. A middle wording (B3) is not written or measured yet; it waits on a yes ·
-  qi-pjrr5g86 ·
-  [261006e § Progress](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md#progress) ·
-  [note](261006_0545-skim-cue-should-situate-the-quote.md)
-
-- 2026-10-05 · SPIDERYARN-READING2-DB (spya-dxufdw) · the reading-time line "appeared a minute
-  late": no matching delay was found. Most likely Experimental features was off when the article
-  loaded and the line drew the instant it was switched on; with it off nothing is recorded either.
-  The question is whether reading time comes out from behind the switch. Four options, A to D,
-  and there is no control yet to turn it off or erase it. Recommended: yes, all of
-  it, for every owner (A) · qi-73z36z3g ·
-  [261005g § Questions for Greg](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md#questions-for-greg) ·
-  [note](261005_0729-reading-time-line-appears-a-minute-after-the-article-loads.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-ED (spya-vc6pnm; the report itself shipped as *Their name* on a
-  gift voucher, whose email now opens "Dear so-and-so,"; this is its deferred half) · may the
-  voucher email carry a starter article by private link? Not built, because the link's key would
-  then be kept in a second place of ours (the stored voucher email) and by our mail provider, and
-  where that key may go is a listed security defence. Four options, A to D. Recommended: yes, with
-  the voucher keeping only which article and the key going into the one email (A; one to two
-  days). Until then, send the link from your own email (D) rather than pasting it into the note ·
-  qi-zqkjnadh ·
-  [261007f § Q-starter](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-starter-may-the-voucher-email-carry-a-private-link) ·
-  [note](261006_2222-gift-voucher-name-note-and-a-starter-article.md)
-
-- 2026-10-06 · SPIDERYARN-READING2-ED (spya-vc6pnm, its other deferred half) · where does the
-  "big list of people" to contact live? A voucher cannot be the list as it is: its email is sent
-  and its gift is real the moment it is made. Three options. Recommended: keep the list where you
-  keep such lists today (A, nothing to build); or a separate list of people on `/admin` with a
-  *Make a voucher* button on each row (B, about two days) · qi-dajb32q7 ·
-  [261007f § Q-list](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-list-where-does-the-big-list-of-people-live) ·
-  [note](261006_2222-gift-voucher-name-note-and-a-starter-article.md)
-
-- 2026-10-04 · SPIDERYARN-READING2-BX (spya-mdp0em) · topic pills on the public shelf
-  (`/read/public`): not built, because every way of showing them edits a listed security defence,
-  and that shelf has 6 articles, under the 8 the pills need. Four options, A to D. Recommended:
-  nothing until the public shelf is bigger (C), then a model-named tree stored for it, paid by the
-  owner whose share changed it (A). Or did you mean the *Include public* section of your own
-  shelf (D)? · qi-8a52pdxh ·
-  [261004j § Part 2](../plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md#part-2-pills-on-the-public-shelf-spya-mdp0em-not-built-a-question-for-greg) ·
-  [note](261004_1000-topic-pills-on-the-public-shelf.md)
-
-- 2026-10-03 · SPIDERYARN-READING2-BV (spya-c2qmbg; the report itself shipped as *Dig deeper* on
-  the citation card, this is its larger half) · should Citations become a sub-mode of Debate
-  (Reception, Claims, Cited works, under one name), and should a cited work be listed beside the
-  claim it is cited near, or placed in a debate thread? Recommended: the merge, then the
-  claim-side list; not the threads yet · qi-vmnga65v ·
-  [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md) ·
-  [note](261003_1947-citation-card-dig-deeper-and-citations-in-debate.md)
-
-- 2026-10-03 · spya-caue42 (the report itself shipped; this is its deferred half) · should Debate's
-  Claims let the reader choose which claim is checked: a box that runs one more search on a claim
-  they type or pick, a list of claims first with no search until one is picked, or as built (the
-  search chooses)? A quick eval says a chosen claim works with the search as it is; qi-k9deez4b ·
-  [261003o § Questions for Greg](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md#questions-for-greg-not-waited-on) ·
-  [note](261003_1016-debate-reception-and-claims-sub-modes.md)
-
-- 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
-  reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
-  try, a Debate started with a lens), and should Debate take a text box to steer it? Noted, nothing
-  built; qi-wjb27jre ·
-  [261003k § Noted, not built](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md#noted-not-built) ·
-  [note](261003_1010-fewer-modes-part-3-why-you-are-reading-feeds-the-bar.md)
-
-- 2026-10-01 · SPIDERYARN-READING2-9D (the report itself shipped as stage 1; this is its stage 2)
-  · may Debate send an article's DOI to a citation index, to list every work that cites it? OpenAlex
-  is licence-compatible today (CC0; a free key and a daily budget) and gives the list but not what
-  each citer said. Semantic Scholar gives the citing sentence, which makes for/against checkable,
-  but its standard licence excludes commercial use: ask AI2 for the expanded one first? ·
-  [261002i § The question for Greg](../plans/261002i-debate-leads-with-who-has-cited-this-article.md) ·
-  [note](261001_1914-debate-leads-with-who-has-cited-this.md)
-
-- 2026-10-01 · SPIDERYARN-READING2-8A (the report itself shipped; this is its follow-up) · may a
-  failed import's pre-filled Problem report also carry the source URL, filename and error sentence?
-  Today it carries ids, step names and times only, because those three would bend
-  feedback.md § The one rule; the cost is that a dismissed job's id leads nowhere. And: build a
-  link back to an uploaded original (a new owner-only read path onto Storage)? ·
-  [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
-  [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
-
-- 2026-10-02 · SPIDERYARN-READING2-A8 (report spya-nnr8ha) · a text
-  size setting on /profile: body text alone follows one variable, but headings stay fixed, so it is
-  either about ten CSS rules re-expressed as one scale (B, ~a day), body-only with an inverted
-  hierarchy (A, not recommended), or not now, using browser zoom (C) ·
-  [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md) ·
-  [note](261002_2036-a-reading-text-size-setting.md)
+- `npx tsx scripts/feedback-questions.ts` lists the open ones;
+- `npx tsx scripts/feedback-questions.ts --answers` prints the replies of his that nobody has acted
+  on yet (exit 2 means it could not tell, never "none");
+- `npx tsx scripts/feedback-questions.ts --new "<title>"` starts a new one. A new waiting item is a
+  question file, never a line in this file.
 
 ## Attempted abuse, not yet seen by Greg
 

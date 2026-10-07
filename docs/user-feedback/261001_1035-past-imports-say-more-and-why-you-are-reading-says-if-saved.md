@@ -1,6 +1,7 @@
 ---
-reports: spya-a5gzb9, spya-hbqezu
+reports: spya-a5gzb9
 ending: shipped
+comment: Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.
 ---
 # Past imports say where, when, and have a Report this; "Why are you reading this?" says whether it saved, and asks again on first open
 
@@ -56,3 +57,7 @@ Not deployed: the Overseer deploys.
 - **A link to the uploaded original** is not built: there is no route that hands a reader back the
   bytes they uploaded, and adding one is a new read path onto Storage with its own security check.
   The filename shows as text.
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-a7kffw.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

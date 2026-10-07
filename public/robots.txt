@@ -32,8 +32,11 @@
 #
 # `/read/` covers the list of shared articles at /read/public too. It carries
 # the same noindex. `/login` is let in for the same reason: every one of our
-# pages links to it, and it carries the noindex. Nothing a crawler can reach
-# links to /profile, the admin pages or the API, and those stay shut.
+# pages links to it, and it carries the noindex. So is `/help/`: /help is the
+# contents of Help and links to every page under it, and each of those carries
+# the noindex too. (`/help/` does not match /help itself, which is one of our
+# own pages and has its two lines.) Nothing a crawler can reach links to
+# /profile, the admin pages or the API, and those stay shut.
 #
 # Each of our own pages has two lines. `$` ends the match, so `/pricing$` is
 # that page and nothing under it; `/pricing?` is the same page with a query
@@ -71,6 +74,7 @@ Allow: /sitemap.xml
 Allow: /read/
 Allow: /login$
 Allow: /login?
+Allow: /help/
 Disallow: /
 
 # The link-preview fetchers, which draw the card when a link is pasted.

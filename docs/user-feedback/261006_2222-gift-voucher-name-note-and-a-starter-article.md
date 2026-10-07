@@ -24,4 +24,7 @@ page. The words are from that row, as the Overseer relayed them:
   becomes claimable the moment it is made, so it cannot hold people who are only candidates.
   Three options in the plan. Queue entry `qi-dajb32q7`.
 
-Both questions are on [awaiting-approval.md](awaiting-approval.md).
+**The questions for Greg are now files**, `docs/user-feedback/questions/q-t2vhv6.md` (the starter
+article) and `docs/user-feedback/questions/q-avh98t.md` (the list of people), moved there from
+`awaiting-approval.md` on 2026-10-07. He sees them in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

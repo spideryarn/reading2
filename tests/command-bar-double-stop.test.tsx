@@ -64,7 +64,8 @@ vi.mock("../src/web/useDictation.js", () => ({
 
 const { Dock } = await import("../src/web/Dock.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
-const { HELP_TOPICS } = await import("../src/web/help/help-topics.js");
+const { HELP_TOPIC_PAGES } = await import("../src/web/help/help-pages.js");
+const { helpWords } = await import("./helpers/help-words.js");
 
 const SLUG = "a-piece";
 const GLOSSARY: PickKey = { id: "mode:glossary", label: "Glossary" };
@@ -427,8 +428,8 @@ describe("a double press on Stop in the command bar", () => {
 
 describe("the reader's help", () => {
   it("says the command bar takes the double press", () => {
-    const keyboard = Object.values(HELP_TOPICS).find((topic) => topic.title === "Keyboard shortcuts");
-    act(() => root.render(keyboard?.body));
-    expect(host.textContent ?? "").toMatch(/Stop twice/);
+    /* Still the page a reader would look on, by its heading. */
+    expect(HELP_TOPIC_PAGES.keyboard.title).toBe("Keyboard shortcuts");
+    expect(helpWords("keyboard")).toMatch(/Stop twice/);
   });
 });

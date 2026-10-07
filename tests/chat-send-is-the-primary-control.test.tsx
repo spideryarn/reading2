@@ -36,6 +36,8 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 vi.mock("../src/web/router.js", () => ({
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
   parseRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
+  /* command-match.ts § pickKey reads it to know a page of Help. */
+  HELP_HREF: "/help",
 }));
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async () => new Response("{}", { status: 200 }),

@@ -32,8 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
-import type { SavedCriterion } from "../saved-criteria.js";
-import { isCriteriaAtCeiling } from "../referee-criteria-store.js";
+import { isCriteriaAtCeiling, type SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
 import { criterionRefusalDrafts } from "./criterion-refusal-drafts.js";
 import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";

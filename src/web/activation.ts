@@ -402,16 +402,18 @@ export function modeStep(mode: Mode): StepName | null {
 }
 
 /**
- * **Referee's chips that arm something**, which is `MODE_TARGET` one level
- * down — still `Partial`, and the four views below are why: the two absences
- * are next to each other in one short list that one file owns, where a mode's
- * absence is spread across the whole client.
+ * **What each of Referee's chips arms**, which is `MODE_TARGET` one level
+ * down. A total `Record` since 2026-10-07, when the fifth chip arrived and GPT
+ * Sol's review of plan 261007h pointed out that a `Partial` let it be left out
+ * in silence: now a sixth view is a red compile here, and `null` is an answer
+ * somebody wrote.
  *
- * `criteria` and `mirror` are absent because neither has anything to generate
+ * `criteria` and `mirror` arm nothing because neither has anything to generate
  * until the referee has written a criterion or left a comment — there is no
- * empty artefact for a press to fill.
+ * empty artefact for a press to fill. `hidden` arms nothing because the source
+ * scan it shows has already run, and calls no model.
  *
- * **`candidates` was here from 2026-09-06 to 2026-10-03, and is absent on
+ * **`candidates` armed its run from 2026-09-06 to 2026-10-03, and is `null` on
  * purpose.** Its first turn may run a web search, which sends terms drawn from
  * an unpublished manuscript to a search engine — a third party the model
  * provider's notice does not cover. While the chip started it, that warning had
@@ -430,8 +432,12 @@ export function modeStep(mode: Mode): StepName | null {
  *
  * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
  */
-const REFEREE_TARGET: Partial<Record<RefereeView, AutoRunTarget>> = {
+const REFEREE_TARGET: Record<RefereeView, AutoRunTarget | null> = {
+  criteria: null,
   claims: "claims",
+  mirror: null,
+  candidates: null,
+  hidden: null,
 };
 
 /**
@@ -626,7 +632,7 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 }
 
 /**
- * The same, for a press on one of Referee's four sub-mode chips. Three of them
+ * The same, for a press on one of Referee's sub-mode chips. All but Claims
  * arm nothing — `REFEREE_TARGET` says which and why.
  *
  * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere
@@ -667,7 +673,7 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     case "diagram":
       return activationForDiagram(sub.view);
     case "referee":
-      return REFEREE_TARGET[sub.view] ?? null;
+      return REFEREE_TARGET[sub.view];
     case "summary":
       return activationForSummary(sub.view);
     /* Nothing to generate in either view: the tree is in the page's payload. */
@@ -732,7 +738,7 @@ export function bandTarget(
   mode: Mode,
   sub: { diagram: DiagramKind; referee: RefereeView; learn: LearnView; summary: SummaryView },
 ): AutoRunTarget | null {
-  if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
+  if (mode === "referee") return REFEREE_TARGET[sub.referee];
   if (mode === "learn") return sub.learn === "quiz" ? "quiz" : null;
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {

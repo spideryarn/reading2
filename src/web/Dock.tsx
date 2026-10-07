@@ -2113,9 +2113,8 @@ export function Dock({
   useMetadataEscape(view === "metadata", metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
-     neither can be trusted. Since 2026-10-04 no reader has both — the link is
-     the visitor's and the row is everybody else's (`DockHelp`) — and it is
-     still one rule for which section. */
+     neither can be trusted. An owner has both; a visitor has only the link,
+     having no command bar (`DockHelp`). */
   const helpLink = helpHrefFor(mode);
 
   /**
@@ -2561,9 +2560,10 @@ export function Dock({
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
 
-        {/* **Help, beside Feedback, on a visitor's bar only** since
-            2026-10-04 — the gate and Greg's words are on `DockHelp`. */}
-        <DockHelp isVisitor={isVisitor} href={helpLink} />
+        {/* **Help, beside Feedback, on every bar** — again since 2026-10-07,
+            after three days on a visitor's only. The history and Greg's
+            words are on `DockHelp`. */}
+        <DockHelp href={helpLink} />
 
         {/* **Feedback, at the far end, and only for somebody a report can
             belong to.** It left the top-right corner on 2026-09-06 for the same
@@ -2574,8 +2574,8 @@ export function Dock({
 
             **After the switch**, because the two are the bar's app-level pair
             and this is the least urgent thing in the row — which is also why
-            the fit ladder takes its word first (dock-fit.ts § the rungs). On a
-            visitor's bar Help sits between them (`DockHelp`).
+            the fit ladder takes its word first (dock-fit.ts § the rungs). Help
+            sits between them (`DockHelp`).
 
             The one thing this makes worse, recorded rather than discovered
             later: on a phone the row already overflows and scrolls, and this
@@ -2624,7 +2624,8 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * **The buttons in this bar that are not modes**, and the two sentences
  * each of them says on hover. Three of them since Help joined on 2026-10-02 —
  * Comments, Metadata, Help — after a spell at two when Tweets became a mode.
- * Help is drawn on a visitor's bar only since 2026-10-04 (`DockHelp`).
+ * Help was a visitor's only from 2026-10-04 to 2026-10-07, and is on every bar
+ * again (`DockHelp`).
  *
  * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
  * makes the next mode a compile error until somebody writes them
@@ -2723,7 +2724,8 @@ const NOT_A_MODE = {
   },
   help: {
     /* Not the button's own word back (the label is *Help*), and true on every
-       surface it is drawn on — a visitor's reading view and metadata page. */
+       surface it is drawn on — the reading view and the metadata page, an
+       owner's and a visitor's. */
     what: "How Spideryarn works: every mode, the map down the side, the gutter, sharing, and what costs what",
     /* The half nobody would guess: that it is not the top of a manual but the
        part about what is on screen, and that the sections are linkable. Said
@@ -2733,19 +2735,19 @@ const NOT_A_MODE = {
 } as const;
 
 /**
- * **Where the Help link opens**: the section for the mode the band is in, or
+ * **Where the Help link opens**: the page of Help for the mode the band is in, or
  * the reading view's when there is no band to explain.
  *
- * Plain has a section of its own (`mode-plain`), but in Plain the screen is the
+ * Plain has a page of its own (`mode-plain`), but in Plain the screen is the
  * reading view and nothing else, so that is what a reader pressing Help there
  * is asking about. Marginalia's column with no band is the same case — it is a
  * column beside the prose, not a mode the band is in — and it arrives here as
  * `plain`, because `mode` is the band (`BandMode` excludes it). Off the reading
  * view `mode` is undefined, and the page you are on is not a mode either.
  *
- * Through `helpHref`, never a hand-built `/help#…`: a mode retired or a section
- * renamed then turns this red at typecheck rather than into a link that opens
- * at the top (help-anchors.ts § Typed). Exported for the tests.
+ * Through `helpHref`, never a hand-built `/help/…`: a mode retired or a page
+ * renamed then turns this red at typecheck rather than into a link to a page
+ * that is not there (help-anchors.ts § Typed). Exported for the tests.
  */
 export function helpHrefFor(mode: BandMode | undefined): string {
   if (mode === undefined || mode === "plain") return helpHref("the-reading-view");
@@ -3897,7 +3899,8 @@ function DockCommandBar({
 }
 
 /**
- * **Help, in the bar of a reader who has no command bar.**
+ * **Help, in every bar: the owner's and a visitor's, on the reading view and
+ * on the Metadata page.**
  *
  * It was on every bar from 2026-10-02: Greg asked for more (i) icons
  * explaining the interface (SPIDERYARN-READING2-85), and GPT Sol's plan review
@@ -3909,21 +3912,29 @@ function DockCommandBar({
  * > I'm trying to avoid cluttering that bottom bar, but of course we also want
  * > to make sure that if people need help, they can get to it.
  *
- * So it is gone wherever the command bar is, because that bar's Help row opens
- * the same section (`helpRow` in CommandBar.tsx), and a mode's (i) ends in
- * *More in Help →* besides (BandAbout.tsx). **A visitor has no command bar**
- * (`DockCommands`, `DockCommandBar`), and in Plain, on the Metadata page, in a
- * mode that is not shared (`VisitorBand`) or in a band that failed there is no
- * (i) either, so for them this link is the only way to Help from the page, and
- * it stays. That is every visitor, signed in or not: the gate is the one the
- * command bar stands down on, so nobody can be without both.
+ * So from 2026-10-04 it was drawn on a visitor's bar only: gone wherever the
+ * command bar is, whose Help row opens the same page (`helpRow` in
+ * CommandBar.tsx), and kept for a visitor, who has no command bar
+ * (`DockCommands`, `DockCommandBar`) —
  * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ * Then Greg, 2026-10-06 (spya-ucftjt):
+ *
+ * > I think in a previous message I suggested that you hide the help icon from
+ * > the bottom bar. I'm second guessing that. Maybe it does make sense to keep
+ * > it down there towards the bottom right.
+ *
+ * So it is back on every bar from 2026-10-07, with no gate —
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
+ * The command bar's Help row stays, and so does *More in Help →* at the end
+ * of a mode's (i) (BandAbout.tsx); for a visitor in Plain, on the Metadata
+ * page, in a mode that is not shared (`VisitorBand`) or in a band that failed,
+ * this link is still the only way to Help from the page.
  *
  * **At the app end of the row**, just before Feedback, because Help is about
  * the app rather than about this article, and the two are the conventional
  * pair — *how does this work* and *this does not work*.
  *
- * **Contextual**: `href` is `helpHrefFor`'s, the section for the mode the band
+ * **Contextual**: `href` is `helpHrefFor`'s, the page of Help for the mode the band
  * is in, or the reading view's in Plain and off the reading view. A real link
  * in the same tab, so Back returns to the article with its address, mode and
  * place intact, and ⌘-click opens Help beside it.
@@ -3931,12 +3942,11 @@ function DockCommandBar({
  * `dock-help` is so the fit ladder can drop its word on the first rung, with
  * the wordmark's and Feedback's (styles/dock-fit.css § the bar's fit ladder).
  *
- * The gate is in here rather than in a `&&` in `Dock`, for the reason
- * `DockFeedback`'s is: that function is at Biome's cognitive-complexity
- * ceiling.
+ * A component of its own rather than more JSX in `Dock`, which is at Biome's
+ * cognitive-complexity ceiling; it also keeps this history out of that
+ * function.
  */
-function DockHelp({ isVisitor, href }: { isVisitor: boolean; href: string }) {
-  if (!isVisitor) return null;
+function DockHelp({ href }: { href: string }) {
   return (
     <DockLink
       href={href}

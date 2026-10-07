@@ -1,6 +1,7 @@
 ---
 reports: spya-c2qmbg
 ending: shipped
+comment: Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?
 ---
 
 # A citation's card offers Dig deeper; folding Citations into Debate awaits Greg
@@ -24,3 +25,7 @@ Not built, queued:
   cited work placed in a debate thread (qi-vmnga65v): options, costs and a recommendation in
   [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md), on
   [awaiting-approval.md](awaiting-approval.md).
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-xf2xvb.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

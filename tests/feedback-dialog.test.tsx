@@ -18,7 +18,7 @@ import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ADMIN_EMAIL } from "../src/admin.js";
+import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
@@ -28,7 +28,9 @@ const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
 /** Every `GET /api/feedback` — the Earlier tab's reads, kept apart from `posts`. */
 const lists: string[] = [];
-let listAnswer: () => Promise<Response>;
+let listAnswer: (input: string) => Promise<Response>;
+/** Whether the dialog is mounted for an admin: the cosmetic flag FeedbackHost passes (261007d). */
+let asAdmin = false;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: RequestInit) => {
@@ -36,7 +38,7 @@ vi.mock("../src/web/lib/api.js", () => ({
        its own list so that `posts` still means "what was filed". */
     if ((init?.method ?? "GET") === "GET") {
       lists.push(input);
-      return listAnswer();
+      return listAnswer(input);
     }
     posts.push({ input, init: init ?? {} });
     return answer();
@@ -62,27 +64,60 @@ const mic = { supported: true, armed: false, transcribing: false, artifact: 7, r
 const micToggles: string[] = [];
 /** What `dismiss` was handed, in order. Plan 261001k. */
 const micDismissals: number[] = [];
+/**
+ * **The reply box's microphone, a second one** (261007d stage 2). The dialog
+ * has two `useDictationField`s once a reply box is open; the mock tells them
+ * apart by `doneKey`, which the reply box starts with `reply:`. `replyMicUses`
+ * is what each render of that hook was given, so the wiring is a fact.
+ */
+const replyMic = { supported: true, armed: false, transcribing: false };
+const replyMicToggles: string[] = [];
+const replyMicUses: { keep: string | null; doneKey: string; context: unknown }[] = [];
+let replyMicDone: (() => void) | undefined;
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
-    dictation: {
-      ...mic,
+  useDictationField: (options: { doneKey?: string; keep?: { box: string }; context?: unknown; onDone?: () => void }) => {
+    if (String(options.doneKey).startsWith("reply:")) {
+      replyMicUses.push({ keep: options.keep?.box ?? null, doneKey: String(options.doneKey), context: options.context });
+      replyMicDone = options.onDone;
+      return {
+        dictation: {
+          ...replyMic,
+          recording: null,
+          toggle: () => {
+            replyMicToggles.push("hook");
+          },
+          artifact: () => 0,
+          dismiss: () => {},
+        },
+        readOnly: replyMic.transcribing,
+        busy: replyMic.transcribing || replyMic.armed,
+        toggle: () => {
+          replyMicToggles.push("field");
+        },
+        sendingAfter: false,
+      };
+    }
+    return {
+      dictation: {
+        ...mic,
+        toggle: () => {
+          micToggles.push("hook");
+        },
+        artifact: () => mic.artifact,
+        dismiss: (n: number) => {
+          micDismissals.push(n);
+        },
+      },
+      readOnly: mic.transcribing,
+      busy: mic.transcribing || mic.armed,
       toggle: () => {
-        micToggles.push("hook");
+        micToggles.push("field");
       },
-      artifact: () => mic.artifact,
-      dismiss: (n: number) => {
-        micDismissals.push(n);
-      },
-    },
-    readOnly: mic.transcribing,
-    busy: mic.transcribing || mic.armed,
-    toggle: () => {
-      micToggles.push("field");
-    },
-  }),
+    };
+  },
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
-  DictationButton: () => createElement("button", { type: "button" }, "mic"),
+  DictationButton: () => createElement("button", { type: "button", className: "mock-mic" }, "mic"),
   DictationStrip: () => null,
 }));
 
@@ -149,6 +184,7 @@ function show(open: boolean) {
         open,
         onClose: () => {},
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
+        admin: asAdmin,
       }),
     );
   });
@@ -303,6 +339,7 @@ beforeEach(() => {
   answer = ok(201);
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
+  asAdmin = false;
   carried = null;
   finishShot = null;
 });
@@ -1464,6 +1501,646 @@ describe("the Earlier tab", () => {
     if (!found) throw new Error(`no ${name} filter`);
     return found;
   }
+
+  /* docs/plans/261007d-…: for an admin the tab says what became of each report,
+     numbers them, and carries the note's one-line comment. */
+  describe("for an admin", () => {
+    const ADMIN_PATH = "/api/admin/feedback/earlier";
+    const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
+    const base = { createdAt: "2026-09-12T10:45:00.000Z", kind: null, page: null, at: null, comment: null, ignoredAt: null };
+    const ADMIN_REPORTS = {
+      reports: [
+        { ...base, id: "spya-k3m9qt", number: 215, status: "shipped", body: "A tab of what I sent before." },
+        {
+          ...base,
+          id: "spya-a2b2c3",
+          number: 214,
+          status: "waiting",
+          body: "One switch or two?",
+          comment: "Waiting on you: <b>one</b> switch for both, or one each?",
+        },
+        {
+          ...base,
+          id: "spya-a3b2c3",
+          number: 213,
+          status: "aside",
+          body: "Could it read my mind?",
+          comment: "Set aside: the browser gives us no way to do this.",
+        },
+        { ...base, id: "spya-a4b2c3", number: 212, status: "aside", body: "Ignore me.", ignoredAt: "2026-10-05T09:00:00.000Z" },
+        { ...base, id: "spya-a5b2c3", number: 211, status: "open", body: "The shelf is slow." },
+      ],
+      more: false,
+      counts: ADMIN_COUNTS,
+      questions: [] as unknown[],
+    };
+    const pills = () =>
+      [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].map((b) =>
+        (b.textContent ?? "").replace(/\s+/g, " ").trim(),
+      );
+    const pill = (name: string) => {
+      const found = [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].find(
+        (b) => (b.firstChild?.textContent ?? "").trim() === name,
+      );
+      if (!found) throw new Error(`no ${name} filter`);
+      return found;
+    };
+    async function openEarlier() {
+      mount();
+      click(tab("Earlier"));
+      await act(async () => {});
+    }
+
+    it("gets the admin list through the production FeedbackHost's reader-id check", async () => {
+      function OpenFeedback() {
+        const open = useFeedbackOpen();
+        return <button type="button" onClick={() => open?.()}>Open feedback</button>;
+      }
+      host = document.createElement("div");
+      document.body.append(host);
+      root = createRoot(host);
+      listAnswer = page(ADMIN_REPORTS);
+      act(() => {
+        root.render(
+          <FeedbackHost readerId={ADMIN_USER_ID_LOCAL}>
+            <OpenFeedback />
+          </FeedbackHost>,
+        );
+      });
+      click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+      click(tab("Earlier"));
+      await act(async () => {});
+
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+    });
+
+    it("reads the admin route, and shows five pills with report counts", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+      expect(pill("All").getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("gives each row its number, its status word and its comment", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      const items = [...panelOf("Earlier").querySelectorAll("li")];
+      expect(items.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual([
+        "#215",
+        "#214",
+        "#213",
+        "#212",
+        "#211",
+      ]);
+      /* The number starts the meta line, so it is the first thing said. */
+      expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent?.startsWith("#215 · ")).toBe(true);
+      expect(items.map((li) => li.querySelector("[data-status]")?.textContent)).toEqual([
+        "Shipped",
+        "Needs a decision",
+        "Set aside",
+        "Set aside",
+        "Open",
+      ]);
+      expect(items.map((li) => li.querySelector("[data-status]")?.getAttribute("data-status"))).toEqual([
+        "shipped",
+        "waiting",
+        "aside",
+        "aside",
+        "open",
+      ]);
+      expect(items.map((li) => li.querySelector(".fb-earlier-comment")?.textContent ?? null)).toEqual([
+        null,
+        "Waiting on you: <b>one</b> switch for both, or one each?",
+        "Set aside: the browser gives us no way to do this.",
+        null,
+        null,
+      ]);
+      /* Text, never markup: the angle brackets are characters on the page. */
+      expect(panelOf("Earlier").querySelector(".fb-earlier-comment b")).toBeNull();
+      /* An ignored report with no comment says where it was set aside, and when: ours, not the model's. */
+      expect(items[3]?.querySelector(".fb-earlier-note")?.textContent).toMatch(/^Set aside on \/admin\/feedback, .*2026/);
+      expect(items[2]?.querySelector(".fb-earlier-note")).toBeNull();
+      expect(items[4]?.querySelector(".fb-earlier-note")).toBeNull();
+    });
+
+    it("asks the server for a status, and lists only what it answered", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      listAnswer = page({ reports: [ADMIN_REPORTS.reports[1]], more: false, counts: ADMIN_COUNTS, questions: [] });
+      click(pill("Needs a decision"));
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH, `${ADMIN_PATH}?show=waiting`]);
+      expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(1);
+
+      listAnswer = page({ reports: [], more: false, counts: { all: 1, open: 0, waiting: 1, aside: 0, shipped: 0 }, questions: [] });
+      click(pill("Set aside"));
+      await act(async () => {});
+      expect(lists.at(-1)).toBe(`${ADMIN_PATH}?show=aside`);
+      expect(panelOf("Earlier").textContent).toContain("None of your reports has been set aside.");
+    });
+
+    it("falls back to the plain list and three pills when the server has no such route (a 404)", async () => {
+      /* New client, old server: after a rollback, or in the minutes of a deploy. */
+      asAdmin = true;
+      listAnswer = (input) => (input.startsWith(ADMIN_PATH) ? page({ error: "Not found" }, 404)() : page(REPORTS)());
+      await openEarlier();
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH, "/api/feedback"]);
+      expect(pills()).toEqual(["All 2", "Shipped 1", "Not shipped 1"]);
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
+      expect(panelOf("Earlier").querySelector(".fb-earlier-number")).toBeNull();
+      /* And it stays on the plain route for the rest of this opening. */
+      click(showButton("Shipped"));
+      await act(async () => {});
+      expect(lists.at(-1)).toBe("/api/feedback?show=shipped");
+      /* The next opening asks the admin route again: the deploy may have finished. */
+      const before = lists.length;
+      reopen();
+      click(tab("Earlier"));
+      await act(async () => {});
+      await act(async () => {});
+      expect(lists.slice(before)).toEqual([ADMIN_PATH, "/api/feedback"]);
+    });
+
+    it.each([403, 500])("does not fall back on a %s: it says the list would not load", async (status) => {
+      asAdmin = true;
+      listAnswer = page({ error: "no" }, status);
+      await openEarlier();
+      await act(async () => {});
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+    });
+
+    it.each([
+      ["the plain route's shape", REPORTS],
+      ["counts that do not sum to All", { ...ADMIN_REPORTS, counts: { ...ADMIN_COUNTS, all: 6 } }],
+      ["a status it does not know", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], status: "deferred" }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a number that is not a positive integer", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], number: 0 }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["the same number twice", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], number: 214 }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a comment that is not text", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], comment: { html: "x" } }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["a comment over the cap", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], comment: "x".repeat(241) }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      ["more rows of a status than its count", { ...ADMIN_REPORTS, counts: { all: 5, open: 2, waiting: 1, aside: 1, shipped: 1 } }],
+      ["a mark that is not a time", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], ignoredAt: "yesterday" }, ...ADMIN_REPORTS.reports.slice(1)] }],
+    ])("refuses an admin answer with %s: the failure sentence and Try again, no rows", async (_case, body) => {
+      asAdmin = true;
+      listAnswer = page(body);
+      await openEarlier();
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+      expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+      expect([...panelOf("Earlier").querySelectorAll("button")].map((b) => b.textContent)).toContain("Try again");
+    });
+
+    it("refuses a row of another status in a filtered answer", async () => {
+      asAdmin = true;
+      listAnswer = page(ADMIN_REPORTS);
+      await openEarlier();
+      listAnswer = page({ reports: [ADMIN_REPORTS.reports[0]], more: false, counts: ADMIN_COUNTS, questions: [] });
+      click(pill("Open"));
+      await act(async () => {});
+      expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    });
+
+    /* Stage 2 of 261007d: an agent's questions, at the top of Needs a decision,
+       each with a box to reply in. */
+    describe("questions an agent has asked", () => {
+      const ANSWERS_PATH = "/api/admin/feedback/answers";
+      const Q1 = {
+        id: "q-aaaaaa",
+        title: "One switch or two?",
+        body: "Background first.\n\nA. One <b>switch</b>.\nB. Two.",
+        asked: "2026-10-05",
+        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?" },
+        answer: null,
+      };
+      const Q2 = {
+        id: "q-bbbbbb",
+        title: "A question about nothing filed",
+        body: "It stands alone.",
+        asked: "2026-10-06",
+        report: null,
+        answer: null,
+      };
+      const WITH_QUESTIONS = { ...ADMIN_REPORTS, questions: [Q1, Q2] };
+      const WAITING = { reports: [ADMIN_REPORTS.reports[1]], more: false, counts: ADMIN_COUNTS, questions: [Q1, Q2] };
+      const questionsBox = () => panelOf("Earlier").querySelector<HTMLElement>(".fb-questions");
+      const cards = () => [...panelOf("Earlier").querySelectorAll<HTMLElement>(".fb-question")];
+      const card = (id: string) => {
+        const found = cards().find((one) => one.dataset.question === id);
+        if (!found) throw new Error(`no question ${id}`);
+        return found;
+      };
+      const button = (within: Element, name: string) => {
+        const found = [...within.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === name);
+        if (!found) throw new Error(`no ${name} button`);
+        return found;
+      };
+      const replyBoxes = () => [...panelOf("Earlier").querySelectorAll<HTMLTextAreaElement>("textarea.fb-reply-input")];
+      function typeReply(text: string) {
+        const box = replyBoxes()[0];
+        if (!box) throw new Error("no reply box");
+        act(() => {
+          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set?.call(box, text);
+          box.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+      const sent = (index: number) => JSON.parse(String(posts[index]?.init.body)) as Record<string, unknown>;
+      const stored = (status: number, createdAt = "2026-10-07T09:00:00.000Z") => async () => {
+        const last = JSON.parse(String(posts.at(-1)?.init.body)) as { id: string; body: string };
+        return new Response(JSON.stringify({ answer: { id: last.id, body: last.body, createdAt } }), { status });
+      };
+      async function openWaiting(body: unknown = WITH_QUESTIONS, waiting: unknown = WAITING) {
+        asAdmin = true;
+        listAnswer = page(body);
+        await openEarlier();
+        listAnswer = page(waiting);
+        click(pill("Needs a decision"));
+        await act(async () => {});
+      }
+      beforeEach(() => {
+        replyMic.armed = false;
+        replyMic.transcribing = false;
+        replyMicToggles.length = 0;
+        replyMicUses.length = 0;
+        replyMicDone = undefined;
+      });
+
+      it("says how many are open beside the pill in every view, and draws them only in Needs a decision", async () => {
+        asAdmin = true;
+        listAnswer = page(WITH_QUESTIONS);
+        await openEarlier();
+        /* In All: counted on the pill, after its report count, and not drawn. */
+        expect(pills()).toContain("Needs a decision 1 · 2 open questions");
+        expect(questionsBox()?.hidden ?? true).toBe(true);
+        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(5);
+
+        listAnswer = page(WAITING);
+        click(pill("Needs a decision"));
+        await act(async () => {});
+        expect(questionsBox()?.hidden).toBe(false);
+        expect(cards().map((one) => one.dataset.question)).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+        /* First: the questions come before the list of reports in the panel. */
+        const list = panelOf("Earlier").querySelector(".fb-earlier-list");
+        expect(questionsBox()?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        /* The report count on the pill is still the report count. */
+        expect(pills()).toContain("Needs a decision 1 · 2 open questions");
+        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(1);
+      });
+
+      it("says one question in the singular, and nothing on the pill when there are none", async () => {
+        asAdmin = true;
+        listAnswer = page({ ...ADMIN_REPORTS, questions: [Q2] });
+        await openEarlier();
+        expect(pills()).toContain("Needs a decision 1 · 1 open question");
+        reopen();
+        listAnswer = page(ADMIN_REPORTS);
+        click(tab("Earlier"));
+        await act(async () => {});
+        expect(pills()).toContain("Needs a decision 1");
+        expect(cards()).toHaveLength(0);
+      });
+
+      it("shows each under its title, with the linked report's number and first line when it has one", async () => {
+        await openWaiting();
+        expect(card("q-aaaaaa").querySelector(".fb-question-title")?.textContent).toBe("One switch or two?");
+        expect(card("q-aaaaaa").querySelector(".fb-earlier-number")?.textContent).toBe("#214");
+        expect(card("q-aaaaaa").querySelector(".fb-question-report-line")?.textContent).toBe("One switch or two?");
+        expect(card("q-bbbbbb").querySelector(".fb-earlier-number")).toBeNull();
+        /* Text, never markup, with the lines kept by CSS: the tag is characters. */
+        expect(card("q-aaaaaa").querySelector(".fb-question-text")?.textContent).toBe(Q1.body);
+        expect(card("q-aaaaaa").querySelector(".fb-question-text b")).toBeNull();
+      });
+
+      it("shows questions even when no report needs a decision", async () => {
+        await openWaiting(WITH_QUESTIONS, {
+          reports: [],
+          more: false,
+          counts: { all: 4, open: 1, waiting: 0, aside: 2, shipped: 1 },
+          questions: [Q1, Q2],
+        });
+        expect(cards()).toHaveLength(2);
+        expect(panelOf("Earlier").textContent).toContain("None of your reports needs a decision.");
+      });
+
+      it("opens one reply box at a time: the others show Reply", async () => {
+        await openWaiting();
+        expect(replyBoxes()).toHaveLength(0);
+        click(button(card("q-aaaaaa"), "Reply"));
+        expect(replyBoxes()).toHaveLength(1);
+        expect(card("q-aaaaaa").querySelector("textarea.fb-reply-input")).not.toBeNull();
+        typeReply("half a thought");
+        click(button(card("q-bbbbbb"), "Reply"));
+        expect(replyBoxes()).toHaveLength(1);
+        expect(card("q-bbbbbb").querySelector("textarea.fb-reply-input")).not.toBeNull();
+        expect(button(card("q-aaaaaa"), "Reply")).toBeTruthy();
+        /* And the first box's words were kept for when it is opened again. */
+        click(button(card("q-aaaaaa"), "Reply"));
+        expect(replyBoxes()[0]?.value).toBe("half a thought");
+      });
+
+      it("posts a reply with a minted id, then shows Answered, the words, and Reply again", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("  1A, and do B later  ");
+        answer = stored(201);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+
+        expect(posts).toHaveLength(1);
+        expect(posts[0]?.input).toBe(ANSWERS_PATH);
+        expect(posts[0]?.init.method).toBe("POST");
+        expect(Object.keys(sent(0)).sort()).toEqual(["body", "id", "question"]);
+        expect(sent(0)).toMatchObject({ question: "q-aaaaaa", body: "1A, and do B later" });
+        expect(isSpideryarnId(sent(0).id as string)).toBe(true);
+
+        expect(replyBoxes()).toHaveLength(0);
+        const answered = card("q-aaaaaa").querySelector(".fb-question-answer");
+        expect(answered?.textContent).toContain("Answered");
+        expect(answered?.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-07T09:00:00.000Z");
+        expect(answered?.querySelector(".fb-question-answer-body")?.textContent).toBe("1A, and do B later");
+        expect(button(card("q-aaaaaa"), "Reply again")).toBeTruthy();
+        /* The other question is untouched. */
+        expect(card("q-bbbbbb").querySelector(".fb-question-answer")).toBeNull();
+
+        /* Reply again: an empty box, and a second reply under a new id. */
+        click(button(card("q-aaaaaa"), "Reply again"));
+        expect(replyBoxes()[0]?.value).toBe("");
+        typeReply("one more thing");
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(posts).toHaveLength(2);
+        expect(sent(1).id).not.toBe(sent(0).id);
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer-body")?.textContent).toBe("one more thing");
+      });
+
+      it("shows the server's stored reply as Answered when the tab is opened later", async () => {
+        const answered = { ...Q1, answer: { id: "spya-a9b2c3", body: "<i>Two</i>, please.\nBoth.", createdAt: "2026-10-06T18:30:00.000Z" } };
+        await openWaiting({ ...ADMIN_REPORTS, questions: [answered, Q2] }, { ...WAITING, questions: [answered, Q2] });
+        const shown = card("q-aaaaaa").querySelector(".fb-question-answer");
+        expect(shown?.querySelector(".fb-question-answer-body")?.textContent).toBe("<i>Two</i>, please.\nBoth.");
+        expect(shown?.querySelector("i")).toBeNull();
+        expect(button(card("q-aaaaaa"), "Reply again")).toBeTruthy();
+        expect(button(card("q-bbbbbb"), "Reply")).toBeTruthy();
+      });
+
+      it("keeps the words when the send fails, and a retry of the same words carries the same id", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A");
+        answer = ok(500);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(replyBoxes()[0]?.value).toBe("1A");
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).toBeNull();
+
+        answer = stored(200);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(posts).toHaveLength(2);
+        expect(sent(1).id).toBe(sent(0).id);
+        /* A 200 is the stored row of the first try: answered, like a 201. */
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer-body")?.textContent).toBe("1A");
+        expect(card("q-aaaaaa").textContent).not.toContain("[fb-reply]");
+      });
+
+      it("gives edited words a new id after a failed send, so the server never sees one id with two bodies", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A");
+        answer = async () => {
+          throw new Error("offline");
+        };
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        typeReply("1B, on reflection");
+        answer = stored(201);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(sent(1).id).not.toBe(sent(0).id);
+      });
+
+      it("says to reload when the server has no such route (a 404), and keeps the words", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A, typed at length");
+        answer = ok(404);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(replyBoxes()[0]?.value).toBe("1A, typed at length");
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply-stale]");
+        expect(card("q-aaaaaa").textContent).toMatch(/reload/i);
+      });
+
+      it("treats a 2xx without a well-formed reply in it as not sent", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A");
+        answer = ok(201);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        expect(replyBoxes()[0]?.value).toBe("1A");
+      });
+
+      it("treats a well-formed receipt for different words as not sent", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A");
+        answer = async () => {
+          const request = sent(0);
+          return new Response(
+            JSON.stringify({ answer: { id: request.id, body: "different words", createdAt: "2026-10-07T09:00:00.000Z" } }),
+            { status: 201 },
+          );
+        };
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        expect(replyBoxes()[0]?.value).toBe("1A");
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).toBeNull();
+      });
+
+      it("sends nothing empty, nothing over the cap, and one reply for two presses", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        typeReply("   ");
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        typeReply("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        expect(card("q-aaaaaa").textContent).toContain(`the limit is ${MAX_FEEDBACK_ANSWER_CHARS}`);
+        typeReply("1A");
+        let release: (() => void) | null = null;
+        answer = () =>
+          new Promise((resolve) => {
+            release = () => resolve(new Response(JSON.stringify({ answer: { id: sent(0).id, body: "1A", createdAt: "2026-10-07T09:00:00.000Z" } }), { status: 201 }));
+          });
+        const sendButton = button(card("q-aaaaaa"), "Send reply");
+        click(sendButton);
+        click(sendButton);
+        expect(posts).toHaveLength(1);
+        await act(async () => release?.());
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).not.toBeNull();
+      });
+
+      it("gives the reply box its own microphone: its own keeper, off the article, and Send off while it is busy", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        expect(card("q-aaaaaa").querySelector(".mock-mic")).not.toBeNull();
+        expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
+        typeReply("said out loud");
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(false);
+
+        replyMic.armed = true;
+        typeReply("said out loud.");
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        /* And the guard is the function's too: a double press on Stop asks it directly. */
+        act(() => replyMicDone?.());
+        await act(async () => {});
+        expect(posts).toHaveLength(0);
+
+        replyMic.armed = false;
+        replyMic.transcribing = true;
+        typeReply("said out loud");
+        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        expect(replyBoxes()[0]?.readOnly).toBe(true);
+
+        /* Not busy: a double press on Stop sends, as the button would. */
+        replyMic.transcribing = false;
+        typeReply("said out loud, done");
+        answer = stored(201);
+        act(() => replyMicDone?.());
+        await act(async () => {});
+        expect(posts).toHaveLength(1);
+        expect(sent(0).body).toBe("said out loud, done");
+      });
+
+      it("stops the reply box's microphone on the way to Write, and when the dialog is shut", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        replyMic.armed = true;
+        typeReply("talking");
+        replyMicToggles.length = 0;
+        micToggles.length = 0;
+        click(tab("Write"));
+        /* The hook's own toggle (a stop that keeps the words), never the field's, which would refocus a hidden box. */
+        expect(replyMicToggles).toEqual(["hook"]);
+        expect(micToggles, "the Write box's microphone is a different one").toEqual([]);
+        /* Hidden, it no longer offers a kept recording or takes a double press. */
+        expect(replyMicUses.at(-1)).toMatchObject({ keep: null, doneKey: "reply:hidden" });
+
+        click(tab("Earlier"));
+        replyMicToggles.length = 0;
+        show(false);
+        expect(replyMicToggles).toEqual(["hook"]);
+      });
+
+      it("leaves the reply box's microphone alone while the box is showing", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        replyMic.armed = true;
+        typeReply("talking");
+        expect(replyMicToggles).toEqual([]);
+      });
+
+      it("holds the page against a reload while a reply is half-written", async () => {
+        await openWaiting();
+        expect(reloadVeto()).toBeNull();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("half a reply");
+        expect(reloadVeto()).not.toBeNull();
+        answer = stored(201);
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(reloadVeto()).toBeNull();
+      });
+
+      it("keeps a draft reachable when a refreshed question list no longer contains it", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("a decision in progress");
+
+        show(false);
+        listAnswer = page({ ...WITH_QUESTIONS, questions: [Q2] });
+        show(true);
+        click(tab("Earlier"));
+        await act(async () => {});
+        listAnswer = page({ ...WAITING, questions: [Q2] });
+        click(pill("Needs a decision"));
+        await act(async () => {});
+
+        expect(card("q-aaaaaa").querySelector<HTMLTextAreaElement>("textarea.fb-reply-input")?.value).toBe(
+          "a decision in progress",
+        );
+        expect(pills()).toContain("Needs a decision 1 · 1 open question");
+        expect(questionsBox()?.querySelector(".fb-questions-heading")?.textContent).toBe("2 questions for you");
+      });
+
+      it("keeps the reply box mounted while closing during transcription", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        replyMic.transcribing = true;
+        show(true);
+        expect(replyBoxes()[0]?.readOnly).toBe(true);
+
+        show(false);
+
+        expect(replyBoxes()).toHaveLength(1);
+        expect(questionsBox()?.hidden).toBe(true);
+      });
+
+      it.each([
+        ["no questions key at all", (({ questions: _dropped, ...rest }) => rest)(WITH_QUESTIONS)],
+        ["questions that are not a list", { ...WITH_QUESTIONS, questions: {} }],
+        ["a question id of the wrong shape", { ...WITH_QUESTIONS, questions: [{ ...Q1, id: "spya-a2b2c3" }] }],
+        ["the same question twice", { ...WITH_QUESTIONS, questions: [Q1, Q1] }],
+        ["a title that is not text", { ...WITH_QUESTIONS, questions: [{ ...Q1, title: { html: "x" } }] }],
+        ["a title over the cap", { ...WITH_QUESTIONS, questions: [{ ...Q1, title: "x".repeat(121) }] }],
+        ["a body over the cap", { ...WITH_QUESTIONS, questions: [{ ...Q1, body: "x".repeat(4001) }] }],
+        ["a date that is not one", { ...WITH_QUESTIONS, questions: [{ ...Q1, asked: "last week" }] }],
+        ["a linked report without a number", { ...WITH_QUESTIONS, questions: [{ ...Q1, report: { id: "spya-a2b2c3", firstLine: "x" } }] }],
+        ["a reply that is not text", { ...WITH_QUESTIONS, questions: [{ ...Q1, answer: { id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" } }] }],
+        ["a reply with no time", { ...WITH_QUESTIONS, questions: [{ ...Q1, answer: { id: "spya-a9b2c3", body: "x", createdAt: "soon" } }] }],
+        ["an agent-only field on a question", { ...WITH_QUESTIONS, questions: [{ ...Q1, refs: "qi-8qvg5gwv" }] }],
+      ])("refuses an admin answer with %s: the failure sentence, no rows and no questions", async (_case, body) => {
+        asAdmin = true;
+        listAnswer = page(body);
+        await openEarlier();
+        expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+        expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+        expect(pills().join(" ")).not.toContain("open question");
+      });
+
+      it("shows no questions to a reader who is not an admin, whatever the answer carries", async () => {
+        asAdmin = false;
+        listAnswer = page({ ...REPORTS, questions: [Q1] });
+        await openEarlier();
+        expect(lists).toEqual(["/api/feedback"]);
+        expect(cards()).toHaveLength(0);
+        expect(pills().join(" ")).not.toContain("open question");
+      });
+    });
+
+    it("changes nothing for a reader who is not an admin: the plain route, three pills, no number", async () => {
+      asAdmin = false;
+      listAnswer = page(REPORTS);
+      await openEarlier();
+      expect(lists).toEqual(["/api/feedback"]);
+      expect(pills()).toEqual(["All 2", "Shipped 1", "Not shipped 1"]);
+      expect(panelOf("Earlier").querySelector(".fb-earlier-number")).toBeNull();
+      expect(panelOf("Earlier").querySelector(".fb-earlier-comment")).toBeNull();
+      expect(panelOf("Earlier").querySelector("[data-status]")).toBeNull();
+      /* And a 404 there is a failure, as it always was: there is nothing to fall back to. */
+    });
+  });
 
   it("marks a shipped report, and only that one", async () => {
     listAnswer = page(REPORTS);

@@ -1,6 +1,7 @@
 ---
 reports: none
 ending: declined
+comment: Not built: showing each summary level early needs a new channel, or works only in the one tab that started the job. You chose to keep the press as built (2026-10-01).
 ---
 
 # Show each summary level as soon as it has passed its check

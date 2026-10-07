@@ -463,13 +463,15 @@ describe("a mode a visitor cannot have", () => {
  * read it back through the rendered card rather than by importing it, so what
  * is asserted is what a reader is shown.
  *
- * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5) and left
- * every bar but a visitor's on 2026-10-04 (spya-dev7pf, plan 261004j), so it
- * is not in this list: these cases render the owner's bar, which has no Help
- * control. Its card is held to the same shape by the last case below, on a
- * visitor's bar; tests/dock-help-link.test.tsx holds who gets the link.
+ * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5): one
+ * link in both arms, whose href follows the mode. It was out of this list from
+ * 2026-10-04 to 2026-10-07, while only a visitor's bar drew it (spya-dev7pf,
+ * plan 261004j), and is back now that every bar does (spya-ucftjt, plan
+ * 261007e). These cases render the owner's bar; the last case below holds the
+ * same card on a visitor's; tests/dock-help-link.test.tsx holds who gets the
+ * link and where it opens.
  */
-const NOT_MODES = ["Comments", "Metadata"] as const;
+const NOT_MODES = ["Comments", "Metadata", "Help"] as const;
 
 /** The bar's button with this accessible name, in whichever arm is rendered. */
 function barControl(label: string): HTMLElement {
@@ -535,7 +537,7 @@ describe("the buttons in the bar that are not modes", () => {
    * be that decision reversed by accident. Tweets was the one that would
    * attract a price, being the only one of these that could start a paid run;
    * it is Summary's Thread view since 2026-10-03, so Summary's button stands
-   * in for it here, beside the two that are not modes.
+   * in for it here, beside the three that are not modes.
    */
   it("carry no currency-symbol figure", async () => {
     withDrawer();
@@ -576,9 +578,10 @@ describe("the buttons in the bar that are not modes", () => {
   });
 
   /**
-   * **Help, on the one bar that still draws it** — a visitor's, since
-   * 2026-10-04 (plan 261004j). The same four claims the list above makes of
-   * Comments and Metadata, in both arms of the bar.
+   * **Help, on a visitor's bar too.** The cases above render the owner's
+   * bar; a visitor's is a different arm of `Dock` (no Commands, and from
+   * 2026-10-04 to 2026-10-07 the only bar with Help at all — plan 261004j).
+   * The same four claims the list above makes, in both arms of the bar.
    */
   it("hold a visitor's Help card to the same shape, in either arm", async () => {
     for (const render of [reading, loose]) {

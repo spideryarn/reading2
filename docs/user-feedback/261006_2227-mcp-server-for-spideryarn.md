@@ -27,7 +27,7 @@ page. The words are from that row:
 - **Tested** against the local stack with two real accounts (30/30), and production read-only
   with no credentials. Signing in to production is yours to try first: an account that has only
   used Google may need *Forgot password* on `/login` to get a password.
-- **Not built, questions for you** (on [awaiting-approval.md](awaiting-approval.md)): signing in
+- **Not built, questions for you** (question [q-arfr76](questions/q-arfr76.md)): signing in
   from Cowork on the web or phone (`qi-n9ntngfq`), and whether an agent may hold a private link's
   key or every reader's address (`qi-2a8nh33e`).
 - **Your list of people** (who, why, which articles) stays in the agent's own notes, as you

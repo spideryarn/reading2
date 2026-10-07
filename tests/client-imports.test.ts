@@ -19,9 +19,9 @@
  * module is one careless edit away from a broken browser bundle."* This is that
  * sentence, enforced.
  *
- * The fix when this fails is never to add the file to the allowlist. It is to
- * move the shared thing into a module that imports nothing — src/types.ts,
- * src/ids.ts, src/urls.ts are the existing examples.
+ * Never allowlist a server module to silence this check. Move the shared thing
+ * into a pure module, or allowlist an existing pure module that meets the
+ * qualification below — src/types.ts, src/ids.ts, src/urls.ts are examples.
  */
 import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -229,6 +229,8 @@ const SHARED = new Set([
      It imports nothing at all. See src/feedback-payload.ts and
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   "feedback-payload.js",
+  "feedback-ending-values.js", // a note's three endings and its comment bound, for the Earlier tab; imports nothing
+  "feedback-question-values.js", // a question's statuses, bounds and id rule, for the Earlier tab; imports only ids.js
   /* What may be said about a failure when it leaves the machine. On the list
      for the same reason `messages.js` is: it imports nothing but that file and
      types, and both halves of monitoring have to agree on the rules exactly —
@@ -421,7 +423,8 @@ const SHARED = new Set([
   /* What a referee's criterion is, and what a result of one may say. On the
      list because both modules qualify — `referee-criteria.js` imports
      `quote-match.js`, `types.js` and `urls.js`, every one of them already here,
-     and `saved-criteria.js` imports only `referee-criteria.js` — and because
+     and `saved-criteria.js` imports only `referee-criteria.js` (and holds
+     `isCriteriaAtCeiling`, so the panel need not import the store) — and because
      being on it is the point rather than a convenience.
 
      The client needs them for the reason `sketch-scene.js` is here: **the
@@ -854,9 +857,9 @@ describe("the client's imports", () => {
    * **What the rule flags, stated as data.**
    *
    * The sweep above reads real files, so it can only ever exercise the imports
-   * somebody happens to have written — and today every shared module is a leaf,
-   * so it passes without touching a single interesting case. This is the same
-   * rule asked about each spelling directly.
+   * somebody happens to have written, so a passing sweep does not prove that
+   * each forbidden spelling is caught. This is the same rule asked about each
+   * spelling directly.
    *
    * The type-only row is here **as an expected flag rather than as a deleted
    * case**, so that the decision in the comment above is executable rather than

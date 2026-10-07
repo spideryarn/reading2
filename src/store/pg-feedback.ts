@@ -45,27 +45,36 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { feedback as feedbackTable } from "../db/schema.js";
+import { feedback as feedbackTable, feedbackQuestionAnswers as answersTable } from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type {
-  FeedbackDiagnosticsPayload,
-  FeedbackEnvironment,
-  FeedbackKind,
+import {
+  EARLIER_FEEDBACK_STATUSES,
+  type EarlierFeedbackStatus,
+  type FeedbackDiagnosticsPayload,
+  type FeedbackEnvironment,
+  type FeedbackKind,
 } from "../types.js";
 import {
   FEEDBACK_WINDOW_MS,
   feedbackHourlyCap,
+  type FeedbackEndingIds,
   type FeedbackIdFilter,
   type FeedbackReport,
+  type MyFeedback,
   type MyFeedbackPage,
+  type MyFeedbackStatusPage,
   type FeedbackStore,
   type FeedbackSubmission,
+  type FeedbackAnswerSubmission,
+  type LinkedFeedbackReport,
   type NewFeedback,
+  type NewFeedbackAnswer,
+  type StoredFeedbackAnswer,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 
@@ -92,6 +101,60 @@ const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } 
 function idMember(ids: readonly string[]): SQL {
   const literal = `{${ids.map((id) => `"${id.replace(/["\\]/g, "\\$&")}"`).join(",")}}`;
   return sql`${feedbackTable.id} = any(${literal}::text[])`;
+}
+
+/** A status as a SQL literal: typed, so a word the union does not have cannot be written into the query. */
+const statusLiteral = (status: EarlierFeedbackStatus): SQL => sql.raw(`'${status}'`);
+
+/**
+ * **A report's status, as one SQL expression** — selected for the row, compared
+ * for the filter and grouped for the counts, so the three cannot disagree.
+ * The order of the `when`s is the rule (`EarlierFeedbackStatus` in
+ * src/types.ts): shipped first; then set aside, by an admin's Ignore or a
+ * declined note; then waiting; and a report with no note is open.
+ */
+function statusOf(endings: FeedbackEndingIds): SQL<string> {
+  return sql<string>`(case
+    when ${idMember(endings.shipped)} then ${statusLiteral("shipped")}
+    when ${feedbackTable.ignoredAt} is not null or ${idMember(endings.declined)} then ${statusLiteral("aside")}
+    when ${idMember(endings.awaiting)} then ${statusLiteral("waiting")}
+    else ${statusLiteral("open")}
+  end)`;
+}
+
+/** The database's word as the union's, or a throw: never a cast over a value this file did not check. */
+function toStatus(value: string): EarlierFeedbackStatus {
+  const status = EARLIER_FEEDBACK_STATUSES.find((known) => known === value);
+  if (status === undefined) throw new Error("feedback status outside the four the query can produce");
+  return status;
+}
+
+/**
+ * **The five columns an Earlier list reads, named here**, not `REPORT_COLUMNS`
+ * narrowed afterwards: what is never selected cannot be handed on by a later
+ * spread. `url` is the fifth, and it is selected only to be turned into `page`
+ * and `at` by `toMine` — the address itself goes no further than this file
+ * (src/feedback-page.ts).
+ */
+const MINE_COLUMNS = {
+  id: feedbackTable.id,
+  createdAt: feedbackTable.createdAt,
+  kind: feedbackTable.kind,
+  body: feedbackTable.body,
+  url: feedbackTable.url,
+};
+
+/** One row of `MINE_COLUMNS` as the six fields an Earlier list hands on. */
+function toMine(row: { id: string; createdAt: Date; kind: string | null; body: string; url: string | null }): MyFeedback {
+  return {
+    id: row.id,
+    createdAt: row.createdAt.toISOString(),
+    /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
+    kind: row.kind === null ? null : (row.kind as FeedbackKind),
+    body: row.body,
+    page: feedbackPageLabel(row.url),
+    at: feedbackPageAt(row.url),
+  };
 }
 
 /**
@@ -196,6 +259,27 @@ function toReport(row: ReportRow): FeedbackReport {
     sentryEventId: row.sentryEventId,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** The four fields of a reply that are the caller's to read back. */
+const ANSWER_COLUMNS = {
+  id: answersTable.id,
+  questionId: answersTable.questionId,
+  body: answersTable.body,
+  createdAt: answersTable.createdAt,
+};
+
+function toAnswer(row: { id: string; questionId: string; body: string; createdAt: Date }): StoredFeedbackAnswer {
+  return { id: row.id, questionId: row.questionId, body: row.body, createdAt: row.createdAt.toISOString() };
+}
+
+/** As much of a report's first line as fits beside a question's title. */
+const FIRST_LINE_CHARS = 140;
+
+/** The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark that it was. */
+function firstLineOf(body: string): string {
+  const line = body.split(/\r\n|[\n\r]/).find((one) => one.trim() !== "")?.trim() ?? "";
+  return line.length > FIRST_LINE_CHARS ? `${line.slice(0, FIRST_LINE_CHARS).trimEnd()}…` : line;
 }
 
 /** How much the reader wrote. The one number this file logs about their words. */
@@ -365,22 +449,12 @@ const rawPgFeedbackStore: FeedbackStore = {
        "50 most recent of 50". Sequential, not `Promise.all`, inside it —
        src/store/article-rows.ts § `walk` says why. */
     return getDb().transaction(async (tx) => {
-      /* **Five columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
-         what is never selected cannot be handed on by a later spread. `url` is
-         the fifth, and it is selected only to be turned into `page` below — the
-         address itself goes no further than this function
-         (src/feedback-page.ts). One row past
+      /* `MINE_COLUMNS`, and no more. One row past
          the limit is how `more` is known; the `(owner_id, created_at)` index the
          cap uses serves this too, and `id` breaks a tie between two reports filed
          in the same instant so the order is stable across reads. */
       const rows = await tx
-        .select({
-          id: feedbackTable.id,
-          createdAt: feedbackTable.createdAt,
-          kind: feedbackTable.kind,
-          body: feedbackTable.body,
-          url: feedbackTable.url,
-        })
+        .select(MINE_COLUMNS)
         .from(feedbackTable)
         .where(and(eq(feedbackTable.ownerId, owner), idFilter(filter)))
         .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
@@ -396,19 +470,116 @@ const rawPgFeedbackStore: FeedbackStore = {
         .from(feedbackTable)
         .where(eq(feedbackTable.ownerId, owner));
       return {
-        reports: rows.slice(0, limit).map((row) => ({
-          id: row.id,
-          createdAt: row.createdAt.toISOString(),
-          /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
-          kind: row.kind === null ? null : (row.kind as FeedbackKind),
-          body: row.body,
-          page: feedbackPageLabel(row.url),
-          at: feedbackPageAt(row.url),
-        })),
+        reports: rows.slice(0, limit).map(toMine),
         more: rows.length > limit,
         counts: { all: counted?.all ?? 0, in: counted?.in ?? 0 },
       };
     }, SNAPSHOT);
+  },
+
+  async listMineByStatus(
+    limit: number,
+    endings: FeedbackEndingIds,
+    show: EarlierFeedbackStatus | "all",
+  ): Promise<MyFeedbackStatusPage> {
+    const owner = currentOwnerId();
+    const status = statusOf(endings);
+    /* One snapshot for the list and its counts, sequentially, as `listMine`. */
+    return getDb().transaction(async (tx) => {
+      /* The owner predicate is always there; the status one is `and`-ed
+         beside it, never instead of it. */
+      const rows = await tx
+        .select({ ...MINE_COLUMNS, number: feedbackTable.number, ignoredAt: feedbackTable.ignoredAt, status })
+        .from(feedbackTable)
+        .where(
+          and(
+            eq(feedbackTable.ownerId, owner),
+            show === "all" ? undefined : sql`${status} = ${statusLiteral(show)}`,
+          ),
+        )
+        .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
+        .limit(limit + 1);
+      /* `group by 1`: the expression binds its arrays afresh each time it is
+         written, and Postgres would not take a second copy for the same one. */
+      const counted = await tx
+        .select({ status, reports: sql<number>`count(*)::int` })
+        .from(feedbackTable)
+        .where(eq(feedbackTable.ownerId, owner))
+        .groupBy(sql`1`);
+      const counts: Record<EarlierFeedbackStatus, number> = { open: 0, waiting: 0, aside: 0, shipped: 0 };
+      for (const row of counted) counts[toStatus(row.status)] = row.reports;
+      return {
+        reports: rows.slice(0, limit).map((row) => ({
+          ...toMine(row),
+          number: row.number,
+          status: toStatus(row.status),
+          ignoredAt: row.ignoredAt === null ? null : row.ignoredAt.toISOString(),
+        })),
+        more: rows.length > limit,
+        counts,
+      };
+    }, SNAPSHOT);
+  },
+
+  async submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission> {
+    const db = getDb();
+    const ownerId = currentOwnerId();
+    /* **`on conflict do nothing`, then look**: the insert is the only write and
+       it either lands or does not, so two copies of one retry cannot both
+       create, and neither meets a raw uniqueness error. The key is
+       `(owner_id, id)`, so the row found below is this owner's by construction. */
+    const [created] = await db
+      .insert(answersTable)
+      .values({
+        id: input.id,
+        ownerId,
+        questionId: input.questionId,
+        body: input.body,
+        environment: input.environment,
+      })
+      .onConflictDoNothing({ target: [answersTable.ownerId, answersTable.id] })
+      .returning(ANSWER_COLUMNS);
+    if (created) {
+      /* Lengths and ids, never the words (docs/project/logging.md). */
+      logger.info({ id: input.id, question: input.questionId, chars: input.body.length }, "feedback question answered");
+      return { kind: "created", answer: toAnswer(created) };
+    }
+    const [existing] = await db
+      .select(ANSWER_COLUMNS)
+      .from(answersTable)
+      .where(and(eq(answersTable.ownerId, ownerId), eq(answersTable.id, input.id)));
+    /* A conflict with no row to find: rows here are never deleted, so this is
+       a bug to hear about, not an outcome to pick a status for. */
+    if (!existing) throw new Error("feedback answer conflicted with a row that cannot be read");
+    /* The same reply again is the retry it looks like. Anything else under
+       this id is a second, different reply, and the stored one stands. */
+    if (existing.questionId !== input.questionId || existing.body !== input.body) {
+      logger.warn({ id: input.id }, "feedback answer refused: its id is already another reply");
+      return { kind: "conflict" };
+    }
+    logger.info({ id: input.id, repeat: true }, "feedback question already answered with this reply");
+    return { kind: "duplicate", answer: toAnswer(existing) };
+  },
+
+  async newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]> {
+    if (questionIds.length === 0) return [];
+    /* `distinct on`: the first row of each question in newest-first order. The
+       owner predicate is always there, and the question one beside it. */
+    const rows = await getDb()
+      .selectDistinctOn([answersTable.questionId], ANSWER_COLUMNS)
+      .from(answersTable)
+      .where(and(eq(answersTable.ownerId, currentOwnerId()), inArray(answersTable.questionId, [...questionIds])))
+      .orderBy(answersTable.questionId, desc(answersTable.createdAt), desc(answersTable.id));
+    return rows.map(toAnswer);
+  },
+
+  async linkedReports(ids: readonly string[]): Promise<LinkedFeedbackReport[]> {
+    if (ids.length === 0) return [];
+    const rows = await getDb()
+      .select({ id: feedbackTable.id, number: feedbackTable.number, body: feedbackTable.body })
+      .from(feedbackTable)
+      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), idMember(ids)));
+    return rows.map((row) => ({ id: row.id, number: row.number, firstLine: firstLineOf(row.body) }));
   },
 
   async markMirrorAttempted(id: string): Promise<void> {

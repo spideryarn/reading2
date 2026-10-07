@@ -15,10 +15,10 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
+import { HELP_TOPIC_FILES } from "../src/web/help/help-pages.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnnotateDialog, annotateKey } from "../src/web/AnnotateDialog.js";
-import { HELP_TOPICS } from "../src/web/help/help-topics.js";
+import { helpWords } from "./helpers/help-words.js";
 import { readerCss } from "./helpers/stylesheets.js";
 import type { BlockId } from "../src/types.js";
 
@@ -230,14 +230,14 @@ describe("copying the selected passage", () => {
    code does. tests/selecting-applies-the-highlight.test.tsx is the behaviour. */
 describe("what the help page promises about selecting", () => {
   it("says that a page-exit save is best effort, not certain", () => {
-    const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
+    const copy = helpWords("comments");
     expect(copy).toContain("Leaving or reloading the page in that moment still tries to save it");
     expect(copy).toContain("a failed connection can lose it");
     expect(copy).not.toContain("leaving the page all save it");
   });
 
   it("says the highlight is applied on selecting, and the three ways to undo or change it", () => {
-    const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
+    const copy = helpWords("comments");
     expect(copy).toContain("they are highlighted in yellow straight away");
     expect(copy).toContain("click anywhere else and you are done");
     expect(copy).toContain("Remove highlight");
@@ -247,7 +247,10 @@ describe("what the help page promises about selecting", () => {
     /* The draft box's promises, which are no longer true outside Referee mode. */
     expect(copy).not.toContain("with yellow already picked");
     expect(copy).not.toContain("The × and Escape save the highlight");
-    expect(copy).toMatch(/In Referee mode<\/strong> selecting works the old way/);
+    /* The emphasis ends after the three words, so it reads as the exception
+       it is: held against the file, where the marks are. */
+    expect(HELP_TOPIC_FILES.comments).toMatch(/\*\*In Referee mode\*\* selecting works the old way/);
+    expect(copy).toContain("In Referee mode selecting works the old way");
   });
 });
 

@@ -39,7 +39,7 @@
 
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import type { RefereeCriterionConfig } from "./referee-criteria.js";
-import { MAX_CRITERIA, type SavedCriterion } from "./saved-criteria.js";
+import type { SavedCriterion } from "./saved-criteria.js";
 
 /**
  * Which criterion a `begin` produces, as a value. **Pure — no clock, no disk.**
@@ -158,50 +158,11 @@ export const CRITERION_HAS_COMMENTS =
   "Your comments are placed on this criterion, so it cannot be deleted until you clear those " +
   "placements or delete those comments.";
 
-/**
- * **What a referee is told when the article already holds `MAX_CRITERIA`.** A
- * 409, from `begin` in src/store/pg-referee-criteria.ts, before any stream
- * opens: nothing is written and nothing is deleted. It replaced, on 2026-10-07,
- * a trim that dropped the oldest criterion to make room without saying so
- * (docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
- *
- * The number is spelled from the constant, so the sentence cannot name a
- * ceiling the store does not enforce.
- *
- * **And it takes the real count, `n`.** A list can already be past the
- * ceiling: the old trim spared criteria still being answered, so one could be
- * inherited above 200 (production's largest was 4 on 2026-10-07, so this is
- * for correctness, not for a reader we know of). There "200" and "Delete one"
- * would both be false, so the sentence names `n` and how many deletes leave
- * room for one more. At exactly the ceiling it is `CRITERIA_AT_CEILING`, word
- * for word. GPT Sol's C2 in the plan above.
- */
-export function criteriaAtCeiling(n: number): string {
-  if (n <= MAX_CRITERIA) {
-    return (
-      `This article already has ${MAX_CRITERIA} criteria, which is as many as it can hold. ` +
-      "Delete one to add another."
-    );
-  }
-  return (
-    `This article already has ${n} criteria, and it can hold ${MAX_CRITERIA}. ` +
-    `Delete ${n - (MAX_CRITERIA - 1)} to add another.`
-  );
-}
-
-/** The sentence at exactly the ceiling — the one nearly every refusal says. */
-export const CRITERIA_AT_CEILING = criteriaAtCeiling(MAX_CRITERIA);
-
-/**
- * **Is this the ceiling's refusal, at any count?** The browser keeps a refused
- * add as a draft (src/web/criterion-refusal-drafts.ts) only for this refusal,
- * and the sentence is the only thing the 409 carries. Read the count back out
- * and rebuild the sentence, so the two forms stay one definition.
- */
-export function isCriteriaAtCeiling(message: string): boolean {
-  const n = /^This article already has (\d+) criteria/.exec(message)?.[1];
-  return n !== undefined && criteriaAtCeiling(Number(n)) === message;
-}
+/* The ceiling's refusal sentence and its recogniser live in
+   src/saved-criteria.ts beside `MAX_CRITERIA`, so the browser can recognise the
+   409 without importing this server module (tests/client-imports.test.ts).
+   Re-exported so server callers keep one import. */
+export { CRITERIA_AT_CEILING, criteriaAtCeiling, isCriteriaAtCeiling } from "./saved-criteria.js";
 
 /**
  * **What a placement is told when its criterion is not there** — a 400, and
