@@ -23,7 +23,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { shiftMsToBrowserClock, type ClockSkew } from "./types";
 import type { UsageHistoryApi, UsageHistoryView } from "./usage-history-client";
-import { plotUsageHistory, type UsagePlot } from "./usage-history-series";
+import { codexWindowLabel } from "./codex-buckets";
+import { plotUsageHistory, type CodexSeries, type Line, type UsagePlot } from "./usage-history-series";
 
 const PLOT_W = 1000;
 const SERIES_H = 64;
@@ -103,10 +104,12 @@ function WindowLine({
   plot,
   series,
   tone,
+  dash,
 }: {
   plot: UsagePlot;
-  series: UsagePlot["accounts"][number]["windows"][number];
+  series: Line;
   tone: string;
+  dash: string | undefined;
 }): ReactNode {
   const x = xOf(plot);
   const y = (pct: number): number => SERIES_H - (Math.max(0, Math.min(100, pct)) / 100) * SERIES_H;
@@ -125,16 +128,242 @@ function WindowLine({
           fill="none"
           stroke={tone}
           strokeWidth={1.5}
+          strokeDasharray={dash}
+          /* The viewBox is stretched, so keep the stroke its real width. */
+          vectorEffect="non-scaling-stroke"
           points={run.map((p) => `${x(p.atMs)},${y(p.value)}`).join(" ")}
         />
       ))}
-      {/* A single reading is a point rather than a line, and must still show. */}
+      {/* A round cap on a zero-length stroke keeps a singleton circular and
+          four CSS pixels wide even when the viewBox stretches on a phone. */}
       {runs
         .filter((run) => run.length === 1)
         .map((run) => (
-          <circle key={run[0]?.atMs} cx={x(run[0]?.atMs ?? 0)} cy={y(run[0]?.value ?? 0)} r={2} fill={tone} />
+          <line
+            key={run[0]?.atMs}
+            x1={x(run[0]?.atMs ?? 0)}
+            x2={x(run[0]?.atMs ?? 0)}
+            y1={y(run[0]?.value ?? 0)}
+            y2={y(run[0]?.value ?? 0)}
+            stroke={tone}
+            strokeWidth={4}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
     </>
+  );
+}
+
+type ChartLine = {
+  key: string;
+  line: Line;
+  tone: string;
+  /** A second encoding for a second account, since colour already names the window. */
+  dash: string | undefined;
+  label: string;
+};
+
+/**
+ * One 24-hour chart: the percentage scale, the gridlines, the record-level
+ * washes every series shares, the lines, and a legend.
+ *
+ * Drawn once for Claude and once or twice for Codex. The washes are the plot's,
+ * not the chart's, because a gap in the records is a gap for every provider.
+ */
+function SeriesChart({
+  plot,
+  skew,
+  label,
+  lines,
+}: {
+  plot: UsagePlot;
+  skew: ClockSkew;
+  label: string;
+  lines: ChartLine[];
+}): ReactNode {
+  const x = xOf(plot);
+  return (
+    <>
+      <div className="tw:relative tw:pl-8">
+        <div
+          className="tw:pointer-events-none tw:absolute tw:inset-y-0 tw:left-0 tw:flex tw:flex-col tw:justify-between tw:text-[10px] tw:opacity-60"
+          aria-hidden
+        >
+          <span>100%</span>
+          <span>50%</span>
+          <span>0%</span>
+        </div>
+        <svg
+          viewBox={`0 0 ${PLOT_W} ${SERIES_H}`}
+          preserveAspectRatio="none"
+          className="tw:mt-2 tw:h-24 tw:w-full"
+          role="img"
+          aria-label={label}
+        >
+          <rect x={0} y={0} width={PLOT_W} height={SERIES_H} fill="var(--quiet-wash)" />
+          {/* Gridlines at 0/50/100%. Without them the height of a line means
+              nothing — a browser check read the chart and could not say what
+              any point was worth. The numbers are in HTML beside the svg,
+              because `preserveAspectRatio="none"` stretches the viewBox and
+              would stretch text with it. */}
+          {[0, 50, 100].map((pct) => (
+            <line
+              key={pct}
+              x1={0}
+              x2={PLOT_W}
+              y1={SERIES_H - (pct / 100) * SERIES_H}
+              y2={SERIES_H - (pct / 100) * SERIES_H}
+              stroke="var(--rule)"
+              strokeWidth={0.5}
+            />
+          ))}
+          {/* Where nothing was recorded. Shaded rather than joined, because the
+              alternative is a straight line across an unobserved period. */}
+          {plot.recorderGaps.map((gap) => (
+            <rect
+              key={`${gap.fromMs}-${gap.toMs}`}
+              x={x(gap.fromMs)}
+              y={0}
+              width={Math.max(1, x(gap.toMs) - x(gap.fromMs))}
+              height={SERIES_H}
+              fill="var(--unknown-wash)"
+            />
+          ))}
+          {plot.clockRegressions.map((span) => (
+            <rect
+              key={`${span.fromMs}-${span.toMs}`}
+              x={x(span.fromMs)}
+              y={0}
+              width={Math.max(1, x(span.toMs) - x(span.fromMs))}
+              height={SERIES_H}
+              fill="var(--alarm-wash)"
+            />
+          ))}
+          {plot.beforeHistory !== null ? (
+            <rect
+              x={x(plot.beforeHistory.fromMs)}
+              y={0}
+              width={Math.max(1, x(plot.beforeHistory.toMs) - x(plot.beforeHistory.fromMs))}
+              height={SERIES_H}
+              fill="var(--rule)"
+              opacity={0.25}
+            />
+          ) : null}
+          {lines.map((l) => (
+            <WindowLine key={l.key} plot={plot} series={l.line} tone={l.tone} dash={l.dash} />
+          ))}
+        </svg>
+      </div>
+
+      <div className="tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:opacity-80 tw:break-words">
+        {lines.map((l) => (
+          <span key={l.key} className="tw:min-w-0">
+            <span style={{ color: l.tone }}>{l.dash === undefined ? "—" : "‐ ‐"}</span> {l.label}
+          </span>
+        ))}
+        {/* **NOT "05:28 – 05:28".** A 24-hour window ends at the same wall
+            time it began, so a bare start-and-end reads as a zero-width
+            range — which is exactly how it looked in the browser. Say the
+            span and anchor it to the end instead. */}
+        <span>
+          the {WINDOW_HOURS} hours to {clockLabel(plot.toMs, skew)}, as observed
+        </span>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The Codex lines, in an order that does not depend on the payload's.
+ *
+ * Bucket order varies from record to record in the live file, so ordering by
+ * first appearance would reshuffle the legend between loads of the same page.
+ */
+function codexLines(series: CodexSeries[], accounts: string[]): ChartLine[] {
+  const sorted = [...series].sort(
+    (a, b) =>
+      a.limitId.localeCompare(b.limitId) ||
+      a.windowMinutes - b.windowMinutes ||
+      a.accountId.localeCompare(b.accountId),
+  );
+  return sorted.map((s) => {
+    const accountIndex = accounts.indexOf(s.accountId);
+    const window = codexWindowLabel({ windowMinutes: s.windowMinutes, slot: "primary" });
+    return {
+      key: JSON.stringify([s.accountId, s.limitId, s.windowMinutes]),
+      line: s,
+      /* Fixed duration colours across both groups and changing history ranges.
+         The provider's two usual windows have distinct tones; other durations
+         share the third tone and are named by their legend labels. */
+      tone: WINDOW_TONES[s.windowMinutes === 300 ? 0 : s.windowMinutes === 10_080 ? 1 : 2] ?? "var(--work)",
+      dash: accountIndex > 0 ? "6 4" : undefined,
+      label: `${s.general ? "" : `${s.limitName ?? s.limitId} · `}${window}${accounts.length > 1 ? ` · ${s.accountId.slice(0, 8)}` : ""}`,
+    };
+  });
+}
+
+/**
+ * The Codex half: the general limit drawn, the model-specific ones collapsed.
+ *
+ * Collapsed because that is how the live sections above treat them, and Greg
+ * asked for the less important things to be put out of the way (plan 261006l).
+ * Each group has its own empty state: model-specific points can exist while the
+ * general limit has none, and an empty chart would read as 0%.
+ */
+function CodexHistory({ plot, skew }: { plot: UsagePlot; skew: ClockSkew }): ReactNode {
+  const drawable = plot.codex.series.filter((s) => s.points.length > 0);
+  /* Both charts describe the same history: filtering by bucket must not hide
+     an account swap or turn the same account's dashed line solid. */
+  const accounts = [...new Set(drawable.map((s) => s.accountId))].sort();
+  const general = codexLines(drawable.filter((s) => s.general), accounts);
+  const specific = codexLines(drawable.filter((s) => !s.general), accounts);
+  const specificCount = new Set(specific.map((l) => (l.line as CodexSeries).limitId)).size;
+  return (
+    <div className="tw:mt-4">
+      <h4 className="tw:text-sm tw:font-medium">Codex</h4>
+      <p className="tw:mt-1 tw:text-xs tw:opacity-70">
+        The Codex login the daemon reads, sampled on each pass. Plotted at the pass time.
+      </p>
+      {general.length > 0 ? (
+        <SeriesChart plot={plot} skew={skew} label={`Codex general usage over the last ${WINDOW_HOURS} hours`} lines={general} />
+      ) : (
+        <p className="tw:mt-1 tw:text-sm tw:opacity-80">No general Codex usage reading to plot in this period.</p>
+      )}
+      {plot.codex.notObserved > 0 ? (
+        <p className="tw:mt-1 tw:text-xs tw:opacity-70">
+          {plot.codex.notObserved} record(s) carried no Codex reading that could be drawn — the lines break there.
+        </p>
+      ) : null}
+      {specific.length > 0 ? (
+        <details className="tw:mt-2">
+          <summary className="tw:cursor-pointer tw:text-xs tw:opacity-80">
+            {specificCount} model-specific limit{specificCount === 1 ? "" : "s"}
+          </summary>
+          <SeriesChart
+            plot={plot}
+            skew={skew}
+            label={`Codex model-specific usage over the last ${WINDOW_HOURS} hours`}
+            lines={specific}
+          />
+        </details>
+      ) : null}
+      {plot.codex.unknownWindows.length > 0 ? (
+        <ul className="tw:mt-2 tw:text-xs tw:opacity-70">
+          {plot.codex.unknownWindows.map((w) => (
+            <li key={JSON.stringify([w.limitId, w.slot, w.windowMinutes, w.why])} className="tw:break-words">
+              <span className="tw:font-medium">
+                {w.limitName ?? w.limitId}
+                {w.windowMinutes !== null || w.slot !== null
+                  ? ` · ${codexWindowLabel({ windowMinutes: w.windowMinutes, slot: w.slot ?? "primary" })}`
+                  : ""}
+              </span>{" "}
+              — {w.why}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -165,23 +394,6 @@ export function UsageHistory({
     <section className="tw:mt-6">
       <h3 className="tw:text-sm tw:font-medium">The last {WINDOW_HOURS} hours</h3>
 
-      {/* **THE CHART IS NOT THE SECTIONS ABOVE IT, AND SAYS SO.**
-          Added 2026-09-10 with the per-account sections (plan 260910c). Each
-          persisted record carries the ONE account the daemon's usage pass
-          observed, so this chart is a history of the ambient login and not of
-          the registered accounts drawn above.
-
-          **It deliberately names no email.** The first draft of this line said
-          "this chart is greg@rehearsable.ai only", and GPT Sol showed that is
-          false: a `/login` swap inside the window produces several account uuids
-          across the range, and the legend above already distinguishes them by
-          uuid fragment when it happens. Naming one would be a claim about every
-          plotted series that nothing here has checked. */}
-      <p className="tw:mt-1 tw:text-xs tw:opacity-70">
-        History samples only the account the daemon itself observed on each pass, identified by uuid. It does not
-        yet record the per-account sections above.
-      </p>
-
       {/* **"NOTHING RECORDED" MEANS NO RECORDS, NOT NO LINE TO DRAW.** This was
           keyed off `hasPoints`, so a window full of collector failures, an
           unattributed cache, or nothing but named unknown windows and rejections
@@ -197,12 +409,6 @@ export function UsageHistory({
           {plot.unreadableLines > 0 ? ` ${plot.unreadableLines} line(s) could not be read.` : ""}
         </p>
       ) : null}
-      {!nothingRecorded && !hasPoints ? (
-        <p className="tw:text-sm tw:opacity-80">
-          Records were kept over this period, but none of them carried a utilisation reading to plot.
-          What they did carry is below.
-        </p>
-      ) : null}
       {plot.unsupportedLines > 0 ? (
         <p className="tw:mt-1 tw:text-xs tw:opacity-70">
           {plot.unsupportedLines} record(s) were written by a newer build and cannot be read here — the series is
@@ -210,104 +416,45 @@ export function UsageHistory({
         </p>
       ) : null}
 
-      {hasPoints ? (
-        <>
-          <div className="tw:relative">
-          <div
-            className="tw:pointer-events-none tw:absolute tw:inset-y-0 tw:left-0 tw:flex tw:flex-col tw:justify-between tw:text-[10px] tw:opacity-60"
-            aria-hidden
-          >
-            <span>100%</span>
-            <span>50%</span>
-            <span>0%</span>
-          </div>
-          <svg
-            viewBox={`0 0 ${PLOT_W} ${SERIES_H}`}
-            preserveAspectRatio="none"
-            className="tw:mt-2 tw:h-24 tw:w-full"
-            role="img"
-            aria-label={`Utilisation over the last ${WINDOW_HOURS} hours`}
-          >
-            <rect x={0} y={0} width={PLOT_W} height={SERIES_H} fill="var(--quiet-wash)" />
-            {/* Gridlines at 0/50/100%. Without them the height of a line means
-                nothing — a browser check read the chart and could not say what
-                any point was worth. The numbers are in HTML beside the svg,
-                because `preserveAspectRatio="none"` stretches the viewBox and
-                would stretch text with it. */}
-            {[0, 50, 100].map((pct) => (
-              <line
-                key={pct}
-                x1={0}
-                x2={PLOT_W}
-                y1={SERIES_H - (pct / 100) * SERIES_H}
-                y2={SERIES_H - (pct / 100) * SERIES_H}
-                stroke="var(--rule)"
-                strokeWidth={0.5}
-              />
-            ))}
-            {/* Where nothing was recorded. Shaded rather than joined, because the
-                alternative is a straight line across an unobserved period. */}
-            {plot.recorderGaps.map((gap) => (
-              <rect
-                key={`${gap.fromMs}-${gap.toMs}`}
-                x={x(gap.fromMs)}
-                y={0}
-                width={Math.max(1, x(gap.toMs) - x(gap.fromMs))}
-                height={SERIES_H}
-                fill="var(--unknown-wash)"
-              />
-            ))}
-            {plot.clockRegressions.map((span) => (
-              <rect
-                key={`${span.fromMs}-${span.toMs}`}
-                x={x(span.fromMs)}
-                y={0}
-                width={Math.max(1, x(span.toMs) - x(span.fromMs))}
-                height={SERIES_H}
-                fill="var(--alarm-wash)"
-              />
-            ))}
-            {plot.beforeHistory !== null ? (
-              <rect
-                x={x(plot.beforeHistory.fromMs)}
-                y={0}
-                width={Math.max(1, x(plot.beforeHistory.toMs) - x(plot.beforeHistory.fromMs))}
-                height={SERIES_H}
-                fill="var(--rule)"
-                opacity={0.25}
-              />
-            ) : null}
-            {plot.accounts.flatMap((account) =>
-              account.windows.map((series, i) => (
-                <WindowLine
-                  key={`${account.accountUuid}-${series.window}`}
-                  plot={plot}
-                  series={series}
-                  tone={WINDOW_TONES[i % WINDOW_TONES.length] ?? "var(--work)"}
-                />
-              )),
-            )}
-          </svg>
-          </div>
+      {/* **THE CHART IS NOT THE SECTIONS ABOVE IT, AND SAYS SO.**
+          Added 2026-09-10 with the per-account sections (plan 260910c). Each
+          persisted record carries the ONE account the daemon's usage pass
+          observed, so this chart is a history of the ambient login and not of
+          the registered accounts drawn above.
 
-          <div className="tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:opacity-80">
-            {plot.accounts.flatMap((account) =>
-              account.windows.map((series, i) => (
-                <span key={`${account.accountUuid}-${series.window}`}>
-                  <span style={{ color: WINDOW_TONES[i % WINDOW_TONES.length] }}>—</span> {series.window}
-                  {plot.accounts.length > 1 ? ` · ${account.accountUuid.slice(0, 8)}` : ""}
-                </span>
-              )),
-            )}
-            {/* **NOT "05:28 – 05:28".** A 24-hour window ends at the same wall
-                time it began, so a bare start-and-end reads as a zero-width
-                range — which is exactly how it looked in the browser. Say the
-                span and anchor it to the end instead. */}
-            <span>
-              the {WINDOW_HOURS} hours to {clockLabel(plot.toMs, skew)}, as observed
-            </span>
-          </div>
-        </>
+          **It deliberately names no email.** The first draft of this line said
+          "this chart is greg@rehearsable.ai only", and GPT Sol showed that is
+          false: a `/login` swap inside the window produces several account uuids
+          across the range, and the legend above already distinguishes them by
+          uuid fragment when it happens. Naming one would be a claim about every
+          plotted series that nothing here has checked. */}
+      <h4 className="tw:mt-3 tw:text-sm tw:font-medium">Claude</h4>
+      <p className="tw:mt-1 tw:text-xs tw:opacity-70">
+        History samples only the account the daemon itself observed on each pass, identified by uuid. It does not
+        yet record the per-account sections above.
+      </p>
+
+      {!nothingRecorded && !hasPoints ? (
+        <p className="tw:text-sm tw:opacity-80">
+          Records were kept over this period, but none of them carried a Claude utilisation reading to plot.
+          What they did carry is below.
+        </p>
+      ) : null}
+      {hasPoints ? (
+        <SeriesChart
+          plot={plot}
+          skew={skew}
+          label={`Claude utilisation over the last ${WINDOW_HOURS} hours`}
+          lines={plot.accounts.flatMap((account) =>
+            account.windows.map((series, i) => ({
+              key: `${account.accountUuid}-${series.window}`,
+              line: series,
+              tone: WINDOW_TONES[i % WINDOW_TONES.length] ?? "var(--work)",
+              dash: undefined,
+              label: `${series.window}${plot.accounts.length > 1 ? ` · ${account.accountUuid.slice(0, 8)}` : ""}`,
+            })),
+          )}
+        />
       ) : null}
 
       {/* THE REJECTIONS, ON THEIR OWN STRIP AND WITH NO ACCOUNT AGAINST THEM.
@@ -319,28 +466,30 @@ export function UsageHistory({
           <h4 className="tw:text-xs tw:font-medium tw:opacity-80">
             Rejections seen — window clusters, not tied to an account
           </h4>
-          <svg
-            viewBox={`0 0 ${PLOT_W} ${STRIP_H}`}
-            preserveAspectRatio="none"
-            className="tw:mt-1 tw:h-5 tw:w-full"
-            role="img"
-            aria-label="Rate-limit rejections over the same period"
-          >
-            <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
-            {plot.incidents
-              .filter((i) => !i.unplaced && !i.unreadable && i.fromMs !== null)
-              .map((incident) => (
-                <rect
-                  key={incident.id}
-                  x={Math.max(0, x(incident.fromMs ?? 0))}
-                  y={2}
-                  width={Math.max(2, x(incident.toMs ?? incident.fromMs ?? 0) - x(incident.fromMs ?? 0))}
-                  height={STRIP_H - 4}
-                  fill="var(--alarm)"
-                  opacity={0.8}
-                />
-              ))}
-          </svg>
+          <div className="tw:pl-8">
+            <svg
+              viewBox={`0 0 ${PLOT_W} ${STRIP_H}`}
+              preserveAspectRatio="none"
+              className="tw:mt-1 tw:h-5 tw:w-full"
+              role="img"
+              aria-label="Rate-limit rejections over the same period"
+            >
+              <rect x={0} y={0} width={PLOT_W} height={STRIP_H} fill="var(--quiet-wash)" />
+              {plot.incidents
+                .filter((i) => !i.unplaced && !i.unreadable && i.fromMs !== null)
+                .map((incident) => (
+                  <rect
+                    key={incident.id}
+                    x={Math.max(0, x(incident.fromMs ?? 0))}
+                    y={2}
+                    width={Math.max(2, x(incident.toMs ?? incident.fromMs ?? 0) - x(incident.fromMs ?? 0))}
+                    height={STRIP_H - 4}
+                    fill="var(--alarm)"
+                    opacity={0.8}
+                  />
+                ))}
+            </svg>
+          </div>
           <ul className="tw:mt-1 tw:text-xs tw:opacity-80">
             {plot.incidents.map((incident) => (
               <li key={incident.id}>
@@ -366,6 +515,8 @@ export function UsageHistory({
           ))}
         </ul>
       ) : null}
+
+      {nothingRecorded ? null : <CodexHistory plot={plot} skew={skew} />}
 
       {/* Is anything still being recorded? Derived from the records, because the
           writer is the Overseer daemon and this page is the dashboard — two
