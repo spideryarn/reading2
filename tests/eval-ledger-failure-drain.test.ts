@@ -7,7 +7,7 @@ vi.mock("../src/store/index.js", () => ({ loadArticle: async () => ({ blocks: []
 vi.mock("../src/glossary.js", () => ({ generateGlossary: mocks.generateGlossary }));
 vi.mock("../src/cli-ledger.js", () => ({
   withLedger: async (_kind: string, main: () => Promise<void>) => collectSpend(main, {
-    attribution: { scopeKind: "eval", ownerId: "00000000-0000-4000-8000-000000000001" },
+    attribution: { scopeKind: "eval", ownerId: "00000000-0000-4000-8000-000026100702" },
     sink: async (row: AiCallRow) => { mocks.rows.push(row); },
   }),
 }));

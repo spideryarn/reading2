@@ -10,7 +10,7 @@ vi.mock("../src/store/ai-calls.js", () => ({ costStore: { record: mocks.record }
 vi.mock("../src/owner.js", () => ({
   environmentOwnerId: mocks.owner,
   // The collector also resolves its ambient owner while turning a spend record into a row.
-  currentOwnerId: () => "00000000-0000-4000-8000-000000000001",
+  currentOwnerId: () => "00000000-0000-4000-8000-000026100701",
 }));
 
 const dirs: string[] = [];
@@ -24,7 +24,7 @@ it.each([false, true])("a ledger with fake=%s keeps local rows and writes databa
   const dir = mkdtempSync(path.join(tmpdir(), "eval-spend-"));
   dirs.push(dir);
   const ledger = new Ledger(path.join(dir, "ledger.jsonl"), 10, fake);
-  const owner = "00000000-0000-4000-8000-000000000001";
+  const owner = "00000000-0000-4000-8000-000026100701";
   mocks.owner.mockImplementation(() => {
     if (fake) throw new Error("a fake run must not resolve a database owner");
     return owner;
