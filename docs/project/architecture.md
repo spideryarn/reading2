@@ -76,6 +76,8 @@ then where the data lives.
 - **[sql.md](sql.md)** — adding a column or a table: the shape we want the schema to have.
 - **[export.md](export.md)** — a reader's data leaving: the per-article zip, and the `db:export`
   rollback that shares its queries.
+- **[mcp.md](mcp.md)** — an AI agent driving Spideryarn as you: the local MCP server, how to sign
+  it in and add it to Claude, its tools, and the approval dialog before anything is sent.
 
 ## Pipeline
 

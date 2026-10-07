@@ -194,6 +194,22 @@ five marked files were re-marked; the gate went red on exactly those five first.
 `tests/overseer-scheduled-dispatch.test.ts` lacked the new `attentionOffSinceRestart`, which my
 first typecheck run hid behind a `tail`.
 
+## Log
+
+- 2026-10-07: planned, reviewed, built, code-reviewed. `/etc/overseer-secrets.env` created (root
+  0600; a transient unit as `greg` saw a key of the source's length). Restart test green in all
+  three modes.
+- 2026-10-07 11:07–11:22 UTC: `/etc/tmpfiles.d/tmp.conf` installed, the 30-day rule confirmed no
+  longer read, and one `systemd-tmpfiles --clean --prefix=/tmp` under `nice`/`ionice -c3`: 880 s,
+  **`/` from 85% to 68% (46 GB free to 93 GB)**. Dashboard 200, tmux socket and the Overseer's
+  scratchpad present, the daemon's heartbeat fresh throughout. The top-level entry count did not
+  fall (826,251): emptying a directory refreshes its mtime, so the empty directories go on the next
+  daily run. 928 "Opening file … SingletonSocket failed, ignoring" lines: dead Chrome sockets,
+  which tmpfiles tries to probe for a listener and skips.
+- 769 screenshots compressed in six commits, 135 MB to 53 MB a checkout; three more from a peer
+  after the merge.
+- Not done here: the Overseer's cut-over to `overseer.service` (its switch; the steps are above).
+
 ## Order
 
 Stage A: `/tmp`. Stage B: the unit, the test, watchdog, tick, activate, docs. Stage C: the script,

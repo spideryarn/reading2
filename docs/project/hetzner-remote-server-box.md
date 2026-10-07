@@ -1113,17 +1113,17 @@ hand, and `diff` is the whole of the verification:
 diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
 ```
 
-**What actually runs: the dashboard is under systemd, and the Overseer daemon is moving there.**
+**What actually runs: the dashboard and the Overseer daemon are both under systemd.**
 Greg approved it on 2026-10-07
 ([the plan](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md)), and the
 unit is ready: it reads `OPENROUTER_API_KEY` from **`/etc/overseer-secrets.env`**, root-owned and
 mode 0600, which systemd reads as root before it drops to `greg`. No agent can read the file
 without `sudo`; every agent can read the running daemon's `/proc/<pid>/environ`, as it always could
 under tmux. The unit refuses to start without the file (no leading `-`), the same refusal the tmux
-launch script makes. Until the Overseer does the switch, the live daemon is still the tmux session
-(`overseer-daemon-<HHMM>`) started by
+launch script makes. The Overseer switched to the unit on 2026-10-07 at 11:25 UTC (disarmed, as
+before); until then the live daemon was the tmux session started by
 [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh), which
-reads the key out of `.env.local`. Check which one is live with
+is now the rollback, after `sudo systemctl disable --now overseer`. Check which one is live with
 `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
 `systemctl is-active overseer`.
 

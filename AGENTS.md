@@ -44,7 +44,8 @@ listed here; the names under each are files in `docs/project/`.
   `prompting-guide.md` (the plain-words rule every prompt shares, and how to measure a prompt change) ·
   `database.md` ·
   `sql.md` (columns over JSON, keys over good intentions) ·
-  `export.md` (one article's data, out)
+  `export.md` (one article's data, out) ·
+  `mcp.md` (an AI agent driving Spideryarn as you, from your own machine)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
