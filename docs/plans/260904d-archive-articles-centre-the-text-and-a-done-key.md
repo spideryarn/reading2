@@ -374,3 +374,22 @@ the loop went looking** — by which time another agent was already fixing both.
 have caught them at the time is `npm run check`, which takes half an hour here and was not run at the
 end of that batch. That is the lesson, and it survives the fact that this pass's own fixes were the
 ones discarded.
+
+## History moved from library.md (2026-10-07)
+
+Moved verbatim from [library.md § This section was called "Delete means archive"](../project/library.md#this-section-was-called-delete-means-archive-and-that-was-the-bug)
+when the docs sweep split over-long reference docs. The reference doc keeps the lesson and the
+tests that pin it; this keeps the story.
+
+### The Delete-to-Archive rename
+
+Nothing under the interface changed: no schema change, no API change, no store change.
+`archived_at`, `?archived=1` and `shelf.archive` were always the words in the database, on the wire
+and in the client, so the rename **narrowed** the vocabulary rather than adding to it.
+
+### Permanent deletion deferred on 2026-09-04
+
+**Permanent deletion was deferred**, deliberately and in writing, though Greg's report raised it —
+*"maybe there should also be a way to permanently delete"*. It gets its own plan: one production
+database, real readers' articles, and a mis-tap that nothing can undo is a different kind of feature
+from this one.
