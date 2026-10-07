@@ -245,6 +245,8 @@ yes. The numbers are for answering with ("1 and 3, not 2").
 
 ### 1. `version-control.md` — a merge conflict no longer goes to Greg
 
+**Decided 2026-10-07: done** (997246843). Greg: *"re version-control.md changes - yes, approved"*.
+
 **Background.** Since 2026-09-10 AGENTS.md says an agent resolves a merge conflict itself, asking
 GPT Sol or Opus when unsure, and comes to Greg only for a real product trade-off. The sixth sweep
 carried a note that `version-control.md` still said otherwise. Read end to end, it says so in one
@@ -272,6 +274,8 @@ commands that discard a side"*.
 *Recommend:* yes. It makes the doc agree with a rule already approved.
 
 ### 2. "Merge `origin/dev` when you wake" is in one doc, and not the one agents load
+
+**Decided 2026-10-07: the `version-control.md` pointer is done** (997246843); the optional AGENTS.md words were not asked for and are not added.
 
 **Background.** The rule, with Greg's words of 2026-09-06, is in `worktrees.md` § The workflow and
 nowhere else. `version-control.md` does not mention it and AGENTS.md does not either.
