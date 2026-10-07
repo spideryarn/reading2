@@ -220,6 +220,32 @@ F7 scripts read new columns absent-safely; F8 question files replace the waiting
 copying it; F9 pill counts stay report counts; F10 the comment rule for an incomplete split
 report; F11 the skew that matters is new client on old server, handled by the 404 fallback.
 
+**Round two** (`261007d-…-plan-review-sol-r2.md`) closed nine of the eleven and added four. All
+six accepted, and **they amend the decisions above where they differ**:
+
+- **F7, the rest.** `feedback-questions.ts --answers` run before the answers table is deployed
+  says *answers are not deployed yet* and exits 0 with none, having checked the table is absent
+  rather than assumed it; any other read failure is exit 2.
+- **F11, the rest.** A reply whose POST gets a 404 keeps the typed words in the box and says to
+  reload and try again.
+- **F12.** The sweep's real instructions are `scripts/overseer-tools/prompt-feedback-sweep.md`.
+  It is updated in stage 2: read every open question file, run `--answers` (exit 2 stops the
+  sweep; it is not "no answers"), keep reading `awaiting-approval.md` only for attempted abuse
+  and history, and debrief open questions and new answer ids.
+- **F13.** The answers table also stores a server-authored `environment`, from the same closed
+  mapping as a feedback report's, never from the POST body. The script uses `productionClient()`,
+  prints `Target:`, reads inside `begin read only`, and treats as Greg's only a row whose owner
+  `isAdmin` **and** whose environment is `production` or `preview`. Anything else is exit 2.
+- **F14.** A late reply must not be lost. Every question id is compiled with its status; the GET
+  sends only open ones; the POST accepts a reply to any known id. A question file records the
+  ids of the answers already acted on (`acted:` in its header), and `--answers` prints every
+  provenance-checked answer whose id is not recorded there, whatever the question's status.
+- **F15.** A new answer id returns 201. The same owner, id, question and body again returns the
+  stored row and 200. The same id with a different question or body returns 409 and changes
+  nothing.
+
+Discovery on the plan is closed after two rounds; the code reviews check these as built.
+
 ## Stages
 
 ### Stage 1 — statuses, comments and numbers (`spya-cnbv8f`)
