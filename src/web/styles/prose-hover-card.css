@@ -232,7 +232,7 @@
    card cut in half is a refusal nobody can act on. */
 .prose-card-refused {
   margin-top: 0.35rem;
-  color: var(--destructive);
+  color: var(--danger);
   font-size: 0.81rem;
   overflow-wrap: break-word;
 }
@@ -412,7 +412,8 @@
 .prose-card-act:disabled:hover { color: var(--ink-faint); }
 .prose-card-act svg { flex: none; }
 .prose-card-act:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-.prose-card-failed { color: var(--highlight-ink); }
+/* A failure sentence: `--danger`, as every one is (plan 261007h § F4). */
+.prose-card-failed { color: var(--danger); }
 
 
 /* ---- a work the piece cites ------------------------------------------

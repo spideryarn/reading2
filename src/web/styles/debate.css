@@ -772,11 +772,14 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   cursor: pointer;
 }
 .dbt-key-star { flex: none; color: var(--highlight-ink); }
-/* Where the box would be when the call failed: one quiet line, the
-   quiet provenance register, so it reads as provenance rather than an error. */
+/* Where the box would be when the call failed: one small line in the quiet
+   provenance register's size, but in `--danger`, the colour every failure
+   sentence takes (plan 261007h § F4): faint grey is how a band says "not made
+   yet", and this was asked for and failed. The words stay calm, and say the
+   sources below are unaffected. */
 .dbt-thread-failed {
   margin: 0.2rem 0 0.4rem;
-  color: var(--ink-faint);
+  color: var(--danger);
   font-family: var(--font-ui);
   font-size: 0.79rem;
   line-height: 1.4;

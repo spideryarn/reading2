@@ -1014,7 +1014,7 @@ function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boo
         disabled={busy}
         aria-label={archived ? "Archived — put back on the shelf" : "Archive this article"}
         className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0 tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50 ${
-          error ? "tw:text-destructive" : archived ? "tw:text-highlight-text" : "tw:text-ink-faint"
+          error ? "tw:text-danger" : archived ? "tw:text-highlight-text" : "tw:text-ink-faint"
         }`}
       >
         {archived ? <Undo2 size={14} strokeWidth={1.75} /> : <Archive size={14} strokeWidth={1.75} />}

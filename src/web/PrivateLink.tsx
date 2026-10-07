@@ -321,7 +321,7 @@ export function PrivateLink({
         </div>
       )}
 
-      {said && <p className="tw:m-0 tw:mt-3 tw:text-destructive">{said}</p>}
+      {said && <p className="tw:m-0 tw:mt-3 tw:text-danger">{said}</p>}
     </div>
   );
 }

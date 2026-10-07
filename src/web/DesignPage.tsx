@@ -39,10 +39,12 @@
  */
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Circle, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-react";
+import { Circle, Info, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { OrderGroup } from "./OrderGroup.js";
+import { ReadError } from "./ReadError.js";
 import { LOGO_ANIMATIONS } from "./logo-animation.js";
 import { LogoLoader } from "./LogoLoader.js";
 /* Type-only, and deliberately so: it is erased at build, so `/design` does not
@@ -928,7 +930,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             real='status: "loading"'
             note="BandWaiting: nothing for 600ms, then a spinner and the sentence naming what it
                   waits for, in a status line mounted from the start. Every band's wait is this
-                  one. Drawn here without the 600ms; responses to a press also show immediately."
+                  one. Drawn here without the 600ms; responses to a press also show immediately.
+                  Beside the not-made-yet and failure sentences in Controls across modes, below."
           >
             <BandWaiting className="gloss-quiet" delayMs={0}>
               Looking for a glossary…
@@ -1061,6 +1064,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           </BandCase>
         </div>
       </section>
+
+      <ControlsAcrossModes />
 
       <section>
         <h2>Toggles</h2>
@@ -1230,6 +1235,281 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         </div>
       </section>
     </main>
+  );
+}
+
+/** One family in § Controls across modes: its name, the real thing, and three lines. */
+function Family({
+  name,
+  real,
+  rule,
+  finger,
+  usedBy,
+  children,
+}: {
+  name: string;
+  /** Where the shared piece lives, as the code names it. */
+  real: string;
+  rule: ReactNode;
+  finger: ReactNode;
+  usedBy: string;
+  children: ReactNode;
+}) {
+  return (
+    <figure className="design-family">
+      <h3>
+        {name} · <code className="design-token">{real}</code>
+      </h3>
+      <div className="design-row">{children}</div>
+      <p className="design-note">
+        <strong>Rule:</strong> {rule}
+        <br />
+        <strong>For a finger:</strong> {finger}
+        <br />
+        <strong>Used by:</strong> {usedBy}.
+      </p>
+    </figure>
+  );
+}
+
+const DESIGN_PARTS = ["Short", "Medium", "Long"] as const;
+const DESIGN_ORDERS = ["In the article", "Most important", "A–Z"] as const;
+
+/**
+ * **One canonical example of each control the modes share** — plan 261007h
+ * § F7, after Greg's report spya-rgq3f6 (2026-10-06): *"I'm just trying to sort
+ * of look for a tiny bit more consistency across modes and in various places"*.
+ *
+ * One each, from the real class or component, and not a copy of every mode's
+ * use of it: the page is long already, and a copy per mode would be a second
+ * thing to keep current. Tests check the shared pieces and some listed callers
+ * (docs/project/controls.md § Controls that do the same job look the same);
+ * this is where you look before drawing a new one.
+ *
+ * Hover and focus are not forced: this page has no way to pin a pseudo-class,
+ * and a copy of the hover rule would keep looking right after the real one
+ * broke. Point at each and Tab through them.
+ */
+function ControlsAcrossModes() {
+  const [part, setPart] = useState<string>(DESIGN_PARTS[0]);
+  const [order, setOrder] = useState<string>(DESIGN_ORDERS[0]);
+  return (
+    <section id="controls-across-modes">
+      <h2>Controls across modes</h2>
+      <p className="design-note">
+        Greg, 2026-10-07: <em>“controls that do the same job should look the same in every mode,
+        though use your judgment.”</em> One example of each, drawn by the real class or component.
+        Point at each and Tab through them for hover and focus; this page does not fake either.
+        Adding a mode, or a control to one:
+      </p>
+      <ul className="design-note design-checklist">
+        <li>
+          Switching between the mode's parts? <code className="design-token">.summ-views</code> +{" "}
+          <code className="design-token">.summ-view-btn</code>. <strong>Orange marks the mode; a
+          part within it is marked neutrally.</strong>
+        </li>
+        <li>
+          A button that starts a model call? <code className="design-token">JobProgress</code>, or
+          shadcn <code className="design-token">Button</code> outline / sm.
+        </li>
+        <li>
+          A box the reader types into? Add its class to mode-band.css § text boxes in the bands.
+        </li>
+        <li>
+          Orders for a list? <code className="design-token">OrderGroup</code> with{" "}
+          <code className="design-token">.gloss-sort-btn</code>.
+        </li>
+        <li>
+          Waiting? <code className="design-token">BandWaiting</code>. Not made yet? A grey sentence,
+          at once. Failed? <code className="design-token">ReadError</code> or{" "}
+          <code className="design-token">.gloss-error</code>, in{" "}
+          <code className="design-token">--danger</code>.
+        </li>
+        <li>
+          Smaller than 40px, and a finger has to hit it?{" "}
+          <code className="design-token">.tap-target</code>.
+        </li>
+        <li>
+          Floats over something? <code className="design-token">--shadow-pop</code>,{" "}
+          <code className="design-token">--shadow-dialog</code> or{" "}
+          <code className="design-token">--shadow-sheet</code>, never a new literal.
+        </li>
+      </ul>
+
+      <Family
+        name="The part-switcher"
+        real=".summ-views, mode-band.css"
+        rule={
+          <>
+            off is faint ink; on is the raised fill, full ink and weight 600, never orange; hover
+            is full ink; focus is the orange ring drawn inside the button. Narrow, it scrolls
+            sideways rather than wrap, and an edge with more beyond it fades. Skim's ‹ › is a
+            pager, not this.
+          </>
+        }
+        finger={<>44px tall (--control-h-lg) under a coarse pointer; about 25px for a mouse.</>}
+        usedBy="Summary, Debate, Structure, Referee and its criterion kinds, Learn, Diagram, Search's matcher, Skim's depths"
+      >
+        <div className="summ-views" role="radiogroup" aria-label="Example parts">
+          {DESIGN_PARTS.map((p) => (
+            // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s, as SummaryMode.tsx draws it
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={part === p}
+              tabIndex={0}
+              className={`summ-view-btn${part === p ? " on" : ""}`}
+              onClick={() => setPart(p)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </Family>
+
+      <Family
+        name="The run button"
+        real="JobProgress → Button outline / sm"
+        rule={
+          <>
+            the usual button for a model call: 32px, 8px corners, the orange wash on hover.
+            Citations' Dig deeper uses the same outline button at 24px (xs), matching its row.{" "}
+            <code className="design-token">aria-disabled</code> looks as unavailable as{" "}
+            <code className="design-token">disabled</code> and keeps its tooltip. Its running,
+            slow, stopping and failed states are in § Job progress, above.
+          </>
+        }
+        finger={<>32px drawn; the button's own box is the target.</>}
+        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Citations, FAQ, Simple, Skim, Debate, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up, Find more and Dig deeper"
+      >
+        <RunButton label="Find the terms" />
+        <Button variant="outline" size="sm" aria-disabled="true">
+          <Search size={13} />
+          Unavailable
+        </Button>
+      </Family>
+
+      <Family
+        name="The text box in a band"
+        real=".chat-input, mode-band.css § text boxes"
+        rule={
+          <>
+            a 1px <code className="design-token">--rule-strong</code> border,{" "}
+            <code className="design-token">var(--radius)</code> corners, the{" "}
+            <code className="design-token">--page</code> ground, one padding, and the orange
+            focus mark. Each box keeps its own size and type; the reader's words are in their face.
+          </>
+        }
+        finger={<>type at least 16px on a touchscreen (narrow-window.css), so iOS does not zoom.</>}
+        usedBy="Chat's composer, Search, Glossary's Look up, Debate, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
+      >
+        <textarea
+          className="chat-input design-family-box"
+          rows={2}
+          aria-label="Example text box"
+          placeholder="Ask about this article…"
+        />
+      </Family>
+
+      <Family
+        name="The order chips"
+        real="OrderGroup + .gloss-sort-btn"
+        rule={
+          <>
+            the chosen order is marked as a part is, neutrally: raised fill, a{" "}
+            <code className="design-token">--rule-strong</code> edge, full ink. A named group,
+            each chip <code className="design-token">aria-pressed</code>.
+          </>
+        }
+        finger={
+          <>
+            40px tall under a coarse pointer, and the row stays one line and scrolls sideways, an
+            edge with more beyond it faded.
+          </>
+        }
+        usedBy="Glossary, Quotes, FAQ, Citations, Debate; Search's row is .srch-sort-btn, the same chip"
+      >
+        <OrderGroup label="Order the examples by" selected={order}>
+          {DESIGN_ORDERS.map((o) => (
+            <button
+              key={o}
+              type="button"
+              className={`gloss-sort-btn${order === o ? " on" : ""}`}
+              aria-pressed={order === o}
+              onClick={() => setOrder(o)}
+            >
+              {o}
+            </button>
+          ))}
+        </OrderGroup>
+      </Family>
+
+      <figure className="design-family">
+        <h3>Waiting, not made yet, failed</h3>
+        <p className="design-note">
+          Three sentences a band prints where its content would be, and the reader has to tell them
+          apart. <strong>Waiting</strong> is <code className="design-token">BandWaiting</code>:
+          nothing for 600ms, then a spinner and the sentence (drawn here at once).{" "}
+          <strong>Not made yet</strong> is a grey sentence with no spinner, at once, because it is
+          the page rather than a wait. <strong>Failed</strong> is{" "}
+          <code className="design-token">--danger</code>, never grey (that reads as never asked)
+          and never orange (that means the AI's, or chosen), with a way to ask again where there is
+          one.
+        </p>
+        <div className="design-panel design-three">
+          <BandWaiting className="gloss-quiet" delayMs={0}>
+            Looking for a glossary…
+          </BandWaiting>
+          <p className="gloss-quiet">Nobody has found the terms for this one yet.</p>
+          <ReadError error={UNEXPECTED_FAILURE.message} onRetry={() => {}} />
+        </div>
+        <p className="design-note">
+          <strong>Used by:</strong> every band; the waits are listed in loading-spinner.md, the
+          failures in tests/failure-colour-and-order-chips.test.ts.
+        </p>
+      </figure>
+
+      <Family
+        name="The hit area"
+        real=".tap-target, tap-target.css"
+        rule={
+          <>
+            a control too small for a finger keeps its drawn size and gets an invisible target of
+            at least 40 × 40px, centred. The dashed box is drawn by this page only, to show where
+            that target reaches; the real one has no outline and exists only under a coarse
+            pointer. Where two would overlap, the row grows instead.
+          </>
+        }
+        finger={<>40 × 40px, or the control's own box if larger; a passage id is bounded to its own width.</>}
+        usedBy="Quotes' ⓘ, a bare passage id, /profile's and Metadata's section headings, sign-in's “Forgot your password?” and “back to sign in”; the close cross has its own, .close-x"
+      >
+        <span className="design-tap-reach">
+          <Button variant="ghost" size="icon-xs" className="tap-target" aria-label="Why this one">
+            <Info />
+          </Button>
+        </span>
+      </Family>
+
+      <Family
+        name="Elevation"
+        real="--shadow-pop, --shadow-dialog, --shadow-sheet"
+        rule={
+          <>
+            three shadows, softer in Light. Not for swatch rings, inset marks, table dividers or
+            focus rings, which are not elevation.
+          </>
+        }
+        finger={<>not a control.</>}
+        usedBy="pop: tooltips, menus, pickers; dialog: chat, annotate and comment panels, the command bar, the toast; sheet: the purpose prompt, the feedback dialog, the lightbox"
+      >
+        {(["--shadow-pop", "--shadow-dialog", "--shadow-sheet"] as const).map((s) => (
+          <div key={s} className="design-shadow-card" style={{ boxShadow: `var(${s})` }}>
+            <code className="design-token">{s}</code>
+          </div>
+        ))}
+      </Family>
+    </section>
   );
 }
 

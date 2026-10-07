@@ -201,11 +201,13 @@
    joined bar that wraps is two broken halves. The buttons keep their width
    (`flex: none`, `nowrap`) and the group takes at most its row
    (`max-width: 100%`, `min-width: 0`); the chosen part is kept in view by
-   useRevealChosen.ts, the logic OrderGroup's order rows share. The scrollbar is
-   thin and left showing: a bar that clips exactly between two parts hides a
-   whole option, and only the scrollbar says there is more (GPT Sol, F2 review
-   K4). It appears only when the parts overflow, and a touch screen overlays it.
-   The focus ring is drawn inside each button, so the clipping costs it nothing. */
+   useRevealChosen.ts, the logic OrderGroup's order rows share. A bar that
+   clips exactly between two parts hides a whole option (GPT Sol, F2 review
+   K4), so two things say there is more. The scrollbar is thin and left
+   showing, though it appears only when the parts overflow and a touch screen
+   overlays it, showing it only mid-swipe; and a short fade on each edge that
+   can scroll further (below), which a phone does show. The focus ring is drawn
+   inside each button, so the clipping costs it nothing. */
 .summ-views {
   display: inline-flex;
   flex-wrap: nowrap;
@@ -251,6 +253,24 @@
 @media (any-pointer: coarse) {
   .summ-view-btn { min-height: var(--control-h-lg); padding-inline: 0.8rem; }
 }
+/* **The fade that says "more this way"**, on a part-switcher or an order row
+   (`.gloss-sort-group`, OrderGroup.tsx) that can scroll further. The marks are
+   useRevealChosen.ts § markMore's, set only while there is more to scroll on
+   that side, so a row that fits — every bar at 1440 — has no mask at all. It
+   is short, 1.25rem; revealing a chosen or focused button keeps its box and
+   outline clear of the fade. A chip too wide for those margins omits the
+   mask (`data-more-unmasked`), so repeated reveals do not fight over which
+   edge to show. A manual swipe can move any chip under the fade again.
+   `--more-fade` is the same number as MORE_FADE_REM there. */
+:is(.summ-views, .gloss-sort-group)[data-more-start] { --more-start: var(--more-fade); }
+:is(.summ-views, .gloss-sort-group)[data-more-end] { --more-end: var(--more-fade); }
+:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]):not([data-more-unmasked]) {
+  --more-fade: 1.25rem;
+  mask-image: linear-gradient(to right, transparent, #000 var(--more-start, 0px), #000 calc(100% - var(--more-end, 0px)), transparent);
+}
+:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]):not([data-more-unmasked]):dir(rtl) {
+  mask-image: linear-gradient(to left, transparent, #000 var(--more-start, 0px), #000 calc(100% - var(--more-end, 0px)), transparent);
+}
 
 /* ------------------------------------------------------- § the wait line --
    Every band's wait: `BandWaiting.tsx`, docs/project/loading-spinner.md. The
@@ -266,9 +286,10 @@
   align-items: center;
   gap: 0.4rem;
 }
-/* Before the 600ms: the spinner and sentence laid out but unseen, so the empty
-   line is already its own height (BandWaiting.tsx). `content` rather than text,
-   so nothing is in the live region to announce early. */
+/* Before the 600ms: the spinner and sentence laid out but unseen, so the line
+   is already its own height (BandWaiting.tsx). Plain words use CSS `content`;
+   formatted children retain their markup. Both ghosts are also aria-hidden,
+   so neither has accessible words to announce early. */
 .band-waiting-ghost {
   visibility: hidden;
 }
@@ -433,10 +454,12 @@ svg.band-waiting-ghost { flex: none; }
 .chat-icon:disabled,
 .chat-icon[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 
+/* Every failure sentence in the bands is `--danger`, the error-text colour
+   (plan 261007h § F4; tests/failure-colour-and-order-chips.test.ts). */
 .chat-error {
   margin: 0;
   padding: 0.4rem 0.7rem;
-  color: var(--highlight-ink);
+  color: var(--danger);
   font-size: 0.9rem;
 }
 
@@ -860,7 +883,7 @@ svg.band-waiting-ghost { flex: none; }
 
 .chat-failed {
   margin: 0.3rem 0 0;
-  color: var(--highlight-ink);
+  color: var(--danger);
   font-family: var(--font-ui);
   font-size: 0.88rem;
 }
@@ -1092,17 +1115,54 @@ svg.band-waiting-ghost { flex: none; }
      floor, and `resize: none` is what stops the reader dragging the box over
      the article it is supposed to sit beside. */
   max-height: 10rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.4;
   resize: none;
 }
-.chat-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* ---- text boxes in the bands ----
+   **One look for every box a reader types into inside a band**: chat's
+   composer, Search's and Glossary's (and Debate's) one-line boxes, Referee's
+   criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note
+   and Skim's purpose. Greg, 2026-10-07: *"controls that do the same job should
+   look the same in every mode, though use your judgment."* Before this rule
+   they came in four borders, three corners (4px, 5px, 10px), two grounds,
+   five paddings and three focus marks — Learn's, Referee's and Illustrated's
+   the browser's own. These values are the majority's, `.chat-input`'s.
+
+   Only the box: each class keeps its own size, type and line height, the
+   reader's face is voices.css's, autosizing and `resize` stay with the
+   component, and narrow-window.css § the 16px field floor still wins on a
+   touchscreen. Not here on purpose (GPT Sol's R8): Chat's rename and edit
+   boxes, which are inline editors drawn in the line they edit, and
+   `ProfileBox`, which is shared with /profile and Metadata off the band.
+   tests/run-buttons-and-text-boxes-agree.test.ts checks each box's declarations
+   and rejects competing rules naming it, except Search's reserved right padding.
+   Plan 261007h § F3. */
+.chat-input,
+.srch-input,
+.gloss-ask-input,
+.cnd-box,
+.crit-text,
+.crit-poles input,
+.quiz-answer,
+.ill-steer-input,
+.skim-purpose-input {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+}
+.chat-input:focus-visible,
+.srch-input:focus-visible,
+.gloss-ask-input:focus-visible,
+.cnd-box:focus-visible,
+.crit-text:focus-visible,
+.crit-poles input:focus-visible,
+.quiz-answer:focus-visible,
+.ill-steer-input:focus-visible,
+.skim-purpose-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
    should be bigger and maybe have some kind of outline to indicate that it's
    probably the most important button in that little area."* So it is the one
@@ -1326,7 +1386,7 @@ svg.band-waiting-ghost { flex: none; }
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-.chat-live-failure p { margin: 0 0 0.4rem; }
+.chat-live-failure p { margin: 0 0 0.4rem; color: var(--danger); }
 /* Filled, so the way out of a failure is the most prominent thing in it — an
    outlined button read as one more grey control in the browser pass. */
 .chat-live-status .chat-live-retry {
@@ -1373,7 +1433,7 @@ svg.band-waiting-ghost { flex: none; }
 .chat-live-device-picker select { min-width: 0; flex: 1 1 8rem; max-width: 100%; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 0.2rem; font: inherit; }
 .chat-live-device-picker small { flex-basis: 100%; color: var(--ink-faint); }
 .chat-live-notice { margin: 0.4rem 0; color: var(--ink-soft); }
-.chat-live-error { margin: 0.5rem 0; color: var(--destructive); overflow-wrap: anywhere; }
+.chat-live-error { margin: 0.5rem 0; color: var(--danger); overflow-wrap: anywhere; }
 .chat-live-tools { padding-left: 1rem; color: var(--ink-soft); max-height: 5rem; overflow: auto; }
 .chat-live-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chat-live-status button { border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--ink); background: var(--panel); padding: 0.2rem 0.4rem; font: inherit; cursor: pointer; }

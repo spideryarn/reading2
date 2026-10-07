@@ -132,6 +132,7 @@ import { assignSlots } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
 import { BandWaiting } from "./BandWaiting.js";
 
@@ -376,14 +377,16 @@ export function ClaimsView({
           />
         }
       >
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           className="clm-run"
           onClick={api.pull}
           disabled={pending || !api.loaded}
         >
           {run === null ? "Pull the paper's claims" : "Pull them again"}
-        </button>
+        </Button>
       </Tooltip>
 
       {api.error && <p className="clm-error">{api.error}</p>}

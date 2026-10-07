@@ -449,7 +449,7 @@ function ResetOnlyRegeneration({
 
   if (job.status === "error" || job.status === "cancelled") {
     return (
-      <p role="alert" className="tw:m-0 tw:text-xs tw:text-destructive">
+      <p role="alert" className="tw:m-0 tw:text-xs tw:text-danger">
         {name} did not finish: {job.status === "cancelled" ? "Stopped." : (job.error ?? "The job failed.")}
       </p>
     );

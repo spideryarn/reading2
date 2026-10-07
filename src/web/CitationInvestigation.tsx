@@ -40,6 +40,7 @@ import type {
 } from "../types.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { useTapReveal } from "./useTapReveal.js";
 
 /* ------------------------------------------------------------- the copy -- */
@@ -429,8 +430,16 @@ export function InvestigateButton({
         />
       }
     >
-      <button
+      {/* The run button every mode shares (plan 261007h § F3, GPT Sol's R10),
+          at the row's size: *Ask in chat* and the Scholar link beside it are
+          24px, and a 32px button would stand a head above them on every row.
+          `aria-disabled` looks unavailable through `Button`'s own classes
+          (components/ui/button.tsx § THREE); the guard is the `busy` check in
+          the handler. `.gloss-btn` stays as a hook. */}
+      <Button
         type="button"
+        variant="outline"
+        size="xs"
         className="gloss-btn cite-investigate"
         aria-disabled={busy}
         onPointerDown={reveal.onPointerDown}
@@ -443,7 +452,7 @@ export function InvestigateButton({
       >
         <Microscope size={11} aria-hidden="true" />
         {running ? "Digging deeper…" : label}
-      </button>
+      </Button>
     </Tooltip>
   );
 }

@@ -363,19 +363,15 @@ td.text.note-open {
   border-bottom: 1px solid var(--rule);
 }
 .gloss-ask-row { display: flex; align-items: center; gap: 0.35rem; }
+/* Its border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. */
 .gloss-ask-input {
   flex: 1;
   min-width: 0;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.9rem;
   line-height: 1.4;
 }
-.gloss-ask-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .gloss-ask-input::placeholder { color: var(--ink-faint); }
 /* The browser's own clear affordance is kept here, unlike the search band's —
    there is no Escape handler on this box, so removing it would leave a reader

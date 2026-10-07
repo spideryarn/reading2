@@ -29,15 +29,30 @@
    than wrap, as every part-switcher does: the bin and the Written-for-you
    badge after it are pushed to the row's right end, and give up nothing. */
 .band-head > .learn-submode { margin-right: auto; }
-/* **Four chips (the Experimental switch on) tighten their side padding**; three keep
-   the bar's 0.6rem. On an iPad the band is 288px, so the head row has 234px of
-   content (the (i) keeps the right 41.6px; 226px on a touch screen). Four
-   chips in the bar are 196px at 0.25rem and about 241px at 0.6rem, and the bin
-   Recall, Tutorial and Explore add beside them is 22px plus a 7px gap: 225px
-   fits, 270px would scroll. Measured 2026-10-07 (plan 261007h § F2); plan
-   261005h item B measured the first version. */
-.learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
-  padding-inline: 0.25rem;
+/* **Four chips (the Experimental switch on) tighten their side padding, and
+   only in a narrow head**; anywhere else they take the bar's own (0.6rem, 0.8rem
+   under a finger), as every other part-switcher does. Until 2026-10-07 they were
+   tight at every width, 4px a side even at 1440 where the head has 490px, and
+   looked cramped beside every other mode's bar (the designer's review of plan
+   261007h § F2).
+
+   The narrow head is an iPad's: its band is 288px, so the head row has 226px
+   of content under a finger (the (i) keeps the right 49.6px). Four chips are
+   about 264px at 0.8rem and 196px at 0.25rem, and the bin Recall, Tutorial and
+   Explore add beside them is 22px plus a 7px gap: 225px fits, 293px would
+   scroll. A phone's head is 317px and a 1024px window's 346px, so both have
+   the room. The line is 19rem (304px), between the two; below it the bar would
+   still scroll sideways and fade at the edge rather than break, so the line
+   is about comfort, not correctness. Measured 2026-10-07; plan 261005h item B
+   measured the first version.
+
+   `container` on the head, not the bar: the bar shrinks to what it holds, and
+   it is the head's width that decides whether four wide chips fit. */
+.band-head:has(> .learn-submode) { container: learn-head / inline-size; }
+@container learn-head (max-width: 19rem) {
+  .learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
+    padding-inline: 0.25rem;
+  }
 }
 
 /* The scrolling child every `.mode-band` needs. Without one the panel's own
@@ -99,20 +114,15 @@
   margin-top: 0.2rem;
 }
 
+/* Its border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. (It had a 4px corner and the
+   fainter rule until 2026-10-07, and the browser's own focus ring.) */
 .quiz-answer {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
   font-size: 0.94rem;
   line-height: 1.45;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  /* `--page`, as `.chat-input` uses. An earlier draft said `--paper`, which is
-     not a token this stylesheet defines — so the box drew with whatever was
-     behind it and looked right by accident against the band. */
-  background: var(--page);
-  color: var(--ink);
   /* The height is the words' (QuizPanel.tsx § `fitBox`), so there is nothing
      to drag and nothing to scroll: the whole answer is on screen and the band
      is what scrolls. spya-qnrxuw. */

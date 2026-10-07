@@ -77,7 +77,7 @@ function mirrorState(report: AdminFeedbackReport): {
 
 const TONE: Record<"ok" | "warn" | "quiet", string> = {
   ok: "tw:text-ink-faint",
-  warn: "tw:text-destructive",
+  warn: "tw:text-danger",
   quiet: "tw:text-ink-faint",
 };
 
@@ -196,7 +196,7 @@ function Screenshot({ ownerId, id, bytes }: { ownerId: string; id: string; bytes
         Screenshot ({Math.round(bytes / 1024)} KB)
       </summary>
       {error ? (
-        <p className="tw:mt-2 tw:text-xs tw:text-destructive">{error}</p>
+        <p className="tw:mt-2 tw:text-xs tw:text-danger">{error}</p>
       ) : url ? (
         <img
           src={url}
@@ -250,7 +250,7 @@ function Diagnostics({ ownerId, id, version }: { ownerId: string; id: string; ve
         Diagnostics (v{version})
       </summary>
       {error ? (
-        <p className="tw:mt-2 tw:text-xs tw:text-destructive">{error}</p>
+        <p className="tw:mt-2 tw:text-xs tw:text-danger">{error}</p>
       ) : payload ? (
         /* Rendered as its own JSON rather than picked apart into fields. The
            blob is versioned precisely so an old report stays readable when the
@@ -337,7 +337,7 @@ function IgnoreControl({
         {ignored ? "Undo" : "Ignore"}
       </button>
       {error && (
-        <span role="alert" className="tw:basis-full tw:text-destructive">
+        <span role="alert" className="tw:basis-full tw:text-danger">
           That did not save. {error}
         </span>
       )}
@@ -442,7 +442,7 @@ export function FeedbackCard({
             there is a blob — "they said yes and there was nothing to collect" is
             a bug in the collector, and only this pair can tell you. */}
         {report.consented && report.diagnosticsVersion === null && (
-          <span className="tw:text-destructive">consented, but no diagnostics arrived</span>
+          <span className="tw:text-danger">consented, but no diagnostics arrived</span>
         )}
         {/* Pushed to the right-hand end of the row, where a wrapped row puts
             it on a line of its own. */}

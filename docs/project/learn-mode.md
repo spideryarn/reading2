@@ -378,9 +378,10 @@ whose rules are there to keep the move fair
 It is not Debate. Debate is a stored survey of what the web says about the piece; this is one turn
 of a conversation, about the argument or the reader's own doubt. Tutorial is unchanged.
 
-With the Experimental switch on there are four chips, and the group tightens their side padding
-(`quiz.css`, `.learn-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the
-288px band on an iPad. With three chips the padding is unchanged.
+With the Experimental switch on there are four chips, and in a narrow band head the group tightens
+their side padding (`quiz.css`, an `@container learn-head` query around
+`.learn-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the 288px band on
+an iPad. Anywhere wider, and with three chips, they take the part-switcher's own padding.
 
 **What a turn does.** One move, in under about 150 words, with one question at most and last:
 

@@ -343,3 +343,49 @@
    caption and the class name below it still fill the width and wrap normally. */
 .design-logo-cell .logo { align-self: flex-start; }
 .design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }
+
+/* ---------------------------------------------- § controls across modes --
+   One family per figure (DesignPage.tsx § ControlsAcrossModes). Layout only:
+   every control in it is drawn by its own class. */
+.design-checklist { padding-left: 1.2rem; }
+.design-checklist li { margin-bottom: 0.25rem; }
+.design-family { margin: 0 0 1.6rem; }
+/* `.chat-input` is `flex: 1` for its composer; here it would take the row.
+   Two classes, because mode-band.css loads after this sheet. */
+.design-row > .design-family-box { flex: 0 1 22rem; }
+.design-three + .design-note { margin-top: 0.5rem; }
+/* The three sentences side by side, each about a band wide, so they are told
+   apart at a glance; they stack when the column cannot hold three. */
+.design-three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.5rem;
+  align-items: start;
+}
+/* **Where `.tap-target`'s invisible target reaches**, drawn for this page only.
+   The same arithmetic as tap-target.css, reading the same two custom
+   properties, so a caller's bound would show; the 40px fallback mirrors that
+   file's. The real target has no outline and exists only under a coarse
+   pointer. */
+.design-tap-reach {
+  position: relative;
+  display: inline-flex;
+  margin: 0.6rem;
+}
+.design-tap-reach::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, var(--tap-w, 40px));
+  height: max(100%, var(--tap-h, 40px));
+  translate: -50% -50%;
+  outline: 1px dashed var(--ink-faint);
+  pointer-events: none;
+}
+.design-shadow-card {
+  padding: 1rem 1.2rem;
+  margin: 0 1rem 1rem 0;
+  border-radius: var(--radius);
+  background: var(--popover);
+}

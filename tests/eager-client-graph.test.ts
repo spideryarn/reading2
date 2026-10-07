@@ -524,6 +524,20 @@ const SHARED_WITH_READER = [
      `SettingsSection`, `mode-catalog.ts` (the (i)'s words), `useSession.ts`,
      and the experimental store's three files. */
   "src/web/BandAbout.tsx",
+  /* Six arrived 2026-10-07 with plan 261007h, when `/design` began drawing
+     the shared wait (`BandWaiting`, § F1, and its `useSlow`) and, in § F7's
+     Controls across modes, the order chips (`OrderGroup`, which brings
+     `useRevealChosen` and through it `fonts.ts`) and the failed read
+     (`ReadError`). Each is already in the reader's closure — every band's
+     panel draws them — so the reader downloads nothing new; what is new is
+     only that `/design` reaches them too, from the real component rather
+     than a copy. */
+  "src/web/BandWaiting.tsx",
+  "src/web/OrderGroup.tsx",
+  "src/web/ReadError.tsx",
+  "src/web/fonts.ts",
+  "src/web/useRevealChosen.ts",
+  "src/web/useSlow.ts",
   "src/web/HighPowerSwitch.tsx",
   "src/web/IconButton.tsx",
   "src/web/JobProgress.tsx",

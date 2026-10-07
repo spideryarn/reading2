@@ -80,6 +80,7 @@ import { REFEREE_CANDIDATES_REACHES_SEARCH } from "../messages.js";
 import { CitedMarkdown } from "./Cited.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
@@ -445,9 +446,9 @@ function StartBrief({ onStart }: { onStart(): void }) {
           />
         }
       >
-        <button type="button" className="cnd-start-btn" onClick={onStart}>
+        <Button type="button" variant="outline" size="sm" className="cnd-start-btn" onClick={onStart}>
           <Globe size={13} aria-hidden="true" /> Build the reviewer brief
-        </button>
+        </Button>
       </Tooltip>
       <p className="cnd-start-note">
         Nothing has been asked yet. Pressing this starts an AI turn over the paper, and it may run a
@@ -871,14 +872,16 @@ function Composer({
           if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         className="cnd-send"
         disabled={busy || disabled || text.trim() === ""}
         onClick={send}
       >
         <SendHorizontal size={13} aria-hidden /> Ask
-      </button>
+      </Button>
     </div>
   );
 }
