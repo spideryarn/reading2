@@ -19,9 +19,15 @@
  * left exactly as found and the tests do not care what order they run in.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { afterAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 
+import { SQL, is } from "drizzle-orm";
+import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+
+import * as schema from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
 import { CHECKPOINT_NAMESPACES } from "../src/store/checkpoints.js";
@@ -396,6 +402,369 @@ describe("the schema keeps the promises the plan makes", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.indexdef).toMatch(/WHERE \(article_id IS NOT NULL\)/);
+  });
+
+  /**
+   * **The block-identity foreign key has an index to check itself with.**
+   *
+   * Deleting an article deletes every one of its `block_identities` rows, and
+   * for each one Postgres looks in `revision_blocks` for `(article_id,
+   * block_id)`. Until 2026-10-07 nothing led on those columns, so each lookup
+   * read the whole primary-key index: timed on a 141-block article in a
+   * 233,000-row table, that one trigger was 3.2 to 3.8 s of the delete, and 6 ms
+   * with this index (docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+   * § Stage 1).
+   *
+   * The definition, not the name: an index called this on `(block_id)` alone, or
+   * with the columns the other way round and a `where`, would keep the name and
+   * lose the point. A plan is not asserted, because a minted test database is
+   * too small for the planner to prefer any index.
+   */
+  it("the block-identity foreign key is indexed, so deleting an article does not scan every block", async () => {
+    const { rows } = await pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes
+        where schemaname = 'spideryarn'
+          and tablename = 'revision_blocks'
+          and indexname = 'revision_blocks_article_block'`,
+    );
+    expect(rows.map((r) => r.indexdef)).toEqual([
+      "CREATE INDEX revision_blocks_article_block ON spideryarn.revision_blocks USING btree (article_id, block_id)",
+    ]);
+  });
+
+  /**
+   * **No table carries the same index twice.**
+   *
+   * `drizzle/0002` made `chat_messages_thread_ordinal`, UNIQUE on `(article_id,
+   * thread_id, ordinal)`, and `drizzle/0003`, the next migration, made
+   * `chat_messages_thread_ordinal_idx` on the same three columns, not unique.
+   * Both were kept up on every chat message for six weeks, and only the first
+   * was in src/db/schema.ts. The second was dropped on 2026-10-07.
+   *
+   * Asked of the catalog rather than of a list, so it holds for the next table
+   * too: two indexes are the same when they are on one table with the same
+   * method, key columns, operator classes, ordering, expressions and predicate.
+   * Uniqueness is deliberately not part of "the same" — a unique index serves
+   * every read its non-unique twin does, which is the whole finding.
+   *
+   * Watched failing before the drop, naming that pair.
+   */
+  it("no table has two indexes on the same columns in the same order", async () => {
+    const { rows } = await pool.query<{ on_table: string; twins: string[] }>(
+      `select i.indrelid::regclass::text as on_table,
+              array_agg(c.relname::text order by c.relname) as twins
+         from pg_index i
+         join pg_class c on c.oid = i.indexrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'spideryarn'
+        group by i.indrelid, c.relam, i.indkey::text, i.indclass::text, i.indoption::text,
+                 coalesce(pg_get_expr(i.indexprs, i.indrelid), ''),
+                 coalesce(pg_get_expr(i.indpred, i.indrelid), '')
+       having count(*) > 1
+        order by 1`,
+    );
+    expect(rows).toEqual([]);
+
+    /* And the one that stays, on the table that had the twin, is the one that
+       enforces something. */
+    const kept = await pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes
+        where schemaname = 'spideryarn' and tablename = 'chat_messages' order by indexname`,
+    );
+    expect(kept.rows.map((r) => r.indexdef)).toEqual([
+      "CREATE UNIQUE INDEX chat_messages_article_id_thread_id_id_pk ON spideryarn.chat_messages USING btree (article_id, thread_id, id)",
+      "CREATE UNIQUE INDEX chat_messages_thread_ordinal ON spideryarn.chat_messages USING btree (article_id, thread_id, ordinal)",
+    ]);
+  });
+
+  /**
+   * **The five indexes that were in the database and not in src/db/schema.ts.**
+   *
+   * The job queue's three (drizzle/0001) and two reader-state ones (0003) were
+   * made by hand and never declared, so a reader of the `jobs` table in the
+   * file did not learn its queue was indexed, and `npm run db:check` — which
+   * compares columns and defaults and nothing else — would not have noticed
+   * one going missing. Declared on 2026-10-07 with no SQL run
+   * (drizzle/20261007012654_declare_migration_only_indexes_and_checks.sql).
+   *
+   * By definition, as Postgres prints it, because the name is the least of it:
+   * `jobs_lease_idx` without its `WHERE` would index every finished job, and a
+   * bare `DESC` is `NULLS FIRST`, which is not what drizzle's `.desc()` writes
+   * (the declarations say `.nullsFirst()` for that reason).
+   */
+  it("the five hand-made indexes are still there, as they were made", async () => {
+    const { rows } = await pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes
+        where schemaname = 'spideryarn'
+          and indexname in ('jobs_queued_idx', 'jobs_lease_idx', 'jobs_owner_created_idx',
+                            'chat_threads_article_updated_idx', 'search_runs_article_created_idx')
+        order by indexname`,
+    );
+    expect(rows.map((r) => r.indexdef)).toEqual([
+      "CREATE INDEX chat_threads_article_updated_idx ON spideryarn.chat_threads USING btree (article_id, updated_at DESC)",
+      "CREATE INDEX jobs_lease_idx ON spideryarn.jobs USING btree (lease_expires_at) WHERE (status = 'running'::text)",
+      "CREATE INDEX jobs_owner_created_idx ON spideryarn.jobs USING btree (owner_id, created_at DESC)",
+      "CREATE INDEX jobs_queued_idx ON spideryarn.jobs USING btree (created_at) WHERE (status = 'queued'::text)",
+      "CREATE INDEX search_runs_article_created_idx ON spideryarn.search_runs USING btree (article_id, created_at DESC)",
+    ]);
+  });
+
+  /**
+   * **Every index src/db/schema.ts declares is in the database, and is the
+   * index it declares.**
+   *
+   * `npm run db:check` compares columns and defaults and nothing else
+   * (src/db/schema-drift.ts says so), so until 2026-10-07 nothing asked whether
+   * a declared index existed, or was the index declared. This reads the
+   * declarations rather than a list of names, so the next one is covered when
+   * it is written; the case above holds five by their full text.
+   *
+   * By shape, not by name: the table, uniqueness, whether it is partial, the
+   * method, and for a btree each key column with its direction and where its
+   * nulls sort. **That last one is the reason this is not a name check.**
+   * Drizzle's `.desc()` means `DESC NULLS LAST`; a bare `DESC` in hand-written
+   * SQL means `NULLS FIRST`. `ai_calls_owner_started` and
+   * `ai_calls_scope_started` were made by hand as `DESC` (drizzle/0021, 0023)
+   * and declared with a plain `.desc()`, so the file described
+   * two indexes that are not the ones in the database, and a table rebuilt
+   * from it would have got ones a plain `order by … desc` cannot walk.
+   * **Watched failing on exactly those two**, before they were declared
+   * `.desc().nullsFirst()`.
+   *
+   * A predicate's text is not compared: Postgres rewrites it on the way in, so
+   * that would be a test of the deparser. Partial or not is.
+   */
+  it("every declared index exists, on the declared columns in the declared order", async () => {
+    type Key = { column: string | null; desc: boolean; nullsFirst: boolean };
+    type Shape = { table: string; unique: boolean; partial: boolean; method: string; keys: Key[] };
+
+    const declared = new Map<string, Shape>();
+    for (const value of Object.values(schema)) {
+      if (!is(value, PgTable)) continue;
+      const config = getTableConfig(value);
+      for (const index of config.indexes) {
+        const c = index.config;
+        if (!c.name) throw new Error(`an index on ${config.name} has no name`);
+        declared.set(c.name, {
+          table: config.name,
+          unique: c.unique,
+          partial: c.where !== undefined,
+          method: c.method ?? "btree",
+          keys: c.columns.map((col) => {
+            if (is(col, SQL)) return { column: null, desc: false, nullsFirst: false };
+            // Drizzle types these as partial SQL or column objects. Reject an
+            // incomplete column instead of casting past that type or silently
+            // comparing undefined names/order with the catalog.
+            if (!("name" in col) || typeof col.name !== "string" || !("indexConfig" in col) || !col.indexConfig) {
+              throw new Error(`an index key on ${config.name} has no column configuration`);
+            }
+            return {
+              column: col.name,
+              desc: col.indexConfig.order === "desc",
+              /* Drizzle's default, and the trap: absent means LAST, for
+                 both directions (drizzle-kit's serializer, `nulls ?? "last"`). */
+              nullsFirst: (col.indexConfig.nulls ?? "last") === "first",
+            };
+          }),
+        });
+      }
+    }
+    // An empty discovery would pass everything below.
+    expect(declared.size).toBeGreaterThan(40);
+    expect([...declared.keys()]).toContain("jobs_lease_idx");
+
+    const { rows } = await pool.query<{
+      name: string;
+      on_table: string;
+      uniq: boolean;
+      partial: boolean;
+      method: string;
+      columns: (string | null)[];
+      options: number[];
+    }>(
+      `select c.relname::text as name, t.relname::text as on_table, i.indisunique as uniq,
+              i.indpred is not null as partial, am.amname::text as method,
+              (select array_agg(a.attname::text order by k.ord)
+                 from unnest(i.indkey::int2[]) with ordinality as k(attnum, ord)
+                 left join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum and k.attnum <> 0
+              ) as columns,
+              (select array_agg(o.opt::int order by o.ord)
+                 from unnest(i.indoption::int2[]) with ordinality as o(opt, ord)) as options
+         from pg_index i
+         join pg_class c on c.oid = i.indexrelid
+         join pg_class t on t.oid = i.indrelid
+         join pg_am am on am.oid = c.relam
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'spideryarn' and i.indisvalid`,
+    );
+    const actual = new Map<string, Shape>();
+    for (const r of rows) {
+      actual.set(r.name, {
+        table: r.on_table,
+        unique: r.uniq,
+        partial: r.partial,
+        method: r.method,
+        // `indoption`: bit 1 is DESC, bit 2 is NULLS FIRST. Only a btree has them.
+        keys: r.columns.map((column, i) => ({
+          column,
+          desc: ((r.options[i] ?? 0) & 1) === 1,
+          nullsFirst: ((r.options[i] ?? 0) & 2) === 2,
+        })),
+      });
+    }
+
+    const wrong: Record<string, { declared: Shape; actual: Shape | "not in the database" }> = {};
+    for (const [name, want] of declared) {
+      const got = actual.get(name);
+      if (!got) {
+        wrong[name] = { declared: want, actual: "not in the database" };
+        continue;
+      }
+      /* Direction and null placement mean something to a btree and to nothing
+         else here; an expression key has no column name to compare. */
+      const comparable = (s: Shape): Shape =>
+        s.method === "btree" ? s : { ...s, keys: s.keys.map((k) => ({ ...k, desc: false, nullsFirst: false })) };
+      const a = comparable(want);
+      const b = comparable({
+        ...got,
+        keys: got.keys.map((k, i) => (want.keys[i]?.column === null ? { ...k, column: null } : k)),
+      });
+      if (JSON.stringify(a) !== JSON.stringify(b)) wrong[name] = { declared: a, actual: b };
+    }
+    expect(wrong).toEqual({});
+  });
+
+  /**
+   * **Every CHECK src/db/schema.ts declares is in the database, on its table,
+   * and validated.** The same gap as the indexes above: five CHECKs on
+   * `ai_calls`, the ledger's money rules, were written by hand in four
+   * migrations and never declared. They are now.
+   *
+   * By name and table here, because an expression's text is the deparser's;
+   * what each of the five *means* is the next case, by what it refuses.
+   */
+  it("every declared CHECK exists on its table and is validated", async () => {
+    const declared: string[] = [];
+    for (const value of Object.values(schema)) {
+      if (!is(value, PgTable)) continue;
+      const config = getTableConfig(value);
+      for (const c of config.checks) declared.push(`${config.name}.${c.name}`);
+    }
+    expect(declared.length).toBeGreaterThan(200);
+    expect(declared).toContain("ai_calls.ai_calls_one_cost_source");
+
+    const { rows } = await pool.query<{ key: string; validated: boolean }>(
+      `select t.relname::text || '.' || k.conname::text as key, k.convalidated as validated
+         from pg_constraint k join pg_class t on t.oid = k.conrelid
+        where k.connamespace = 'spideryarn'::regnamespace and k.contype = 'c'`,
+    );
+    const validated = new Set(rows.filter((r) => r.validated).map((r) => r.key));
+    expect(declared.filter((d) => !validated.has(d)).sort()).toEqual([]);
+    /* And the other direction, which is the one that was open: a CHECK in the
+       database that the file does not declare is a rule nobody reading the
+       file can see, and one a regenerated table would lose. */
+    const known = new Set(declared);
+    expect(rows.map((r) => r.key).filter((k) => !known.has(k)).sort()).toEqual([]);
+  });
+
+  /**
+   * **What the ledger's five hand-written CHECKs refuse**, since a name proves
+   * a constraint is there and not what it says. One forbidden row each, and one
+   * row of every legal kind first, so a constraint that refused everything
+   * would not pass.
+   */
+  it("the ledger's money rules refuse what they say they refuse", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const now = new Date().toISOString();
+      const insert = (over: Record<string, unknown>) => {
+        /* Every NOT NULL column with no default, and `duration_ms`, which a
+           row off the realtime wire must carry. */
+        const row: Record<string, unknown> = {
+          id: randomUUID(),
+          run_id: randomUUID(),
+          owner_id: OWNER,
+          purpose: "schema-test",
+          scope_kind: "product",
+          wire: "chat",
+          requested_model: "a-model",
+          outcome: "ok",
+          duration_ms: 1,
+          started_at: now,
+          finished_at: now,
+          provider_account: "openrouter",
+          cost_source: "none",
+          ...over,
+        };
+        const cols = Object.keys(row);
+        return c.query(
+          `insert into spideryarn.ai_calls (${cols.join(", ")}) values (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
+          Object.values(row),
+        );
+      };
+
+      // The legal kinds: unpriced, provider-priced, provider-priced BYOK, computed.
+      await insert({});
+      await insert({ cost_source: "provider", credits_used_nanos: 5 });
+      await insert({ cost_source: "provider", credits_used_nanos: 0, is_byok: true, byok_upstream_nanos: 7 });
+      await insert({ cost_source: "computed", computed_cost_nanos: 5, price_version: "2026-10-01" });
+      await insert({ provider_account: "anthropic" });
+      await insert({ provider_account: "openai" });
+
+      await expectViolation(c, /ai_calls_provider_account_known/, () => insert({ provider_account: "azure" }));
+      await expectViolation(c, /ai_calls_cost_source_known/, () => insert({ cost_source: "guessed" }));
+      // All three sources against all four money-presence shapes. Keep the
+      // price-version rule satisfied so it cannot mask this rule's refusal.
+      for (const source of ["provider", "computed", "none"] as const) {
+        for (const credits of [false, true]) {
+          for (const computed of [false, true]) {
+            const allowed = credits === (source === "provider") && computed === (source === "computed");
+            const write = () =>
+              insert({
+                cost_source: source,
+                credits_used_nanos: credits ? 5 : null,
+                computed_cost_nanos: computed ? 5 : null,
+                price_version: source === "computed" ? "2026-10-01" : null,
+              });
+            if (allowed) await write();
+            else await expectViolation(c, /ai_calls_one_cost_source/, write);
+          }
+        }
+      }
+      // A computed figure with no version, and a version on a figure that was not computed.
+      await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
+        insert({ cost_source: "computed", computed_cost_nanos: 5 }),
+      );
+      await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
+        insert({ cost_source: "provider", credits_used_nanos: 5, price_version: "2026-10-01" }),
+      );
+      // An upstream figure off the BYOK pocket: not BYOK, not OpenRouter,
+      // or not provider-priced. Each predicate must independently refuse it.
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({ cost_source: "provider", credits_used_nanos: 5, byok_upstream_nanos: 7 }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({
+          provider_account: "anthropic",
+          cost_source: "provider",
+          credits_used_nanos: 5,
+          is_byok: true,
+          byok_upstream_nanos: 7,
+        }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({ is_byok: true, byok_upstream_nanos: 7 }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({
+          cost_source: "computed",
+          computed_cost_nanos: 5,
+          price_version: "2026-10-01",
+          is_byok: true,
+          byok_upstream_nanos: 7,
+        }),
+      );
+    });
   });
 
   /**

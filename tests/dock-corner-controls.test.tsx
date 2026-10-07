@@ -560,6 +560,13 @@ describe("the route walk: one branded home control, never two triggers", () => {
     expect(home.closest('[role="radiogroup"]'), "it is inside the modes").toBeNull();
     expect(home.classList.contains("dock-btn"), "it would inherit the hover wash").toBe(false);
     expect(home.getAttribute("aria-current")).toBeNull();
+    /* **And it is the page's one link home**, since 2026-10-07: the masthead
+       drew an arrow to the shelf above the title until Greg asked for it to go
+       (spya-us7e4v, *"We have the Spideryarn logo for that"*). Both halves, so
+       an arrow that came back and a wordmark that stopped linking each fail. */
+    expect(home.getAttribute("href")).toBe("/");
+    expect(document.querySelector(".masthead"), "no masthead to look in").not.toBeNull();
+    expect(document.querySelector('.masthead a[href="/"]'), "the masthead's arrow came back").toBeNull();
     expect(home.getAttribute("aria-checked")).toBeNull();
   });
 
@@ -666,7 +673,11 @@ describe("a signed-out stranger on a shared article", () => {
     /* The way home is still theirs: a stranger has the most need of something
        on screen that says what this site is. */
     expect(waysHome()).toHaveLength(1);
-    expect(document.querySelector(".dock-home")).not.toBeNull();
+    expect(document.querySelector(".dock-home")?.getAttribute("href")).toBe("/");
+    /* The masthead's *Back to Spideryarn* arrow went with the owner's,
+       2026-10-07 (spya-us7e4v): the bar's wordmark goes to the same place. */
+    expect(document.querySelector(".masthead"), "no masthead to look in").not.toBeNull();
+    expect(document.querySelector('.masthead a[href="/"]'), "the masthead's arrow came back").toBeNull();
   });
 
   it("gets none on the visitor metadata page or in Tweets either", async () => {

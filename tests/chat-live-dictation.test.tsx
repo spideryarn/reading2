@@ -54,6 +54,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
         toggle,
         error: null,
         startedAt: null,
+        endsAt: null,
         deviceLabel: null,
         deviceId: null,
         deviceUnavailable: false,

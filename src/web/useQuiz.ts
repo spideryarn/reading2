@@ -708,8 +708,8 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
 
       setAttempt({ questionId, answer, status: "marking", reply: "", error: null });
 
-      /* What has arrived so far, held here because the stream reader throws a
-         plain sentence and the catch below still owes the reader the half they
+      /* What has arrived so far, held here because the stream reader throws
+         only an error and the catch below still owes the reader the half they
          have read — on every stop, a stall included. */
       let partial = "";
       try {
@@ -815,7 +815,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           answer,
           status: "failed",
           reply: partial,
-          error: (err as Error).message,
+          error: describeFetchFailure(err as Error),
         });
       } finally {
         if (live.current === controller) live.current = null;

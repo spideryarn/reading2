@@ -40,8 +40,8 @@
  * **Fake:** the bodies of the pipeline steps, and only those. The thirteen real
  * ones fetch web pages and call models. They return `parts` and let the session
  * write them, which is exactly what the real stages do — that is the whole
- * precondition of the flip (`LEGACY_UNCONVERTED_STEPS` is empty,
- * src/pipeline.ts). A real stage committing through a real `pgStoreSession` is
+ * precondition of the flip (no step is exempt from returning `parts`,
+ * src/pipeline.ts § `ConvertedProduct`). A real stage committing through a real `pgStoreSession` is
  * `tests/pg-session-real-step.test.ts`; what that file cannot show is the
  * *selection*, because it injects `openPgStoreSession` itself. This file is the
  * other half.

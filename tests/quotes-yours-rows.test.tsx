@@ -248,16 +248,16 @@ describe("the bar", () => {
       STRONG.text,
       "which is why the bound is tight",
     ]);
-    expect(host.querySelector(".quotes-bar-value")?.textContent).toContain("1 of 2 + 2 yours");
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 2 + 2 yours");
     /* The foot line is the model's list's, word for word what it was. */
-    expect(host.querySelector(".quotes-bar-note")?.textContent).toBe(barNote(1, 2));
+    expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(barNote(1, 2));
     expect(host.querySelector<HTMLInputElement>("#quotes-bar")?.getAttribute("aria-valuetext")).toContain("showing 1 of 2 quotes");
   });
 
   it("says nothing about yours when there are none", async () => {
     await mount({ rank: "prioritised", comments: [] });
-    expect(host.querySelector(".quotes-bar-value")?.textContent).toContain("1 of 2");
-    expect(host.querySelector(".quotes-bar-value")?.textContent).not.toContain("yours");
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 2");
+    expect(host.querySelector(".gloss-gate-value")?.textContent).not.toContain("yours");
   });
 });
 

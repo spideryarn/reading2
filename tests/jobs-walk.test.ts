@@ -347,8 +347,8 @@ async function artefactsOf(slug: string, names: readonly StepName[]) {
 
 /**
  * A **converted** step: it writes nothing itself and returns everything it
- * declares, which is what all thirteen now do (`LEGACY_UNCONVERTED_STEPS` is
- * empty). The session's commit is what puts the artefacts in the draft, so
+ * declares, which is what all thirteen now do (and must: src/pipeline.ts §
+ * `ConvertedProduct`). The session's commit is what puts the artefacts in the draft, so
  * `assertProduced` reads back what this returned.
  *
  * A step that returns nothing at all is a different case with its own tests.

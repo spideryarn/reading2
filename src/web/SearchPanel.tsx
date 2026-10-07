@@ -454,6 +454,7 @@ export function SearchPanel({
         loaded={loaded}
         active={active}
         typed={(find ?? "").trim().length}
+        own={own !== null}
       />
     </ModeSurface>
   );
@@ -1491,10 +1492,19 @@ function SortBar({
           a control that visibly does nothing — the honest version of which is
           not to draw it. */}
       {asksTheServer(matcher) && (
-        <>
+        /* **A named group, and each button says whether it is pressed**, as the
+            five sibling rows do through `OrderGroup` ("Order the … by"). This
+            row stays its own markup, since moving onto that component would
+            change how it wraps and scrolls on a touch screen (plan 261007a §
+            K4). `display: contents` in search.css, so the wrapper is in the
+            accessibility tree and not in the layout. Until 2026-10-07 the
+            pressed order was a colour and nothing a screen reader could hear. */
+        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a list, not form controls; `role="group"` with a name is what ARIA has for that, as OrderGroup.tsx says */
+        <div className="srch-sort-group" role="group" aria-label="Order the passages by">
           <button
             type="button"
             className={`srch-sort-btn${order === "document" ? " on" : ""}`}
+            aria-pressed={order === "document"}
             onClick={() => onOrder("document")}
             title="In the order they appear in the article"
           >
@@ -1503,6 +1513,7 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
+            aria-pressed={order === "confidence"}
             onClick={() => onOrder("confidence")}
             title="Strongest matches first — the model's own judgment about its answers"
           >
@@ -1511,12 +1522,13 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "prioritised" ? " on" : ""}`}
+            aria-pressed={order === "prioritised"}
             onClick={() => onOrder("prioritised")}
             title="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
           >
             prioritised
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -1583,12 +1595,12 @@ function ConfSlider({
   const note = confNote(hiddenCount, all.length);
 
   return (
-    <div className="srch-gate">
-      <div className="srch-gate-row">
-        <label className="srch-gate-label" htmlFor="srch-gate">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="srch-gate">
           confidence
         </label>
-        <span className="srch-gate-value">
+        <span className="gloss-gate-value">
           {gate} · {count}
         </span>
         {/* Only once there is something to undo — the same call the glossary's
@@ -1596,7 +1608,7 @@ function ConfSlider({
         {moved && (
           <button
             type="button"
-            className="srch-gate-reset"
+            className="gloss-gate-reset"
             title={`Back to ${PRIORITY_CONF}`}
             aria-label={`Reset the threshold to ${PRIORITY_CONF}`}
             onClick={() => onGate(null)}
@@ -1607,7 +1619,7 @@ function ConfSlider({
       </div>
       <input
         id="srch-gate"
-        className="srch-gate-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         /* A fixed 0–100, deliberately unlike the glossary's `gateMax`. Ending
@@ -1634,7 +1646,7 @@ function ConfSlider({
           sentence stays, because it is what tells "Nothing matched" from "you
           hid it all" and names the way back. The other thresholds still print
           theirs in every state (threshold.ts § hiddenNote). */}
-      {hiddenCount > 0 && <p className="srch-gate-note">{note}</p>}
+      {hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}
     </div>
   );
 }
@@ -1655,6 +1667,7 @@ function Results({
   loaded,
   active,
   typed,
+  own,
 }: {
   found: Found[];
   order: HitOrder;
@@ -1678,6 +1691,8 @@ function Results({
   loaded: boolean;
   active: string[];
   typed: number;
+  /** The reader owns these searches, so a failed row's ⚠ may be a retry button. */
+  own: boolean;
 }) {
   /* Empty in words mode, whatever is ticked. The ticks deliberately survive a
      trip to the words matcher and back (App.tsx § onMatcher), so `active` is
@@ -1761,6 +1776,15 @@ function Results({
      and the reader deserves to be told that the emptiness has a cause. */
   const broken = switchedOn.filter((r) => r.status === "error");
   if (broken.length > 0 && broken.length === switchedOn.length) {
+    /* **How many of those rows have a ⚠ that is a button.** `Saved` draws one
+       only for the owner and only while `worthRetrying` says another go could
+       work; on the rest the ⚠ is plain text. The hint said "tries it again" of
+       every row until 2026-10-07, which is false for those. The count is of
+       ticked searches only, and every ticked search here failed; an unticked
+       row above can have either kind of ⚠, so each sentence names the ticked
+       rows. And none says another go *would* fail: the refusal's own
+       sentence says "most likely" (GPT Sol, K4-F4 and K4-F8). */
+    const retryable = own ? broken.filter((r) => worthRetrying(r.error)).length : 0;
     return (
       <div className="srch-empty">
         <p className="srch-failed">
@@ -1770,7 +1794,13 @@ function Results({
             : `All ${broken.length} of these searches failed.`}
         </p>
         <p className="srch-empty-hint">
-          The ⚠ on each row above tries it again.
+          {retryable === broken.length
+            ? "The ⚠ on each ticked row above tries it again."
+            : retryable === 0
+              ? "The ⚠ on each ticked row above only marks the failure. It is not a button, because " +
+                "running the same search again is unlikely to go differently."
+              : "On the ticked rows above, the ⚠ tries the search again where that could work. On " +
+                "the others it only marks the failure."}
         </p>
       </div>
     );

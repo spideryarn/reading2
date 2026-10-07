@@ -903,16 +903,23 @@ export const articleRevisions = spideryarn.table(
      * **That rule is intent, not a guard. Nothing enforces it today**, and this
      * comment said `publishRevision` did until 2026-08-27, which was simply
      * untrue: that function checks blocks, the tree, `checkTree` and the `structure`
-     * run, and has never looked at these two columns. Nothing writes them yet
-     * either, so the claim was vacuous rather than merely wrong — there is no
-     * revision it could have been false about.
+     * run, and has never looked at these two columns.
+     *
+     * **They are written now**: src/store/artifacts-pg.ts § `writeRaw` sets
+     * both when a `fetch` step's source document is stored, and a draft carries
+     * them forward from the revision it is based on (src/store/pg-revisions.ts,
+     * `rawSourceSha256: "carry"`). (This comment said *"Nothing writes them
+     * yet"* until 2026-10-07, which had been untrue since the live write path
+     * landed.) **The implication is still not checked.** `reasonsNotToPublish`
+     * does not read these columns, so a revision with a successful `fetch` and
+     * no reference would publish; the writer is what keeps that from happening.
      *
      * Writing it down as a fact was the same mistake as the comment in
      * src/store/pg.ts that claimed the ToC guard checked what it did not —
-     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day. The
-     * rule lands in `reasonsNotToPublish` with the live write path;
-     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the full
-     * truth table, including the failed-fetch case this sentence omits.
+     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day.
+     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the
+     * truth table the check would need, including the failed-fetch case this
+     * sentence omits.
      *
      * Note this is **not** `raw_sha256` above. That one is the hash of what the
      * network sent; this is the hash of what we stored, and for HTML in any
@@ -1074,10 +1081,12 @@ export const articleRevisions = spideryarn.table(
      * decision rather than a gap, and a cheap one to reverse, because
      * `profileHash` is a field on the JSON rather than a column.
      *
-     * **No attempts table beside it.** v1 stores no answers: a reader answers,
-     * reads the reply and moves on. The questions persist because they are an
-     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not
-     * stored.
+     * **The reader's answers are not in here; they are rows in
+     * `quiz_attempts`** (below, since drizzle/20261005032955_quiz_attempts.sql),
+     * keyed by this document's `batchId` and a question's id, with the question
+     * copied onto the row so an answer survives a regeneration. v1 stored no
+     * answers at all (docs/plans/260831al-review-quiz-sub-mode.md § Attempts are
+     * not stored), and this comment went on saying so after that changed.
      *
      * **No foreign key from an evidence `blockId` to `revision_blocks`**, on
      * the same argument the glossary, the ideas, the quotes, the timeline and
@@ -1283,11 +1292,17 @@ export const articleRevisions = spideryarn.table(
      * **Not a `nav_label` column on `revision_blocks`, even though the key
      * would fit.** That would give stage 4b write access to stage 3's rows, and
      * a re-run of labels would mutate rows that are otherwise immutable once
-     * the revision is published. `labels.json` is one of the `structure` step's
-     * OUTPUTS (src/pipeline.ts), so its currency rides with the `structure` row in
-     * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
-     * own. Checked against the code, not assumed — an earlier draft of this
-     * work had it as a step and would have added a CHECK value for it.
+     * the revision is published.
+     *
+     * **Two steps write this column, and each has its own row in
+     * `revisionStepRuns`** (src/pipeline.ts § `STEPS`): `structure` produces
+     * the tree with a pending manifest, and `labels`, a step of its own since
+     * 2026-09-06, produces the labels and merges them into the tree
+     * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md). Until
+     * 2026-10-07 this said the manifest was one of `structure`'s outputs only
+     * and that `labels` was *"deliberately NOT a step name of its own"*, which
+     * was true before that plan; `revision_step_runs_step` below has admitted
+     * the name since.
      */
     labels: jsonb("labels").$type<LabelsFile>(),
 
@@ -1400,11 +1415,12 @@ export const articleRevisions = spideryarn.table(
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
      * same standing hazard `revision_step_runs_step` has, which has drifted
      * twice and has `tests/db-step-constraint.test.ts` watching it.
-     * `drizzle-kit generate` diffs the TypeScript and knows nothing about a
-     * CHECK expression, so a fourth member added to the union in src/types.ts
-     * would compile, migrate cleanly and then be rejected at the UPDATE with a
-     * `23514 check_violation` naming none of this.
-     * `tests/nav-label-status.test.ts` compares the two.
+     * `drizzle-kit generate` does see a CHECK's expression (edit this literal
+     * and it writes the DROP and the ADD), but it reads this file and not the
+     * union: a fourth member added in src/types.ts alone would compile, leave
+     * nothing to migrate, and then be rejected at the UPDATE with a `23514
+     * check_violation` naming none of this. `tests/nav-label-status.test.ts`
+     * compares the two.
      */
     check(
       "article_revisions_nav_label_status",
@@ -1576,6 +1592,18 @@ export const revisionBlocks = spideryarn.table(
     primaryKey({ columns: [t.revisionId, t.blockId] }),
     /** GIN, because this column is queried with `@@` and never selected. */
     index("revision_blocks_fts").using("gin", t.fts),
+    /**
+     * Serves `revision_blocks_identity_fk` below, and nothing else. Deleting an
+     * article cascades to every one of its `block_identities` rows, and for
+     * each one Postgres asks whether a `revision_blocks` row still names
+     * `(article_id, block_id)`. The primary key leads on `revision_id`, so
+     * without this that question read the whole primary-key index once per
+     * block id: measured 2026-10-07 on a 141-block article in a 233,000-row
+     * table, 3.2 to 3.8 s of a 3.2 to 3.9 s delete, and 6 ms of about 50 ms with it
+     * (docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+     * § Stage 1).
+     */
+    index("revision_blocks_article_block").on(t.articleId, t.blockId),
     unique("revision_blocks_revision_ordinal").on(t.revisionId, t.ordinal),
     check("revision_blocks_ordinal", sql`${t.ordinal} >= 0`),
     /**
@@ -1630,10 +1658,14 @@ export const revisionBlocks = spideryarn.table(
       foreignColumns: [articleRevisions.articleId, articleRevisions.id],
     }).onDelete("cascade"),
     /**
-     * No cascade, and no `restrict` either — identities are never deleted, so
-     * this FK only ever fires on an id that was never minted. That is a real
-     * bug (stage 3 re-minting instead of carrying ids forward) and it should
-     * fail loudly rather than insert.
+     * No cascade, and no `restrict` either. An identity is deleted only when
+     * its whole article is, and then this is checked at the end of the
+     * statement, by which time the block rows have gone with their revision
+     * (docs/project/database.md § `restrict` and `no action`); the index
+     * `revision_blocks_article_block` above is what makes that check cheap.
+     * Otherwise it fires on an insert naming an id that was never minted. That
+     * is a real bug (stage 3 re-minting instead of carrying ids forward) and it
+     * should fail loudly rather than insert.
      */
     foreignKey({
       name: "revision_blocks_identity_fk",
@@ -2021,10 +2053,18 @@ export const refereeCriteria = spideryarn.table(
     /* Poles and scale are exactly the diverging kind's, and all three arrive or
        none of them does. Half a diverging criterion is one that cannot be drawn
        and cannot be described in words, and it would reach the panel looking
-       fine. */
+       fine.
+
+       **Counted, not compared.** Until 2026-10-07 this was `(kind =
+       'diverging') = (all three are not null)`, which says the first half and
+       not the second: on a kind with no ends both sides are false as soon as
+       ONE of the three is null, so one or two stray fields passed. No row had
+       any at the 2026-10-07 check (0 of 10 in production, 0 of 11 locally);
+       `configToRow` nulls all three, and `configFromRow` would have dropped
+       them unread. */
     check(
       "referee_criteria_diverging_shape",
-      sql`(${t.kind} = 'diverging') = (${t.poleAgainst} is not null and ${t.poleFavour} is not null and ${t.scale} is not null)`,
+      sql`num_nonnulls(${t.poleAgainst}, ${t.poleFavour}, ${t.scale}) = case when ${t.kind} = 'diverging' then 3 else 0 end`,
     ),
     check("referee_criteria_scale", sql`${t.scale} is null or ${t.scale} in ('rg','br')`),
     /* An attempt is both columns or neither — see `search_runs_attempt_both`.
@@ -2106,10 +2146,11 @@ export const refereeClaims = spideryarn.table(
      * it is a fact about the run and not about any claim in it.
      *
      * Nullable, and null means *not recorded* rather than *none omitted*. Those
-     * are genuinely different: the route that stores a run writes `claims` and
-     * `model` and nothing else today, so every run stored before it learns to
-     * write this has no answer, and the panel's fallback copy depends on telling
-     * that from a truthful zero.
+     * are genuinely different, and the panel's fallback copy depends on telling
+     * one from a truthful zero. The route writes it on every successful run
+     * (src/routes.ts § `runRefereeClaims`, from `outcome.dropped.truncated`), so
+     * null now means a run stored before it did, a run that failed, or one
+     * still pending; `begin` nulls it.
      */
     claimsOmitted: integer("claims_omitted"),
     /**
@@ -2162,12 +2203,30 @@ export const refereeClaims = spideryarn.table(
   },
   (t) => [
     check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
-    /* **No `empty unless done` check, deliberately.** It was written and taken
-       out again: `begin` does write `[]` over whatever was there, so a `pending`
-       row carrying claims would be a half-applied write — but the filesystem
-       store cannot refuse one, and a constraint only one of the two stores keeps
-       turns a shrug on a laptop into a 500 on Vercel. The invariant is held
-       where both stores can hold it, in `begin`. */
+    /* **Claims are empty unless the run is done.** A `pending` or `error` row
+       carrying claims is yesterday's answer under today's spinner, or under a
+       failure.
+
+       Three things keep an ordinary write clear of it, and
+       tests/store-pg-referee-claims.test.ts holds each: `begin` writes `[]` on
+       the insert and in the upsert, in the same statement that moves the
+       status; `finish` and the sweep match only a `pending` row, which is
+       therefore empty; and an `error` finish cannot carry claims, because
+       `ClaimsFinish` (src/store/contracts.ts) types them as the empty tuple.
+
+       **This was written in 2026-09 and taken out again**, because the
+       filesystem store could not refuse the same row and a constraint only one
+       of two stores keeps turns a shrug on a laptop into a 500 on Vercel. That
+       store was deleted on 2026-09-05; the CHECK came back on 2026-10-07 with
+       0 of 4 production rows against it.
+
+       `jsonb_array_length` raises on a value that is not an array, which is a
+       refusal too, with a less helpful name. The column is `not null default
+       '[]'` and every writer hands it an array. */
+    check(
+      "referee_claims_empty_unless_done",
+      sql`${t.status} = 'done' or jsonb_array_length(${t.claims}) = 0`,
+    ),
   ],
 );
 
@@ -2966,16 +3025,63 @@ export const jobs = spideryarn.table(
     uniqueIndex("jobs_ingest_event_unique")
       .on(t.ingestEventId)
       .where(sql`${t.ingestEventId} is not null`),
+    /**
+     * **The three below were made by hand in drizzle/0001_auth_fks_and_guards.sql
+     * and were in the database, and not in this file, until 2026-10-07.**
+     * Declaring them ran no SQL
+     * (drizzle/20261007012654_declare_migration_only_indexes_and_checks.sql is
+     * empty on purpose); it means a reader of this table learns its queue is
+     * indexed, and a table regenerated from this file keeps them.
+     * tests/db-schema.test.ts holds each by definition.
+     *
+     * The queued rows, oldest first. Made when claiming scanned for the oldest
+     * queued job; a claim names its job by id now, and the planner still reads
+     * the small queued subset through this (1,869 scans in production between
+     * 2026-08-20 and 2026-10-06; which query, nobody has looked). Partial,
+     * because finished rows accumulate and are never what a question about the
+     * queue is asking for.
+     */
+    index("jobs_queued_idx")
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'queued'`),
+    /** The running rows by lease: the rescue sweep looks for the ones whose lease has expired. */
+    index("jobs_lease_idx")
+      .on(t.leaseExpiresAt)
+      .where(sql`${t.status} = 'running'`),
+    /**
+     * The job list, newest first (src/store/pg-jobs.ts § `list`).
+     *
+     * **`.nullsFirst()` is the declaration being true, not a preference.** The
+     * hand-written SQL said `"created_at" DESC`, and a bare `DESC` in Postgres
+     * is `NULLS FIRST`. Drizzle's `.desc()` alone writes `DESC NULLS LAST`,
+     * which is a different index: declared that way, a database rebuilt from
+     * this file would not match the one that exists, and a plain `order by
+     * created_at desc` could not walk it. The same goes for
+     * `chat_threads_article_updated_idx` and `search_runs_article_created_idx`.
+     * (An index drizzle generated itself from a `.desc()`, such as
+     * `uploads_owner_minted`, really is `NULLS LAST` in the database.)
+     */
+    index("jobs_owner_created_idx").on(t.ownerId, t.createdAt.desc().nullsFirst()),
   ],
 );
 
 /**
- * One row, ever. Claiming locks it FOR UPDATE before choosing a job.
+ * One row, ever, and **it is a lock, not a record**. Every transition of a job
+ * into `running` takes this row `FOR UPDATE NOWAIT` first
+ * (src/store/pg-jobs.ts § `claim`), so claimants are decided one at a time.
+ * Inside the lock `claim` counts the `running` rows in `jobs` and refuses at
+ * the cap its caller passes (`maxRunning`); compatible jobs may run side by
+ * side up to it. A missing row is a refusal, not a free pass.
  *
- * This exists because `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` does NOT give
- * concurrency 1 — it lets two workers claim two *different* queued jobs, which
- * is exactly the global guarantee docs/project/ingest-queue.md chose on
- * purpose. The singleton row is the guarantee.
+ * It was made when the rule was one job at a time, because `SELECT ... FOR
+ * UPDATE SKIP LOCKED LIMIT 1` does not give that: it lets two workers claim
+ * two *different* queued jobs. This comment went on saying *"the singleton row
+ * is the guarantee"* of concurrency one until 2026-10-07; the row serialises
+ * the decision and the count is the cap.
+ *
+ * **`running_job_id` is read and written by nothing** (no mention outside this
+ * file), and `updated_at` has not moved since the row was seeded: no claim
+ * updates either. Dropping the column is Greg's call.
  */
 export const queueState = spideryarn.table(
   "queue_state",
@@ -2998,14 +3104,21 @@ export const queueState = spideryarn.table(
 /**
  * Whether a pipeline step's output is CURRENT, not merely present.
  *
- * `stepIsDone` in src/pipeline.ts is an `access()` existence check: a file is
- * there, therefore the step is done, whatever it was generated from. Carrying
- * that across as "column is non-null" would carry the bug across too.
+ * This table is what `stepIsDone` in src/pipeline.ts asks, in order: was the
+ * step interrupted (`status`), are all its artefacts there, and does the stamp
+ * stored here equal the one the step would write today (or, for a step with no
+ * stamp, its own `isDone`). When this table was designed that function was an
+ * `access()` existence check on a file, "it is there, therefore it is done,
+ * whatever it was generated from", and carrying that across as "column is
+ * non-null" would have carried the bug across too. The filesystem went on
+ * 2026-09-05.
  *
- * `inputHash` should be computed the way src/tweets.ts `hashBlocks` does it —
- * over `id \t text` per block, joined. Deliberately NOT the bytes of the
- * artefact, because those change when an unread field is recomputed and do NOT
- * change when two blocks swap ids. That choice is the transferable part.
+ * `inputHash` fingerprints what that step consumes: see each step's `stamp`
+ * in src/pipeline.ts. Article-reading steps include the blocks, tree and
+ * metadata; assets and other steps have their own inputs. `hashBlocks` in
+ * src/source-hash.ts includes ids and text, and role/treatment where present,
+ * with framing for ambiguous delimiters. Fingerprinting inputs rather than
+ * output bytes is what lets the stamp detect an output that has gone stale.
  */
 export const revisionStepRuns = spideryarn.table(
   "revision_step_runs",
@@ -3069,12 +3182,15 @@ export const revisionStepRuns = spideryarn.table(
        * this CHECK to admit it.
        */
       /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
-         to the database by drizzle/0031 and never got back into this literal,
-         because `drizzle-kit generate` diffs the schema and knows nothing about a
-         CHECK expression — so this one is hand-maintained and the migrations are
-         the truth. `tests/db-step-constraint.test.ts` compares the last
-         `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
-         directions, which is what makes there not be a third drift. */
+         to the database by a hand-written drizzle/0031 and never got back into
+         this literal. `drizzle-kit generate` does see a CHECK's expression now
+         (edit a literal and it writes the DROP and the ADD:
+         drizzle/20261007010230_referee_criteria_shape_all_or_none.sql is one it
+         wrote unaided), but it reads this file and not `STEP_ORDER`, so the
+         literal is still a second copy kept by hand.
+         `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT`
+         in the migrations against `STEP_ORDER` in both directions, which is
+         what makes there not be a third drift. */
       sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
@@ -3318,8 +3434,10 @@ export const realtimeSessions = spideryarn.table(
  * - **`cost_micros` is gone**, in favour of nano-dollars in a `bigint`. A single
  *   query embedding costs about $0.0000006, which is **less than one
  *   micro-dollar** and rounded to zero — the row read as free.
- * - **No `attempt` column.** A retry is a separate call and gets its own row and
- *   its own id; `run_id` is what groups the calls one piece of work made.
+ * - **A retry is a separate call and gets its own row and its own id**;
+ *   `run_id` is what groups the calls one piece of work made. Since 2026-10-06
+ *   the `attempt` column below says which go a row was inside one call's
+ *   transport retry (this line said *"No `attempt` column"* until 2026-10-07).
  *
  * ## `owner_id` is here, and src/owner.ts's rule says it should not be
  *
@@ -3365,7 +3483,10 @@ export const aiCalls = spideryarn.table(
     jobId: text("job_id"),
     stepName: text("step_name"),
     /**
-     * `messages`, `chat` or `embeddings`.
+     * Which transport the call went over: a member of `Wire` in src/models.ts,
+     * which is the list. It is not copied here because it has grown (three
+     * values when this line last named them, seven by 2026-10-06) and no CHECK
+     * holds the column to it; two CHECKs below do name `'realtime'`.
      *
      * **On the row because the two wires do not mean the same thing by "input
      * tokens"** — the Messages shape reports cache reads and writes *outside*
@@ -3642,8 +3763,17 @@ export const aiCalls = spideryarn.table(
     createdAt: createdAt(),
   },
   (t) => [
-    /** "What did this owner spend in August" — the query a spend limit would need. */
-    index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc()),
+    /**
+     * "What did this owner spend in August" — the query a spend limit would need.
+     *
+     * `.nullsFirst()` here and on `ai_calls_scope_started` below, since
+     * 2026-10-07: both were made by hand as a bare `DESC` (drizzle/0021, 0023),
+     * which is `NULLS FIRST`, and declared with a plain `.desc()`, which drizzle
+     * reads as `NULLS LAST`. See `jobs_owner_created_idx`; the declaration
+     * changed and the indexes did not
+     * (drizzle/20261007013835_ledger_indexes_declared_as_made.sql runs nothing).
+     */
+    index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc().nullsFirst()),
     /** "What did this ingest cost", asked once per job at the end of it. */
     index("ai_calls_job").on(t.jobId),
     /**
@@ -3658,7 +3788,7 @@ export const aiCalls = spideryarn.table(
      * landing in the number Greg sets a price against is how a price gets set
      * wrong.
      */
-    index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc()),
+    index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc().nullsFirst()),
     /**
      * **The same report must not become two rows.**
      *
@@ -3682,6 +3812,46 @@ export const aiCalls = spideryarn.table(
     uniqueIndex("ai_calls_realtime_event")
       .on(t.realtimeSessionId, t.providerEventId, t.eventKind)
       .where(sql`${t.realtimeSessionId} is not null`),
+    /**
+     * **The five below were written by hand in four migrations and were in the
+     * database, and not in this file, until 2026-10-07**: drizzle/0023 (the
+     * first, second and third), 0025 (the fourth), 20260902141103 (the fifth),
+     * and 20260902150952, which widened the first to its third account.
+     * Declaring them ran no SQL; see `jobs_queued_idx`. They are the ledger's
+     * money rules, and tests/db-schema.test.ts holds each by what it refuses.
+     *
+     * Only three spellings each. A typo in either is a row that silently drops
+     * out of whichever half of the report filters on it, and widening
+     * `ProviderAccount` or `CostSource` in TypeScript is not enough without the
+     * matching edit here.
+     */
+    check("ai_calls_provider_account_known", sql`${t.providerAccount} in ('openrouter', 'anthropic', 'openai')`),
+    check("ai_calls_cost_source_known", sql`${t.costSource} in ('provider', 'computed', 'none')`),
+    /**
+     * **The two numbers are different claims and exactly one can be true of a
+     * row**: `credits_used_nanos` is what OpenRouter deducted,
+     * `computed_cost_nanos` is what we worked out because nobody could be
+     * asked. A row carrying both would invite a reader to pick, and a `SUM` over
+     * both would double-count.
+     */
+    check(
+      "ai_calls_one_cost_source",
+      sql`(${t.costSource} = 'provider' and ${t.creditsUsedNanos} is not null and ${t.computedCostNanos} is null)
+          or (${t.costSource} = 'computed' and ${t.creditsUsedNanos} is null and ${t.computedCostNanos} is not null)
+          or (${t.costSource} = 'none' and ${t.creditsUsedNanos} is null and ${t.computedCostNanos} is null)`,
+    ),
+    /** A computed figure without a version cannot be re-checked when a rate changes. */
+    check(
+      "ai_calls_price_version_iff_computed",
+      sql`(${t.costSource} = 'computed' and ${t.priceVersion} is not null)
+          or (${t.costSource} <> 'computed' and ${t.priceVersion} is null)`,
+    ),
+    /** The BYOK pocket: only a provider-priced, bring-your-own-key OpenRouter row has an upstream figure. */
+    check(
+      "ai_calls_byok_upstream_only",
+      sql`${t.byokUpstreamNanos} is null
+          or (${t.costSource} = 'provider' and ${t.isByok} is true and ${t.providerAccount} = 'openrouter')`,
+    ),
     /**
      * **A realtime row is fully identified or it is not a realtime row.**
      *
@@ -4033,6 +4203,12 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_explore")
       .on(t.articleId)
       .where(sql`${t.kind} = 'explore'`),
+    /**
+     * The thread list, newest first — what the chat panel opens with. Made by
+     * hand in drizzle/0003_reader_state_owner_fks.sql and declared here on
+     * 2026-10-07, with no SQL run; see `jobs_queued_idx`.
+     */
+    index("chat_threads_article_updated_idx").on(t.articleId, t.updatedAt.desc().nullsFirst()),
   ],
 );
 
@@ -4208,6 +4384,11 @@ export const chatMessages = spideryarn.table(
       "chat_messages_attempt_both",
       sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
     ),
+    /* The rule (one message per position in a thread) and also the index a
+       thread's messages are read through, in order. It had a non-unique twin on
+       the same three columns, `chat_messages_thread_ordinal_idx`, from the
+       migration after the one that made this; that was dropped on 2026-10-07,
+       and tests/db-schema.test.ts refuses the next such pair on any table. */
     unique("chat_messages_thread_ordinal").on(t.articleId, t.threadId, t.ordinal),
     check("chat_messages_role", sql`${t.role} in ('user','assistant')`),
     check("chat_messages_status", sql`${t.status} in ('pending','done','error')`),
@@ -4386,6 +4567,13 @@ export const searchRuns = spideryarn.table(
       "search_runs_attempt_both",
       sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
     ),
+    /**
+     * The saved-search list, newest first, and the input to the trim that keeps
+     * the newest `MAX_RUNS`. Made by hand in
+     * drizzle/0003_reader_state_owner_fks.sql and declared here on 2026-10-07,
+     * with no SQL run; see `jobs_queued_idx`.
+     */
+    index("search_runs_article_created_idx").on(t.articleId, t.createdAt.desc().nullsFirst()),
   ],
 );
 
@@ -4812,8 +5000,25 @@ export const uploadSourceGuesses = spideryarn.table(
     /** Billed searches the provider reported — nullable, and null is not zero (as `citation_finds`). */
     searches: integer("searches"),
     model: text("model"),
+    /**
+     * **The eligibility clock, not when the row was made.** `claim` re-stamps
+     * it on every reclaim, and `release` sets it to the Unix epoch so the row
+     * is reclaimable at once (src/store/pg-source-guesses.ts). Until
+     * 2026-10-07 it was also this table's only "when", and it stopped being one
+     * the first time a search failed. `created_at` below is that.
+     */
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /**
+     * **When this row was first written** — the first claim on this article.
+     * Filled by the database default; no store names it, so the upsert in
+     * `claim` and the `release` that zeroes `claimed_at` cannot move it.
+     * **Null means the row predates the column's installation** — nullable
+     * on purpose, since no row is given an invented time, and not backfilled
+     * from `claimed_at`, which may be a later claim or the epoch. AGENTS.md
+     * § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     check("upload_source_guesses_status", sql`${t.status} in ('searching', 'found', 'none')`),
@@ -5261,8 +5466,9 @@ export const feedback = spideryarn.table(
      *
      * `bytea` and not a bucket reference: it is small, it is bounded, and a
      * reference would give the report a second place to be incomplete.
-     * 400,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
-     * here for the same reason the answer cap is. The filename and content type
+     * 2,000,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
+     * in `feedback_screenshot_size` below for the same reason the answer cap
+     * is (this line said 400,000 after both had moved). The filename and content type
      * are never stored — the route writes a constant pair, so a client-supplied
      * MIME type or filename can never be forwarded.
      */
@@ -5353,19 +5559,23 @@ export const feedback = spideryarn.table(
      * well as in the route, because a rule enforced in TypeScript holds only for
      * the callers that went through that TypeScript.
      *
-     * **4,000 is `MAX_FEEDBACK_ANSWER_CHARS`** in src/types.ts, which is where
-     * the dialog's `maxlength` and the route's refusal read it from. Written out
-     * here rather than imported for the reason the vocabularies above are — and
+     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`** in src/types.ts. Written out here
+     * rather than imported for the reason the vocabularies above are — and
      * pinned to that constant behaviourally by tests/feedback-store.test.ts,
      * which writes exactly the cap and exactly one character more.
      *
-     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`, and it is deliberately not 4,000.**
-     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS` — the route
-     * refuses more and the dialog says so — but the backfill glued three
-     * separately-capped answers under their headings, and three full ones come
-     * to exactly this. A 4,000 CHECK would either fail the migration on a row
-     * that was legal when it was filed, or force it to truncate, which throws
-     * away something a reader wrote. GPT Sol's review of the plan, 2026-09-02.
+     * **It is three old answers, not one.** The backfill of 2026-09-02 glued
+     * three answers, each capped at 4,000
+     * (`MAX_LEGACY_FEEDBACK_ANSWER_CHARS`), under their headings, and three full
+     * ones come to exactly this. A 4,000 CHECK would either fail the migration
+     * on a row that was legal when it was filed, or force it to truncate, which
+     * throws away something a reader wrote. GPT Sol's review of the plan,
+     * 2026-09-02.
+     *
+     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS`, which the route
+     * refuses past and the dialog says. It was 4,000 and has been 12,000 since
+     * 2026-10-07, inside this number on purpose: raising it moved nothing here
+     * (plan 261007b, which also sets out raising this one, for Greg).
      */
     check(
       "feedback_body_shape",

@@ -206,22 +206,34 @@ function withNote(note: string | undefined): { illustrationNote?: string } {
   return note?.trim() ? { illustrationNote: note } : {};
 }
 
-export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllustrated {
-  const [status, setStatus] = useState<IllustratedStatus>("loading");
-  const [illustrated, setIllustrated] = useState<Illustrated | null>(null);
-  const [faults, setFaults] = useState<IllustratedFault[]>([]);
-  const [stale, setStale] = useState(false);
-  const [outdated, setOutdated] = useState(false);
-  const [profiled, setProfiled] = useState(false);
-  const [profileChanged, setProfileChanged] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * **The painting on screen and everything that arrived with it, as one
+ * value**, so the facts about a painting cannot outlive it — useSketch.ts §
+ * `SketchShown` has the reasoning, and why `faults` is not in here.
+ */
+interface IllustratedShown {
+  /** Checked and safe to draw. */
+  illustrated: Illustrated;
   /**
-   * **Which stored painting is on screen**, for *Paint again*'s hold
+   * **Which stored painting this is**, for *Paint again*'s hold
    * (rewrite-hold.ts). `Illustrated` has no clock of its own, so this is the
    * stored value itself, as the server sent it — useSketch.ts § `drawn` says
    * why it is never the response beside it, nor the checked plates.
    */
-  const [painted, setPainted] = useState<string | null>(null);
+  painted: string;
+  stale: boolean;
+  outdated: boolean;
+  profiled: boolean;
+  profileChanged: boolean;
+}
+
+export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllustrated {
+  const [status, setStatus] = useState<IllustratedStatus>("loading");
+  const [shown, setShown] = useState<IllustratedShown | null>(null);
+  const [faults, setFaults] = useState<IllustratedFault[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const illustrated = shown?.illustrated ?? null;
+  const profileChanged = shown?.profileChanged ?? false;
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
 
@@ -251,13 +263,8 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       if (res.status === 404) {
         // The ordinary case: `illustrated` is off DEFAULT_INGEST_STEPS, so most
         // articles have never had one painted. This is what the button is for.
-        setIllustrated(null);
+        setShown(null);
         setFaults([]);
-        setStale(false);
-        setOutdated(false);
-        setProfiled(false);
-        setProfileChanged(false);
-        setPainted(null);
         landed(started, res, null);
         setError(null);
         setStatus("none");
@@ -279,11 +286,13 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
          empty plate list and the step refuses to write one, so reaching here
          means something got past both — an import, a hand-edited column, a
          schema from before the union existed. A panel that took it as `ready`
-         would draw an empty band and report success. */
+         would draw an empty band and report success.
+
+         **No painting, so no facts about one** — `shown` is null and the four
+         flags go with it. The faults stay: they say why there is nothing. */
       if (checked.plates.length === 0) {
-        setIllustrated(null);
+        setShown(null);
         setFaults(report.faults);
-        setPainted(null);
         landed(started, res, null);
         setStatus("none");
         setError(null);
@@ -291,17 +300,19 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       }
 
       const identity = JSON.stringify(loaded.illustrated);
-      setPainted(identity);
       landed(started, res, identity);
-      setIllustrated(checked);
+      setShown({
+        illustrated: checked,
+        painted: identity,
+        stale: loaded.stale,
+        outdated: loaded.outdated,
+        /* `!= null` rather than truthiness: the field is `string | null |
+           undefined` and only `null` and absent mean "painted from a Sketch
+           that had no profile". */
+        profiled: checked.profileHash != null,
+        profileChanged: loaded.profileChanged,
+      });
       setFaults(report.faults);
-      setStale(loaded.stale);
-      setOutdated(loaded.outdated);
-      /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "painted from a Sketch that
-         had no profile". */
-      setProfiled(checked.profileHash != null);
-      setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -349,7 +360,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
      as useSketch.ts § `regenerate` does, and for the dearest run there is. The
      two unforced verbs are offered only with nothing painted, so there is no
      painting for them to hold. */
-  const hold = useRewriteHold({ slug, step: "illustrated", identity: painted, queue, fresh, refresh });
+  const hold = useRewriteHold({ slug, step: "illustrated", identity: shown?.painted ?? null, queue, fresh, refresh });
   const held = hold.run;
   const regenerate = useCallback(
     async (note?: string) => {
@@ -435,9 +446,9 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     status,
     illustrated,
     faults,
-    stale,
-    outdated,
-    profiled,
+    stale: shown?.stale ?? false,
+    outdated: shown?.outdated ?? false,
+    profiled: shown?.profiled ?? false,
     profileChanged,
     sketch,
     slug,

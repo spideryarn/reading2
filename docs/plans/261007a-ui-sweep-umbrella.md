@@ -1,7 +1,8 @@
 # UI sweep: the umbrella plan
 
-**Status: breadth pass done, plan reviewed, clusters being built, 2026-10-07. § What landed is filled in as each
-cluster does.**
+**Status: done enough to stop here, 2026-10-07. All five clusters are on `dev` (§ What landed).
+Three questions are with Greg (§ For Greg), and two jobs are queued under rules he has already
+given.**
 
 The UI half of the sweep Greg asked for on 2026-10-06, run the way
 [improve-the-codebase.md](../reusable/improve-the-codebase.md) says with the interface as its
@@ -405,13 +406,18 @@ Measured, the same control comes in several designs:
 | The control | Designs | The range |
 |---|---|---|
 | The row that switches a mode's parts (Summary's Brief/Fuller/Thread, Referee's four, Learn's four, Diagram's five, Debate's two, Structure's two, Search's three) | six | 24 to 36px tall; corners 0, 4, 5, 9 and 10px; a joined bar, separate chips, bare text tabs, an orange outline |
-| The button that runs a mode's job | six | 24 to 36px tall, 8 or 10px corners; Search's `find` is 12px shorter than the box beside it |
+| The button that runs a mode's job | four | nine modes share one (32px, 8px corners); Referee's three are 29 and 34px with 10px corners; Search's `find` is 24px, 12px shorter than the box beside it |
 | A text box | nine in the bands, four more on the shelf, Help and sign-in | six paddings, corners of 4, 5, 6, 8 and 10px |
 | The order chips and the buttons beside them | four | 23, 26, 28 and 32px in one band |
 | Search's order row | one of a kind | its own corner, colour and wrapping where five siblings share one |
 | Waiting for a mode to load | two | a spinner after a pause, announced to a screen reader (Chat, Search, Diagram); a bare grey sentence (thirteen bands) |
 | A failure sentence | four colours | orange, red, plain ink, grey |
 | The signed-out pages' top bar and title | two | the full bar and a 76px title on Home, Features, Pricing; a small home icon and a 24px title on Help, Changelog, Privacy, Contact |
+
+Pictures, taken from the running app on 2026-10-07:
+[the part-switchers](261007a-ui-sweep-q1-part-switchers.png),
+[the run buttons](261007a-ui-sweep-q1-run-buttons-and-boxes.png),
+[the text boxes](261007a-ui-sweep-q1-text-boxes.png).
 
 *Recommend:* yes, one family at a time, each shown to you as a before and after to accept or
 refuse: the loading line first (it also fixes what a screen reader hears), then the part-switcher,
@@ -446,8 +452,9 @@ part-switcher most. This is the companion to the font-size question already with
   2.1:1, faint on purpose by their own comment. *Recommend:* lighten the grey one step on raised
   surfaces; leave the chips unless you find them hard to read.
 - *Shadows in the light theme.* Tooltips, dialogs and menus keep the heavy black shadow tuned for
-  the dark page; the marketing pages already lightened theirs. *Recommend:* I send one tooltip in
-  the light theme, as it is and lighter, and you pick.
+  the dark page; the marketing pages already lightened theirs. [One card, as it is and with a lighter
+  shadow](261007a-ui-sweep-q3-light-theme-shadow.png). The difference is small. *Recommend:*
+  the lighter one, if you can see a difference at all; otherwise leave it.
 - *Three bands still print their own name* (Debate, Chat, Learn) where the rest lost theirs on
   2026-09-05. Debate's comment calls its heading deliberate. *Recommend:* leave them.
 
@@ -582,11 +589,37 @@ scroll-reveal (question 2), and five items in § After the clusters. Not looked 
 public article opened from the public shelf; the shelf's table view beyond its text; light-theme
 contrast at 820.
 
+## What this run says about the method
+
+- **A browser found less than reading did.** About 230 page loads of measurement produced one
+  honest headline, that nothing overflows, and the drift tables. Every live defect that was
+  built came from GPT Sol reading components and stylesheets, or from a static nominator
+  comparing siblings. A UI sweep still needs the browser, for the "nothing is broken" claim and
+  for every before and after, but the second family reading code is where the defects are.
+- **The plan review changed more than any nominator.** It reversed one decision (`--danger`),
+  removed one false finding, turned four handlers into a class of fifteen with two listeners
+  above them, and caught that the obvious failure-sentence fix would have told readers the app
+  was broken when their connection dropped.
+- **Each code review found something real in work that had been built red-first and
+  browser-checked**: a composing key leaking past seven handlers; a sentence calling loading
+  results "already opened"; a guard that broke the rule written an hour earlier; a palette test
+  that passed at 4.5001:1 for a colour painted at 4.495:1.
+- **A brief's facts were wrong about as often as the sixth sweep's were.** "Plain GETs" that were
+  paid POSTs is the one that could have cost money; the builder checked before pressing. Telling
+  builders that every claim is a claim, and asking for the false ones back, caught each.
+- **A `type="search"` box, a Radix popover and a browser's own focus ring** each did something
+  jsdom does not, and each was found only in a real browser. Unit tests alone would have shipped
+  three fixes that did not fix.
+
 ## Review status
 
 - This umbrella, round 1: [GPT Sol](261007a-ui-sweep-umbrella-review-sol.md), read-only, **ready
   with these fixes**; all twenty-one applied. No second round: the fixes narrow or specify the
   work, and each cluster's code gets its own review.
+- Each cluster's code: GPT Sol, write-capable inside the cluster, one round each; the prompts and
+  answers are beside each cluster's plan (`261007a-ui-sweep-k<N>-code-review-*.md`). K1, K2, K3
+  and K5: ready with these fixes, all fixed. K4: not ready, on one finding outside the builder's
+  files, which the orchestrator then fixed (§ What landed, K4). Nothing overruled.
 
 ## What landed
 
@@ -631,4 +664,83 @@ contrast at 820.
   what the components emit. Left: the ordinary `.chat-tool-detail` is `--ink-faint` at 0.7
   opacity, about 3:1 (question 3's "faint text").
 
-*(the rest filled in as clusters land)*
+- **K3, the shelf's passage filter and false copy — landed 2026-10-07**, `3aad96ec5` and Sol's
+  fixes `5b93f7b0e` on `dev` ([its plan](261007a-ui-sweep-k3-shelf-filter-and-false-copy.md)).
+  The passage list obeys topics and tags as well as Unread, derived from `narrowShelf` with an
+  empty query; a test over all sixteen filter combinations, red first, and red again against the
+  version that derives from the card rows. In a browser, six topics with a query matching no
+  card listed 1 to 13 passages each and none from outside the topic. The false sentences are
+  corrected (Learn's accessible name, Admin home, the shelf card's "Built", two "zoom" sentences,
+  `SHARED_LINK_CARRIES`); Citations and FAQ say "Finding…"; the shelf's details trigger has a
+  focus mark; the rebuild failure goes through the shared helper; the counts on topic and tag
+  chips went from 3.2:1 to 5.7:1 or better in both themes. **GPT Sol's review found two P1s:**
+  with "Include archived" on and its listing still loading or failed, hidden archived hits were
+  described as "already opened" (the sentence now says only that they are not shown); and the
+  builder's guard on the tag popover kept it open by `preventDefault`, against the rule K2 had
+  just written that a composing key is left untouched, which Radix makes impossible from inside
+  its own callback, so it is a capture listener scoped to the open popover. Two postmortems came
+  with it (`261007b`, `261007c`). **What the plan had wrong:** the counts are drawn in
+  `ShelfTermChip.tsx` (and `ShelfTagFilter.tsx`), not `ShelfTerms.tsx`, and fail in dark too; "one
+  composition check" could not satisfy the written rule. Left: `SHARED_WITH_YOU` in
+  `src/messages.ts` still says "at every zoom level" and nothing imports it; "the one admin page
+  that writes" survives in a comment, a test comment and a heading in `admin.md`; the shelf's
+  two "also found in" sections are told about Unread and topics but not tags.
+
+- **K4, failure sentences and panel states — landed 2026-10-07**, `b007f68cd`, `012af29a1`,
+  `675d794f9`, `e707aa87f`, `5d593947c` and Sol's fixes `911317050` on `dev`
+  ([its plan](261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)). **The throw seam:**
+  a stream that ends early throws a `ReaderFacingError`; a refused completion throws
+  `MalformedReply` (its old sentence told the reader to try again, which is a second paid call
+  when the answer had already been stored). **The catches:** six hooks and four more sites call
+  `describeFetchFailure`; one test file poses only `fetch`, so the real transport marking is what
+  is exercised, over seven kinds of failure (25 of 39 cases red first). **Skim's purpose box**
+  re-reads what is stored before it says anything: stored, it carries on; not stored, it says so;
+  unreadable, it says it cannot tell. **Panels:** Quotes shows a running or failed job at its
+  ceiling (and the seventh sweep's rewrite hold, which arrived mid-build, shows there too);
+  a glossary occurrence chip moves the stepper; Referee's Criteria and Mirror offer Try again only
+  when `worthRetrying`; Search's order row has a named group, pressed states, a guarded hover, a
+  focus mark and a 40px floor for a finger, with every resting value at 1440 measured identical
+  before and after; the hint under failed searches has three wordings, for all, none and some rows
+  retryable. 47 mutations, all noticed. **GPT Sol's verdict was "not ready"**, on one finding the
+  builder could not fix inside its manifest: `COULD_NOT_REACH` said "nothing was sent or received
+  just now", false for a stream or download cut part-way, and K4 routed six more failures to it.
+  **Fixed by the orchestrator in `src/messages.ts`** (the clause is gone; the comment says why),
+  so nothing is overruled. Sol's other fixes: Skim's recovered save skipped `profileSaved()`; "That
+  was not saved" could be false if another tab overwrote a landed save; the Search hints promised
+  a certain failure where the real refusal says "most likely". **What the plan and brief had
+  wrong:** Diagram's projection and similar reads are POSTs that can call a paid embedding, not
+  plain GETs (the builder aborted them in the browser; nothing was spent); on the server a forced
+  Quotes run over a current list is always an append, so only the client's verb differed.
+  Left: Mirror, under a failure that cannot be retried, has no pressable control until the
+  sub-mode is re-entered (needs `useMirror.ts`); `ProfileBox`, `SettingsSection` and the Add page
+  still say "Not saved — …" for every rejection, the defect Skim had (the shared fix is in
+  `useAutosavedText`); the lost-connection mark for a blob read is written inline twice and wants
+  a `readBlob` beside `readJson`; two comments in `DiagramPanel.tsx` say "the server's own words"
+  of a sentence that is now sometimes the client's.
+
+- **K5, the threshold slider and order row — landed 2026-10-07**, `28713c72a` and Sol's fixes
+  `1771c8c1f` on `dev`
+  ([its plan](261007a-ui-sweep-k5-threshold-slider-and-order-row-one-class-set.md), with the
+  measuring script and both runs' output beside it). The slider's ten rules existed four times
+  and the order row's eight twice; there is now one set of each, under the names Glossary already
+  used (`.gloss-gate*`, `.gloss-sort*`), which three and four bands were drawing with already.
+  Debate's value carries a CSS modifier, `in-words`; no component changed beyond the class names
+  it emits. 175 lines of stylesheet gone net (the plan said about 140), 71 selector occurrences
+  down to 33. **The evidence: 0 differences over 76,084 compared values**, in 28 scenes (seven
+  bands, two widths and pointers, two themes) and 292 states (rest, hover, real Tab focus,
+  pressed, the slider moved, the reset), each element recorded as a hash of every computed
+  longhand plus its box and scroll sizes. The script was shown to repeat (0 differences run
+  twice on the untouched tree, once a varying order of custom properties was sorted) and to see a
+  change (a `line-height` of 1.4 for 1.35 gave 167 differences). The built stylesheet, as a second
+  witness, differs in one rule for these selectors. GPT Sol: ready with these fixes, no P0 or P1,
+  no stylesheet changed; it judged the dedup worth its keep and the modifier not a flag too many.
+  Not in the matrix: Debate's order row on real markup (no stored debate has two orders; a
+  stand-in was measured), a real phone, widths between 390 and 1440, the native range thumb.
+  Left: `tests/debate-panel.test.tsx` asserts that an id nothing has had for some time is absent,
+  which cannot fail; in Citations, tabbing through the order row adds `&at=` to the address;
+  `design-css-overview.md` has no line saying where a band's slider and order row are styled.
+
+**The whole, together:** on the merge of `origin/dev` holding all five clusters, `npm run
+typecheck` is clean (3,368 files) and the twenty suites the clusters added or leaned on pass
+together (1,024 tests). The full suite was not run by this session; the readiness loop runs it
+against `dev`. No paid model call was made at any point: OpenRouter spend for the run is zero.

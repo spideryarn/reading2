@@ -28,8 +28,11 @@ describe("an HTML page's title, at import", () => {
     const { meta, extractedHtml } = await extract(page("THE ORDER OF TIME", { lang: "en" }));
     expect(meta.title).toBe("The Order of Time");
     expect(meta.titleOriginal).toBe("THE ORDER OF TIME");
-    /* The prose is the author's: the heading stage 3 makes a block of is not recased. */
-    expect(extractedHtml).toContain("<h1>THE ORDER OF TIME</h1>");
+    /* The page's own `<title>` is not recased. Until 2026-10-07 the page's body
+       also opened with an `<h1>` of ours carrying it, which stage 3 made a
+       block of (src/extract.ts § `debugPage`, plan 261007b). */
+    expect(extractedHtml).toContain("<title>THE ORDER OF TIME</title>");
+    expect(extractedHtml).not.toContain("<h1>");
   });
 
   it("a title in ordinary case is stored as it came, with no original", async () => {

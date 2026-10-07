@@ -306,7 +306,7 @@ describe("the seams", () => {
   const page = (title: string) =>
     `<!doctype html><html lang="en"><head><title>${title}</title><meta property="og:site_name" content="Penguin"></head><body><article>${prose}</article></body></html>`;
 
-  it("a web page's title is the tidier's, called with the site's name and language, and the <h1> is still the author's", async () => {
+  it("a web page's title is the tidier's, called with the site's name and language, and the page's <title> is still the author's", async () => {
     const titleTidier = vi.fn<TitleTidier>(async (title) => ({ title: "The Future of NASA", titleOriginal: title }));
     const { meta, extractedHtml } = await runExtract({
       html: page("THE FUTURE OF NASA"),
@@ -316,7 +316,8 @@ describe("the seams", () => {
     });
     expect(meta.title).toBe("The Future of NASA");
     expect(meta.titleOriginal).toBe("THE FUTURE OF NASA");
-    expect(extractedHtml).toContain("<h1>THE FUTURE OF NASA</h1>");
+    expect(extractedHtml).toContain("<title>THE FUTURE OF NASA</title>");
+    expect(extractedHtml).not.toContain("<h1>");
     expect(titleTidier).toHaveBeenCalledOnce();
     expect(titleTidier.mock.calls[0]?.[0]).toBe("THE FUTURE OF NASA");
     expect(titleTidier.mock.calls[0]?.[1]).toMatchObject({ siteName: "Penguin", lang: "en" });

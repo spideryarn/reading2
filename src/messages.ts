@@ -2868,12 +2868,16 @@ export const LIVE_UPSTREAM: ReaderFacingFailure = {
  * development build still adds that hint — `couldNotReach` in
  * src/web/lib/reader-facing.ts — and this is what everyone else reads. It does
  * not guess which side is at fault, because the client cannot tell.
+ *
+ * It also reaches a reader whose stream or download was cut part-way (the
+ * transport marks that the same way), so it does not say that nothing was sent
+ * or received. Until 2026-10-07 it did, which was false there.
  */
 export const COULD_NOT_REACH: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "Couldn't reach the server, so nothing was sent or received just now. That is usually the " +
-    "connection; trying again once it is back should work. [net-down]",
+    "Couldn't reach the server. That is usually the connection; trying again once it is back " +
+    "should work. [net-down]",
 };
 
 /**
