@@ -282,7 +282,7 @@ describe("the run button, while the criterion is incomplete", () => {
     const cls = run().className;
     expect(run().getAttribute("data-slot"), "not the shared run button").toBe("button");
     expect(cls, "nothing greys the dead button").toContain("tw:aria-disabled:opacity-50");
-    expect(cls, "the dead button still lights up on hover").toContain("tw:aria-disabled:hover:bg-transparent");
+    expect(cls, "the dead button still lights up on hover").toContain("tw:not-aria-disabled:hover:bg-highlight/10");
     expect(cls, "pointer-events: none would take the card away").not.toMatch(/aria-disabled:pointer-events-none/);
     expect(rules(), "the old rule is still there and now matches nothing").not.toContain(".crit-run:disabled");
   });

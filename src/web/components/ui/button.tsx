@@ -27,7 +27,7 @@
  *     one page. The orange one won, because it is the app's.
  *
  * THREE — `aria-disabled="true"` looks unavailable, as `disabled` does: half
- * opacity, a default cursor, and (on `outline`) no hover. Upstream styles the
+ * opacity, a default cursor, and no enabled hover in any variant. Upstream styles the
  * native `disabled` only. A button that must keep its tooltip reachable while
  * it cannot act (Referee's *Run this criterion*, Citations' *Dig deeper*, the
  * command bar's *Ask*) uses `aria-disabled`, keeps its own guard against the
@@ -53,16 +53,16 @@ const buttonVariants = cva(
            page — so the stock hover makes the button *darker*, which on a dark
            ground reads as pressed-and-stuck rather than as live. */
         default:
-          "tw:bg-primary tw:text-primary-foreground tw:hover:brightness-110",
+          "tw:bg-primary tw:text-primary-foreground tw:not-aria-disabled:hover:brightness-110",
         destructive:
-          "tw:bg-destructive tw:text-[var(--destructive-button-foreground)] tw:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
+          "tw:bg-destructive tw:text-[var(--destructive-button-foreground)] tw:not-aria-disabled:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
         outline:
-          "tw:border tw:border-border tw:bg-transparent tw:text-foreground tw:hover:border-highlight/60 tw:hover:bg-highlight/10 tw:hover:text-foreground tw:aria-disabled:hover:border-border tw:aria-disabled:hover:bg-transparent",
+          "tw:border tw:border-border tw:bg-transparent tw:text-foreground tw:not-aria-disabled:hover:border-highlight/60 tw:not-aria-disabled:hover:bg-highlight/10 tw:not-aria-disabled:hover:text-foreground",
         secondary:
-          "tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80",
+          "tw:bg-secondary tw:text-secondary-foreground tw:not-aria-disabled:hover:bg-secondary/80",
         ghost:
-          "tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground",
-        link: "tw:text-primary tw:underline-offset-4 tw:hover:underline",
+          "tw:text-muted-foreground tw:not-aria-disabled:hover:bg-highlight/10 tw:not-aria-disabled:hover:text-foreground",
+        link: "tw:text-primary tw:underline-offset-4 tw:not-aria-disabled:hover:underline",
       },
       size: {
         default: "tw:h-9 tw:px-4 tw:py-2 tw:has-[>svg]:px-3",
