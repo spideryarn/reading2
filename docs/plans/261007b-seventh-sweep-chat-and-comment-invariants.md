@@ -132,3 +132,100 @@ now share one read, taken only when the send carries one of the four fields: 1, 
 because nothing is written between the four and, since this commit, `withTurn` decides all four
 again in the transaction, so a single look loses nothing a second look was guarding. The earlier
 read for the thread's kind stays where it is.
+
+**A red I caused and committed.** Commit B added three describe blocks to
+`tests/chat-anchor-route.test.ts` without the mutation judgement its conversion record requires, and
+`tests/store-migration-registry.test.ts` was red for one commit because I had not run it. The next
+commit adds the judgements (and the mutations behind them, below).
+
+### C. SV2 + WC1, and the reverse interleaving
+
+Reproduced, both halves, and each half separately.
+
+Server, through `handleApi` and Postgres with the PATCHes sent through their real routes
+(`tests/comment-answer-stream-lifetime.test.ts`), red before the fix:
+
+```text
+× a note and a colour changed mid-answer are in the frame when the answer finishes
+× a note and a colour changed mid-answer are in the frame when the answer fails
+AssertionError: the frame carries the comment as it was when the answer began:
+  expected { body: 'old note', colour: undefined } to deeply equal { body: 'new note', colour: 'blue' }
+× a note removed mid-answer is absent from the frame
+```
+
+Client, the real hook over a held stream and a fake server that keeps its own row
+(`tests/comment-answer-stream-keeps-reader-edits.test.tsx`), red before the fix (9 of 11; the two
+controls were green):
+
+```text
+× a new body survives a delta and the terminal frame      a delta put the old note back: expected 'old' to be 'new'
+× a body removed stays removed                            a delta put the removed note back
+× with no delta at all, the terminal frame alone does not undo it
+× a colour changed mid-stream survives too, and a removed one stays removed
+× the stream dropping leaves the edit, under the error    the failure branch put the old note back
+× a failed Dig deeper puts the old answer back, and still not the old note
+× landing after a delta, it keeps the words already streamed       expected undefined to be 'hello'
+× an edit landing after the done frame does not bring the spinner back      expected 'pending' to be 'done'
+× a recolour landing after the done frame does not bring the spinner back
+```
+
+The client cases send the `done` frame **an older server sends** (the answer over the opening
+snapshot), so they prove the client's half without the server's; the Postgres cases prove the
+server's without the client's.
+
+Fixed:
+
+- **Server**, `src/routes.ts` § `answer` § `settle`: on a successful write the frame is the row out
+  of the list `patch` returned. *No matching row*, handled on purpose: the comment was deleted
+  between the write and the read, and the frame is then this attempt's answer over the opening
+  snapshot, the same thing the refused branch already sends for a comment deleted mid-answer
+  (characterised by a fourth case, green before and after). `pg-comments.ts` is not touched.
+- **Client**, `src/web/useComments.ts`: `withAnswerOf(row, from)` replaces a row's answer half
+  (`status`, `answer`, `citations`, `searches`, `model`, `error`, `replacing`) and leaves the rest;
+  `putAnswer` applies it to the row as it is in state. `send` uses it in all five places it wrote a
+  row (before the POST, `begin`, `delta`, `done`, failure). Replaced, not merged, so clearing stays
+  expressible: a retry drops the last attempt's `error`, the first delta drops `replacing`.
+- **The reverse interleaving**: `edit`, `place` and `recolour` end in one `landPatch`. It takes the
+  whole row from the PATCH's answer, as before, unless an answer stream was open at any point while
+  that PATCH was out; then it takes the reader's half only. `send` keeps a per-id mark (streams
+  open, streams ended) for it to ask.
+
+**What the review got wrong, slightly.** It says a per-id counter *"bumped in `send`"* is enough,
+for *"whenever an answer began on that id after the PATCH was sent"*. That misses its own headline
+case: the answer began **before** the PATCH was sent and ended before the PATCH was answered, so no
+answer began in between and nothing is open at either end. The mark therefore counts endings as
+well as openings. The mutation `crossed = now.open > 0` shows it: the two *after the done frame*
+cases go red.
+
+**Not changed, and why.** A stream that drops leaves "The answer stopped arriving" on the row even
+if the server finished; a later PATCH used to heal that by replacing the row, and still does unless
+it crossed the stream. And `begin`, `delta` and `done` now ignore the reader's fields in a frame
+even when the frame is newer than the tab (a PATCH committed and not yet answered): the PATCH's own
+answer brings them a moment later.
+
+## Mutations
+
+Each applied alone by exact string replacement, the named tests run, and the line edited back
+(nothing restored from git). All on 2026-10-07.
+
+| Item | Mutation | Went red |
+|---|---|---|
+| A | the `requireTail` line in `streamChat`'s gate deleted | *a stale edit gets its 409 and the other tab's answer goes on streaming* (the control stays green) |
+| B | `withTurn`'s anchor refusal disabled | 10: six pure shapes, two through Postgres, the two rewritten cases in `chat-anchor.test.ts` |
+| B | `withTurn`'s help refusal disabled | 3: two pure, one through Postgres |
+| B | help thrown as `ChatConflict`, not `ChatTurnRefused` | the same 3, on the status |
+| B | `sameAnchor` false for an identical anchor | 9, including *first send, the same send again, and a follow-up* |
+| B | `withTurn` refusing help whether or not the thread exists | 5, including *a help press, then a follow-up* |
+| B (SVO9) | the shared read loading twice | the two cases that carry a field; the plain send stays green |
+| C server | `settle` framing `{ ...comment, ...patch }` again | 3 of 4 (the deleted comment stays green, as it should) |
+| C client | `delta` writing the whole row | 4 |
+| C client | `done` writing the whole row | 4 |
+| C client | the failure branch writing the whole row | 2 |
+| C client | `begin` writing the whole row | *an edit answered before the begin frame is read is not undone by it* (written after this mutation first came back green) |
+| C client | `withAnswerOf` merging instead of replacing | *clears what the last attempt left* |
+| C client | `landPatch` never treating a PATCH as crossed | 3 |
+| C client | `landPatch` crossed only while a stream is open | the two *after the done frame* cases |
+| C client | `landPatch` always crossed | *with no answer in the air, a PATCH answer still replaces the whole row* |
+
+One mutation was itself wrong the first time: a second load placed inside a branch the load-count
+cases never enter came back green, and was replaced by one on the shared read.

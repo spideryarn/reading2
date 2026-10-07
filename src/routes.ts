@@ -1838,12 +1838,30 @@ async function answer(
     /**
      * Send the `done` frame, carrying **what the store actually holds**.
      *
+     * **When the write lands, that is the row out of the list `patch` returns**,
+     * read after the write. Until 2026-10-07 it was `{ ...comment, ...patch }`:
+     * this attempt's answer over the comment as `beginAnswer` had returned it,
+     * fifteen to twenty-five seconds earlier. A note the reader edited, moved or
+     * recoloured in that time was right in the database (the answer's write
+     * leaves those columns alone) and went back to the old one on screen,
+     * because the client took the frame for the row. Seventh sweep, SV2;
+     * tests/comment-answer-stream-lifetime.test.ts. The client now writes only
+     * the answer's half of whatever this carries (`putAnswer`,
+     * src/web/useComments.ts), and a tab from before that still replaces the
+     * row, which is why the frame has to be right on its own.
+     *
+     * A write that landed and a list without the row in it means the comment
+     * was deleted between the two statements. Then, and for the two cases
+     * below where nothing stored can be read, the frame is our own answer over
+     * the opening snapshot: **not** what the store holds, and the one thing
+     * left to send.
+     *
      * `commentStore.patch` answers `undefined` when this attempt is no longer the
      * live one — a sweep buried it and the reader has begun another. Framing our
      * own answer then would put it back on their screen, which is the overwrite
-     * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
-     * whatever the `done` frame carries. So on a refusal the row is read back and
-     * framed instead, and the reader's panel ends up agreeing with the database.
+     * the fence exists to prevent, one layer up. So on a refusal the row is read
+     * back and framed instead, and the reader's panel ends up agreeing with the
+     * database.
      *
      * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
      * simply stays silent. The comment client turns a stream that ends without a
@@ -1858,7 +1876,7 @@ async function answer(
     const settle = async (patch: AnswerFinish): Promise<void> => {
       const kept = await commentStore.patch(slug, comment.id, patch, attempt);
       if (kept) {
-        frame("done", { ...comment, ...patch });
+        frame("done", kept.find((c) => c.id === comment.id) ?? { ...comment, ...patch });
         return;
       }
       let stored: Comment | undefined;
@@ -1931,7 +1949,10 @@ async function answer(
            store is broken too, and only the second is an emergency. */
         captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
         /* `settle` frames the `done` itself, so this is the one path that still
-           has to: the store could not be told, and the reader must still be. */
+           has to: the store could not be told, and the reader must still be.
+           There is no stored row to send, so this is the opening snapshot with
+           the failure on it, and a note edited since is not in it. The client
+           keeps its own copy of the reader's fields (`putAnswer`). */
         frame("done", { ...comment, ...patch });
       }
     } finally {

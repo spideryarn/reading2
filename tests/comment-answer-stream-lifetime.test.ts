@@ -63,6 +63,15 @@
  * header warns about, and because the second attempt is what makes the registry
  * a count.
  *
+ * ## And what the terminal frame carries (2026-10-07)
+ *
+ * The last describe is a different subject that needs the same held stream:
+ * the `done` frame is the comment **as stored when the answer is written**,
+ * not as it was when the answer began. Seventh sweep, SV2; its mutation
+ * (`settle` framing `{ ...comment, ...patch }` again) is recorded in
+ * docs/plans/261007b-seventh-sweep-chat-and-comment-invariants.md. The
+ * client's half is tests/comment-answer-stream-keeps-reader-edits.test.tsx.
+ *
  * **Outside this oracle.** What the model is told, and what the reader sees —
  * `explainStream` is stubbed, so no model is called and no ledger row is
  * written; tests/explain.test.ts and the comment client suites hold those. The
@@ -110,6 +119,8 @@ const gates = vi.hoisted(() => {
     arrive: () => void;
     hold: () => Promise<void>;
     release: () => void;
+    /** Set before `release()` to have the stream throw instead of finishing. */
+    fail?: boolean;
   }
   const queue: Gate[] = [];
   let taken = 0;
@@ -149,6 +160,7 @@ vi.mock("../src/explain.js", async (importOriginal) => ({
     yield { type: "delta", text: "half an explanation" };
     gate.arrive();
     await gate.hold();
+    if (gate.fail) throw new Error("the stubbed model fell over");
     yield {
       type: "done",
       ending: "finished",
@@ -401,5 +413,124 @@ describe("a comment's answer outlives nothing it should", { timeout: 60_000 }, (
     await secondCall.promise;
     const stored = (await asTestOwner(() => commentStore.load(SLUG))).find((c) => c.id === id);
     expect(stored?.status, "the live attempt's terminal write landed").toBe("done");
+  });
+});
+
+/**
+ * **The terminal frame is the stored row.** A reader's PATCH that lands while
+ * the model is answering writes its own column and nothing else, and the
+ * answer's write leaves that column alone, so the database is right either
+ * way. What was wrong until 2026-10-07 is what the tab was told: `settle` in
+ * src/routes.ts framed its answer spread over the comment `beginAnswer` had
+ * returned, and the client replaces the row with that frame. The note the
+ * reader had just saved went back to the old one on screen.
+ *
+ * The PATCHes go through their real routes, and the frame is compared with a
+ * read of the store, not with values written out again here.
+ *
+ * Checked by mutation: `settle` framing `{ ...comment, ...patch }` on a
+ * successful write again, watched red on 2026-10-07 and undone. The first
+ * three cases fail (both endings, and the removed note). The fourth stays
+ * green, and should: a deleted comment has no stored row, so its frame was
+ * and is the opening snapshot.
+ */
+describe("an answer's terminal frame carries the comment as stored, not as it began", { timeout: 60_000 }, () => {
+  let article: ScratchArticle;
+  let id = "";
+
+  beforeAll(async () => {
+    article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  }, 60_000);
+
+  beforeEach(async () => {
+    const long = article.blocks.find((b) => b.text.length > 40);
+    if (!long) throw new Error("the fixture has no block long enough to quote");
+    await asTestOwner(async () => {
+      for (const c of await commentStore.load(SLUG)) await commentStore.remove(SLUG, c.id);
+    });
+    const made = await asTestOwner(() =>
+      commentStore.create(SLUG, { blockId: long.id, quote: long.text.slice(0, 20), start: 0, body: "old note" }),
+    );
+    id = made.id;
+    await getDb()
+      .update(commentsTable)
+      .set({ status: "done", answer: "an old explanation" })
+      .where(and(eq(commentsTable.articleId, article.articleId), eq(commentsTable.id, id)));
+  });
+
+  afterAll(async () => {
+    gates.releaseAll();
+    await article?.remove();
+  });
+
+  async function patch(path: string, body: unknown): Promise<void> {
+    const call = begin("PATCH", `/api/comments/${SLUG}/${id}${path}`, body);
+    await call.promise;
+    expect(call.written(), "the PATCH itself was refused").toContain('"comment"');
+  }
+
+  function doneFrame(written: string): Record<string, unknown> {
+    const frame = written.split("\n\n").find((b) => b.startsWith("event: done"));
+    if (!frame) throw new Error(`no done frame in: ${written}`);
+    return JSON.parse(frame.slice(frame.indexOf("data: ") + "data: ".length)) as Record<string, unknown>;
+  }
+
+  const storedRow = async () =>
+    (await asTestOwner(() => commentStore.load(SLUG))).find((c) => c.id === id) as unknown as Record<string, unknown>;
+
+  it.each<[string, boolean]>([
+    ["finishes", false],
+    ["fails", true],
+  ])("a note and a colour changed mid-answer are in the frame when the answer %s", async (_name, fail) => {
+    const gate = gates.make();
+    const call = begin("POST", answerUrl(id), ANSWER_BODY);
+    await reachedOrSettled(gate, call);
+
+    await patch("", { body: "new note" });
+    await patch("/colour", { colour: "blue" });
+
+    gate.fail = fail;
+    gate.release();
+    await call.promise;
+
+    const stored = await storedRow();
+    // The store was never wrong: the reader's columns and the answer's are disjoint.
+    expect(stored).toMatchObject({ body: "new note", colour: "blue", status: fail ? "error" : "done" });
+
+    const frame = doneFrame(call.written());
+    expect(
+      { body: frame["body"], colour: frame["colour"] },
+      "the frame carries the comment as it was when the answer began",
+    ).toEqual({ body: stored["body"], colour: stored["colour"] });
+    expect(frame).toEqual(JSON.parse(JSON.stringify(stored)));
+  });
+
+  it("a note removed mid-answer is absent from the frame", async () => {
+    const gate = gates.make();
+    const call = begin("POST", answerUrl(id), ANSWER_BODY);
+    await reachedOrSettled(gate, call);
+    await patch("", { body: null });
+    gate.release();
+    await call.promise;
+
+    expect("body" in (await storedRow())).toBe(false);
+    expect("body" in doneFrame(call.written()), "the frame put the removed note back").toBe(false);
+  });
+
+  it("a comment deleted mid-answer still gets a frame: this attempt's answer, on the row as it began", async () => {
+    /* Nothing is stored to frame, and a stream that ends with no `done` is
+       what the client turns into "The answer stopped arriving". The client
+       knows what to do with a `done` for an id it has deleted. */
+    const gate = gates.make();
+    const call = begin("POST", answerUrl(id), ANSWER_BODY);
+    await reachedOrSettled(gate, call);
+    await asTestOwner(() => commentStore.remove(SLUG, id));
+    gate.release();
+    await call.promise;
+
+    const frame = doneFrame(call.written());
+    expect(frame["id"]).toBe(id);
+    expect(frame["answer"]).toBe("the whole explanation");
+    expect(await storedRow()).toBeUndefined();
   });
 });

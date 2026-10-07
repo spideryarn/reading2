@@ -47,6 +47,67 @@ export type ClientComment = Comment & {
 };
 
 /**
+ * **The fields an answer owns**, and so the only ones an answer stream may
+ * write: the six `AnswerPatch` names in src/comments.ts, which are the columns
+ * `beginAnswer` blanks and `patch` fills, plus this tab's own `replacing`.
+ * Everything else on the row is the reader's (their note, its placement, its
+ * colour, the conversation it started) or never changes (the id, the passage).
+ *
+ * Two writers share a row here, and neither waits for the other: the reader's
+ * PATCHes are queued among themselves and deliberately not behind the 15 to 25
+ * second stream (`patching`). Until 2026-10-07 each of them wrote the **whole**
+ * row from whatever copy it held, so a delta put back a note edited a moment
+ * before, and a PATCH answered mid-stream blanked the words already streamed.
+ * Now each writes its own half: `withAnswerOf` for the stream, and
+ * `landPatch` (in the hook) for a PATCH that crossed one.
+ * tests/comment-answer-stream-keeps-reader-edits.test.tsx; seventh sweep, WC1.
+ */
+type AnswerHalf = Pick<ClientComment, "status"> &
+  Partial<Pick<ClientComment, "answer" | "citations" | "searches" | "model" | "error" | "replacing">>;
+
+/** One comment's answer streams in this tab. See `answers` in the hook. */
+interface AnswerMark {
+  /** Streams open now. */
+  open: number;
+  /** Streams that have ended, however they ended. */
+  ended: number;
+}
+const NO_ANSWERS: AnswerMark = { open: 0, ended: 0 };
+
+/**
+ * `row`, with its answer replaced by `from`'s.
+ *
+ * **Replaced, not merged**: a field `from` does not carry is absent afterwards.
+ * A spread could not say that, and three things depend on it: a retry clears
+ * the last attempt's `error`, the first delta drops `replacing`, and a finished
+ * answer with no citations does not keep the old ones. The keys are taken off
+ * by name rather than set to `undefined`, because `exactOptionalPropertyTypes`
+ * is on and an absent key is a different shape.
+ */
+function withAnswerOf(row: ClientComment, from: AnswerHalf): ClientComment {
+  const {
+    status: _status,
+    answer: _answer,
+    citations: _citations,
+    searches: _searches,
+    model: _model,
+    error: _error,
+    replacing: _replacing,
+    ...readers
+  } = row;
+  return {
+    ...readers,
+    status: from.status,
+    ...(from.answer !== undefined ? { answer: from.answer } : {}),
+    ...(from.citations !== undefined ? { citations: from.citations } : {}),
+    ...(from.searches !== undefined ? { searches: from.searches } : {}),
+    ...(from.model !== undefined ? { model: from.model } : {}),
+    ...(from.error !== undefined ? { error: from.error } : {}),
+    ...(from.replacing ? { replacing: true as const } : {}),
+  };
+}
+
+/**
  * What a selection knows about the passage it is marking — or, from the
  * gutter's bookmark button, only the block (`CommentAnchor`).
  */
@@ -521,6 +582,74 @@ export function useComments(slug: string): CommentsApi {
     );
   }, []);
 
+  /**
+   * **An answer frame, written onto the row as it is on screen now.**
+   *
+   * `put`, for the half an answer stream owns: the answer fields come from
+   * `next`, and every other field stays as the tab currently has it, whatever
+   * copy of the row `next` was built from. See `withAnswerOf`.
+   *
+   * A row that is not there is appended whole, as `put` would: that is the
+   * re-minted id, whose optimistic row `send` has just dropped.
+   */
+  const putAnswer = useCallback((next: ClientComment) => {
+    setComments((prev) =>
+      prev.some((c) => c.id === next.id)
+        ? prev.map((c) => (c.id === next.id ? withAnswerOf(c, next) : c))
+        : [...prev, next],
+    );
+  }, []);
+
+  /**
+   * The answer streams of each comment, in this tab: how many are open now,
+   * and how many have ended. `send` writes it; `landPatch` reads it, through
+   * `answerMark`, to ask whether one was open at any point while a PATCH was
+   * out.
+   *
+   * `ended` as well as `open`, because the case that matters most is the one
+   * where nothing is open at either end: the PATCH was sent while an answer
+   * streamed and answered after it finished. Not cleared on a change of
+   * article: nothing renders from it, and a count nobody asks about is inert.
+   */
+  const answers = useRef(new Map<string, AnswerMark>());
+  const answerMark = useCallback(
+    (id: string): AnswerMark => answers.current.get(id) ?? NO_ANSWERS,
+    [],
+  );
+
+  /**
+   * **A PATCH's answer, put on screen.** `edit`, `place` and `recolour` all end
+   * here.
+   *
+   * The server's comment **replaces** the stored one; it is not merged over
+   * it. A merge cannot express a *removal*: clearing the body returns a comment
+   * with no `body` key, and `{ ...c, ...comment }` keeps the old one, so a
+   * reader who emptied the box watched their words come straight back. The
+   * response is the whole row, so replacing is both correct and the only thing
+   * that can clear a field. GPT Sol, reviewing the built code, 2026-08-28.
+   *
+   * **Except the answer, when an answer stream was open at any point while
+   * this PATCH was out** (`sentAt` is `answerMark(id)` from just before the
+   * request). The response is a snapshot from the moment the write committed,
+   * and for the length of a stream that snapshot says `pending` with no
+   * answer. Landing after a delta it blanked the words on screen; landing
+   * after the `done` frame it brought the spinner back, and nothing would ever
+   * stop it. So then the reader's half comes from the response and the
+   * answer's half stays as the stream left it. With no stream in the way the
+   * response is the newest word on every column and the whole row is taken, as
+   * before. Seventh sweep, WC1 (the Opus review's reverse interleaving).
+   */
+  const landPatch = useCallback(
+    (id: string, comment: Comment, sentAt: AnswerMark) => {
+      const now = answerMark(id);
+      const crossed = sentAt.open > 0 || now.open > 0 || now.ended !== sentAt.ended;
+      setComments((prev) =>
+        prev.map((c) => (c.id !== id ? c : crossed ? withAnswerOf(comment, c) : comment)),
+      );
+    },
+    [answerMark],
+  );
+
   /** The DELETE itself, checked. Also used to re-delete after a late answer. */
   const forget = useCallback(
     async (id: string, reportFailure = true) => {
@@ -579,7 +708,7 @@ export function useComments(slug: string): CommentsApi {
         status: "pending",
         ...(previous ? { answer: previous, replacing: true as const } : {}),
       };
-      put(pending);
+      putAnswer(pending);
       setError(null);
       // Asking again un-deletes: the reader is plainly no longer finished with
       // it, whatever they clicked a moment ago.
@@ -592,6 +721,21 @@ export function useComments(slug: string): CommentsApi {
       let id = pending.id;
       let text = "";
       let settled = false;
+
+      /* This stream is open, as far as a PATCH's answer is concerned, from here
+         to the `finally` below: see `answers` and `landPatch`. Under every id
+         the row goes by, because the server may re-mint it at `begin`. */
+      const marks = answers.current;
+      const names = new Set([pending.id]);
+      const opened = (name: string) => {
+        const was = marks.get(name) ?? NO_ANSWERS;
+        marks.set(name, { open: was.open + 1, ended: was.ended });
+      };
+      const closed = (name: string) => {
+        const was = marks.get(name) ?? NO_ANSWERS;
+        marks.set(name, { open: was.open - 1, ended: was.ended + 1 });
+      };
+      opened(pending.id);
 
       void (async () => {
         try {
@@ -641,9 +785,13 @@ export function useComments(slug: string): CommentsApi {
                 const stale = id;
                 setComments((prev) => prev.filter((c) => c.id !== stale));
                 id = begun.id;
+                names.add(id);
+                opened(id);
               }
               if (!gone) {
-                put({ ...begun, ...(previous ? { answer: previous, replacing: true as const } : {}) });
+                /* The answer half only. `begun` is the row as the server
+                   claimed it, and a PATCH answered since then is newer than it. */
+                putAnswer({ ...begun, ...(previous ? { answer: previous, replacing: true as const } : {}) });
               }
               continue;
             }
@@ -655,12 +803,12 @@ export function useComments(slug: string): CommentsApi {
               // `replacing` deliberately dropped: from the first word on, what
               // is on screen is the new answer, not the old one being held.
               if (!gone) {
-                /* Spread, for the reason on `pending` above: a delta must not
-                   be the moment the reader's own note leaves the screen.
-                   `replacing` goes, because from the first word on what is on
-                   screen is the new answer, not the old one being held. */
-                const { replacing: _held, ...rest } = pending;
-                put({ ...rest, id, status: "pending", answer: text });
+                /* A delta must not be the moment the reader's own note leaves
+                   the screen, nor the moment an edit they made a second ago
+                   does: only the answer is written, onto the row as it is now
+                   (`putAnswer`). `carried` is the fallback for a row that has
+                   gone: the row from before the request, without its answer. */
+                putAnswer({ ...carried, id, status: "pending", answer: text });
               }
               continue;
             }
@@ -675,7 +823,12 @@ export function useComments(slug: string): CommentsApi {
                 void forget(done.id);
                 return;
               }
-              put(done);
+              /* The answer half only, here too. The frame is the stored row
+                 (src/routes.ts § `settle`), but a PATCH can commit after the
+                 server read it and be answered before this is, and a server
+                 from before 2026-10-07 sent the row as it was when the answer
+                 began. */
+              putAnswer(done);
               return;
             }
           }
@@ -691,8 +844,8 @@ export function useComments(slug: string): CommentsApi {
           if (deleted.current.has(id)) return;
           const message = describeFetchFailure(e as Error);
           setError(message);
-          put({
-            ...pending,
+          putAnswer({
+            ...carried,
             id,
             status: "error",
             error: message,
@@ -706,10 +859,12 @@ export function useComments(slug: string): CommentsApi {
                 ? { answer: previous, replacing: true as const }
                 : {}),
           });
+        } finally {
+          for (const name of names) closed(name);
         }
       })();
     },
-    [slug, put, forget],
+    [slug, putAnswer, forget],
   );
 
 
@@ -881,6 +1036,7 @@ export function useComments(slug: string): CommentsApi {
     (id: string, body: string | null): Promise<void> =>
       queue(id, async (isCurrent) => {
         if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
@@ -892,24 +1048,17 @@ export function useComments(slug: string): CommentsApi {
             madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          /* **The server's comment replaces the stored one; it is not merged
-             over it.** A merge cannot express a *removal*: clearing the body
-             returns a comment with no `body` key, and `{ ...c, ...comment }`
-             keeps the old one — so a reader who emptied the box watched their
-             words come straight back. The response is the whole row, so
-             replacing is both correct and the only thing that can clear a
-             field. The one client-only field, `replacing`, deliberately does
-             not survive an edit. GPT Sol, reviewing the built code, 2026-08-28.
-
-             Replacing is also why this had to be queued: it carries the mark
-             the server held when it answered, so out of order it is a mark the
-             referee has already changed. */
-          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          /* Replaced, not merged: `landPatch` says why, and what it leaves
+             alone when an answer was streaming. Replacing is also why this had
+             to be queued: the response carries the mark the server held when
+             it answered, so out of order it is a mark the referee has already
+             changed. */
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue, madeFor],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
@@ -946,6 +1095,7 @@ export function useComments(slug: string): CommentsApi {
     (id: string, mark: Mark): Promise<void> =>
       queue(id, async (isCurrent) => {
         if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
@@ -962,12 +1112,12 @@ export function useComments(slug: string): CommentsApi {
             madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue, madeFor],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
@@ -983,6 +1133,7 @@ export function useComments(slug: string): CommentsApi {
     (id: string, colour: HighlightColour | null): Promise<void> =>
       queue(id, async (isCurrent) => {
         if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/colour`,
@@ -994,12 +1145,12 @@ export function useComments(slug: string): CommentsApi {
             madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
           if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue, madeFor],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
