@@ -303,7 +303,7 @@ export function withTurn(
 
      `existing` can be a thread the turn did not name (`targetOf`), but only
      for a single-thread kind, and the route refuses an anchor or a help flag
-     with any kind but chat before it reads anything. */
+     with any kind but chat before the turn is written. */
   if (existing && anchor && !sameAnchor(existing.anchor, anchor)) {
     throw new ChatConflict(ANCHORED_ELSEWHERE);
   }
@@ -613,14 +613,12 @@ export class ChatConflict extends Error {
 }
 
 /**
- * A new turn whose body claims something the stored thread rules out, where
- * the claim is **a client's bug rather than a stale view**: a 400, where
- * `ChatConflict` is a 409.
+ * A new turn carrying first-turn-only metadata on an existing thread: a 400,
+ * matching the route, where `ChatConflict` is a 409.
  *
  * One rule throws it today: `help: true` on a thread that already exists
- * (`withTurn`). The route answers that with a 400 and its own sentence, on the
- * grounds that the request would not have been right against any conversation,
- * and the refusal inside the store's transaction has to arrive as the same
+ * (`withTurn`). The route answers that with a 400 and its own sentence, and
+ * the refusal inside the store's transaction has to arrive as the same
  * status. So the status rides on the error, which is what `serveApi` reads
  * first and what lets it through `guardDbStore` (`mayPassThrough`, src/store/db-errors.ts:
  * anything with a numeric `status`). A `ChatConflict` here would have turned

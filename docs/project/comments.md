@@ -842,12 +842,14 @@ behind a fifteen-second stream. So two writers share one row and neither waits f
 `searches`, `model` and `error` (and the tab's own `replacing`); everything else is the reader's.
 
 - **On the server**, the answer's write touches only its own columns, and the `done` frame is the
-  row read back after that write (`settle` in [`src/routes.ts`](../../src/routes.ts) § `answer`),
-  not the answer spread over the comment as it was when the answer began.
+  row read back after that write (`settle` in [`src/routes.ts`](../../src/routes.ts) § `answer`).
+  If a newer attempt claimed it before that read, this stream retains its own committed terminal
+  answer over the latest reader fields; it cannot watch the replacement attempt. See
+  [the postmortem](../postmortems/261007a-a-post-write-read-can-belong-to-a-new-attempt.md).
 - **In the tab**, every frame of the stream (`begin`, each `delta`, `done`, and the hook's own
   failure branch) writes the answer's half onto the row as it is on screen now: `putAnswer` and
   `withAnswerOf` in [`src/web/useComments.ts`](../../src/web/useComments.ts). The half is replaced,
-  not merged, so a retry clears the last attempt's `error`.
+  not merged, so a frame with no `error` removes the previous one.
 - **And the other way round**, a PATCH's answer is the whole row as stored when the write
   committed, which for the length of a stream says `pending` with no answer. If a stream was open
   at any point while the PATCH was out, only the reader's half of that answer is taken

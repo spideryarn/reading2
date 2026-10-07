@@ -517,6 +517,37 @@ describe("an answer's terminal frame carries the comment as stored, not as it be
     expect("body" in doneFrame(call.written()), "the frame put the removed note back").toBe(false);
   });
 
+  it.each([false, true])("a successful write followed by another claim still ends this stream (failure=%s)", async (fail) => {
+    // Red on both terminal statuses with the fix edited out, as is the unit
+    // twin in tests/comment-answer-terminal-frame.test.ts (2026-10-07).
+    const gate = gates.make();
+    const call = begin("POST", answerUrl(id), ANSWER_BODY);
+    await reachedOrSettled(gate, call);
+    await patch("", { body: "new note" });
+    const original = commentStore.patch.bind(commentStore);
+    const spy = vi.spyOn(commentStore, "patch").mockImplementationOnce(async (...args) => {
+      const kept = await original(...args);
+      expect(kept).toBeDefined();
+      // Another process can claim after UPDATE and before the returned list
+      // is read. Supply the real row after that claim to the route.
+      await commentStore.beginAnswer(SLUG, id);
+      return commentStore.load(SLUG);
+    });
+    try {
+      gate.fail = fail;
+      gate.release();
+      await call.promise;
+      const stored = await storedRow();
+      expect(stored).toMatchObject({ body: "new note", status: "pending" });
+      expect(doneFrame(call.written())).toMatchObject({
+        id, body: "new note", status: fail ? "error" : "done",
+        answer: fail ? "half an explanation" : "the whole explanation",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("a comment deleted mid-answer still gets a frame: this attempt's answer, on the row as it began", async () => {
     /* Nothing is stored to frame, and a stream that ends with no `done` is
        what the client turns into "The answer stopped arriving". The client

@@ -78,8 +78,8 @@ const NO_ANSWERS: AnswerMark = { open: 0, ended: 0 };
  * `row`, with its answer replaced by `from`'s.
  *
  * **Replaced, not merged**: a field `from` does not carry is absent afterwards.
- * A spread could not say that, and three things depend on it: a retry clears
- * the last attempt's `error`, the first delta drops `replacing`, and a finished
+ * A spread could not say that, and three things depend on it: a frame without
+ * an error clears the last attempt's `error`, the first delta drops `replacing`, and a finished
  * answer with no citations does not keep the old ones. The keys are taken off
  * by name rather than set to `undefined`, because `exactOptionalPropertyTypes`
  * is on and an absent key is a different shape.
@@ -775,8 +775,9 @@ export function useComments(slug: string): CommentsApi {
                back a row a DELETE removed; pinned by
                tests/comment-answer-stream-lifetime.test.ts § *a comment deleted
                mid-answer*. What reading on still does is reach the `done`
-               branch, which sends the DELETE a second time. That is harmless (a
-               DELETE of a missing id answers 200) and is kept as it was. Until
+               branch, which sends the DELETE a second time. After the first
+               succeeds that is a no-op (a missing id answers 200); if the first
+               fails, the second can still remove the row. Until
                then the deleted row is simply not drawn. */
             const gone = deleted.current.has(id);
             if (event.name === "begin") {
@@ -822,9 +823,9 @@ export function useComments(slug: string): CommentsApi {
               if (deleted.current.has(done.id)) {
                 /* Deleted while the answer was in the air. The DELETE we sent
                    may have run *before* the server finished writing. That write
-                   is an `UPDATE` and matches no row, so nothing is back on disk
-                   (this comment said it could be until 2026-10-07); the second
-                   DELETE is a no-op kept from when it was needed. */
+                   cannot recreate a deleted row. After the first DELETE
+                   succeeds, the second is a no-op; if it failed or is still
+                   in flight, this one can perform the deletion. */
                 void forget(done.id);
                 return;
               }
@@ -1225,8 +1226,8 @@ export function useComments(slug: string): CommentsApi {
       if (creating.current.has(id)) return;
       // An answer POST is not in `creating`: its `done` handler re-sends this
       // DELETE once the write it is racing has landed. That write is an UPDATE,
-      // which cannot put a deleted row back, so this one is the delete that
-      // counts and the second is a no-op (`send`, the `done` branch).
+      // which cannot put a deleted row back. Either DELETE may be the one that
+      // succeeds; the second is a no-op once the first has succeeded.
       void forget(id);
     },
     [forget],

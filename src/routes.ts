@@ -1836,7 +1836,7 @@ async function answer(
     frame("begin", comment);
 
     /**
-     * Send the `done` frame, carrying **what the store actually holds**.
+     * Send the `done` frame, using the stored row for the reader's fields.
      *
      * **When the write lands, that is the row out of the list `patch` returns**,
      * read after the write. Until 2026-10-07 it was `{ ...comment, ...patch }`:
@@ -1849,6 +1849,13 @@ async function answer(
      * the answer's half of whatever this carries (`putAnswer`,
      * src/web/useComments.ts), and a tab from before that still replaces the
      * row, which is why the frame has to be right on its own.
+     *
+     * The UPDATE and that read are separate statements. If another attempt
+     * claimed the row between them, the returned row is `pending`: this
+     * stream cannot adopt that attempt, and ending `pending` leaves a spinner
+     * with no watcher. Keep the current reader fields but frame the terminal
+     * answer this attempt successfully committed. A newer terminal row is
+     * used unchanged. tests/comment-answer-terminal-frame.test.ts.
      *
      * A write that landed and a list without the row in it means the comment
      * was deleted between the two statements. Then, and for the two cases
@@ -1876,7 +1883,10 @@ async function answer(
     const settle = async (patch: AnswerFinish): Promise<void> => {
       const kept = await commentStore.patch(slug, comment.id, patch, attempt);
       if (kept) {
-        frame("done", kept.find((c) => c.id === comment.id) ?? { ...comment, ...patch });
+        const current = kept.find((c) => c.id === comment.id);
+        frame("done", current?.status === "pending"
+          ? { ...current, ...patch }
+          : current ?? { ...comment, ...patch });
         return;
       }
       let stored: Comment | undefined;
@@ -3146,7 +3156,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* **Where the conversation was started from** (`ThreadOrigin`): the anchor's
      rules, one for one. It belongs to the turn that creates a thread, so a
      retry or an edit may not carry one; only a chat has one; and the shape is
-     checked here, before anything is read or written. That the block is this
+     checked here, before a turn is written. That the block is this
      article's is checked after `loadArticle`, and that an existing thread has
      the same origin is checked under `inTurnOrder` and again by `withTurn`.
      docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1. */
@@ -3295,8 +3305,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `chatStore.begin` reads under the article's row lock, before it mints
        either message. Kind has been there since Learn mode, origin since
        2026-10-05, anchor and help since 2026-10-07 (seventh sweep, SV3). The
-       same predicates and the same statuses, so which of the two answers is
-       not something a client can tell.
+       same predicates and the same statuses; the route supplies its early
+       refusal and `withTurn` enforces the invariant in the transaction.
 
        One read, where until 2026-10-07 each rule made its own (SVO9): four
        loads of every conversation of the article for a send carrying all four.
@@ -9597,9 +9607,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /* **The glossary's second POST.** A reader types a term into the box and
-     this finds it in the prose and explains the passage — `lookup` above with
-     the entry replaced by a phrase, so it is the same `explain` call at the
-     same cost with the same patient deadline. **A finished answer is stored**:
+     this finds it in the prose and explains the passage. Both use
+     `explainStream`, but `lookup` first searches and passes `dig` for a deeper
+     answer; Ask does neither (`src/term-lookup.ts`). **A finished answer is stored**:
      the term is added to the glossary (`deps.lookups.addTerm`,
      src/term-lookup.ts § `makeAskAboutTerm`, plan 261002f). An answer that
      does not finish writes nothing. This sentence said "it writes nothing"
@@ -9638,10 +9648,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          `article: "first-capture"` records the spend rather than authorising it. **This request never
          enters the job queue**, so the queue's concurrency cap is not a
          limit on it either — a first draft of this comment claimed it was, and
-         GPT Sol was right that it is false. Stated rather than fixed here
-         because it is the shape of every paid request in this file and a scheme
-         invented on the day for one endpoint would be the wrong place to put
-         one. docs/project/glossary.md § Looking a term up, and the note in
+         GPT Sol was right that it is false. The allowance decision for Ask
+         remains open; the sibling's shared limiter is in `admitDig`, rather
+         than the job queue. docs/project/glossary.md § Looking a term up, and the note in
          docs/user-feedback/ for Greg.
 
          Re-traced 2026-09-10 for the move to streaming, and still true: the

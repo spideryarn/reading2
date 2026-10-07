@@ -4272,7 +4272,7 @@ export interface ChatThread {
    * prose, so a thread that re-anchored itself would move its mark to a
    * paragraph the reader is not looking at. `withTurn` sets it only on the
    * branch that builds a new thread, and refuses a different one offered for a
-   * thread that exists (`sameAnchor`, below); the route refuses it first, for
+   * thread that exists (`sameAnchor`); the route refuses it first, for
    * the sentence. A thread with **no** anchor is refused one too.
    */
   anchor?: ChatAnchor;

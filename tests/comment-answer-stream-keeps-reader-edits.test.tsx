@@ -26,7 +26,7 @@
  * does, and every assertion about the screen is made against that row rather
  * than against a value written out again here.
  */
-import { act, createElement, useEffect } from "react";
+import { act, createElement, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,6 +59,7 @@ const ID = "spya-ask001";
 
 /** The server's row. Writes apply to it; every answer is a snapshot of it. */
 let stored: Comment;
+let other: Comment | undefined;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -76,12 +77,20 @@ function without(row: Comment, ...keys: string[]): Comment {
 
 /** One PATCH, applied to its own column only, as each route's SQL does. */
 function patch(url: string, body: Record<string, unknown>): Response {
+  if (other && url.includes(`/${other.id}`)) {
+    other = { ...other, body: body["body"] as string };
+    return json({ comment: other });
+  }
   if (url.endsWith("/colour")) {
     const colour = body["colour"];
     stored =
       typeof colour === "string"
         ? { ...stored, colour: colour as HighlightColour }
         : without(stored, "colour");
+  } else if (url.endsWith("/mark")) {
+    stored = body["criterionId"] === null
+      ? without(stored, "criterionId", "valence")
+      : { ...stored, criterionId: body["criterionId"] as string, valence: body["valence"] as number };
   } else {
     const next = body["body"];
     stored = typeof next === "string" ? { ...stored, body: next } : without(stored, "body");
@@ -95,6 +104,7 @@ interface Held {
   commit(): void;
   /** Hand that answer to the tab. */
   deliver(): void;
+  fail(): void;
 }
 let held: Held[] = [];
 
@@ -109,7 +119,8 @@ let stream: Stream | undefined;
 
 function answer(url: string, init: RequestInit): Promise<Response> {
   const method = init.method ?? "GET";
-  if (method === "GET") return Promise.resolve(json({ comments: [stored] }));
+  if (method === "GET") return Promise.resolve(json({ comments: [stored, ...(other ? [other] : [])] }));
+  if (method === "DELETE") return Promise.resolve(json({ ok: true }));
   if (method === "POST" && url.endsWith("/answer")) {
     // `beginAnswer`: the answer columns are blanked and the row is `pending`.
     stored = { ...without(stored, "answer", "citations", "searches", "model", "error"), status: "pending" };
@@ -139,6 +150,7 @@ function answer(url: string, init: RequestInit): Promise<Response> {
       composed = patch(url, body);
     },
     deliver: () => deliverWith(composed ?? patch(url, body)),
+    fail: () => deliverWith(json({ error: "write refused" }, 409)),
   });
   return parked;
 }
@@ -170,6 +182,7 @@ beforeEach(async () => {
     colour: "yellow",
   };
   held = [];
+  other = undefined;
   stream = undefined;
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -425,5 +438,129 @@ describe("a PATCH answered while the row was pending does not undo the answer", 
     await land(await start(() => api?.edit(ID, "new")));
     expect(shown().answer).toBe("an answer written in another tab");
     expect(shown().body).toBe("new");
+  });
+});
+
+describe("the stream/PATCH boundary under other interleavings", () => {
+  it.each([false, true])("a placement (clear=%s) survives later answer frames and a delayed PATCH response", async (clear) => {
+    if (clear) {
+      await land(await start(() => api?.place(ID, { criterionId: "spya-r4w2dn", valence: -80 })));
+    }
+    const s = await ask();
+    const mark = clear ? { criterionId: null, valence: null } : { criterionId: "spya-r4w2dn", valence: -80 };
+    const one = await start(() => api?.place(ID, mark));
+    await land(one);
+    await say("delta", { text: "hello" });
+    await say("done", finishedFromTheOpeningSnapshot(s.begun));
+    if (clear) {
+      expect("criterionId" in shown()).toBe(false);
+      expect("valence" in shown()).toBe(false);
+    } else {
+      expect(shown()).toMatchObject(mark);
+    }
+
+    await ask();
+    const later = await start(() => api?.place(ID, mark));
+    later.commit();
+    await say("done", finished());
+    later.deliver();
+    await settle();
+    expect(shown().status).toBe("done");
+    expect(shown().answer).toBe("hello there");
+  });
+
+  it("a stream wholly inside a PATCH's lifetime is still detected", async () => {
+    const one = await start(() => api?.edit(ID, "new"));
+    one.commit();
+    await ask();
+    await say("done", finished());
+    one.deliver();
+    await settle();
+    expect(shown()).toMatchObject({ body: "new", status: "done", answer: "hello there" });
+  });
+
+  it("ending one of two streams does not close the other stream's mark", async () => {
+    const first = await ask();
+    await ask(); // Models a retry after the first attempt's lease expired.
+    first.frame("done", { ...stored, status: "pending" });
+    await settle();
+    const one = await start(() => api?.edit(ID, "new"));
+    one.commit();
+    await say("delta", { text: "hello" });
+    one.deliver();
+    await settle();
+    expect(shown()).toMatchObject({ body: "new", answer: "hello", status: "pending" });
+    await say("done", finished());
+  });
+
+  it("a stream on X does not suppress a newer answer in a PATCH on Y", async () => {
+    other = { ...stored, id: "spya-t7r4wz" };
+    await act(async () => {
+      root.unmount();
+      root = createRoot(host);
+      root.render(createElement(Harness));
+    });
+    await settle();
+    await ask();
+    other = { ...other, answer: "Y's newer answer" };
+    await land(await start(() => api?.edit("spya-t7r4wz", "Y's note")));
+    expect(api?.comments.find((c) => c.id === "spya-t7r4wz")).toMatchObject({
+      body: "Y's note", answer: "Y's newer answer", status: "done",
+    });
+    await say("done", finished());
+  });
+
+  it("a failed PATCH neither changes the note nor blocks the next PATCH", async () => {
+    await ask();
+    const one = await start(() => api?.edit(ID, "never saved"));
+    one.fail();
+    await settle();
+    expect(shown().body).toBe("old");
+    expect(api?.error).toBeTruthy();
+    await land(await start(() => api?.edit(ID, "new")));
+    await say("done", finished());
+    expect(shown()).toMatchObject({ body: "new", status: "done" });
+  });
+
+  it("a PATCH held across a stream error preserves that error, and a later PATCH can heal it", async () => {
+    const s = await ask();
+    const one = await start(() => api?.edit(ID, "new"));
+    one.commit();
+    s.close();
+    await settle();
+    one.deliver();
+    await settle();
+    expect(shown()).toMatchObject({ body: "new", status: "error" });
+    stored = { ...stored, status: "done", answer: "the server finished anyway" };
+    await land(await start(() => api?.recolour(ID, "blue")));
+    expect(shown()).toMatchObject({ status: "done", answer: stored.answer, colour: "blue" });
+  });
+
+  it("a deleted comment stays absent through delta, done and a delayed PATCH", async () => {
+    await ask();
+    const one = await start(() => api?.edit(ID, "new"));
+    one.commit();
+    await act(async () => api?.remove(ID));
+    await say("delta", { text: "hello" });
+    await say("done", finished());
+    one.deliver();
+    await settle();
+    expect(api?.comments).toEqual([]);
+  });
+
+  it("StrictMode effects leave the mark scoped to the one explicit send", async () => {
+    await act(async () => {
+      root.unmount();
+      root = createRoot(host);
+      root.render(createElement(StrictMode, null, createElement(Harness)));
+    });
+    await settle();
+    await ask();
+    const one = await start(() => api?.edit(ID, "new"));
+    one.commit();
+    await say("done", finished());
+    one.deliver();
+    await settle();
+    expect(shown()).toMatchObject({ body: "new", status: "done", answer: "hello there" });
   });
 });

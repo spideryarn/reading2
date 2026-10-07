@@ -115,10 +115,11 @@ refusal rests on three things, each read or tested:
 1. *The route and `withTurn` ask the same question of the same thread.* Same predicate, same
    loader. `withTurn` can pick a thread the request did not name (`targetOf`), but only for a
    single-thread kind, and the route refuses an anchor or a help flag with any kind but chat before
-   it reads anything.
-2. *What the client sends.* An anchor and `help` leave the browser from one place,
-   `src/web/ChatDialog.tsx` § `ask`, which calls `send(null, …)` and so mints a new thread id every
-   time. A follow-up (`onSend`, `send(thread.id, question, at)`) carries neither. Nothing resends a
+   the turn is written (not before any read: the kind lookup comes first).
+2. *What the client sends.* `src/web/ChatDialog.tsx` § `ask` sends anchor and `help` through
+   `send(null, …)`, minting a new thread id each time. Conversation-band handoffs also carry
+   anchors and start a fresh draft; their follow-ups omit them. A dialog follow-up
+   (`onSend`, `send(thread.id, question, at)`) carries neither. Nothing resends a
    chat POST of its own accord; `src/web/lib/api.ts` repeats one only after a 401, which never
    reached the handler.
 3. *Tested through the route and Postgres:* first send, the same send again, a follow-up, a "?"
@@ -184,7 +185,7 @@ Fixed:
   (`status`, `answer`, `citations`, `searches`, `model`, `error`, `replacing`) and leaves the rest;
   `putAnswer` applies it to the row as it is in state. `send` uses it in all five places it wrote a
   row (before the POST, `begin`, `delta`, `done`, failure). Replaced, not merged, so clearing stays
-  expressible: a retry drops the last attempt's `error`, the first delta drops `replacing`.
+  expressible: a frame without `error` drops it, and the first delta drops `replacing`.
 - **The reverse interleaving**: `edit`, `place` and `recolour` end in one `landPatch`. It takes the
   whole row from the PATCH's answer, as before, unless an answer stream was open at any point while
   that PATCH was out; then it takes the reader's half only. `send` keeps a per-id mark (streams
@@ -217,8 +218,8 @@ No code. Each corrected against the code it describes, and nothing here is a new
   `remove` has the third) that an answer finishing after a DELETE writes the row back, so the
   DELETE is sent again. The answer's write is an `UPDATE` and cannot. Checked two ways: the SQL, and
   the new Postgres case *a comment deleted mid-answer still gets a frame*, which reads the store
-  afterwards and finds no row. The second DELETE is harmless and is left in; the comments now say
-  it is a no-op kept from when it was needed.
+  afterwards and finds no row. The second DELETE is left in; it is a no-op after the first
+  succeeds, but can perform the deletion if the first failed or is still in flight.
 - **SV4.** The Ask route *"writes nothing"* (a finished answer is added to the glossary:
   `makeAskAboutTerm` calls `deps.lookups.addTerm`); *"there is none to reuse … `lookup` has none
   either"* (`lookUpTerm` takes the `dig-deeper` allowance through `admitDig`); and
@@ -246,14 +247,105 @@ No code. Each corrected against the code it describes, and nothing here is a new
 
 ## Not done
 
-- No postmortem under `docs/postmortems/`. The class for B is already written up
+- No postmortem under `docs/postmortems/` for A, B or C as built (the review's C1 has one, below).
+  The class for B is already written up
   ([261005h](../postmortems/261005h-a-per-process-origin-check-leaves-the-transaction-accepting-another-origin.md));
   A and C are each a rule that existed at one layer and was not carried to the next, which is that
   postmortem's class again and the umbrella's *One level up*. If one is wanted for C (two writers
   replacing a shared row), it is not written.
 - A stream that drops while the server finishes still leaves "The answer stopped arriving" until a
   reload or an uncrossed PATCH (under C, *Not changed*).
-- Not pushed; the GPT Sol code review is the orchestrator's next step.
+- The GPT Sol code review followed: *Code review* and *Review status*, below.
+
+## Code review, 2026-10-07
+
+The successful UPDATE and its returned list read are separate statements. A replacement attempt
+can claim between them, making the returned row `pending`. Framing it as `done` newly left a
+spinner without a watcher. Reproduced in the real route with store/model leaves stubbed: both
+success and failure cases were red; the three controls passed. The fix retains current reader
+fields and this attempt's committed terminal answer only when that returned row is pending. A
+newer terminal row still passes unchanged. Root cause and rejected options:
+[postmortem](../postmortems/261007a-a-post-write-read-can-belong-to-a-new-attempt.md).
+
+`tests/comment-answer-terminal-frame.test.ts` also has a preceding sibling row, so `kept[0]`
+cannot pass as the matching id (watched red: 1 failure). Replacing `place`'s `landPatch` with
+whole-row replacement was also watched red: 2 placement failures. Both mutations were undone.
+Two Postgres twins were added to
+`tests/comment-answer-stream-lifetime.test.ts`; **unrun in the review sandbox**. Added hook probes
+cover placement/removal, a stream wholly inside a PATCH, overlapping marks, X/Y isolation,
+failed PATCH and stream, deletion and StrictMode. The mark survived all of them.
+
+Rewritten comments were narrowed: the second DELETE is only a no-op after the first succeeds;
+Ask and Lookup share an explanation generator but Lookup searches first; the transaction's
+refusal need not have byte-identical punctuation to the route's. The sender trace and history
+found no ordinary newly refused request; the original gateway plan already required API refusal.
+
+Wider, unchanged: a refused completion can still frame a newer pending attempt with no watcher;
+`send`'s captured `carried` row restores old error/citations/searches/model on a delta (also at
+the base). The new retry-clearing wording was corrected, rather than declaring that defect fixed.
+The seven answer fields are complete today but are manually listed in several places.
+
+Final review validation: **13 unit/jsdom/doc suites, 151 tests passed, 0 failed**; all four
+TypeScript projects passed and covered **3,340 source files**. Targeted Biome lint checked seven
+files, with **19 informational diagnostics, no errors or warnings**. `git diff HEAD --check`
+passed. Neither the full suite nor Postgres assertions were run. No commit was made.
+
+## Review status
+
+**GPT Sol's verdict, 2026-10-07: "ship with these fixes applied", subject to the Postgres checks
+being run outside its sandbox.** They were, and they pass. The review's answer is
+[261007b-…-code-review-sol.md](261007b-seventh-sweep-chat-and-comment-invariants-code-review-sol.md)
+and its prompt is
+[beside it](261007b-seventh-sweep-chat-and-comment-invariants-code-review-prompt.md). Its three
+findings, all fixed by the reviewer and committed as one further commit:
+
+- **C1 (P1).** A `done` frame could carry another attempt's `pending` row, leaving a spinner nobody
+  was watching. Fixed in `settle`: a pending row out of the read supplies the reader's fields and
+  this attempt supplies the terminal answer it committed; a newer finished answer is framed as it is.
+- **C2 (P2).** The original regressions admitted `kept[0]` and a whole-row replacement in `place`.
+  A sibling-row case and placement cases were added.
+- **C3 (P3).** Five rewritten comments still claimed too much, and were narrowed.
+
+**Checked afterwards, outside the sandbox** (Claude, the same day):
+
+- *C1 red without its fix.* The four lines in `settle` edited back by hand:
+  `tests/comment-answer-terminal-frame.test.ts` 2 failed, 3 passed, and the two Postgres twins in
+  `tests/comment-answer-stream-lifetime.test.ts` 2 failed, 8 passed, each on
+  `status: "pending"` where `done` or `error` was expected. Fix put back: 15 passed across the two
+  files. **The Postgres twins had never been run before this**; they are right as written and were
+  not changed.
+- *C1 judged.* The frame now shows this attempt's answer over a row another attempt has already
+  blanked and will overwrite. Nothing the reader wrote is involved: the reader's fields in the
+  frame are the current ones, and the tab takes only the answer's half of a frame anyway
+  (`putAnswer`). What the tab shows is an answer this attempt did commit; a reload shows the newer
+  attempt's. The cost is that one tab can show a finished answer the store has since replaced,
+  until it reloads.
+- *C2's two mutations.* `kept[0]` for the id match: 1 failed, 4 passed. `place` replacing the whole
+  row: 2 failed, 20 passed. Both edited back.
+- *C3.* Each of the five read against the code. One more of the same kind was in this plan
+  (*"before it reads anything"*, under B) and is corrected above.
+- *No existing assertion was weakened*: the test diffs only add.
+- *Gates, before merging `dev`.* `npm run typecheck`: all four projects, 3,340 files. By file, 144
+  test files in six runs (every file the stage touched, every `tests/chat-*` and `tests/comment-*`,
+  every suite that mentions `useComments`, `tests/routes.test.ts`,
+  `tests/store-migration-registry.test.ts`, the tests that read `src/routes.ts` as text, and
+  `tests/doc-links.test.ts`): **2,953 passed, 0 failed**. Biome on the 13 touched source and test
+  files: 19 infos, no warnings or errors. The same gates are run again after the merge, before the
+  push.
+
+**Left, from Sol's wider notes.** None is new in this stage's fix, and none is fixed here:
+
+- A **refused** completion (the attempt was superseded before its write) can still frame a newer
+  `pending` attempt without adopting its stream: the same unwatched spinner as C1, by the other
+  branch of `settle`.
+- `send`'s captured `carried` row puts the old `error`, `citations`, `searches` and `model` back on
+  a later delta. It exists at the base of this stage.
+- The seven answer-owned fields are listed by hand in several places (`withAnswerOf`,
+  `AnswerHalf`, `beginAnswer`, `patch`, the test harness), and nothing fails if an eighth is added
+  to one list and not the others.
+
+**History.** Commit `63c49bb72` is red on its own in `tests/store-migration-registry.test.ts`;
+`8836f40ab` fixes it (under B, *A red I caused and committed*). History was not rewritten.
 
 ## Mutations
 
