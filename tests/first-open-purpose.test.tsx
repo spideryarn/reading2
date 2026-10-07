@@ -28,16 +28,19 @@ const B = "4d4d4d4d-4444-4444-8444-000000000001";
 const MARK = "spideryarn.ask-purpose";
 
 describe("firstOpenWithPurpose: the table", () => {
-  const wide = "?mode=summary&margin=1";
-  const medium = "?mode=summary";
+  /* Since 2026-10-07 (plan 261007o) the ordinary default is the guide, so
+     the purpose read no longer says where a first open lands, only whether
+     the modal shows: where no band fits and no reason is stored. */
+  const wide = "?mode=chat&guide=1&margin=1";
+  const medium = "?mode=chat&guide=1";
   it.each([
     [wide, "stored", wide, false],
     [medium, "stored", medium, false],
     ["", "stored", "", false],
     [wide, "unknown", wide, false],
     ["", "unknown", "", false],
-    [wide, "none", "?mode=chat&guide=1&margin=1", false],
-    [medium, "none", "?mode=chat&guide=1", false],
+    [wide, "none", wide, false],
+    [medium, "none", medium, false],
     ["", "none", "", true],
   ] as const)("ordinary %j, purpose %s → %j, modal %s", (ordinary, outcome, search, modal) => {
     expect(firstOpenWithPurpose(ordinary, outcome)).toEqual({ search, modal });
@@ -109,10 +112,10 @@ const render = (outcome: "stored" | "none" | "unknown" | null, strict = false) =
 describe("a marked first open", () => {
   beforeEach(() => session.set(MARK, "x"));
 
-  it("waits for the purpose read: settings alone do not put Summary on screen", () => {
-    Object.assign(setting, { loaded: true, signedIn: true });
+  it("does not wait for the purpose read: the guide at once, since it is the answer either way", () => {
+    Object.assign(setting, { signedIn: true });
     render(null);
-    expect(location.search).toBe("");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("no reason, room for a band: settings first, then the read → the guide, and no modal", () => {
@@ -155,10 +158,10 @@ describe("a marked first open", () => {
     expect(modals).toEqual([true]);
   });
 
-  it("a reason stored → the ordinary default", () => {
+  it("a reason stored → the guide too, and no modal", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render("stored");
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
     expect(modals).toEqual([false]);
   });
 
@@ -167,7 +170,7 @@ describe("a marked first open", () => {
     render("unknown");
     Object.assign(setting, { loaded: true });
     render("unknown");
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
     expect(modals).toEqual([false]);
   });
 
@@ -183,7 +186,7 @@ describe("a marked first open", () => {
     expect(location.search).toBe("?mode=summary");
   });
 
-  it("a reader who moved while it was waiting is left where they are", () => {
+  it("a reader who has moved is not moved back when the read answers", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
     history.replaceState(null, "", "/read/x?at=spya-aaaaaa");
@@ -204,23 +207,26 @@ describe("no mark", () => {
   it("the ordinary default, without waiting for anything", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("a mark for another article does not hold this one", () => {
     session.set(MARK, "y");
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 });
 
 describe("the module hold belongs to one arrival", () => {
   it("does not let the previous reader's late answer settle this reader's hold for the same article", () => {
+    /* A phone, where B's own "none" would be the modal: A's late answer must
+       neither put A's modal over B's page nor use up B's decision. */
     const applied: string[] = [];
-    holdFirstOpen({ slug: "x", readerId: B, ordinary: "?mode=summary" });
+    holdFirstOpen({ slug: "x", readerId: B, ordinary: "" });
     releaseWhenDecided("x", B, (search) => applied.push(search));
-    settleFirstOpen("x", A, "none");
-    expect(applied).toEqual([]);
+    expect(settleFirstOpen("x", A, "none")).toEqual({ modal: false });
+    expect(settleFirstOpen("x", B, "none")).toEqual({ modal: true });
+    expect(applied).toEqual([""]);
   });
 });

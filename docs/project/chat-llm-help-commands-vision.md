@@ -288,8 +288,9 @@ the interface model.
   reason for reading, roughly how many other articles they have opened, and our words for every
   mode, and it proposes **buttons** — open a mode, quick search, and chat's others — that the
   reader presses. The bar reaches it as a second door: when the fast pick answers that no row fits,
-  a row *Ask the guide: "…"* sends the sentence there. It replaces the "Why are you reading this?"
-  modal on a first open where a band fits. [chat-tools.md § The guide](chat-tools.md#the-guide).
+  a row *Ask the guide: "…"* sends the sentence there. It is where every first open of an article
+  lands where a band fits (since 2026-10-07), and stands in there for the "Why are you reading
+  this?" modal. [chat-tools.md § The guide](chat-tools.md#the-guide).
   Unlike the pick, **the guide sees the article**, so it holds the line by pressing alone: nothing
   it writes runs without the reader. Whether it may open a mode itself is a question for Greg
   (`[Q-guide-acts]` in the plan).

@@ -755,16 +755,26 @@ omission.
 >
 > — Greg, 2026-10-04 (spya-ax5tmm)
 
+> yes. but perhaps with a fixed starting message?
+>
+> — Greg, 2026-10-07, asked whether the guide should replace Summary as that band (q-kgrhm4)
+
 One more case in the same decision, since 2026-10-05
-([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)).
+([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)),
+and the guide rather than Summary since 2026-10-07
+([261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md)).
 A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
 it, arrives at:
 
 | Usable width (rail on) | Arrives at |
 |---|---|
 | below 700px | the article alone — a band would cover the prose |
-| 700px and up | `?mode=summary` (Brief) |
-| 900px and up | `?mode=summary&margin=1` |
+| 700px and up | `?mode=chat&guide=1` — the guide, with its fixed greeting |
+| 900px and up | `?mode=chat&guide=1&margin=1` |
+
+Chat turns `guide=1` into the article's guide, stored or empty, and then drops it, so neither it
+nor `mode=chat` is remembered (§ `NEVER_REMEMBERED`, `NEEDS_AN_EXPLICIT_PRESS`): the next bare
+open puts back only `?margin=1`.
 
 The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
 ([`layout.ts`](../../src/web/layout.ts)) and `notesFit`
@@ -797,21 +807,19 @@ it.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
-- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in Summary spends
-  nothing ([summaries.md](summaries.md)); with no summary stored the owner sees the empty state and
-  **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
-  none, once, which is what Greg asked for
-  ([marginalia.md § Relation words](marginalia.md#relation-words)).
-- **Or the guide, when the add page asked why and nobody said**, since 2026-10-07
-  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4). While the
-  add page's *ask why* mark names this article, the default waits for the owner's purpose read, and
-  one coordinator decides ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): a reason
-  stored, or a read that failed, gets the table above; no reason with room for a band gets
-  `?mode=chat&guide=1` (and `&margin=1` where the table would have had it) and no modal; no reason
-  on a phone gets the modal over the article alone, as before. The coordinator registers before the
-  settings answer, so the purpose read can land first and a settings failure cannot strand the
-  decision. A failed read keeps the mark, so the next load asks with the
-  modal, which is what it always did ([reader-profile.md](reader-profile.md)).
+- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in the guide
+  spends nothing: its greeting is ours, and the reader's first message is its first model call.
+  Arriving with the notes on makes their *so / but / vs* words if the article has none, once,
+  which is what Greg asked for ([marginalia.md § Relation words](marginalia.md#relation-words)).
+- **And the add page's "Why are you reading this?" is asked by the guide where it can be**
+  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4, simplified by
+  [261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md)). While
+  the add page's *ask why* mark names this article, the arrival is applied at once, without waiting
+  for the settings store, and the owner's purpose read decides only the modal
+  ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): with room for a band, the
+  guide's greeting holds the same box and there is no modal; on a phone, no reason stored gets the
+  modal over the article alone, as before. A failed read keeps the mark, so the next load asks with
+  the modal, which is what it always did ([reader-profile.md](reader-profile.md)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

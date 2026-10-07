@@ -955,9 +955,10 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   (§ Command buttons). It cannot act; the press is the act.
 - **Three doors**: the pinned row; the command bar's *Ask the guide: "…"* when the fast pick
   answers that no row fits
-  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and a
-  first open from the add page with no reason given, where a band fits, which opens the guide instead
-  of the "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and
+  **every first open of an article, where a band fits** (since 2026-10-07, in Summary's place —
+  [url-state.md](url-state.md#an-article-never-opened-here-arrives-at-a-default)), which also
+  stands in for the add page's "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
 
 Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
 [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
