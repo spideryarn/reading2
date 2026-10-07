@@ -21,7 +21,10 @@ import { profileSaved } from "./profile-saved.js";
  * (plan 260930e F1, kept by src/web/add-purpose.ts): before that an empty box
  * is not a request to erase a sentence the reader cannot see.
  *
- * Rejects with the server's sentence on failure.
+ * Rejects with the server's sentence on failure. **A rejection does not mean
+ * nothing was stored**: the server answers after the write, so a reply lost on
+ * the way back rejects here over a sentence that is on the shelf. A caller that
+ * is about to say which it was asks `storedPurpose` below first.
  *
  * `madeFor` is the reader these words are for, when the caller can outlive a
  * change of reader: the add page's session sends its last words after the
@@ -57,6 +60,28 @@ export async function savePurpose(
      is old (src/web/profile-saved.ts). */
   profileSaved();
   return body.purpose ?? null;
+}
+
+/**
+ * **What the server holds for this article's purpose right now**, or `null`
+ * when that cannot be established. For a caller whose save rejected and who
+ * must not say "not saved" over a sentence that was (SkimPurpose.tsx).
+ *
+ * Only a fresh server 200 that could read the shelf is an answer. `apiFetch`
+ * answers a GET whose transport failed out of the saved copy, with a real 200
+ * and `x-spideryarn-offline: copy` (lib/api.ts § `attempt`), and a copy written
+ * before the save says nothing about it; Metadata.tsx § `stillOnTheServer` has
+ * the same rule for the same reason.
+ */
+export async function storedPurpose(slug: string): Promise<{ purpose: string | null } | null> {
+  try {
+    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`);
+    if (res.headers.get("x-spideryarn-offline") === "copy" || res.status !== 200) return null;
+    const body = await readJson<{ purpose: string | null; purposeFailed?: boolean }>(res);
+    return body.purposeFailed === true ? null : { purpose: body.purpose ?? null };
+  } catch {
+    return null;
+  }
 }
 
 /**

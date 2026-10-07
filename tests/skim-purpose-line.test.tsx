@@ -28,6 +28,8 @@ globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.
 
 /** What `GET /api/reader?slug=` answers, or `"fail"` for a 500. */
 let readerBody: { purpose: string | null; purposeFailed?: boolean } | "fail" | "held" = { purpose: null };
+/** The purpose read is answered from the copy this browser saved, not by the server. */
+let readerFromCopy = false;
 /** A held PATCH, so a test can look between the press and the save's answer. */
 let patchReply: Promise<Response> | null = null;
 const requested: { url: string; method: string; body?: unknown }[] = [];
@@ -43,7 +45,12 @@ vi.mock("../src/web/lib/api.js", async () => {
       if (readerBody === "held") return new Promise<Response>(() => {});
       return readerBody === "fail"
         ? new Response(JSON.stringify({ error: "Could not read." }), { status: 500 })
-        : new Response(JSON.stringify(readerBody), { status: 200 });
+        : new Response(JSON.stringify(readerBody), {
+            status: 200,
+            /* What the real `apiFetch` puts on a GET it answered from the saved
+               copy because the transport failed (lib/api.ts § `attempt`). */
+            headers: readerFromCopy ? { "x-spideryarn-offline": "copy" } : {},
+          });
     }
     if (url.startsWith("/api/library/") && init?.method === "PATCH") {
       if (patchReply) return patchReply;
@@ -143,6 +150,7 @@ let root: Root;
 
 beforeEach(() => {
   readerBody = { purpose: null };
+  readerFromCopy = false;
   patchReply = null;
   requested.length = 0;
   ensured = 0;
@@ -291,8 +299,109 @@ describe("the purpose line in Skim", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(ensured).toBe(0);
-    expect(line()?.textContent).toContain("Not saved —");
+    /* The server refused, and a fresh read of what is stored agrees. */
+    expect(line()?.textContent).toContain("That was not saved");
+    expect(line()?.textContent).toContain("The shelf is down.");
     expect(box()?.value).toBe("the method");
+    expect(planButton()!.disabled).toBe(false);
+  });
+
+  /* **A PATCH whose reply is lost may have been stored.** The server answers
+     after the write, so a connection that dies between the two rejects
+     `savePurpose` over a sentence that is on the shelf. "Not saved" was said
+     for every rejection until 2026-10-07 (plan 261007a § K4, the review's U21). */
+  describe("when the save's reply is lost", () => {
+    /* A built page: the development build keeps the browser's words in brackets. */
+    beforeEach(() => {
+      vi.stubEnv("PROD", true);
+      vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    /** A 200 whose body dies mid-read: the real `readJson` marks it unreachable. */
+    const replyLost = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(c) {
+              c.error(new TypeError("Load failed"));
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    const pressPlan = async () => {
+      await drawOwner(owner());
+      await type("the method");
+      patchReply = replyLost();
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    };
+
+    it("reads what is stored, and carries on when the sentence is there", async () => {
+      await drawOwner(owner());
+      await type("the method");
+      patchReply = replyLost();
+      readerBody = { purpose: "the method" };
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(line()?.textContent).toContain("Reading for:");
+      expect(line()?.textContent).toContain("the method");
+      expect(line()?.textContent).not.toMatch(/not saved/i);
+      expect(ensured).toBe(1);
+    });
+
+    it("says it was not saved only when a fresh read shows it is not there", async () => {
+      await pressPlan();
+      expect(line()?.textContent).toContain("That was not saved");
+      expect(line()?.textContent).toMatch(/\[net-down\]/);
+      expect(line()?.textContent).not.toContain("Load failed");
+      expect(box()?.value).toBe("the method");
+      expect(ensured).toBe(0);
+    });
+
+    it.each([
+      ["the read is answered from this browser's saved copy", () => { readerFromCopy = true; }],
+      ["the read fails too", () => { readerBody = "fail"; }],
+      ["the server could not read the shelf", () => { readerBody = { purpose: null, purposeFailed: true }; }],
+    ])("claims neither when %s", async (_why, arrange) => {
+      await drawOwner(owner());
+      await type("the method");
+      patchReply = replyLost();
+      arrange();
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(line()?.textContent).toContain("Couldn't tell whether that was saved");
+      expect(line()?.textContent).not.toMatch(/not saved/i);
+      expect(line()?.textContent).not.toContain("Load failed");
+      /* The draft is kept and the press is still there to make. */
+      expect(box()?.value).toBe("the method");
+      expect(planButton()!.disabled).toBe(false);
+      expect(ensured).toBe(0);
+    });
+
+    it("never prints an exception's own words", async () => {
+      await drawOwner(owner());
+      await type("the method");
+      patchReply = Promise.reject(new Error("Cannot read properties of undefined (reading 'shelf')"));
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(line()?.textContent).not.toContain("Cannot read");
+      expect(line()?.textContent).not.toContain("Something went wrong");
+      expect(line()?.textContent).toMatch(/\[web-unexpected\]/);
+      expect(box()?.value).toBe("the method");
+    });
   });
 
   it("cannot submit an empty or blank draft", async () => {

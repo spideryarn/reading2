@@ -22,7 +22,8 @@ import { Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { Link } from "./Link.js";
-import { savePurpose, usePurpose } from "./purpose.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { savePurpose, storedPurpose, usePurpose } from "./purpose.js";
 import { carriedSearch, readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
 import type { UseSkim } from "./useSkim.js";
@@ -91,11 +92,30 @@ export function PurposeLine({ owner, bannerUp }: Props) {
     try {
       stored = await savePurpose(owner.slug, text);
     } catch (err) {
+      /* **A save that rejected may still have been stored** (purpose.ts §
+         `savePurpose`), so ask what is there before saying which it was. This
+         said "Not saved" for every rejection until 2026-10-07. */
+      const why = describeFetchFailure(err as Error);
+      const held = await storedPurpose(owner.slug);
       if (!live.current) return;
-      planning.current = false;
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      setSaving(false);
-      return;
+      /* `text` is what the server would hold: it trims and settles `\r\n`, and
+         a textarea's value never carries a `\r`. */
+      if (held === null || held.purpose !== text) {
+        planning.current = false;
+        setError(
+          held === null
+            ? /* No code: the reason's own sentence can claim more than is known
+                 here ("nothing was sent"), and Metadata's delete says the same
+                 thing the same way (copy.md § The words on the one control). */
+              "Couldn't tell whether that was saved, so no route was planned. Your words are still " +
+                "in the box. Reload the page to see what is stored."
+            : `That was not saved, so no route was planned. ${why}`,
+        );
+        setSaving(false);
+        return;
+      }
+      /* It is there. Carry on as the press asked. */
+      stored = held.purpose;
     }
     if (!live.current) return;
     setSaved(stored);
@@ -126,7 +146,7 @@ export function PurposeLine({ owner, bannerUp }: Props) {
       </div>
       {error !== null && (
         <p className="gloss-error" role="alert">
-          Not saved — {error}
+          {error}
         </p>
       )}
     </div>
