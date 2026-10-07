@@ -2549,8 +2549,11 @@ Five things about it are worth knowing before touching it.
   can skip the step and still publish it.
 - **It happens on every run, since 2026-09-05.** There was a filesystem session beside it, chosen by
   the store flag, that did none of this — no draft, no publication, no database — and a suite
-  that proved it by taking `DATABASE_URL` away. Both went with the flag
-  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F);
+  that proved it by taking `DATABASE_URL` away. The branch that chose it and that suite went with
+  the flag
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
+  The session itself (`fsStoreSession`) outlived them, called by one test and nothing else, until
+  2026-10-07 ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md));
   [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is what says
   this line opens what it says it opens.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach

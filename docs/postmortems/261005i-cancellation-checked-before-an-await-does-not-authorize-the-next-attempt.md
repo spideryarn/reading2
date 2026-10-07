@@ -31,6 +31,20 @@ they have not been observed red or green because the locked test command could
 not acquire the shared lock. Source inspection establishes the missing check;
 runtime validation remains outstanding.
 
+> **Note, 2026-10-07.** The paragraph above records validation as outstanding, but the
+> [transport plan's gates](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md#gates) already recorded
+> the six cases red and green before this sweep (see the
+> [Sol cross-review](../investigations/261006d-seventh-sweep-depth-pipeline-review-sol-on-opus.md#pqo6-tests-allegedly-never-seen-red)).
+> They were run again here. With `if (n > 1) options?.signal?.throwIfAborted()`
+> deleted from `asTransportAttempts`, the four non-stream seams' *opens no attempt when the signal
+> aborts as the backoff finishes* fail (`expected undefined to be DOMException`). With
+> `if (attempt > 1) options.signal.throwIfAborted()` deleted from `acceptedStream`, the stream's
+> case of that name and *opens no retry if the activity callback aborts after the wait* fail
+> (`expected 2 to be 1`). All 260 pass with both lines back. The Messages loop's check now has a
+> test of its own too: *a Stop as the backoff finishes leaves one row, and opens no attempt 2* in
+> [messages-stream.test.ts](../../tests/messages-stream.test.ts), red with that line deleted.
+> [The plan](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md#item-3-pqo6-two-tests-seen-red-and-the-missing-one) has the runs.
+
 Countermeasures, ranked by cost and value:
 
 1. Check cancellation immediately before retry resource creation. Applied here.

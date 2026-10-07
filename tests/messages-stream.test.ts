@@ -13,7 +13,7 @@
  * hand-written to match the code. If OpenRouter moves the field, these are the
  * record of where it used to be.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Anthropic, { APIUserAbortError } from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { CallDeadlineReached, StallReached } from "../src/call-failure.js";
@@ -29,6 +29,7 @@ import {
   wasRefused,
 } from "../src/messages-stream.js";
 import { truncationFailure } from "../src/token-budget.js";
+import * as transportRetry from "../src/transport-retry.js";
 
 /* Captured from a live streamed call through https://openrouter.ai/api/v1/messages,
    2026-08-27. Trimmed only of the content blocks. */
@@ -986,6 +987,57 @@ describe("streamMessage — every attempt's row says which go it was, and how it
       setTimeout(() => controller.abort(), 50);
     });
     expect(rows).toEqual([[1, "error", beforeAnswer("network")]]);
+  });
+
+  /**
+   * **The Stop that lands after the wait resolves and before the retry opens.**
+   *
+   * The case above stops *during* the backoff, which `waitOrStop` itself
+   * rejects. This one lets the wait resolve and aborts before its continuation
+   * runs, so the only thing between the Stop and a second attempt is the
+   * `options.signal?.throwIfAborted()` after the wait in `finalMessage`
+   * (src/messages-stream.ts). That line was added after a review *"with no test
+   * of its own"*
+   * (docs/postmortems/261005i-cancellation-checked-before-an-await-does-not-authorize-the-next-attempt.md);
+   * this is the test, written 2026-10-07. The OpenRouter seams have had the same
+   * case in tests/ai-call-transport-retry.test.ts.
+   *
+   * Wrap `waitOrStop` itself, keeping its real wait and aborting when it
+   * resolves, before the caller resumes. Timer lengths cannot identify it:
+   * the SDK has its own timers, and the retry policy can change independently.
+   *
+   * Mutation, watched red that day: the `throwIfAborted()` after the wait
+   * deleted → `expected 2 to be 1` on `call.attempts()`: an attempt opened
+   * after the Stop.
+   */
+  it("a Stop as the backoff finishes leaves one row, and opens no attempt 2", async () => {
+    const controller = new AbortController();
+    vi.spyOn(transportRetry, "backoffMs").mockReturnValue(1);
+    const wait = transportRetry.waitOrStop;
+    const backoff = vi.spyOn(transportRetry, "waitOrStop").mockImplementation(async (ms, signal) => {
+      await wait(ms, signal);
+      controller.abort();
+    });
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        await expect(call.finalMessage()).rejects.toThrow();
+        expect(call.aborted()).toBe(true);
+        // An attempt opened then aborted before fetch must also fail this test.
+        expect(call.attempts()).toBe(1);
+      });
+      expect(backoff).toHaveBeenCalledExactlyOnceWith(1, controller.signal);
+      expect(controller.signal.aborted).toBe(true);
+      expect(t.sent()).toBe(1);
+      expect(report.pending).toEqual([]);
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([
+        [1, "error", beforeAnswer("network")],
+      ]);
+    } finally {
+      t.restore();
+      vi.restoreAllMocks();
+    }
   });
 
   it("a refusal carries its status", async () => {
