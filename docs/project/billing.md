@@ -24,20 +24,11 @@ asking politely. The build is
 
 **Status: live, and it has taken real money.** Tiers are database rows as of
 2026-09-02; a job's ending settles its slot at all seven places a job can end and adding an article
-takes one, so a free account is held to three lifetime ingests. As of 2026-09-03 there are checkout,
-portal and confirm routes, and the **whole round trip has been run for real** in Stripe test mode:
-card `4242…` through hosted Checkout → signed webhook → `syncSubscriptionFromStripe` (which had
-never executed until then) → an `active` row with the period Stripe reported → the same account
-admitting a fourth ingest where a free one is refused, and refusing the twenty-first with Stripe's
-own renewal date on it.
+takes one, so a free account is held to three lifetime ingests.
+How it got there — the first test-mode round trip, the first live sale, the day the reader-facing
+surface landed — is in [261007g-billing-history.md § Billing](../plans/261007g-billing-history.md#billing).
 
-**The first live sale happened the same day** — see
-[The first live sale](#the-first-live-sale-and-the-four-things-it-measured), which is where the
-facts that only a real purchase can establish are written down.
-
-The **reader-facing surface** landed the same day — see [What a reader sees](#what-a-reader-sees).
 What is not built is marked *not built* below rather than described in the present tense.
-
 
 **Live voice has no allowance on any paid plan**, and it is the dearest thing we serve — about
 $0.08–0.13 a minute, so a handful of full conversations a month can cost more than a Reader
@@ -136,9 +127,7 @@ values ('scholar', 'Spideryarn Scholar', 'For people who read for a living.', 50
 **A description must not restate the allowance.** `/profile` renders `ingests_per_period`
 structurally and puts the description beside it, so a description that opens by repeating the number
 is a second copy the one-`UPDATE` quota change above does not touch — raise the quota to 50 and the
-sentence goes on saying 20. The two seeded rows did repeat it, which read on screen as *"20 articles
-a month. 20 articles a month. Reading what you have already added is always free."* until a browser
-run caught it on 2026-09-03; `drizzle/20260903090000_…` took the first sentence back out.
+sentence goes on saying 20.
 
 Then, for either:
 
@@ -259,9 +248,7 @@ real purchase on 2026-09-03, and neither is visible to any unit test — nothing
 invoice.
 
 **`tax_code` on the product.** A Stripe account created from 2026 has **Managed Payments** on by
-default — Stripe as merchant of record — and it refuses to sell a product without one. The first
-Checkout on the new account died with `Invalid line_items[0]: the product tax code is missing`, which
-our route correctly reported to the reader as "we could not reach Stripe just now". Ours is
+default — Stripe as merchant of record — and it refuses to sell a product without one. Ours is
 `txcd_10103000`, *SaaS — personal use*.
 
 **`tax_behavior` on the price, and this one is the money.** Its default, `unspecified`, behaves as
@@ -370,30 +357,8 @@ after a review found the claim on the page; until then it lived only in
 
 ## The first live sale, and the four things it measured
 
-Greg bought Reader on the live account on **2026-09-03 at 11:37 UTC** — `cus_VBwqG2jsgqOKh4`,
-`sub_1UBYxALv4piDbwcbVew6jxqN`, on `acct_1UBW3NLv4piDbwcb`. Live mode gets exactly one first
-customer, so what it settled is written down here rather than re-derived.
-
-The day also produced four faults, recorded below beside the things they bite. Why none of them was
-visible to a green suite, a passing `stripe:check` or a code review is
-[260904a](../postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md);
-the fixes are [260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md).
-
-**One: the live round trip works, end to end and unattended.** Hosted Checkout → signed webhook →
-`syncSubscriptionFromStripe` → a production `billing_accounts` row reading `status=active`,
-`livemode=true`, the right price and a period ending 2026-10-03. `last_synced_at` was **11 seconds**
-after the charge. The test-mode run had proved the code; this proved the deployed webhook endpoint,
-the live keys and the production database, none of which the test run touches.
-
-**Two: [Managed Payments](#managed-payments-and-what-it-is-worth) is really on**, with the
-consequences and the statement descriptor recorded there.
-
-**Three: [Adaptive Pricing](#adaptive-pricing-and-why-a-london-customer-paid-euros) charged a
-British customer in euros**, because he was in Greece.
-
-**Four: a cancellation is expressed as a timestamp, and we were reading a boolean** — below. It was
-a live bug for a few hours on 2026-09-03 and is fixed; the payload is kept because it is the only
-one of its kind we have.
+What the first live sale on 2026-09-03 established, and the four faults that day produced, is in
+[261007g-billing-history.md § The first live sale](../plans/261007g-billing-history.md#the-first-live-sale-and-the-four-things-it-measured).
 
 ### How Stripe says a subscription is ending
 
@@ -407,11 +372,6 @@ Greg cancelled the live subscription through the Portal on 2026-09-03. Stripe ex
 "cancel_at_period_end": false, // <-- still false
 "cancellation_details": { "reason": "cancellation_requested" }
 ```
-
-[`src/billing/subscription.ts`](../../src/billing/subscription.ts) read only
-`cancel_at_period_end === true`, so the sync stored `false` and `/profile` went on saying the plan
-renews. Verified against the production row after the webhook had run: Stripe said cancelled, we
-said nothing.
 
 **What the code does now.** Both raw facts are read and both are stored — `cancel_at` is a nullable
 timestamp column on `billing_accounts` beside `cancel_at_period_end`, because neither implies the
@@ -491,9 +451,6 @@ migration, on an account with one live subscription; every cancellation from now
 column already there.
 
 ## What a reader sees
-
-Built 2026-09-03, and it is the half that had been missing: the refusal copy had been pointing at
-*"the Upgrade button on your profile page"* since the wall went up, and there was no such button.
 
 **Where a reader buys, since 2026-09-04: `/pricing`.** Greg: *"Right now, the only way to pay is
 from the /profile page, which is a bit buried and confusing."* Both pages now draw the same
@@ -790,8 +747,7 @@ That is also why it is not a second source of truth — the two are never both r
 2026-09-06, and
 [the plan](../plans/260906h-delete-an-article-permanently.md#stage-b-deleting-must-not-change-the-bill).
 
-**The trigger, rather than the store method that calls it.** The trigger landed before the delete
-path did (`DELETE /api/library/:slug`, 2026-09-06). Putting the stamp in application code would make the ledger
+**The trigger, rather than the store method that calls it.** Putting the stamp in application code would make the ledger
 right for exactly the route somebody remembered, and wrong for a future admin path, a cascade nobody
 has written, or a statement run by hand — and nothing about a wrongly-priced row looks wrong.
 
@@ -1075,15 +1031,12 @@ only one of them is fine. *Already released* is ordinary and idempotent — debu
 succeeded* is a contradiction: the job ended other than successfully and the slot is charged anyway,
 so somebody has been billed for an article they did not get. *The row is gone* means the ledger has
 lost a row a foreign key should have held. Both of those are **`error`-level**, with the ids, and
-neither throws. Until 2026-09-03 all four logged the same sentence at `warn`, and a test asserted
-that the charge silently survived — GPT Sol, finding 3.
+neither throws.
 
 **A cancel racing a final publication settles exactly once**, and it is the job fence that does it,
 not the tolerance. The loser never reaches settlement: a `requestCancel` that lost matches no
 `ACTIVE` row and returns before it would settle, and a claimant that lost raises `StaleAttemptError`
-out of `finishIn`, above its own settlement. An earlier version of this paragraph said the loser's
-settlement "rolls back with the transition that lost", which was a plausible sentence about
-something that never happens — GPT Sol, 2026-09-03.
+out of `finishIn`, above its own settlement.
 
 That pair is not a race at all, in fact: which of them ends the job is decided by the **lease**
 rather than by arrival order, so there is nothing for two connections to contend over. The
@@ -1163,9 +1116,7 @@ otherwise, and there is one store now. Settlement joins the
 Postgres publish transaction, which has no filesystem counterpart, and writing a second
 filesystem ledger would be two implementations of one count.
 
-**This cannot leak into production**: there is no second store to leak through. It used to rest on
-a boot refusal in `src/store/index.ts` and a `/api/health` warning, both of which went with the
-thing they were guarding against on 2026-09-05.
+**This cannot leak into production**: there is no second store to leak through.
 
 ## Test and live must never cross
 
@@ -1281,9 +1232,7 @@ What could not be solved per-product is everything else, because it is account-w
 Portal** (one headline, one custom domain — and it is our entire self-serve billing UI), the
 **customer email sender**, the **dunning and retry cadence**, **Radar** rules, the payout schedule,
 and the blast radius if Stripe ever freezes an account. A consumer subscription and B2B consulting
-invoicing want different answers to all of those. Two settings collided in one morning before the
-split — the portal login link and the one-subscription toggle — which is what made the pattern
-obvious.
+invoicing want different answers to all of those.
 
 The costs, paid knowingly: a second account verifies from scratch and inherits nothing, and there are
 two payout streams to reconcile. **A separate Stripe account is not a separate tax position** — that
@@ -1611,9 +1560,6 @@ any time. See [admin.md](admin.md).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.
-- ~~**A subscriber is offered no plan change**~~ — **done, 2026-09-04**. Stripe permitted the
-  switch that morning and the gate became tier-aware that evening; a Reader is offered Researcher on
-  both pages, through the Portal. [Reader → Researcher](#reader-researcher-open-at-stripe-and-open-in-our-own-ui).
 
 The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
@@ -1636,23 +1582,17 @@ us, and on Greg. Three things in it bear on this doc:
 
 ### Reader → Researcher: open at Stripe, and open in our own UI
 
-**The Stripe half was shut, and is now open.** Found by GPT Sol on 2026-09-03 and then confirmed
-against the live Portal configuration, which is the half that matters: `subscription_update` read
-`{ enabled: false, default_allowed_updates: [] }` on the account taking real money. A Reader who
-pressed **Upgrade to Researcher** was sent to a Portal with no *Switch plan* button on it, and the
-only route left was to cancel, wait out the paid period and subscribe again — asking somebody who
-wants to pay us five times more to first stop paying us anything.
+**The Stripe half was shut, and is now open.** How it was found shut, and how it was opened, is in
+[261007g-billing-history.md § Reader → Researcher](../plans/261007g-billing-history.md#reader-researcher-open-at-stripe-and-open-in-our-own-ui).
 
-[260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md) closed it, applied
-live on 2026-09-04. `SUBSCRIPTION_UPDATE` in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts)
+`SUBSCRIPTION_UPDATE` in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts)
 now carries the fields that had to be decided rather than defaulted — switching on, `price` the only
 allowed update, the billing dates unmoved, the proration invoiced at once, and a trial ended by the
 switch rather than carried through it — and `ensurePortalConfiguration` **reconciles a configuration
 that already exists** rather than returning early, which is what makes editing that block reach the
 live account at all. `portalDrift` is the single statement of what correct means, and
 [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) asks it too, so anything `--apply` would
-rewrite is a blocking failure rather than a quiet difference. `stripe:check --prod` went from five
-blocking problems to none the same day.
+rewrite is a blocking failure rather than a quiet difference.
 
 The Portal is the mechanism rather than a stopgap. Reader and Researcher are separate Stripe
 **Products**, so Stripe cannot schedule a period-end downgrade between them, and a direct
@@ -1669,11 +1609,6 @@ back **absent, not empty**, unless the read asks for
 and looks fine while offering nowhere to go.
 
 #### And then the dead end moved into our own UI, where it was closed the same day
-
-`canCheckout` ([`src/billing/summary.ts`](../../src/billing/summary.ts)) meant *"has no open
-subscription"* — the same question `startCheckout` asks — and not *"has somewhere to go"*, while
-every plan button on both pages was gated on it. So a paying Reader was drawn no button anywhere and
-the switch Stripe had just permitted was one nothing offered.
 
 **The gate is now the offer.** `canCheckout` and `offers` are both gone from the wire, replaced by
 one field: `purchase`, a discriminated union in
