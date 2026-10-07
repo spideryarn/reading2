@@ -3920,7 +3920,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     },
   },
   "tests/referee-routes-postgres.test.ts": {
-    "00000000-0000-4000-8000-0000000000d5": {
+    "07852712-f444-4aec-bd4a-b70403c8c03d": {
       kind: "no-row-needed",
       why:
         "`outsider` is a request owner for the one case that asks whether somebody who does not " +
