@@ -4,11 +4,12 @@
  * docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { compressOne, docsPngs, main, needsCompression, pngChunks, withTriedMark } from "../scripts/compress-screenshots.js";
 
@@ -256,6 +257,38 @@ describe("pngquant availability", () => {
   });
   it("rejects unknown CLI flags even alongside --check", () => {
     expect(() => main(["--check", "--chek"])).toThrow(/unknown option/);
+  });
+  it("--best-effort reports a file it cannot take and carries on, for the commit hook", () => {
+    const outside = path.join(tempDir(), "outside.png");
+    writeFileSync(outside, truecolourPng(1, 1, () => [1, 2, 3]));
+    expect(() => main(["--", outside])).toThrow(/outside repo/);
+    // Keep the valid second file in this checkout: an outside file is deliberately
+    // refused, so two outside fixtures would prove only skipping, not continuation.
+    const dir = mkdtempSync(path.join(REPO, "docs", ".compression-test-"));
+    scratch.push(dir);
+    const valid = path.join(dir, "valid.png");
+    const original = truecolourPng(1, 1, () => [1, 2, 3]);
+    writeFileSync(valid, original);
+    const bin = tempDir();
+    renameSync(fakePngquant(bin, "process.exit(98)"), path.join(bin, "pngquant"));
+    const previousPath = process.env.PATH;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ""}`;
+      expect(main(["--best-effort", "--", outside, valid])).toBe(0);
+      expect(log.mock.calls.some(([line]) => String(line).startsWith("skipped "))).toBe(true);
+      expect(needsCompression(readFileSync(valid))).toBeNull();
+      expect(readFileSync(valid)).not.toEqual(original);
+      const receiptLine = log.mock.calls.map(([line]) => String(line)).find((line) => line.startsWith("compression-result "));
+      expect(receiptLine).toBeDefined();
+      expect(JSON.parse(receiptLine!.slice("compression-result ".length))).toMatchObject({
+        file: path.relative(REPO, valid), sha256: createHash("sha256").update(readFileSync(valid)).digest("hex"),
+      });
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      log.mockRestore();
+    }
   });
 });
 

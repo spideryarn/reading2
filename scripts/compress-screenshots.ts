@@ -6,7 +6,11 @@
  * npm run screenshots:compress -- a.png b.png   # these: a new screenshot, before you commit it
  * npm run screenshots:compress                  # every PNG under docs/ that git tracks
  * npm run screenshots:compress -- --check       # list the ones still to do; exit 1 if any. Changes nothing.
+ * npm run screenshots:compress -- --best-effort a.png   # skip bad files; bounded batch for the hook
  * ```
+ *
+ * `--best-effort` is for `.claude/hooks/compress-commit-pngs.sh`, which runs this
+ * on the PNGs a commit is about to carry and must never stop the commit.
  *
  * Greg, 2026-10-07, said yes to compressing screenshots
  * (docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md).
@@ -180,14 +184,14 @@ export function withTriedMark(bytes: Buffer): Buffer {
 }
 
 /** File-backed capture also works where synchronous pipe reads fail after the child ran. */
-function runCaptured(command: string, args: string[], cwd?: string) {
+function runCaptured(command: string, args: string[], cwd?: string, timeout?: number) {
   const dir = mkdtempSync(path.join(tmpdir(), "screenshots-command-"));
   const stdout = path.join(dir, "stdout");
   const stderr = path.join(dir, "stderr");
   const out = openSync(stdout, "wx", 0o600);
   const err = openSync(stderr, "wx", 0o600);
   try {
-    const ran = spawnSync(command, args, { cwd, stdio: ["ignore", out, err] });
+    const ran = spawnSync(command, args, { cwd, stdio: ["ignore", out, err], timeout, killSignal: "SIGKILL" });
     if (ran.error !== undefined) throw ran.error;
     return { status: ran.status, signal: ran.signal, stdout: readFileSync(stdout, "utf8"), stderr: readFileSync(stderr, "utf8") };
   } finally {
@@ -228,7 +232,8 @@ export function docsPngs(repo: string): string[] {
 type Outcome = { readonly kind: "compressed"; readonly before: number; readonly after: number } | { readonly kind: "marked"; readonly why: string } | { readonly kind: "already" };
 
 /** Compress one file in place, or mark it as tried. */
-export function compressOne(file: string, pngquant = "pngquant", repo = REPO): Outcome {
+export function compressOne(file: string, pngquant = "pngquant", repo = REPO,
+  options: { timeout?: number; onWritten?: (bytes: Buffer) => void } = {}): Outcome {
   const source = screenshotFile(file, repo);
   file = source.file;
   const before = readFileSync(file);
@@ -242,7 +247,7 @@ export function compressOne(file: string, pngquant = "pngquant", repo = REPO): O
   const temporaryDir = mkdtempSync(path.join(path.dirname(file), ".screenshots-"));
   const temporary = path.join(temporaryDir, "output.png");
   try {
-    const ran = runCaptured(pngquant, [...PNGQUANT_ARGS, "--output", temporary, "--", file]);
+    const ran = runCaptured(pngquant, [...PNGQUANT_ARGS, "--output", temporary, "--", file], undefined, options.timeout);
     let outcome: Outcome;
     if (ran.status === 0) {
       const after = readFileSync(temporary);
@@ -261,7 +266,9 @@ export function compressOne(file: string, pngquant = "pngquant", repo = REPO): O
       throw new Error(`screenshot changed while compressing: ${file}`);
     }
     chmodSync(temporary, current.stat.mode & 0o777);
+    const written = options.onWritten === undefined ? undefined : readFileSync(temporary);
     renameSync(temporary, file);
+    if (written !== undefined) options.onWritten?.(written);
     return outcome;
   } finally {
     rmSync(temporaryDir, { recursive: true, force: true });
@@ -270,18 +277,32 @@ export function compressOne(file: string, pngquant = "pngquant", repo = REPO): O
 
 export function main(argv: readonly string[]): number {
   let check = false;
+  let bestEffort = false;
   let pathsOnly = false;
   const named: string[] = [];
   for (const arg of argv) {
     if (pathsOnly) named.push(arg);
     else if (arg === "--") pathsOnly = true;
     else if (arg === "--check") check = true;
+    else if (arg === "--best-effort") bestEffort = true;
     else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     else named.push(arg);
   }
   const files = named.length > 0 ? named.map((one) => path.resolve(one)) : docsPngs(REPO).map((one) => path.join(REPO, one));
-  for (const file of files) screenshotFile(file, REPO);
-  const todo = files.filter((file) => needsCompression(readFileSync(file)) !== null);
+  // Best effort: a file that cannot be checked or compressed is reported and left as it is.
+  const attempt = <T>(file: string, run: () => T): T | undefined => {
+    if (!bestEffort) return run();
+    try {
+      return run();
+    } catch (error) {
+      console.log(`skipped   ${path.relative(REPO, file)}: ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  };
+  const todo = files.filter((file) => attempt(file, () => {
+    screenshotFile(file, REPO);
+    return needsCompression(readFileSync(file)) !== null;
+  }) === true);
   if (check) {
     for (const file of todo) console.log(`${path.relative(REPO, file)}: ${String(needsCompression(readFileSync(file)))}`);
     console.log(todo.length === 0 ? "every PNG is compressed" : `${String(todo.length)} PNG(s) to compress: npm run screenshots:compress`);
@@ -289,8 +310,18 @@ export function main(argv: readonly string[]): number {
   }
   let before = 0;
   let after = 0;
+  const deadline = Date.now() + 20000; // inside the hook's own 24 s, inside the registration's 30 s
   for (const file of todo) {
-    const outcome = compressOne(file);
+    if (bestEffort && Date.now() >= deadline) break;
+    const outcome = attempt(file, () => compressOne(file, "pngquant", REPO, bestEffort ? {
+      timeout: Math.min(8000, Math.max(1, deadline - Date.now())),
+      // The hook can re-stage these exact bytes without accidentally staging a later
+      // peer edit. Hash the output we renamed, never a fresh read of the working copy.
+      onWritten: (bytes) => console.log(`compression-result ${JSON.stringify({
+        file: path.relative(REPO, file), sha256: createHash("sha256").update(bytes).digest("hex"),
+      })}`),
+    } : {}));
+    if (outcome === undefined) continue;
     const name = path.relative(REPO, file);
     if (outcome.kind === "compressed") {
       before += outcome.before;
