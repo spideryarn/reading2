@@ -7276,6 +7276,102 @@ export const EARLIER_FEEDBACK_SHOWS = ["all", "shipped", "unshipped"] as const;
 export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
 
 /**
+ * **What became of a report, as an admin's Earlier tab says it** — four, and
+ * every report has exactly one. Derived, never stored:
+ *
+ * - `shipped`: its notes combine to shipped (a change went out);
+ * - otherwise `aside` (shown *Set aside*): an admin pressed Ignore on
+ *   `/admin/feedback`, or its notes say declined;
+ * - otherwise `waiting` (shown *Needs a decision*): its notes say awaiting;
+ * - otherwise `open`: no note yet, so it is new or in hand.
+ *
+ * The order is the rule: an ignored report no longer asks for a decision, and
+ * a shipped one stays shipped whatever else is true of it. The one place the
+ * rule is executed is src/store/pg-feedback.ts § `statusOf`.
+ * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+ */
+export const EARLIER_FEEDBACK_STATUSES = ["open", "waiting", "aside", "shipped"] as const;
+export type EarlierFeedbackStatus = (typeof EARLIER_FEEDBACK_STATUSES)[number];
+
+/** `GET /api/admin/feedback/earlier?show=`, absent meaning `all`. Filtered on the server, before the cap. */
+export const ADMIN_EARLIER_FEEDBACK_SHOWS = ["all", ...EARLIER_FEEDBACK_STATUSES] as const;
+export type AdminEarlierFeedbackShow = (typeof ADMIN_EARLIER_FEEDBACK_SHOWS)[number];
+
+/**
+ * **One of an admin's own earlier reports** — `GET /api/admin/feedback/earlier`.
+ * The six fields every reader's list has, and four only this route sends.
+ * `shipped` is not among them: `status` says it.
+ */
+export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
+  /** `feedback.number`: unique across every owner, shown as `#212`. */
+  number: number;
+  status: EarlierFeedbackStatus;
+  /**
+   * **One line about what became of it**, from its note's `comment:` header
+   * (src/feedback-ending.ts § `feedbackComment`), or null. An agent wrote it:
+   * plain text, to be drawn as text, at most `MAX_FEEDBACK_COMMENT_CHARS`.
+   */
+  comment: string | null;
+  /** ISO: when an admin pressed Ignore on it, or null. What the row says when there is no comment. */
+  ignoredAt: string | null;
+}
+
+/**
+ * **An admin's reply to a question, as the Earlier tab shows it under the
+ * question**: the newest one this admin has sent. Their own words back to them.
+ */
+export interface AdminFeedbackQuestionAnswer {
+  id: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * **One open question an agent has put to the admin** — part of
+ * `GET /api/admin/feedback/earlier`. An agent wrote `title` and `body` (a
+ * file under docs/user-feedback/questions/, compiled into the server): plain
+ * text, to be drawn as text with its line breaks kept. The file's `refs` and
+ * `acted` lines are for agents and are never here.
+ */
+export interface AdminFeedbackQuestion {
+  /** `q-k3m9qt`. */
+  id: string;
+  title: string;
+  body: string;
+  /** `yyyy-mm-dd`: the day it was asked. */
+  asked: string;
+  /**
+   * The report it is about, when it names one **and that report is this
+   * admin's own**; otherwise null, and the body has to stand without it.
+   */
+  report: { id: string; number: number; firstLine: string } | null;
+  /** This admin's newest reply, or null. */
+  answer: AdminFeedbackQuestionAnswer | null;
+}
+
+/**
+ * The whole answer. **Counts are report counts** under each filter, uncapped,
+ * on every answer, and the four statuses sum to `all`.
+ *
+ * `questions` is every open question, oldest first, **the same under every
+ * `show`**: a question's report may be shipped, set aside or absent, so the
+ * list is not narrowed by the filter (plan 261007d, decision 7). The dialog
+ * draws them in *Needs a decision* and counts them beside that pill.
+ */
+export interface AdminEarlierFeedbackPage {
+  reports: AdminEarlierFeedback[];
+  more: boolean;
+  counts: Record<AdminEarlierFeedbackShow, number>;
+  questions: AdminFeedbackQuestion[];
+}
+
+/** What `POST /api/admin/feedback/answers` answers with: the stored reply, on a 201 and on a 200 alike. */
+export interface AdminFeedbackAnswerReceipt {
+  answer: AdminFeedbackQuestionAnswer;
+}
+
+/**
  * **How many earlier reports the dialog lists.** No paging: a reader with fifty
  * reports is almost certainly the administrator, who has `/admin/feedback`.
  * The server's number, never a query parameter.

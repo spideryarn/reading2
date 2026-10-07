@@ -1,6 +1,6 @@
 {
-  "id": "0fd2df66-f160-4721-bd48-81b9f61b445c",
-  "prevId": "78025803-d426-4c00-a583-8d4c8867ab29",
+  "id": "2c5b277b-118c-49f9-b967-59aead6be9ba",
+  "prevId": "1fc6ba73-7fe3-461f-9ca1-3878fc31a486",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2277,12 +2277,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "recipient_name": {
-          "name": "recipient_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2390,10 +2384,6 @@
         "billing_vouchers_recipient_note_length": {
           "name": "billing_vouchers_recipient_note_length",
           "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_note\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_note\") <= 500"
-        },
-        "billing_vouchers_recipient_name_length": {
-          "name": "billing_vouchers_recipient_name_length",
-          "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_name\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_name\") <= 80"
         },
         "billing_vouchers_claimed_together": {
           "name": "billing_vouchers_claimed_together",
@@ -4117,6 +4107,23 @@
           "primaryKey": false,
           "notNull": false
         },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "byDefault",
+            "name": "feedback_number_seq",
+            "schema": "spideryarn",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4126,6 +4133,21 @@
         }
       },
       "indexes": {
+        "feedback_number_unique": {
+          "name": "feedback_number_unique",
+          "columns": [
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "feedback_owner_created_idx": {
           "name": "feedback_owner_created_idx",
           "columns": [
@@ -4175,7 +4197,7 @@
         },
         "feedback_body_shape": {
           "name": "feedback_body_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback\".\"body\")) > 0 and length(\"spideryarn\".\"feedback\".\"body\") <= 20000"
+          "value": "length(btrim(\"spideryarn\".\"feedback\".\"body\")) > 0 and length(\"spideryarn\".\"feedback\".\"body\") <= 12072"
         },
         "feedback_kind": {
           "name": "feedback_kind",
@@ -5389,6 +5411,12 @@
           "notNull": true,
           "default": 1
         },
+        "running_job_id": {
+          "name": "running_job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
@@ -5398,7 +5426,22 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "queue_state_running_job_id_jobs_id_fk": {
+          "name": "queue_state_running_job_id_jobs_id_fk",
+          "tableFrom": "queue_state",
+          "tableTo": "jobs",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "running_job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

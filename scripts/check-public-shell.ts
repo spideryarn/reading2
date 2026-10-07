@@ -1333,7 +1333,7 @@ function runSelfTest(): void {
     .map((p) => `Allow: ${p}$\nAllow: ${p}?\n`)
     .join("");
   const brandAllows = "Allow: /favicon.ico\nAllow: /favicon-32x32.png\nAllow: /favicon-16x16.png\nAllow: /apple-touch-icon.png\nAllow: /og-card.png\n";
-  const anonymousGroup = `User-agent: *\n${pageAllows}Allow: /assets/\n${brandAllows}Allow: /sitemap.xml\nAllow: /read/\nAllow: /login$\nAllow: /login?\nDisallow: /\n\n`;
+  const anonymousGroup = `User-agent: *\n${pageAllows}Allow: /assets/\n${brandAllows}Allow: /sitemap.xml\nAllow: /read/\nAllow: /login$\nAllow: /login?\nAllow: /help/\nDisallow: /\n\n`;
   const previewGroup =
     "User-agent: facebookexternalhit\nUser-agent: Twitterbot\nUser-agent: LinkedInBot\nUser-agent: WhatsApp\n" +
     "User-agent: TelegramBot\nUser-agent: Discordbot\nUser-agent: Slackbot\n" +
@@ -1352,7 +1352,7 @@ function runSelfTest(): void {
       judgeRobotsTxt("text/plain", anonymousGroup + previewGroup.replace(`Allow: ${allow}\n`, "") + sitemapLine).length > 0,
     );
   }
-  for (const allow of ["/$", "/help$", "/assets/", "/sitemap.xml", "/read/", "/login$"]) {
+  for (const allow of ["/$", "/help$", "/assets/", "/sitemap.xml", "/read/", "/login$", "/help/"]) {
     check(
       `judgeRobotsTxt: catches every crawler's missing ${allow} permission`,
       judgeRobotsTxt("text/plain", anonymousGroup.replace(`Allow: ${allow}\n`, "") + previewGroup + sitemapLine).length > 0,
@@ -1715,8 +1715,11 @@ function checkSitePages(host: string): void {
 
   /* An app path: the default shell, with `noindex` twice. `/login` is the one
      nearest to being a page of ours, so it is the one to ask about. And the
-     near-misses of a listed path, which the lookahead must not let through. */
-  for (const appPath of ["/login", "/profile", "/read/public", "/admin/costs", "/api/health", "/api/public/library",
+     near-misses of a listed path, which the lookahead must not let through.
+     `/help/spine` is both: a real page of Help, under a listed path, that
+     `robots.txt` lets a crawler fetch (src/site-pages.ts §
+     `CRAWLABLE_NOINDEX_ROBOTS_ALLOWS`) precisely so that this header is read. */
+  for (const appPath of ["/login", "/help/spine", "/profile", "/read/public", "/admin/costs", "/api/health", "/api/public/library",
     "/pricing/", "/pricingx", "/pricing/x", "/index.html", SHELL_FILE,
     ...SITE_PAGES.filter((p) => p.path !== "/").map((p) => `/_pages/${p.name}.html`)]) {
     const r = curlRequest(`${host}${appPath}`);

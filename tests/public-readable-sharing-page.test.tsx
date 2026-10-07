@@ -546,5 +546,5 @@ describe("the public-readable-sharing page", () => {
 });
 
 it("qualifies Help's listing promise for an article that is only link-shared", () => {
-  expect(read("src/web/help/help-topics.tsx")).toMatch(/An article shared only this way is not listed anywhere/);
+  expect(read("src/web/help/pages/sharing.md").replace(/\s+/g, " ")).toMatch(/An article shared only this way is not listed anywhere/);
 });

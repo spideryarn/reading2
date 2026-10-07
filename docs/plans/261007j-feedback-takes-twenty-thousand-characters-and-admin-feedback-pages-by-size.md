@@ -103,3 +103,17 @@ GPT Sol's code review: [261007j-feedback-20k-code-review-sol.md](261007j-feedbac
 — no correctness defects; it rejected an over-fifty page whatever `more` says, added the UTF-8,
 escaped and tied-timestamp paging cases, and corrected a comment. Its database tests could not run
 in its sandbox and were rerun here: 400 passed.
+
+## Merging 261007d
+
+A sibling (261007d, the Earlier tab says what became of each report) landed on `dev` while this was
+built, and two parts of it lean on `MAX_FEEDBACK_ANSWER_CHARS`:
+
+- **An admin's reply to a question** is capped by that constant in the box and the route, and by a
+  CHECK of 12,000 on `feedback_question_answers.body`. Raised to 20,000, the route would take what
+  the column refuses, and a long reply would come back as a database error. The migration (now
+  `20261007094018`, regenerated after the merge) widens that CHECK too; 261007d's own
+  exact-the-cap test went red on the merge and green with it.
+- **`/api/admin/feedback/earlier`** returns up to fifty whole bodies, like the reader's list, so it
+  takes the same `prefixWithinBytes` cut (a route test, seen red without it). The shared client
+  validator, `readEnvelope`, carries the short-page rule for both.

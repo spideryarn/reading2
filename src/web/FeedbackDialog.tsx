@@ -116,7 +116,7 @@ import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
 import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
-import { EarlierFilter, EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
+import { EarlierFilter, EarlierList, EarlierQuestions, useEarlierFeedback } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -181,6 +181,12 @@ interface Props {
   where: FeedbackWhere;
   /** The latest request to fill the box, if anything has asked. */
   prefill?: FeedbackPrefill | null;
+  /**
+   * Whether the reader is an admin, by the client's cosmetic flag
+   * (src/admin.ts § `isAdmin`): the Earlier tab then asks the admin route,
+   * which says what became of each report. Not a gate; the server's is.
+   */
+  admin?: boolean;
 }
 
 /**
@@ -360,7 +366,20 @@ function reportBody(input: {
   };
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) {
+/**
+ * **Tell anything about to reload the page that a draft is held** — the Write
+ * box's words, picture or recording, or a half-written reply to a question —
+ * and take it back when neither is, or when the dialog is unmounted.
+ */
+function useDraftHeld(...held: boolean[]): void {
+  const any = held.some(Boolean);
+  useEffect(() => {
+    noteFeedbackDraft(any);
+    return () => noteFeedbackDraft(false);
+  }, [any]);
+}
+
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -722,10 +741,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
      `open` is deliberately not part of the reload veto. */
   const holdsDraft =
     body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
-  useEffect(() => {
-    noteFeedbackDraft(holdsDraft);
-    return () => noteFeedbackDraft(false);
-  }, [holdsDraft]);
+  /* Told to the reload veto below, with any half-written reply to a question:
+     the Earlier hook is called after the tabs' state it needs. */
 
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
@@ -761,7 +778,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, counts, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
+  const { earlier, choice, setShow, retry, questions, openQuestionCount, replies } = useEarlierFeedback(
+    open,
+    view === "earlier",
+    admin,
+  );
+  /* A half-written reply to a question is a draft too (261007d): an automatic
+     reload would lose it exactly as it would lose the Write box's words. */
+  useDraftHeld(holdsDraft, replies.holds);
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -1319,8 +1343,19 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter show={show} counts={counts} onShow={setShow} />
-          <EarlierList earlier={earlier} show={show} retry={retry} />
+          <EarlierFilter choice={choice} onShow={setShow} questionCount={openQuestionCount} />
+          {/* An agent's questions, for an admin: the top of Needs a decision.
+              Hidden, not unmounted, on every other filter and tab, so a reply
+              in progress survives (FeedbackEarlier.tsx § EarlierQuestions). */}
+          <EarlierQuestions
+            questions={questions}
+            replies={replies}
+            choice={choice}
+            earlier={earlier}
+            open={open}
+            onEarlier={view === "earlier"}
+          />
+          <EarlierList earlier={earlier} choice={choice} retry={retry} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

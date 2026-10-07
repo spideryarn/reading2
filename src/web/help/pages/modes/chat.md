@@ -1,0 +1,57 @@
+---
+keywords: ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore
+---
+
+## When to use it
+
+When you have a question of your own: what a sentence means, whether a claim follows, how two
+passages fit together. It is the wrong tool for “summarise this” — Summary and Structure already do
+that, and Chat has no summarising tool on purpose.
+
+Quicker ways in than the Chat button:
+
+- **The speech-bubble in a paragraph’s margin** opens a chat about just that paragraph. Nothing is
+  asked until you send.
+- **The ? in a paragraph’s margin** asks “Help me understand” straight away.
+- **Select some words**: they are highlighted, and the box that opens has an **Ask the AI about
+  this…** field.
+
+Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.
+
+## Reading it
+
+The short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or
+point at it to read the start first. A dimmed code is a paragraph the article no longer has. Check
+the passage before you trust the claim — that is what the codes are for.
+
+The lines above an answer say where else Chat looked:
+
+- **searched the web**: the pages it used are listed under the answer as **From the web**.
+- **searched your library for …**: it searched your other saved articles. This matches words, not
+  meaning, so if it finds nothing, try other words before you conclude you never read about it.
+- **read** and a site name: it fetched that page.
+
+An answer with none of these came from the article alone. Chat decides when it needs them.
+
+Each article keeps its own conversations under **All conversations**. That list holds every
+conversation you have had about the article, not only the ones started in Chat. A row from somewhere
+else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
+a claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
+conversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from
+more than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow
+it.
+
+<kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
+still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+
+**Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or
+remove a tag, look a term up in the glossary, or show where the article first says something.
+Nothing happens until you press the button; Chat cannot do any of these itself.
+
+**Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
+you send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice
+quickly and it sends by itself once the words arrive; this works here, in Feedback, in a comment
+follow-up, in a quiz answer and when you annotate a passage. In the command bar it presses Enter for
+you instead. **Live**, beside it, is a spoken conversation you can interrupt. Your audio goes
+directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,
+and press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all.

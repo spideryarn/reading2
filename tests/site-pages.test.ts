@@ -330,7 +330,7 @@ describe("public/robots.txt", () => {
      * decided it.
      */
     it("lets /login be fetched, which is not listed and says noindex", () => {
-      expect([...CRAWLABLE_NOINDEX_ROBOTS_ALLOWS]).toEqual(["/login$", "/login?"]);
+      expect([...CRAWLABLE_NOINDEX_ROBOTS_ALLOWS]).toEqual(["/login$", "/login?", "/help/"]);
       expect(mayFetch(everyone, "/login")).toBe(true);
       expect(mayFetch(everyone, "/login?next=%2Fread%2Fx")).toBe(true);
       expect(mayFetch(everyone, "/login/x")).toBe(false);
@@ -347,7 +347,31 @@ describe("public/robots.txt", () => {
 
     /* `/read/` is let in so that the `noindex` on it can be read: a Disallow
        stops the fetch and not the listing (the plan, § robots.txt). */
-    it.each(NEVER.filter((p) => !p.startsWith("/read/") && !["/sitemap.xml", "/og-card.png", "/login"].includes(p)))(
+    /**
+     * **The pages of Help, decided 2026-10-07, for `/login`'s reason.** `/help`
+     * is the contents of Help and links to every page under it, so a crawler
+     * finds each address; it is let in to read the `noindex` they are served
+     * with (`NEVER` holds `/help/reading`, and `vercel.json`'s header covers
+     * it, above). A prefix, so a page of Help added later needs no line here.
+     * It lets in nothing but what is under `/help/`, and `/help` itself is let
+     * in by its own two lines as a listed page. GPT Sol, plan review of
+     * 261007e, R6.
+     */
+    it("lets a page of Help be fetched, which is not listed and says noindex", () => {
+      for (const page of ["/help/spine", "/help/mode-glossary", "/help/questions", "/help/reading", "/help/spine?x=1"]) {
+        expect(mayFetch(everyone, page), page).toBe(true);
+      }
+      expect(mayFetch(everyone, "/helpful")).toBe(false);
+      expect(mayFetch(everyone, "/help")).toBe(true);
+      expect(SITE_PAGES.some((p) => p.path.startsWith("/help/"))).toBe(false);
+      expect(NEVER).toContain("/help/reading");
+    });
+
+    it.each(
+      NEVER.filter(
+        (p) => !p.startsWith("/read/") && !p.startsWith("/help/") && !["/sitemap.xml", "/og-card.png", "/login"].includes(p),
+      ),
+    )(
       "does not let %s be fetched",
       (pagePath) => {
         expect(mayFetch(everyone, pagePath)).toBe(false);

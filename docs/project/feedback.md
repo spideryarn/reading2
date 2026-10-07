@@ -8,7 +8,7 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 ## In this doc
 
 - [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history)
-- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, and [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark)
+- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored)
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
 - [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
@@ -187,12 +187,13 @@ The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in rea
 newest first — the date, problem or suggestion, the page it was filed from (and the paragraph, for
 its link), and what they wrote —
 read by `GET /api/feedback`, which is owner-scoped in the store like every other read and sends
-**those fields, whether it shipped, and nothing else**: not the email, the address, the diagnostics
-or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why). Fifty at
-most, and the list says so when there were more. **Fewer, when they are long**: a report may be
-20,000 characters, so fifty can pass the 4.5 MB a response may be, and the list stops at the last
-whole report that fits 3 MiB (`FEEDBACK_LIST_BYTES`; `/admin/feedback` pages by the same budget).
-No report is shortened, and the line then counts what it shows —
+**seven fields a report and nothing else**: the report's id, those five (the date, the kind, the
+page, the paragraph, the words), and whether it shipped. Not the email, the address, the
+diagnostics or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why).
+Fifty at most, and the list says so when there were more. **Fewer, when they are long**: a report
+may be 20,000 characters, so fifty can pass the 4.5 MB a response may be, and the list stops at the
+last whole report that fits 3 MiB (`FEEDBACK_LIST_BYTES`; `/admin/feedback` and the admin's own
+Earlier view use the same budget). No report is shortened, and the line then counts what it shows —
 [261007j](../plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md).
 
 **The page is a label, not the address**, since 2026-10-03. Greg asked that a report carry the page
@@ -229,7 +230,7 @@ which also records the check that one reader cannot see another's reports here.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-63)
 
-Each report now carries a fifth field, **`shipped`**, shown as a word in its meta line, and the tab
+Each report also carries **`shipped`**, shown as a word in its meta line, and the tab
 filters **All · Shipped · Not shipped** — on the server (`?show=shipped|unshipped`), so the fifty
 are the newest *matching* ones, not a filter over the newest fifty.
 
@@ -240,7 +241,8 @@ header naming its report row id and its ending (`reports: spya-…` / `ending: s
 shipped **only once the commit carrying its note has been deployed** — that is the "deployed" half,
 for free — and nobody writes to the production database. A report with no note, or a note with no
 header, reads as not shipped: the label is never claimed without a note saying so. What this cannot
-say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped*. The header format,
+say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped* (to every reader
+but an admin: [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07)). The header format,
 split reports (`parts:`), the accepted limits, and why this beat a status column are in
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
 
@@ -261,6 +263,114 @@ reader cannot see; each has a guard and a test. And `.fb-scroll[hidden]` needs i
 that one. A send already in flight is allowed to finish: success shuts the dialog and shows the
 ordinary thank-you toast, and failure returns to Write so its recovery panel cannot land hidden.
 [260916c](../plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md).
+
+### What became of each report, for an admin, since 2026-10-07
+
+> When I look in feedback earlier, not shipped, there's still quite a few listed. […] let's give
+> you another category for deferred or ignored, or maybe even both. […] write some kind of comment
+> that would indicate why you deferred them, or what the question was […] And maybe you could give
+> every single feedback report its own ID somehow, so that it would be easy for us to refer to them
+> in conversation.
+>
+> — Greg, 2026-10-06 (`spya-cnbv8f`)
+
+**For an admin only.** Every other reader's tab, and `GET /api/feedback`, are exactly as above. An
+admin's tab reads `GET /api/admin/feedback/earlier` instead: still their **own** reports,
+owner-scoped in the store as `listMine` is, but behind the `/api/admin/` gate
+([admin.md](admin.md)) because it says three things no other reader is told. Whether to tell
+everyone is a question for Greg, in the plan.
+
+- **One of four statuses**, with five pills, **All · Open · Needs a decision · Set aside ·
+  Shipped**, each with its count of reports. *Shipped*: the notes combine to shipped. Otherwise
+  *Set aside*: an admin pressed Ignore, or the notes say declined. Otherwise *Needs a decision*:
+  the notes say awaiting. Otherwise *Open*: no note yet. The order is the rule, so an ignored
+  report never asks for a decision. It is one SQL expression (`statusOf` in
+  [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts)), used for the row, the filter and
+  the counts. No new ending was added to the notes.
+- **A number, `#212`**, at the start of the row; say "feedback 212". It is `feedback.number`: one
+  sequence across all owners, stored, so it names one report and keeps naming it. Reports from
+  before the column were numbered in the order they were filed.
+- **One line from the note**, under the reader's words, in the model's face
+  ([fonts.md](fonts.md)): the note header's `comment:`
+  ([feedback-reports.md § The note](feedback-reports.md#the-note-in-docsuser-feedback)). An ignored
+  report with no comment says *Set aside on /admin/feedback* and the date.
+
+**The browser's `isAdmin` only picks which route to ask**; the server decides who is answered. If
+the admin route answers 404 (a server from before it, during a deploy or after a rollback) the tab
+falls back to the plain list and three pills for that opening. Any other failure, or an answer
+that fails the browser's check of it, is the ordinary "would not load" sentence with Try again.
+
+Nothing in this subsection writes to production: a status or a comment changes when a note
+changes and the commit carrying it is deployed.
+[261007d](../plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md).
+
+### Questions for an admin, and replies to them, since 2026-10-07
+
+> Perhaps you could even find some way of signalling when you need input from me. […] you'd show
+> my report and then their question from you, and then some kind of input box with a voice
+> dictation button […] And in fact, it should be possible for you to ask my input on things that
+> aren't tied specifically to a feedback report.
+>
+> — Greg, 2026-10-06 (`spya-sshjd2`)
+
+**An agent asks by committing a file; the admin answers in the dialog; an agent reads the answer
+with a script.** Nothing an agent runs writes to production, and no route was added outside the
+sign-in gate. The price is that a question appears only after a deploy. How an agent writes one and
+acts on the reply is
+[feedback-reports.md § Asking Greg a question](feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer);
+this is what the app does with it.
+
+```
+ docs/user-feedback/questions/q-….md ──▶ scripts/feedback-endings.ts ──▶ src/feedback-questions.generated.ts
+                                                                          (server only)
+ GET  /api/admin/feedback/earlier  ──▶ questions: every open one, with the admin's newest reply
+ POST /api/admin/feedback/answers  ──▶ a row in feedback_question_answers
+ scripts/feedback-questions.ts --answers  ◀── reads those rows from production, read-only
+```
+
+- **Where they show.** `GET /api/admin/feedback/earlier` carries `questions` on every answer:
+  every open question, oldest first, whatever the filter. The tab draws them **at the top of
+  *Needs a decision***, above the reports, and says *"3 open questions"* beside that pill in every
+  view. The pill's number is still its count of reports, and the pills still sum to All: a question
+  is not a report, and its report may be shipped, set aside, or nothing at all.
+- **What one shows.** When it was asked; the report it is about, as `#number` and that report's
+  first line, **only when the report is the admin's own** (the lookup is owner-scoped, so a
+  question about another reader's report shows none of it); its title and its text, which an agent
+  wrote, in the model's face and as plain text with its line breaks ([fonts.md](fonts.md)); and the
+  admin's newest reply, *Answered · when*, in the reader's face. The file's `refs:` and `acted:`
+  lines are for agents: they are never compiled into the server, and the browser refuses a question
+  carrying any field but the six.
+- **Replying.** *Reply* opens a box under the question, one box at a time; a box that is shut keeps
+  its words. It has its own microphone ([dictation.md](dictation.md)): a second
+  `useDictationField`, with its own keeper name (`feedback-reply`) so a recording left by the Write
+  box is never offered here. The microphone stops when the box goes out of sight (another filter,
+  the Write tab, the dialog shut), as the Write box's does, and *Send reply* is off while it is
+  listening or transcribing. A half-written reply holds the page against an automatic reload, as a
+  half-written report does.
+- **Where a reply goes.** `POST /api/admin/feedback/answers` with `{ id, question, body }` and
+  nothing else: any other key is refused. The `id` is minted by the browser, so a retry is safe:
+  **201** for a new reply, **200** with the stored row for the same reply again, **409** when that
+  id is already a different reply, which changes nothing. The browser keeps one id for one question
+  and one set of words, and mints a new one when the words change, so it does not meet the 409. A
+  question id this build has no file for is a 400. **A reply to a question already marked answered
+  is accepted**: it may have been typed in a tab opened before that deploy, and the words are kept.
+- **The row.** `feedback_question_answers`, keyed `(owner_id, id)`: the question's id, the words
+  (at most 12,000 characters, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the `environment` the server
+  itself was running in, which is what lets the script tell a production row from a local one. **A
+  reply is not a report**: it is never in the Earlier list, on `/admin/feedback`, in Sentry, in the
+  endings map or in a shipped email, and it is not rate-limited (the route is admin-only, and an
+  admin has no cap).
+- **When it fails.** The words stay in the box. A 404 means the page is newer than the server that
+  answered (a rollback, or the minutes of a deploy) and says to copy the words, reload and reply
+  again; anything else says to try again. If the `questions` part of the list's answer is not what
+  the browser expects, the whole list shows the ordinary "would not load" sentence, never some of
+  the questions. If a later list no longer contains a question while its box has words or a
+  transcription in flight, that question remains beside the local draft until it is sent or
+  cancelled; it is not counted as an open question on the pill.
+
+After a reply the card says *Answered* and offers *Reply again*; the question itself leaves the
+dialog when an agent marks its file `status: answered` and that commit is deployed, unless the
+browser is still holding an unsent reply to it as above.
 
 ## The thank-you, and getting out of it
 
@@ -460,6 +570,10 @@ which *is* the verified account id.
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
+| an admin's Earlier tab: status, number, comment | `GET /api/admin/feedback/earlier` in [`src/routes.ts`](../../src/routes.ts); `listMineByStatus` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); the same `FeedbackEarlier.tsx` |
+| questions for an admin: the files, the compile, what the server reads | [`docs/user-feedback/questions/`](../user-feedback/questions/), [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) § `parseQuestionFile`, [`src/feedback-question.ts`](../../src/feedback-question.ts), the rules in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts) |
+| replies to them: the route, the store, the table, the box | `POST /api/admin/feedback/answers` in [`src/routes.ts`](../../src/routes.ts); `submitAnswer` and `newestAnswers` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackQuestionAnswers` in [`src/db/schema.ts`](../../src/db/schema.ts); `EarlierQuestions` in `FeedbackEarlier.tsx` |
+| listing questions and reading replies, for agents | [`scripts/feedback-questions.ts`](../../scripts/feedback-questions.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |
@@ -702,7 +816,9 @@ gate as the reads).
 **What it does is take the report out of the agents' queue**: `scripts/feedback-unswept.ts` drops a
 marked row and says how many it dropped ([feedback-reports.md § Where the queue lives](feedback-reports.md#where-the-queue-lives)).
 Nothing a reader sees changes. The Earlier tab's shipped status comes from the notes, as before,
-and Sentry's copy is untouched.
+and Sentry's copy is untouched. An admin's own Earlier tab is the one exception, since 2026-10-07:
+it shows their ignored report as *Set aside*
+([§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07)).
 
 The list and the write take turns in the browser. A Refresh that read the old row and landed after
 the write would draw *Ignore* again on a report already ignored, so neither starts while the other
