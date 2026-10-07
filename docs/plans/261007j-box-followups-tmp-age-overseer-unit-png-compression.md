@@ -166,6 +166,34 @@ and a dozen scripts).
 | 9 (P2) | 70 is a low floor | `85-98`, which costs 1 MB in 54 |
 | 10 (P2) | A test cannot guarantee nothing uncompressed is committed | Called advisory; hook passed over, above |
 
+## Sol's code reviews
+
+Two write-capable runs in parallel on disjoint files: stages A and B
+([prompt](261007j-box-followups-code-review-ab-prompt.md),
+[answer](261007j-box-followups-code-review-ab-sol.md)) and stage C
+([prompt](261007j-box-followups-code-review-c-prompt.md),
+[answer](261007j-box-followups-code-review-c-sol.md)). Their fixes, all kept, each seen red first:
+
+- **The attention check could pass on an empty journal**, and flooring the restart time to the
+  second could pick up the old daemon's warning. It now reads only the current invocation's journal
+  (`_SYSTEMD_INVOCATION_ID`) and needs the daemon's `scheduler:` startup line, which it prints after
+  the `attention:` line, before it believes the absence of `attention: off`.
+- **The key file must hold exactly one assignment**: a second line could empty the key or override
+  the unit's store or arming. Mode exactly 0600.
+- **`e /tmp/claude-*` kept Claude's `claude-<hex>-cwd` files for ever**: a path with its own line is
+  skipped by the parent, and `e` cleans only directories. Narrowed to numeric uid directories.
+- The tmpfiles test now uses idle ordinary files (a live socket survived without its exclusion), and
+  the provisioning check rejects a shadowed or duplicated `/tmp` rule.
+- The compressor refuses animated and 16-bit PNGs, a path outside the checkout or a symlink, an
+  unknown option, and a source changed under it; validates chunk CRCs; keeps the file mode; uses a
+  private temporary directory. The test skips only when pngquant is absent, not when it is broken.
+
+Reported and then done here: the `tried` mark hashed only IDAT, so adding transparency passed. It
+now hashes every chunk that affects rendering (`tried v2`), re-marking replaces an old mark, and the
+five marked files were re-marked; the gate went red on exactly those five first. And two calls in
+`tests/overseer-scheduled-dispatch.test.ts` lacked the new `attentionOffSinceRestart`, which my
+first typecheck run hid behind a `tail`.
+
 ## Order
 
 Stage A: `/tmp`. Stage B: the unit, the test, watchdog, tick, activate, docs. Stage C: the script,

@@ -19,9 +19,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 After=network-online.target
 Wants=network-online.target
 
-# NEVER GIVE UP, and retry slowly instead. The start limit lives in [Unit], not
-# [Service] -- systemd moved it here in v229 and a StartLimitBurst= under
-# [Service] is silently ignored.
+# NEVER GIVE UP, and retry slowly instead. Keep both start-limit keys in [Unit].
+# systemd 255 still accepts the legacy StartLimitBurst= in [Service], but
+# StartLimitIntervalSec= there is ignored with a warning.
 #
 # Until 2026-10-07 this was ten tries in 300s and then `failed` for good. The
 # daemon died of ENOSPC on 2026-10-05 and stayed down 46 hours; under that limit

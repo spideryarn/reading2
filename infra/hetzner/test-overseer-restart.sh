@@ -72,7 +72,7 @@ state_blocked=$(prop ActiveState); result_blocked=$(prop Result); restarts=$(pro
 echo "while blocked: $(show)"
 
 if [ "$mode" = --env ]; then : > "$env_file"; else rm -f "$dir/filler"; fi
-echo "cause removed; waiting up to 2 minutes for a stable recovery"
+echo "cause removed; waiting up to 6 minutes for a stable recovery (24 checks, plus 10s to confirm each active PID)"
 back=no
 for _ in $(seq 1 24); do
   sleep 5
@@ -93,7 +93,7 @@ if [ "$mode" = --old ]; then
   echo "UNEXPECTED for the old settings: state $state_blocked ($result_blocked), start limit hit $limit_hit, back $back"; exit 1
 fi
 if [ "$state_blocked" != failed ] && [ "$back" = yes ] && [ "$restarts" -ge 5 ]; then
-  echo "OK ($mode): $restarts restarts while blocked, never failed, and stably up once the cause was gone"; exit 0
+  echo "OK ($mode): $restarts restarts while blocked, not failed at the final blocked check, and stably up once the cause was gone"; exit 0
 fi
 echo "FAIL ($mode): state while blocked $state_blocked ($result_blocked), restarts $restarts, back $back"
 exit 1

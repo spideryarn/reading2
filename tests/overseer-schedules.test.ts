@@ -76,6 +76,7 @@ import {
 import { AUTHORISED_HASHES, standingJobs } from "../tools/overseer/standing-jobs.js";
 import {
   activationVerdict,
+  attentionOffSince,
   ARMING_ENV_FILE,
   INSTALLED_UNIT,
   SECRETS_ENV_FILE,
@@ -851,6 +852,18 @@ describe("the key file", () => {
     expect(secretsFileStanding(good)).toEqual({ kind: "ok" });
   });
 
+  test("a later empty assignment or another environment override is refused before stopping the old daemon", () => {
+    for (const extra of ["OPENROUTER_API_KEY=", "OVERSEER_STORE_DIR=/another/store", "OVERSEER_JOBS_ENABLED=1"]) {
+      const standing = secretsFileStanding({ ...good, text: `${good.text}${extra}\n` });
+      expect(standing.kind).toBe("bad");
+      if (standing.kind === "bad") expect(standing.why).not.toContain("sk-or-v1-abc123");
+    }
+  });
+
+  test("the declared mode is exactly 0600, matching provisioning's check", () => {
+    expect(secretsFileStanding({ ...good, mode: 0o400 }).kind).toBe("bad");
+  });
+
   test("missing, not root's, or readable by anyone else is refused", () => {
     expect(secretsFileStanding({ ...good, exists: false }).kind).toBe("bad");
     expect(secretsFileStanding({ ...good, ownerUid: 1000 }).kind).toBe("bad");
@@ -868,6 +881,40 @@ describe("the key file", () => {
       expect(standing.kind).toBe("bad");
       if (standing.kind === "bad") expect(standing.why).not.toContain("sk-or");
     }
+  });
+});
+
+describe("attention verification reads the new daemon's startup", () => {
+  const since = "2026-10-07T11:00:00.750Z";
+  const invocation = "1234567890abcdef1234567890abcdef";
+  const reply = (stdout: string) => ({ pid: 0, output: [], stdout, stderr: "", status: 0, signal: null });
+
+  test("an empty or incomplete successful journal read cannot prove attention is on", () => {
+    for (const journal of ["", "-- No entries --\n", "Started Overseer.\n"]) {
+      expect(attentionOffSince(since, (command) => reply(command === "systemctl" ? invocation : journal))).toBeNull();
+    }
+  });
+
+  test("old attention-off logs in the same second cannot reject a healthy new invocation", () => {
+    const entries = [
+      { at: Date.parse("2026-10-07T11:00:00.500Z"), id: "old", text: "attention: off — OPENROUTER_API_KEY is not set" },
+      { at: Date.parse("2026-10-07T11:00:00.800Z"), id: invocation, text: "scheduler: OFF — jobs disabled" },
+    ];
+    const queried: string[][] = [];
+    const result = attentionOffSince(since, (command, args) => {
+      if (command === "systemctl") return reply(invocation);
+      queried.push(args);
+      const lower = Number(args[args.indexOf("--since") + 1]!.slice(1)) * 1000;
+      const match = args.find((arg) => arg.startsWith("_SYSTEMD_INVOCATION_ID="))?.split("=")[1];
+      return reply(entries.filter((one) => one.at >= lower && (match === undefined || match === one.id)).map((one) => one.text).join("\n"));
+    });
+    expect(result).toBe(false);
+    expect(queried[0]).toContain(`_SYSTEMD_INVOCATION_ID=${invocation}`);
+    expect(queried[0]).toContain(`@${(Date.parse(since) / 1000).toFixed(3)}`);
+  });
+
+  test("the off warning preceding the new daemon's first checkpoint is still a failure", () => {
+    expect(attentionOffSince(since, (command) => reply(command === "systemctl" ? invocation : "attention: off — OPENROUTER_API_KEY is not set\nscheduler: OFF — jobs disabled\n"))).toBe(true);
   });
 });
 

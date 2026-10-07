@@ -122,12 +122,13 @@ export function secretsFileStanding(input: {
       why: `${SECRETS_ENV_FILE} does not exist, and the unit reads it with no leading "-", so systemd would refuse to start. Create it as infra/hetzner/README.md says`,
     };
   }
-  if (input.ownerUid !== 0 || input.mode === null || (input.mode & 0o077) !== 0) {
+  if (input.ownerUid !== 0 || input.mode !== 0o600) {
     return { kind: "bad", why: `${SECRETS_ENV_FILE} must be owned by root with mode 0600, so no agent on the box can read the key` };
   }
   if (input.text === null) return { kind: "cannot-tell", why: `${SECRETS_ENV_FILE} exists, root 0600; its contents can only be checked as root (--apply under sudo)` };
-  if (!/^OPENROUTER_API_KEY=[A-Za-z0-9_-]+$/m.test(input.text)) {
-    return { kind: "bad", why: `${SECRETS_ENV_FILE} has no OPENROUTER_API_KEY= line with a plain value, so the daemon would run with attention off` };
+  const assignments = input.text.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#") && !line.startsWith(";"));
+  if (assignments.length !== 1 || !/^OPENROUTER_API_KEY=[A-Za-z0-9_-]+$/.test(assignments[0]!)) {
+    return { kind: "bad", why: `${SECRETS_ENV_FILE} must contain exactly one OPENROUTER_API_KEY= line with a non-empty plain value and no other assignments: later lines could empty the key or override the unit's store or arming` };
   }
   return { kind: "ok" };
 }
@@ -178,7 +179,7 @@ export function activationVerdict(input: {
   readonly armed: boolean;
   /**
    * Whether the unit's journal since the restart has the daemon's own
-   * `attention: off` line, or null if the journal could not be read. The key
+   * `attention: off` line, or null if this invocation's startup could not be confirmed. The key
    * file can exist and still not reach the daemon; this is the daemon saying so.
    */
   readonly attentionOffSinceRestart: boolean | null;
@@ -186,9 +187,9 @@ export function activationVerdict(input: {
   const problems: string[] = [];
   const notes: string[] = [];
 
-  if (input.attentionOffSinceRestart === null) problems.push(`the journal for ${UNIT_NAME} could not be read, so nothing confirms the key reached the daemon`);
+  if (input.attentionOffSinceRestart === null) problems.push(`the journal for ${UNIT_NAME} did not confirm the current daemon's startup, so nothing confirms the key reached it`);
   else if (input.attentionOffSinceRestart) problems.push(`the new daemon logged "attention: off": ${SECRETS_ENV_FILE} did not give it OPENROUTER_API_KEY`);
-  else notes.push(`the new daemon did not log "attention: off", so it has its key`);
+  else notes.push(`the current daemon's startup was read from its journal and did not log "attention: off", so it has its key`);
 
   if (input.installedUnit === null) {
     problems.push(`${INSTALLED_UNIT} does not exist, so systemd has no unit to run`);
@@ -513,7 +514,9 @@ function main(argv: readonly string[]): number {
   // ── (4) THE VERIFICATION, which is the point of the whole file.
   waitFor(() => {
     const at = readCheckpoint(storeDir).writtenAt;
-    return at !== null && Date.parse(at) >= Date.parse(restartedAt);
+    // The warning is printed BEFORE the checkpoint, but journald may ingest
+    // it later. Wait for the startup log as well; an empty journal is no proof.
+    return at !== null && Date.parse(at) >= Date.parse(restartedAt) && attentionOffSince(restartedAt) !== null;
   }, 60_000);
   const checkpoint = readCheckpoint(storeDir);
   const active = spawnSync("systemctl", ["is-active", UNIT_NAME], { encoding: "utf8" });
@@ -566,11 +569,27 @@ function readSecretsStanding(): ReturnType<typeof secretsFileStanding> {
   return secretsFileStanding({ exists: true, ownerUid: stat.uid, mode: stat.mode & 0o777, text });
 }
 
-/** Whether the unit's journal since `sinceIso` has the daemon's `attention: off` line; null if it cannot be read. */
-function attentionOffSince(sinceIso: string): boolean | null {
-  const since = `@${String(Math.floor(Date.parse(sinceIso) / 1000))}`;
-  const ran = spawnSync("journalctl", ["-u", UNIT_NAME, "--since", since, "-o", "cat", "--no-pager"], { encoding: "utf8", timeout: 30_000 });
+/**
+ * The CURRENT invocation's startup, not a previous retry's warning. The CLI
+ * prints `scheduler:` after deciding whether attention is off, before running
+ * the daemon and writing any checkpoint. Until that line is visible, absence
+ * of the warning proves nothing. No journal text is returned or printed.
+ */
+export function attentionOffSince(
+  sinceIso: string,
+  read = (command: string, args: string[]) => spawnSync(command, args, { encoding: "utf8", timeout: 30_000 }),
+): boolean | null {
+  const shown = read("systemctl", ["show", UNIT_NAME, "-p", "InvocationID", "--value"]);
+  const invocation = shown.stdout?.trim();
+  if (shown.error !== undefined || shown.status !== 0 || !/^[a-f0-9]{32}$/.test(invocation ?? "")) return null;
+  // journalctl accepts fractional epoch seconds. Flooring would include the
+  // old daemon's warning from earlier in the very same second.
+  const since = `@${(Date.parse(sinceIso) / 1000).toFixed(3)}`;
+  const ran = read("journalctl", ["-u", UNIT_NAME, `_SYSTEMD_INVOCATION_ID=${invocation}`, "--since", since, "-o", "cat", "--no-pager"]);
   if (ran.error !== undefined || ran.status !== 0) return null;
+  const still = read("systemctl", ["show", UNIT_NAME, "-p", "InvocationID", "--value"]);
+  if (still.error !== undefined || still.status !== 0 || still.stdout.trim() !== invocation) return null;
+  if (!/^scheduler: (OFF|RULES ONLY|ARMED) — /m.test(ran.stdout)) return null;
   return ran.stdout.includes("attention: off");
 }
 

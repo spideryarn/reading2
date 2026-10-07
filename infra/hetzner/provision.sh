@@ -196,7 +196,7 @@ echo "=== worktrees off the volume ==="
 # 2026-10-05 while / had 70 GB free. .claude/hooks/worktree-create.sh puts a new
 # worktree here when this directory exists, and in the repo when it does not -- so
 # without this line a rebuilt box quietly goes back to filling /home.
-# /var/tmp rather than /tmp: /tmp is aged out after 30 days (tmpfiles.d/tmp.conf) and
+# /var/tmp rather than /tmp: /tmp is aged out after 7 days (tmpfiles.d/tmp.conf) and
 # /var/tmp is not. It is on the DISPOSABLE disk on purpose; a worktree is a checkout
 # plus node_modules, and anything worth keeping in one is pushed.
 # docs/project/worktrees.md § Where a worktree's bytes live.
@@ -1440,9 +1440,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 After=network-online.target
 Wants=network-online.target
 
-# NEVER GIVE UP, and retry slowly instead. The start limit lives in [Unit], not
-# [Service] -- systemd moved it here in v229 and a StartLimitBurst= under
-# [Service] is silently ignored.
+# NEVER GIVE UP, and retry slowly instead. Keep both start-limit keys in [Unit].
+# systemd 255 still accepts the legacy StartLimitBurst= in [Service], but
+# StartLimitIntervalSec= there is ignored with a warning.
 #
 # Until 2026-10-07 this was ten tries in 300s and then `failed` for good. The
 # daemon died of ENOSPC on 2026-10-05 and stayed down 46 hours; under that limit
@@ -2335,9 +2335,11 @@ D /tmp 1777 root root 7d
 # them, and a stopped session may be resumed. Left at the 30 days they had
 # before, by a line of its own (a path with its own line is aged by that line,
 # not its parent's); not excluded altogether, which would leave 8 GB for the
-# next reboot. A glob rather than claude-1000, so it does not depend on the uid;
-# it also catches Claude Code's small claude-<hex>-cwd files, which is harmless.
-e /tmp/claude-* - - - 30d
+# next reboot. Match numeric uid directories (one or several digits), rather
+# than claude-<hex>-cwd files: a separate glob excludes those from the parent
+# cleanup, but `e` only cleans directories, so the files would survive forever.
+e /tmp/claude-[0-9] - - - 30d
+e /tmp/claude-[0-9]*[0-9] - - - 30d
 
 # Browser profiles and singleton directories. The Playwright and Chrome MCP
 # servers launch Chrome with a temporary profile here; Chrome writes its
@@ -2855,7 +2857,11 @@ check "box-tidy timer running"    'systemctl is-active box-tidy.timer | grep -qx
 check "box-tidy runs as $USER_NAME" 'systemctl show -p User --value box-tidy.service | grep -qx '"$USER_NAME"''
 check "gh installed from GitHub's repo" 'gh --version && apt-cache policy gh | grep -q "cli.github.com"'
 check "pngquant installed"        'command -v pngquant'
-check "/tmp ages out after 7 days" 'systemd-tmpfiles --cat-config 2>/dev/null | grep -qx "D /tmp 1777 root root 7d" && ! systemd-tmpfiles --cat-config 2>/dev/null | grep -qx "D /tmp 1777 root root 30d"'
+# cat-config also prints ignored duplicates. Require exactly one /tmp entry,
+# so an earlier file cannot shadow our age while this check still says OK.
+# check() normally disables pipefail for grep -q; awk consumes all output, so
+# enable it here to reject a failed config reader even with plausible output.
+check "/tmp ages out after 7 days" 'set -o pipefail; systemd-tmpfiles --cat-config 2>/dev/null | awk '\''$1 !~ /^#/ && $2 == "/tmp" { n++; ok = ($1 == "D" && $3 == "1777" && $4 == "root" && $5 == "root" && $6 == "7d") } END { exit !(n == 1 && ok) }'\'''
 # The Overseer's key file is a person's step, not provisioning's, so its absence
 # is not a failure here; a copy anybody can read is.
 check "overseer key file, if present, is root 0600" '! test -e /etc/overseer-secrets.env || test "$(stat -c %u:%a /etc/overseer-secrets.env)" = 0:600'
