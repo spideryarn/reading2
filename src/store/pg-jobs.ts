@@ -2381,6 +2381,13 @@ export async function releaseStepIn(
  * So the flag is cleared and the ending stands. Written down here because the
  * two functions reading the same column and answering differently is exactly
  * what a later reader would take for a bug.
+ *
+ * **And since 2026-10-07 the claimant's own instance agrees.** A Stop that
+ * aborted the running step locally used to make `transitionAfter` (src/jobs.ts)
+ * ask for a `cancelled` ending here instead, so the same press kept the article
+ * or lost it by which server answered. It asks for `done` now; Greg's decision
+ * is quoted there. `cancel_requested_at` is not cleared, so the press stays on
+ * the row.
  */
 export async function finishIn(
   exec: Executor,

@@ -576,6 +576,42 @@ describe("the plates", () => {
     expect(JSON.stringify(illustrated)).not.toMatch(/[A-Za-z0-9+/]{500}/);
   });
 
+  /**
+   * **A Stop part-way through the plates hands back no product.**
+   *
+   * Since 2026-10-07 the queue keeps and publishes whatever a job's last step
+   * returns after a Stop (src/jobs.ts § `transitionAfter`), and this step is
+   * always a job's last. `drawPlates` already stops at the abort and says so
+   * (`IllustratedRun.cancelled`); returning that set would publish a half-painted
+   * illustration, stamped current, over the reader's last good one. So the step
+   * throws the abort instead, which is what the queue did with it before: the
+   * job ends `cancelled` and the published painting stays.
+   * docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md.
+   */
+  it("throws rather than return a half-painted set when the reader stops it between plates", async () => {
+    const stop = new AbortController();
+    const call = await import("../src/ai-call.js");
+    const spy = vi.spyOn(call, "openRouterImage").mockImplementation(() => {
+      plateCalls++;
+      /* The reader presses Stop while the first plate is being drawn, and the
+         plate arrives anyway. */
+      stop.abort();
+      return Promise.resolve({ image: PLATE, mediaType: "image/jpeg" } as Awaited<
+        ReturnType<typeof call.openRouterImage>
+      >);
+    });
+    try {
+      await script();
+      const before = plateCalls;
+      await expect(
+        STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore()),
+      ).rejects.toBeDefined();
+      expect(plateCalls - before, "the second plate is never asked for").toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("records the failure on the plate rather than throwing the run away", async () => {
     /* **The orphan case, from the other side.** Both plates are drawn and paid
        for; the second cannot be stored because it is neither of the two formats

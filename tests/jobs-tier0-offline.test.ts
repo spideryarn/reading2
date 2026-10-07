@@ -171,14 +171,26 @@ describe("Tier 0 queue decisions without Postgres", () => {
     expect(begins).toBe(1);
   });
 
-  it.each(["remote", "local"] as const)("preserves the %s Stop outcome during a last step that returns", async (where) => {
+  /* Greg, 2026-10-07: a Stop during the last step, when the step finishes
+     anyway, keeps and publishes the article whichever server it reached.
+     docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+  it.each(["remote", "local"] as const)("keeps the article when a %s Stop lands during a last step that returns", async (where) => {
     const advance = fixture(["fetch"], async () => {
       if (where === "local") await cancelJob(row.id);
       else row.cancelling = true;
       return { detail: "finished" };
     });
-    expect((await advance())?.job.status).toBe(where === "remote" ? "done" : "cancelled");
+    expect((await advance())?.job.status).toBe("done");
     expect(commits).toEqual(["fetch"]);
+  });
+
+  it("still ends the job cancelled when a local Stop lands during an earlier step that returns", async () => {
+    const advance = fixture(["fetch", "metadata"], async (_ctx, name) => {
+      if (name === "fetch") await cancelJob(row.id);
+      return { detail: name };
+    });
+    expect((await advance())?.job.status).toBe("cancelled");
+    expect(ran).toEqual(["fetch"]);
   });
 
   it("honours a Stop returned by a final skipped note after a kept progress write failed", async () => {

@@ -79,6 +79,11 @@ gets the article if their Stop was answered by a different server from the one d
 are one rule too many. Nothing here changes either: two characterisation tests pin today's
 behaviour, labelled as an open question, so that it cannot change by accident.
 
+**Decided, 2026-10-07.** Greg, relayed by the Overseer: *"re Stop, yes, probably best to err on the
+side of caution, and keep & publish"*. Both servers now keep and publish; the two cases are flipped
+and joined by controls.
+[261007f](261007f-stop-during-the-last-step-keeps-and-publishes.md) has the build.
+
 ## Stages
 
 ### PQ1: a failed read or progress write abandons the claim
@@ -339,9 +344,11 @@ which is what they are for.
 
 ## What is left
 
-- **Greg's:** the Stop question above
+- ~~**Greg's:** the Stop question above
   ([Left open, for Greg](#left-open-for-greg)): Stop pressed during an import's last step, when
-  the step finishes anyway, keeps the article on one server and loses it on another.
+  the step finishes anyway, keeps the article on one server and loses it on another.~~ Decided
+  2026-10-07, keep and publish; built in
+  [261007f](261007f-stop-during-the-last-step-keeps-and-publishes.md).
 - **Reported, numbers unchanged on purpose:** two step budgets look too small.
   `STEP_BUDGET_MS.assets` is 185 s against a real ceiling of about 360 s for a PDF, and
   `STEP_BUDGET_MS.fetch` is 150 s against a paper source that tries several candidates. Both are

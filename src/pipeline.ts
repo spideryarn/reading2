@@ -44,6 +44,7 @@ import {
   describeStorageFailure,
   pdfFigureCaptionsIn,
   pdfFigureMarkersIn,
+  STOPPED_PART_WAY,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
@@ -3658,6 +3659,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const assets: Assets = {
         ...run.assets,
         ...(figures && figures.entries.length ? { pdfFigures: figures.entries } : {}),
+        /* **Stopped part-way: kept, and not current.** The reader's Stop can
+           land while this, an import's last step, is running, and the queue then
+           keeps and publishes what it returns (src/jobs.ts § `transitionAfter`).
+           Every image not yet fetched is in `entries` as a failure; with the real
+           hash the next ordinary run would skip the step and never fetch them.
+           Asked of the signal after both halves have returned, so a Stop during
+           either counts. `STOPPED_PART_WAY` in src/collect-assets.ts. */
+        ...(ctx.signal.aborted ? { sourceHash: STOPPED_PART_WAY } : {}),
       };
       const drawn = figures?.stored ? `, ${figures.stored} figures recovered` : "";
       return {
@@ -4930,6 +4939,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         figures: figureSurvey.figures,
         ...(ctx.illustrationNote ? { note: ctx.illustrationNote } : {}),
       });
+
+      /* **Stopped between plates: no product.** `run.cancelled` is the
+         generator's way of saying the set is half-painted, and it leaves the
+         decision to whoever stores it. Since 2026-10-07 the queue keeps and
+         publishes what a job's last step returns after a Stop, and this step
+         is always a job's last, so returning would publish the half set,
+         stamped current, over the last good painting. Throwing the abort is
+         what the queue made of it before: `cancelled`, and nothing replaced.
+         Only when the signal fired: `cancelled` also covers a provider's own
+         timeout, which is not a Stop and keeps its old path.
+         docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+      if (run.cancelled) ctx.signal.throwIfAborted();
 
       /* **Written here rather than in `generateIllustrated`**, which writes
          nothing on purpose (its header says why): the hash of the Sketch is a
