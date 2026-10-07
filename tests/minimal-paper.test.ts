@@ -564,6 +564,43 @@ describe("no free way into a minimal paper", () => {
   });
 
   /**
+   * **Search and a referee criterion get `loadArticle`'s refusal, like every
+   * other reader.** Until 2026-10-07 these two asked a gate of their own first
+   * (`refuseAPaperNotReadYet`, one extra indexed read), kept only so their 409
+   * left out the `paper` field. Nothing reads that field on these routes: its
+   * one reader is the article load, src/web/article/access.ts. SVO5 in
+   * docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md.
+   *
+   * Written before the gate went, and green both sides of it, with one line
+   * changed: the body used to be exactly `{ error, code }` and is now exactly
+   * what chat sends for the same paper. What must not move is that it is
+   * refused **before a row is written** — both routes store a run and then
+   * stream, so a refusal that came late would be a stored failure.
+   */
+  it.each([
+    ["a search", "search", { criterion: "entropy", kind: "meaning" }],
+    ["a referee criterion", "referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses %s as chat is refused, and stores nothing", async (_name, family, body) => {
+    const rows = async () => {
+      const out = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      return out.rows[0];
+    };
+    const before = await rows();
+    const reply = await call(READER, "POST", `/api/${family}/${slug}`, body);
+    expect(reply.status).toBe(409);
+    const chat = await call(READER, "POST", `/api/chat/${slug}`, { threadId: randomUUID(), question: "What is it about?" });
+    expect(reply.body).toEqual(chat.body);
+    expect(chat.body.paper).toBeDefined();
+    expect(reply.body).toMatchObject({ error: NOT_READ_YET.message, code: "not-processed" });
+    expect(await rows()).toEqual(before);
+    expect(before).toEqual({ searches: 0, criteria: 0 });
+  });
+
+  /**
    * **The guard behind `enqueue`'s**, for a path round it nobody has found yet:
    * a full re-read inserted straight into the queue, with no reservation and
    * then with an ordinary one, runs to the end and its tree is refused at the

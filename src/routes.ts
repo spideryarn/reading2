@@ -290,7 +290,6 @@ import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import { stageFailure } from "./job-failure.js";
 import {
   LIVE_UPSTREAM,
-  NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
   REASON_NOT_READ,
@@ -4913,21 +4912,6 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  * without `done` as *expected* for a run it has already forgotten, rather than
  * as the broken-connection failure it is for any other run.
  */
-/**
- * **A 409 for a paper not yet read through, before a route writes anything** —
- * for the two streamed routes that used to record a row before they read the
- * article (`search`, `runRefereeCriterion`). Since plan 261005i § D they read
- * it first, and `loadArticle` would refuse the same paper; this stays ahead of
- * it because that refusal also carries the paper (`NotProcessed.paper`), which
- * is a different 409 body from the one these two have always sent. Every other
- * caller of `loadArticle` gets `NotProcessed` from there. One indexed read.
- */
-async function refuseAPaperNotReadYet(slug: string): Promise<void> {
-  if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
-    throw new NotProcessed(NOT_READ_YET.message);
-  }
-}
-
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { id, criterion, kind = "meaning", revises = false } = (body ?? {}) as Record<
     string,
@@ -4956,14 +4940,15 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     throw httpError(400, "A criterion must be 500 characters or fewer");
   }
 
-  /* Before `begin`, which writes the run and opens the stream: a paper not yet
-     read through is refused as an answer, not stored as a failed search and
-     reported as a fault. Plan 261001m. */
-  await refuseAPaperNotReadYet(slug);
   /* Read before the row is written, and the same `article` goes to the model:
      the run is stamped with the hash of the blocks it is answered over, not of
      whatever is current when `begin` runs (plan 261005i § D, as
-     `runRefereeClaims`). A failed read is an HTTP error with no row. */
+     `runRefereeClaims`). A failed read is an HTTP error with no row.
+
+     **That includes a paper not yet read through** (plan 261001m): `loadArticle`
+     refuses it with `NotProcessed`, a 409, so it is an answer and not a stored
+     failed search reported as a fault. This must stay ahead of `begin`, which
+     writes the run and opens the stream. tests/minimal-paper.test.ts. */
   const article = await loadArticle(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
@@ -5261,9 +5246,9 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
-  /* Before `begin`, for `search`'s reason — and the article is read before it
-     too, so the row carries the hash of the blocks the model is sent. */
-  await refuseAPaperNotReadYet(slug);
+  /* Before `begin`, for `search`'s two reasons: the row carries the hash of the
+     blocks the model is sent, and a paper not yet read through is refused here
+     (`NotProcessed`) with nothing written. */
   const article = await loadArticle(slug);
   const { row, attempt } = await refereeCriteriaStore.begin(
     slug,
