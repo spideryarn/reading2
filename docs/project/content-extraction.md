@@ -35,6 +35,7 @@ For background on why Readability was chosen over alternatives (trafilatura, def
 - [§ The three ways this stage refuses](#the-three-ways-this-stage-refuses) — a page rejected as no article, too short, or a bot check; adding a bot-check provider
 - [§ The one thing this pipeline deletes](#the-one-thing-this-pipeline-deletes) — what is removed on purpose
 - [§ The one thing this pipeline protects](#the-one-thing-this-pipeline-protects) — what must survive extraction
+- [§ Readers' comments, left out on every pass](#readers-comments-left-out-on-every-pass) — a blog's thread, and Readability's retry
 - [§ The publisher's furniture, and the title it stole](#the-publishers-furniture-and-the-title-it-stole) — site chrome and wrong titles
 - [§ The byline, and the authors Readability drops](#the-byline-and-the-authors-readability-drops) — author extraction
 - [§ The journal and the publication day, from a registry](#the-journal-and-the-publication-day-from-a-registry) — venue and date; includes the backfill
@@ -496,7 +497,9 @@ decided the same way, one helper up (`refusalFor`), on the document before anyth
 Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Readability sees the
 page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
 [`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
-what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+what the publisher called it**, as furniture. (A blog's comment thread is also deleted by the name of
+its container, under a different licence —
+[§ Readers' comments](#readers-comments-left-out-on-every-pass).) The class is narrow on purpose — **platform-generated controls beside content, recognised by the
 platform's own selector, that contain no block-level descendants** — and there are five of them:
 MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
 `ul.reflinks`, and Springer Nature's *Full size image* button, `div.c-article-section__figure-link`.
@@ -643,6 +646,36 @@ selection is global and a wrong positive stamp can delete an author's prose else
 
 What was stamped rides on `ExtractResult.kept`, per rule, exactly as `removed` does and for the same
 reason — a rule that stamped nothing is absent rather than zero.
+
+## Readers' comments, left out on every pass
+
+**A blog's comment thread does not reach the article**, and mostly that is Readability's doing:
+its first pass deletes anything whose class or id says `comment`, `disqus` or `replies` (unless it
+also says `content`, `article`, `main` …). On 2026-10-07, over nine real posts with their threads in
+the HTML (WordPress, wordpress.com, Blogger, Slate Star Codex's 736, Greg's xenaproject
+page), not one comment got through. The sampled Substack, Medium, Ghost, Disqus and LessWrong pages
+loaded theirs with JavaScript, which stage 1 never runs, so those pages gave stage 2 no thread to
+remove.
+
+**The gap was Readability's retry.** Under 500 characters, it parses again with that deletion off and
+returns the longest attempt, so a short post came back as its comment thread. Since 2026-10-07
+[`src/reader-comments.ts`](../../src/reader-comments.ts) deletes the thread's container before
+Readability sees the page, **by the exact id or whole class token the engine gives it** (WordPress's
+`.comments-area`, `.comment-list`, `.commentlist`, old themes' `#commentlist`; Blogger's
+`.comment-thread.toplevel-thread`; Disqus's `#disqus_thread`). The generic `#comments` wrapper,
+`#respond` and `.comment-thread` on its own are not rules: RFC 9110 uses `#comments` for authored
+prose, `respond` is an ordinary word, and a generic thread can be the page's content. Not
+Readability's own substring rule run early: that deletes a real article in
+`div.commentary` (GPT Sol's counter-example). On 66 pages, ten of them discussions such as GitHub,
+Discourse and Stack Overflow, everything stage 2 returns except the new audit count is identical;
+on a short post the thread no longer comes back. The count is in `ExtractResult.removed` under
+`comment-thread containers`. The counterexample and why parity with Readability did not expose it
+are in [261007o](../postmortems/261007o-baseline-parity-can-hide-the-same-loss-on-both-sides.md).
+
+What it does not fix: the retry still returns the *longest* attempt, which on a short post can be a
+sidebar instead. And comments are left out, not kept anywhere: whether to import them behind a
+folded heading, and what that would mean for every mode that reads the article, is Greg's question
+in [261007k](../plans/261007k-readers-comments-left-out-of-a-blog-import-on-every-pass.md).
 
 ## The publisher's furniture, and the title it stole
 

@@ -31,8 +31,9 @@ import { escapeHtml, plainTitle } from "./html.js";
 import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
-import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
+import { removePlatformFurniture } from "./furniture.js";
 import { prepareLatexml } from "./latexml.js";
+import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
@@ -190,8 +191,9 @@ export interface ExtractResult {
   /** What the callout pass found — see src/callouts.ts. */
   callouts: CalloutStats;
   /**
-   * **How much platform chrome stage 2 deleted, per selector** — the audit line
-   * for the one thing this pipeline removes (src/furniture.ts).
+   * **What the named pre-Readability removers deleted, per audit key** —
+   * platform chrome by selector (src/furniture.ts), and a reader-comment thread
+   * by the rule name in src/reader-comments.ts.
    *
    * It rides here rather than on `Meta` for a reason worth stating: `Meta` is
    * persisted as *columns* on `article_revisions` (src/store/pg.ts §
@@ -200,7 +202,7 @@ export interface ExtractResult {
    * field whose only reader, stage D's audit line, does not exist yet. Stage D
    * is where that trade stops being premature.
    */
-  removed: FurnitureRemovals;
+  removed: ExtractRemovals;
   /**
    * **What stage 2 told Readability to keep, per rule** — the other half of the
    * audit line, and the mirror of `removed` above (src/protect.ts).
@@ -211,6 +213,9 @@ export interface ExtractResult {
    */
   kept: KeptStructure;
 }
+
+/** Counts from the named pre-Readability removal passes, by their fixed audit keys. */
+export type ExtractRemovals = Readonly<Record<string, number>>;
 
 /**
  * **Un-hide `aria-hidden="true"` before Readability looks at the page.**
@@ -418,8 +423,8 @@ export function readArticle(
   refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
-  /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
-  removed: FurnitureRemovals;
+  /** What the named pre-Readability removers deleted, per audit key. */
+  removed: ExtractRemovals;
   /**
    * What `protectAuthoredStructure` stamped, per rule — see src/protect.ts.
    *
@@ -462,7 +467,7 @@ function readingArm(
   ownIds: WorkId[];
   notes: NoteStats;
   callouts: CalloutStats;
-  removed: FurnitureRemovals;
+  removed: ExtractRemovals;
 } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -754,7 +759,7 @@ function prepareDocument(
 ): {
   notes: NoteStats;
   callouts: CalloutStats;
-  removed: FurnitureRemovals;
+  removed: ExtractRemovals;
   kept: KeptStructure;
 } {
   unhideCollapsedSections(doc);
@@ -769,9 +774,10 @@ function prepareDocument(
      PDF's sha256 and a web article has no raw PDF and therefore no `pdfFigures`
      entry to match. This is belt to that braces, and it is one line. */
   scrubReserved(doc, [RESERVED_ATTRS.pdfFigure, RESERVED_ATTRS.sourceRef]);
-  /* **The one step that deletes something because of what the publisher called
+  /* **The one step that deletes furniture because of what the publisher called
      it** — other things here remove elements, but only this one does it as a
-     policy about furniture. What it may delete, and why that licence is narrow
+     policy about furniture (the comment-thread pass below deletes by name too,
+     but a thread, not furniture). What it may delete, and why that licence is narrow
      enough to spend, is on `removePlatformFurniture` (src/furniture.ts). It is
      not a general furniture pass: everything else stays and waits for stage D.
 
@@ -786,7 +792,14 @@ function prepareDocument(
      note pass does most to — the removal counts, the `NoteStats`, the
      `CalloutStats` and Readability's output HTML are byte-identical on all
      nine. 2026-09-06. */
-  const removed = removePlatformFurniture(doc);
+  const furniture = removePlatformFurniture(doc);
+  /* **A blog's comment thread, taken out whole by the name its engine gave the
+     container** — so Readability's short-page retry cannot hand the thread back
+     as the article. Beside the furniture pass and before protect, so both arms
+     of protect's fallback see the same page and `removed` is the same in both.
+     src/reader-comments.ts. */
+  const comments = removeReaderComments(doc);
+  const removed = comments > 0 ? { ...furniture, [READER_COMMENTS_KEY]: comments } : furniture;
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
      takes the identifying classes off, and the sanitiser downstream of it
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
@@ -962,7 +975,7 @@ export function readArticleWithProvenance(
   notes: NoteStats;
   callouts: CalloutStats;
   /**
-   * What `removePlatformFurniture` deleted, per selector.
+   * What the named pre-Readability removers deleted, per audit key.
    *
    * **Removed before the source is stamped**, which is the fact the gates rest
    * on: `prepareDocument` runs first, so a deleted control is absent from the
@@ -970,7 +983,7 @@ export function readArticleWithProvenance(
    * provenance gates never see a hole. Confirmed by running the corpus rather
    * than assumed — C4a, 2026-09-06.
    */
-  removed: FurnitureRemovals;
+  removed: ExtractRemovals;
   /**
    * What `protectAuthoredStructure` stamped, per rule (src/protect.ts).
    *
@@ -1047,7 +1060,7 @@ function provenanceArm(
   challenge: ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
-  removed: FurnitureRemovals;
+  removed: ExtractRemovals;
   source: Document;
   sourceHtml: string;
   stampedElements: number;

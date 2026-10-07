@@ -226,5 +226,17 @@
     "bytes": 5822,
     "url": "https://example.invalid/braemar-result",
     "capturedAt": "2026-09-05"
+  },
+  "xena-wordpress-comments": {
+    "sha256": "3c49eb1d05896d933804ce46cd5e3b3b853976063d6763ab272969929e390c35",
+    "bytes": 263610,
+    "url": "https://xenaproject.wordpress.com/2026/10/01/to-grieve-or-not-to-grieve/",
+    "capturedAt": "2026-10-07"
+  },
+  "lemire-wordpress-comments": {
+    "sha256": "fdba12acb41779853df0b57dd9f24e9acd5a82848baf556ffd86cea867e09a20",
+    "bytes": 99102,
+    "url": "https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/",
+    "capturedAt": "2026-10-07"
   }
 }
