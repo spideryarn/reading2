@@ -281,6 +281,47 @@ device.
    `architecture.md`, the questions below, overseer-queue entries for each deferred half, the
    note.
 
+## What landed
+
+**Stage 1** (commit after `Plan 261007j: …`): `src/mcp/` and `scripts/spideryarn-mcp.ts`, 67
+tests in `tests/mcp-{tools,session,stdio}.test.ts`, built by an Opus subagent. Red then green, each
+break reverted: ignoring the approver's answer (4 red), skipping the re-read under the lock (2),
+a no-op lock (4), the session binding off (3), one `process.stdout.write` in `serve` (1). Decided
+while building: `retry_gift_voucher_email` takes the voucher id and which email (`gift` or
+`claimed`) rather than the email row's id, so the dialog can name the address; all CLI output goes
+to stderr; an existing session directory that others can merely read is tightened to 0700 rather
+than refused.
+
+**Stage 2, the spike** (`scripts/spikes/261007j-mcp-local-spike.ts`, 2026-10-07, against the shared
+local stack on port 5273): **30/30**, by a Sonnet subagent.
+
+- Both readers signed in by `login`; the real server over stdio listed 15 tools, `whoami` right for
+  each.
+- The real approver on this Linux box refused `create_gift_voucher`: *"Sending mail and publishing
+  need a confirmation dialog, which this server can only show on macOS … Nothing was done."*
+- Presence and absence: the admin's canary tag on `john-von-neumann-spya-yx9t8u` showed in the
+  admin's `list_tags` and `list_articles` and in neither of reader-b's; reader-b's search had
+  `hits: []`; reader-b's `edit_tags` on that slug got the server's 404 (*"No article artefacts
+  for …"*), which does not confirm the slug exists. Canary removed. Gap: search does not index
+  tags, so it has no positive control.
+- All four admin tools under reader-b: *"Spideryarn refused: That page is for the site's
+  administrator. [admin-only]"*.
+- Admin, approver stubbed to approve: a voucher to an `@example.com` address `queued`; the same call
+  again `replayed`, one voucher; the same key with 2 articles refused (*"That idempotency_key was
+  already used for a different gift; nothing was sent"*), still one; then revoked.
+- Deliberate break: the absence check run on the admin's session went red
+  (`{"articles":true,"tags":true}`), so it can fail.
+- Production, no credentials: `GET /api/library` → 401; `whoami` with no session → one line,
+  exit 1, no stack trace. No production sign-in was attempted.
+- Not exercised: `import_article` for real (it spends model money on the shared box); the tool's
+  own URL check refused `not a url` before the server saw it.
+- Found: `set_auto_modes` returned the whole reader profile, profile text included, into the
+  model's context. Trimmed to `{ autoModes }` in the code review stage.
+
+**Still unproven, and only Greg can prove it:** signing in to production (does *Forgot password*
+give a Google account a password?), the dialog on a real Mac, and whether Cowork sees a server from
+`claude_desktop_config.json`. [mcp.md](../project/mcp.md) is the set-up.
+
 ## Deferred, with queue entries
 
 - **Remote MCP (the Cowork sign-in flow), once Greg answers Question 1.** Not a routing detail
