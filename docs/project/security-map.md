@@ -293,6 +293,16 @@ line or Sentry: the voucher writes go through `guardDbStore`, because a failed e
 the whole email in Drizzle's error. `tests/share-link-token-stays-home.test.ts` pins the two
 callers of the read, and `tests/voucher-starter.test.ts` the rest.
 
+**And since 2026-10-07, an AI assistant's conversation**
+([261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md)). The MCP server's
+`create_private_link` ([mcp.md](mcp.md)) asks the owner's route for the link, making one only if
+none is on, and hands it to the AI app that called it, where it stays in that conversation and in
+whatever the app or its agent keeps. Greg accepted that (2026-10-07). It is the owner's own route
+with the owner's own session, and **a dialog on the owner's screen approves every call**, naming
+the article; the model cannot answer it. An existing link is handed over, never replaced: the
+route's `keepExisting` decides under the row lock. `tests/share-link-token-stays-home.test.ts`
+pins `src/mcp/tools.ts` as the one client outside the browser that asks for the key.
+
 #### And since 2026-09-04 there is a page over it, which holds one defence
 
 `/read/public` ([public-shelf.md](public-shelf.md), `PublicLibraryPage` in

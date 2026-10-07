@@ -120,7 +120,7 @@ export function readGatewayKey(): string | null {
  * process's environment, the daemon's unit file or a hand run's shell (plan
  * 260910f D7). **The one reader of it**, for the reason `readGatewayKey` is the
  * one reader of the key: a second place deciding it could decide differently,
- * and then a version-2 answer would be filed under version 1.
+ * and then a proposal-aware answer would be filed under version 1.
  *
  * Exactly `"1"`, never merely set: `OVERSEER_PROPOSALS=0` must not turn on the
  * one change here that costs a cold re-read of the fleet.
@@ -136,7 +136,7 @@ export function promptVersionFor(proposals: boolean): PromptVersion {
 
 /**
  * The usage verdict the Overseer's checkpoint holds, or `null` when it holds
- * none — the only thing `reach` knows about whether Fable could take a question
+ * none — the only thing `reach` knows about whether Opus could take a question
  * (D14). Read from the file like any other reader of the checkpoint; the pass
  * takes it as a plain input and stays free of the store.
  */

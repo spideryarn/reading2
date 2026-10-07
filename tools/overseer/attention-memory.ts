@@ -45,7 +45,7 @@ import { join } from "node:path";
 import type { AttentionAnswerability, AttentionKind } from "../fleet/wire.js";
 import {
   PROPOSAL_PROMPT_VERSION,
-  PROPOSAL_RECIPIENTS,
+  storedRecipient,
   asksOutOfBounds,
   type CacheableVerdict,
   type CachedVerdict,
@@ -184,7 +184,7 @@ function parseRoute(v: Record<string, unknown>): VerdictRoute | null {
     const unplacedWhy = nonBlank(v["unplacedWhy"]);
     return unplacedWhy === null ? null : { recipient, unplacedWhy };
   }
-  const known = PROPOSAL_RECIPIENTS.find((r) => r === recipient);
+  const known = storedRecipient(recipient);
   const reason = nonBlank(v["reason"]);
   const asks = nonBlank(v["asks"]);
   if (known === undefined || reason === null || asks === null || asksOutOfBounds(asks) !== null) return null;
@@ -255,10 +255,12 @@ export function parseAttentionMemory(u: unknown): AttentionMemoryRead {
     if (rawVersion === undefined || rawVersion === null) promptVersion = null;
     else if (typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0) promptVersion = rawVersion;
     else return { kind: "unusable", why: `the verdict for ${k} names prompt version ${JSON.stringify(rawVersion)}, which is not a version` };
-    // A VERSION-2 QUESTION ALWAYS CARRIES ITS PROPOSAL — `parseVerdict` refuses
-    // one without (D8). One filed under version 2 with none is corruption, and
+    // A PROPOSAL-AWARE QUESTION ALWAYS CARRIES ITS PROPOSAL — `parseVerdict` refuses
+    // one without (D8). One filed under that version with none is corruption, and
     // believing it would draw a proposal-aware card with nothing proposed.
-    if (promptVersion === PROPOSAL_PROMPT_VERSION && verdict.kind === "question" && verdict.recipient === undefined) {
+    // Version 2 used the same proposal shape: becoming stale does not make a
+    // record that its own reader refused valid history.
+    if ((promptVersion === 2 || promptVersion === PROPOSAL_PROMPT_VERSION) && verdict.kind === "question" && verdict.recipient === undefined) {
       return { kind: "unusable", why: `the verdict for ${k} is filed under prompt version ${promptVersion} and carries no proposal` };
     }
     // THE MODEL THAT MADE IT — GPT Sol's F18. Absent (schemas 1 and 2) is

@@ -35,7 +35,7 @@ export const LABEL_CASES = [
 ] as const;
 export type LabelCase = (typeof LABEL_CASES)[number];
 
-export const LABEL_RECIPIENTS = ["sol", "fable", "greg", "overseer", "self"] as const;
+export const LABEL_RECIPIENTS = ["sol", "opus", "greg", "overseer", "self"] as const;
 export type LabelRecipient = (typeof LABEL_RECIPIENTS)[number];
 
 export const LABEL_CATEGORIES = [

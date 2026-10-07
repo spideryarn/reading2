@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 
 import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 import { ApiError, makeApi, type TokenSource } from "../src/mcp/api.js";
-import { type Approver, defaultApprover, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
+import { type Approver, defaultApprover, dialogText, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
 import { buildServer } from "../src/mcp/server.js";
 import { TOOLS, voucherId } from "../src/mcp/tools.js";
 
@@ -229,11 +229,12 @@ describe("each tool calls the route it claims", () => {
     expect(result.json()).toEqual({ article: "on-tools", repeat: true, link: `${SITE}/read/on-tools` });
   });
 
-  it("there is no get_allowance, list_users or private-link tool (Sol F17; plan § Not in V1)", () => {
+  /* list_users and create_private_link arrived with plan 261007o, once Greg said
+     yes; get_allowance is still out (it claims vouchers, so it is not a read). */
+  it("there is no get_allowance tool (Sol F17), and no tool turns a private link off or remakes it", () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).not.toContain("get_allowance");
-    expect(names).not.toContain("list_users");
-    expect(names.some((n) => /private_link|share_link/.test(n))).toBe(false);
+    expect(names.filter((n) => /private_link|share_link/.test(n))).toEqual(["create_private_link"]);
   });
 
   it("list_gift_vouchers leaves out the notes and the claimant's usage (Sol F17)", async () => {
@@ -681,4 +682,243 @@ describe("no token reaches a result", () => {
     expect(result.text).not.toContain(ACCESS);
     expect(result.text).toContain("Bearer [redacted]");
   });
+});
+
+/* ---------------------------------------------------------- plan 261007o -- */
+
+const KEY_ON = "KEYabcdefghijklmnopqrs";
+const KEY_NEW = "NEWabcdefghijklmnopqrs";
+
+describe("create_private_link hands over the existing link, and makes one only when there is none", () => {
+  const on = { "GET /api/article/on-tools/share-link": { body: { on: true, key: KEY_ON, since: "2026-10-01T00:00:00Z" } } };
+  const off = {
+    "GET /api/article/on-tools/share-link": { body: { on: false } },
+    "POST /api/article/on-tools/share-link": { body: { on: true, key: KEY_NEW, since: "2026-10-07T00:00:00Z" } },
+  };
+
+  it("keeps the article's slug visible in the actual dialog when its title is long", async () => {
+    for (const routes of [on, off]) {
+      const approver = new StubApprover(false);
+      const h = await harness({
+        ...routes,
+        "GET /api/library": { body: { articles: [shelfEntry("on-tools", "A".repeat(400))] } },
+      }, approver);
+      await h.call("create_private_link", { slug: "on-tools" });
+      expect(approver.asked).toHaveLength(1);
+      const message = dialogText(approver.asked[0]!).message;
+      expect(message).toContain("on-tools");
+      expect(message).not.toContain(KEY_ON);
+      expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+    }
+  });
+
+  it("when a link is on: asks, then answers that link and never posts (a POST would replace the key)", async () => {
+    const approver = new StubApprover(true);
+    const h = await harness(on, approver);
+    const result = await h.call("create_private_link", { slug: "on-tools" });
+    expect(result.isError, result.text).toBe(false);
+    expect(approver.asked).toHaveLength(1);
+    const lines = approver.asked[0]?.lines.join("\n") ?? "";
+    expect(lines).toContain('"On Tools"');
+    expect(lines).toMatch(/already has a private link/);
+    expect(lines).not.toContain(KEY_ON);
+    expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+    /* Read again after the yes (Sol's F2), so a session that signed out or
+       changed hands while the dialog was open hands over nothing. */
+    expect(h.seen.filter((s) => s.path === "/api/article/on-tools/share-link")).toHaveLength(2);
+    expect(result.json()).toEqual({
+      link: `${SITE}/read/on-tools?key=${KEY_ON}`,
+      since: "2026-10-01T00:00:00Z",
+    });
+  });
+
+  it("when the approved link changed or went while the dialog was open: an error, no key, nothing made", async () => {
+    for (const second of [
+      { body: { on: false } },
+      { body: { on: true, key: KEY_NEW, since: "2026-10-07T03:00:00Z" } },
+      { status: 401, body: { error: "signed out" } },
+    ]) {
+      let gets = 0;
+      const h = await harness({
+        "GET /api/article/on-tools/share-link": () =>
+          ++gets === 1 ? { body: { on: true, key: KEY_ON, since: "2026-10-01T00:00:00Z" } } : second,
+      });
+      const result = await h.call("create_private_link", { slug: "on-tools" });
+      expect(result.isError, JSON.stringify(second)).toBe(true);
+      expect(result.text).not.toContain(KEY_ON);
+      expect(result.text).not.toContain(KEY_NEW);
+      expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+    }
+  });
+
+  it("when it is off: asks with the rights sentence, then posts once, keeping any link made meanwhile", async () => {
+    const approver = new StubApprover(true);
+    const h = await harness(off, approver);
+    const result = await h.call("create_private_link", { slug: "on-tools" });
+    expect(result.isError, result.text).toBe(false);
+    expect(approver.asked[0]?.lines.join("\n")).toContain(SHARING_RIGHTS_CONFIRM);
+    const writes = h.seen.filter((s) => s.method !== "GET");
+    /* keepExisting: the server decides under its row lock (Sol's F1), so a link
+       somebody made while the dialog was open is handed over, not replaced. */
+    expect(writes.map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      {
+        method: "POST",
+        path: "/api/article/on-tools/share-link",
+        body: { rightsConfirmed: true, keepExisting: true },
+      },
+    ]);
+    expect(result.json()).toEqual({
+      link: `${SITE}/read/on-tools?key=${KEY_NEW}`,
+      since: "2026-10-07T00:00:00Z",
+    });
+  });
+
+  for (const [label, routes] of [
+    ["on", on],
+    ["off", off],
+  ] as const) {
+    it(`a no (link ${label}) writes nothing and hands over no key`, async () => {
+      const approver = new StubApprover(false);
+      const h = await harness(routes, approver);
+      const result = await h.call("create_private_link", { slug: "on-tools" });
+      expect(result.isError).toBe(false);
+      expect(result.text).toContain("nothing was sent");
+      expect(result.text).not.toContain(KEY_ON);
+      expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+    });
+  }
+
+  it("no argument can stand in for the person's approval", async () => {
+    const approver = new StubApprover(false);
+    const h = await harness(off, approver);
+    const result = await h.call("create_private_link", { slug: "on-tools", approved: true });
+    expect(result.isError).toBe(true);
+    expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+  });
+});
+
+describe("list_users and user_activity read the admin's users route, trimmed", () => {
+  const row = (n: number, email: string, extra: Record<string, unknown> = {}) => ({
+    id: `00000000-0000-4000-8000-00000000000${n}`,
+    email,
+    createdAt: "2026-09-01T00:00:00Z",
+    providers: ["google"],
+    articles: 3,
+    archived: 1,
+    uploads: 0,
+    questions: 2,
+    chats: 1,
+    searches: 4,
+    opens: 9,
+    spendNanos: 1000,
+    spendCalls: 2,
+    spendUnpricedCalls: 0,
+    spendMonth: "2026-10",
+    plan: "free",
+    ingests: 3,
+    ingestsShared: 0,
+    highPower: 0,
+    highPowerShared: 0,
+    minimal: 0,
+    ingestLimit: 25,
+    ingestWindow: "lifetime",
+    ...extra,
+  });
+  const users = [
+    row(1, "old@example.com", { lastSignInAt: "2026-09-02T00:00:00Z", lastReadAt: "2026-09-03T00:00:00Z" }),
+    row(2, "ada@example.com", { lastSignInAt: "2026-10-05T00:00:00Z", lastReadAt: "2026-10-06T00:00:00Z" }),
+    row(3, "never@example.org"),
+  ];
+  const routes = { "GET /api/admin/users": { body: { users } } };
+
+  it("list_users answers each account trimmed, most recently active first", async () => {
+    const h = await harness(routes);
+    const result = await h.call("list_users");
+    expect(h.seen.map((s) => `${s.method} ${s.path}`)).toEqual(["GET /api/admin/users"]);
+    const answer = result.json() as { total: number; users: Record<string, unknown>[] };
+    expect(answer.total).toBe(3);
+    expect(answer.users.map((u) => u.email)).toEqual(["ada@example.com", "old@example.com", "never@example.org"]);
+    expect(Object.keys(answer.users[0] ?? {}).sort()).toEqual(
+      ["archived", "articles", "createdAt", "email", "id", "lastReadAt", "lastSignInAt", "plan"].sort(),
+    );
+  });
+
+  it("list_users filters by a piece of the address and limits", async () => {
+    const h = await harness(routes);
+    const filtered = (await h.call("list_users", { query: "EXAMPLE.COM", limit: 1 })).json() as {
+      total: number;
+      users: { email: string }[];
+    };
+    expect(filtered.total).toBe(2);
+    expect(filtered.users.map((u) => u.email)).toEqual(["ada@example.com"]);
+  });
+
+  it("list_users uses the latest activity, even when a sign-in is newer than the last read", async () => {
+    const h = await harness({
+      "GET /api/admin/users": {
+        body: {
+          users: [
+            users[1],
+            row(1, "returned@example.com", {
+              lastReadAt: "2026-09-03T00:00:00Z",
+              lastSignInAt: "2026-10-07T00:00:00Z",
+            }),
+          ],
+        },
+      },
+    });
+    const result = (await h.call("list_users", { limit: 1 })).json() as { users: { email: string }[] };
+    expect(result.users.map((u) => u.email)).toEqual(["returned@example.com"]);
+  });
+
+  it("user_activity answers one account's counts and dates, by address in any case or by id", async () => {
+    const h = await harness(routes);
+    const ada = (await h.call("user_activity", { email: "ADA@example.com" })).json() as { user: Record<string, unknown> };
+    expect(ada.user).toEqual(expect.objectContaining({ email: "ada@example.com", questions: 2, spendMonth: "2026-10" }));
+    expect((await h.call("user_activity", { id: users[2]?.id })).json()).toEqual({
+      user: expect.objectContaining({ email: "never@example.org" }),
+    });
+  });
+
+  /* Sol's F3 on plan 261007o: a field added to the admin page's row later must
+     not reach an AI conversation without somebody deciding it should. */
+  it("user_activity answers an allowlist, so a field the admin page gains later stays out", async () => {
+    const planted = users.map((u) => ({ ...u, articleTitles: ["SENTINEL-TITLE"], profile: "SENTINEL-PROFILE" }));
+    const h = await harness({ "GET /api/admin/users": { body: { users: planted } } });
+    const result = await h.call("user_activity", { email: "ada@example.com" });
+    expect(result.text).not.toContain("SENTINEL");
+    expect(Object.keys((result.json() as { user: object }).user).sort()).toEqual(
+      [
+        "id", "email", "createdAt", "lastSignInAt", "emailConfirmedAt", "providers", "lastReadAt",
+        "articles", "archived", "uploads", "questions", "chats", "searches", "opens",
+        "spendNanos", "spendCalls", "spendUnpricedCalls", "spendMonth",
+        "plan", "planStatus", "ingests", "ingestsShared", "ingestLimit", "ingestWindow",
+      ].sort(),
+    );
+    const listed = await h.call("list_users");
+    expect(listed.text).not.toContain("SENTINEL");
+  });
+
+  it("user_activity needs exactly one of email or id, and says when there is no such account", async () => {
+    const h = await harness(routes);
+    expect((await h.call("user_activity", {})).isError).toBe(true);
+    expect((await h.call("user_activity", { email: "a@b.c", id: users[0]?.id })).isError).toBe(true);
+    const missing = await h.call("user_activity", { email: "nobody@example.com" });
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain("No account");
+  });
+
+  for (const tool of ["list_users", "user_activity"]) {
+    it(`${tool}: the server's 403 says the tool is admin-only, and neither asks`, async () => {
+      const approver = new StubApprover(true);
+      const h = await harness(
+        { "GET /api/admin/users": { status: 403, body: { error: "That page is for the site's administrator. [admin-only]" } } },
+        approver,
+      );
+      const result = await h.call(tool, tool === "user_activity" ? { email: "ada@example.com" } : {});
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain("admins only");
+      expect(approver.asked).toEqual([]);
+    });
+  }
 });

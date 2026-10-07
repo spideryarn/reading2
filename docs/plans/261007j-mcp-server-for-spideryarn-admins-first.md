@@ -337,8 +337,10 @@ give a Google account a password?), the dialog on a real Mac, and whether Cowork
   the already-verified user, calling the operations beneath the routes directly rather than over
   HTTP; and scopes are decided before Supabase OAuth is offered to anyone but Greg. Touches
   `src/routes.ts` and `src/auth.ts`, two listed defences.
-- **`list_users`, if Greg says yes to Question 3.** One tool.
-- **The private link, if Greg says yes to Question 2.** One tool.
+- **`list_users`, if Greg says yes to Question 3.** One tool. *Greg said yes, 2026-10-07; built as
+  `list_users` and `user_activity` in [261007o](261007o-mcp-private-link-and-admin-user-tools.md).*
+- **The private link, if Greg says yes to Question 2.** One tool. *Greg said yes, 2026-10-07; built
+  as `create_private_link` in [261007o](261007o-mcp-private-link-and-admin-user-tools.md).*
 
 ## Questions for Greg
 

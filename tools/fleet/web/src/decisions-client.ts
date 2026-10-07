@@ -228,7 +228,7 @@ function advisers(value: unknown): boolean {
   if (!Array.isArray(value) || value.length === 0) return false;
   const seen = new Set<string>();
   for (const adviser of value) {
-    if (adviser !== "sol" && adviser !== "fable" && adviser !== "nobody") return false;
+    if (adviser !== "sol" && adviser !== "opus" && adviser !== "fable" && adviser !== "nobody") return false;
     if (seen.has(adviser)) return false;
     seen.add(adviser);
   }

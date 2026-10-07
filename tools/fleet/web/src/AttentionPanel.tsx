@@ -641,16 +641,15 @@ const HOLDERS: Record<ProposalRecipient, { line: string; name: string; what: str
     name: "Sol",
     what: "A technical question whose evidence is in the code — Sol reads the tree and can find the answer.",
   },
-  // `fable` is the wire token from before Greg retired Fable (2026-09-28); the question now goes to Opus.
-  fable: {
+  opus: {
     line: "ask Opus",
     name: "Opus",
-    what: "A question of wording, a default, or whether a case can be dropped — what Opus is for.",
+    what: "Wording, a default, or arbitrating between two options that both work, when nothing irreversible is at stake — what Opus is for.",
   },
   greg: {
     line: "this one is yours",
     name: "you",
-    what: "Irreversible or visible outside the project, a change to a rule doc, a product tweak that would remove engineering, or a recommendation worth contesting — the questions that stay with you.",
+    what: "Irreversible or visible outside the project, a change to a rule doc, whether a case can be dropped, a product tweak that would remove engineering, or a recommendation worth contesting — the questions that stay with you.",
   },
   overseer: {
     line: "the Overseer could check it",

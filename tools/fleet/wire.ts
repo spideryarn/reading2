@@ -767,7 +767,7 @@ export type AttentionItem = {
  * `unplaced` is NOT one of them; it is its own arm of `AttentionProposal`, and it
  * is never promoted to `greg` (plan 260910f D8).
  */
-export type ProposalRecipient = "sol" | "fable" | "greg" | "overseer" | "self";
+export type ProposalRecipient = "sol" | "opus" | "greg" | "overseer" | "self";
 
 /**
  * Whether the proposed holder could take the question NOW. Projected on every
@@ -3435,7 +3435,8 @@ export type HoldBasis =
 export type DecisionWireClass = "assumption" | "decision" | "decline";
 /** Who recorded a line. `daemon` is the report drain, and only ever copies a session's decision. */
 export type DecisionWireRecorder = "greg" | "overseer" | "daemon";
-export type DecisionWireAdviser = "sol" | "fable" | "nobody";
+/** `fable` is history: who advised a decision made before Greg retired Fable (2026-09-28). New ones say `opus`. */
+export type DecisionWireAdviser = "sol" | "opus" | "fable" | "nobody";
 
 export type DecisionWireExecution =
   | { kind: "verified"; token: string; since: string }
