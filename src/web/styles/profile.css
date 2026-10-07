@@ -213,8 +213,10 @@
 }
 /* Nothing heard for ten seconds: the same words, warm rather than faint, and a
    glyph, so it is noticed while the microphone is still on. The colour is
-   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k. */
-.prof-listening.quiet .prof-listening-what {
+   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k.
+   `.ending` is the last minute before the cap, counted down. Plan 261007b. */
+.prof-listening.quiet .prof-listening-what,
+.prof-listening.ending .prof-listening-what {
   color: var(--highlight-ink, var(--highlight));
   font-weight: 600;
 }

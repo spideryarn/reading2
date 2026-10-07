@@ -49,6 +49,7 @@ vi.mock("../src/web/useDictation.js", () => ({
     toggle: () => {},
     error: null,
     startedAt: state.armed ? 1_000 : null,
+    endsAt: null,
     deviceLabel: state.armed ? "MacBook Pro Microphone (Built-in)" : null,
     deviceId: null,
     deviceUnavailable: false,

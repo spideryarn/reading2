@@ -52,6 +52,7 @@ vi.mock("../src/web/useDictation.js", () => ({
       },
       error: null,
       startedAt: state.armed ? 1_000 : null,
+      endsAt: null,
       deviceLabel: null,
       deviceId: null,
       deviceUnavailable: false,

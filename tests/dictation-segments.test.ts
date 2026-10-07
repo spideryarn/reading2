@@ -24,7 +24,7 @@ import { act, createElement, type ReactNode, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
-import { PART_MS } from "../src/web/mic-recording.js";
+import { MAX_MS, PART_MS } from "../src/web/mic-recording.js";
 import type { TranscriptionResult } from "../src/web/transcriber.js";
 import { joinTranscripts, useDictation } from "../src/web/useDictation.js";
 import { useDictationField } from "../src/web/useDictationField.js";
@@ -141,8 +141,10 @@ const failed = (retryable: boolean): TranscriptionResult => ({
 });
 
 let clock = 0;
-/** The ceiling's callback, caught so a test can reach five minutes without waiting them. */
+/** The ceiling's callback, caught so a test can reach the cap without waiting for it. */
 let ceilings: Array<() => void> = [];
+/** Notes the fake `AudioContext` was asked to play: the cap's chime is three. */
+let notes = 0;
 
 type Path = "recogniser" | "no recogniser";
 
@@ -164,6 +166,21 @@ function install(path: Path) {
       resume = async () => {};
       createMediaStreamSource = () => ({ connect: () => {}, disconnect: () => {} });
       createAnalyser = () => ({ fftSize: 2048, getFloatTimeDomainData: () => {}, disconnect: () => {} });
+      currentTime = 0;
+      destination = {};
+      createOscillator = () => ({
+        type: "sine",
+        frequency: { setValueAtTime: () => {} },
+        connect: () => {},
+        start: () => {
+          notes += 1;
+        },
+        stop: () => {},
+      });
+      createGain = () => ({
+        gain: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {} },
+        connect: () => {},
+      });
     },
   );
   if (path === "recogniser") {
@@ -201,12 +218,13 @@ beforeEach(() => {
   calls = [];
   ignoreAbort = false;
   ceilings = [];
+  notes = 0;
   clock = 0;
   const base = Date.now();
   vi.spyOn(Date, "now").mockImplementation(() => base + clock);
   const realSetTimeout = window.setTimeout.bind(window);
   vi.spyOn(window, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-    if (ms === 5 * 60_000) {
+    if (ms === MAX_MS) {
       ceilings.push(fn);
       return 0;
     }
@@ -258,7 +276,7 @@ function drive(send = transcribe) {
   };
 }
 
-function driveField() {
+function driveField(onDone?: () => void) {
   let field: ReturnType<typeof useDictationField> | null = null;
   let value = "Before";
   function Probe(): ReactNode {
@@ -271,6 +289,7 @@ function driveField() {
       box,
       context: { kind: "profile" },
       transcribe,
+      ...(onDone && { onDone }),
     });
     return createElement("textarea", {
       ref: box,
@@ -537,7 +556,58 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
     expect(calls.map((c) => c.signal?.aborted)).toEqual([false, false, false]);
     for (const [i, w] of ["a", "b", "c"].entries()) await answer(i, ok(w));
     expect(h.transcripts).toEqual(["a b c"]);
+    /* The words arriving must not take the reason with them: it is the only
+       thing on screen saying why the microphone went off (spya-n8cuqq). */
+    expect(h.get().error).toContain("[mic-full]");
+    expect(h.get().error).toContain("15 minutes");
     h.unmount();
+  });
+
+  /* The countdown invites a press on Stop as it reaches zero. Landing just
+     after the cap, that press used to find a session already stopping, start a
+     new dictation, and abort the uploads of the one just recorded. GPT Sol's
+     plan review of 261007b, P7. */
+  it("a press on Stop just after the cap changes nothing", async () => {
+    const h = drive();
+    await longDictation(h, path);
+    act(() => ceilings[0]?.());
+    act(() => h.get().toggle());
+    if (path === "recogniser") act(() => recognition().onend?.());
+    await settle();
+    act(() => h.get().toggle());
+    await settle();
+    expect(calls, "the press started a new dictation").toHaveLength(3);
+    expect(calls.map((c) => c.signal?.aborted)).toEqual([false, false, false]);
+    for (const [i, w] of ["a", "b", "c"].entries()) await answer(i, ok(w));
+    expect(h.transcripts).toEqual(["a b c"]);
+    expect(h.get().error).toContain("[mic-full]");
+    /* And it is a moment's grace, not a button that is dead from then on. */
+    clock += 2000;
+    await press(h, path);
+    expect(h.get().armed).toBe(true);
+    h.unmount();
+  });
+
+  /* Heard as well as shown, and only for a cap: three notes, after the
+     recorders have drained. An ordinary Stop is silent. */
+  it("chimes when the cap ends it, and not when the reader does", async () => {
+    const h = drive();
+    await longDictation(h, path);
+    expect(h.get().endsAt).not.toBeNull();
+    await stop(h, path);
+    expect(notes, "an ordinary Stop chimed").toBe(0);
+    expect(h.get().endsAt, "a countdown left running over a stopped microphone").toBeNull();
+    h.unmount();
+
+    const capped = drive();
+    calls = [];
+    await longDictation(capped, path);
+    act(() => ceilings.at(-1)?.());
+    if (path === "recogniser") act(() => recognition().onend?.());
+    await settle();
+    expect(notes).toBe(3);
+    expect(capped.get().endsAt).toBeNull();
+    capped.unmount();
   });
 
   it("another box taking the microphone ends it like Stop, and it still publishes", async () => {
@@ -700,6 +770,30 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
 
 describe("the field's live-word span", () => {
   beforeEach(() => install("recogniser"));
+
+  /* The press arrives through a render that still says `armed`. The hook
+     ignores it; the field must not open its double-press window either, or a
+     second press sends a dictation nobody asked to send. GPT Sol's code
+     review of 261007b, C1. */
+  it("does not offer to send when a press on Stop lands just after the cap", async () => {
+    const sent: number[] = [];
+    const h = driveField(() => sent.push(1));
+    act(() => h.get().toggle());
+    await settle();
+    act(() => recognition().onaudiostart?.());
+    talk(5000, 1000);
+    const stale = h.get().toggle;
+    clock += MAX_MS;
+    act(() => ceilings[0]?.());
+    act(() => stale());
+    expect(h.get().again, "the cap opened the double-press window").toBeUndefined();
+    act(() => recognition().onend?.());
+    await settle();
+    await answer(0, ok("said"));
+    expect(sent).toHaveLength(0);
+    expect(h.value()).toContain("said");
+    h.unmount();
+  });
 
   it("keeps the superseded session's rough words outside the new session's replacement span", async () => {
     const h = driveField();

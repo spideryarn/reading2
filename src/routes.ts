@@ -472,6 +472,7 @@ import {
   FEEDBACK_KINDS,
   MAX_FEEDBACK_URL_CHARS,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   /* A value, and the same number the panel's textarea counts against — one
      declaration, so the button that disables itself and the route that answers
@@ -521,10 +522,11 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
- *   UTF-16 unit `JSON.stringify` can produce for a control character — times
- *   three, because a stale client still sends the old three answers and folding
- *   them into one `body` must not be refused before it is read;
+ * - the reader's answer, at the six bytes per UTF-16 unit `JSON.stringify` can
+ *   produce for a control character: the larger of the one box at
+ *   `MAX_FEEDBACK_ANSWER_CHARS` and a stale client's old three at
+ *   `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` each, because folding those into one
+ *   `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -536,7 +538,7 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  */
 const MAX_FEEDBACK_BODY_BYTES =
   Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 +
-  3 * MAX_FEEDBACK_ANSWER_CHARS * 6 +
+  Math.max(MAX_FEEDBACK_ANSWER_CHARS, 3 * MAX_LEGACY_FEEDBACK_ANSWER_CHARS) * 6 +
   MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES +
   /* The id, the URL, the slug, the build stamp, the two booleans, every key,
      and the braces and commas around all of it. The URL replaced the route kind
@@ -7367,15 +7369,15 @@ const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,6
  * own prose. The cap is in the message because the fix depends on it; the text
  * never is. docs/project/copy.md, and the same rule as `tidyBody` above.
  */
-function feedbackAnswer(value: unknown, field: string): string | null {
+function feedbackAnswer(value: unknown, field: string, cap: number): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") throw httpError(400, `${field} must be a string or null [fb-type]`);
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (trimmed.length > MAX_FEEDBACK_ANSWER_CHARS) {
+  if (trimmed.length > cap) {
     throw httpError(
       400,
-      `An answer can be at most ${MAX_FEEDBACK_ANSWER_CHARS} characters. ` +
+      `An answer can be at most ${cap} characters. ` +
         `Trimming it to the part that matters usually helps. [fb-long]`,
     );
   }
@@ -7409,10 +7411,13 @@ function feedbackBody(sent: Record<string, unknown>): string {
     throw httpError(400, "A report mixes two request shapes [fb-shape]");
   }
 
-  const written = feedbackAnswer(sent.body, "body");
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
+  /* **Two caps.** The one box takes `MAX_FEEDBACK_ANSWER_CHARS`. The old three
+     keep the cap they were written under, so that glued together they still
+     come to exactly what the column's CHECK admits. src/types.ts. */
+  const written = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
+  const steps = feedbackAnswer(sent.steps, "steps", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const expected = feedbackAnswer(sent.expected, "expected", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const actual = feedbackAnswer(sent.actual, "actual", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
   const legacy = [
     steps === null ? null : `Steps to reproduce:\n${steps}`,
     expected === null ? null : `What you expected to see:\n${expected}`,
