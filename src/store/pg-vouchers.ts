@@ -61,7 +61,12 @@ import {
   queueGiftEmail,
   skipQueuedGifts,
 } from "./pg-voucher-emails.js";
-import type { AdminVoucher, ClaimantUsage } from "../admin-vouchers.js";
+import {
+  RECIPIENT_NAME_MAX,
+  type AdminVoucher,
+  type ClaimantUsage,
+  cleanRecipientName,
+} from "../admin-vouchers.js";
 import { isUuid } from "../ids.js";
 
 const logger = log("store");
@@ -273,6 +278,7 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
       articles: row.articles,
       note: row.note,
       recipientNote: row.recipientNote,
+      recipientName: row.recipientName,
       createdAt: row.createdAt.toISOString(),
       createdBy: row.createdBy,
       updatedAt: row.updatedAt.toISOString(),
@@ -414,6 +420,8 @@ export interface NewVoucher {
   readonly note: string | null;
   /** The note to the recipient, put in their email. Plan 261002b. */
   readonly recipientNote: string | null;
+  /** Their name, which opens their email as *Dear <name>,*. Plan 261007f. */
+  readonly recipientName: string | null;
 }
 
 export type CreateVoucherAnswer =
@@ -429,8 +437,8 @@ export type CreateVoucherAnswer =
  * transaction.** It then waits, unclaimed, until its address asks for a plan.
  *
  * `on conflict (id) do nothing`: a replay under the same id finds the original,
- * and is `replayed` only if the stored address, articles, note and creator are
- * exactly what it carries; anything else under that id is a `conflict`. The
+ * and is `replayed` only if the stored address, articles, both notes, name and
+ * creator are exactly what it carries; anything else under that id is a `conflict`. The
  * email is queued only when this call's insert is the one that inserted.
  */
 export async function createVoucher(
@@ -451,12 +459,16 @@ export async function createVoucher(
           articles: input.articles,
           note: input.note,
           recipientNote: input.recipientNote,
+          recipientName: input.recipientName,
           createdBy,
         })
         .onConflictDoNothing({ target: billingVouchers.id })
         .returning({ id: billingVouchers.id });
       if (row) {
-        const delivery = await queueGiftEmail(tx, row.id, email, input.articles, audience, input.recipientNote);
+        const delivery = await queueGiftEmail(tx, row.id, email, input.articles, audience, {
+          recipientName: input.recipientName,
+          recipientNote: input.recipientNote,
+        });
         return { kind: "created", id: row.id, delivery };
       }
       const [existing] = await tx
@@ -465,6 +477,7 @@ export async function createVoucher(
           articles: billingVouchers.articles,
           note: billingVouchers.note,
           recipientNote: billingVouchers.recipientNote,
+          recipientName: billingVouchers.recipientName,
           createdBy: billingVouchers.createdBy,
         })
         .from(billingVouchers)
@@ -476,6 +489,7 @@ export async function createVoucher(
         existing.articles === input.articles &&
         existing.note === input.note &&
         existing.recipientNote === input.recipientNote &&
+        existing.recipientName === input.recipientName &&
         existing.createdBy === createdBy;
       return same ? { kind: "replayed", id: input.id } : { kind: "conflict" };
     },
@@ -498,7 +512,7 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const unknown = Object.keys(body).filter(
-    (key) => !["id", "email", "articles", "note", "recipientNote"].includes(key),
+    (key) => !["id", "email", "articles", "note", "recipientNote", "recipientName"].includes(key),
   );
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   if (typeof body.id !== "string" || !isUuid(body.id)) return { ok: false, message: "id must be a uuid." };
@@ -510,6 +524,8 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!note.ok) return note;
   const recipientNote = parseNote(body.recipientNote ?? null, "recipientNote");
   if (!recipientNote.ok) return recipientNote;
+  const recipientName = parseName(body.recipientName ?? null);
+  if (!recipientName.ok) return recipientName;
   return {
     ok: true,
     value: {
@@ -518,15 +534,18 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
       articles: articles.value,
       note: note.value,
       recipientNote: recipientNote.value,
+      recipientName: recipientName.value,
     },
   };
 }
 
-/** What `PATCH /api/admin/vouchers/:id` may carry: any of five fields, at least one. */
+/** What `PATCH /api/admin/vouchers/:id` may carry: any of six fields, at least one. */
 export function parseVoucherPatch(body: unknown): Parsed<VoucherPatch> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const keys = Object.keys(body);
-  const unknown = keys.filter((key) => !["email", "articles", "note", "recipientNote", "revoked"].includes(key));
+  const unknown = keys.filter(
+    (key) => !["email", "articles", "note", "recipientNote", "recipientName", "revoked"].includes(key),
+  );
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   if (keys.length === 0) return { ok: false, message: "Nothing to change." };
   const patch: { -readonly [K in keyof VoucherPatch]: VoucherPatch[K] } = {};
@@ -549,6 +568,11 @@ export function parseVoucherPatch(body: unknown): Parsed<VoucherPatch> {
     const recipientNote = parseNote(body.recipientNote, "recipientNote");
     if (!recipientNote.ok) return recipientNote;
     patch.recipientNote = recipientNote.value;
+  }
+  if ("recipientName" in body) {
+    const recipientName = parseName(body.recipientName);
+    if (!recipientName.ok) return recipientName;
+    patch.recipientName = recipientName.value;
   }
   if ("revoked" in body) {
     if (typeof body.revoked !== "boolean") return { ok: false, message: "revoked must be true or false." };
@@ -601,6 +625,22 @@ function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Pa
   return { ok: true, value: note === "" ? null : note };
 }
 
+/**
+ * **Their name: refused first, cleaned second** (261007f, Sol's F7). A raw
+ * value over the limit is a 400 that says so, never a silently shortened name;
+ * what passes is made one line and trimmed (`cleanRecipientName`), so a line
+ * break or a control character inside it becomes a space, and blank is none.
+ * Counted in code points, as `parseNote` counts and for its reason.
+ */
+function parseName(value: unknown): Parsed<string | null> {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string") return { ok: false, message: "recipientName must be a string or null." };
+  if ([...value].length > RECIPIENT_NAME_MAX) {
+    return { ok: false, message: `recipientName must be at most ${RECIPIENT_NAME_MAX} characters.` };
+  }
+  return { ok: true, value: cleanRecipientName(value) };
+}
+
 /** A change to one voucher. Every field optional; validated by the route. */
 export interface VoucherPatch {
   readonly articles?: number;
@@ -610,6 +650,8 @@ export interface VoucherPatch {
    * frozen when it is queued. A new address in the same patch is sent with it.
    */
   readonly recipientNote?: string | null;
+  /** Their name. **Changing it sends nothing**, exactly as the note. Plan 261007f. */
+  readonly recipientName?: string | null;
   /** Only while unclaimed — once claimed the voucher belongs to the account. */
   readonly email?: string;
   /** True revokes (keeping the row); false restores. */
@@ -694,6 +736,7 @@ async function updateOnce(
           email: billingVouchers.email,
           articles: billingVouchers.articles,
           recipientNote: billingVouchers.recipientNote,
+          recipientName: billingVouchers.recipientName,
         })
         .from(billingVouchers)
         .where(eq(billingVouchers.id, id))
@@ -715,6 +758,7 @@ async function updateOnce(
           ...(patch.articles === undefined ? {} : { articles: patch.articles }),
           ...(patch.note === undefined ? {} : { note: patch.note }),
           ...(patch.recipientNote === undefined ? {} : { recipientNote: patch.recipientNote }),
+          ...(patch.recipientName === undefined ? {} : { recipientName: patch.recipientName }),
           ...(newEmail === undefined ? {} : { email: newEmail }),
           /* Revoking an already revoked voucher keeps its first date. */
           ...(patch.revoked === undefined
@@ -739,8 +783,11 @@ async function updateOnce(
           newEmail,
           patch.articles ?? current.articles,
           audience ?? { kind: "invite" },
-          /* The note as it stands after this patch. */
-          patch.recipientNote === undefined ? current.recipientNote : patch.recipientNote,
+          /* The name and the note as they stand after this patch. */
+          {
+            recipientName: patch.recipientName === undefined ? current.recipientName : patch.recipientName,
+            recipientNote: patch.recipientNote === undefined ? current.recipientNote : patch.recipientNote,
+          },
         );
         return { kind: "updated", giftDelivery };
       }

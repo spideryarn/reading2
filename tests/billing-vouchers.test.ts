@@ -147,7 +147,7 @@ async function givenUsed(owner: string, n: number): Promise<void> {
 
 /** A voucher for `owner`'s address, unclaimed. */
 async function givenVoucher(owner: string, n: number, note: string | null = null): Promise<string> {
-  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null }, ADMIN_USER_ID_LOCAL);
+  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null, recipientName: null }, ADMIN_USER_ID_LOCAL);
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
   return made.id;
 }
@@ -415,7 +415,7 @@ describe("the administrator's side", () => {
     const id = randomUUID();
     expect(parseNewVoucher({ id, email: " A@B.example ", articles: 20 })).toEqual({
       ok: true,
-      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null },
+      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null, recipientName: null },
     });
     /* The id is the browser's, and required: it is what makes a replay the same create. */
     expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);
@@ -436,6 +436,38 @@ describe("the administrator's side", () => {
     expect(parseVoucherPatch({}).ok).toBe(false);
     expect(parseVoucherPatch({ revoked: "yes" }).ok).toBe(false);
     expect(parseVoucherPatch({ revoked: true, note: "  " })).toEqual({ ok: true, value: { revoked: true, note: null } });
+  });
+
+  it("takes their name as one line of at most 80 characters, refusing a longer one rather than shortening it", () => {
+    /* Plan 261007f: refused first, cleaned second. */
+    const id = randomUUID();
+    const base = { id, email: "a@b.example", articles: 2 };
+    const nameOf = (recipientName: unknown) => {
+      const parsed = parseNewVoucher({ ...base, recipientName });
+      return parsed.ok ? parsed.value.recipientName : parsed.message;
+    };
+    const TOO_LONG = "recipientName must be at most 80 characters.";
+    expect(nameOf("  Ada Lovelace ")).toBe("Ada Lovelace");
+    expect(nameOf("x".repeat(80))).toBe("x".repeat(80));
+    expect(nameOf("x".repeat(81))).toBe(TOO_LONG);
+    /* Code points, as Postgres' char_length counts: one emoji is one. */
+    expect(nameOf("😀".repeat(80))).toBe("😀".repeat(80));
+    expect(nameOf("😀".repeat(81))).toBe(TOO_LONG);
+    /* The raw value is what is measured, so padding cannot be trimmed into range. */
+    expect(nameOf(` ${"x".repeat(80)}`)).toBe(TOO_LONG);
+    /* A line break and a control character each become a space. */
+    expect(nameOf(`Ada${String.fromCharCode(10)}Lovelace${String.fromCharCode(0)}B`)).toBe("Ada Lovelace B");
+    expect(nameOf(`Ada${String.fromCharCode(13, 10)}L`)).toBe("Ada  L");
+    expect(nameOf("   ")).toBeNull();
+    expect(nameOf(null)).toBeNull();
+    expect(nameOf(7)).toBe("recipientName must be a string or null.");
+
+    expect(parseVoucherPatch({ recipientName: " Ada " })).toEqual({ ok: true, value: { recipientName: "Ada" } });
+    expect(parseVoucherPatch({ recipientName: "" })).toEqual({ ok: true, value: { recipientName: null } });
+    expect(parseVoucherPatch({ recipientName: null })).toEqual({ ok: true, value: { recipientName: null } });
+    expect(parseVoucherPatch({ recipientName: "x".repeat(81) })).toEqual({ ok: false, message: TOO_LONG });
+    /* A patch without it does not touch it. */
+    expect(parseVoucherPatch({ note: "n" })).toEqual({ ok: true, value: { note: "n" } });
   });
 });
 

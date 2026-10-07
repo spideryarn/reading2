@@ -6166,6 +6166,12 @@ export const billingVouchers = spideryarn.table(
      * Plan 261002b.
      */
     recipientNote: text("recipient_note"),
+    /**
+     * **Who the gift is for, by name**, as the administrator typed it: the gift
+     * email opens *Dear <name>,* under its heading. One line, and untrusted on
+     * render exactly as the note is. Null is no greeting. Plan 261007f.
+     */
+    recipientName: text("recipient_name"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -6195,6 +6201,10 @@ export const billingVouchers = spideryarn.table(
     check(
       "billing_vouchers_recipient_note_length",
       sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 500`,
+    ),
+    check(
+      "billing_vouchers_recipient_name_length",
+      sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 80`,
     ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),

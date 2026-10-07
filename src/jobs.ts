@@ -98,6 +98,7 @@ import { NotProcessed } from "./not-processed.js";
 import { NeedsAnotherWindow } from "./another-window.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
+import { shortIdIsTaken } from "./store/short-id-is-taken.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
@@ -1308,6 +1309,10 @@ async function runStep(
       controller.abort();
       controller.signal.throwIfAborted();
     }
+    /* A local Stop can arrive during the preflight reads even when the
+       starting note fails. Keeping a last step's returned product does not
+       authorise starting that step's work with an already-aborted signal. */
+    controller.signal.throwIfAborted();
     if (!powerRead.ok) throw powerRead.error;
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
@@ -1321,6 +1326,9 @@ async function runStep(
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
     const attempt = await session.beginStep(job.slug, step.name);
+    /* Opening the marker also yields: honour a Stop/deadline that arrived
+       there before invoking a step that might ignore its signal. */
+    controller.signal.throwIfAborted();
     /* **The one place that knows a step is over.** A step is not a model call
        — summarise batches per parent, labels fans out — so no stage can report
        its own total, and threading one up would be a return-type change on
@@ -1367,6 +1375,10 @@ async function runStep(
        write has landed (`stepPreviews`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
+    /* A partial run can return before a Stop, then yield while its ledger or
+       preview settles. Keep the step's retention condition until this final
+       decision boundary, rather than trusting a check inside its run. */
+    if (product.discardOnAbort) controller.signal.throwIfAborted();
     step.detail = product.detail;
     /* **Marked done before the commit, not after, and that is the ordering the
        atomic boundary needs.** `decide` below asks whether this was the job's
@@ -1401,9 +1413,10 @@ async function runStep(
 
        **That argument is the reader's Stop only.** When the abort was our own
        deadline, `decide` throws and the product is dropped on purpose; see
-       `transitionAfter`. And a Stop answered on this instance commits the
-       product into a draft that the `cancelled` ending then fails, so the
-       protection described above is not one that ending gives. */
+       `transitionAfter`. And a Stop answered on this instance with steps still
+       to run commits the product into a draft that the `cancelled` ending
+       then fails, so the protection described above is not one that ending
+       gives; on the last step the product is kept and published. */
     const transition = decide();
     /* **The settlement that happened, not the one that was asked for.** A
        release resolves to *cancelled* when a Stop landed while the step ran, and
@@ -2944,21 +2957,34 @@ async function walkClaim(
          before it are already in the draft, which the pause keeps.
          tests/jobs-walk.test.ts § the exits of a claim. */
       if (overran()) throw controller.signal.reason;
-      /* **The reader's Stop, on this instance.** Ends `cancelled` with the
-         draft failed, where the same Stop answered by another instance leaves
-         the job to finish `done` and published (`finishIn` clears the flag).
-         Two answers to one question, known and left alone: which is right is
-         a product decision that has not been made, and both are pinned as
-         today's behaviour in tests/jobs-walk.test.ts.
-         docs/plans/261007b-seventh-sweep-job-queue-tier-0.md § Left open. */
-      if (controller.signal.aborted) {
-        markCancelled(job, "Cancelled");
-        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
-      }
       /* The step that has just finished is already `done` in memory, so this is
          the next one the walk would reach — and `undefined` means the job is
          over. */
       const next = job.steps.find((s) => s.status !== "done" && s.status !== "skipped");
+      /* **The reader's Stop, on this instance, with steps still to run.** Stop
+         means do no more: the job ends `cancelled` and the draft is failed, as
+         it does when the Stop reaches another instance and is read at the
+         next boundary (`note`'s `cancelling`, or `releaseStepIn`'s `case`). */
+      if (controller.signal.aborted && next) {
+        markCancelled(job, "Cancelled");
+        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
+      }
+      /* **Nothing left: the job is done, and a Stop on this instance does not
+         change that.** The last step returned its product, so it is committed
+         and the article published, exactly as when the Stop reached another
+         instance (`finishIn` clears the flag; `cancel_requested_at` keeps the
+         press). Until 2026-10-07 this instance alone ended such a job
+         `cancelled` and failed the draft, so the same press kept the article
+         or lost it by which server answered it. Greg, 2026-10-07, relayed by
+         the Overseer: "re Stop, yes, probably best to err on the side of
+         caution, and keep & publish".
+
+         **What makes keeping safe is the step's job, not this one's.** A step
+         that obeys the signal throws and has nothing here to keep. One that
+         returns after it must not return a product that claims to be finished:
+         `assets` marks a manifest made under an abort as not current, and
+         `illustrated` throws rather than hand back a half-painted set.
+         docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
       if (!next) {
         return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "done") };
       }
@@ -3156,6 +3182,14 @@ async function walkClaim(
           jlog.warn(
             { step: step.name },
             `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,
+          );
+        } else if (controller.signal.aborted && settlement.ending.status === "done") {
+          /* `info`, because the job row says only `done`: this line and
+             `cancel_requested_at` are what record that a Stop was pressed and
+             the article kept anyway (`transitionAfter`, the last step). */
+          jlog.info(
+            { step: step.name },
+            `stop pressed during the last step, which finished: kept and published — ${job.slug}`,
           );
         } else if (controller.signal.aborted) {
           jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
@@ -3749,7 +3783,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     : request.url
       ? await freeSlug(request.slug, request.url)
       : request.upload
-        ? { kind: "minted", slug: slugWithShortId(request.slug) }
+        ? { kind: "minted", slug: await mintSlug(request.slug) }
         : /* From the shelf, and the preflight a few lines up has just proved it:
              this is *"run something on the article I already have"*, and a slug
              nobody has is refused there rather than reaching this line. */
@@ -4086,7 +4120,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
-        : { kind: "minted", slug: slugWithShortId(request.slug) };
+        : { kind: "minted", slug: await mintSlug(request.slug) };
       continue;
     }
 
@@ -4391,6 +4425,45 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
   return allocation.kind === "adopted" && allocation.from === "shelf";
 }
 
+/** How many ids `mintSlug` will mint for one slug. It asks about all but the last. */
+const MINT_TRIES = 3;
+
+/**
+ * **A slug for a new article, ending in a short id no article already has.**
+ *
+ * `articles.short_id` is unique across every owner, and a freshly minted id
+ * can equal one an article already holds. That is rare for one import and
+ * grows with the library, and until 2026-10-07 nothing looked: the import
+ * failed where the article row is created, and a retry, which keeps its name,
+ * failed again. So this asks, and mints again on a yes. Plan 261007f, E10.
+ *
+ * **The one way `enqueue` mints.** Its three mints (a pasted address through
+ * `freeSlug`, an upload, and the re-mint after `nameTaken`) all come here. A
+ * retry does not: it keeps the failed attempt's name (`slugForRetry`).
+ *
+ * **Asking is not reserving**, and this does not pretend to. Two imports that
+ * mint one id at the same moment both hear "free". The last id is also sent
+ * out unasked, so a lookup that says yes for ever cannot hang an import. In
+ * both cases the database refuses the second row and `lockOrCreateArticle`
+ * (src/store/pg-revisions.ts) refuses in words. **The reader does not see
+ * those words today**: a refusal while a claim opens its draft ends no job, so
+ * the import sits as running until its lease and requeues run out, then fails
+ * as interrupted. That is true of every refusal thrown there, not only this
+ * one, and is written up in docs/project/ingest-queue.md § When two imports
+ * mint the same id at once.
+ *
+ * The lookup is an argument for `freeSlug`'s reason: tests/short-id-collision.test.ts
+ * can say "taken, then free" without an article in the way.
+ */
+export async function mintSlug(
+  base: string,
+  isTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
+): Promise<string> {
+  let id = mintId();
+  for (let tries = 1; tries < MINT_TRIES && (await isTaken(id)); tries += 1) id = mintId();
+  return slugWithShortId(base, id);
+}
+
 /**
  * **The slug this URL should use: the one it already has, or a fresh one.**
  *
@@ -4445,6 +4518,10 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
  * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
  * one line those tests do not cover.
  *
+ * `idIsTaken` is a second lookup, handed straight to `mintSlug` above. The
+ * cases in that file that mint leave it at its default, so they do ask the
+ * database; tests/short-id-collision.test.ts is where it is stood in for.
+ *
  * ## It says which of the two it did, and that is not decoration
  *
  * See `SlugAllocation`. The two branches below are the *only* place in the
@@ -4455,9 +4532,10 @@ export async function freeSlug(
   slug: string,
   url: string,
   alreadyHolding: (urlKey: string) => Promise<SlugHolder | undefined> = slugAlreadyHolding,
+  idIsTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
 ): Promise<SlugAllocation> {
   const held = await alreadyHolding(urlKey(url));
-  if (held === undefined) return { kind: "minted", slug: slugWithShortId(slug) };
+  if (held === undefined) return { kind: "minted", slug: await mintSlug(slug, idIsTaken) };
   /* The two adoptions are spelled out rather than spread, because they are not
      the same allocation: a queue adoption carries the holder it adopted from,
      and the type will not let it be built without one. See `SlugAllocation`. */

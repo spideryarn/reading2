@@ -1,5 +1,5 @@
 {
-  "id": "2a22b89e-984d-44ec-bc75-a9cb067ebd5e",
+  "id": "88800ff3-43db-421e-9525-c9e19a431b15",
   "prevId": "1fc6ba73-7fe3-461f-9ca1-3878fc31a486",
   "version": "7",
   "dialect": "postgresql",
@@ -2277,6 +2277,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "recipient_name": {
+          "name": "recipient_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2384,6 +2390,10 @@
         "billing_vouchers_recipient_note_length": {
           "name": "billing_vouchers_recipient_note_length",
           "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_note\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_note\") <= 500"
+        },
+        "billing_vouchers_recipient_name_length": {
+          "name": "billing_vouchers_recipient_name_length",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_name\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_name\") <= 80"
         },
         "billing_vouchers_claimed_together": {
           "name": "billing_vouchers_claimed_together",
@@ -5379,6 +5389,12 @@
           "notNull": true,
           "default": 1
         },
+        "running_job_id": {
+          "name": "running_job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
@@ -5388,7 +5404,22 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "queue_state_running_job_id_jobs_id_fk": {
+          "name": "queue_state_running_job_id_jobs_id_fk",
+          "tableFrom": "queue_state",
+          "tableTo": "jobs",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "running_job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

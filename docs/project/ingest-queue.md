@@ -887,6 +887,32 @@ handle a rename would redirect through. `slugForShortId`
 ([`src/store/find-article.ts`](../../src/store/find-article.ts)) is that lookup. The rename itself is
 not built.
 
+### A new id is checked against every article, and when two imports mint the same id at once
+
+A short id is random, so a new one can equal one an article already has. For one import that is 8
+in 100 million at 62 articles, but it grows with the square of the library: an even chance of a
+first collision by about 33,000 articles. So since 2026-10-07 `mintSlug`
+([`src/jobs.ts`](../../src/jobs.ts)) asks whether any article has the id, through the boolean
+`shortIdIsTaken` ([`src/store/short-id-is-taken.ts`](../../src/store/short-id-is-taken.ts)), and
+mints again if so. All three places `enqueue` mints go through it. Before that, the import failed
+where its article row is created and Retry, which keeps the name, failed again.
+
+**Known and left open:** asking is not reserving. Two imports in flight that mint the same id at the
+same moment both hear "free", and the database refuses the second row. For exactly two imports in
+that window, the chance is about 1 in 772 million; unlike collision with the existing library, it
+does not grow with the library's size. No model has been paid at that point, because
+the row is created when the job's draft opens, before any step. `lockOrCreateArticle`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) turns the violation into a refusal
+in plain words, but **the reader does not see them**: a refusal thrown while a claim opens its draft
+ends no job, so the card shows an import running for about 38 minutes (the lease, then two requeues)
+and then *"This stopped part-way through"* with a Retry that repeats it. Pasting the address again
+works at once. That gap belongs to every refusal thrown at draft open, the older "slug already
+belongs to another reader" included, and closing it is queued separately
+([261007f](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
+Closing the window itself would take a unique index on the queue and a migration; passed over as
+machinery for a roughly one-in-772-million collision between a particular pair of simultaneous
+imports. `tests/short-id-collision.test.ts`.
+
 ### What the short id changed about adoption, and it is not nothing
 
 `freeSlug` still *adopts* — adding an article we already have comes back to its slug, so every step
@@ -1982,13 +2008,10 @@ is dropped on purpose**: `assets` returns a manifest whose unfetched images are 
 `failed: "network"` and stamped current, and keeping it would publish it. The step runs again in
 the next window, on a draft that still holds every step before it.
 
-**What Stop does in the same position is two things, and is an open question.** If the last step
-finishes although Stop was pressed, the job ends `done` and published when the Stop was answered
-by another server (`finishIn` clears the flag), and `cancelled` with the draft failed when it was
-answered by the claimant's own. Neither was changed; both are pinned as today's behaviour in
-`tests/jobs-walk.test.ts`, and
-[261007b § Left open](../plans/261007b-seventh-sweep-job-queue-tier-0.md#left-open-for-greg) has
-the question.
+**Stop in the same position is a different signal with a different rule**: a last step that
+returns after the reader's Stop is kept and published —
+[§ A Stop during the last step keeps the article](#a-stop-during-the-last-step-keeps-the-article).
+Which of the two fired first decides which rule applies.
 
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
@@ -2456,6 +2479,37 @@ on the claimant aborting itself *inside* its own lease, and for a while it did n
 created after `parts.session(...)` had been awaited, which under Postgres is two row locks and
 possibly a block copy — with no deadline armed for any of it. The real deadline drifted later than
 the arithmetic assumed, which is precisely what let a claimant still be alive when its lease lapsed.
+
+### A Stop during the last step keeps the article
+
+> re Stop, yes, probably best to err on the side of caution, and keep & publish
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+**A Stop that lands while an import's last step is finishing keeps and publishes the article,
+whichever server it reached.** If the step returns its product, the product is committed, the
+draft is published and the job ends `done`. Until 2026-10-07 that was true only when the Stop
+reached another server; when it reached the claimant's own, the in-process abort made
+`transitionAfter` end the job `cancelled` and fail the draft, so the same press kept the article or
+lost it by which server answered.
+[261007f](../plans/261007f-stop-during-the-last-step-keeps-and-publishes.md) has the build.
+
+Four things it does not change. **A Stop during an earlier step** still does no more: the later
+steps do not run, the job ends `cancelled`, and the draft is failed. **A step that obeys the Stop**
+throws and leaves nothing to keep. **Our own deadline** still discards a late product and pauses
+([above](#a-claimant-that-runs-out-of-time-puts-the-job-down-and-keeps-its-draft)). And when both
+fire, the first abort's reason sticks: deadline first ends as the pause's *Stop wins* answer,
+`cancelled`; Stop first keeps the article.
+
+**`done` is the word, and the press is still on the row.** The card shows the finished state and
+says nothing about the Stop; `jobs.cancel_requested_at` keeps when it was pressed, for an operator.
+
+**Keeping is safe only if the step does not claim a part-made product is finished.** `assets`
+answers a Stop by returning a manifest in which every image not yet fetched is a failure, so it
+writes `sourceHash: "stopped-part-way"` and the manifest is not current: those images hot-link the
+publisher until a run that includes `assets` fetches them (*Refresh from source* and *Start again*
+force it). `illustrated` throws on a Stop between plates rather than publish a half-painted set
+over the last good one.
 
 ## Naming the step is the point
 
