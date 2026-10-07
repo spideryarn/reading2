@@ -123,7 +123,7 @@ export interface ModeCatalogEntry {
    *    sentence beginning *"Opening it runs…"* is false on three of the four.
    *    Four of the fourteen said exactly that in first draft and GPT Sol caught
    *    all four (2026-09-07). Write about the **artefact and where it comes
-   *    from** — *"one model pass over the article, written once and then
+   *    from** — *"one model call over the article, written once and then
    *    stored"* — which is true wherever the card is read and is also what
    *    makes `how` an intrinsic fact about the mode, and so a legitimate
    *    tenant of this file rather than a Dock string parked in it.
@@ -290,7 +290,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   glossary: {
     description: "The terms this piece uses in a non-obvious way, defined from the piece itself",
-    how: "The list is one model pass over the whole article, written once and then stored, so it is instant every time after the first. Terms are defined from this piece rather than from a dictionary, and once they exist they are underlined in the prose in every mode, not only this one.",
+    how: "The list is one model call over the whole article, written once and then stored, so it is instant every time after the first. Terms are defined from this piece rather than from a dictionary, and once they exist they are underlined in the prose in every mode, not only this one.",
     /* Not `concepts`: a reader could as well mean Ideas, and `rerun concepts`
        would then force the wrong list. */
     aliases: [
@@ -397,7 +397,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   ideas: {
     description:
       "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
-    how: "One model pass over the article, written once and then stored. The split between what you have to bring and what the piece adds is the model's reading rather than something the article marks, and each idea carries the passages it was drawn from, where they can still be found.",
+    how: "One model call over the article, written once and then stored. The split between what you have to bring and what the piece adds is the model's reading rather than something the article marks, and each idea carries the passages it was drawn from, where they can still be found.",
     /* **Not `claims`**, which was the first draft and which GPT Sol caught on
        2026-09-07: Referee has a built sub-mode labelled exactly "Claims", so
        the commonest word for a proposition is already spoken for by a different
@@ -462,7 +462,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   timeline: {
     description: "When the piece says these things happened, in order — and how sure it actually is",
-    how: "One model pass over the article, written once and then stored. Anything the piece never dated stays undated rather than being guessed at, and the order is the model's reading of the piece rather than a sort by date.",
+    how: "One model call over the article, written once and then stored. Anything the piece never dated stays undated rather than being guessed at, and the order is the model's reading of the piece rather than a sort by date.",
     aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
     experimental: true,
   },
@@ -499,7 +499,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "one model pass … written once and then stored": the `citations` step,
+       - "one model call … written once and then stored": the `citations` step,
          one messages-wire call over `articleWithIds`, written to the
          `citations` column (src/citations.ts, src/pipeline.ts § STEPS).
        - "every address … is one the article gave, found by code": `linkFor` in
@@ -538,7 +538,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model call over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: [
@@ -596,7 +596,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "The questions a careful reader would ask this piece, and where it responds",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "one model pass over the article, written once and stored": the `faq`
+       - "one model call over the article, written once and stored": the `faq`
          step, one messages-wire call over `articleWithIds`, written to the `faq`
          column and replaced on a re-run (src/faq.ts, src/pipeline.ts § STEPS).
        - "no answer is written": `FaqQuestion` has `question` and `passages` and
@@ -613,7 +613,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          to. No frequency score exists: nobody's asking is counted.
        Not the "checked against it" sentence, which the panel's (i) already
        says (GPT Sol D3). About the mode, not the press, and no price. */
-    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
+    how: "One model call over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
     /* Not `questions`, and nothing that starts with it — `questions and
        answers` — because `question` is Chat's and FAQ comes first in the bar:
        the longer word here would take it. `faq` itself is this mode's label,
@@ -626,7 +626,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "A route through the piece's quotes, a little deeper each time round",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "a short model pass over its quotes": the `skim` step reads the
+       - "a short model call over its quotes": the `skim` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
          src/skim.ts sends each quote's words, section path and priority,
          and never the article's prose.
@@ -639,7 +639,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          (`SKIM_NO_QUOTES`), and the band asks for `quotes` before it
          (`precededBy`, src/web/useSkim.ts).
        About the mode, not the press, and no price. */
-    how: "A short model pass over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
+    how: "A short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
     /* "spiral" and "route" are the two words Greg used for it in the brief —
        docs/project/skim.md. `trajectory` was the mode's own word until
        2026-10-01 (261001r), and Greg asked to keep it as a keyword. */
@@ -664,7 +664,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */

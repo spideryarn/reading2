@@ -652,7 +652,14 @@ describe("CitationsPanel", () => {
     await draw(owner({ citations: artefact([searched, PASSING]) }));
     const button = investigateButton(searched.id);
     const card = await cardFor(button);
-    for (const copy of [`${card.head} ${card.body}`, MODE_CATALOG.citations.how]) {
+    /* The catalog's first sentence is about the listing, not Dig deeper, and says
+       "One model call" like every sibling band's since 2026-10-07 (Greg chose
+       "call" over "pass", plan 261007h § F6); the promise checked here is the
+       Dig deeper part's, so the catalog is read from there on. */
+    const how = MODE_CATALOG.citations.how;
+    const digDeeper = how.slice(how.indexOf("Dig deeper"));
+    expect(digDeeper.length).toBeLessThan(how.length);
+    for (const copy of [`${card.head} ${card.body}`, digDeeper]) {
       expect(copy).toMatch(/searches the web for (this|the) work/i);
       expect(copy).not.toMatch(/one web search|model call/i);
     }

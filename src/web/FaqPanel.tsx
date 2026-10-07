@@ -221,9 +221,9 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has asked this piece its questions yet.</p>
+          <p>Nobody has asked this one its questions yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article, and it takes tens of seconds. Written once and kept —
+            One model call over the whole article, and it takes tens of seconds. Written once and kept —
             you will not be asked again unless the article changes.
           </p>
           {run("Find the questions")}

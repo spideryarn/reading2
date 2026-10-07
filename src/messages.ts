@@ -3452,7 +3452,7 @@ export const SIGN_IN_AGAIN = "Sign in again";
  * `noun` is a noun phrase with its article: `"a glossary"`, `"a summary"`.
  */
 export function notBuiltYet(noun: string): string {
-  return `Nobody has built ${noun} for this piece yet.`;
+  return `Nobody has built ${noun} for this one yet.`;
 }
 
 /**
@@ -3481,7 +3481,7 @@ export function notBuiltYet(noun: string): string {
  * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */
 export function builtButEmpty(noun: string): string {
-  return `${noun} was built for this piece, and it came back with nothing in it.`;
+  return `${noun} was built for this one, and it came back with nothing in it.`;
 }
 
 /**

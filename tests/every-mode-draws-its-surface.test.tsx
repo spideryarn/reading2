@@ -1227,9 +1227,9 @@ const SPENDS: Record<Mode, Spend> = {
   timeline: { kind: "posts", steps: ["timeline"] },
   /* The dearest press in the app — two calls out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
-  /* One model pass over the article, like the timeline. */
+  /* One model call over the article, like the timeline. */
   citations: { kind: "posts", steps: ["citations"] },
-  /* One model pass over the article, like Ideas. */
+  /* One model call over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
   /* **Three steps, and the first two are the point**: with no Quotes the
      route has nothing to order, and since stage 6 of plan 260928a it plans

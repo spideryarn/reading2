@@ -176,7 +176,7 @@ export function TweetsPanel({
         <div className="gloss-empty">
           <p>Nobody has written a thread for this one yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article, and it takes tens of seconds. Written once and kept
+            One model call over the whole article, and it takes tens of seconds. Written once and kept
             — you will not be asked again unless the article changes.
           </p>
           <Run owner={owner} label="Write the thread" />

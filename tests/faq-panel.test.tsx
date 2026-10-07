@@ -273,7 +273,7 @@ describe("FaqPanel", () => {
 
   it("offers to find them when nobody has", async () => {
     await draw(owner({ status: "none", faq: null }));
-    expect(host.textContent).toContain("Nobody has asked this piece its questions yet.");
+    expect(host.textContent).toContain("Nobody has asked this one its questions yet.");
     expect(host.textContent).toContain("Find the questions");
     expect(host.querySelector(".faq-item")).toBeNull();
   });
