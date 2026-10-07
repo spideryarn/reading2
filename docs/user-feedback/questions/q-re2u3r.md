@@ -1,7 +1,7 @@
 ---
 id: q-re2u3r
 report: spya-uc0asn
-status: open
+status: answered
 asked: 2026-10-06
 title: Should a signed-in reader get AI on someone else's public article?
 refs: SPIDERYARN-READING2-DY · qi-qw7tggag · docs/plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article.md § Questions for Greg · docs/user-feedback/261006_1425-ai-for-a-signed-in-reader-on-a-public-article.md
@@ -35,3 +35,9 @@ What would decide it: whether you see a search on a public article as a taste th
 Recommended: A.
 
 Not asked now: who pays for D. Its searches and chats cost about a hundred times more per call and nothing limits them, so that waits on a general spending limit, which does not exist yet.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> it's fine if signed-in visitors reading someone else's public articles can't use AI modes for now
+
+Settled: E, C and D not now; the private copy (B, built) is the route. Recorded in 261006k.
