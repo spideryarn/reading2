@@ -13,6 +13,28 @@ running text — each with a link. Asked for through the Feedback button on 2026
 The design, the review that reshaped it and the real runs are
 [260911g-citations-mode.md](../plans/260911g-citations-mode.md). This page says what is built.
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ A row](#a-row) — what one row draws, and where its two scores come from
+- [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
+- [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
+- [§ What we have read of the work](#what-we-have-read-of-the-work-said-on-every-row) — the "read from" line on every row
+- [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
+- [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
+- [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
+- [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
+- [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
+- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that reads a work and judges its influence
+- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work
+- [§ Already an article here](#already-an-article-here) — a cited work that is already on the shelf
+- [§ Chat can read it](#chat-can-read-it) — the `article_citations` tool
+- [§ Making it again](#making-it-again) — the Metadata redo
+- [§ Who sees it](#who-sees-it) — owner, visitor, experimental switch
+- [§ Deferred](#deferred) — what was left out, and where each reason is written
+- [§ The code](#the-code) — the files, in one list
+
 ## A row
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
@@ -839,8 +861,15 @@ work inside the fence, after filtering and caps; our words also say what the cou
 ## Making it again
 
 From the Metadata page: *AI processing* has a Citations row, since 2026-09-29, and it is the
-only redo — the panel says nothing when its list was made by an older prompt
-([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
+usual place to redo a list the article still matches — the panel says nothing when its list was made by an
+older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
+article has changed under the list, the banner that says so has *Find them again*, which is held
+from the press until the new list has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+After a refused start, the panel's foot also offers *Find them again* on a current list, held in
+the same way.
+A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
 succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
 drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
@@ -880,6 +909,12 @@ code keeps of it) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).
+
+The tests are the `tests/citation*.test.ts(x)` and `tests/citations*.test.ts(x)` files, one per
+piece above (for instance [`citations.test.ts`](../../tests/citations.test.ts),
+[`citation-marks.test.ts`](../../tests/citation-marks.test.ts),
+[`citations-panel.test.tsx`](../../tests/citations-panel.test.tsx)). The probe behind the
+influence numbers is [`evals/citations-influence-dig.ts`](../../evals/citations-influence-dig.ts).
 
 ---
 

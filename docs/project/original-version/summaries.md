@@ -46,7 +46,8 @@ does this, with 2–6 words for a `title` and 6–20 for a `navLabel`.
 **The steps are not uniform.** 10, 15, 25, 30, 50, 100, 200, 400, 800 — roughly geometric at the
 top, much finer at the bottom. That is a real finding about where the useful distinctions are: the
 difference between 10 and 25 tokens changes what a line can *do*, while the difference between 400
-and 800 is just more of the same. It is direct evidence for [Q4](../open-questions.md#q4): discrete
+and 800 is just more of the same. It is direct evidence for Q4 (discrete levels or continuous zoom), which is
+[closed as moot](../open-questions.md#q4) now the gist columns are gone: discrete
 levels, unevenly spaced, chosen by what they can express.
 
 ## What the prompt says, and the one thing it doesn't
@@ -207,6 +208,10 @@ all-or-nothing parse.
 - [overview.md](overview.md) — the map to that codebase
 - [../granularity-zoom.md](../granularity-zoom.md) — our version: a gist per node, at every depth
 - [../structure-step.md#granularity](../structure-step.md#granularity) — our length rules, and why a row's job is to distinguish itself
-- [../open-questions.md#q4](../open-questions.md#q4) — discrete levels or continuous zoom
+- [../open-questions.md#q4](../open-questions.md#q4) — discrete levels or continuous zoom (closed, moot: the gist columns were removed 2026-09-29)
 - [prompt-caching.md](prompt-caching.md) — the alternative to batching, which they designed and never built
 - [llm-plumbing.md](llm-plumbing.md) — structured output, retries, and what they logged
+
+---
+
+Up: [overview.md](overview.md)

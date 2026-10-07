@@ -26,6 +26,26 @@ answer from the model only if you ask for one. Saving costs nothing.
 > *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
 > has changed is what a selection creates, and what a comment is allowed to hold.
 
+## In this doc
+
+- [§ What a comment is now](#what-a-comment-is-now) — the current model: bookmark, note, optional AI answer
+- [§ Intent](#intent) — Greg's words and the reasoning behind the design
+- [§ Several at once](#several-at-once) — asking about many passages together
+- [§ The answer arrives a few words at a time](#streaming) — how an answer streams in
+- [§ Two more ways to push back on an answer](#pushing-back) — follow-up and *Ask in chat* from a comment
+- [§ Anchoring](#anchoring) — how a comment finds its passage (block ids, quote)
+- [§ Why this call is not a pipeline stage](#why-this-call-is-not-a-pipeline-stage) — why it is a request, not a stage
+- [§ What the prompt asks for](#what-the-prompt-asks-for) — the model's brief for an answer
+- [§ The drawer that lists them, and what kind of thing it is](#the-drawer) — the comments list
+- [§ Where the code is](#where-the-code-is) — files and tests; start here to find code
+- [§ Three things that fail silently here, and one that used to](#three-things-that-fail-silently-here-and-one-that-used-to) — gotchas
+- [§ When it says "Failed to fetch"](#failed-to-fetch) — a known error and its cause
+- [§ A shared link carries them, since 2026-09-04](#a-shared-link-carries-them-since-2026-09-04) — what a visitor sees
+- [§ Deliberate limits](#deliberate-limits) — what a comment will not do
+- [§ Where the chat panel sits](#chat-dock) — dock placement beside the prose
+- [§ The other way to ask](#the-other-way-to-ask) — chat as the alternative to a comment's AI
+- [§ See also](#see-also)
+
 ## What a comment is now
 
 Three independent properties, and a comment may have any combination of them:
@@ -325,7 +345,14 @@ Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/route
 
 - **A criterion that is not yours is refused, not stored.** `criterionId` comes off a request, so on
   its own it names any string; it is checked against `refereeCriteriaStore.load(slug)`, which is
-  scoped to the article *and* the requesting owner.
+  scoped to the article *and* the requesting owner. **And the same 400, in the same words, when the
+  criterion goes between that check and the write** — another tab deleting it, which it may while
+  nothing is placed on it. The check and the write are two statements, so `comments_criterion_fk`
+  is what notices; `rethrowPlacementError` in
+  [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) catches that key by name on `create`
+  and `patchMark` and answers as the route would have. It was a 500 until 2026-10-07. The other
+  direction — deleting a criterion comments are placed on — is
+  [referee-mode.md § a criterion with comments on it](referee-mode.md#a-criterion-with-comments-on-it).
 - **An out-of-range valence is a 400, never a clamp.** This is the one rule the feature exists for.
   `SearchHit.confidence` is a 0–100 match strength whose validator clamps negatives to zero, so a
   placement that travelled anything confidence-shaped arrives as `0` — *"no strong feeling"* — with
@@ -767,7 +794,7 @@ it was fine" from "nobody has said".
 
 > [!NOTE]
 > The panel sits at `z-index: 70` — above everything structural, but **below** the tooltip layer
-> (`.tooltip-anchor`, 80). It was 90 first, on the reasoning that a hover should never cover
+> (`.tooltip-anchor`, 100; it was 80 until the drawer arrived at 95). It was 90 first, on the reasoning that a hover should never cover
 > something the reader deliberately opened. That was wrong and visibly so: the panel has a tooltip
 > of its own, and at 90 it buried it. A tooltip is dismissed the instant the pointer moves, so it
 > cannot obstruct anything.
@@ -831,6 +858,36 @@ The `begin` frame carries the whole comment, and that is the point of it: `Comme
 re-mints an id that is malformed or collides, and a stream has no response body to carry the real one
 back.
 Without it the client streams an answer into a row the server has never heard of.
+
+### The stream owns the answer, and nothing else on the row <a id="the-stream-owns-the-answer"></a>
+
+A reader can edit their note, move its placement or recolour it while its explanation is being
+written: the box is mounted whatever the status, and those PATCHes are deliberately not queued
+behind a fifteen-second stream. So two writers share one row and neither waits for the other.
+
+**The rule: each writes its own half.** The answer's half is `status`, `answer`, `citations`,
+`searches`, `model` and `error` (and the tab's own `replacing`); everything else is the reader's.
+
+- **On the server**, the answer's write touches only its own columns, and the `done` frame is the
+  row read back after that write (`settle` in [`src/routes.ts`](../../src/routes.ts) § `answer`).
+  If a newer attempt claimed it before that read, this stream retains its own committed terminal
+  answer over the latest reader fields; it cannot watch the replacement attempt. See
+  [the postmortem](../postmortems/261007b-a-post-write-read-can-belong-to-a-new-attempt.md).
+- **In the tab**, every frame of the stream (`begin`, each `delta`, `done`, and the hook's own
+  failure branch) writes the answer's half onto the row as it is on screen now: `putAnswer` and
+  `withAnswerOf` in [`src/web/useComments.ts`](../../src/web/useComments.ts). The half is replaced,
+  not merged, so a frame with no `error` removes the previous one.
+- **And the other way round**, a PATCH's answer is the whole row as stored when the write
+  committed, which for the length of a stream says `pending` with no answer. If a stream was open
+  at any point while the PATCH was out, only the reader's half of that answer is taken
+  (`landPatch`). With no stream in the way it replaces the whole row, as it always did.
+
+Until 2026-10-07 none of the three held: a note edited mid-stream went back to the old one on
+screen at the next delta and stayed there after `done`, and a PATCH answered after `done` brought
+the spinner back for good. Postgres was right throughout, which is why nothing reported it.
+[Plan 261007b](../plans/261007b-seventh-sweep-chat-and-comment-invariants.md), C;
+`tests/comment-answer-stream-keeps-reader-edits.test.tsx` and
+`tests/comment-answer-stream-lifetime.test.ts`.
 
 ### And it stays where it starts <a id="stays-where-it-starts"></a>
 
@@ -1027,9 +1084,9 @@ ahead of time. Everything else about the stage discipline holds — the call is 
 function ([`src/explain.ts`](../../src/explain.ts)), the routes are a thin wrapper
 ([`src/routes.ts`](../../src/routes.ts)), and the artefact is a row in Postgres.
 
-It is also the only place the project talks to **OpenRouter** rather than the Anthropic SDK the
-pipeline uses, because `OPENROUTER_API_KEY` is the key this project has. The model defaults to
-`anthropic/claude-sonnet-5` and is overridable with `SPIDERYARN_EXPLAIN_MODEL`.
+Like the other article-analysis calls it goes through **OpenRouter** ([ai-gateway.md](ai-gateway.md)). The model
+is whichever one `src/models.ts` puts the `explain` task on for the article's power (`modelFor`),
+and `SPIDERYARN_EXPLAIN_MODEL` overrides it.
 
 ## What the prompt asks for
 
@@ -1205,10 +1262,11 @@ nothing to poll.
 2. **A 200 with no completion.** OpenRouter answers `200` with an empty `content` when the model
    stops for its own reasons. `explain` throws on that rather than storing a blank comment that
    looks answered.
-3. **The browser's own selection highlight** sits on top of the mark we just drew, so without
-   `removeAllRanges()` after asking, the new artefact is invisible until the reader clicks
-   elsewhere — and it looks exactly like a mark that was never drawn. The call is in
-   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `onSelect`.
+3. **The browser's own selection highlight** sits on top of the mark we just drew, so a new mark
+   can be invisible until the reader clicks elsewhere — and it looks exactly like a mark that was
+   never drawn. A mouse's selection is now put back over the new mark (`selectAnchor` in
+   [`selection.ts`](../../src/web/selection.ts)); a finger's is cleared with `removeAllRanges()` in
+   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `selectProse`.
 4. **Retry, which shipped broken and was caught in the browser.** `retry` fired the POST from
    inside a `setComments` updater. An updater must be pure — React StrictMode invokes it twice — so
    one click sent *two* requests; and because `CommentStore.create` refused a client id that was
@@ -1244,7 +1302,7 @@ agent's word for it, or your own from ten minutes ago:
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5273/api/article/<slug>
 ```
 
-A comment whose POST never reached the server is **not** written to disk, so it disappears on
+A comment whose POST never reached the server is **not** stored, so it disappears on
 reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 
 ## A shared link carries them, since 2026-09-04
@@ -1289,7 +1347,8 @@ hole in six lines.
 
 So `publicCommentsQuery` names its columns, joins `articles`, and **repeats the `publicSlug`
 predicate in its own `where`** — a naked `articleId` is not authority. The tripwire's allowlist grew
-from four tables to five, deliberately, and its comment says what a sixth line would have to prove.
+from four tables to five, deliberately, and its comment says what a further line would have to prove
+(it has grown since; the list in the test is the current one).
 
 ### Citations are re-judged, not copied
 
@@ -1337,8 +1396,9 @@ rather than blanked, and if none survives the key comes off entirely.
   same long-press is how a reader copies or looks a word up, so a touch selection gets a "Highlight
   or comment" button below it and the press applies the highlight —
   [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
-- **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
-  visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
+- **On the legacy answer path, the row goes `pending` before the model is called**, so a crash
+  mid-answer leaves a visible unanswered question rather than a selection that evaporated. The
+  dialog offers a retry. (A new comment is stored `none` and never calls the model.)
 - **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` in the
   store cannot distinguish "an answer is coming" from "the process writing it died" — so the server
   keeps the list of what it is actually answering, and anything else that is `pending` is swept to
@@ -1370,9 +1430,10 @@ rather than blanked, and if none survives the key comes off entirely.
   only takes the click when there is no selection to act on. (The one exception is the overlap rule
   in [§ The box a selection opens](#the-selection-box), which replaces a highlight made a moment
   ago and not yet touched.)
-- **No editing, no reply, no follow-up question.** Ask, read, delete. Anything more is a chatbot
-  with the article in the context window, which is
-  [an explicit anti-goal](vision.md#anti-goals).
+- **A comment holds one question and one answer, with no transcript.** The reader can edit their own
+  words, and a follow-up box hands the question to a chat rather than growing a thread in the dialog
+  ([§ pushing back](#pushing-back)). Anything more is a chatbot with the article in the context
+  window, which is [an explicit anti-goal](vision.md#anti-goals).
 - **Comments are per-article, not per-reader.** There is one reader.
 
 ## Where the chat panel sits <a id="chat-dock"></a>

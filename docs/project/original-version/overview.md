@@ -25,8 +25,8 @@ registry, a reversible-mutations framework, four PDF ingestion pipelines, and ~1
 documents. It has been built and rebuilt over a year and it works.
 
 This repo is a bet on **one idea** — [granularity zoom](../granularity-zoom.md) — and it is trying to
-stay tight, experimental and fast-moving: filesystem instead of a database, one process, no auth, no
-framework churn ([architecture.md](../architecture.md)). So treat what follows as a **library to
+stay tight, experimental and fast-moving: one process, no
+framework churn (it started on the filesystem and without auth; both have since gone, to Postgres and real accounts) ([architecture.md](../architecture.md)). So treat what follows as a **library to
 consult, not a backlog to import**. Greg's call, 2026-08-24, when asked which of its ideas to lift
 into our decisions: *"None of them for now."*
 
@@ -219,3 +219,7 @@ Two more orientation docs:
 - [structure-step.md](../structure-step.md) — the deeply-nested ToC
 - [open-questions.md](../open-questions.md) — several of which the previous version has answered once
 - [`styles/tokens.css`](../../../styles/tokens.css), [`public/`](../../../public/) — what came across
+
+---
+
+Up: [vision.md](../vision.md)

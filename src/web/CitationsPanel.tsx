@@ -83,6 +83,7 @@ import {
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { useRenderCount } from "./perf.js";
 import {
   survivesThreshold,
@@ -892,7 +893,15 @@ export function CitationsPanel({
   const shown = orderWorks(all, order, bar);
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = citations !== null && (owner === null || owner.status === "ready");
-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const showJob =
+    owner !== null &&
+    ready &&
+    !owner.stale &&
+    (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
   /* Empty with fewer than two works or two orders, and then there is no order
      row and an empty head row holds the top of the band instead. */
   const orders = citations && all.length > 1 ? orderOptions(all) : [];
@@ -977,18 +986,22 @@ export function CitationsPanel({
     ) : null;
 
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new citations haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="citations"
       icon={<BookText size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 

@@ -171,6 +171,8 @@ function owner(citations: CitedWork[]): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     findNote: null,
     investigating: null,
     investigateStage: null,
@@ -339,6 +341,8 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
   } as UseDebate;
 }
 

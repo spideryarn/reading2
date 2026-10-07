@@ -2,6 +2,17 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ The picture carries words](#lettering) — why plates are lettered, and the rule that every drawn scene gets a title or none does
+- [§ The reader can say how it should come out](#steering) — the steering note: what it touches, what it never does
+- [§ It is an interpretation](#it-is-an-interpretation-and-the-app-says-so) — the label, the brief, what is checked and what cannot be
+- [§ At full screen the brief is a column](#at-full-screen-the-brief-is-a-column-not-a-details) — Enlarge's two-column layout
+- [§ Nothing in the picture is a control](#nothing-in-the-picture-is-a-control) — why there are no hotspots on the plate
+- [§ The paper's own figures go in](#figures) — figures from stage 4.5 handed to the illustrator
+- [§ The wire, and what it costs](#the-wire-and-what-it-costs) — OpenRouter images, the price table, PNG storage
+- [§ Where the pieces are](#where-the-pieces-are-and-the-two-things-that-are-unlike-every-other-mode) — files and routes; Sketch-then-paint chaining, freshness, plate-route safety
+
 One of Diagram mode's pictures: the [Sketch](sketch.md) scene, painted by an image model. It moved
 here from [diagram.md](diagram.md) on 2026-10-01 with its wording kept; the mode and the other
 pictures are still there.
@@ -139,6 +150,11 @@ microphone ([dictation.md](dictation.md)). Whatever is in it goes with the next 
 argument*, *Draw the Sketch, then paint*, or *Paint again*, which sits beside a picture that is
 already there and is forced. The design and its review are
 [261002j](../plans/261002j-illustrated-steering-note.md).
+
+*Paint again* is held from the press until the new painting has been read, so one press cannot buy
+two paintings: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
+While it is held with nothing running, the band says *The new picture hasn't loaded yet.* and offers
+*Try again*, which only reads.
 
 Four things to know before touching it:
 
@@ -389,6 +405,7 @@ about the bytes exactly as the storage key is.
 | the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
 | the plate, the plate row, Enlarge, and the *what it depicts* list | [`src/web/IllustratedView.tsx`](../../src/web/IllustratedView.tsx) |
 | the harness that paints one offline | [`evals/illustrated/`](../../evals/illustrated/) |
+| the tests | [`illustrated-plate.test.ts`](../../tests/illustrated-plate.test.ts), [`illustrated-run.test.ts`](../../tests/illustrated-run.test.ts), [`illustrated-image.test.ts`](../../tests/illustrated-image.test.ts), [`illustrated-figures.test.ts`](../../tests/illustrated-figures.test.ts), [`illustrated-route.test.ts`](../../tests/illustrated-route.test.ts), [`illustrated-view.test.tsx`](../../tests/illustrated-view.test.tsx) |
 
 **It is the only step whose input is another step's artefact**, and that has two
 consequences worth knowing before touching either.

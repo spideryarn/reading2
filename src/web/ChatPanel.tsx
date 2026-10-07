@@ -570,7 +570,7 @@ export function ChatPanel({
           : kind === "explore"
             ? "Explore what you think about this article"
             : learn
-            ? "Remember what you took from this article"
+            ? "Recall what you took from this article"
             : "Chat about this article"
       }
       head={

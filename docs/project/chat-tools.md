@@ -42,6 +42,30 @@ contract come from.
    └─────────┘◄───────────└──────────────┘
 ```
 
+## In this doc
+
+- [§ What Greg asked for, and what is here](#what-greg-asked-for-and-what-is-here) — intent and the tool loop in one picture
+- [§ The nine, and the filter they had to pass](#the-nine-and-the-filter-they-had-to-pass) — adding or judging a tool
+- [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
+- [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
+- [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`
+- [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
+- [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
+- [§ Chat's list shows every conversation about the article](#chats-list-shows-every-conversation-about-the-article) — list sources, icons, the `?chatfrom=` filter, chats started from a mode
+- [§ Security: a tool result is data, and one of them is a stranger's](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers) — prompt-injection stance
+- [§ A transcript cannot be published by column allowlist, and that is why chat is not shared](#a-transcript-cannot-be-published-by-column-allowlist-and-that-is-why-chat-is-not-shared) — why no shared chat
+- [§ What is logged](#what-is-logged) — logging rules for tool calls
+- [§ Asking whether a claim holds up is a question about the world](#asking-whether-a-claim-holds-up-is-a-question-about-the-world) — provenance and "my inference"
+- [§ The "?" says so, and the answer teaches](#the-says-so-and-the-answer-teaches) — the "?" gesture
+- [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search) — (history) why word search is literal
+- [§ What chat is told is on screen](#what-chat-is-told-is-on-screen) — the on-screen blocks the composer sends
+- [§ Command buttons: chat proposes, the reader presses](#command-buttons-chat-proposes-the-reader-presses) — chat-proposed commands
+- [§ Not built, and worth building](#not-built-and-worth-building) — backlog
+- [§ What the browser pass found](#what-the-browser-pass-found) — (history) a browser test round
+- [§ The model claimed a search it never ran](#the-model-claimed-a-search-it-never-ran) — (history) a postmortem-style note
+- [§ The reader's own article ate its own search results](#the-readers-own-article-ate-its-own-search-results) — (history) a bug and fix
+- [§ Still open](#still-open) — open questions
+
 ## What Greg asked for, and what is here
 
 > Give the Chat the ability to use tools, e.g. web search. Anything else you can think of that would
@@ -474,6 +498,11 @@ From 2026-10-01 it showed chats only.
   Citations (a chat started from a claim or an angle, an entry, a cited work), Learn, and a
   passage.
 
+A chat started from an item in a mode (`ThreadOrigin` in [`src/types.ts`](../../src/types.ts)) is
+written up where it is built: [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat),
+[glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
+[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work).
+
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
 `tests/chat-list-sources.test.tsx` (the panel).
 
@@ -708,8 +737,14 @@ with the ordinary prompt.
 **creates** the thread, the anchor is a **whole block** (`{ blockId }`, no quote), and the effective
 kind is **`chat`**. Refused rather than dropped, the posture the anchor rule beside it already takes:
 a request the server silently reinterprets stores a press nobody made *and* answers with the teaching
-prompt, and nothing on screen says so. The first of the three is checked twice — early for the
-sentence, and again under `inTurnOrder` so a thread cannot appear between the look and the write.
+prompt, and nothing on screen says so. The first of the three is checked three times: early for the
+sentence, again under `inTurnOrder`, and by `withTurn` in [`src/chat.ts`](../../src/chat.ts) inside
+the store's transaction. Only the last is a guarantee: `inTurnOrder` orders one server's requests,
+and a second server can create the thread after either of the route's looks. Until 2026-10-07 the
+transaction did not check it (nor the anchor rule beside it, which now has the same three places and
+its 409), and this paragraph said the lock was enough
+([plan 261007b](../plans/261007b-seventh-sweep-chat-and-comment-invariants.md), B). `withTurn`'s
+refusal is a 400 as the route's is (`ChatTurnRefused`), where its other refusals are 409s.
 Each violation is its own 400 with its own sentence;
 `tests/chat-help-route.test.ts` pins all four, and pins that what `helpAboutBlock` sends still gets
 through. Found by GPT Sol reviewing the built code, 2026-09-05.

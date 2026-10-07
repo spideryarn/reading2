@@ -39,6 +39,15 @@ The analysis also reads **detail rows** (`spendDetail`, one per call), because a
 find one expensive call or count the jobs behind a step. It checks the two reads agree to the
 nano-dollar, and on the three attempt counts below, and refuses to report if they do not.
 
+**Where things are.** The ranking table's columns are `rankingColumns` in
+[`src/web/AdminCostsPage.tsx`](../../src/web/AdminCostsPage.tsx); the page's data hook is
+[`src/web/useAdminCosts.ts`](../../src/web/useAdminCosts.ts) and its view helpers
+[`src/web/admin-costs-view.ts`](../../src/web/admin-costs-view.ts). A new column needs a field on
+the cube first. A new column *in the ledger* is a migration: how one is generated and applied is
+[database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) and
+[§ Step two: apply the migrations](database.md#step-two-apply-the-migrations). What the ledger
+records about time is [ai-gateway.md § What every call is written down as](ai-gateway.md#what-every-call-is-written-down-as).
+
 ## The rules the figures keep
 
 Each of these was a way the first design was wrong

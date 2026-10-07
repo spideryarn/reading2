@@ -20,7 +20,8 @@
  * and a p-queue. All five were correct and all five were **one process's**, so
  * `POST /api/jobs` creating a job in instance A and `POST /api/jobs/<id>/advance`
  * landing on instance B meant a 404 on a job that plainly existed. They moved
- * to src/store/jobs-fs.ts unchanged; what replaced them here is a **claim**.
+ * to src/store/jobs-fs.ts unchanged (a file that was itself deleted on
+ * 2026-09-05); what replaced them here is a **claim**.
  *
  * The claim is the whole design and it is three lines of SQL: an attempt token,
  * a lease, and claimant writes fenced on `id = $id and attempt_id = $attempt
@@ -53,14 +54,15 @@ import {
 } from "./ai-spend.js";
 import { CallDeadlineReached } from "./call-failure.js";
 import { mintId } from "./ids.js";
-/* The artefact store the **filesystem** session writes through, and nothing
-   else uses it: under Postgres a claim's session writes into its own draft and
-   never touches a disk (`claimSession`). Named for the role rather than imported
-   under its own name, because that is what the role was — the one line that
-   would pick Postgres instead — and it is kept so while the filesystem branch
-   is still what every laptop runs. Stage 4 deletes the branch and this import
-   with it. Deliberately not routed through src/store/index.ts, which is the
-   *reader's* store. */
+/* **The cost ledger**: where each model call's row is recorded
+   (`costStore.record`, the sink `runStep` hands `collectSpend`) and where a
+   finished job's total is read back (`jobSpend`). Deliberately not routed
+   through src/store/index.ts, which is the *reader's* store.
+
+   This comment described an artefact store "the filesystem session writes
+   through" until 2026-10-07, and promised that stage 4 would delete the
+   import. Neither was true of this line: production has used no filesystem
+   session since 2026-09-05, and the import is the ledger. */
 import { costStore, totalLedger } from "./store/ai-calls.js";
 import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
@@ -148,7 +150,7 @@ export type { Job, JobStep, StepName } from "./types.js";
  *
  * Bound here rather than in src/store/index.ts for the same reason
  * src/upload-records.ts binds its own: that file is the *reader's* store and it
- * imports fs.ts, which imports src/pipeline.ts, which this file imports — asking
+ * imports pg.ts, which imports src/pipeline.ts, which this file imports — asking
  * from there would be an import cycle, and `npm run check` gates on cycles.
  */
 const store: JobStore = pgJobStore;
@@ -248,8 +250,27 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * The arithmetic it has to satisfy, measured rather than assumed and **for an
  * ordinary web page** — `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ≤110s + extract ~10s + blocks ~5s + structure 320.4s + assets ≤185s = 630.4s
+ *     fetch 110s + extract ~10s + blocks ~5s + structure 320.4s + assets 185s = 630.4s
  *     630.4s  <  740s self-abort  <  800s platform kill
+ *
+ * **`fetch` and `assets` are estimates there, not bounds.** Both were written
+ * "≤" until 2026-10-07 and neither is one any more:
+ *
+ * - 110 s is one `fetchDocument` at its worst (three 30 s attempts and the
+ *   backoff between them). Since 261006i `fetchByAddress` (src/pipeline.ts) can
+ *   make that fetch and then try a paper source's candidates, each a
+ *   `fetchDocument` with its own three attempts.
+ * - 185 s is `collectAssets`'s 180 s cap plus unwinding. The step then runs
+ *   `recoverPdfFigures`, which has a 180 s cap of its own
+ *   (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so a PDF's `assets`
+ *   can take about 360 s.
+ *
+ * Neither number was changed with this note. What rests on them is the sum
+ * above, and `STEP_BUDGET_MS.assets`, which decides whether `assets` is started
+ * after `structure` in the same window: a step admitted on 185 s can outlive
+ * the deadline. `transitionAfter` discards its product; `pauseForDeadline`
+ * requeues while budget remains, lets Stop win, or refuses a stale claim.
+ * Exhausting the budget ends the job as interrupted.
  *
  * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
  * requests.** `STEP_BUDGET_MS.structure` is now 700s, so a walk that has spent
@@ -261,10 +282,11 @@ const aborts = processSingleton<Map<string, AbortController>>(
  *
  * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
  * and `extract ~5s`, both of which this same file falsified in the same change
- * that raised `MAX_PAGES` ⟨GPT Sol⟩: `fetch` is bounded by src/fetch.ts's three
- * 30s attempts rather than by a single request, and `extract`'s 10s is the *HTML*
- * branch. `assets` is its own cap, which moved from 180s to 185s to include the
- * unwinding.
+ * that raised `MAX_PAGES` ⟨GPT Sol⟩: one `fetchDocument` is bounded by
+ * src/fetch.ts's three 30s attempts rather than by a single request, and
+ * `extract`'s 10s is the *HTML* branch. `assets` is `collectAssets`'s cap, which
+ * moved from 180s to 185s to include the unwinding. (Both are estimates of the
+ * step now; see the note under the sum above.)
  *
  * **And a PDF does not fit, has never claimed to, and that is not a hole.** The
  * PDF branch of `extract` is a fan-out of model calls whose ceiling is
@@ -512,11 +534,15 @@ export function jobConcurrency(): number {
  *
  * One claim now walks a whole job (`advanceJobWith`), so the deadline bounds the
  * **claim** and not the step. Without this table the last thing a long ingest
- * does is start a step it cannot finish: the self-abort fires half way through,
- * the job ends `error` with `INTERRUPTED`'s wording, and on Vercel the scratch
- * directory that held everything the earlier steps produced goes with the
- * invocation. Checked first, the same job hands the claim back **intact** and
- * stays `queued`, and the next request continues.
+ * does is start a step it cannot finish: the self-abort fires half way through
+ * and the window's remainder is spent on work that is thrown away, at the cost
+ * of one of the job's `REQUEUE_BUDGET` windows. Checked first, the same job
+ * hands the claim back **intact**, spends no budget, and stays `queued`, and
+ * the next request continues. (This said the job ended `error` and that a
+ * scratch directory on Vercel went with the invocation. There has been no
+ * scratch directory since 2026-09-05. Since 2026-09-04 a step that throws on
+ * deadline can pause with its draft while requeue budget remains; late returns
+ * take that path too since 2026-10-07.)
  *
  * Every number is either measured or a generous guess and **says which**, which
  * is the discipline `tests/jobs-lease-budget.test.ts` learned the hard way:
@@ -528,9 +554,9 @@ export function jobConcurrency(): number {
  *
  * **Wrong in the pessimistic direction is cheap and wrong in the optimistic
  * direction is not.** Too large a number hands the claim back a step early —
- * one more request, and on a warm instance the steps already done are skipped
- * for free. Too small a number is the mid-step kill this table exists to
- * prevent. So round up.
+ * one more request, in which the steps already done are skipped because their
+ * artefacts are in the draft, whichever instance answers. Too small a number is
+ * the mid-step stop this table exists to prevent. So round up.
  */
 export const STEP_BUDGET_MS: Record<StepName, number> = {
   /* **MEASURED** 2026-09-04, and the measurement is the smaller half of the
@@ -553,7 +579,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      it is the reason for the rounding rather than a gap.
 
      It read *"GUESS, generous. Network only, no model call. Never measured"*
-     until then, and 10 s was under a single one of its own three timeouts. */
+     until then, and 10 s was under a single one of its own three timeouts.
+
+     **110 s is one `fetchDocument`, and the step can make several.** Since
+     261006i `fetchByAddress` (src/pipeline.ts) may fetch the address and then
+     a paper source's candidates, each with its own three attempts, so 150 s
+     does not bound the step. Not re-measured, and the number is unchanged. */
   fetch: 150_000,
   /* **GUESS, generous.** One cheap call over at most 6,000 characters, capped at
      `TIMEOUT_MS` = 60 s in src/paper-metadata.ts, plus pdf.js opening the file
@@ -687,7 +718,16 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      publisher that hangs. Not imported, deliberately: this file would then
      depend on a pipeline stage's module for a constant it only compares
      against, and the two are allowed to differ — this one has to be the
-     *claimant's* worst case, which is the cap plus whatever unwinding costs. */
+     *claimant's* worst case, which is the cap plus whatever unwinding costs.
+
+     **It is the worst case of the first half of the step only.** For a PDF
+     the step goes on to `recoverPdfFigures`, with a second 180 s cap
+     (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so the claimant's
+     real worst case is about 360 s and this number is under it. Unchanged
+     here; whether to raise it is reported in
+     docs/plans/261007b-seventh-sweep-job-queue-tier-0.md. A step that does
+     outlive the deadline discards its product and asks `pauseForDeadline` for
+     another window; exhausted budget ends the job as interrupted. */
   assets: 185_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
      up hard because it is a model call and one measurement is one sample. */
@@ -880,7 +920,7 @@ export function orderSteps(names: StepName[]): StepName[] {
  *
  * **This is the correction that makes "refresh from source" mean anything.**
  * A refresh asks for `fetch` and `extract` to run again — but the three stages
- * after them all find their artefacts still on disk from last time, skip
+ * after them all find their artefacts still stored from last time, skip
  * themselves, and report a row of ticks. The result is a fresh article under
  * last week's tree and last week's arc: every gist describing paragraphs that
  * have moved, and nothing anywhere saying so. A textbook
@@ -975,14 +1015,13 @@ function newStep(name: StepName, force: boolean, upload: boolean): JobStep {
 }
 
 /**
- * Should this step run even though its artefact is already on disk?
+ * Should this step run even though its artefact is already stored?
  *
  * `force` is a **request**, and a request is spent once it has been honoured.
- * Inside `runJob` that distinction never comes up — a job runs its steps once,
- * top to bottom, and every step reaches the runner at `pending`. It comes up
- * the moment `advanceJob` runs one step per request: the second call would read
- * the same `force: true` on a step the first call had just re-run, force it
- * again, and keep forcing it for ever. A refresh would never finish and would
+ * That distinction comes up whenever a job takes more than one claim, because
+ * every claim walks the whole list: the second would read the same
+ * `force: true` on a step the first had just re-run, force it again, and keep
+ * forcing it for ever. A refresh would never finish and would
  * bill a model call a minute for as long as a tab was open.
  *
  * **This is the one thing advance has to remember rather than derive**, and it
@@ -1061,18 +1100,16 @@ function stepPreviews(
 /**
  * Run — or skip — exactly one step, recording all of it on the job.
  *
- * The single implementation of "do this step", shared by the two things that
- * drive a job: `runJob`, which loops it until the job ends, and `advanceJob`,
- * which calls it once per HTTP request. Two copies of this would be two places
- * to keep the marker discipline, the cancel bookkeeping and the failure kinds
- * in step, and they would drift on the first change to any of them.
+ * The single implementation of "do this step". It has one caller, `walkClaim`,
+ * which calls it for every step of a claimed job in turn. (It was shared by
+ * two drivers until both went: `runJob`, which looped it, and an `advanceJob`
+ * that called it once per HTTP request.)
  *
- * **Never throws — with one exception, and it is not a step failure.** A failure
- * is an outcome, recorded on the job and on the step, because both callers have
- * to tell the same story about it. The exception is `StaleAttemptError` out of
- * `note`: that does not mean the step went wrong, it means *this claimant no
- * longer owns this job*, and carrying on would spend a model call whose result
- * nothing will accept. It propagates, and `advanceJob` turns it into `busy`.
+ * **Ordinary step failures are outcomes, recorded on the job and the step.**
+ * `StaleAttemptError` propagates because this claimant no longer owns the job;
+ * `advanceJob` answers `busy`. `DraftGoneError` also propagates: the claim is
+ * still ours but its draft is gone, so the walk ends it through storage recovery.
+ * A settlement that itself cannot be written is left to the lease.
  *
  * **The one job write this makes is the step's own transition**, and it makes it
  * through `session.commit` so that the artefacts, the step's completion and the
@@ -1082,7 +1119,9 @@ function stepPreviews(
  * and the endings that have no product go through `session.settleJob`.
  *
  * `decide` is the caller's, and it is called **immediately before** the commit
- * rather than after the step returns. That is the ordering the atomic boundary
+ * rather than after the step returns. It may throw `DeadlineReached` instead of
+ * answering, which is how a step that returned after the claimant's deadline
+ * is treated as one the deadline stopped: nothing is committed. That is the ordering the atomic boundary
  * needs: the job transition has to be known while there is still a transaction
  * to put it in. It sees this step already marked `done` in memory, and the title
  * already on the job, because both are inputs to what the transition says.
@@ -1097,7 +1136,7 @@ async function runStep(
   /* The caller's progress write. It answers with the job row as it now stands —
      which is how the walk notices a Stop pressed on another instance — but that
      is the caller's business and nothing here reads it. */
-  note: () => Promise<unknown>,
+  note: () => Promise<Job | undefined>,
   session: StoreSession,
   registry: StepRegistry,
   decide: () => JobTransition,
@@ -1172,9 +1211,10 @@ async function runStep(
   };
 
   /* `session.reads`, not the store directly. The preflight and the run phase
-     have to ask the same store, or a step decides whether to skip by looking at
-     one place and does its work against another — which under Postgres means
-     files on disk answering for rows in a draft. */
+     have to ask the same thing, or a step decides whether to skip by looking at
+     one place and does its work against another: the published article
+     answering for this claim's draft. (While there were two stores it was
+     files on disk answering for rows in a draft.) */
   /* **A step that reads the structure does not run on the stand-in tree a
      first import opened with** — every step after `structure` but `assets`
      (`needsRealStructure`). Normally such a step never gets here: it queues
@@ -1196,16 +1236,26 @@ async function runStep(
       );
   const gated = !structureRead.ok || structureRead.awaiting;
 
-  if (
-    powerRead.ok &&
-    !gated &&
-    !stillForced(step) &&
-    (await stepIsDone(registry[step.name], ctx, session.reads))
-  ) {
-    /* **A step this job already ran keeps saying so.** `runJob` never meets
-       this case — it visits each step once, at `pending` — but `advanceJob`
-       walks the whole list on every call, so without the guard the second
-       request would relabel the first request's work `skipped` and replace
+  /* **The freshness read, caught like the two reads above it.** It was awaited
+     bare in the `if` below until 2026-10-07, outside the `try`, so a read that
+     failed once left this function as a throw nothing recorded: the walk's
+     outer `catch` rethrew it, and the row stayed `running` behind a live lease
+     with the article's line and a machine slot held for up to `LEASE_MS`. A
+     failed read is the step's failure. It is **not** an answer of "not
+     current": that would start paid work on a question nobody answered.
+     tests/jobs-walk.test.ts § the exits of a claim. */
+  const freshRead =
+    powerRead.ok && !gated && !stillForced(step)
+      ? await stepIsDone(registry[step.name], ctx, session.reads).then(
+          (done) => ({ ok: true as const, done }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      : ({ ok: true as const, done: false });
+
+  if (freshRead.ok && freshRead.done) {
+    /* **A step this job already ran keeps saying so.** A walk visits the
+       whole list on every claim, so without the guard a job's second claim
+       would relabel the first claim's work `skipped` and replace
        whatever it reported ("12 KB", the article's title) with "already done".
        The reader would watch the card lose its own progress, one row per step.
 
@@ -1221,7 +1271,14 @@ async function runStep(
     // stage skips the four before it — so at `info` this would be the bulk of
     // the log and the lines that matter would be sitting in it.
     jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
-    await note();
+    const skipped = await note();
+    /* A skipped tail can otherwise reach the all-skipped publication door
+       after a previous progress failure missed Stop. This is a boundary
+       response, not a Stop arriving during an already-running last step. */
+    if (skipped?.cancelling) {
+      markCancelled(job, "Cancelled");
+      return { outcome: "cancelled" };
+    }
     return { outcome: "skipped" };
   }
 
@@ -1237,17 +1294,25 @@ async function runStep(
      would otherwise be shown under this one. */
   delete step.preview;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
-  await note();
+  const starting = await note();
 
   /* Filled by `collectSpend`'s `onDone` below, which fires on both paths — so
      this is readable from the `catch` as well as from the success path. */
   let spend: SpendReport = emptySpend();
 
   try {
+    /* A failed kept-step note can miss Stop. The starting write is another
+       look at the row: honour its cancellation before beginning paid work.
+       Preview writes during an already-running step keep their existing rule. */
+    if (starting?.cancelling) {
+      controller.abort();
+      controller.signal.throwIfAborted();
+    }
     if (!powerRead.ok) throw powerRead.error;
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
     if (structureRead.awaiting) throw stageFailure(STRUCTURE_NOT_BUILT);
+    if (!freshRead.ok) throw freshRead.error;
     /* Bracketing the run, not decorating it. A step that dies between two of
        its own writes leaves artefacts that all exist and all parse and
        describe two different generations, and nothing about the files can
@@ -1311,11 +1376,16 @@ async function runStep(
        catch below puts both back — `step.status = "error"` — and the job ends as
        a failure, which is what it always did.
 
-       The title only exists once extraction has run, and the moment it does is
-       the moment the progress card can stop calling the article by its slug. */
+       The title only exists once a step has read it, and the moment one does
+       is the moment the progress card can stop calling the article by its slug.
+       Two steps do, and each returns it as its `detail`: `extract`, and
+       `metadata`, which is the only one of the two a minimal paper's job has.
+       Until 2026-10-07 only `extract` was lifted, so that job never had one. */
     step.status = "done";
     step.finishedAt = new Date().toISOString();
-    if (step.name === "extract") job.title = product.detail;
+    if ((step.name === "extract" || step.name === "metadata") && product.detail?.trim()) {
+      job.title = product.detail;
+    }
 
     /* **The whole of what used to be four calls, three here and one in the
        caller.** `commit` validates the product against `produces` before it
@@ -1327,7 +1397,13 @@ async function runStep(
        job, not about this step: `run` returned and its postcondition passed, so
        the work is real and paid for. Clearing the marker after the throw would
        leave a completed step looking interrupted, and the Retry that follows a
-       cancel would buy the same model call twice. */
+       cancel would buy the same model call twice.
+
+       **That argument is the reader's Stop only.** When the abort was our own
+       deadline, `decide` throws and the product is dropped on purpose; see
+       `transitionAfter`. And a Stop answered on this instance commits the
+       product into a draft that the `cancelled` ending then fails, so the
+       protection described above is not one that ending gives. */
     const transition = decide();
     /* **The settlement that happened, not the one that was asked for.** A
        release resolves to *cancelled* when a Stop landed while the step ran, and
@@ -1940,13 +2016,14 @@ function endingFrom(job: Job, status: JobEnding["status"]): JobEnding {
  * Keep advancing one job until there is nothing left to do.
  *
  * **The replacement for p-queue, and for `runJob`.** Both are gone, and so is
- * the library: concurrency 1 is no longer a promise a package makes, it is
- * `jobs_only_one_running` — a partial unique index the database enforces across
- * every instance, where p-queue could only speak for this one.
+ * the library: how many jobs run at once is no longer a promise a package
+ * makes for one process, it is `jobConcurrency()`, counted by `claim` inside
+ * the `queue_state` lock for every instance. (It was concurrency 1 and a
+ * unique index, `jobs_only_one_running`, until 2026-08-30.)
  *
  * The first draft of this exited on `busy`, and
  * [GPT Sol](../docs/plans/260827h-durable-queue-and-uploads-review-sol.md) was right
- * that a loop which exits on `busy` is not a pump: job A takes the single slot,
+ * that a loop which exits on `busy` is not a pump: job A takes the last slot,
  * job B's loop is told `busy` once and stops, and nothing ever restarts it.
  * What "close the tab and it still finishes" means on a laptop is that
  * something keeps asking. So `busy` **backs off and asks again**.
@@ -2002,9 +2079,11 @@ function pump(id: string, owner: OwnerId): void {
 
 /* ------------------------------------------------------------- advancing --
 
-   The other way a job moves: one step per HTTP request, driven by whoever is
-   watching it. Designed in docs/plans/260826q-job-queue-rethink.md § Decided, and it is
-   what makes docs/plans/260826s-ingest-resume.md work.
+   How a job moves: one **claim** per HTTP request, driven by whoever is
+   watching it, and a claim walks as many steps as its deadline covers
+   (`walkClaim`). It was one step per request until 2026-08-30. Designed in
+   docs/plans/260826q-job-queue-rethink.md § Decided, and it is what makes
+   docs/plans/260826s-ingest-resume.md work.
    -------------------------------------------------------------------------- */
 
 /** What one `POST /api/jobs/:id/advance` did. */
@@ -2020,7 +2099,11 @@ export interface Advanced {
 }
 
 /**
- * Run **exactly one** not-yet-done step of a job, and say what happened.
+ * Claim a job and walk its not-yet-done steps, and say what happened.
+ *
+ * One call runs every step its claim's deadline covers, which for an ordinary
+ * article is the whole job in one or two calls. (It ran **exactly one** step
+ * until 2026-08-30; `walkClaim` has the reason that changed.)
  *
  * This is the browser-driven half of the queue, and the whole of the design is
  * in three properties:
@@ -2035,13 +2118,13 @@ export interface Advanced {
  * `stepIsDone`, which reads the *artefacts* (src/pipeline.ts): does this step's
  * output exist, was it made from this article, by this prompt, by this model,
  * and did the run that wrote it finish. So a job resumed a week later starts
- * wherever the files say, and there is no second account of progress that can
+ * wherever the artefacts say, and there is no second account of progress that can
  * drift from the first. `stillForced` above is the one deliberate exception and
  * says why.
  *
  * **It is idempotent.** On a finished job it does nothing and reports `done`.
  * Called twice at once, the second call is turned away with `busy` rather than
- * starting a second runner over the same files.
+ * starting a second runner over the same article.
  *
  * ## How two callers keep out of each other's way
  *
@@ -2058,17 +2141,24 @@ export interface Advanced {
  *
  * ## What this deliberately does not do
  *
- * **Take a job away from a claimant whose lease has run out.** The job is
- * failed, with a sentence saying it was interrupted, and Retry is the reader's
- * to press. Guessing that an owner is dead is how two runners end up writing
- * one article — the fault docs/plans/260826q-job-queue-rethink.md names in pgmq — and
- * the guess is only safe once every durable write is inside the fenced
- * transaction, which is docs/plans/260827j-transactional-stage-runner.md and is not
- * built.
+ * **Resume work as part of the sweep itself.** The sweep at the top of
+ * `advanceJobWith` only moves rows: Stop ends cancelled; otherwise back to
+ * `queued` with the draft while `REQUEUE_BUDGET` lasts, then ended interrupted.
+ * This request can immediately claim its requeued job; another request can
+ * claim it too. The successful claimant carries on from the artefacts.
  *
- * What makes an expired lease *mean* something in the meantime is the
- * claimant's own deadline: see `LEASE_MS`. It aborts itself first, so a lapsed
- * lease says "the process is gone" rather than "the process is slow".
+ * That requeue is safe because artefact rows, step completion and the job's
+ * release or ending share a fenced transaction (src/store/pg-session.ts).
+ * A stale claimant cannot commit them. Checkpoints and the cost ledger have
+ * their own lifetimes. Until that was built (2026-09-01, with the
+ * requeue following on 2026-09-03) this paragraph said a lapsed job was simply
+ * failed, because guessing that an owner is dead is how two runners end up
+ * writing one article — the fault docs/plans/260826q-job-queue-rethink.md
+ * names in pgmq.
+ *
+ * What makes an expired lease *mean* something is the claimant's own
+ * deadline: see `LEASE_MS`. It aborts itself first, so a lapsed lease says
+ * "the process is gone" rather than "the process is slow".
  *
  * @returns null if there is no such job, so the route can 404.
  */
@@ -2084,9 +2174,9 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * Three of the tests this stage owes cannot honestly be written without it. The
  * Postgres session's preflight-over-misleading-files claim, its all-skipped
  * path, and its handling of a release that resolves to cancellation are all
- * claims about **the coordinator driving that session** — and production picks
- * its session by `STORE` in `claimSession` below, which since the flip (commit
- * `c42c940`) is Postgres wherever that is configured. A test that
+ * claims about **the coordinator driving that session** — and production
+ * builds its session in `claimSession` below, which opens the Postgres one and
+ * nothing else (it chose by a `STORE` flag until 2026-09-05). A test that
  * called a session method directly would be proving something else: the whole
  * point of the first of those is that `stepIsDone` goes through `session.reads`
  * and not through a store the caller happens to have. GPT Sol, 2026-08-29,
@@ -2112,13 +2202,12 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * for tests. `evals/cost/run.ts` is the third: it drives the production registry
  * with `scopeKind: "eval"` overlaid on every step and stage 1 replaced by
  * committed bytes, so that measuring what an article costs does not require a
- * second copy of the pipeline. It replaces the chooser, never the choice —
- * exactly as the paragraph below says.
+ * second copy of the pipeline. It replaces who builds the session and the
+ * steps, never what production builds — exactly as the paragraph below says.
  *
  * **Production behaviour does not change**, because `PRODUCTION` builds its
- * session through `claimSession` below rather than choosing one here — and that
- * is the line that selects Postgres or the filesystem. This seam replaces the
- * chooser, never the choice.
+ * session through `claimSession` below rather than choosing one here. This
+ * seam replaces who builds the session, never what production builds.
  */
 export interface AdvanceParts {
   /**
@@ -2202,9 +2291,9 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * left to do and the files it copied from are not written at all under Postgres.
  * docs/plans/260831b-finish-the-database-move.md § Stage 3 — the flip.
  *
- * **Async because opening the draft is a database call**, which is new: the
- * filesystem session needs nothing awaited to build, and this signature was
- * async for the interface's sake before it was async for a reason.
+ * **Async because opening the draft is a database call.** The filesystem
+ * session needed nothing awaited to build, so until the flip this signature
+ * was async for the interface's sake and not for a reason.
  *
  * ## There is no filesystem side any more
  *
@@ -2394,9 +2483,9 @@ export async function advanceJobWith(
    * true. With `REQUEUE_BUDGET` windows left the row goes back to `queued` on
    * the same id and the very next claimant may take it — the reader sees a card
    * that carries on, not a failure. It is only once the budget is spent that the
-   * job is settled and offered a button. Either way the sweep never *takes over*
-   * the work in this request: it moves the row and returns, and something else
-   * claims it. GPT Sol, reviewing the built stage 3, finding 6.
+   * job is settled and offered a button (Stop cancels regardless of budget).
+   * The sweep only moves rows. The claim below may immediately resume the
+   * requested job; another request may claim it instead.
    *
    * **And it is deliberately not scoped to `owner`, which is in scope on the
    * line above and would look like a free improvement.** `settleExpired` takes
@@ -2476,8 +2565,21 @@ export async function advanceJobWith(
     /* Held by another claimant, or the single running slot is taken by a
        different job, or Stop has been pressed and the abort has not landed.
        All three are *wait and ask again*, which is what the client does. */
-    case "busy":
-      return { job: (await store.get(id, owner)) as Job, ran: null, busy: true, done: false };
+    case "busy": {
+      /* **Read, not assumed.** One of the three refusals, the queue's lock
+         being held by another claim, is answered before the store has looked
+         for the job at all (`claim`'s `NOWAIT` branch; its transaction is
+         already aborted, so it cannot look afterwards). Until 2026-10-07 this
+         line cast the read to `Job`, so a job that did not exist, or was not
+         this owner's, answered 200 `{ran: null, busy: true, done: false}` with
+         no job in it while the lock was held and 404 once it was free.
+         `get` is scoped to the owner, so a job that is really there is always
+         found and still told to wait. tests/jobs-walk.test.ts § the exits of
+         a claim. */
+      const job = await store.get(id, owner);
+      if (!job) return null;
+      return { job, ran: null, busy: true, done: false };
+    }
     case "stopping":
       return { job: outcome.job, ran: null, busy: true, done: false };
   }
@@ -2505,28 +2607,33 @@ export async function advanceJobWith(
  *
  * ## Why the whole job rather than one step
  *
- * Because on Vercel each `POST /api/jobs/:id/advance` may land on a different
- * instance with an empty disk. The old shape — claim, run one step, release —
- * is correct on a laptop and cannot finish an ingest on a serverless host at
- * all: step 2 looks for what step 1 wrote and finds nothing, so it runs step 1
- * again. **A loop at the route cannot fix that**, which is the finding this
- * function exists for: every `advanceJob` takes its own claim, so between one
- * call's release and the next call's claim a second tab can take the job, on a
- * second instance, with its own partial scratch — and the two alternate,
- * restarting from their own halves. GPT Sol, docs/plans/260830a-v1-imports-review-sol.md
- * critical 3.
+ * **The reason it was built, which no longer holds.** On 2026-08-30 a step's
+ * artefacts were files, and on Vercel each `POST /api/jobs/:id/advance` may
+ * land on a different instance with an empty disk. The old shape — claim, run
+ * one step, release — could not finish an ingest there at all: step 2 looked
+ * for what step 1 wrote and found nothing. A loop at the route could not fix
+ * it either, since between one call's release and the next call's claim a
+ * second tab could take the job on a second instance with its own partial
+ * scratch. GPT Sol, docs/plans/260830a-v1-imports-review-sol.md critical 3.
+ *
+ * **Why it is kept.** Artefacts have been rows in the claim's draft since
+ * 2026-09-05, so a hand-off to a cold instance now costs a claim and a round
+ * trip, not the work, and the walk hands back deliberately in two places
+ * (below). What one claim per job still buys is fewer requests, and one
+ * deadline that covers the expensive step whole. `LEASE_MS` has the trade.
  *
  * So the claim is taken once and **kept** across steps: `transitionAfter`
- * returns `keep`, which finishes the step and writes nothing to the `jobs` row.
- * What the reader sees between steps is `noteProgress`, which is a progress bar
- * and deliberately does not renew the lease.
+ * returns `keep`, which finishes the step and writes the job's steps with it,
+ * and nothing else on the `jobs` row. What the reader sees between steps is
+ * `noteProgress`, which is a progress bar and deliberately does not renew the
+ * lease.
  *
  * ## What ends the walk
  *
- * Five things, and each has a branch below: the job runs out of steps, a step
- * fails, a step is cancelled, a Stop lands between two steps, or there is not
- * enough of the claimant's own deadline left for the next step — the last being
- * the only one that hands the claim back with the job still to do.
+ * The branches below handle completion, step failure, Stop, a lost claim or
+ * draft, and hand-back. Hand-back happens between steps when time is short,
+ * or mid-step on our deadline or `NeedsAnotherWindow`; the latter two share
+ * the bounded `pauseForDeadline` path.
  */
 async function walkClaim(
   job: Job,
@@ -2551,10 +2658,10 @@ async function walkClaim(
    * have to change** — which is the evidence that "one per claim" was the right
    * lifetime rather than a coincidence of the old shape.
    *
-   * On the filesystem it holds no transaction and says so out loud
-   * (src/store/session.ts). `PRODUCTION` above is what supplies it, and it still
-   * picks the filesystem artefact store; that is the line the Postgres session
-   * replaces in D2, and this one does not change.
+   * `PRODUCTION` above is what supplies it, and it is the Postgres session
+   * (`claimSession`), whose `commit` is one transaction. (It was a filesystem
+   * session holding no transaction until 2026-09-05; this line did not change
+   * when that one was replaced.)
    *
    * ## And building it can fail, which is why it is inside a recovery
    *
@@ -2749,18 +2856,57 @@ async function walkClaim(
   /**
    * Write what the card should say, **without letting go of the claim.**
    *
-   * The one job write that is neither a release nor a finish, and the walk needs
-   * it twice over. A step's completion reaches the `jobs` row through it now
-   * that a non-final commit writes nothing there — so without it the card would
-   * show a job stuck on step one for the whole ingest — and it is also the only
+   * The one job write outside a commit, and the walk needs it twice over. It is
+   * what tells the card a step has *started* or been skipped (a finished step is
+   * also on the row from its own commit, since 2026-10-07), and it is the only
    * thing that reads the row back mid-job, which is how a Stop pressed on
    * *another instance* is noticed at all: that instance has no `AbortController`
    * of ours to pull, so `cancelling` on the row is the whole of the message.
    */
   /* **Hands the written row back**, because the walk reads `cancelling` off it
      between steps — a Stop pressed on another instance arrives there and
-     nowhere else. `runStep` ignores the return; see its `note` parameter. */
-  const note = async (): Promise<Job> => await store.noteProgress(job.id, attempt, job.steps);
+     nowhere else. `runStep` ignores the return; see its `note` parameter.
+
+     **A write that fails answers `undefined` and the walk goes on**, unless the
+     failure is the fence saying the claim has moved, which still propagates.
+     The three direct calls sit outside `runStep`'s `try` (a skip, a step starting,
+     a kept step), so until 2026-10-07 any other failure left the walk through
+     its outer `catch` with the row still `running` behind a live lease.
+
+     **What makes carrying on safe is that nothing but the card and one look
+     at Stop rides on this write.** A forced step's `done` status spends its
+     force request (`stillForced`), and until 2026-10-07 that receipt was
+     written here and nowhere else, so a claim that lapsed first, or two
+     failures in a row and a pause, bought the step twice. The step's commit
+     writes it now (`keepStepIn`, src/store/pg-jobs.ts), in the transaction
+     that keeps the product.
+
+     The next fenced write, the step's own `beginStep` or commit, decides
+     whether the store can be reached. A failed write loses one look at
+     `cancelling`. A successful
+     starting write notices Stop before running the next runnable step; repeated write
+     failures can delay it across several steps. The finite step list and the
+     claim deadline bound that delay, not a promise of one step.
+     tests/jobs-walk.test.ts § the exits of a claim. */
+  const note = async (): Promise<Job | undefined> => {
+    try {
+      /* **The title goes with it.** It is set in memory by the step that read
+         it, and until 2026-10-07 it reached the row only through a release or
+         an ending. A mid-step hand-back and a lapsed lease both answer from
+         the row, and the next claim skips the step that would set it again, so
+         the card went back to the slug for the rest of the job. */
+      return await store.noteProgress(job.id, attempt, job.steps, job.title);
+    } catch (err) {
+      if (err instanceof StaleAttemptError) throw err;
+      /* The class only: a driver error's message can carry the statement's
+         bound parameters, which here are the steps. src/store/db-errors.ts. */
+      jlog.warn(
+        { errorType: err instanceof Error ? err.name : typeof err },
+        `progress not written, carrying on — ${job.slug}`,
+      );
+      return undefined;
+    }
+  };
 
   try {
     /**
@@ -2779,16 +2925,35 @@ async function walkClaim(
     const transitionAfter = (): JobTransition => {
       /* **Whose abort was it?** A step that watches its signal unwinds through
          `runStep`'s catch and never reaches here; a step that ignores it runs to
-         completion and lands exactly here — and if the thing that aborted was
-         our own deadline rather than the reader, calling it "cancelled" tells
-         them they stopped something they did not. GPT Sol found the
-         mislabelling; the deadline had a branch on the failure path and none on
-         the success path. */
+         completion and lands exactly here.
+
+         **Our own deadline: the product is not kept, and the job is put down.**
+         Thrown rather than returned, so it lands in `runStep`'s catch before
+         the commit and takes the path a step that *obeyed* the deadline takes:
+         `cancelled`, then the walk's `pauseForDeadline`, with all four of its
+         answers. Until 2026-10-07 this returned `interruptedEnding`, which
+         committed the finished product into a draft the same transaction then
+         failed, and ended the job `error` under a sentence saying finished
+         steps are kept. It was reachable: `assets` answers an abort by
+         returning, and can run about 360 s against a 185 s budget.
+
+         **Not kept, deliberately.** What such a step returns is what it had
+         when it was told to stop. `assets` returns a manifest whose unfetched
+         images are `failed: "network"`, stamped current, and committing that
+         would publish it. The step runs again in the next window; the steps
+         before it are already in the draft, which the pause keeps.
+         tests/jobs-walk.test.ts § the exits of a claim. */
+      if (overran()) throw controller.signal.reason;
+      /* **The reader's Stop, on this instance.** Ends `cancelled` with the
+         draft failed, where the same Stop answered by another instance leaves
+         the job to finish `done` and published (`finishIn` clears the flag).
+         Two answers to one question, known and left alone: which is right is
+         a product decision that has not been made, and both are pinned as
+         today's behaviour in tests/jobs-walk.test.ts.
+         docs/plans/261007b-seventh-sweep-job-queue-tier-0.md § Left open. */
       if (controller.signal.aborted) {
-        const ending = overran()
-          ? interruptedEnding(job)
-          : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
-        return { kind: "end", jobId: job.id, attempt, ending };
+        markCancelled(job, "Cancelled");
+        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
       }
       /* The step that has just finished is already `done` in memory, so this is
          the next one the walk would reach — and `undefined` means the job is
@@ -2799,22 +2964,30 @@ async function walkClaim(
       }
       /* **There is more to do and time to do it in: keep the claim.** This is
          the ordinary path, and it is the change that makes an import work on a
-         host where the next request would land on a different disk. Nothing is
-         written to the `jobs` row here at all — the loop's `note` does that,
-         outside the commit, because a progress bar is not worth widening an
-         artefact transaction for. */
-      if (deadlineAt - Date.now() >= STEP_BUDGET_MS[next.name]) return { kind: "keep" };
+         host where the next request would land on a different disk.
+
+         **The steps go with it**, this one already `done` in memory. That is
+         the receipt for a forced step: `stillForced` reads the stored status,
+         and until 2026-10-07 only the loop's `note` wrote it, after the commit
+         and able to fail on its own. A claim that lapsed first, or two lost
+         notes and a pause, left the step stored `running` and forced, and the
+         next claim ran it again. Status, lease and title are not touched.
+         tests/jobs-walk.test.ts § does not buy a committed forced step again. */
+      if (deadlineAt - Date.now() >= STEP_BUDGET_MS[next.name]) {
+        return { kind: "keep", jobId: job.id, attempt, steps: job.steps };
+      }
       /* **Not enough of our own deadline left for the next step: hand back.**
          Deliberate, and the difference between this and doing nothing is the
          difference between a job that stays `queued` and resumable and a job
          killed inside a step with a live lease, unreclaimable until it lapses.
          Nobody takes the job away from us here — we put it down.
 
-         What it costs on a deployed instance is the scratch directory, since
-         the next request may be somewhere else; `stepIsDone` derives what is
-         finished from the artefacts, so a warm instance resumes for free and a
-         cold one re-runs. That trade is v1's, and it is stated in
-         docs/plans/260830d-v1-imports-on-vercel.md rather than discovered. */
+         What it costs is one more claim and its round trip. The draft is
+         kept and `stepIsDone` derives what is finished from the artefacts in
+         it, so the next claim skips the finished steps on whichever instance
+         it lands. (Until 2026-09-05 it cost a deployed instance its scratch
+         directory, and a cold one re-ran everything: v1's trade,
+         docs/plans/260830d-v1-imports-on-vercel.md.) */
       return {
         kind: "release",
         jobId: job.id,
@@ -2889,9 +3062,9 @@ async function walkClaim(
           /* **The claimant's own copy of the steps is left carrying the failure
              narrative on purpose**, because the three refusals below fall
              through to an ending that needs it. What the *store* writes on a
-             pause is its own business and is derived from the record it holds —
-             `settledSteps` on Postgres, `sweepStopped` on the filesystem — so
-             the two stories never have to be reconciled here. That only works
+             pause is its own business and is derived from the record it holds
+             (`settledSteps`, src/store/pg-jobs.ts), so the two stories never
+             have to be reconciled here. That only works
              because `noteProgress` copies what it is given; it used to alias it,
              and the alias carried `runStep`'s `error` into the paused record.
              tests/step-failure-seam.test.ts § a run its own deadline stopped. */
@@ -3009,9 +3182,9 @@ async function walkClaim(
        * **Kept, so the walk goes on — and these two lines are what makes that
        * safe to do.**
        *
-       * The commit wrote nothing to the `jobs` row (see `JobTransition`), so
-       * `noteProgress` is what tells the card this step finished, and its
-       * answer is the only look this walk takes at the row it holds. That look
+       * The commit wrote the steps and handed no row back (see
+       * `JobTransition`), so `noteProgress`'s answer is the only look this walk
+       * takes at the row it holds. That look
        * is not housekeeping: **Stop pressed on another instance arrives here and
        * nowhere else.** `requestCancel` sets `cancelling` on the row and aborts
        * the local `AbortController` if the claimant happens to be in this
@@ -3024,7 +3197,7 @@ async function walkClaim(
        * docs/plans/260830d-v1-imports-on-vercel.md § Risks rather than discovered.
        */
       const noted = await note();
-      if (noted.cancelling) {
+      if (noted?.cancelling) {
         jlog.debug({ step: step.name }, `stop noticed after ${step.name} — ${job.slug}`);
         /* The same word `transitionAfter` uses when a Stop lands *during* a
            step, because it is the same event and the reader must not be able to
@@ -4473,8 +4646,8 @@ async function inFlightSlugForUrlKey(
  * How many finished jobs to keep.
  *
  * The records are the only account of what happened, so they outlive the card
- * on the homepage — but one per ingest, for ever, means the `_jobs` directory,
- * the in-memory map and **every poll response** grow without bound. Fifty is
+ * on the homepage — but one per ingest, for ever, means the `jobs` table and
+ * **every poll response** grow without bound. Fifty is
  * far more than anyone scrolls back through and small enough that the list
  * stays a list.
  *

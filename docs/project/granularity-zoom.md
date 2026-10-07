@@ -22,6 +22,27 @@ but no longer the one everything else is read through.
 > controls are history. [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).
 > Summary stopped drawing the tree on 2026-10-01 ([summaries.md](summaries.md)).
 
+## In this doc
+
+Live: the tree, how it is generated, the spine, the arc, validation. History: the rest.
+
+- [§ Intent](#intent) — Greg's original brief, verbatim, and why the framing is a hypothesis
+- [§ The shape](#the-shape) — the two-axis picture (up-down chronology, left-right granularity)
+- [§ The tree](#the-tree) — the contiguous-range invariant everything rests on
+  - [Node shape](#node-shape) — fields of a node; gist vs `navLabel`, and why a leaf has no gist
+  - [The supplement node](#the-supplement-node) — footnotes: a node with a title and no gist
+  - [Where the tree comes from](#where-the-tree-comes-from) — author headings plus model-proposed seams
+- [§ Generation](#generation) — prompt rules, length ceilings, what is cached
+- [§ The tabular view](#the-tabular-view) — (history) the gist columns beside the prose, removed 2026-09-29
+  - [Structure's two faces](#structures-two-faces-and-the-width-between-them) — live: columns vs nested list and the width between
+  - [The spine](#the-spine-a-birds-eye-rail) — live: the proportional rail, hover card, search lanes
+  - [The arc](#the-arc) — live: one article-level sentence per part, and how it joins the tree
+  - [Too many levels](#too-many-levels-fit-the-columns-dont-just-scroll-them) — (history) fitting columns to the window
+  - [Validate the tree](#validate-the-tree-always) — live: `npm run validate-tree` before trusting a new tree
+  - [The other view: fisheye](#the-other-view-fisheye) — (history) the sketch that never became a view
+- [§ Interaction](#interaction) — (history) anchor invariant and zoom keys
+- [§ What would make this fail](#what-would-make-this-fail) — the testable failure modes
+
 ## Intent
 
 Greg's description (2026-08-24), verbatim, because the wording carries the design:
@@ -115,28 +136,32 @@ interface Node {
   parent: NodeId | null;
   children: NodeId[];      // [] for leaves
   range: [BlockId, BlockId];  // inclusive, contiguous; resolved via the blocks.json index
-  title: string;           // 2–6 words, for Hierarchy and the spine
+  title: string;           // 2–6 words, for Structure and the spine
   gist?: string;           // ONE sentence — what the level above renders. Absent on leaves.
-  navLabel?: string;       // leaves only — a Hierarchy row's text. Never rendered in the reading view.
+  navLabel?: string;       // leaves only — a Structure paragraph row's text. Never rendered in the reading view.
   summary?: string;        // 2–4 sentences, shown on hover/expand, optional
   sourceHeading?: string;  // the author's own heading, if this node came from one
   treatment?: "supplement";   // the apparatus — see below. Authored title, NO gist.
 }
 ```
 
+(Abridged: [`TreeNode` in `src/types.ts`](../../src/types.ts) is the definition, and has two fields
+more — `question`, a Socratic line on the root and the parts that Marginalia shows, and `titleFrom`,
+set when a title quotes the block's opening words.)
+
 **Leaves carry no `gist`, but they do carry a `navLabel`.** These are different things, and keeping
-them separate is what lets Hierarchy go "all the way down to a paragraph level" without breaking
+them separate is what lets Structure (and, before 2026-09-29, Hierarchy) go "all the way down to a paragraph level" without breaking
 [principle 1](vision.md#principles).
 
 - A **gist** is *substitutable prose*. It appears in the reading view **in place of** the text it
   compresses. Leaves never get one, because at the rightmost level the real paragraph is right
   there, and a summary must never be shown where the real sentence could be.
-- A **navLabel** is *a pointer to prose*. It appears only in Hierarchy and the spine — navigation
-  chrome, never the reading column. Clicking it takes you to the paragraph; it is never displayed
+- A **navLabel** is *a pointer to prose*. It appears only in Structure's paragraph rows and the spine —
+  navigation chrome, never the reading column. Clicking it takes you to the paragraph; it is never displayed
   instead of the paragraph.
 
-Principle 1 asks that "every generated line should be a door, not a wall". A Hierarchy row is definitively
-a door: its whole purpose is to be clicked and left behind. The rule that matters is not "leaves
+Principle 1 asks that "every generated line should be a door, not a wall". A Structure paragraph row is
+definitively a door: its whole purpose is to be clicked and left behind. The rule that matters is not "leaves
 have no generated text" but **"the reading view never substitutes generated text for prose that
 could be shown"** — and that rule is intact.
 
@@ -155,10 +180,10 @@ Two consequences worth stating, because they are easy to get wrong:
   ([structure-step.md § Absence on a node](structure-step.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column)).
   While that says `pending` or `failed`, every surface below **withholds the whole paragraph-label
   layer** rather than drawing what happens to exist —
-  [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule. The `Paragraphs` pill and
-  the leaf column say so in one sentence, because there the reader asked for the layer by name;
-  Structure's nested-list face (Outline mode until 2026-09-10) simply does not climb to its paragraph
-  rung, because nobody asked.
+  [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule. (The `Paragraphs` pill and
+  the leaf column said so in one sentence, because there the reader asked for the layer by name; they
+  went with Hierarchy on 2026-09-29.) Structure's nested-list face (Outline mode until 2026-09-10) simply
+  does not climb to its paragraph rung, because nobody asked.
 
   **`pending` is the ordinary state of a newly added article, since 2026-09-06**, and that is worth
   knowing before you read the withheld state as a fault. The label pass left the blocking `structure`
@@ -214,8 +239,9 @@ saved reading position and in the arc alike. See [260828o-footnotes.md](../plans
 Most web essays are structurally flat — the Noema test article is ~54 minutes of largely bare
 `<p>` with few subheads — so "chapters → sections" usually has to be *proposed*, not read off the
 document — and the brief's own "chapters → sections → pages or paragraphs" is a book's structure,
-not an essay's. Provisional approach, with the alternatives weighed in
-[Q1](open-questions.md#q1):
+not an essay's. The approach, adopted over the two it was weighed against — the author's headings
+alone (faithful and free, but a flat article collapses to two levels) and a model segmenting the
+whole piece (uniform depth, but every boundary is the model's opinion):
 
 - Use the author's real headings as hard boundaries where they exist. They are ground truth about
   where the author thought the seams were, and readers recognise them.
@@ -233,7 +259,7 @@ Bottom-up, one pass, precomputed for the whole article and cached.
              (from block text)  (from children)   (from children)   (from children)
 ```
 
-(The leftmost step writes leaves' `navLabel`s — the Hierarchy rows for individual paragraphs. Leaves have
+(The leftmost step writes leaves' `navLabel`s — Structure's rows for individual paragraphs. Leaves have
 no `gist`; the first *gists* appear one level up. See [Node shape](#node-shape).)
 
 **Two things about that diagram are aspiration rather than description, and both matter.** It reads
@@ -572,9 +598,10 @@ Four decisions worth keeping:
   rail nobody had asked for. The fix was to show labels only at widths where they cost no column
   (~1280px for a three-level tree). With one width there is nothing left to decide. (The
   non-monotonicity was found by `spideryarn2-cd`, 2026-08-25, by sweeping widths — at any single
-  width the old behaviour looked like a considered trade. The sweep is still a test:
-  `tests/layout.test.ts` asserts that no width ever shows fewer columns than a narrower one, which
-  is the check that would catch the next width spent conditionally.)
+  width the old behaviour looked like a considered trade. The sweep was a test in
+  `tests/layout.test.ts` — no width ever showed fewer columns than a narrower one — and went with
+  the columns on 2026-09-29; `tests/layout.test.ts` still sweeps the band's invariants "at every
+  width, root and rail".)
 - **It is on unless the URL says otherwise**, in every mode, outline included — Greg, 2026-09-05:
   *"we don't need the 'Spine' button (let's just default to always showing it)"*. Decided in
   [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so that one function
@@ -835,7 +862,10 @@ The sketch, recorded so it isn't lost:
   screen. Whether that rank is derived from tree position (each node promoting its best sentence,
   which guarantees even coverage and gives literally "one sentence per chapter" at the far left) or
   from a global salience score (honest about which passages are dense, but it clumps and leaves whole
-  sections blank) is **undecided** — see [Q8](open-questions.md#q8).
+  sections blank) was **never decided**, because the view was never built. The recommendation at the
+  time was the first, the hierarchical budget: it delivers the brief's own description of the
+  leftmost column and degrades gracefully. A global score with a per-section floor would read better
+  than either and is two interacting mechanisms to tune.
 
 Note this view leans toward showing the author's real sentences rather than generated gists, which
 is a different bargain from the tabular view's and closer to
@@ -860,8 +890,8 @@ stays put while the text breathes around it.
   every level of this view. ← / → then came back to granularity after all: they move that *aim*
   sideways across the columns, so the level can be chosen without a mouse. See
   [keyboard.md](keyboard.md#choosing-the-level-without-a-mouse).
-- **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom is a later
-  question ([Q4](open-questions.md#q4)).
+- **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom was left as a
+  later question, and went with the columns.
 - **Click a gist to descend into just that node**, leaving the rest of the article coarse. This is
   the focus+context mode and it's likely how the feature is actually used — you scan L1, spot the
   one chapter you care about, and drop into it alone. v1 should support it even if uniform-level

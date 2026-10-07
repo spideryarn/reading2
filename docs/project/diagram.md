@@ -2,6 +2,24 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ What it is for](#what-it-is-for) — Greg's ask, and what "a mode" means here
+- [§ The three computed pictures](#the-three-computed-pictures) — Force, Drift and Trail side by side, and what each is honest about
+- [§ There were eight, and five are gone](#there-were-eight-and-five-are-gone) — which pictures were cut, and why (history)
+- [§ Who sees which chip](#who-sees-which-chip-2026-09-04) — the experimental switch, and why it is not a gate
+- [§ Why Force was the default, and why Sketch is now](#why-force-was-the-default-and-why-sketch-is-now) — what arriving costs, and what pressing the bar's Diagram button arms
+- [§ Waiting, and failing](#waiting-and-failing-without-borrowing-a-picture) — spinners, Try again, one request per attempt
+- [§ The graph Force is drawn from](#the-graph-force-is-drawn-from) — the five kinds of edge; sequence chain, anchor, semantic, vocabulary
+- [§ Interaction](#interaction) — keys, the footer card, the step bar and why a press once sprang back
+- [§ Two things that are wrong in a way you cannot see](#two-things-that-are-wrong-in-a-way-you-cannot-see) — SVG clipping and `wrapText`'s shared secret
+- [§ Colour](#colour) — the eight hues and where they come from
+- [§ The two pictures made of paragraphs](#the-two-pictures-made-of-paragraphs) — Drift and Trail: what a projection can promise, the caveat icon, lanes or spread
+- [§ The fourth: Sketch](#sketch) — pointer to [sketch.md](sketch.md)
+- [§ The fifth: Illustrated](#illustrated) — pointer to [illustrated.md](illustrated.md)
+- [§ A visitor gets the Sketch, and only the Sketch](#a-visitor-gets-the-sketch-and-only-the-sketch) — the signed-out view, and what it may not fetch
+- [§ What is deliberately not here](#not-doing) — rejected pictures and libraries, and the known gaps
+
 The article as a picture, in the middle band — several of them, one toggle, and the
 reader's position marked on every one. Three are geometry over the article's own
 tree; the fourth is [a model's drawing](sketch.md), and it is the only one that is
@@ -130,7 +148,7 @@ distinction was GPT Sol's finding against the first round of `strata` — eight
 long paragraphs and eight one-line list items are the same number of blocks and
 very different amounts of article — and it cost a whole round to learn.
 
-**A cut picture's name in a URL opens Force** rather than an error, which is
+**A cut picture's name in a URL opens the default, Sketch** (Force until 2026-09-04), rather than an error, which is
 the same "degrade to something real" rule every parser in
 [`params.ts`](../../src/web/params.ts) follows, and the one place here that has
 an actual pasted link behind it. `?diagram=tree` is the one to watch: it was the
@@ -169,13 +187,13 @@ and shows them a checked chip for it.
 
 **It is not a gate, and nothing here should be written as though it were.** The
 switch is about clutter and the server does not read it. What actually decides
-what a reader may buy is one level in: `access` pins a visitor to Force and draws
+what a reader may buy is one level in: `access` pins a visitor to the Sketch and draws
 no picker at all, and `/api/similar/:slug` and `/api/projection/:slug` sit behind
 `requireUser`. [security-map.md](security-map.md).
 
 **What this does and does not change about spend.** It changes discoverability,
 not authority. Every article owner could already start unlimited paid Sketch
-reruns and still can; a shared visitor is still Force-only; *following a link*
+reruns and still can; a shared visitor is still pinned to one picture (the Sketch since 2026-09-04, Force before); *following a link*
 still buys nothing, because only a **gesture** arms an automatic run — a chip
 inside the mode, or, since 2026-09-06, the bar's own Diagram button
 ([`activation.ts`](../../src/web/activation.ts), and the section below). There is no
@@ -1636,9 +1654,10 @@ made by different hands within an hour. See the section above.
   static, shareable image of an article's shape — a thumbnail, an OG image.
 - **No Mermaid.** Clickable nodes need `securityLevel: 'loose'`, and the node
   labels here are headings from a stranger's web page ([security.md](security.md)).
-- **No cross-reference arcs, yet.** The article's own internal links
-  ([`internal-links.ts`](../../src/web/internal-links.ts)) would make this a real
-  graph rather than a tree. The most interesting thing left, and a second feature.
+- **No cross-reference arcs on the two scatters.** Force draws the article's own internal links
+  as its **anchor** edges ([§ Anchor](#anchor-the-one-edge-somebody-meant);
+  [`internal-links.ts`](../../src/web/internal-links.ts) is the click-time other end); Drift and
+  Trail do not.
 - **No UMAP, and no t-SNE.** They would separate the clusters far more prettily
   and they were rejected on a *claim* rather than on a cost: their distances do
   not mean anything. The gaps in a UMAP plot are an artefact of its own

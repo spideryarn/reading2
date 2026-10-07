@@ -1,7 +1,13 @@
 # High-powered AI
 
-Parent: [reading-view-overview.md](reading-view-overview.md). The build, and every decision behind
-it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
+Up: [reading-view-overview.md](reading-view-overview.md). Tests:
+[`high-power-models.test.ts`](../../tests/high-power-models.test.ts),
+[`high-power-routes.test.ts`](../../tests/high-power-routes.test.ts),
+[`high-power-step.test.ts`](../../tests/high-power-step.test.ts),
+[`billing-high-power.test.ts`](../../tests/billing-high-power.test.ts),
+[`add-high-power.test.ts`](../../tests/add-high-power.test.ts),
+[`metadata-high-power-switch.test.tsx`](../../tests/metadata-high-power-switch.test.tsx). The build,
+and every decision behind it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
 and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
 it costs them), and [261002k](../plans/261002k-high-powered-ai-at-import.md) (choosing it while
 the article is added).

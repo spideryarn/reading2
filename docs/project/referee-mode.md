@@ -1,5 +1,26 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- Status (the paragraphs below, before the first section) — what is built, with the day each part landed (largely history)
+- [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now
+- [§ How to read a panel](#how-to-read-a-panel-one-press-away-since-2026-10-03) — where the "how to read this" sentences went
+- [§ The job](#the-job-and-the-tension-it-was-built-to-hold) — Greg's tension and the research number behind it
+- [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
+- [§ The four sub-modes](#the-four-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4)
+- [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
+- [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
+- [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
+- [§ The (i) in the corner](#what-the-mode-is-for-the-i-in-the-corner) — what the mode is, in two sentences
+- [§ The rules the whole mode obeys](#the-rules-the-whole-mode-obeys) — no verdict, identity-stripped calls, the injection scan
+- [§ Confidentiality](#confidentiality-exact-and-unflinching-about-the-tense) — the three sentences and why their tenses differ
+- [§ The band has to fit](#the-band-has-to-fit-and-for-a-day-it-did-not) — the layout accident (history, partly superseded)
+- [§ What the evidence says](#what-the-evidence-actually-says-and-where-the-plan-overstated-it) — the two numbers, and what the plan overstated
+- [§ Website copy notes](#website-copy-notes-kept-for-later) — raw material for a referee landing page
+- [§ See also](#see-also) — plans, research and the source files, by name
+
 **Status, 2026-09-01: all four sub-modes are built, and all four work in the store that deploys.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
@@ -190,10 +211,10 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 ## Why the mode is `referee`, not `reviewer`
 
-`review` is already a mode — the reader says what they took from a piece they have read for
-themselves and the model shows them where it comes apart
-([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
-name was chosen). A `reviewer` mode beside a `review` mode would be one word meaning two things,
+`review` was already a mode when this name was chosen — the reader says what they took from a piece
+they have read for themselves and the model shows them where it comes apart
+([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, and to `learn`
+on 2026-10-06). A `reviewer` mode beside a `review` mode would be one word meaning two things,
 which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md)).
@@ -389,6 +410,39 @@ and it is also a ranking of the referee's own work, which wants thought first.
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
 which collects every digit on the row and compares it against the numbers that went in.
 
+#### A criterion with comments on it cannot be deleted, and says so <a id="a-criterion-with-comments-on-it"></a>
+
+A placement points at its criterion, and `comments_criterion_fk` refuses to leave it pointing at
+nothing ([database.md § `restrict` and `no action`](database.md#restrict-and-no-action-are-the-same-rule-at-two-different-moments)).
+Until 2026-10-07 nothing turned that refusal into words, so it reached the referee as a 500
+`[db-failed]`, *"a bug here rather than anything you did"*, from three directions. Each is now a
+refusal with its own sentence, **and nothing else changed**: no comment is detached, no criterion is
+deleted, and the key is what it was.
+
+| The referee | Gets | Sentence |
+|---|---|---|
+| deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
+| adds a criterion when the list is full and the one the trim would remove has comments on it | 409, before any stream opens | `CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS` |
+| places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
+
+The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts); the key
+is matched **by name**, before the store guard drops the name, with `violatesForeignKey`
+([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught rather than checked for
+in advance: a read for comments followed by the delete can be raced by a placement, and the key
+cannot. The delete is optimistic in the browser, so `useCriteria` § `forget` restores the row on a
+409 and on nothing else — a 500 does not say whether the row went.
+
+**The second row is a wedge, and it is still one.** Finished rows past the cap are trimmed, and
+pending rows are skipped. If a trim candidate has comments, that add rolls back. The sentence says
+"the one that would be dropped to make room" rather than "the oldest one", because the oldest can
+be a pending row the trim skips while a younger finished one is what blocks. Whether the trim should skip such a
+criterion instead, letting a list run past twenty, is a retention decision waiting on Greg (question 3a in
+[the seventh sweep's umbrella](../plans/261006m-seventh-codebase-sweep-depth-umbrella.md)), as is
+what Delete should do with the comments (question 3).
+`tests/referee-routes-postgres.test.ts` § *OPEN QUESTION 3a* pins today's behaviour so whoever
+builds the answer has the case to turn over.
+[The plan](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md).
+
 ### 2. Claims — where the paper addresses its own claims
 
 Pulls the claims the paper makes up front and, for each, lists the passages that address it, by
@@ -443,15 +497,17 @@ the same omissions, on a repeat run — with the dropped claim's words swallowed
 claim's quote. Every rule above is about the rows that came back, and a claim that never gets a row
 is invisible: the zero-passage row and its honest sentence cannot fire when there is no row.
 
-So the panel now prints, under the list, **what the claims did not account for**: for each block a
-claim was taken from, the sentences and clauses no claim above is anchored in
-(`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
-for the clause its quote *begins* in rather than every clause it covers, which is what makes a
-three-claim sentence quoted whole under one claim show its other two.
+So the panel now prints, under the list, **the other text inside the quoted passages** (heading
+`OTHER_TEXT_HEADING`): the sentences and clauses of the passages the claims quote that no claim above
+begins in (`otherTextInQuotes`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim
+accounts for the clause its quote *begins* in rather than every clause it covers, which is what makes
+a three-claim sentence quoted whole under one claim show its other two. (It listed every clause of
+every block a claim came from, under the heading "Not accounted for", until GPT Sol's review on
+2026-09-01 narrowed it to the quotes.)
 
-**The wording is the whole value of it**, and it is a checked constant rather than a string in the
-panel. It says *what was not accounted for* and never *the claims you missed*: a block a claim came
-from carries background, citation and setup as well as claims, so calling these missed claims would
+**The wording is the whole value of it**, and it is a checked constant (`OTHER_TEXT_NOTE`) rather
+than a string in the panel. It says what the list *is* — a fact about the list above — and never
+*the claims you missed*: a block a claim came from carries background, citation and setup as well as claims, so calling these missed claims would
 be the judgement this sub-mode refuses, made in reverse and on worse evidence.
 [`tests/referee-copy-is-about-the-model.test.ts`](../../tests/referee-copy-is-about-the-model.test.ts)
 holds it there, and no number appears beside them for the same reason no number appears on a claim.
@@ -532,8 +588,8 @@ cut —
 >
 > — Greg, 2026-09-01
 
-**It is Chat with a third personality, not a panel of its own.** `candidates` is a third
-`ThreadKind` beside `chat` and `learn` ([`src/types.ts`](../../src/types.ts)), so it inherits
+**It is Chat with a third personality, not a panel of its own.** `candidates` was the third
+`ThreadKind`, after `chat` and `learn` (there are five now: [`src/types.ts`](../../src/types.ts)), so it inherits
 streaming, the tools, OpenRouter's server-side web search, citation collection, thread persistence
 and retry for nothing. What had to change was small and known: the `chat_threads_kind` CHECK
 (`drizzle/0050_candidates_thread_kind.sql` — the *widening* direction, which needs no data movement
@@ -969,7 +1025,7 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
 ## Confidentiality: exact, and unflinching about the tense
 
 By the time a reader reaches Referee mode, the article's text has already gone to a third-party
-model provider — `DEFAULT_INGEST_STEPS` runs extraction, structure and gists at ingest
+model provider — `DEFAULT_INGEST_STEPS` runs extraction and structure at ingest
 ([`src/pipeline.ts`](../../src/pipeline.ts)), and a PDF is read by a model before it is anything
 else. The first draft of this plan put a notice about that fact *inside* Referee mode, phrased as
 something still to decide. The cross-family review called that the single most serious finding in

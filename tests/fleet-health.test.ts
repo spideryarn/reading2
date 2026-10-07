@@ -126,6 +126,9 @@ describe("health gathering and assembly", () => {
         availableKiB: 152_949_524,
         usePercent: 50,
       },
+      // The `df` fixture answers both questions with the line for `/`, which is
+      // what a machine with no separate /home does.
+      homeDisk: { kind: "none" },
       swapActivity: { kind: "value", siKBs: 76, soKBs: 0, waPercent: 0, activelySwapping: true },
       attribution: {
         kind: "value",
@@ -145,10 +148,11 @@ describe("health gathering and assembly", () => {
       ["free", ["-b"]],
       ["swapon", ["--show", "--bytes"]],
       ["df", ["-k", "/"]],
+      ["df", ["-k", "/home"]],
       ["vmstat", ["1", "2"]],
       ["ps", ["-eo", "rss,args", "--no-headers"]],
     ]);
-    expect(asyncSpecs).toHaveLength(7);
+    expect(asyncSpecs).toHaveLength(8);
     expect(Object.fromEntries(asyncSpecs.map(({ key, cmd, args }) => [key, [cmd, args]]))).toEqual({
       "health:uptime": ["uptime", []],
       "health:nproc": ["nproc", []],
@@ -156,6 +160,7 @@ describe("health gathering and assembly", () => {
       "health:vmstat": ["vmstat", ["1", "2"]],
       "health:swapon": ["swapon", ["--show", "--bytes"]],
       "health:df": ["df", ["-k", "/"]],
+      "health:df-home": ["df", ["-k", "/home"]],
       "health:ps": ["ps", ["-eo", "rss,args", "--no-headers"]],
     });
   });
@@ -186,7 +191,7 @@ describe("health gathering and assembly", () => {
 
     const report = await collectHealthAsync({ owner, nowMs: () => 50_000 });
 
-    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(called.sort()).toEqual(["df", "df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
     expect(report.load.kind).toBe("value");
     expect(report.memory.kind).toBe("value");
     expect(report.swap.kind).toBe("value");
@@ -226,7 +231,7 @@ describe("health gathering and assembly", () => {
 
     const report = await collectHealthAsync({ owner, nowMs: () => 50_000 });
 
-    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(called.sort()).toEqual(["df", "df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
     expect(report.load.kind).toBe("value");
     expect(report.memory.kind).toBe("value");
     expect(report.swap.kind).toBe("value");
@@ -464,8 +469,8 @@ describe("health gathering and assembly", () => {
 
     expect(mostCheapInFlight).toBe(3);
     expect(mostTotalInFlight).toBe(4);
-    expect(called.sort()).toEqual(["df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
-    expect(new Set(specs.map((spec) => spec.key)).size).toBe(7);
+    expect(called.sort()).toEqual(["df", "df", "free", "nproc", "ps", "swapon", "uptime", "vmstat"]);
+    expect(new Set(specs.map((spec) => spec.key)).size).toBe(8);
     const vmstatTimeout = specs.find((spec) => spec.cmd === "vmstat")?.timeoutMs;
     const cheapTimeouts = specs.filter((spec) => spec.cmd !== "vmstat").map((spec) => spec.timeoutMs);
     expect(vmstatTimeout).toBe(10_000);

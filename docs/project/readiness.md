@@ -25,6 +25,13 @@ a record to `~/.fleet-readiness/runs/` carrying the commit it ran on, the tree s
 of the run, how it ended, what it counted and — for a failure — which test files failed. Wrapping it in `tmux-job.ts` is the usual reason —
 the run survives a disconnect and its output is kept.
 
+**How long a run took is already recorded and already drawn.** Every record carries `durationMs`
+([`scripts/readiness-run.ts`](../../scripts/readiness-run.ts) writes it; parsed in
+[`readiness.ts`](../../tools/fleet/readiness.ts) and
+[`readiness-client.ts`](../../tools/fleet/web/src/readiness-client.ts)), and
+[`ReadinessPanel.tsx`](../../tools/fleet/web/src/ReadinessPanel.tsx) shows it on each check's row
+beside its latest reading (` · 6.2m`, from `describeDuration`) and in each mark's hover title — so a change to *how* it is shown is a panel edit, not a new datum.
+
 **A plain `npm test` leaves no record.** It will still appear in the tab's 24-hour history,
 reconstructed from its tmux log, drawn faded — and it can never make the answer green, because
 nothing writes the commit into a log and a run about no commit cannot be evidence about `dev`.
@@ -98,7 +105,18 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-verdict.ts` | the conjunction above, as one pure function |
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
+| `tools/fleet/web/src/readiness-client.ts` | the browser's parser of `/api/readiness`, and its types (the `durationMs` the panel draws) |
 | `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
+
+Tests, in `tests/`: [`fleet-readiness.test.ts`](../../tests/fleet-readiness.test.ts) (records, verdict,
+parsing), [`fleet-readiness-route.test.ts`](../../tests/fleet-readiness-route.test.ts),
+[`fleet-readiness-async.test.ts`](../../tests/fleet-readiness-async.test.ts),
+[`fleet-readiness-panel.test.ts`](../../tests/fleet-readiness-panel.test.ts),
+[`fleet-readiness-poll.test.tsx`](../../tests/fleet-readiness-poll.test.tsx),
+[`fleet-readiness-failing-files.test.tsx`](../../tests/fleet-readiness-failing-files.test.tsx),
+[`readiness-failed-files-review.test.ts`](../../tests/readiness-failed-files-review.test.ts) and
+[`readiness-loop.test.ts`](../../tests/readiness-loop.test.ts) (the periodic runner,
+[`scripts/readiness-loop.ts`](../../scripts/readiness-loop.ts)).
 
 ## Three ways it nearly lied, caught in review
 

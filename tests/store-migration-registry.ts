@@ -2425,8 +2425,10 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
   "tests/article-cache-call-site.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  /* Three blocks added on 2026-10-07 (seventh sweep, C4/B), each with its
+     own mutation and its own blind spot, so the arrears stay at three. */
   "tests/chat-anchor-route.test.ts":
-    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
+    { date: "2026-09-04", stage: "B", mutations: 5, blindSpots: 5, blocksWithoutJudgement: 3 },
   "tests/chat-live-ticket-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 3, blocksWithoutJudgement: 4 },
   "tests/chat-live-turn.test.ts":
@@ -3923,6 +3925,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "JSONL file with no foreign key anywhere, and the Postgres half overrides it with " +
         "`currentOwnerId()` on every fixture. `ai_calls_owner_id_users_id_fk` is real, so the " +
         "constraint exists — nothing reaches it with this id.",
+    },
+  },
+  "tests/referee-routes-postgres.test.ts": {
+    "00000000-0000-4000-8000-0000000000d5": {
+      kind: "no-row-needed",
+      why:
+        "`outsider` is a request owner for the one case that asks whether somebody who does not " +
+        "own the article is turned away before `comments_criterion_fk` is ever consulted. Both " +
+        "calls made as him, `refereeCriteriaStore.remove` and `commentStore.create`, must reject " +
+        "with a 404 from the article lookup, and the case then checks that no comment and no " +
+        "criterion changed. If either call ever got as far as its write, the insert would name " +
+        "him in `comments.owner_id` and this entry would have to become `seeded`.",
     },
   },
   "tests/store-jobs-parity.test.ts": {

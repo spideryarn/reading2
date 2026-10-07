@@ -1,10 +1,17 @@
 # Reading time — where you have spent time in the piece
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **The spine carries a tinted area that reaches further across where you have spent longer, with a
 line down its edge, and a faint hairline beside each passage says the same thing up close.** It is there so a reader who has been thrown around the article — by a
-citation, a search hit, a rotation — can find the place they had got to by eye. Part of
-[reading-view-overview.md](reading-view-overview.md). The plan, and every number's reasoning, is
-[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md).
+citation, a search hit, a rotation — can find the place they had got to by eye. The plan, and every
+number's reasoning, is
+[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md). The
+server half is [`src/store/pg-reading-time.ts`](../../src/store/pg-reading-time.ts) and the `POST
+/api/reading-time/:slug` route in [`src/routes.ts`](../../src/routes.ts) (tests:
+[`reading-time-route.test.ts`](../../tests/reading-time-route.test.ts),
+[`reading-time.test.ts`](../../tests/reading-time.test.ts),
+[`use-reading-time.test.tsx`](../../tests/use-reading-time.test.tsx)).
 
 > I would love for there to be a way to indicate where I've spent time in the article, perhaps in the
 > spine and or as a kind of subtle indicator in the vertical gutter next to the text. […] One of the

@@ -73,6 +73,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
@@ -154,7 +155,15 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
   const ready = faq !== null && (owner === null || owner.status === "ready");
   /* The owner's alone: `dropped` does not cross (src/public-types.ts § PublicFaq). */
   const dropped = owner?.faq && ready ? droppedNote(owner.faq.dropped) : null;
-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const showJob =
+    owner !== null &&
+    ready &&
+    !owner.stale &&
+    (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
 
   /**
    * @param again whether this is the button beside a list that is already
@@ -163,18 +172,22 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
    *   useIdeas.ts § `ensure`.
    */
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new questions haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="faq"
       icon={<BadgeQuestionMark size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 

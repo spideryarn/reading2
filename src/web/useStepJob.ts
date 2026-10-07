@@ -239,6 +239,9 @@ export interface StepFailure {
   retry: (() => void) | null;
 }
 
+/** A mode's artefact hold can wrap the job-level Retry as well as its forced verb. */
+export type RetryHold = (start: () => Promise<string | null>) => Promise<void>;
+
 /**
  * @typeParam S the step this hook was made for — inferred from the `step`
  *   argument, and what `StepRun.precededBy` is checked against. Defaults to the
@@ -246,6 +249,8 @@ export interface StepFailure {
  *   check widens away with it, so annotate `StepJob<"sketch">` if you write one.
  */
 export interface StepJob<S extends StepName = StepName> {
+  /** Register this mount's artefact hold for Retry; cleanup removes only this registration. */
+  registerRetryHold?(hold: RetryHold): () => void;
   /**
    * The job writing this article's artefact, if one is. Null otherwise.
    *
@@ -589,6 +594,13 @@ export function useStepJob<S extends StepName>(
      both went red with it there). Metadata's run button latches in `RerunRow`
      instead, where one press is the whole of what it means. */
   const inFlight = useRef(false);
+  const retryHold = useRef<RetryHold | null>(null);
+  const registerRetryHold = useCallback((hold: RetryHold) => {
+    retryHold.current = hold;
+    return () => {
+      if (retryHold.current === hold) retryHold.current = null;
+    };
+  }, []);
   const [starting, setStarting] = useState(false);
 
   /**
@@ -709,17 +721,18 @@ export function useStepJob<S extends StepName>(
       /* React commits a discrete click promptly in the browser, but the action
          itself must still be single-flight: two events can reach this closure
          before that commit removes the button. */
-      if (inFlight.current) return;
+      if (inFlight.current) return null;
       inFlight.current = true;
       setStarting(true);
       const next = await queue.retry(id);
       if (next) {
         setWatchedId(next.id);
         startedId.current = next.id;
-        return;
+        return next.id;
       }
       inFlight.current = false;
       setStarting(false);
+      return null;
     },
     [queue],
   );
@@ -780,7 +793,9 @@ export function useStepJob<S extends StepName>(
       ? {
           message: stopped.message,
           retryable: stopped.retryable,
-          retry: () => void retry(stopped.id),
+          /* Retry writes an artefact too. Its hold must survive the new job
+             finishing, just as the mode's forced verb does. */
+          retry: () => void (retryHold.current ? retryHold.current(() => retry(stopped.id)) : retry(stopped.id)),
         }
       : null;
 
@@ -789,6 +804,7 @@ export function useStepJob<S extends StepName>(
   const stalled = job !== null && driverStalled(queue.driverFailures, job.id);
 
   return {
+    registerRetryHold,
     job,
     loaded: queue.loaded,
     failed,

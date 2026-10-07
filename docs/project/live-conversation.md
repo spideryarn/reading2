@@ -1,5 +1,7 @@
 # Live conversation
 
+Up: [reading-view-overview.md](reading-view-overview.md) · the typed chat it joins: [chat-tools.md](chat-tools.md)
+
 Talking to the article, out loud, in the middle of a chat. Press **Live** in the composer and the
 reader is in a spoken conversation with a companion that has the whole piece in front of it; press
 Send, or Live again, and they are back to typing in the same thread.
@@ -19,6 +21,22 @@ reader can read the whole thing back a week later. That is the requirement every
 > I should be able to use that button to start a new conversation, or resume an existing one, and when I hang up I should be able to resume or switch to typing/dictation.
 >
 > — Greg, 2026-09-06
+
+## In this doc
+
+- [§ The controls must say what is happening](#the-controls-must-say-what-is-happening) — the Live button's states and wording
+- [§ Where the pieces are](#where-the-pieces-are) — which file does what; start here to find code
+- [§ Which model, and why not GPT-Live yet](#which-model-and-why-not-gpt-live-yet) — the engine choice
+- [§ The audio never touches our server](#the-audio-never-touches-our-server) — the privacy and cost shape
+- [§ The meter](#the-meter) — what the usage meter counts and shows
+- [§ The three orderings, and why each is a rule](#the-three-orderings-and-why-each-is-a-rule) — why turns can land out of order
+- [§ The write, and the one guard that is also the idempotency](#the-write-and-the-one-guard-that-is-also-the-idempotency) — how a spoken turn is saved once
+- [§ What a spoken row carries that a typed one does not](#what-a-spoken-row-carries-that-a-typed-one-does-not) — extra fields on a spoken message
+- [§ Three things that are not obvious and cost an afternoon each](#three-things-that-are-not-obvious-and-cost-an-afternoon-each) — gotchas before debugging
+- [§ The second engine: GPT-Live, behind Experimental](#the-second-engine-gpt-live-behind-experimental) — the other engine and its switch
+- [§ The lifecycle, which is the most failure-prone part](#the-lifecycle-which-is-the-most-failure-prone-part) — connect, hang up, resume; where it breaks
+- [§ What is not built](#what-is-not-built) — known gaps
+- [§ See also](#see-also)
 
 ## The controls must say what is happening
 
