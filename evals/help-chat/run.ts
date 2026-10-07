@@ -38,6 +38,7 @@ import { withLedger } from "../../src/cli-ledger.js";
 import { HELP_CHAT_STALL_MS, HELP_CHAT_SYSTEM, HELP_CHAT_TIMEOUT_MS, HELP_CHAT_VERSION, helpChatRequest } from "../../src/help-chat-call.js";
 import corpus from "../../src/help-corpus.generated.json" with { type: "json" };
 import { loadEnvLocal } from "../../src/env.js";
+import { PROVIDER_HOSTS } from "../../src/spend-declarations.js";
 import { runStream } from "../../src/stream-run.js";
 import { QUESTIONS } from "./questions.js";
 
@@ -81,13 +82,19 @@ interface Seen {
   usage: Record<string, unknown> | null;
 }
 
+/** The gateway's host: the first of the shared list (src/spend-declarations.ts). */
+const GATEWAY_HOST = PROVIDER_HOSTS[0] ?? "";
+
 /** The last streamed OpenRouter response, read off a clone. Watching, not bypassing. */
 let pending: Promise<Seen> | null = null;
 function watchTheModel(): void {
   const real = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await real(input, init);
-    if (String(input).includes("openrouter.ai")) {
+    /* Which provider's reply to read, from the shared list rather than a host
+       spelled here: this file only watches the gateway's own fetch. */
+    const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
+    if (host === GATEWAY_HOST || host.endsWith(`.${GATEWAY_HOST}`)) {
       const copy = res.clone();
       pending = copy.text().then((text) => {
         let provider: string | null = null;
