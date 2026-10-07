@@ -38,8 +38,9 @@
  * (the recogniser), `useDictation` (the capture) or the server. None of them is
  * swallowed.
  */
-import { useEffect, useRef, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 
+import { CAP_WARNING_MS, formatDuration } from "../../../../src/web/mic-recording.js";
 import type { UseDictation } from "../../../../src/web/useDictation.js";
 import { useDictationField } from "../../../../src/web/useDictationField.js";
 import { sendForTranscription, type FleetDictationContext } from "./dictation-client.js";
@@ -185,6 +186,32 @@ function statusLine(d: UseDictation): string | null {
   return "Listening.";
 }
 
+/**
+ * **The last minute before the cap, counted down.** The hook stops a dictation
+ * at `MAX_MS` and chimes a minute before; this is the same warning for the eye.
+ * Nothing until then. Greg, spya-n8cuqq: *"if you're ever going to cut me off
+ * like that, you should give me some kind of feedback of some kind."*
+ *
+ * `role="timer"` so it is exposed and not read out every second. Rounded up, and
+ * at or past the deadline it says it is stopping rather than 0:00.
+ */
+function StopsIn({ endsAt }: { endsAt: number }): ReactNode {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, []);
+  const left = endsAt - now;
+  if (left > CAP_WARNING_MS) return null;
+  return (
+    <span className="tw:text-[12px] tw:font-semibold tw:text-needs-ink" role="timer">
+      {left <= 0
+        ? "Stopping dictation…"
+        : `Dictation stops in ${formatDuration(Math.ceil(left / 1000) * 1000)}.`}
+    </span>
+  );
+}
+
 export function DictationControl({
   dictation,
   toggle,
@@ -282,6 +309,8 @@ export function DictationControl({
           Not hearing much{dictation.deviceLabel === null ? "" : ` from “${dictation.deviceLabel}”`}.
         </span>
       ) : null}
+
+      {dictation.armed && dictation.endsAt !== null ? <StopsIn endsAt={dictation.endsAt} /> : null}
 
       {dictation.deviceUnavailable ? (
         <span className="tw:text-[12px] tw:text-needs-ink">

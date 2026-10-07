@@ -750,10 +750,14 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       /* There is one claims run per article, so the key is the slug and the row
          is the row — no id to keep in step. Put back to `pending` and aged past
          the grace, it is collectable if and only if the slug has left
-         `pullingClaims`. */
+         `pullingClaims`.
+
+         `claims: []` with it, as `begin` writes: a `pending` row may not carry
+         claims (`referee_claims_empty_unless_done`), so this hand-made one has
+         to be a row the store could have made. */
       await getDb()
         .update(refereeClaims)
-        .set({ status: "pending", createdAt: new Date(Date.now() - 10 * 60_000) })
+        .set({ status: "pending", claims: [], createdAt: new Date(Date.now() - 10 * 60_000) })
         .where(eq(refereeClaims.articleId, article.articleId));
 
       const after = await get(`/api/referee/claims/${SLUG}`);

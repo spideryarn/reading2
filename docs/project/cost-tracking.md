@@ -10,6 +10,11 @@ one — **how a new piece of AI work gets its cost tracked, and where the figure
 >
 > — Greg, 2026-09-30
 
+Adding a column to the ledger (a new thing recorded per call) is a migration: how it is named and
+generated is [database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once),
+how it is applied [§ Step two: apply the migrations](database.md#step-two-apply-the-migrations). The
+table is `aiCalls` in [`src/db/schema.ts`](../../src/db/schema.ts).
+
 ## The short version: you should not have to do anything
 
 Every gateway call made inside a collector writes one row to `spideryarn.ai_calls`, priced when the

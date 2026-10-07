@@ -400,6 +400,8 @@ function quotesOwner(over: Partial<QuotesOwner> = {}): QuotesOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }

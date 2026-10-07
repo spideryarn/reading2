@@ -864,7 +864,7 @@ describe("one microphone, shared or not at all", () => {
        ending the dictation, the tape is the only source of words left — and
        `recordTrack` returns null when every container this browser offers
        refuses to start. Carrying on there leaves the microphone armed with no
-       live words, no recording and no five-minute cap, under a strip promising
+       live words, no recording and no cap, under a strip promising
        words when the reader stops. GPT Sol's code review, D2. */
     vi.stubGlobal(
       "MediaRecorder",

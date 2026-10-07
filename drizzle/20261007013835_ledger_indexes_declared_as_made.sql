@@ -1,0 +1,23 @@
+-- This migration runs no SQL, on purpose. It exists for the snapshot beside it.
+-- docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md § Stage 6b
+--
+-- `ai_calls_owner_started` and `ai_calls_scope_started` were made by hand, in
+-- 0021 and 0023, as `("owner_id", "started_at" DESC)` and
+-- `("scope_kind", "started_at" DESC)`. A bare DESC is NULLS FIRST, and that is
+-- what every database built from this folder has. src/db/schema.ts declared
+-- both with a plain `.desc()`, which drizzle reads as DESC NULLS LAST: a
+-- different index, which a plain `order by started_at desc` cannot walk, and
+-- the one a table regenerated from the file would have got.
+--
+-- The declarations now say `.desc().nullsFirst()`. `drizzle-kit generate` saw
+-- two changed indexes and wrote DROP INDEX and CREATE INDEX for each, which
+-- would rebuild two indexes into exactly what they already are (checked: in a
+-- scratch database built from this folder, running those four statements left
+-- pg_get_indexdef and indoption unchanged for both). They are deleted here
+-- rather than run, for the reason 0030_drop_summary_steer.sql gives and
+-- 20261007012654 repeats.
+--
+-- `meta/20261007013835_snapshot.json` is kept exactly as generated: it differs
+-- from the one before it in two fields, `"nulls": "last"` to `"first"`.
+-- tests/db-schema.test.ts now compares every declared index with the catalog,
+-- direction and null placement included, which is how these two were found.

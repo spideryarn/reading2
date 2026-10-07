@@ -152,7 +152,7 @@ export function useArc(
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). Arc is the one that could sometimes
      repair itself afterwards, because a later job completion reads again; a
      reader who asks for nothing more still keeps the pre-job arc for ever. */
@@ -198,7 +198,7 @@ export function useArc(
     started.current = slug;
     /* Unforced. The step's own freshness check is the thing being trusted here,
        and it will agree: we only reach `absent` when there is no arc, or when
-       the one on disk is stale — and a stale artefact is exactly what an
+       the stored one is stale — and a stale artefact is exactly what an
        unforced run regenerates. Forcing would also work and would cost a model
        call on any race where another tab wrote one first. */
     void queue.start();

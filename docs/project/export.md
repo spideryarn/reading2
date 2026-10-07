@@ -15,9 +15,10 @@ how it leaves.
 >
 > — Greg, 2026-09-01
 
-Parent: [architecture.md](architecture.md). The work is
+Up: [architecture.md](architecture.md). The work is
 [260901h-export-article-data.md](../plans/260901h-export-article-data.md), and it is built: the
-bundle, `GET /api/export/:slug`, and the button on the Metadata page.
+bundle, `GET /api/export/:slug` (the `/api/export/` pattern in [`src/routes.ts`](../../src/routes.ts)),
+and the button on the Metadata page.
 
 ## What comes out
 
@@ -32,8 +33,10 @@ file-by-file list, and the thing to edit when the layout changes.
     README.md         the above, for whoever writes an importer
     content/          revision.json, stamped.html, extracted.html, blocks.json,
                       block-identities.json, assets.json
-    augmentations/    tree, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, arc,
-                      tweets, labels, comments, chat, searches, referee-claims, referee-criteria,
+    augmentations/    tree, glossary, glossary-lookups, glossary-hidden, ideas, quotes, timeline,
+                      quiz, sketch, illustrated, arc, tweets, labels, citations, citation-finds,
+                      citation-investigations, faq, relations, skim, crossrefs, simple-summary,
+                      reading-time, comments, chat, searches, referee-claims, referee-criteria,
                       tags (your own, since 261003d), quiz-attempts (your answers and the
                       mark each was given, since 261005b — every one, including answers to
                       questions that have since been rewritten; each row carries its

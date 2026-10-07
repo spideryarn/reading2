@@ -46,7 +46,14 @@ import {
   type RefereeCriterionConfig,
   type RefereeResult,
 } from "../referee-criteria.js";
-import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
+import {
+  COMMENTS_CRITERION_FK,
+  CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS,
+  CRITERION_HAS_COMMENTS,
+  CRITERION_SWEPT,
+  criterionRefusal,
+  withCriterion,
+} from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
 import {
@@ -55,7 +62,7 @@ import {
   type RefereeCriteriaStore,
   type SweepOptions,
 } from "./contracts.js";
-import { guardDbStore } from "./db-errors.js";
+import { guardDbStore, violatesForeignKey } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
@@ -251,7 +258,19 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          nothing and the paid answer was gone on reload. It becomes trimmable
          once it finishes or the sweep fails it. So the cap is twenty plus
          however many older criteria are still running.
-         docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
+         docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md
+
+         **A finished row with the referee's comments placed on it is NOT
+         skipped**, and that is a decision waiting on Greg rather than an
+         oversight (question 3a,
+         docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg).
+         `comments_criterion_fk` refuses the delete, this transaction rolls back
+         with the insert in it. The add fails whenever such a row is a trim
+         candidate. What changed on 2026-10-07 is only how that is said: a 409
+         and a sentence where there was a 500. There is deliberately no
+         "has it comments?" read in front of the delete — under READ COMMITTED a
+         comment can be placed between such a read and the delete, so the key's
+         own refusal is the only check that cannot be raced. */
       const others = await tx
         .select({ id: refereeCriteria.id, status: refereeCriteria.status })
         .from(refereeCriteria)
@@ -265,14 +284,26 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         .offset(MAX_CRITERIA - 1);
       const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
       if (past.length) {
-        await tx.delete(refereeCriteria).where(
-          and(
-            eq(refereeCriteria.articleId, articleId),
-            inArray(refereeCriteria.id, past),
-            // Repeated in SQL for the reason the reset's predicate is above.
-            ne(refereeCriteria.status, "pending"),
-          ),
-        );
+        try {
+          await tx.delete(refereeCriteria).where(
+            and(
+              eq(refereeCriteria.articleId, articleId),
+              inArray(refereeCriteria.id, past),
+              // Repeated in SQL for the reason the reset's predicate is above.
+              ne(refereeCriteria.status, "pending"),
+            ),
+          );
+        } catch (err) {
+          // Thrown out of the callback, so the insert above is rolled back with it.
+          if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
+            /* A line, because this used to be a 500 somebody would have seen in
+               Sentry and is now an answer nobody will: how often a list is
+               wedged is the evidence question 3a is waiting for. */
+            logger.info({ slug, past: past.length }, "criterion not added: the trim would delete one with comments on it");
+            throw criterionRefusal(409, CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
+          }
+          throw err;
+        }
       }
 
       // `inserted!`: an insert with `returning()` yields the row it wrote.
@@ -378,9 +409,24 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
   async remove(slug: string, id: string): Promise<SavedCriterion[]> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
-    await db
-      .delete(refereeCriteria)
-      .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
+    /* The referee's own comments can be placed on a criterion, and
+       `comments_criterion_fk` (`no action`, src/db/schema.ts) refuses to leave
+       one pointing at nothing. That refusal is the design; it is caught here,
+       by name and before the guard below drops the name, so the referee is told
+       why rather than told the app is broken. Nothing is detached and nothing
+       is deleted. **Caught, not checked first**: a read for comments followed
+       by the delete can be raced by a placement, and the key cannot. */
+    try {
+      await db
+        .delete(refereeCriteria)
+        .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
+    } catch (err) {
+      if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
+        logger.info({ slug, criterionId: id }, "criterion not deleted: comments are placed on it");
+        throw criterionRefusal(409, CRITERION_HAS_COMMENTS);
+      }
+      throw err;
+    }
     const remaining = await criteriaFor(articleId, db, slug);
     logger.info({ slug, criterionId: id, remaining: remaining.length }, "criterion deleted");
     return remaining;

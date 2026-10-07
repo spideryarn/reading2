@@ -113,6 +113,7 @@ import type {
   RefereePoles,
   RefereeResult,
 } from "../referee-criteria.js";
+import { worthRetrying } from "../messages.js";
 import type { Block, BlockId, Comment } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
@@ -1246,11 +1247,18 @@ function CriterionRow({
       {row.status === "error" && (
         <p className="crit-error">
           {row.error}{" "}
-          {/* "Try again" names nothing on its own, which is `DiagramPanel`'s
+          {/* **Only while another go could come out differently.** The
+              sentence stays either way; what goes, under an account out of
+              credit or a refusal that will be repeated, is the invitation to
+              spend a fresh full-price call on it. `worthRetrying` reads the
+              sentence's code, as Search's rows do (src/messages.ts). Offered
+              for every failure until 2026-10-07. */}
+          {worthRetrying(row.error) && (
+          /* "Try again" names nothing on its own, which is `DiagramPanel`'s
               `TryAgain` finding: a reader arriving here by Tab hears "button,
               Try again" and no object. The `aria-label` carries the name; the
               card carries what the press costs, which is the same call as the
-              first one rather than a cheap resume. */}
+              first one rather than a cheap resume. */
           <Tooltip
             placement="top"
             keepSide
@@ -1279,6 +1287,7 @@ function CriterionRow({
               Try again
             </button>
           </Tooltip>
+          )}
         </p>
       )}
       {row.status === "done" && row.results.length === 0 && (

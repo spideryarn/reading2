@@ -81,7 +81,15 @@ import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
+import {
+  ANCHORED_ELSEWHERE,
+  ChatConflict,
+  HELP_NOT_FIRST,
+  isSpokenKind,
+  requireTail,
+  withEdit,
+  withRetry,
+} from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -121,6 +129,7 @@ import type { SavedCriterion } from "./saved-criteria.js";
 import { runClaimsStream } from "./referee-claims-run.js";
 /* What a claims run is stamped with: the fingerprint of the blocks it was sent. */
 import { hashBlocks } from "./source-hash.js";
+import { CRITERION_NOT_ON_ARTICLE } from "./referee-criteria-store.js";
 import type { Claim } from "./referee-claims.js";
 /* Referee mode's rule 5, and the one thing under it that costs nothing: the
    deterministic scan of the stored raw source. No model, no gateway, no spend
@@ -448,6 +457,7 @@ import {
   MAX_ORIGIN_NAME_CHARS,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
+  sameAnchor,
   sameOrigin,
   THREAD_KINDS,
 } from "./types.js";
@@ -462,6 +472,7 @@ import {
   FEEDBACK_KINDS,
   MAX_FEEDBACK_URL_CHARS,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   /* A value, and the same number the panel's textarea counts against — one
      declaration, so the button that disables itself and the route that answers
@@ -511,10 +522,11 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
- *   UTF-16 unit `JSON.stringify` can produce for a control character — times
- *   three, because a stale client still sends the old three answers and folding
- *   them into one `body` must not be refused before it is read;
+ * - the reader's answer, at the six bytes per UTF-16 unit `JSON.stringify` can
+ *   produce for a control character: the larger of the one box at
+ *   `MAX_FEEDBACK_ANSWER_CHARS` and a stale client's old three at
+ *   `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` each, because folding those into one
+ *   `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -526,7 +538,7 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  */
 const MAX_FEEDBACK_BODY_BYTES =
   Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 +
-  3 * MAX_FEEDBACK_ANSWER_CHARS * 6 +
+  Math.max(MAX_FEEDBACK_ANSWER_CHARS, 3 * MAX_LEGACY_FEEDBACK_ANSWER_CHARS) * 6 +
   MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES +
   /* The id, the URL, the slug, the build stamp, the two booleans, every key,
      and the braces and commas around all of it. The URL replaced the route kind
@@ -1476,8 +1488,9 @@ const MAX_BODY_CHARS = 4000;
  * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
  * criterion belonging to somebody else — or to another article, or to nothing —
  * is refused rather than stored. `comments_criterion_fk` refuses it a second
- * time, but a foreign-key error becomes a generic store failure through
- * src/store/db-errors.ts rather than this useful bad-request answer. (The
+ * time. On `create` and `patchMark`, the store catches this key before the
+ * error guard scrubs it and returns the same 400 if the criterion disappears
+ * between this check and the write. Other foreign keys remain store failures. (The
  * filesystem store, until 2026-09-05, had no constraint at all, and the two
  * stores agreed only because this check was above both of them.)
  *
@@ -1528,7 +1541,7 @@ async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<Mar
     const criteria = await refereeCriteriaStore.load(slug);
     named = criteria.find((c) => c.id === id);
     if (!named) {
-      throw httpError(400, "criterionId is not one of your criteria on this article");
+      throw httpError(400, CRITERION_NOT_ON_ARTICLE);
     }
   }
 
@@ -1827,14 +1840,39 @@ async function answer(
     frame("begin", comment);
 
     /**
-     * Send the `done` frame, carrying **what the store actually holds**.
+     * Send the `done` frame, using the stored row for the reader's fields.
+     *
+     * **When the write lands, that is the row out of the list `patch` returns**,
+     * read after the write. Until 2026-10-07 it was `{ ...comment, ...patch }`:
+     * this attempt's answer over the comment as `beginAnswer` had returned it,
+     * fifteen to twenty-five seconds earlier. A note the reader edited, moved or
+     * recoloured in that time was right in the database (the answer's write
+     * leaves those columns alone) and went back to the old one on screen,
+     * because the client took the frame for the row. Seventh sweep, SV2;
+     * tests/comment-answer-stream-lifetime.test.ts. The client now writes only
+     * the answer's half of whatever this carries (`putAnswer`,
+     * src/web/useComments.ts), and a tab from before that still replaces the
+     * row, which is why the frame has to be right on its own.
+     *
+     * The UPDATE and that read are separate statements. If another attempt
+     * claimed the row between them, the returned row is `pending`: this
+     * stream cannot adopt that attempt, and ending `pending` leaves a spinner
+     * with no watcher. Keep the current reader fields but frame the terminal
+     * answer this attempt successfully committed. A newer terminal row is
+     * used unchanged. tests/comment-answer-terminal-frame.test.ts.
+     *
+     * A write that landed and a list without the row in it means the comment
+     * was deleted between the two statements. Then, and for the two cases
+     * below where nothing stored can be read, the frame is our own answer over
+     * the opening snapshot: **not** what the store holds, and the one thing
+     * left to send.
      *
      * `commentStore.patch` answers `undefined` when this attempt is no longer the
      * live one — a sweep buried it and the reader has begun another. Framing our
      * own answer then would put it back on their screen, which is the overwrite
-     * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
-     * whatever the `done` frame carries. So on a refusal the row is read back and
-     * framed instead, and the reader's panel ends up agreeing with the database.
+     * the fence exists to prevent, one layer up. So on a refusal the row is read
+     * back and framed instead, and the reader's panel ends up agreeing with the
+     * database.
      *
      * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
      * simply stays silent. The comment client turns a stream that ends without a
@@ -1849,7 +1887,10 @@ async function answer(
     const settle = async (patch: AnswerFinish): Promise<void> => {
       const kept = await commentStore.patch(slug, comment.id, patch, attempt);
       if (kept) {
-        frame("done", { ...comment, ...patch });
+        const current = kept.find((c) => c.id === comment.id);
+        frame("done", current?.status === "pending"
+          ? { ...current, ...patch }
+          : current ?? { ...comment, ...patch });
         return;
       }
       let stored: Comment | undefined;
@@ -1922,7 +1963,10 @@ async function answer(
            store is broken too, and only the second is an emergency. */
         captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
         /* `settle` frames the `done` itself, so this is the one path that still
-           has to: the store could not be told, and the reader must still be. */
+           has to: the store could not be told, and the reader must still be.
+           There is no stored row to send, so this is the opening snapshot with
+           the failure on it, and a note edited since is not in it. The client
+           keeps its own copy of the reader's fields (`putAnswer`). */
         frame("done", { ...comment, ...patch });
       }
     } finally {
@@ -2079,9 +2123,11 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
  * was true of the JSON route only because nothing stopped the server when the
  * tab went. Cancelling here would turn a closed band into a paid call thrown
  * away and a promise broken; letting it finish buys the stored answer the
- * reader was told they would get. The asked term cancels, because nothing it
- * produces outlives the page. `answer` above makes the same choice for the
- * same reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ * reader was told they would get. The asked term cancels (`streamAskedTerm`
+ * passes `gone`), which is a choice and not a consequence of having nothing
+ * to keep: a finished one is stored as an added term, and only an unfinished
+ * one leaves nothing. `answer` above makes this function's choice, for this
+ * function's reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
 async function streamTermLookup(slug: string, termId: string, res: ServerResponse): Promise<void> {
   const { stream, release } = await lookUpTerm(slug, termId);
@@ -3114,9 +3160,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* **Where the conversation was started from** (`ThreadOrigin`): the anchor's
      rules, one for one. It belongs to the turn that creates a thread, so a
      retry or an edit may not carry one; only a chat has one; and the shape is
-     checked here, before anything is read or written. That the block is this
+     checked here, before a turn is written. That the block is this
      article's is checked after `loadArticle`, and that an existing thread has
-     the same origin is checked under `inTurnOrder`.
+     the same origin is checked under `inTurnOrder` and again by `withTurn`.
      docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1. */
   if (origin !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An origin can only be sent with a new question");
@@ -3144,9 +3190,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      All three are checked here, before `loadArticle` and before anything is
      written, so a bad body is an ordinary JSON 400 rather than an `error` frame
      inside a 200 stream — and the first of them is stated a second time under
-     `inTurnOrder`, where the read is safe from a thread appearing between the
-     look and the write. `help === true` is the only truthy value that can reach
-     here.
+     `inTurnOrder`, and decided by `withTurn` in the store's transaction, which
+     is the only one of the three a thread cannot appear in front of.
+     `help === true` is the only truthy value that can reach here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
      src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
@@ -3160,13 +3206,13 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `storedKind` is defined for exactly the threads that exist, and it was
        loaded a few dozen lines up for the character cap, so this costs nothing.
 
-       **Checked again under `inTurnOrder` below**, and that is not belt and
+       **Checked again under `inTurnOrder` below, and a third time by
+       `withTurn` inside the store's transaction**, and that is not belt and
        braces: this read is outside the lock, so a thread can be created between
-       it and the write. Here for the sentence and the fast refusal; there for
-       the guarantee — the division `withTurn`'s own kind check already
-       describes. */
+       it and the write, and the lock is this process's alone. Here for the
+       sentence and the fast refusal; `withTurn` for the guarantee. */
     if (storedKind !== undefined) {
-      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+      throw httpError(400, HELP_NOT_FIRST);
     }
     /* Absent means chat — the default `withTurn` applies to a thread it is
        creating — so the effective kind is what is checked, not the field. And
@@ -3222,15 +3268,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          pressed nothing and was told they had stopped it, and no replacement
          came. Found by a GPT-5.6 review, 2026-08-26.
 
-         The check is the real rule rather than a copy of it: `withRetry` and
-         `withEdit` are pure, so they can be run against a snapshot and thrown
-         away. Whatever they would refuse, they refuse here, for free, before
-         the destructive part. The authoritative run is still the one inside
-         `chatStore.retry` / `chatStore.edit` below, which re-reads under the
-         store's own lock — this is a gate, not a substitute. */
+         The check is the real rule rather than a copy of it: `withRetry`,
+         `requireTail` and `withEdit` are pure, so they can be run against a
+         snapshot and thrown away. What the store would refuse of this
+         snapshot is refused here, for free, before the destructive part. The
+         authoritative run is still the one inside `chatStore.retry` /
+         `chatStore.edit` below, which re-reads under the store's own lock —
+         this is a gate, not a substitute, and it sees only this process.
+
+         **The edit's tail is part of that, and until 2026-10-07 it was not.**
+         `withEdit` never looks at the tail; `pgChatStore.edit` runs
+         `requireTail` before it. So a stale edit passed this gate, stopped the
+         other tab's answer (stored `done`, `stopped`, empty), and was then
+         refused: the bug in the first paragraph, by its other door. Seventh
+         sweep, SV1; tests/chat-route.test.ts. */
       const snapshot = await chatStore.load(slug);
       if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
-      else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      else {
+        if (typeof expectedTailId === "string") requireTail(snapshot, threadId, expectedTailId);
+        withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      }
 
       /* Both of these rewrite rows that a live answer in this thread may be
          halfway through writing, so the live one is stopped and *waited for*
@@ -3239,81 +3296,75 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          src/chat.ts. */
       await settleThread(slug, threadId);
     }
-    /* **A thread is anchored once.** Reached only for an ordinary send, and
-       only when one was offered — `withTurn` applies an anchor solely on the
-       branch that builds a new thread, so without this the second question of
-       an anchored conversation could carry a different passage and be accepted
-       in silence. What the reader would then have is a conversation the
-       database says is about passage A holding a question about passage B, with
-       nothing anywhere disagreeing.
+    /* **Four rules about a send that meets a thread which already exists**,
+       read off one look at it. Each is reached only for an ordinary send (a
+       retry or an edit was refused the field far above, before anything was
+       read), and only when the send carries the field, so a plain follow-up
+       reads nothing here.
 
-       Read under `inTurnOrder`, so the thread cannot be created between the
-       look and the write.
+       **These are the sentence and the fast refusal, not the guarantee.** The
+       look is under `inTurnOrder`, which orders this process's requests for
+       one conversation and nothing else. Another server can create the thread
+       after it, so `withTurn` decides all four again from the snapshot
+       `chatStore.begin` reads under the article's row lock, before it mints
+       either message. Kind has been there since Learn mode, origin since
+       2026-10-05, anchor and help since 2026-10-07 (seventh sweep, SV3). The
+       same predicates and the same statuses; the route supplies its early
+       refusal and `withTurn` enforces the invariant in the transaction.
 
-       An identical anchor is allowed through, which is what makes a retried
-       send — the same request arriving twice — harmless rather than a 409 the
-       reader has to understand. */
-    if (wanted) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && !sameAnchor(existing.anchor, wanted)) {
-        throw httpError(409, "That conversation is already about a different passage");
+       One read, where until 2026-10-07 each rule made its own (SVO9): four
+       loads of every conversation of the article for a send carrying all four.
+       Nothing is written between them, and what a single look can miss is
+       exactly what `withTurn` is there for. */
+    const existing =
+      wanted || wantedOrigin || beginKind || help === true
+        ? (await chatStore.load(slug)).find((t) => t.id === threadId)
+        : undefined;
+    if (existing) {
+      /* **A thread is anchored once.** `withTurn` applies an anchor solely on
+         the branch that builds a new thread, so without a refusal the second
+         question of an anchored conversation could carry a different passage
+         and be accepted in silence: a conversation the database says is about
+         passage A holding a question about passage B, with nothing anywhere
+         disagreeing.
+
+         An identical anchor is allowed through, which is what makes a retried
+         send (the same request arriving twice) harmless rather than a 409 the
+         reader has to understand. */
+      if (wanted && !sameAnchor(existing.anchor, wanted)) {
+        throw httpError(409, ANCHORED_ELSEWHERE);
       }
-    }
-    /* **A thread's origin is set once**: the anchor's rule just above, and
-       read under the same lock. A thread that exists and was started from
-       somewhere else, or from nowhere, is refused; the identical origin
-       resent is let through, so a repeated send is harmless. */
-    if (wantedOrigin) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
+      /* **A thread's origin is set once**: the anchor's rule. A thread that
+         was started from somewhere else, or from nowhere, is refused; the
+         identical origin resent is let through. */
+      if (wantedOrigin && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
         throw httpError(409, "That conversation was not started from that item");
       }
-    }
-    /* **A thread is one kind for life**, and this is the same shape as the
-       anchor check above it: read under `inTurnOrder` so the thread cannot be
-       created between the look and the write, and an *identical* kind passes so
-       that a retried send is harmless rather than a 409 nobody can act on.
+      /* **A thread is one kind for life**, and an *identical* kind passes for
+         the reason an identical anchor does.
 
-       Reached only on an ordinary send — a retry or an edit was refused a
-       `kind` far above, before anything was read. That ordering is the point:
-       both of those call `settleThread`, which stops a live answer in this
-       thread, and a request rejected *after* that has aborted the answer
-       another tab's reader was watching and told them they stopped it. That
-       exact bug has been fixed here once already (docs/plans/260826a-chat-mode.md).
-
-       `withTurn` refuses it again inside the store's transaction, because
-       `inTurnOrder` is per-process and this one is not. Here for the status
-       code and the sentence; there for the guarantee. */
-    if (beginKind) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && existing.kind !== beginKind) {
+         That a retry or an edit never gets here is the point of refusing
+         their `kind` so early: both call `settleThread`, which stops a live
+         answer in this thread, and a request rejected *after* that has
+         aborted the answer another tab's reader was watching and told them
+         they stopped it (docs/plans/260826a-chat-mode.md; and again for a
+         stale tail, above). */
+      if (beginKind && existing.kind !== beginKind) {
         throw httpError(409, "That conversation is already a different kind");
       }
-    }
-    /* **And a "?" press CREATES a conversation**, read again under the lock.
+      /* **And a "?" press CREATES a conversation.** The same rule refused
+         this request far above, before `loadArticle`, off a load taken outside
+         the turn order; this one sees a thread this process created since.
 
-       The same rule refused this request far above, before `loadArticle`, off a
-       load taken outside `inTurnOrder`. That one is the sentence a reader's
-       client gets and the reason nothing was loaded for a request that was
-       never going to run; this one is the guarantee, and it is here for the
-       reason the two checks above it give — the thread cannot be created
-       between the look and the write. Same division as `kind`, whose store-side
-       twin is inside `withTurn`'s transaction.
+         A later question in an existing conversation is the reader typing. A
+         flag saying otherwise puts a press in the database that nobody made
+         **and** answers an ordinary follow-up with the teaching prompt.
 
-       A later question in an existing conversation is the reader typing. A flag
-       saying otherwise puts a press in the database that nobody made **and**
-       answers an ordinary follow-up with the teaching prompt.
-
-       400 rather than 409, unlike its two neighbours: they describe a request
-       that would have been fine against a different conversation, and this one
-       is a client sending a field it has no business sending at all. */
-    if (help === true) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing) {
-        throw httpError(
-          400,
-          'A "?" press starts a conversation; a later question in one is not one',
-        );
+         400 rather than 409, unlike its neighbours: they describe a request
+         that would have been fine against a different conversation, and this
+         one is a client sending a field it has no business sending at all. */
+      if (help === true) {
+        throw httpError(400, HELP_NOT_FIRST);
       }
     }
     return wantsRetry
@@ -4721,23 +4772,6 @@ function parseLens(lens: unknown): string {
     throw httpError(413, `An origin's lens may be at most ${MAX_LENS_CHARS} characters`);
   }
   return words;
-}
-
-/**
- * Are these the same anchor?
- *
- * A thread with no anchor is **not** the same as one with any anchor: a send
- * offering a passage for an unanchored conversation is still trying to change
- * what that conversation is about, and it is refused. `undefined` on both sides
- * cannot reach here — the caller only asks when it has one.
- */
-function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
-  if (!stored) return false;
-  if (stored.blockId !== wanted.blockId) return false;
-  const a = "quote" in stored ? stored : null;
-  const b = "quote" in wanted ? wanted : null;
-  if (!a || !b) return a === b; // both block-only, or one of each
-  return a.quote === b.quote && a.start === b.start;
 }
 
 /**
@@ -7335,15 +7369,15 @@ const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,6
  * own prose. The cap is in the message because the fix depends on it; the text
  * never is. docs/project/copy.md, and the same rule as `tidyBody` above.
  */
-function feedbackAnswer(value: unknown, field: string): string | null {
+function feedbackAnswer(value: unknown, field: string, cap: number): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") throw httpError(400, `${field} must be a string or null [fb-type]`);
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (trimmed.length > MAX_FEEDBACK_ANSWER_CHARS) {
+  if (trimmed.length > cap) {
     throw httpError(
       400,
-      `An answer can be at most ${MAX_FEEDBACK_ANSWER_CHARS} characters. ` +
+      `An answer can be at most ${cap} characters. ` +
         `Trimming it to the part that matters usually helps. [fb-long]`,
     );
   }
@@ -7377,10 +7411,13 @@ function feedbackBody(sent: Record<string, unknown>): string {
     throw httpError(400, "A report mixes two request shapes [fb-shape]");
   }
 
-  const written = feedbackAnswer(sent.body, "body");
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
+  /* **Two caps.** The one box takes `MAX_FEEDBACK_ANSWER_CHARS`. The old three
+     keep the cap they were written under, so that glued together they still
+     come to exactly what the column's CHECK admits. src/types.ts. */
+  const written = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
+  const steps = feedbackAnswer(sent.steps, "steps", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const expected = feedbackAnswer(sent.expected, "expected", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const actual = feedbackAnswer(sent.actual, "actual", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
   const legacy = [
     steps === null ? null : `Steps to reproduce:\n${steps}`,
     expected === null ? null : `What you expected to see:\n${expected}`,
@@ -9576,10 +9613,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **The glossary's second POST, and it writes nothing.** A reader types a term
-     into the box and this finds it in the prose and explains the passage —
-     `lookup` above with the entry replaced by a phrase, so it is the same
-     `explain` call at the same cost with the same patient deadline.
+  /* **The glossary's second POST.** A reader types a term into the box and
+     this finds it in the prose and explains the passage. Both use
+     `explainStream`, but `lookup` first searches and passes `dig` for a deeper
+     answer; Ask does neither (`src/term-lookup.ts`). **A finished answer is stored**:
+     the term is added to the glossary (`deps.lookups.addTerm`,
+     src/term-lookup.ts § `makeAskAboutTerm`, plan 261002f). An answer that
+     does not finish writes nothing. This sentence said "it writes nothing"
+     until 2026-10-07, which was true before that plan.
 
      The term is in the **body**, never the path. It is the reader's own words,
      which docs/project/logging.md keeps out of an address, and it can carry
@@ -9602,18 +9643,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          choosing. `askAboutTerm` validates and normalises it; the route does
          not pre-judge it, so there is one bound in one place.
 
-         **No rate limit, and there is none to reuse.** The sibling `lookup`
-         POST has none either, and feedback's hourly cap is the only limiter in
-         this file (`fileFeedback`). So an owner with one article of their own
+         **No rate limit here.** The sibling `lookup` POST has had one since
+         plan 261001p: it takes the shared `dig-deeper` allowance (`admitDig`,
+         src/dig-deeper.ts, through `lookUpTerm`), and this route does not.
+         Whether it should is not decided, and sharing that allowance would
+         have ordinary explanations spend what deeper searches are counted
+         against. (Until 2026-10-07 this said there was none to reuse and that
+         `lookup` had none either.) So an owner with one article of their own
          can drive paid `explain` calls as fast as they can post: ownership says
          *which* article, not *how many* requests, and the row's
          `article: "first-capture"` records the spend rather than authorising it. **This request never
          enters the job queue**, so the queue's concurrency cap is not a
          limit on it either — a first draft of this comment claimed it was, and
-         GPT Sol was right that it is false. Stated rather than fixed here
-         because it is the shape of every paid request in this file and a scheme
-         invented on the day for one endpoint would be the wrong place to put
-         one. docs/project/glossary.md § Looking a term up, and the note in
+         GPT Sol was right that it is false. The allowance decision for Ask
+         remains open; the sibling's shared limiter is in `admitDig`, rather
+         than the job queue. docs/project/glossary.md § Looking a term up, and the note in
          docs/user-feedback/ for Greg.
 
          Re-traced 2026-09-10 for the move to streaming, and still true: the

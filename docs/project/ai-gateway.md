@@ -2,6 +2,27 @@
 
 Up: [architecture.md](architecture.md)
 
+## In this doc
+
+- [§ What it replaced](#what-it-replaced) — the two-vendor world before OpenRouter (history)
+- [§ One gateway, five wires](#one-gateway-five-wires) — adding a provider or wire; what `provider` means
+- [§ What the Skin gives us](#what-the-skin-gives-us-that-neither-half-had-alone) — why Messages-over-OpenRouter
+- [§ The four things that fail silently](#the-four-things-that-fail-silently) — when a call looks fine and is not
+- [§ What it cost](#what-it-cost) — the three money pockets, credits versus BYOK
+- [§ What an article costs to arrive](#what-an-article-costs) — the per-article figure
+- [§ Two spellings of one model](#two-spellings-of-one-model-and-why-both-survive) — `CAPABLE_MODEL` and friends
+- [§ What every call is written down as](#what-every-call-is-written-down-as) — the `ai_calls` row, its columns, the timing columns
+  - [§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong) — before summing any duration
+  - [§ A transport blip is retried](#transport-retry) — why a call appears as several rows
+  - [§ How a stream ends](#stream-end) — aborted, truncated, finished
+- [§ The three calls allowed round the outside](#the-three-calls-allowed-round-the-outside-and-the-test-that-keeps-them-to-three) — what bypasses the gateway
+- [§ The exception that arrived](#the-exception-that-arrived-and-what-it-costs-the-rule) — OpenAI realtime for live conversation
+- [§ What stops a reader spending our money](#what-stops-a-reader-spending-our-money-and-what-does-not) — caps and abuse
+- [§ A proposed second exception](#a-proposed-second-exception-calls-paid-by-the-readers-chatgpt-plan) — not built
+- [§ The box's key has a monthly limit](#the-boxs-key-has-a-monthly-limit-and-it-runs-out) — when local calls start failing
+- [§ The one thing still open](#the-one-thing-still-open) — the refusals contradiction
+- [§ See also](#see-also)
+
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
 *recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation, quick search and
 the PDF reader alike.
@@ -33,7 +54,7 @@ because the browser tells it**, posting what each turn cost to `/api/live/:sessi
 the server prices it and writes an ordinary `ai_calls` row. That landed on 2026-09-02 (Stage 2B) and
 `src/live.ts` came out of `UNMETERED_SPEND` the same day — the register's second table means *money
 leaves and no row appears*, so leaving it there would have made the report overclaim in the one
-direction it exists to prevent. The two live-mode evals under `evals/live/` are still in it.
+direction it exists to prevent. The live-mode evals under `evals/live/` are still in it.
 
 **It is still not a declared bypass, and the reason changed on 2026-09-02.** It used to be that a
 `Declaration` for it could not be *typed*: `ProviderAccount` had no `"openai"` and `Wire` had no
@@ -457,8 +478,9 @@ credits are bought rather than on a per-token markup.
 assets`, of which only `structure` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
 debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
 
-[open-questions.md § Q7](open-questions.md#q7) is what this answers, and
 [billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
+The per-token economics of a *search* pass, cold and warm, are a different measurement:
+[evals/results/](../../evals/results/README.md).
 
 ## Two spellings of one model, and why both survive
 
@@ -483,6 +505,16 @@ Since 2026-08-28 a finished call is not only reported, it is **kept**: one row i
 awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) reads it
 back for `npm run cost`. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
+
+**The table is `aiCalls` in [`src/db/schema.ts`](../../src/db/schema.ts)** (`spideryarn.ai_calls`).
+**What it records about time is three columns and nothing finer:** `started_at` and `finished_at`
+(the whole call) and `duration_ms` (the whole call, nullable only on a realtime row). There is no
+first-token or time-to-first-byte column anywhere in the schema, so a latency-to-first-token figure
+is new data to capture, not a fold of what is stored; a new column is a migration
+([database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) says
+how one is named and generated, and [§ Step two: apply the migrations](database.md#step-two-apply-the-migrations)
+how it is applied). How not to add `duration_ms` up is
+[§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong).
 
 ### `upstream` — the endpoint OpenRouter selected, not the frame's label
 
@@ -626,8 +658,8 @@ re-litigated without one:
 - **Postgres only, and it never reads whole rows.** The aggregate is a `GROUP BY` in
   [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts) — `CostStore` was
   deliberately *not* widened, on GPT Sol's call: *"Do not widen `CostStore` merely to preserve
-  filesystem parity for a pricing query whose source of truth is Postgres."* On the filesystem store
-  the report refuses and says so.
+  filesystem parity for a pricing query whose source of truth is Postgres."* (The filesystem store
+  it was refusing on went on 2026-09-05; the aggregate is Postgres's alone now.)
 - **The categories are named for the mechanism, not for a provenance the schema cannot prove.**
   `scope_kind` does **not** separate ingest from reading: a reader asking for Glossary posts to
   `POST /api/jobs` and is recorded `job_step`, exactly like base ingest. So the category is
@@ -747,8 +779,9 @@ test, red, alongside the real files with the wrapper taken back out.
 new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
 `loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
 has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
-docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
-the old pair, because they were dirty with other agents' work on the day.
+docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight were on it that day and the other
+five still carried the old pair; the stage CLIs have since left for the queue (above), and
+`src/pdf-read.ts` is the paid CLI that ends this way now.
 
 The tempting way to accept two tails is to ask something weaker of each, which is the failure this
 gate already had once. So the two are checked separately, and the new one is checked *harder*: the
@@ -931,12 +964,12 @@ this; the bill was still using the weaker question.
 
 ### How a stream ends, and who decides what that means <a id="stream-end"></a>
 
-**One classification, seven callers, and the callers still decide.**
+**One classification, shared by chat/completions streaming callers, and the callers still decide.**
 [`classifyEnd`](../../src/ai-call.ts) turns a finished `openRouterStream` run into a
 `StreamOutcome` — `finished`, `truncated`, `filtered`, `wants-tools`, `provider-failed`,
 `abandoned`, `timed-out`, `went-quiet`, `unterminated`, or `unknown-finish-reason` with the reason
-and the terminator beside it. Every streaming caller switches on it with a `never` default, so a
-tenth way for a stream to end is a compile error at every site rather than a branch somebody forgot.
+and the terminator beside it. Callers that decide from it switch on it with a `never` default, so a
+new way for a stream to end is a compile error at every site rather than a branch somebody forgot.
 
 **Why it reports rather than decides.** The callers genuinely disagree, on evidence, about what
 `finish_reason: "length"` means: fatal to a quiz mark, success-with-a-flag to chat, left to the
@@ -1021,8 +1054,9 @@ types were never what stood in the way.
 - `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
   every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
   `ProviderAccount` and a `Wire`; these have both now and still cannot be declared, because a
-  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. Two
-  entries: the two live-mode evals under `evals/live/`, and
+  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. The
+  file lists them all (more than these two today, among them `scripts/run-claude.ts`); the two this
+  section began with are the live-mode evals under `evals/live/`, and
   [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
   every plan, which spawn another vendor's CLI on a third account and so are invisible to the
   capability scan as well as to the ledger.

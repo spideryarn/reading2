@@ -1,5 +1,7 @@
 # Database
 
+Up: [architecture.md](architecture.md)
+
 **The database is Supabase Postgres, and since 2026-09-05 all relational application data is in
 it.** Raw source documents and article images use the blob seam: Supabase Storage when credentials
 are present, and `data/_blobs/` as the local fallback, described below.
@@ -30,6 +32,56 @@ manual; that one is the taste.
 
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
+
+## In this doc
+
+- [§ A new migration, in five lines](#a-new-migration-in-five-lines) — how a migration is named,
+  generated and applied; start here to add a column or a table
+- [§ There is one store, and nothing left of the flag](#there-is-one-store-and-nothing-left-of-the-flag) — why no
+  `SPIDERYARN_STORE` or filesystem store exists any more (history)
+- [§ The filesystem era](#the-filesystem-era-files-under-dataslug) — what `data/<slug>/` held, and
+  what outlived it: source documents, upload attempts, cache keys (history)
+- [§ Next: Supabase Postgres](#next-supabase-postgres) — the files that hold the schema, the
+  commands, how a job's writes reach a published revision, the `db:export` rollback, and the rules
+  that outrank convenience
+- [§ The four token columns](#the-four-token-columns-and-why-they-are-not-defaulted) — why
+  `ai_calls` token counts have no default
+- [§ Connecting to the remote](#connecting-to-the-remote) — reaching production's database, and
+  [the four migrations the local ledger said were applied](#the-four-migrations-that-were-not-there-and-the-command-that-said-they-were)
+- [§ A watermark is not a ledger](#a-watermark-is-not-a-ledger) — a migration that was skipped under
+  `✓ migrations applied`, the guard, and a journal mid-merge
+- [§ Two worktrees generated at once](#two-worktrees-generated-at-once) — `drizzle/meta/` forks, the
+  gates that stop them, and [repairing one](#repairing-a-fork-what-the-losing-migration-is-decides-everything)
+- [§ Roles](#roles) — the three database roles, applying migrations on the remote
+  ([step two](#step-two-apply-the-migrations)), and
+  [why `DATABASE_URL=… npm run db:migrate` reaches a different database than it names](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)
+- [§ A null column and an absent field](#a-null-column-and-an-absent-field-are-the-same-fact-and-you-must-choose-which) —
+  a field that was missing on disk and is `null` in a row
+- [§ `restrict` and `no action`](#restrict-and-no-action-are-the-same-rule-at-two-different-moments) —
+  choosing an `on delete` rule
+- [§ Tightening an invariant over stored data](#tightening-an-invariant-over-stored-data-is-a-migration) —
+  a new validator rule that makes stored data illegal: sweep the rows in the same commit
+- [§ Two traps recorded elsewhere](#two-traps-recorded-elsewhere-repeated-here-because-they-are-expensive) —
+  `supabase db reset --linked`, and the other expensive one
+- [§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for) — the cache of model work a
+  failed attempt already paid for
+- [§ What is not done yet](#what-is-not-done-yet) — known gaps (uplink, Vercel env, `restrict`)
+
+## A new migration, in five lines
+
+1. Change [`src/db/schema.ts`](../../src/db/schema.ts) (read [sql.md](sql.md) first for the shape).
+2. `npm run db:generate -- --name <what_it_does>` writes `drizzle/<yyyyMMddHHmmss>_<what_it_does>.sql`,
+   plus a snapshot and a journal entry under `drizzle/meta/`. The timestamp prefix is
+   `migrations.prefix` in [`drizzle.config.ts`](../../drizzle.config.ts); the files before 2026-09-02
+   are numbered `0000`–`0052`. For hand-written SQL, `-- --custom --name <what_it_does>`, never a
+   file created by hand ([§ What stops it now](#what-stops-it-now)).
+3. Read the generated `.sql`; hand-edit it if drizzle's guess is wrong (a default that must not
+   rewrite old rows: [sql.md § Store when it happened](sql.md#store-when-it-happened)).
+4. `npm run db:migrate` applies it to the local Supabase. Never `drizzle-kit push`, and never run the
+   DDL by hand in `psql` or Studio ([§ Next: Supabase Postgres](#next-supabase-postgres)).
+5. `npm run db:check` says whether the live schema and `schema.ts` now agree. Production's migrations
+   are applied by `npm run deploy`, which only the Overseer runs ([deployment.md](deployment.md)), and the one rule to read before pointing a command at it is
+   [`DATABASE_URL=… npm run db:migrate` does not do what it looks like](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
 
 ## There is one store, and nothing left of the flag
 
@@ -752,6 +804,46 @@ repair is written up at the top of
 [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
 still in the folder as a named exception today.
 
+**The snapshot `--custom` writes is a copy of the previous one, not a picture of `schema.ts`.**
+Read in `node_modules/drizzle-kit/bin.cjs` § `preparePgMigrationSnapshot`: `custom` is the previous
+snapshot with a new `id`. So `--custom` is for SQL that changes nothing drizzle can see (a grant, a
+trigger, dropping an index that was never declared). Edit `schema.ts` and reach for `--custom` in
+the same breath and the edit is recorded nowhere, and the next ordinary `generate` emits it.
+
+### Declaring something the database already has
+
+`schema.ts` is the source of truth only for what is declared in it, and hand-written migrations
+have made objects it never heard of. Five indexes and five CHECKs were like that until 2026-10-07
+([261007c](../plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md)
+§ Stage 6). Declaring one is three steps, and the second is the one that looks wrong:
+
+1. Declare it in `schema.ts` and run an ordinary `npm run db:generate -- --name <what>`. Drizzle
+   diffs against a snapshot that lacks the object, so the `.sql` it writes is a `CREATE` or an `ADD
+   CONSTRAINT` for something that exists. Applied, it fails on `already exists`.
+2. **Delete those statements and leave a comment-only file**, saying why. Not `IF NOT EXISTS`: an
+   earlier migration did the work, on every database this chain builds, and a second one claiming to
+   is a lie about what changed when ([`0030`](../../drizzle/0030_drop_summary_steer.sql) set the
+   precedent). Keep the snapshot exactly as generated. It is the point of the migration.
+3. Prove the declaration is the object and not a near miss. `npm run db:generate -- --allow-empty`
+   says the snapshot equals `schema.ts`; it says nothing about the database. For that, build a
+   scratch database (`npx tsx scripts/db-test-create.ts`, dropped again with `--drop <name>`), and
+   in one rolled-back transaction drop the objects, run the statements drizzle generated, and
+   compare `pg_get_indexdef` / `pg_get_constraintdef` before and after.
+
+Step 3 found something. **Drizzle's `.desc()` means `DESC NULLS LAST`; a bare `DESC` in hand-written
+SQL means `NULLS FIRST`.** They are different indexes (a plain `order by x desc` cannot walk the
+first), and a declaration with a plain `.desc()` over a hand-made `DESC` index describes one that
+is not in the database. Write `.desc().nullsFirst()`. Two indexes declared long before had the same
+fault and nobody had compared them: `ai_calls_owner_started` and `ai_calls_scope_started`.
+
+[`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) now compares **every** declared index
+with the catalog (table, uniqueness, partial or not, method, and each key column's direction and
+null placement), every declared CHECK by name and table in both directions, and the ledger's five
+by what they refuse. The general index and CHECK inventories read the declarations; the money
+tests name the five rules and exercise their legal and forbidden rows. What that still
+leaves uncompared: a predicate's or a CHECK's expression text, and foreign keys beyond the ones
+that file names.
+
 ### Two facts about a fork repair, both learned the hard way on 2026-09-02
 
 Written down because both were reverse-engineered under pressure, by two agents independently, on
@@ -1422,8 +1514,8 @@ adapter uses `getDb()` and takes no `tx`.
   the same link ran at 119 KB/s and the whole import took under two minutes. The tell is
   `pg_stat_activity` showing the statement `active` on `Client:ClientRead` — the server waiting for
   you. Measure the upload before blaming the database.
-- **Vercel does not have these values yet** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
-  `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
+- **Vercel's recorded configuration** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
+  `PGSSLROOTCERT` — is in [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
   on this list, then became its opposite — set there and wanting taking off. Greg removed it from
   Preview and Production on 2026-09-06 and stage I of
   [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) deleted

@@ -590,4 +590,99 @@ contrast at 820.
 
 ## What landed
 
-*(filled in as clusters land)*
+- **K2, keys pressed while composing — landed 2026-10-07**, `67ce4c833` and `b03381467` on `dev`
+  ([its plan](261007a-ui-sweep-k2-composition-keys.md), which holds the census of every Enter and
+  Escape handler and what each does). The two shared Escape listeners and fourteen text boxes no
+  longer close, clear, cancel, save or navigate on a key the input method is using; `TagEditor`
+  and `CommandBar` use the house test; /profile's contents list has a visible, inset focus mark
+  (7.3:1 dark, 5.7:1 light). About sixty test cases seen red, 25 mutations, and a browser check
+  through Chrome's own composition API (`Input.imeSetComposition`), not synthetic events. The rule
+  is written into [keyboard.md](../project/keyboard.md) § "A key an input method is using is not
+  ours". **What the plan had wrong:** a guard in the handler is not enough for a
+  `type="search"` box, because Chrome empties it on Escape by itself and the old handlers were
+  hiding that with `preventDefault`; jsdom has no such default, so only the browser showed it.
+  **GPT Sol's review found the cluster's sharpest defect:** seven handlers returned on a composing
+  key *before* their conditional `stopPropagation`, so a composing Escape leaked to `document`
+  where an ordinary one was contained. Left: `GlossaryPanel`'s "ask a term" box (K4's file, added
+  to K4), `ShelfTags`'s popover (added to K3), and, losing no text, `ModeHerald`, the hover cards
+  and a few forms the census lists.
+
+- **K1, CSS — landed 2026-10-07**, `74c7ec21b`, `49e5b9ad2`, `3a4d5d745` and Sol's fixes
+  `3073853b8` on `dev` ([its plan](261007a-ui-sweep-k1-css-status-rows-focus-marks.md), with the
+  measuring script and its before and after output beside it). **Status rows:** the page-level
+  rule is `.loading, pre.error`; a failed chat tool row went from 543×115px (48px padding, mono,
+  `pre-wrap`) to an ordinary 543×19px row, and a failed dock line from 113px tall to 17px.
+  `--danger` is defined in both themes as error text, `oklch(0.7 0.2 27.325)` dark and
+  `oklch(0.52 0.2 27.325)` light, 5.2:1 or better on the page, the panel and the raised surface
+  in both (the old orange at 0.7 opacity was 1.8 to 4.0:1), and is on /design. **Focus marks:**
+  five controls measured after a real Tab went from 1.4–2.7:1 (or no mark) to 4.8:1 or better,
+  each keeping its geometry; Marginalia had five such buttons, not four. **The rest:** all built
+  as specified. `tests/css-tokens.test.ts` gained a check that no outline is drawn in a surface or
+  hairline colour, seen red. GPT Sol: ready with these fixes, no P0 or P1; its two P2s were about
+  the builder's new tests (an exemption inherited from the text check; a palette pair that passed
+  as a continuous colour at 4.5001:1 where the painted 8-bit colour is 4.495:1). **What the plan
+  had wrong:** the tooltip was never off screen at 390, it filled the width to within 5px (the cap
+  is restored on that ground, and the card is 13px narrower there); two marks are never drawn at
+  once, so Marginalia's offset stays; in the dark theme `--highlight` and `--highlight-text` are
+  one colour, so two of the focus changes show only in light. Also extended: the disabled-hover
+  guard covers `aria-disabled="true"`, because Citations' Investigate lit the same way. Not
+  measured on a real page (no fixture reaches them without a model call): a real failed chat tool
+  or dock question, `.marg-question`, `.tip-hit`; those were measured on injected markup matching
+  what the components emit. Left: the ordinary `.chat-tool-detail` is `--ink-faint` at 0.7
+  opacity, about 3:1 (question 3's "faint text").
+
+- **K3, the shelf's passage filter and false copy — landed 2026-10-07**, `3aad96ec5` and Sol's
+  fixes `5b93f7b0e` on `dev` ([its plan](261007a-ui-sweep-k3-shelf-filter-and-false-copy.md)).
+  The passage list obeys topics and tags as well as Unread, derived from `narrowShelf` with an
+  empty query; a test over all sixteen filter combinations, red first, and red again against the
+  version that derives from the card rows. In a browser, six topics with a query matching no
+  card listed 1 to 13 passages each and none from outside the topic. The false sentences are
+  corrected (Learn's accessible name, Admin home, the shelf card's "Built", two "zoom" sentences,
+  `SHARED_LINK_CARRIES`); Citations and FAQ say "Finding…"; the shelf's details trigger has a
+  focus mark; the rebuild failure goes through the shared helper; the counts on topic and tag
+  chips went from 3.2:1 to 5.7:1 or better in both themes. **GPT Sol's review found two P1s:**
+  with "Include archived" on and its listing still loading or failed, hidden archived hits were
+  described as "already opened" (the sentence now says only that they are not shown); and the
+  builder's guard on the tag popover kept it open by `preventDefault`, against the rule K2 had
+  just written that a composing key is left untouched, which Radix makes impossible from inside
+  its own callback, so it is a capture listener scoped to the open popover. Two postmortems came
+  with it (`261007b`, `261007c`). **What the plan had wrong:** the counts are drawn in
+  `ShelfTermChip.tsx` (and `ShelfTagFilter.tsx`), not `ShelfTerms.tsx`, and fail in dark too; "one
+  composition check" could not satisfy the written rule. Left: `SHARED_WITH_YOU` in
+  `src/messages.ts` still says "at every zoom level" and nothing imports it; "the one admin page
+  that writes" survives in a comment, a test comment and a heading in `admin.md`; the shelf's
+  two "also found in" sections are told about Unread and topics but not tags.
+
+- **K4, failure sentences and panel states — landed 2026-10-07**, `b007f68cd`, `012af29a1`,
+  `675d794f9`, `e707aa87f`, `5d593947c` and Sol's fixes `911317050` on `dev`
+  ([its plan](261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)). **The throw seam:**
+  a stream that ends early throws a `ReaderFacingError`; a refused completion throws
+  `MalformedReply` (its old sentence told the reader to try again, which is a second paid call
+  when the answer had already been stored). **The catches:** six hooks and four more sites call
+  `describeFetchFailure`; one test file poses only `fetch`, so the real transport marking is what
+  is exercised, over seven kinds of failure (25 of 39 cases red first). **Skim's purpose box**
+  re-reads what is stored before it says anything: stored, it carries on; not stored, it says so;
+  unreadable, it says it cannot tell. **Panels:** Quotes shows a running or failed job at its
+  ceiling (and the seventh sweep's rewrite hold, which arrived mid-build, shows there too);
+  a glossary occurrence chip moves the stepper; Referee's Criteria and Mirror offer Try again only
+  when `worthRetrying`; Search's order row has a named group, pressed states, a guarded hover, a
+  focus mark and a 40px floor for a finger, with every resting value at 1440 measured identical
+  before and after; the hint under failed searches has three wordings, for all, none and some rows
+  retryable. 47 mutations, all noticed. **GPT Sol's verdict was "not ready"**, on one finding the
+  builder could not fix inside its manifest: `COULD_NOT_REACH` said "nothing was sent or received
+  just now", false for a stream or download cut part-way, and K4 routed six more failures to it.
+  **Fixed by the orchestrator in `src/messages.ts`** (the clause is gone; the comment says why),
+  so nothing is overruled. Sol's other fixes: Skim's recovered save skipped `profileSaved()`; "That
+  was not saved" could be false if another tab overwrote a landed save; the Search hints promised
+  a certain failure where the real refusal says "most likely". **What the plan and brief had
+  wrong:** Diagram's projection and similar reads are POSTs that can call a paid embedding, not
+  plain GETs (the builder aborted them in the browser; nothing was spent); on the server a forced
+  Quotes run over a current list is always an append, so only the client's verb differed.
+  Left: Mirror, under a failure that cannot be retried, has no pressable control until the
+  sub-mode is re-entered (needs `useMirror.ts`); `ProfileBox`, `SettingsSection` and the Add page
+  still say "Not saved — …" for every rejection, the defect Skim had (the shared fix is in
+  `useAutosavedText`); the lost-connection mark for a blob read is written inline twice and wants
+  a `readBlob` beside `readJson`; two comments in `DiagramPanel.tsx` say "the server's own words"
+  of a sentence that is now sometimes the client's.
+
+*(the rest filled in as clusters land)*

@@ -2,6 +2,29 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ It transcribes twice](#it-transcribes-twice) — why live words are decoration and the second pass is a vocabulary
+- [§ Why not OpenAI](#why-not-openai) — which model transcribes, and what was measured
+- [§ The ums come out](#the-ums-come-out-and-nothing-else-does) — filler words, and why it is not a prompt line
+- [§ What is in the vocabulary](#what-is-in-the-vocabulary) — the five sources, the cap, the guards
+- [§ Adding a box somewhere else](#adding-a-box-that-takes-dictation-somewhere-else) — a new vocabulary place
+- [§ One capture](#one-capture-and-it-is-always-ours) — one microphone track, per-browser differences, the `[mic-offline]` fallback
+- [§ The gap](#what-the-reader-sees-in-the-gap) — readOnly box and the one-span replace
+- [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
+- [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
+- [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
+- [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
+- [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
+- [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
+- [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) — IndexedDB recovery, `keepDictation`
+- [§ The ways it fails](#the-ways-it-fails) — nine failure modes
+- [§ The codes](#the-codes) — every `[mic-…]` code and where it is raised
+- [§ Where the pieces are](#where-the-pieces-are) — file map
+- [§ What a browser pass could check](#what-a-browser-pass-could-and-could-not-check) (history)
+- [§ What is still open](#what-is-still-open) — unmeasured things
+- [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
 box. It is on nine boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
@@ -213,7 +236,7 @@ nothing rather than being conditionally skipped, so a recipe is only ever a list
 *source* is one entry in `SOURCES`: a name and an async function from a place to terms, which must
 never throw.
 
-`transcribeWith` takes the vocabulary as a plain string, so a caller that has words from somewhere
+`transcribeWith` takes the vocabulary as a plain list of terms, so a caller that has words from somewhere
 else entirely can send them without going near any of this.
 
 Every read is best-effort, wrapped, and bounded at 1.5 seconds. A reader who talks for a minute and
@@ -571,11 +594,34 @@ The rules that make it safe, each a decision in
   exists from the press, and the superseding abort runs on every browser, not only where there is a
   recogniser.
 
-**The ceiling on a whole dictation stays at five minutes** (`MAX_MS`), and hitting it ends the
-dictation and transcribes what was said, under `[mic-full]` with a sentence that is now true. Not
-higher, although parts would allow it: five minutes of speech is about what the largest box —
-Feedback's 4,000 characters — holds, and the other boxes take 600 to 4,000. A ceiling sized from
-each box's own limit is the later refinement.
+**The ceiling on a whole dictation is fifteen minutes** (`MAX_MS`), and hitting it ends the
+dictation and transcribes what was said, under `[mic-full]`. It was five until 2026-10-07, sized to
+what Feedback's box then held, and Greg met it there in the middle of a long thought
+(`spya-n8cuqq`):
+
+> if you're ever going to cut me off like that, you should give me some kind of feedback of some
+> kind. But more importantly, let's make sure if there is going to be a cap, let's make it at least
+> 15 minutes.
+
+**So it cannot arrive unnoticed.** There had been a sentence, in small type, shown once the
+microphone was already off, and somebody thinking aloud is not looking at the box. Now, in the last
+minute (`CAP_WARNING_MS`), the strip takes its warning look and counts down, *"Dictation stops in
+0:45"*; a rising two-note chime plays when that minute starts and a falling three-note one at the
+cap ([`quiet-chime.ts`](../../src/web/quiet-chime.ts)), each once; and the `[mic-full]` sentence
+stays after the words arrive. **There is one deadline and the tape owns it**: `endsAt`, which the
+strip counts down to, the timer is set for, and every arriving chunk is checked against, because a
+timer in a throttled tab or on a laptop that slept fires late. The cap happens once. A warning
+chime that would arrive more than five seconds late is dropped, and the cap's chime plays only once
+the track is off, so it is not on the tape. A press on Stop within a second and a half of the cap is
+ignored: the countdown invites it, and it used to start a new dictation and abort the uploads of the
+one just recorded. A screen reader is told once, not each second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
+too. Feedback's limit went from 4,000 to 12,000 characters the same day
+([feedback.md](feedback.md)). **That is about thirteen minutes of speech without a pause, not
+fifteen**: 12,072 is what the database admits, and raising that is a question put to Greg in the
+plan. Past it the words stay in the box and Send is off until they are trimmed. The other boxes keep
+their own limits: a long dictation into a small one overflows it, as it did before. A cap is still there because a microphone left on
+by mistake records, uploads and is billed for as long as it runs.
+[261007b](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md).
 
 **What is not verified.** A spike on the box (plan § The spike) rotated five parts in Chrome 152
 and Chromium 151: every part decoded on its own, and a seam loses **up to ~70 ms** — the old
@@ -741,7 +787,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | | |
 |---|---|
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
-| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the five-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
+| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
@@ -841,14 +887,11 @@ once for that origin. And the origin includes the port, which Vite moves.
 ## This is not two-way voice
 
 Worth saying plainly, because the UI implies otherwise. The chat composer's button says **"Talk"**
-and flips to **"Listening…"**, and Recall wears a `Speech` icon under *"Say what you took
-from this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
-sound.** There is no text-to-speech, no WebRTC, no WebSocket, and no speech-to-speech anywhere.
-
-A voice-dialogue feature would be entirely greenfield, and the accounting for it has already been
-decided in [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the OpenAI
-Realtime API cannot go through OpenRouter, so it would be the first paid call in the product that
-does not.
+and flips to **"Listening…"** — but that is this feature: audio in, text out, nothing spoken back.
+The two-way kind is a separate button, **Live**, in [live-conversation.md](live-conversation.md); its
+accounting is [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the
+OpenAI Realtime and GPT-Live APIs cannot go through OpenRouter, so Live is the paid feature in the
+product that calls OpenAI directly.
 
 ## See also
 

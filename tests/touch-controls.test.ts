@@ -166,8 +166,13 @@ describe("a control a finger has to hit", () => {
      glossary.css and `.quotes-rank-btn` in quotes.css carry the same
      declarations, character for character. Whatever floor they get, they get
      together, or the next report is about the other one. */
-  const BARS = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
-  const FLOOR_REM = 2.5; // 40px — these two rows' retained floor.
+  const PAIR = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
+  /* **And Search's order buttons, which are their own class** (they are not an
+     `OrderGroup`: plan 261007a § K4, the review's U16). They had a bare
+     `:hover`, no `:active` and no floor until 2026-10-07; their rules are in
+     search.css, under their own class, and the same checks hold them. */
+  const BARS = [...PAIR, ".srch-sort-btn"] as const;
+  const FLOOR_REM = 2.5; // 40px — these rows' retained floor.
 
   it("keeps the dock's raised 44px coarse-pointer width floor", () => {
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
@@ -219,6 +224,14 @@ describe("a control a finger has to hit", () => {
         `${cls} has no :active, so a finger gets no feedback that a press landed`,
       ).toBe(true);
     });
+
+    it(`${cls} draws its own focus mark for a keyboard`, () => {
+      const rule = rules(readerCssNoComments()).find((r) =>
+        selectors(r.selector).includes(`${cls}:focus-visible`),
+      );
+      expect(rule, `${cls} has no :focus-visible rule`).toBeDefined();
+      expect(rule?.decls ?? "").toMatch(/outline:\s*2px solid var\(--highlight-text\)/);
+    });
   }
 
   /* **The band's corner is its own floor, 2rem, not the order rows' 2.5rem.**
@@ -262,7 +275,7 @@ describe("a text field iOS must not zoom into", () => {
   const floorRule = () =>
     rules(coarseBlocks(readerCssNoComments())).find((r) => r.selector.includes("textarea"));
 
-  it("one rule raises every field to 1rem on a coarse pointer", () => {
+  it("one rule raises every field to 1rem, and never under 16px, on a coarse pointer", () => {
     const rule = floorRule();
     expect(rule, "no rule names `textarea` inside a coarse-pointer block").toBeDefined();
     const parts = selectors(rule?.selector ?? "");
@@ -272,7 +285,11 @@ describe("a text field iOS must not zoom into", () => {
        the keyboard, and a `<select>` takes focus — the composer's stance picker
        was still 13.28px after the first two halves shipped. */
     expect(parts.some((p) => p.includes("select")), "and a `select` half").toBe(true);
-    expect(rule?.decls ?? "").toMatch(/font-size:\s*1rem/);
+    /* `max(1rem, 16px)`, not `1rem`: iOS's threshold is 16 CSS pixels, and a
+       reader whose root size is 12px gets a 12px field from `1rem` alone
+       (measured, 2026-10-07). Never a bare `16px`, which would shrink the
+       field for a reader who has made their type larger. */
+    expect(rule?.decls ?? "").toMatch(/font-size:\s*max\(\s*1rem\s*,\s*16px\s*\)/);
   });
 
   /**

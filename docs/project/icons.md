@@ -1,5 +1,7 @@
 # Icons
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 The reading view uses **[Lucide](https://lucide.dev)** (`lucide-react`), and only Lucide. This doc is
 why that rather than Phosphor, what the house defaults are, and the two ways an icon swap breaks a
 layout without anyone noticing.
@@ -81,7 +83,7 @@ Set once, in [`src/web/main.tsx`](../../src/web/main.tsx), via Lucide's own cont
 dark ground the icons read as bold and start competing with the prose. They are chrome; the article
 is the thing.
 
-Per-icon `size` overrides are fine for a specific fit (the masthead chevron is 14, the search globe
+Per-icon `size` overrides are fine for a specific fit (the chat card's `ChevronDown` is 14, the search globe
 is 12) — **weight overrides are not**, because a single icon at a different stroke is the one that
 looks wrong.
 
@@ -267,8 +269,8 @@ Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Deb
 
 ## Where they're used
 
-- [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `ChevronDown`, rotated by `.chevron.up` for
-  the article-details disclosure.
+- [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `Archive`, `Undo2`, `Upload`, `Globe` and
+  `Lock` for the title line's actions and sharing mark. (Its `ChevronDown` disclosure is gone.)
 - [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) — `X` to close, `ChevronLeft` /
   `ChevronRight` to step between comments, and `Globe` — struck through by a composed diagonal when
   the model didn't search — for whether it went to the web ([comments.md](comments.md)).

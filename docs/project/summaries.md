@@ -2,6 +2,21 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ Brief | Fuller | Thread](#brief-fuller-thread-since-2026-10-03) — the three-way control
+- [§ Two levels, Brief and Fuller](#two-levels-brief-and-fuller-since-2026-10-04) — what each level is
+  - [Brief first](#brief-first-since-2026-10-04) · [When Summary offers a rewrite](#when-summary-offers-a-rewrite-since-2026-10-04) · [Cost of a write](#cost-of-a-write-since-2026-10-04)
+- [§ Simple — a plain-words orientation](#simple-a-plain-words-orientation) — the design the Brief and
+  Fuller prompts grew out of: levels, length, register
+  - [Length follows the piece](#length-follows-the-piece-since-2026-10-05) · [Written for someone who has not read it](#written-for-someone-who-has-not-read-it-since-2026-10-05) · [Bold and bullets](#bold-and-bullets-since-2026-10-04)
+- [§ A summary is a door](#a-summary-is-a-door) — the chips, and each paragraph linking to its passages
+  - [Ask about a paragraph](#ask-about-a-paragraph-since-2026-10-04) · [Each sentence is a door too](#each-sentence-is-a-door-too-since-2026-10-02)
+- [§ The fidelity guard](#the-fidelity-guard-since-2026-10-01) — checking each paragraph against what it cites
+- [§ The band is a touch wider](#the-band-is-a-touch-wider-since-2026-10-01) · [§ The URL](#the-url)
+- [§ What this deliberately does not have](#what-this-deliberately-does-not-have) · [§ What is still open](#what-is-still-open)
+- [§ History: the outline](#history-the-outline-2026-08-26-to-2026-10-01) (history) · [§ See also](#see-also)
+
 A **mode** in the band between the spine and the prose: a few short paragraphs in everyday words
 saying what the piece is about, why it matters, and its key ideas, at one of two lengths —
 **Brief** or **Fuller** — or the piece as a numbered **Thread**. Press `Summary` in the bottom bar
@@ -264,7 +279,7 @@ It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept a
 not a digest**: a few paragraphs, capped by code; **every paragraph is a door** (below), and a
 paragraph that cites no passage is dropped when it is written. The words are plain text, never
 markdown; bold and bullets are [two fields beside them](#bold-and-bullets-since-2026-10-04). What it
-is — written by AI, the article says it better — is said in the slider's card, not in a line under
+is — written by AI, the article says it better — is said in each button's card, not in a line under
 the paragraphs.
 
 ### Three levels, one row, shaped by the reader (since 2026-10-01)

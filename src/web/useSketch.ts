@@ -206,7 +206,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 

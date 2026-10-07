@@ -2868,12 +2868,16 @@ export const LIVE_UPSTREAM: ReaderFacingFailure = {
  * development build still adds that hint — `couldNotReach` in
  * src/web/lib/reader-facing.ts — and this is what everyone else reads. It does
  * not guess which side is at fault, because the client cannot tell.
+ *
+ * It also reaches a reader whose stream or download was cut part-way (the
+ * transport marks that the same way), so it does not say that nothing was sent
+ * or received. Until 2026-10-07 it did, which was false there.
  */
 export const COULD_NOT_REACH: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "Couldn't reach the server, so nothing was sent or received just now. That is usually the " +
-    "connection; trying again once it is back should work. [net-down]",
+    "Couldn't reach the server. That is usually the connection; trying again once it is back " +
+    "should work. [net-down]",
 };
 
 /**
@@ -4309,7 +4313,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  * sentence, nothing to keep in step.
  */
 export const SHARED_LINK_CARRIES =
-  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
   "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +

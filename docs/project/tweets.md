@@ -85,6 +85,13 @@ Each file's header comment says what it owns.
 - [`src/web/modes/summary/TweetsMode.tsx`](../../src/web/modes/summary/TweetsMode.tsx) — the thread's band, for
   the owner and for a visitor; [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) draws the thread.
   [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) mounts it and owns the control.
+- Tests: [`tests/tweets.test.ts`](../../tests/tweets.test.ts) (the step),
+  [`tests/tweets-page.test.ts`](../../tests/tweets-page.test.ts),
+  [`tests/tweets-copy-icons.test.tsx`](../../tests/tweets-copy-icons.test.tsx),
+  [`tests/tweets-retry-settles.test.tsx`](../../tests/tweets-retry-settles.test.tsx),
+  [`tests/store-tweets-stale.test.ts`](../../tests/store-tweets-stale.test.ts), and
+  [`tests/old-tweets-addresses.test.tsx`](../../tests/old-tweets-addresses.test.tsx) (the two old
+  addresses landing on the thread).
 
 ---
 

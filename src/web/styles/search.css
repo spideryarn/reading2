@@ -167,7 +167,7 @@
 .srch-error {
   margin: 0;
   padding: 0.5rem 0.7rem;
-  color: var(--destructive, oklch(0.65 0.2 25));
+  color: var(--destructive);
   font-size: 0.88rem;
   border-bottom: 1px solid var(--rule);
 }
@@ -341,7 +341,7 @@
   cursor: pointer;
 }
 .srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
-.srch-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+.srch-icon.danger:hover { color: var(--destructive); }
 /* The warning sign on a search that failed in a way running it again cannot fix.
    It carries the same glyph as the retry button next to it, so without this it
    inherits `cursor: pointer` and a hover background and reads as a control —
@@ -584,7 +584,7 @@
   color: var(--ink-soft);
   font-size: 0.91rem;
 }
-.srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
+.srch-failed { color: var(--destructive); }
 /* The 600ms before the spinner is allowed to say anything. Holding one line's
    worth of height means the panel does not grow when it does — see
    `SavedLoading`, and useSlow.ts for why the words wait at all. */
@@ -611,8 +611,35 @@
   font-size: 0.83rem;
   cursor: pointer;
 }
-.srch-sort-btn:hover { color: var(--ink); }
+/* **Behind `(hover: hover)`, with pressed feedback and a focus mark beside
+   it**, as `.gloss-sort-btn` has them (glossary.css, which says why): on iOS a
+   bare `:hover` sticks to whatever was last touched, so an order that is not
+   in force sat there in the pressed order's ink. `:active` is the feedback a
+   finger does get. These buttons are their own class, not an `OrderGroup`
+   (plan 261007a § K4), so the rules are written here; the row at rest is
+   unchanged. tests/touch-controls.test.ts. */
+@media (hover: hover) {
+  .srch-sort-btn:hover { color: var(--ink); }
+}
+.srch-sort-btn:active { color: var(--ink); background: var(--surface-raised); }
 .srch-sort-btn.on { border-color: var(--rule-strong); background: var(--surface-raised); color: var(--ink); }
+.srch-sort-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* The three orders are a named group for a screen reader (SearchPanel.tsx §
+   SortBar) and nothing for layout: the buttons stay flex items of `.srch-sort`
+   and wrap exactly as they did. */
+.srch-sort-group { display: contents; }
+/* **The finger floor `.gloss-sort-btn` has**, 40px, by the same means
+   (narrow-window.css § a coarse pointer argues the number and `min-height`
+   over padding). Here and not there because this sheet owns the class. The
+   buttons were 22px tall on a phone. */
+@media (pointer: coarse) {
+  .srch-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+  }
+}
 
 .srch-hits { flex: 1; margin: 0; padding: 0.3rem; list-style: none; overflow-y: auto; }
 /* A result is TWO buttons side by side — the gutter, which explains the score,
@@ -789,8 +816,9 @@
 .srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
-   it is to show more than the row could. */
-.tip-hit { max-width: 26rem; }
+   it is to show more than the row could; and under the viewport cap the base
+   card has (tooltip.css § .tooltip), which a bare `26rem` replaced. */
+.tip-hit { max-width: min(26rem, calc(100vw - 1.75rem)); }
 .tip-hit p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 /* What the two numbers in the gutter mean, under the passage they belong to.
    Ruled off and set smaller, because it is *about* the result rather than part

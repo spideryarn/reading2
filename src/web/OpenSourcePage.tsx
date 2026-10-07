@@ -75,7 +75,7 @@ export function OpenSourcePage() {
       <div className="tw:mt-5 tw:flex tw:flex-col tw:gap-4 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         <p className="tw:m-0">
           Spideryarn is built in the open. All of the code behind this site — the reading view, the
-          pipeline that turns an article into something you can zoom around, the deployment scripts
+          pipeline that turns an article into its table of contents and reading aids, the deployment scripts
           — lives at{" "}
           <a
             href={REPO_URL}

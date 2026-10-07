@@ -217,8 +217,8 @@ export function AdminHome() {
   return (
     <Shell title="Admin">
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
-        Everything on these pages reads across accounts. Only Gift vouchers can change anything,
-        and only a voucher.
+        Everything on these pages reads across accounts. Two of them can also change something:
+        Gift vouchers makes and edits vouchers, and Feedback can mark a report as ignored.
       </p>
       <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
         <Entry

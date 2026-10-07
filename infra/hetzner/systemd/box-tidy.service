@@ -1,0 +1,66 @@
+# Box tidy: the hourly disk tidy. /usr/local/lib/spideryarn/box-tidy.mjs, whose
+# header says exactly what it deletes and what it never touches.
+# docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
+#
+# /home filled to 100% on 2026-10-05 and took the Overseer daemon down with
+# ENOSPC; the tidying that would have prevented it was a script somebody had to
+# remember to run. This runs it on a timer instead.
+#
+# A SYSTEM unit with User=@USER@, not a systemd USER unit, for the reason
+# overseer.service gives: a user unit does not start at boot without lingering,
+# and nothing in this repo enables it.
+#
+# Type=oneshot and no Restart=, like the watchdog: the timer decides when this
+# runs again. No [Install] section: only the timer is ever enabled.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Box tidy -- deletes old Codex transcripts, job logs; reports temp directories
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/hetzner-remote-server-box.md
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# HOME explicitly: the script finds ~/.codex and the checkout under it, and npm
+# finds its cache under it.
+Environment=HOME=/home/@USER@
+# npm is /usr/bin/npm on this box (NodeSource). Spelled out because a unit gets
+# no login PATH.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Test roots, fake /proc, and future clocks must never affect the real timer.
+UnsetEnvironment=BOX_TIDY_HOME BOX_TIDY_TMP BOX_TIDY_CHECKOUT BOX_TIDY_PROC BOX_TIDY_NPM BOX_TIDY_HOME_MOUNT BOX_TIDY_NOW_MS BOX_TIDY_TIGHT_PERCENT
+
+# The script keeps paths observed in a snapshot of /proc/<pid>/cwd and
+# /proc/<pid>/fd. Two capabilities, and
+# both are needed, measured on the box on 2026-10-07: CAP_SYS_PTRACE to read
+# another process's links at all (even some of this user's own; `systemd --user`
+# is not dumpable), and CAP_DAC_READ_SEARCH to list /proc/<pid>/fd for a process
+# owned by root, which is a directory only root may list. With either missing
+# the script meets a process it cannot read and deletes nothing, by design.
+# These are powerful capabilities: SYS_PTRACE can also modify other processes,
+# and DAC_READ_SEARCH bypasses filesystem read/search permissions. The cleaner
+# uses them for observation, but that does not make the capabilities read-only.
+AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+
+# NOT the checkout's tsx, unlike the other units here, and on purpose. A full
+# disk is when the checkout is mid-merge or has no node_modules, and this has to
+# run then. The script is one file with no dependencies, installed outside the
+# checkout by provision.sh.
+ExecStart=/usr/bin/node /usr/local/lib/spideryarn/box-tidy.mjs
+# Never a checkout or a worktree. The capabilities above hide this process's
+# working directory from the user's other processes, and worktree removal
+# (scripts/worktree-inuse.ts) lets a hidden process past only because it knows
+# this one by name and knows it stands here.
+WorkingDirectory=/
+
+# It walks and deletes on a box running twenty sessions. Last in line for CPU
+# and disk.
+Nice=19
+IOSchedulingClass=idle
+# The script stops reporting temp directories after ten minutes of its own
+# accord; this is the backstop for a step that hangs.
+TimeoutStartSec=30min

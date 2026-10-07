@@ -55,14 +55,14 @@ import type {
   PaperPassage,
 } from "../types.js";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
-import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
-import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { readAnswerStream } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
 
@@ -163,6 +163,13 @@ export interface UseCitations extends CitationDig {
    * does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
+  /**
+   * The forced run was pressed on the list still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   cancel(id: string): void;
@@ -241,6 +248,8 @@ export interface CitationsRead extends CitationDig {
   reload(): Promise<void>;
   /** Fetch again **because the list on the server has just changed** — a job finished. */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   /**
    * **The one write that crosses this seam**, and it exists because `find`
    * cannot.
@@ -303,6 +312,8 @@ export function useCitationsRead(slug: string): CitationsRead {
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -311,6 +322,7 @@ export function useCitationsRead(slug: string): CitationsRead {
    */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
         /* The header asks for "no list yet" as `200 null` rather than a 404,
            which a browser prints in red on every ordinary page load
@@ -329,6 +341,7 @@ export function useCitationsRead(slug: string): CitationsRead {
           setCitations(null);
           setStale(false);
           setOutdated(false);
+          landed(started, res, null);
           setError(null);
           setStatus("none");
           return;
@@ -341,6 +354,7 @@ export function useCitationsRead(slug: string): CitationsRead {
           throw new MalformedReply("the citations reply has no list");
         }
         setCitations(loaded.citations);
+        landed(started, res, loaded.citations.generatedAt);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setError(null);
@@ -354,7 +368,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         setStatus((was) => (was === "loading" ? "error" : was));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
@@ -555,7 +569,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         setInvestigateDraft(null);
         setInvestigateFailed({
           id,
-          message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+          message: describeFetchFailure(err as Error),
           previousAt,
           previousLookupAt,
           lookupKept,
@@ -598,6 +612,7 @@ export function useCitationsRead(slug: string): CitationsRead {
     retryRead,
     reload,
     refresh,
+    fresh,
     applyFound,
     detachDerived,
     applyInvestigation,
@@ -664,9 +679,22 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts), as
+     useIdeas.ts § `regenerate` does. The list's clock is its identity, and it
+     is the server's: a *Look it up* answer patched onto a row here leaves it
+     alone, so only a run that rewrote the list reads as a replacement. */
+  const hold = useRewriteHold({
+    slug,
+    step: "citations",
+    identity: citations?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read
@@ -681,10 +709,12 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
+    refresh,
     retryRead: read.retryRead,
     ensure,
     regenerate,

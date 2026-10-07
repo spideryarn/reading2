@@ -105,3 +105,7 @@ Greg's gjdutils library in its native habitat, and we already import the relevan
 - [../../reusable/gjdutils-instructions.md](../../reusable/gjdutils-instructions.md) — the instruction library
 - [../../reusable/codex-cli-as-subagent.md](../../reusable/codex-cli-as-subagent.md) — how to run a cross-model critique here
 - [borrow-list.md](borrow-list.md) — what all of this adds up to
+
+---
+
+Up: [overview.md](overview.md)

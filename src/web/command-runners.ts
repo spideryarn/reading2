@@ -19,6 +19,7 @@ import type {
   Outcome,
 } from "./command-proposal.js";
 import { FIND_MORE_MODES, type FindMoreMode } from "./find-more.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { handOffFindMore } from "./find-more-handoff.js";
 import { handOffGlossaryAsk } from "./glossary-ask-handoff.js";
 import { searchDraftFor } from "./search-draft.js";
@@ -73,7 +74,9 @@ export function tagRunners(tags: TagsControl): {
       await tags.edit(change);
       return CLOSE;
     } catch (err) {
-      return { kind: "stay", message: `Couldn't ${verb} that tag. ${(err as Error).message}` };
+      /* The server's refusal passes through; a lost connection or a bug is
+         said in our words, not its own (lib/describe-failure.ts). */
+      return { kind: "stay", message: `Couldn't ${verb} that tag. ${describeFetchFailure(err as Error)}` };
     }
   };
   return {

@@ -338,7 +338,8 @@ The fourth round passed all three scroll cases, and `elementFromPoint` at the ba
 the badge rather than the masthead in each: badge top 119.92 against a 116.92 masthead at 1280×600
 scrolled to the bottom, 168.92 at 1280×900 unscrolled, 320.16 against a 255.375 masthead at 390.
 
-**Screenshots: [`260909c-shots/`](260909c-shots/)** — two of the eight the browser passes produced,
+**Screenshots: `260909c-shots/`** (deleted from the tree on 2026-10-07 by `7e597a72c`; they are in
+git history) — two of the eight the browser passes produced,
 the ones showing the thing Greg asked about: a row at 1280 and at 390. The rest are the numbers
 above, which are better evidence anyway. There is no "before" shot; the tab was never photographed
 until this change was already on screen.

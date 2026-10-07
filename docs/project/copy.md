@@ -2,6 +2,18 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ Who is reading this](#who-is-reading-this) — the design constraint
+- [§ The four rules](#the-four-rules) — what happened, whose problem (`retry` / `ours` / `bug` / `blocked`), what next, never echo the provider
+- [§ The bracketed code](#the-bracketed-code) — code prefixes, stability, and which families live outside `src/messages.ts` (`mic-`, import states, boundaries, picker)
+- [§ Writing a new one](#writing-a-new-one) — adding a message: `CODE_KINDS` and `FROM_FACTORIES`
+- [§ The seam between the two audiences](#the-seam-between-the-two-audiences) — why a thrown `Error.message` never reaches the reader (`stageFailure`, `sayToReader`)
+- [§ The same seam in the browser](#the-same-seam-in-the-browser) — `describeFetchFailure`, `ReaderFacingError`, `PAGE_FAULT`
+- [§ The one control that cannot be undone](#the-words-on-the-one-control-that-cannot-be-undone) — *Delete permanently* wording
+- [§ What this does not cover yet](#what-this-does-not-cover-yet) — copy still written where it is used
+- [§ See also](#see-also)
+
 The words the reader sees, and the rules they follow. Mostly this is about
 **error messages**, because those are where writing badly costs the most: an
 empty state that reads oddly is a shrug, but a failure the reader misreads sends
@@ -217,14 +229,13 @@ vector art" would be a confident guess. What we can say is that we looked and co
 that there is an original to open — so the sentence says that, and *view the original* sits beside
 it.
 
-**The paragraph-label sentences are the fourth exception**, and they follow the import-state family
-exactly: *"Paragraph labels are still arriving."* / *"Paragraph labels aren't available."*, in
-[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) beside the rule that decides which one applies,
-and **no bracketed code**. Not in `src/messages.ts` because that file is about failures a model call
-can return, and a label pass that has not finished yet is not one; no code because neither sentence
-is a problem the reader could report or act on. The `failed` one is where rule 4 bites hardest — a
-labels run fails for whatever reason a provider gives, and none of that reaches the reader or the
-DTO: the enum is the whole of what crosses.
+**The paragraph-label sentences were the fourth exception, and are gone.** *"Paragraph labels are
+still arriving."* / *"Paragraph labels aren't available."* followed the import-state family exactly
+(no bracketed code, because neither was a problem the reader could act on) until 2026-09-29, when
+they went with Hierarchy mode. The layer is now **withheld without a word**, by the one rule in
+[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts). What stays true is rule 4's half: a labels
+run fails for whatever reason a provider gives, and none of that reaches the reader or the DTO —
+the enum is the whole of what crosses.
 [granularity-zoom.md § the paragraph outline](granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose).
 
 **The three error boundaries are the fifth exception.** `[render]` is the whole
@@ -478,6 +489,30 @@ A bare `throw new Error("…")` written for a reader in one of those hooks now
 reaches them as `PAGE_FAULT`. That is the cost, and the fix is one word at the
 throw site; `tests/describe-fetch-failure.test.ts` refuses one in any file that
 calls `describeFetchFailure`.
+
+**Eleven more catches joined on 2026-10-07**
+([261007a K4](../plans/261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)): the four
+kept-answer streams (Glossary's two, Citations' *Investigate*, the quiz's mark), Diagram's two
+reads, Skim's purpose box, *View the original*, the bar's tag commands, the admin's cost read and
+the export download. Three things that work settled:
+
+- **`readAnswerStream` says who each throw is for**: the `error` frame and a body that ends early
+  are `ReaderFacingError`s; a `done` frame its caller refuses is a `MalformedReply`, so the reader
+  gets `PAGE_FAULT` and not an invitation to pay for a second answer when the first was kept.
+- **A body read that is not `readJson` marks its own lost connection.** `res.blob()` dying
+  part-way rejects with a bare `TypeError`; *View the original* and the export mark it where it
+  happens, as `readJson` does.
+- **One code, last.** A control that appends its own code (`[source-open]`, `[export-failed]`) does
+  so only when the reason carries none, so a lost connection under Export ends `[net-down]`.
+
+**And a save that rejected is not a save that failed.** The server answers a PATCH after the
+write, so a reply lost on the way back rejects over a sentence that was stored. Skim's purpose box
+reads what is stored before it says which (`storedPurpose` in
+[`purpose.ts`](../../src/web/purpose.ts), a fresh server 200 only): there, it carries on; not
+there, *These words are not what is saved for this article…* with the reason (what the read
+showed, never "that was not saved": another tab can replace a save that landed); no answer,
+*Couldn't tell whether that was saved…*, with no code, as the delete control below says it. The other purpose boxes still say
+*Not saved — …* for every rejection.
 
 **The server's half, for streams.** The client trusts the server's two reader
 channels — the `{ error }` of a refused request and the `error` frame of a

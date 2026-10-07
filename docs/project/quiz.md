@@ -58,6 +58,22 @@ The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
 [its review](../plans/260831al-review-quiz-sub-mode-review-sol.md).
 
+## In this doc
+
+- [§ A path, since 2026-09-30](#a-path-since-2026-09-30) — Quiz as a walk through the article, not a pile
+- [§ It adapts: the premise](#it-adapts-the-premise) — how the next question is chosen
+- [§ A reference answer is not an answer key](#a-reference-answer-is-not-an-answer-key) — why the model's answer is only a reference
+- [§ What a mark says, and what it may not](#what-a-mark-says-and-what-it-may-not) — marking rules and limits
+- [§ The artefact, and the batch every mark binds to](#the-artefact-and-the-batch-every-mark-binds-to) — what is stored, and why marks tie to a batch
+- [§ On screen](#on-screen) — the UI, keys, the question card
+- [§ Answers are kept](#answers-are-kept) — persistence of what you answered
+- [§ In the prose, in every mode](#in-the-prose-in-every-mode) — quiz marks drawn on the article
+- [§ Only what you have read](#only-what-you-have-read) — scoping to read passages
+- [§ Shaped by who you are and why you are reading](#shaped-by-who-you-are-and-why-you-are-reading) — profile and purpose in the stamp
+- [§ Where to look again](#where-to-look-again) — tests, evals and code
+- [§ What is deliberately not here](#what-is-deliberately-not-here) — refused features
+- [§ See also](#see-also)
+
 ## A path, since 2026-09-30
 
 Greg, 2026-09-29 (SPIDERYARN-READING2-5W):

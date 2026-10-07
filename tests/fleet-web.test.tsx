@@ -3113,6 +3113,26 @@ describe("box health, made readable", () => {
     expect(stats.find((s) => s.key === "disk")?.sub).toBe("50 KiB of 100 KiB on /");
   });
 
+  it("gives /home a row of its own when it is a separate filesystem, and none when it is not", () => {
+    // The box's /home is a 49 GB volume beside a 300 GB /, and it is the one
+    // that filled on 2026-10-05 while the only disk tile on the page read 80%.
+    const full = readHealthStats(
+      report({ homeDisk: { kind: "value", totalKiB: 100, usedKiB: 98, availableKiB: 2, usePercent: 98 } }),
+    );
+    expect(full.map((s) => s.key)).toEqual(["load", "memory", "swap", "disk", "homeDisk", "swapActivity"]);
+    expect(full.find((s) => s.key === "homeDisk")).toMatchObject({
+      label: "Home disk used",
+      value: "98%",
+      sub: "98 KiB of 100 KiB on /home",
+      tone: "alarm",
+    });
+    expect(toneOf(full, "disk")).toBe("work");
+
+    expect(readHealthStats(report({ homeDisk: { kind: "none" } })).map((s) => s.key)).not.toContain("homeDisk");
+    const unknown = readHealthStats(report({ homeDisk: { kind: "unknown", why: "df failed: boom" } }));
+    expect(toneOf(unknown, "homeDisk")).toBe("unknown");
+  });
+
   it("prints memory and swap absolutes in the right order of magnitude", () => {
     /* THE BUG THIS REPLACES. `memory.totalKiB` came back as 32,859,295,744 on
        a 32 GB box and `swap.totalKiB` as 34,359,730,176 for 32 GiB of swap —

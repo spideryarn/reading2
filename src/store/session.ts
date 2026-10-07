@@ -49,31 +49,36 @@ import type { Job, JobStep, StepName } from "../types.js";
  * run them beside it. The two shapes are the two things that can follow a step —
  * the claim goes back so the next request can have it, or the job is over.
  *
- * The job's *progress* note is deliberately not here. `revision_step_runs` is
- * the authority for "is this step done"; `noteProgress` is a progress bar, and
- * pulling the job row into the artefact transaction for a field nothing decides
- * anything on would widen it for nothing. The **terminal** release and finish
- * are a different matter, and that is what these are —
- * docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 1.
+ * **All three carry the job's steps**, `keep` included since 2026-10-07. This
+ * said the progress note was deliberately not here, because `steps` is a
+ * progress bar nothing decides anything on. One thing does: a forced step runs
+ * again unless its stored status is `done` (`stillForced`, src/jobs.ts), and
+ * `revision_step_runs` cannot answer for it, since a rebuilt artefact looks
+ * like the one it replaced. So the steps go in with the product.
+ * docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 1, is the
+ * terminal release and finish; docs/plans/261007b-seventh-sweep-job-queue-tier-0.md
+ * § C1 is the keep.
  */
 export type JobTransition =
   /**
    * The step is done, the job goes on, and **the claim stays here.**
    *
    * The ordinary case, since the coordinator started walking a whole job on one
-   * claim (docs/plans/260830d-v1-imports-on-vercel.md § Stage 3). It writes nothing to
-   * the `jobs` row at all: the step's completion is in `revision_step_runs`,
-   * which is the authority for *is this step done*, and the row the card is
-   * rendered from catches up a moment later through `noteProgress` — outside
-   * this transaction, deliberately, because a progress bar is not worth widening
-   * an artefact transaction for.
+   * claim (docs/plans/260830d-v1-imports-on-vercel.md § Stage 3). It writes the
+   * job's `steps` and nothing else on the row: not the status, not the lease,
+   * not the title. `noteProgress` still follows it, outside the transaction,
+   * for the card and for the look at `cancelling`.
+   *
+   * The Postgres session writes `steps` in the product's transaction
+   * (`keepStepIn`). `fsStoreSession`, which only a test reaches and which has
+   * no transaction, ignores them.
    *
    * **Why it is not simply `release`.** A release hands the claim back, and on a
    * serverless host the next request lands on a different instance with an empty
    * `/tmp` and finds nothing the last step wrote. That is the whole reason
    * imports do not work today, and it is why every non-final step now keeps.
    */
-  | { kind: "keep" }
+  | { kind: "keep"; jobId: string; attempt: string; steps: JobStep[] }
   /**
    * The step is done and the job goes on, but **let the claim go** — the next
    * request takes it.
@@ -103,11 +108,11 @@ export type JobTransition =
 export type JobEndTransition = Extract<JobTransition, { kind: "end" }>;
 
 /**
- * The two transitions that write the `jobs` row — **the only ones
- * `settlementOf` can read**.
+ * The two transitions that move the job — **the only ones `settlementOf` can
+ * read**.
  *
- * A `keep` writes nothing there, so there is no row to read the outcome off and
- * no settlement to infer. Excluded in the type rather than handled with a throw,
+ * A `keep` writes the row's steps and leaves its status alone, and hands no row
+ * back, so there is no outcome to read and no settlement to infer. Excluded in the type rather than handled with a throw,
  * because the alternative is a branch nothing can reach and nothing can test.
  */
 export type JobSettlingTransition = Exclude<JobTransition, { kind: "keep" }>;
@@ -265,10 +270,10 @@ export interface StoreSession {
    * writes in a row; what this buys today is that there is exactly one place for
    * D1b to make them one.
    *
-   * **Or no job write at all.** A `keep` is the ordinary case now that one claim
-   * walks the whole job: the step is finished and nothing about the `jobs` row
-   * changes, so this writes the artefacts, checks them, completes the step and
-   * stops. See `JobTransition`.
+   * **Or the job's steps and nothing more.** A `keep` is the ordinary case now
+   * that one claim walks the whole job: the step is finished and the job stays
+   * claimed, so this writes the artefacts, checks them, completes the step,
+   * records the steps on the row and stops. See `JobTransition`.
    *
    * Throws rather than returning an outcome. Every caller treats a refusal as a
    * step failure, and an outcome that has to be checked is one that can be
@@ -483,10 +488,11 @@ export function fsStoreSession(options: {
          second when its own writes did not land. */
       await assertProduced(step, ctx, artifacts);
       await artifacts.finishStep(ctx.slug, step.name, attempt);
-      /* **Nothing else on a `keep`.** The step is done and the claim is staying
-         where it is, so there is no job write to make here at all — the
-         coordinator's `noteProgress` catches the row up outside this call, which
-         is where a progress note belongs. See `JobTransition`. */
+      /* **Nothing else on a `keep`, here.** The Postgres session writes the
+         job's steps at this point, in the product's transaction. This one has
+         no transaction and its `JobSettles` has no such write, so the
+         coordinator's `noteProgress` is what catches the row up. See
+         `JobTransition`. */
       if (transition.kind === "keep") return { kind: "kept" };
       /* **Last, and inside the same call.** Under D1b this is the statement that
          has to share a transaction with the three above it: without that there

@@ -42,14 +42,13 @@ import type {
   Job,
 } from "../types.js";
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
-import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
-import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { readAnswerStream } from "./lib/sse.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
@@ -192,8 +191,8 @@ function isCitation(data: unknown): data is Citation {
  * ## Generations, not a flag
  *
  * **The mechanism now lives in [`useOrderedRead`](./useOrderedRead.ts)**, shared
- * with the seven other artefact readers, which had none of it and each lost the
- * race this hook was fixed for
+ * with the other artefact readers. The seven there were on 2026-09-02 had none
+ * of it, and each lost the race this hook was fixed for
  * (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md
  * § T2.1). The reasoning stays here, because this is where it was worked out and
  * the glossary is the surface that exercises every verb of it.
@@ -617,11 +616,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         }
       } catch (err) {
         if (controller.signal.aborted || !mine()) return true;
-        setLookFailed({
-          id,
-          message:
-            err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
-        });
+        setLookFailed({ id, message: describeFetchFailure(err as Error) });
         /* See the section above: the answer may be stored anyway. Only once the
            stream had opened — a refusal before it stored nothing.
 
@@ -916,8 +911,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      request already in flight read the old one. See `refresh` on
      `GlossaryRead` for the sequence this gets wrong the other way. This was the
      one thing the copies did *not* agree about — none of the others had a
-     trailing fetch to reach for — until 2026-09-02, when all eight moved onto
-     src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
+     trailing fetch to reach for — until 2026-09-02, when the eight there were
+     then moved onto src/web/useOrderedRead.ts, whose `refresh` is what is
+     passed here. */
   const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
   const run = useCallback(
@@ -1075,9 +1071,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
         if (controller.signal.aborted || !current()) return;
         /* The draft stays: the reader has read it, and the sentence says what
            it is. */
-        setAskFailed(
-          err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
-        );
+        setAskFailed(describeFetchFailure(err as Error));
       } finally {
         /* **Only if it is still ours.** `clearAsked` hands the box back the
            moment it disowns a request, and a later `ask` may already own

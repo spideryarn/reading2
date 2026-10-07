@@ -2,6 +2,23 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ The parameters](#the-parameters) — what a `?param=` means, which push and which replace, and which old ones are retired
+- [§ The library's own five](#the-librarys-own-five) — the shelf's parameters (there are ten now), and the superseded `?about=` and `?spine=` spellings
+- [§ One conversation id, two ways of drawing it](#one-thread-id) — why `?thread=` serves both Chat and the other modes
+- [§ Which article is the path](#which-article-is-the-path) — the path/query split, and the old `?slug=` and `#hash` addresses
+- [§ Three decisions](#three-decisions) — replace versus push, debouncing, and why the unit is a section
+  - [Position replaces history](#position-replaces-history-deliberate-acts-push) — why scrolling never adds a Back entry
+  - [The way back](#the-way-back-lives-until-you-leave-the-article) — the pushed entry, the "back to X" chip, and jumps landing centred
+  - [The unit is a section](#the-unit-is-a-section-not-a-position) — what `?at=` addresses
+- [§ Reopening an article where you left it](#reopening-an-article-where-you-left-it) — the remembered last view, what is never remembered, and the default for a new article
+- [§ Why the query string and not the hash](#why-the-query-string-and-not-the-hash) — the double-scroll reason
+- [§ The library: nuqs](#the-library-nuqs) — why this library, and what was rejected
+- [§ `note` replaces](#note-replaces-even-though-opening-a-dialog-is-deliberate) — `?note=` against `?at=` when both are present
+
+Code: [`params.ts`](../../src/web/params.ts), [`router.ts`](../../src/web/router.ts) (the legacy-address rewrites), [`last-view.ts`](../../src/web/last-view.ts); tests [`url-state.test.ts`](../../tests/url-state.test.ts), [`router.test.ts`](../../tests/router.test.ts).
+
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
 ([§ The library's own five](#the-librarys-own-five)). Which article you are looking at is the
@@ -53,7 +70,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10 (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10, and `?mode=hierarchy` does too; `?mode=trajectory` opens Skim; `?mode=remember` opens Learn; `?mode=tweets` is rewritten to `?mode=summary&summary=thread` (`liftLegacyTweets` in [`router.ts`](../../src/web/router.ts)) (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `glossary`, `citations`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
@@ -157,9 +174,10 @@ sent to anybody. Now:
 | `tags` | the reader's own tags chosen in the Tags row, ANDed with each other and with `topics`. A tag no article in scope carries is ignored, and never rewritten away — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above) | push | `?tags=ai,memory` |
 | `archived` | `1` when the **Include archived** chip is on: the archived articles join the shelf's one list — sorted, narrowed, searched (passages too) and counted with it, each marked — and the topics' scope — [shelf-terms.md](shelf-terms.md) | push | `?archived=1` |
 | `topicsView` | `detail` for one row per topic; absent is the row of pills — [shelf-terms.md](shelf-terms.md) | push | `?topicsView=detail` |
+| `public` | `1` when the **Include public** chip is on: what other readers have shared, in its own section under the shelf and narrowed by the same search box — [library.md § Include public](library.md#include-public-and-an-empty-shelf-that-says-where-to-go), [public-shelf.md](public-shelf.md) | push | `?public=1` |
 
-Eight since 2026-09-28, when `topics`, `archived` and `topicsView` arrived; the heading keeps "five" because other
-docs and source comments link to its anchor.
+Ten today (`topics`, `archived` and `topicsView` arrived 2026-09-28; `tags` and `public` since); the heading keeps "five" because other
+docs and source comments link to its anchor. Each is parsed in [`params.ts`](../../src/web/params.ts) (`library*Param`).
 
 **A list rather than one value**, because a shift-click adds a second sort key, and a compound order
 the URL cannot carry is an order you cannot reload into or send to anybody. One key is a list of one.

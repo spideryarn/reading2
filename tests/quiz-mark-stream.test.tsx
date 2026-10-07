@@ -387,7 +387,11 @@ describe("the sentence each stop says, and what stays on screen", () => {
       expect(latest?.attempt?.status).toBe("failed");
       expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
       expect(latest?.answered.has(Q1)).toBe(false);
-      expect(latest?.attempt?.error).toBe(stop === "stall" ? "the stream sent nothing for 60s" : "socket broke");
+      /* A reader's sentence for each, never the exception's own words
+         ("the stream sent nothing for 60s", "socket broke"), which is what
+         this pinned until 2026-10-07. */
+      expect(latest?.attempt?.error).toMatch(stop === "stall" ? /\[ai-stalled\]$/ : /\[net-down\]$/);
+      expect(latest?.attempt?.error).not.toContain("sent nothing for");
       if (stop === "stall") expect(cancelled).toBe(true);
     } finally {
       vi.useRealTimers();

@@ -29,7 +29,30 @@ A grep for `trajector` outside the historical folders should find only these, ea
 - **The cost ledger.** `ai_calls` is append-only, so its historical rows keep `purpose` /
   `step_name` `'trajectory'`; a legacy alias in [`src/cost-categories.ts`](../../src/cost-categories.ts)
   counts them with `skim`.
+- **Step and prompt-version aliases**: `trajectory → skim` in `src/step-order.ts` and
+  `src/feedback-payload.ts`, and `#mode-trajectory` in the help page's anchors
+  ([`help-anchors.ts`](../../src/web/help/help-anchors.ts)). The prompt tag is `skim/N` since
+  `skim/8`; routes stored under `trajectory/N` are older.
 - History: plan, postmortem and feedback file names, and the applied migrations.
+
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ What shipped](#what-shipped) — how Skim works today: the step, the band, the keys, and every change since v1, newest last
+- [§ What we tried for v2](#what-we-tried-for-v2) — the three scrapbook mockups and which survived (history)
+- [§ What Greg asked for](#what-greg-asked-for) — his words, the intent behind the mode
+- [§ The core idea](#the-core-idea-as-we-read-it) — our reading of the ask, before building (history)
+- [§ Version one](#version-one) — the first cut, as specified (history)
+- [§ Version two: the scrapbook](#version-two-the-scrapbook) — what Greg wanted of v2 (history)
+- [§ Decided](#decided) — the calls already made
+- [§ Later](#later) — what is not built
+- [§ Questions for Greg](#questions-for-greg) — seven defaults taken to keep the build moving, each cheap to change
+- Code: [`src/skim.ts`](../../src/skim.ts) (the step) · [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx) ·
+  [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx) · [`useSkim.ts`](../../src/web/useSkim.ts) ·
+  [`skim-route.ts`](../../src/web/skim-route.ts) · [`skim.css`](../../src/web/styles/skim.css) ·
+  tests: [`skim.test.ts`](../../tests/skim.test.ts), [`skim-route.test.ts`](../../tests/skim-route.test.ts),
+  [`skim-panel.test.tsx`](../../tests/skim-panel.test.tsx)
 
 ## What shipped
 
@@ -317,7 +340,9 @@ no purpose, a small box, *What do you want from this piece?*, and **Plan the rou
 saves the purpose and only then re-plans the route (unforced — the stamp's profile hash is what
 re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
 with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
-cannot be read, and no second ask under the stale or profile-changed banner.
+cannot be read, and no second ask under the stale or profile-changed banner. A save whose reply is
+lost is checked against what is stored before the box says whether it was saved
+([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
 **Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
@@ -429,7 +454,7 @@ when each pass walked only its own. So:
   reader hears the other passes in the row's name (*"Also in Gist"*), and the band's (i) says what
   the dots mean, since a phone has no hover. **Not drawn** where they would never vary: a route
   offering one depth, or one with no carried stop.
-- **The prompt is `skim/9`**: it asks the model which earlier stops to carry, and when not to
+- **The prompt has asked this since `skim/9`** (now `skim/10`): it asks the model which earlier stops to carry, and when not to
   (src/skim.ts). A route planned before it has no `again`, is not announced as out of date
   (260929c), and walks as it did until planned again from Metadata. Measured on six articles, three
   rounds ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)). As shipped: about
@@ -609,8 +634,8 @@ chosen, is written below when it lands.
    the web for what others say about a piece — the two would want to share rather than duplicate.
    Until then, a reader whose stated purpose is "how is this different from X" gets a route that
    leans on what the paper itself says about earlier work, and no more.
-2. **Quotes as the stops** — see the plan's *Reuse* section for why v1 does not do this, and what
-   would change our mind.
+2. **A fresh choice of passages as the stops, instead of the Quotes** — v1 uses the Quotes
+   (Question 1 below, which says what would change our mind).
 
 ## Questions for Greg
 

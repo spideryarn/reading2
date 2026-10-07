@@ -1,8 +1,11 @@
 # Experimental features
 
-One setting, off by default, with **two controls**: a checkbox on
-[/profile](reader-profile.md) and a button at the end of the
-[bottom bar](reading-view-overview.md). Greg, 2026-08-31:
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+One setting, off by default, with **three controls**: a checkbox on
+[/profile](reader-profile.md), a button at the end of the
+[bottom bar](reading-view-overview.md), and a row in the command bar
+([§ The three controls](#the-three-controls)). Greg, 2026-08-31:
 
 > The idea is that when this is off, it shows just the features that are most valuable/polished
 > (which is what we want for most users). When on, it includes extra features that might be still
@@ -12,6 +15,16 @@ One setting, off by default, with **two controls**: a checkbox on
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
+
+## In this doc
+
+- [§ The four rules](#the-four-rules) — signed-out is off, off is the default, hidden is not unreachable, hiding never deletes
+- [§ Where it lives](#where-it-lives) — the column, the contract, the wire field and the client store, when you change how it is saved
+- [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
+- [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
+- [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
+- [§ The two things gated below mode level](#the-two-things-gated-below-mode-level) — Learn's Explore and Diagram's four pictures
+- [§ See also](#see-also)
 
 ## The four rules
 
@@ -462,5 +475,11 @@ Diagram buys nothing, and a shared visitor is pinned to the free picture whateve
 
 - [reader-profile.md](reader-profile.md) — the page this switch is on, and the boxes above it.
 - [sql.md](sql.md) — why the column is a nullable timestamp.
+- [mode.md](mode.md) — the checklist for adding a mode, including which side of this switch it is on
+  (`experimental` in [`src/mode-catalog.ts`](../../src/mode-catalog.ts)).
+- [`tests/dock-experimental-switch.test.tsx`](../../tests/dock-experimental-switch.test.tsx),
+  [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — the
+  appearances of the bar button, and the anonymous reading path's application requests staying
+  under `/api/public/`, with no POST.
 - [docs/plans/experimental-features-toggle.md](../plans/experimental-features-toggle.md) — the
   decisions taken when it was built, including the ones that went the other way.
