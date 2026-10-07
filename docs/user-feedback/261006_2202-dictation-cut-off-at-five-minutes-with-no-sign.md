@@ -1,7 +1,7 @@
 ---
 reports: spya-n8cuqq
 ending: shipped
-comment: Shipped: dictation runs fifteen minutes and warns before it stops. Still waiting on you: should Feedback take fifteen minutes of non-stop speech? It takes 12,000 characters now; 20,000 means raising the database's own cap.
+comment: Shipped: dictation runs fifteen minutes and warns before it stops, and Feedback now takes 20,000 characters, a full fifteen minutes of non-stop speech.
 ---
 # Dictation cut off at five minutes, with no sign
 
@@ -26,11 +26,13 @@ Not deployed: the Overseer deploys.
 - **Feedback takes 12,000 characters**, up from 4,000, so the box holds what the microphone now
   lets in: about thirteen minutes of speaking without a pause.
 - **The cap was not a listed defence**, so nothing about it waited on Greg.
-- **Deferred, and waiting on Greg:** taking Feedback to 20,000 characters, a full fifteen minutes
-  at any pace. That means raising the database's own cap on a report, which the code describes as
-  what stops a pasted article reaching Sentry, so it was written up and not built: queue item
-  qi-8qvg5gwv, and a line in [awaiting-approval.md](awaiting-approval.md).
+- **Built later, once Greg answered:** Feedback takes 20,000 characters, a full fifteen minutes
+  at any pace. That meant raising the database's own cap on a report, which the code describes as
+  what stops a pasted article reaching Sentry, so it was asked first. Greg chose option B on
+  2026-10-07 (`q-sa4yuq`), and it is on `dev` (`aaab52aa7`): plan
+  [261007j](../plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md),
+  queue item qi-8qvg5gwv.
 
-**The question for Greg is now a file**, `docs/user-feedback/questions/q-sa4yuq.md`, moved there from
+**The question for Greg, now answered, is a file**, `docs/user-feedback/questions/q-sa4yuq.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
