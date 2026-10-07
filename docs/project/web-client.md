@@ -181,10 +181,17 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation, and its `useGoesByItself` for anything else that should go after a few
   seconds but not while it has mouse hover or focus.
+- **`src/web/menu.ts` § `MENU_SURFACE`, `MENU_ITEM`, `useFingerPressMenu`** — a Radix
+  `DropdownMenu`: the list's look, and the three trigger handlers that make a finger open it at the
+  tap rather than at a press that may be a scroll. Two callers, the shelf's "⋯"
+  (`src/web/ShelfEntry.tsx`) and the bottom bar's More (`src/web/Dock.tsx` § `DockMore`).
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
   and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its
-  search from. A page that mounts the list puts `CONTENTS_MARGIN` (same file) on its `<main>`.
+  search from. A page that mounts the list puts `CONTENTS_MARGIN` (same file) on its `<main>`, and
+  mounts it **inside** that `<main>` at the place it should be drawn on a narrow window: below
+  1024px it is a block in the column (a search box and a *Contents* button), and from there up it
+  is fixed in the left margin wherever it was mounted.
   Metadata and `/profile` use both ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
 - **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
@@ -704,10 +711,11 @@ Three kinds of site deliberately do **not**:
   does not replace what is on screen. Without the header the answer is the 404 it always was,
   because a tab left open across the deploy would show an error for a `null`; "no such article"
   is a 404 either way. `apiFetch` does not keep the `null` for offline, as it never kept the 404.
-  **Tweets, relations, Skim, Sketch and Arc still answer a plain 404.** Moving one over is three
-  places: the typed error at its loader's throw, the helper at its route, and its name in
-  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if the
-  last two disagree.
+  **Six reads still answer a 404 whatever is sent**; the list, and what is left to do for each, is
+  in [`src/store/artefact-not-made-yet.ts`](../../src/store/artefact-not-made-yet.ts). Moving one
+  over is two places that must land together: the helper at its route, and its name in
+  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if they
+  disagree.
   [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md),
   [261006h](../plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md).
 - **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the

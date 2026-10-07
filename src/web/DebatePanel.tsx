@@ -1737,7 +1737,7 @@ function StopBar<L extends string>({
 }: {
   /** The range input's id, which the `<label>` points at. */
   id: string;
-  /** A class beside `.dbt-bar`, naming which bar this is. */
+  /** A class beside `.gloss-gate`, naming which bar this is. */
   kind: string;
   label: string;
   /**
@@ -1774,12 +1774,12 @@ function StopBar<L extends string>({
   const note = hiddenNote(barred.hiddenCount, barred.visible.length + barred.hiddenCount, noun);
 
   return (
-    <div className={`dbt-bar ${kind}`}>
-      <div className="dbt-bar-row">
-        <label className="dbt-bar-label" htmlFor={id}>
+    <div className={`gloss-gate ${kind}`}>
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor={id}>
           {label}
         </label>
-        <span className="dbt-bar-value">
+        <span className="gloss-gate-value in-words">
           {words[level]} · {count}
         </span>
         {/* Only once there is something to undo, exactly as next door: a reset
@@ -1787,7 +1787,7 @@ function StopBar<L extends string>({
         {moved && (
           <button
             type="button"
-            className="dbt-bar-reset"
+            className="gloss-gate-reset"
             title={`Back to “${words[defaultLevel]}”`}
             aria-label={`Reset the bar to “${words[defaultLevel]}”`}
             onClick={() => onLevel(null)}
@@ -1798,7 +1798,7 @@ function StopBar<L extends string>({
       </div>
       <input
         id={id}
-        className="dbt-bar-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         max={stops.length - 1}
@@ -1814,7 +1814,7 @@ function StopBar<L extends string>({
       {/* **Only when it is hiding something** — and then always, because a bar
           that has hidden every row looks exactly like a search that found
           none, and this sentence is what tells the two apart. */}
-      {barred.hiddenCount > 0 && <p className="dbt-bar-note">{note}</p>}
+      {barred.hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}
     </div>
   );
 }

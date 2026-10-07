@@ -564,6 +564,72 @@ describe("no free way into a minimal paper", () => {
   });
 
   /**
+   * **Search and a referee criterion ask a gate of their own first**
+   * (`refuseAPaperNotReadYet` in src/routes.ts), ahead of `loadArticle`. For a
+   * minimal paper whose metadata has been published, as here, the two refuse
+   * alike but for the body: the gate's is exactly `{ error, code }`, and
+   * `loadArticle`'s (chat's) also carries `paper`.
+   *
+   * SVO5 deleted the gate as a duplicate on the strength of this case alone,
+   * and plan 261007d § 4 put it back: the case below this one is the state
+   * only the gate covers. What must not move in either is that the paper is
+   * refused **before a row is written** — both routes store a run and then
+   * stream, so a refusal that came late would be a stored failure.
+   */
+  it.each([
+    ["a search", "search", { criterion: "entropy", kind: "meaning" }],
+    ["a referee criterion", "referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses %s with chat's 409 and sentence, and stores nothing", async (_name, family, body) => {
+    const rows = async () => {
+      const out = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      return out.rows[0];
+    };
+    const before = await rows();
+    const reply = await call(READER, "POST", `/api/${family}/${slug}`, body);
+    expect(reply.status).toBe(409);
+    const chat = await call(READER, "POST", `/api/chat/${slug}`, { threadId: randomUUID(), question: "What is it about?" });
+    expect(chat.status).toBe(409);
+    expect(chat.body.paper).toBeDefined();
+    expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+    expect(chat.body).toMatchObject(reply.body);
+    expect(await rows()).toEqual(before);
+    expect(before).toEqual({ searches: 0, criteria: 0 });
+  });
+
+  /* **The state only the gate covers.** A minimal ingest creates the article
+     row before `metadata` publishes its first revision. `loadArticle`'s
+     revision join finds nothing then and would answer 404; the gate reads the
+     `articles` row alone and answers 409. Found by the C6 code review after
+     SVO5 had deleted the gate; red (404) without it. */
+  it.each([
+    ["search", { criterion: "entropy", kind: "meaning" }],
+    ["referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses an unpublished minimal paper on %s before writing a run", async (family, body) => {
+    const unpublished = `unpublished-minimal-${randomUUID()}`;
+    const [row] = await getDb().insert(articles).values({
+      ownerId: READER, slug: unpublished, processing: "minimal",
+    }).returning({ id: articles.id });
+    try {
+      const reply = await call(READER, "POST", `/api/${family}/${unpublished}`, body);
+      expect(reply.status).toBe(409);
+      expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+      expect((await call(DUPER, "POST", `/api/${family}/${unpublished}`, body)).status).toBe(404);
+      const counts = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs where article_id = ${row!.id}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria where article_id = ${row!.id}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      expect(counts.rows).toEqual([{ searches: 0, criteria: 0 }]);
+    } finally {
+      await getDb().delete(articles).where(eq(articles.id, row!.id));
+    }
+  });
+
+  /**
    * **The guard behind `enqueue`'s**, for a path round it nobody has found yet:
    * a full re-read inserted straight into the queue, with no reservation and
    * then with an ordinary one, runs to the end and its tree is refused at the

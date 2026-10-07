@@ -41,9 +41,9 @@
  * It used to leave `SPIDERYARN_STORE` unset and wrap `fsStoreSession`, which
  * means the sentence at the top of this header — *"D1b turns that one call into
  * a transaction, so it is worth knowing how much of the suite is watching it"* —
- * was watching **the session that has no transaction in it**. `fsStoreSession`
- * says so about itself in as many words (src/store/session.ts): four writes in a
- * row, and a kill between any two of them leaves half of them done. So the file
+ * was watching **the session that had no transaction in it**. `fsStoreSession`
+ * (deleted 2026-10-07) said so about itself in as many words: four writes in a
+ * row, and a kill between any two of them left half of them done. So the file
  * whose entire subject is *the commit as one act* was pinned against the
  * implementation where it is not one. That is what the conversion bought, and it
  * is worth more here than in most of the twenty-six.

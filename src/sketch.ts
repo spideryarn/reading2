@@ -744,11 +744,10 @@ export async function generateSketch(opts: {
     );
   }
 
-  /* **Nothing is written here**, and that is what makes `sketch` the first
-     *converted* step in this pipeline (src/pipeline.ts § LEGACY_UNCONVERTED_STEPS).
-     The other nine stages write their own file inside `run`, which works on a
-     laptop and cannot work through a store that puts the artefact in a Postgres
-     column. This one hands the sketch back and lets its two callers decide:
+  /* **Nothing is written here**, and that is what made `sketch` the first
+     *converted* step in this pipeline. The other stages wrote their own file
+     inside `run` until 2026-08-31, which worked on a laptop and cannot work
+     through a store that puts the artefact in a Postgres column. This one hands the sketch back and lets its callers decide:
      the pipeline returns it as `parts`, and `evals/sketch/run.ts` writes it into
      a results directory. A generator
      that wrote the file *and* returned it would give the pipeline two writes,

@@ -452,8 +452,9 @@ is where they are written down:
   back out. **That one asks `any-pointer: coarse`**, unlike every other size rule here, and the
   reason is in narrow-window.css § a field iOS zooms into: one point of type is not chrome, so the
   trade the paragraph above makes does not apply, and an iPad with a Magic Keyboard reports
-  `pointer: fine` while its reader goes on tapping the glass. The four Tailwind-styled fields carry
-  `tw:any-pointer-coarse:text-base` at their own call sites, because the utilities layer outranks
+  `pointer: fine` while its reader goes on tapping the glass. The Tailwind-styled fields carry an
+  `any-pointer-coarse` font-size floor at their own call sites
+  ([narrow-windows.md](narrow-windows.md) lists them), because the utilities layer outranks
   the stylesheet whatever the specificity.
 
 And two things that are about a finger rather than a size, in `glossary.css` and `quotes.css`:

@@ -594,7 +594,8 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
  * their ordinary answer, and as a 404 it was a red line in the console for
  * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
- * src/types.ts says why it is opt-in, and names the reads not moved.
+ * src/types.ts says why it is opt-in; src/store/artefact-not-made-yet.ts
+ * names the reads not moved.
  *
  * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
  *   different 404, and stays one whatever the header says; so does every other
@@ -4935,6 +4936,13 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  * it because that refusal also carries the paper (`NotProcessed.paper`), which
  * is a different 409 body from the one these two have always sent. Every other
  * caller of `loadArticle` gets `NotProcessed` from there. One indexed read.
+ *
+ * **And it covers a state `loadArticle` does not.** A minimal ingest creates
+ * the article row before `metadata` publishes its first revision. In between,
+ * `loadArticle`'s revision join finds nothing and answers 404; this reads the
+ * `articles` row alone and answers 409. Deleted on 2026-10-07 as a duplicate
+ * and put back the same day for that reason: plan 261007d § 4,
+ * tests/minimal-paper.test.ts § "refuses an unpublished minimal paper".
  */
 async function refuseAPaperNotReadYet(slug: string): Promise<void> {
   if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
@@ -6478,57 +6486,9 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
      started inside the two hours and finished outside them, being told their
      file expired while we are holding it. `UploadStore.claim` has the rest. */
   const claim = await claimUpload(uploadId, { owner, arrived: true });
-  if (!claim.ok) {
-    /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
-       answered it moved out to `resolveExistingUpload`, and without this line
-       a vanished record fell through the `taken` branch to "already being
-       turned into an article" — a sentence about a record that is not there.
-       Not reachable through the route, which resolves first; reachable by
-       anything that calls this directly, which is what makes it worth stating. */
-    if (claim.why === "unknown") throw httpError(404, "No such upload");
-    if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
-    /* `taken`. If the first claim got as far as a job, that job is the answer —
-       this is the same request arriving twice, not a conflict. **Reached only
-       by the genuine race now** — two fresh requests that both saw `pending`
-       before either claimed — because `resolveExistingUpload` answers the
-       common repeat before a slot is ever reserved. */
-    const already = await jobForUpload(uploadId);
-    if (already) return { kind: "job", job: already };
-    /**
-     * **And when the job has gone, the upload record still knows.**
-     *
-     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
-     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
-     * quiz are three more rows on one article — so fifty is a fortnight of
-     * ordinary use rather than a year of it. After that the upload is still
-     * `claimed`, the article is still on the shelf, and this answered *"That
-     * upload is already being turned into an article"* about an article the
-     * reader had finished reading. GPT Sol, reviewing the built stage 1,
-     * finding 5.
-     *
-     * **Answered from the record rather than by keeping the job alive**, and
-     * that is the choice worth writing down. Sparing an upload's job from
-     * retention only covers the ingests that never completed: a *successful*
-     * import's job is trimmed like any other success, and that is the case a
-     * reader actually comes back to. What is durable here is the **article**,
-     * and the upload record has named it since the moment `enqueue` returned —
-     * upload records are never trimmed by count, so the record outlives the job
-     * by design. (This used to add "swept on their grant", which was simply
-     * false: `sweepable` in src/source.ts has no production caller and nothing
-     * deletes an upload record or its staging object. Nothing here depends on
-     * the sweep; the claim was wrong rather than load-bearing.)
-     *
-     * Re-read rather than reusing `record` above: `noteSlug` lands after
-     * `enqueue` returns, so a second request arriving in that window would
-     * otherwise read a record from before the slug was written.
-     */
-    const fresh = await readUpload(uploadId, owner);
-    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
-    /* A claim with nothing at all to show for it: `enqueue` threw between the
-       claim and `noteSlug`. The reader chooses the file again, which is cheap
-       and correct. */
-    throw httpError(409, "That upload is already being turned into an article.");
-  }
+  /* Another request claimed it first, or it is not there to claim. The five
+     answers, and why each is what it is, are `answerALostClaim`'s. */
+  if (!claim.ok) return await answerALostClaim(uploadId, claim.why);
 
   const candidate = slugFromFilename(claim.record.filename) || "document";
   const job = await enqueue({
@@ -6613,18 +6573,61 @@ async function queueAMinimalUpload(uploadId: string): Promise<UploadOutcome> {
 }
 
 /**
- * **A claim that lost, answered** — `queueAnUpload`'s `taken` branch, which
- * the minimal path shares: the job the winner made, else the article its record
- * names, else the 409 nothing can do better than. `unknown` and `expired` are
- * the same 404 and 410 as there.
+ * **A claim that lost, answered** — for both ways of queueing an upload, the
+ * full import (`queueAnUpload`) and the minimal one (`queueAMinimalUpload`):
+ * 404 for no record, 410 for an expired grant, else the job the winner made,
+ * else the article its record names, else the 409 nothing can do better than.
+ * `queueAnUpload` spelled these out for itself until 2026-10-07;
+ * tests/uploads-api.test.ts § "a claim that lost the race" pins each.
  */
 async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<UploadOutcome> {
+  /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
+     answered it moved out to `resolveExistingUpload`, and without this line
+     a vanished record fell through the `taken` branch to "already being
+     turned into an article" — a sentence about a record that is not there.
+     Reachable through the route if the record disappears between the
+     initial look and the claim. */
   if (why === "unknown") throw httpError(404, "No such upload");
   if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+  /* `taken`. If the first claim got as far as a job, that job is the answer —
+     this is the same request arriving twice, not a conflict. **Reached only
+     by the genuine race now** — two fresh requests that both saw `pending`
+     before either claimed — because `resolveExistingUpload` answers the
+     common repeat before a slot is ever reserved. */
   const already = await jobForUpload(uploadId);
   if (already) return { kind: "job", job: already };
+  /**
+   * **And when the job has gone, the upload record still knows.**
+   *
+   * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+   * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+   * quiz are three more rows on one article — so fifty is a fortnight of
+   * ordinary use rather than a year of it. After that the upload is still
+   * `claimed`, the article is still on the shelf, and this answered *"That
+   * upload is already being turned into an article"* about an article the
+   * reader had finished reading. GPT Sol, reviewing the built stage 1,
+   * finding 5.
+   *
+   * **Answered from the record rather than by keeping the job alive**, and
+   * that is the choice worth writing down. Sparing an upload's job from
+   * retention only covers the ingests that never completed: a *successful*
+   * import's job is trimmed like any other success, and that is the case a
+   * reader actually comes back to. What is durable here is the **article**,
+   * and `noteSlug` names it on the upload record just after `enqueue` returns —
+   * upload records are never trimmed by count, so the record outlives the job
+   * by design. (This used to add "swept on their grant", which was simply
+   * false: `sweepable` in src/source.ts has no production caller and nothing
+   * deletes an upload record or its staging object. Nothing here depends on
+   * the sweep; the claim was wrong rather than load-bearing.)
+   *
+   * Read now rather than handed in by the caller: `noteSlug` lands after
+   * `enqueue` returns, so a second request arriving in that window would
+   * otherwise read a record from before the slug was written.
+   */
   const fresh = await readUpload(uploadId, currentOwnerId());
   if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  /* A claim with no job or slug yet: the winner's `enqueue` may still be in
+     flight or may have failed. */
   throw httpError(409, "That upload is already being turned into an article.");
 }
 
@@ -7959,6 +7962,7 @@ function logRequest(
   status: number,
   started: number,
   err?: unknown,
+  failureStatus?: number,
 ): void {
   /* **A stack only where a stack tells you something.**
    *
@@ -8000,8 +8004,11 @@ function logRequest(
      `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
      request that called no model gets no extra fields at all. */
   Object.assign(fields, spendFields(currentSpend() ?? emptySpend()));
-  if (status >= 500) line.error(fields, msg);
-  else if (status >= 400) line.warn(fields, msg);
+  // Headers may already carry 200 when the handler fails. Keep that wire
+  // status in the fields, but keep the failure visible at its severity.
+  const severityStatus = failureStatus ?? status;
+  if (severityStatus >= 500) line.error(fields, msg);
+  else if (severityStatus >= 400) line.warn(fields, msg);
   else line.info(fields, msg);
 }
 
@@ -8100,12 +8107,14 @@ async function serveApi(
      five days, with its handler sitting a line below unreached.
      docs/postmortems/260901a-the-route-the-query-string-hid.md. */
   const path = url.split("?")[0] ?? url;
-  /* **The other half of the same split, parsed once.** Four route families read
-     a query string, and before this each parsed the URL again for itself — one
-     of them out of `req.url` directly, which is the escape hatch that made the
-     `path`/`rawUrl` distinction above a convention rather than a rule. Handing
-     the parsed parameters down means no handler below has a reason to hold a
-     URL string at all. GPT Sol's finding 1, 2026-09-01. */
+  /* **The other half of the same split, parsed once.** Every route that reads
+     a query string reads this one. Before it each parsed the URL again for
+     itself — one of them out of `req.url` directly, which is the escape hatch
+     that made the `path`/`rawUrl` distinction above a convention rather than a
+     rule. Handing the parsed parameters down means no handler below has a
+     reason to hold a URL string at all. GPT Sol's finding 1, 2026-09-01. (One
+     did anyway until 2026-10-07: the comments read parsed `req.url` again for
+     `?anchors=`.) */
   const query = new URLSearchParams(url.slice(path.length).replace(/^\?/, ""));
 
 
@@ -8115,6 +8124,7 @@ async function serveApi(
      no set of call sites to keep in step. It reads `res.statusCode`, which
      `send` has just set, so the exit points do not have to report anything. */
   let failure: unknown;
+  let failureStatus: number | undefined;
   try {
     /**
      * **The public namespace, dispatched before the gate and inside this `try`.**
@@ -8246,7 +8256,8 @@ async function serveApi(
     // mapped to a status, handed to the client and forgotten, so a production
     // 500 left nothing behind to read.
     failure = err;
-    /* **The rule is the status we answered with, not who chose it.** If this
+    failureStatus = status;
+    /* **The rule is the failure's status, not who chose it.** If this
        request logged at `error` level it goes to Sentry, and `logRequest` uses
        exactly the same threshold two lines down — so the two can never drift
        into disagreeing about what a fault is.
@@ -8283,12 +8294,31 @@ async function serveApi(
        conventions the streams use — and anything else is `UNEXPECTED_FAILURE`.
        The error itself is already in `logRequest`'s line, stack and all.
        Plan 260924a § Stage 2c. */
+    /* **A response that has already started gets no second answer.** A handler
+       that threw after `sse(res)`, or after a stream it had finished, used to
+       reach the `send` below: that set `statusCode = 500` on a response the
+       reader had received as 200, and then `setHeader` threw
+       `ERR_HTTP_HEADERS_SENT` out of this catch — so the request line said 500,
+       and src/vercel.ts's outer catch filed a second Sentry event about headers
+       in place of the fault. The fault itself is captured above, once, and
+       `failure` puts it on the request line beside the status the reader got.
+
+       All that is left to do is close a stream nobody else will: only one that
+       is neither ended nor destroyed. **This does not replace a stream's own
+       catch** — those send the terminal frame and reconcile what was stored,
+       and nothing here can do either. tests/serve-api-after-headers.test.ts,
+       which uses a real `ServerResponse` because a fake `setHeader` cannot
+       throw. */
+    if (res.headersSent) {
+      if (!res.writableEnded && !res.destroyed) res.end();
+      return true;
+    }
     const said =
       status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
     send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
-    logRequest(method, path, res.statusCode, started, failure);
+    logRequest(method, path, res.statusCode, started, failure, failureStatus);
   }
 }
 
@@ -8296,9 +8326,9 @@ async function serveApi(
  * The request, as the dispatchers below take it.
  *
  * **Three fields, three jobs, and the split is the whole point.** `path` is what
- * every route matches on. `query` is what the four route families that take
- * parameters read — the shelf's `?archived=1`, search's `?q=`, the reader's
- * `?slug=`, chat's `?summary=1`. `rawUrl` is for the 404 message, which is worth
+ * every route matches on. `query` is what the routes that take parameters
+ * read — the shelf's `?archived=1`, the reader's `?slug=`, chat's
+ * `?summary=1`, and the rest. `rawUrl` is for the 404 message, which is worth
  * printing in full. All three are computed once in `serveApi`.
  *
  * Matching a route against a URL with a query string on it cannot match
@@ -9713,8 +9743,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   // Its own endpoint rather than a field on the article payload: that one is
-  // ~150KB and is fetched on every page, and stat-ing every file for it would
-  // charge every reader for a page almost nobody opens.
+  // fetched on every page, and working out every step's state for it — the
+  // step rows, and every block read, cleaned and hashed to say which steps are
+  // still current (src/store/pg.ts § `articleMetadata`) — would charge every
+  // reader for a page almost nobody opens. (Written about the filesystem
+  // store, where the cost was a `stat` of every file.)
   {
     kind: "pattern",
     method: "GET",
@@ -10558,7 +10591,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: COMMENTS_PATTERN,
     article: "first-capture",
-    handler: async ({ request: { req, res } }, captures) => {
+    handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const comments = await sweepOrphaned(slug);
       /* **Whole-block bookmarks go only to a client that asks for them.** A tab
@@ -10568,8 +10601,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          Such a tab simply does not see the bookmark until it reloads; the row is
          untouched. GPT Sol's plan review of 260912c. Delete the filter once no
          client can be older than the parameter. */
-      const wholeBlock =
-        new URL(req.url ?? "/", "http://local").searchParams.get("anchors") === "whole-block";
+      const wholeBlock = query.get("anchors") === "whole-block";
       send(res, 200, {
         comments: wholeBlock ? comments : comments.filter((c) => c.quote !== undefined),
       });

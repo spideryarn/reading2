@@ -6201,8 +6201,9 @@ export type CrossrefsFound = CrossrefsResponse;
  * because the offline cache and several tests match these URLs by a pattern
  * that ends at the slug. "No such article" is a 404 either way.
  *
- * **Not every artefact read**: tweets, relations, Skim, Sketch and Arc still
- * answer a plain 404 and do not look at this header.
+ * **Not every artefact read.** Six still answer a 404 whatever is sent; they
+ * are named, with what is left to do for each, in
+ * src/store/artefact-not-made-yet.ts, which is the one list.
  *
  * The server's half is `orNullWhenNotMadeYet` in src/routes.ts. It goes, and
  * `200 null` becomes unconditional, the day there is a client-version

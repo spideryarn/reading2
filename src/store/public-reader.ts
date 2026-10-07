@@ -1068,10 +1068,15 @@ export const pgPublicReader: PublicArticleReader = {
           ...(row.citations === null ? {} : { citations: row.citations }),
           /* `comments_colour` keeps the column to the four names. */
           ...(row.colour === null ? {} : { colour: row.colour as HighlightColour }),
-          /* Required by `Comment` and constant by construction: the query
-             refuses every other value (PUBLIC_COMMENTS_WHERE), and the public
-             DTO drops the field. Written out rather than cast so that a change
-             to the predicate has somewhere obvious to disagree. */
+          /* Required by `Comment`, and **not what every row says**: the
+             query admits `'none'` as well as `'done'` (PUBLIC_COMMENTS_WHERE)
+             — a reader's own note has had no model call — and this writes
+             `done` for both. That is harmless only because the public DTO
+             drops the field (`publicComments`, src/public/dto.ts). Anything
+             that starts reading `status` off this needs the row's own value
+             first. (This said "constant by construction: the query refuses
+             every other value" until 2026-10-07, which was true of the
+             searches below and never of this.) */
           status: "done" as const,
         })),
         searches: searchRows.map((row) => ({

@@ -216,15 +216,6 @@ export function ProfilePage() {
   const words = onShelf.reduce((n, a) => n + (a.words ?? 0), 0);
 
   return (
-    <>
-      {/* **Metadata's contents list, in the left margin, with its search box.**
-          Greg, 2026-10-03, asked whether this page gets it as well as the
-          folding: *"Probably B"*, B being this. It reads the `[data-section]`
-          elements inside `main`, so there is no list of the six to keep in
-          step. Hidden below `lg`; `CONTENTS_MARGIN` is the room it needs from
-          there until the centred margin holds it.
-          docs/plans/261003n-profile-gets-the-contents-list-and-search-box.md. */}
-      <PageContents containerRef={body} label="Sections of this page" synonyms={PROFILE_SYNONYMS} />
     <main
       ref={body}
       className={`tw:mx-auto ${CONTENTS_MARGIN} tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans`}
@@ -243,6 +234,22 @@ export function ProfilePage() {
         What the model knows about who it is writing for, what your account may do, and what you
         have switched on.
       </p>
+
+      {/* **Metadata's contents list, with its search box.** Greg, 2026-10-03,
+          asked whether this page gets it as well as the folding: *"Probably
+          B"*, B being this. It reads the `[data-section]` elements inside
+          `main`, so there is no list of the six to keep in step.
+          docs/plans/261003n-profile-gets-the-contents-list-and-search-box.md.
+
+          **Mounted here, under the introduction, because below `lg` this is
+          where it is drawn**: the search box and a *Contents* button, above
+          *Account*. Until 2026-10-07 it was `main`'s sibling and a narrow
+          window did not get it (PageContents.tsx has Greg's report). From `lg`
+          it is fixed in the left margin wherever it is mounted, and
+          `CONTENTS_MARGIN` on `main` is the room it needs there until the
+          centred margin holds it.
+          docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */}
+      <PageContents containerRef={body} label="Sections of this page" synonyms={PROFILE_SYNONYMS} />
 
       {/* **Which sections fold, and which do not.** Greg, 2026-10-03, feedback
           report `spya-ka3cau`:
@@ -475,6 +482,5 @@ export function ProfilePage() {
           gloss the others do not have reads as a different kind of thing. */}
       <SiteFooter />
     </main>
-    </>
   );
 }

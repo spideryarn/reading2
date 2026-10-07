@@ -27,9 +27,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Job, Skim, SkimResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { IdeasRead } from "./useIdeas.js";
@@ -82,6 +84,13 @@ export interface UseSkim {
    * because their prompt is older.
    */
   regenerate(): Promise<void>;
+  /**
+   * The forced run was pressed on the route still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read the route again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -97,27 +106,45 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
      intent, not a guessed request: once both reads answer, the request below
      can name exactly the missing or stale prerequisites. */
   const [waitingRun, setWaitingRun] = useState<"ensure" | "regenerate" | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /* The read. `current()` after every `await`: src/web/useOrderedRead.ts. */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
         const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`);
         if (!current()) return;
-        if (res.status === 404) {
+        /* **Checked and derived before anything is published** (plan 261007e,
+           WCO4): `readJson` checks no shape, and an empty 200 is `{}`.
+           A 404 is "none yet", and so is `200 null`, which this route does not
+           send today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+        const loaded = res.status === 404 ? null : await readJson<SkimResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case: nobody has asked for a route yet. */
           setSkim(null);
           setStale(false);
           setOutdated(false);
           setProfileChanged(false);
           setNotOnRoute(0);
+          landed(started, res, null);
           setError(null);
           setStatus("none");
           return;
         }
-        const loaded = await readJson<SkimResponse>(res);
-        if (!current()) return;
-        setSkim(loaded.skim);
+        /* A reply without a route is published nowhere: a `MalformedReply`,
+           so the reader gets `PAGE_FAULT` and what is on screen stays
+           (tests/read-error-matrix.test.tsx). The list of stops is what the
+           server itself requires of a stored route before it answers 200
+           (`loadSkim`, src/store/pg.ts), so no route it sends fails this. */
+        const route = (loaded as Partial<SkimResponse> | undefined)?.skim;
+        if (typeof route !== "object" || route === null || !Array.isArray(route.stops)) {
+          throw new MalformedReply("the skim reply has no route");
+        }
+        setSkim(route);
+        landed(started, res, route.generatedAt);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);
@@ -131,7 +158,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         setStatus((was) => (was === "loading" ? "error" : was));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   const { reload, refresh } = useOrderedRead(load);
@@ -196,14 +223,35 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     [quotesFirst, ideasFirst],
   );
   const prerequisitesLoading = quotes.status === "loading" || ideas.status === "loading";
+  /* **The forced run holds the route it was pressed on** (rewrite-hold.ts), as
+     useFaq.ts § `regenerate` does. The route's clock is its identity: every run
+     of the stage re-stamps it (src/skim.ts).
+
+     **The hold is about this step's forced run and nothing before it.** It is
+     keyed by `(slug, "skim")`, and it follows the one job the press made,
+     prerequisites and all: a run that chose the Quotes first is held for the
+     whole job. Failure or cancellation in a prerequisite ends it too. It
+     holds neither the Quotes' nor the Ideas' own forced controls, which have
+     holds of their own under their own steps, and neither of those holds this. `ensure` is
+     never held: unforced, it is the request the server de-duplicates. */
+  const hold = useRewriteHold({
+    slug,
+    step: "skim",
+    identity: skim?.generatedAt ?? null,
+    queue,
+    fresh,
+    refresh,
+  });
+  const held = hold.run;
   const startReady = useCallback(
     async (kind: "ensure" | "regenerate") => {
-      await queue.start({
-        ...(kind === "regenerate" ? { force: true } : {}),
-        ...(precededBy.length > 0 ? { precededBy } : {}),
-      });
+      const prerequisites = precededBy.length > 0 ? { precededBy } : {};
+      if (kind === "ensure") await queue.start(prerequisites);
+      /* Taken here and not in `regenerate`, so a press that waited for the
+         prerequisite reads is held from the moment it is actually made. */
+      else await held(() => queue.start({ force: true, ...prerequisites }));
     },
-    [queue, precededBy],
+    [queue, precededBy, held],
   );
   const ensure = useCallback(async () => {
     if (prerequisitesLoading) {
@@ -256,7 +304,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting || waitingRun !== null,
     automatic: auto && (queue.job !== null || queue.starting || waitingRun !== null),
@@ -265,6 +313,8 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     retryRead,
     ensure,
     regenerate,
+    rewriting: hold.rewriting,
+    refresh,
     cancel: queue.cancel,
   };
 }

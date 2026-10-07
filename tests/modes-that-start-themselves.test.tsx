@@ -45,6 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type BandMode, isBandMode } from "../src/modes.js";
 import { modePress } from "../src/web/reader/mode-press.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type { BlockId, Job } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -502,8 +503,13 @@ async function reopen(slug: string, start: BandMode): Promise<void> {
 }
 
 function press(label: string): Promise<void> {
-  const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-  if (!found) throw new Error(`no ${label} button in the bar`);
+  /* The bar's button, or the mode's item under More where it is one of the
+     five gathered there (plan 261007c). An item's pick goes through the
+     command bar's door, which arms exactly as the bar button does and never
+     toggles shut; an open gathered mode is drawn in the bar, so the press that
+     closes it is still the bar button's. */
+  const found = modeDoor(host, label);
+  if (!found) throw new Error(`no ${label} button in the bar, and no item under More`);
   return act(async () => {
     found.click();
   });

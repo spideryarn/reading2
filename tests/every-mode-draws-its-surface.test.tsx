@@ -86,6 +86,7 @@ import { MODES, type Mode } from "../src/modes.js";
 import type { AutoRunTarget } from "../src/web/auto-run-targets.js";
 import { commandId, modeCommand } from "../src/web/command-match.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type {
   Article,
   BlockId,
@@ -984,17 +985,17 @@ async function modeAfterPress(before: string): Promise<string> {
   return modeInUrl();
 }
 
-/** The real bar button, found the way a screen reader would find it. */
-function modeButton(mode: Mode): HTMLButtonElement {
+/**
+ * The real control a reader presses for this mode, found the way a screen
+ * reader would find it: a radio, Marginalia's toggle after them (261001i), or
+ * — for the five gathered there since 2026-10-07 (plan 261007c) — the mode's
+ * item under More, which `modeDoor` opens to find.
+ */
+function modeButton(mode: Mode): HTMLElement {
   const label = MODE_LABEL[mode];
-  /* The radios, and Marginalia's toggle after them (261001i). */
-  const found = [
-    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
-  ].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 async function press(mode: Mode): Promise<void> {

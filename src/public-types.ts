@@ -865,8 +865,8 @@ export interface PublicSketch {
  *
  * **Operational** — `error`, `attemptId`, `leaseExpiresAt`, `model`,
  * `searches`, `status`. How our machine got on, not what the reader said. The
- * public read filters to finished rows in SQL, so `status` would be a constant
- * on the wire as well as an internal fact.
+ * public read admits bare notes (`none`) and answered notes (`done`) in SQL;
+ * the visitor needs neither operational status.
  *
  * **Somebody else's feature** — `criterionId` and `valence`. A comment with a
  * criterion is a **referee's** placement of a passage on a scale, not a reading
