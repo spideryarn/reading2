@@ -3,8 +3,10 @@
 Cluster **C7** of the [seventh sweep](261006m-seventh-codebase-sweep-depth-umbrella.md). Its
 § What the review changed is binding here (U3, U11, U13, U16, U22).
 
-**Status, 2026-10-07:** being built, one stage per commit, in a worktree. Not pushed and **not
-applied to production**: a GPT Sol review comes first, and production is the Overseer's.
+**Status, 2026-10-07:** stages 1 to 6, an unplanned 6b, and 8 are built, one commit each, in a
+worktree. **Stage 7 is not built**: its constraint breaks 35 test files, two of which exist to test
+the very rows it forbids ([§ Stage 7](#stage-7-not-built-and-why)). Not pushed and **not applied to
+production**: a GPT Sol review comes first, and production is the Overseer's.
 [§ Waiting to be applied to production](#waiting-to-be-applied-to-production) is the list.
 
 ## Goal
@@ -335,6 +337,76 @@ second empty migration costs a file.
 and match their declarations. Whether each query that orders by such a column says `nulls last`
 too, and so can walk the index rather than sort, was not looked at; every one of those tables is
 small. GPT Sol's audit says `articles_public_listing`'s query does.
+
+## Stage 7: not built, and why
+
+`article_revisions_published_has_scalars`: `status <> 'published' or num_nonnulls(word_count,
+block_count, part_count, section_count) = 4`. **Documented, not closed.**
+
+**The data and the writer are ready.** Production, read 2026-10-07 00:56 UTC: 470 revisions, 460
+published, **0** violating. One statement in `src/` sets `status = 'published'`
+(`publishRevisionIn`, `src/store/pg-revisions.ts`), and it sets all four numbers from
+`deriveLibraryScalars` in that same `SET`; nothing nulls them afterwards, and a draft does not copy
+them (`REVISION_CARRY_POLICY` says `derive`).
+
+**The tests are not.** The constraint was generated (not applied to the shared database) and every
+test file that names the table was run against a database built with it: **35 of 124 fail**, where
+the cross-review's upper bound was 29. They insert a published revision directly, without the four
+numbers:
+
+`article-delete-pg`, `article-rows-snapshot`, `asked-url-claim-session`, `asset-route`,
+`backfill-registry-facts-pg`, `blocks-baseline`, `cited-in-spideryarn-pg`, `db-schema`,
+`draft-sweep-on-step-start`, `event-times`, `export-route`, `find-article`,
+`glossary-ideas-baseline`, `illustrated-route`, `library-log-volume`, `pipeline-slug-claim`,
+`public-visibility-pg`, `publication-enqueues-the-labels-successor`, `referee-criteria-store`,
+`shelf-terms-pg`, `shelf-topic-sets-pg`, `source-store`, `store-export-bundle`,
+`store-export-covers-tables`, `store-export-isolation`, `store-export-referee`,
+`store-export-search-kind`, `store-export-thread-kind`, `store-glossary-delete-pg`,
+`store-parity-referee`, `store-parity`, `store-pg-referee-claims`, `store-shelf-pg`,
+`store-shelf-reads`, `unknown-stored-thread-kind`.
+
+Three reasons this is past a mechanical sweep, which is where the brief said to stop:
+
+1. **Two of them test the rows the constraint forbids.** `tests/library-log-volume.test.ts` is
+   about how much `scalarsForShelf` logs when published revisions have no scalars, and
+   `tests/store-shelf-reads.test.ts` has *"recomputes the scalars, loudly, when a published
+   revision has none"*. The shelf reads only current published revisions, so once the CHECK exists
+   that fallback cannot be reached by any row, and those tests cannot be re-pointed at a
+   non-published status and still mean anything. Keeping the fallback (the brief says to) and
+   keeping its tests honest (the brief says to) cannot both be done with the constraint in place.
+   That is a choice: drop the fallback and its tests with the constraint, or keep all three as they
+   are.
+2. **It collides.** U13 puts cluster C5 before this stage for `tests/store-parity-referee.test.ts`,
+   and C5 has not landed on `dev`.
+3. **Thirty-five files, most of them other clusters' subjects**, each needing four numbers that are
+   true of its fixture rather than four zeros.
+
+**What it would take:** one decision (reason 1), then a shared fixture helper so a direct insert
+of a published revision cannot forget the numbers, then the migration, which is one generated
+statement. The `pg.ts` comment that says this *"needs a migration"* is left as it is, because it
+is still true.
+
+## Stage 8: comments that had stopped being true
+
+No migration. The union of GPT Sol's DB2 and the Opus document's DBO11, each checked against the
+code before and after rewriting. `src/db/schema.ts` unless noted:
+
+| Where | It said | What is true |
+|---|---|---|
+| `article_revisions.raw_source_sha256` | *"Nothing writes them yet"* | `artifacts-pg.ts` § `writeRaw` writes both and a draft carries them. The publish gate still does not check the implication, and the comment says so. |
+| `article_revisions.labels` | `labels` is *"deliberately NOT a step name of its own"* | A step of its own since 2026-09-06; two steps write the column. |
+| `article_revisions.quiz` | *"No attempts table beside it"* | `quiz_attempts`, since 2026-10-05. |
+| `article_revisions_nav_label_status` and `revision_step_runs_step` | `generate` *"knows nothing about a CHECK expression"* | It diffs the expression and writes the DROP and ADD (stage 2's migration is one). What it cannot see is the TypeScript union, so the literal is still a second copy. |
+| `queue_state` | *"The singleton row is the guarantee"* of concurrency one | A lock every claim takes; `claim` counts running jobs inside it against `maxRunning`. `running_job_id` and `updated_at` are written by nothing. |
+| `revision_step_runs` header | `stepIsDone` *"is an `access()` existence check"* | Interruption, then presence, then the stamp. `hashBlocks` lives in `src/source-hash.ts`. |
+| `ai_calls` header | *"No `attempt` column"* | There is one, since 2026-10-06. |
+| `ai_calls.wire` | *"`messages`, `chat` or `embeddings`"* | Seven members; the comment points at `Wire` in `src/models.ts` and no longer lists them. |
+| `referee_claims.claims_omitted` | the route *"writes `claims` and `model` and nothing else today"* | It writes `claimsOmitted` on every finished run. |
+| `feedback.screenshot` | *"400,000"* | 2,000,000, in the constant and in `feedback_screenshot_size`. |
+| `src/store/article-rows.ts` § `queue_state`, both entries | *"One row saying which job is running"* | A lock row that records nothing. |
+| `referee_claims`, the withheld CHECK | the filesystem store could not refuse it | Rewritten in stage 3, with the CHECK. |
+
+The `comments.thread_id` note is history that says it is history, and stays.
 
 ## Waiting to be applied to production
 

@@ -903,16 +903,23 @@ export const articleRevisions = spideryarn.table(
      * **That rule is intent, not a guard. Nothing enforces it today**, and this
      * comment said `publishRevision` did until 2026-08-27, which was simply
      * untrue: that function checks blocks, the tree, `checkTree` and the `structure`
-     * run, and has never looked at these two columns. Nothing writes them yet
-     * either, so the claim was vacuous rather than merely wrong — there is no
-     * revision it could have been false about.
+     * run, and has never looked at these two columns.
+     *
+     * **They are written now**: src/store/artifacts-pg.ts § `writeRaw` sets
+     * both when a `fetch` step's source document is stored, and a draft carries
+     * them forward from the revision it is based on (src/store/pg-revisions.ts,
+     * `rawSourceSha256: "carry"`). (This comment said *"Nothing writes them
+     * yet"* until 2026-10-07, which had been untrue since the live write path
+     * landed.) **The implication is still not checked.** `reasonsNotToPublish`
+     * does not read these columns, so a revision with a successful `fetch` and
+     * no reference would publish; the writer is what keeps that from happening.
      *
      * Writing it down as a fact was the same mistake as the comment in
      * src/store/pg.ts that claimed the ToC guard checked what it did not —
-     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day. The
-     * rule lands in `reasonsNotToPublish` with the live write path;
-     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the full
-     * truth table, including the failed-fetch case this sentence omits.
+     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day.
+     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the
+     * truth table the check would need, including the failed-fetch case this
+     * sentence omits.
      *
      * Note this is **not** `raw_sha256` above. That one is the hash of what the
      * network sent; this is the hash of what we stored, and for HTML in any
@@ -1074,10 +1081,12 @@ export const articleRevisions = spideryarn.table(
      * decision rather than a gap, and a cheap one to reverse, because
      * `profileHash` is a field on the JSON rather than a column.
      *
-     * **No attempts table beside it.** v1 stores no answers: a reader answers,
-     * reads the reply and moves on. The questions persist because they are an
-     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not
-     * stored.
+     * **The reader's answers are not in here; they are rows in
+     * `quiz_attempts`** (below, since drizzle/20261005032955_quiz_attempts.sql),
+     * keyed by this document's `batchId` and a question's id, with the question
+     * copied onto the row so an answer survives a regeneration. v1 stored no
+     * answers at all (docs/plans/260831al-review-quiz-sub-mode.md § Attempts are
+     * not stored), and this comment went on saying so after that changed.
      *
      * **No foreign key from an evidence `blockId` to `revision_blocks`**, on
      * the same argument the glossary, the ideas, the quotes, the timeline and
@@ -1283,11 +1292,17 @@ export const articleRevisions = spideryarn.table(
      * **Not a `nav_label` column on `revision_blocks`, even though the key
      * would fit.** That would give stage 4b write access to stage 3's rows, and
      * a re-run of labels would mutate rows that are otherwise immutable once
-     * the revision is published. `labels.json` is one of the `structure` step's
-     * OUTPUTS (src/pipeline.ts), so its currency rides with the `structure` row in
-     * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
-     * own. Checked against the code, not assumed — an earlier draft of this
-     * work had it as a step and would have added a CHECK value for it.
+     * the revision is published.
+     *
+     * **Two steps write this column, and each has its own row in
+     * `revisionStepRuns`** (src/pipeline.ts § `STEPS`): `structure` produces
+     * the tree with a pending manifest, and `labels`, a step of its own since
+     * 2026-09-06, produces the labels and merges them into the tree
+     * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md). Until
+     * 2026-10-07 this said the manifest was one of `structure`'s outputs only
+     * and that `labels` was *"deliberately NOT a step name of its own"*, which
+     * was true before that plan; `revision_step_runs_step` below has admitted
+     * the name since.
      */
     labels: jsonb("labels").$type<LabelsFile>(),
 
@@ -1400,11 +1415,12 @@ export const articleRevisions = spideryarn.table(
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
      * same standing hazard `revision_step_runs_step` has, which has drifted
      * twice and has `tests/db-step-constraint.test.ts` watching it.
-     * `drizzle-kit generate` diffs the TypeScript and knows nothing about a
-     * CHECK expression, so a fourth member added to the union in src/types.ts
-     * would compile, migrate cleanly and then be rejected at the UPDATE with a
-     * `23514 check_violation` naming none of this.
-     * `tests/nav-label-status.test.ts` compares the two.
+     * `drizzle-kit generate` does see a CHECK's expression (edit this literal
+     * and it writes the DROP and the ADD), but it reads this file and not the
+     * union: a fourth member added in src/types.ts alone would compile, leave
+     * nothing to migrate, and then be rejected at the UPDATE with a `23514
+     * check_violation` naming none of this. `tests/nav-label-status.test.ts`
+     * compares the two.
      */
     check(
       "article_revisions_nav_label_status",
@@ -2129,10 +2145,11 @@ export const refereeClaims = spideryarn.table(
      * it is a fact about the run and not about any claim in it.
      *
      * Nullable, and null means *not recorded* rather than *none omitted*. Those
-     * are genuinely different: the route that stores a run writes `claims` and
-     * `model` and nothing else today, so every run stored before it learns to
-     * write this has no answer, and the panel's fallback copy depends on telling
-     * that from a truthful zero.
+     * are genuinely different, and the panel's fallback copy depends on telling
+     * one from a truthful zero. The route writes it on every finished run
+     * (src/routes.ts § `runRefereeClaims`, from `outcome.dropped.truncated`), so
+     * null now means a run stored before it did, a run that failed, or one
+     * still pending; `begin` nulls it.
      */
     claimsOmitted: integer("claims_omitted"),
     /**
@@ -3047,12 +3064,22 @@ export const jobs = spideryarn.table(
 );
 
 /**
- * One row, ever. Claiming locks it FOR UPDATE before choosing a job.
+ * One row, ever, and **it is a lock, not a record**. Every transition of a job
+ * into `running` takes this row `FOR UPDATE NOWAIT` first
+ * (src/store/pg-jobs.ts § `claim`), so claimants are decided one at a time.
+ * Inside the lock `claim` counts the `running` rows in `jobs` and refuses at
+ * the cap its caller passes (`maxRunning`); compatible jobs may run side by
+ * side up to it. A missing row is a refusal, not a free pass.
  *
- * This exists because `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` does NOT give
- * concurrency 1 — it lets two workers claim two *different* queued jobs, which
- * is exactly the global guarantee docs/project/ingest-queue.md chose on
- * purpose. The singleton row is the guarantee.
+ * It was made when the rule was one job at a time, because `SELECT ... FOR
+ * UPDATE SKIP LOCKED LIMIT 1` does not give that: it lets two workers claim
+ * two *different* queued jobs. This comment went on saying *"the singleton row
+ * is the guarantee"* of concurrency one until 2026-10-07; the row serialises
+ * the decision and the count is the cap.
+ *
+ * **`running_job_id` is read and written by nothing** (no mention outside this
+ * file), and `updated_at` has not moved since the row was seeded: no claim
+ * updates either. Dropping the column is Greg's call.
  */
 export const queueState = spideryarn.table(
   "queue_state",
@@ -3075,11 +3102,16 @@ export const queueState = spideryarn.table(
 /**
  * Whether a pipeline step's output is CURRENT, not merely present.
  *
- * `stepIsDone` in src/pipeline.ts is an `access()` existence check: a file is
- * there, therefore the step is done, whatever it was generated from. Carrying
- * that across as "column is non-null" would carry the bug across too.
+ * This table is what `stepIsDone` in src/pipeline.ts asks, in order: was the
+ * step interrupted (`status`), are all its artefacts there, and does the stamp
+ * stored here equal the one the step would write today (or, for a step with no
+ * stamp, its own `isDone`). When this table was designed that function was an
+ * `access()` existence check on a file, "it is there, therefore it is done,
+ * whatever it was generated from", and carrying that across as "column is
+ * non-null" would have carried the bug across too. The filesystem went on
+ * 2026-09-05.
  *
- * `inputHash` should be computed the way src/tweets.ts `hashBlocks` does it —
+ * `inputHash` is computed the way `hashBlocks` in src/source-hash.ts does it —
  * over `id \t text` per block, joined. Deliberately NOT the bytes of the
  * artefact, because those change when an unread field is recomputed and do NOT
  * change when two blocks swap ids. That choice is the transferable part.
@@ -3146,12 +3178,15 @@ export const revisionStepRuns = spideryarn.table(
        * this CHECK to admit it.
        */
       /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
-         to the database by drizzle/0031 and never got back into this literal,
-         because `drizzle-kit generate` diffs the schema and knows nothing about a
-         CHECK expression — so this one is hand-maintained and the migrations are
-         the truth. `tests/db-step-constraint.test.ts` compares the last
-         `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
-         directions, which is what makes there not be a third drift. */
+         to the database by a hand-written drizzle/0031 and never got back into
+         this literal. `drizzle-kit generate` does see a CHECK's expression now
+         (edit a literal and it writes the DROP and the ADD:
+         drizzle/20261007010230_referee_criteria_shape_all_or_none.sql is one it
+         wrote unaided), but it reads this file and not `STEP_ORDER`, so the
+         literal is still a second copy kept by hand.
+         `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT`
+         in the migrations against `STEP_ORDER` in both directions, which is
+         what makes there not be a third drift. */
       sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
@@ -3395,8 +3430,10 @@ export const realtimeSessions = spideryarn.table(
  * - **`cost_micros` is gone**, in favour of nano-dollars in a `bigint`. A single
  *   query embedding costs about $0.0000006, which is **less than one
  *   micro-dollar** and rounded to zero — the row read as free.
- * - **No `attempt` column.** A retry is a separate call and gets its own row and
- *   its own id; `run_id` is what groups the calls one piece of work made.
+ * - **A retry is a separate call and gets its own row and its own id**;
+ *   `run_id` is what groups the calls one piece of work made. Since 2026-10-06
+ *   the `attempt` column below says which go a row was inside one call's
+ *   transport retry (this line said *"No `attempt` column"* until 2026-10-07).
  *
  * ## `owner_id` is here, and src/owner.ts's rule says it should not be
  *
@@ -3442,7 +3479,10 @@ export const aiCalls = spideryarn.table(
     jobId: text("job_id"),
     stepName: text("step_name"),
     /**
-     * `messages`, `chat` or `embeddings`.
+     * Which transport the call went over: a member of `Wire` in src/models.ts,
+     * which is the list. It is not copied here because it has grown (three
+     * values when this line last named them, seven by 2026-10-06) and no CHECK
+     * holds the column to it; two CHECKs below do name `'realtime'`.
      *
      * **On the row because the two wires do not mean the same thing by "input
      * tokens"** — the Messages shape reports cache reads and writes *outside*
@@ -5422,8 +5462,9 @@ export const feedback = spideryarn.table(
      *
      * `bytea` and not a bucket reference: it is small, it is bounded, and a
      * reference would give the report a second place to be incomplete.
-     * 400,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
-     * here for the same reason the answer cap is. The filename and content type
+     * 2,000,000 is `MAX_FEEDBACK_SCREENSHOT_BYTES` in src/types.ts, written out
+     * in `feedback_screenshot_size` below for the same reason the answer cap
+     * is (this line said 400,000 after both had moved). The filename and content type
      * are never stored — the route writes a constant pair, so a client-supplied
      * MIME type or filename can never be forwarded.
      */
