@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **A page draws the house only where there is no corner logo beside it.**
+ * **A page draws a way home only where there is no corner logo beside it.**
+ * Signed out that was a house until 2026-10-07 and is now the site bar (plan
+ * 261007h, F4b); the file kept its name.
  *
  * Greg, 2026-10-04 (spya-gqj660):
  *
@@ -113,24 +115,37 @@ async function show(path: string): Promise<void> {
   );
 }
 
-const HOUSE_PAGES = ["/changelog", "/privacy", "/contact", "/opensource", "/help"];
-const houses = () => document.querySelectorAll('main a[aria-label="Home"]');
+const DOCUMENT_PAGES = ["/changelog", "/privacy", "/contact", "/opensource", "/help"];
+const houses = () => document.querySelectorAll('a[aria-label="Home"]');
+const navs = () => document.querySelectorAll("nav.site-nav");
 
-describe("the five pages that carry the house", () => {
-  it.each(HOUSE_PAGES)("signed in at %s: the corner logo, and no house", async (path) => {
+describe("the five document pages: the corner logo signed in, the site bar signed out", () => {
+  it.each(DOCUMENT_PAGES)("signed in at %s: the corner logo, and no house or site bar", async (path) => {
     session.user = { id: "reader-1", email: "reader@example.com" };
     await show(path);
     /* The control: without the logo, "no house" would be a page with no way
        home at all, and this case would call that a pass. */
     expect(document.querySelector(".logo-home"), `${path} lost its corner logo`).not.toBeNull();
     expect(houses(), `${path} drew a house beside the logo`).toHaveLength(0);
+    expect(navs(), `${path} drew the site bar inside the signed-in shell`).toHaveLength(0);
   });
 
-  it.each(HOUSE_PAGES)("signed out at %s: no corner logo, so the house", async (path) => {
+  /* Since 2026-10-07 (plan 261007h, F4b): signed out, these pages wear the
+     bar Home, Features, Pricing and Sign-in wear, rather than a lone house.
+     The bar's wordmark is the way home, so the house went with it. */
+  it.each(DOCUMENT_PAGES)("signed out at %s: no corner logo, the site bar, no house", async (path) => {
     await show(path);
     expect(document.querySelector(".logo-home")).toBeNull();
-    expect(houses(), `${path} left a stranger no way home`).toHaveLength(1);
-    expect(houses()[0]?.getAttribute("href")).toBe("/");
+    expect(navs(), `${path} left a stranger without the site bar`).toHaveLength(1);
+    const nav = navs()[0]!;
+    expect(nav.querySelector('a[href="/"]'), `${path}'s bar has no way home`).not.toBeNull();
+    /* Outside the narrow document column, inside a `.site` token scope —
+       SiteNav's colours come from `--site-*`. */
+    expect(nav.closest("main"), `${path} put the bar inside <main>`).toBeNull();
+    expect(nav.closest(".site"), `${path}'s bar has no .site scope`).not.toBeNull();
+    expect(houses(), `${path} kept the house under the bar`).toHaveLength(0);
+    /* The page under the reader's feet is not offered as somewhere else. */
+    expect(nav.querySelector(`a[href="${path}"]`), `${path}'s bar links to itself`).toBeNull();
   });
 });
 

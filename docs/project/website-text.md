@@ -123,21 +123,23 @@ also carries which passages were on screen, the requests the page made and the i
 under ([feedback.md](feedback.md)). An email carries none of that.
 
 **The sentence about the button is hedged, and the hedges were bought at review.** It says *"if you
-are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders bare to a
-stranger; and it says the report *carries that page's address* rather than *"so we can see what you
+are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders without it
+to a stranger; and it says the report *carries that page's address* rather than *"so we can see what you
 saw"*, because pressing Feedback here sends `/contact`, and no screenshot goes unless the reader
 attaches one. GPT Sol established both as a P1 against the first draft — the page that tells people
 how to reach us is the worst place in the app to overclaim.
 
-**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
-a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
-sentences, so it takes the policy page's Home link, `h1` and `SiteFooter`. (That link said
-*Back* until 2026-09-08 — it goes to `/` rather than `history.back()`, and most people who open this
-page were sent to it. Since 2026-09-29 it is a house icon with a "Home" tooltip rather than the words
-— [260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md).
-Since 2026-10-05 it is drawn only for a signed-out reader, here and on `/privacy`, `/changelog`,
-`/opensource` and `/help`: signed in, the corner logo beside the page goes to the same place —
-`HomeLink` in [`BackLink.tsx`](../../src/web/BackLink.tsx),
+**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry a hero
+and the `--site-*` token scope over the whole page, which exist to sell something over a long
+scroll; this is four sentences, so it takes the policy page's `h1` and `SiteFooter`. **The top bar
+is shared since 2026-10-07**: signed out, this page and `/privacy`, `/changelog`, `/opensource` and
+`/help` draw `SiteNav` above a narrow document column, with their 24px titles unchanged; signed in
+they draw nothing of their own, because the corner logo beside the page is the way home —
+[`DocumentPage.tsx`](../../src/web/DocumentPage.tsx), plan
+[261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)
+F4b. (Before that a signed-out reader got a lone house icon to `/`, which said *Back* until
+2026-09-08 and was words until 2026-09-29 —
+[260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md),
 [261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md).)
 
 **Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is

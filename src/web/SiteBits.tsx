@@ -47,6 +47,10 @@ import { useLogoAnimation } from "./logo-animation.js";
 import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF, loginHref } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
 
+/** The pages a stranger is sent to that read as documents rather than heroes —
+ *  the ones `DocumentPage` draws. Values are their route kinds (router.ts). */
+export type DocumentHere = "help" | "changelog" | "privacy" | "contact" | "opensource";
+
 /** The width the page shell runs to. Prose inside it stays much narrower. */
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 
@@ -171,8 +175,14 @@ export function SiteNav({
    *
    * `login` is the sign-in page (SignInPage.tsx), and what drops for it is
    * *Sign in* — the link to the page under the reader's feet.
+   *
+   * **The five document pages joined on 2026-10-07** (`DocumentPage.tsx`,
+   * plan 261007h F4b): signed out, `/help`, `/changelog`, `/privacy`,
+   * `/contact` and `/opensource` wear this bar instead of a lone house. Like
+   * `public-library`, none of them is one of the bar's own links except
+   * `privacy`, and what drops for it is *Privacy*.
    */
-  here: "home" | "features" | "pricing" | "public-library" | "login";
+  here: "home" | "features" | "pricing" | "public-library" | "login" | DocumentHere;
   /** Whether the reader looking at this bar already has an account open. */
   signedIn: boolean;
 }) {
@@ -262,9 +272,11 @@ export function SiteNav({
               Pricing
             </Link>
           )}
-          <Link href={PRIVACY_HREF} className={secondary}>
-            Privacy
-          </Link>
+          {here !== "privacy" && (
+            <Link href={PRIVACY_HREF} className={secondary}>
+              Privacy
+            </Link>
+          )}
           {/* **The sign-in page, since 2026-10-01** — Greg, report spya-p6s5a4:
               *"let's create a separate sign-in page and signpost to it at the
               top and bottom"*. Until then this jumped to a panel on `/` or

@@ -50,7 +50,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import type { Mode } from "../../modes.js";
 import { MODE_LABEL } from "../../title-text.js";
-import { HomeLink } from "../BackLink.js";
+import { DocumentPage } from "../DocumentPage.js";
 import { scrollToAndFlash } from "../flash.js";
 import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
@@ -260,14 +260,15 @@ export function HelpPage() {
   };
 
   return (
-    <main
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx,
+       which also says why the sticky bar clears the contents column and the
+       section anchors below. */
+    <DocumentPage
+      here="help"
+      floor
       onClickCapture={onClickCapture}
-      className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-5xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans"
+      className="tw:mx-auto tw:flex tw:max-w-5xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      {/* Signed out only, as on `/changelog`: signed in, the corner logo is the
-          way home. BackLink.tsx § `HomeLink`. */}
-      <HomeLink className="tw:mb-6" />
-
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Help</h1>
       <p className="tw:mt-2 tw:mb-0 tw:max-w-2xl tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         How to get the most out of Spideryarn, and how to read what it shows you. For what it does
@@ -292,15 +293,15 @@ export function HelpPage() {
 
       <div className="tw:flex-1" />
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }
 
 /**
  * One section: its heading with a `#` beside it, and its words.
  *
- * `scroll-mt` so the heading lands below the corner logo rather than under
- * it — the same clearance PrivacyPage.tsx's sections take. `data-section` is
+ * `scroll-mt` so the heading lands below the corner logo (signed in) or the
+ * 56px site bar (signed out) rather than under it —the same clearance PrivacyPage.tsx's sections take. `data-section` is
  * the attribute the Metadata page's sections carry, kept for the same reader:
  * anything that walks a page's sections.
  */
