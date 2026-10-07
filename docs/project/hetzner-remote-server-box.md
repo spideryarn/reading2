@@ -1130,6 +1130,14 @@ live with `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pi
 `systemctl is-active overseer`. Moving the daemon back under the unit needs the key supplied to it
 (for example an `EnvironmentFile=`), which is a box change for Greg.
 
+**The installed unit file was brought up to the repo's on 2026-10-07**, still disabled and not
+started; it had been 59 lines behind, with a `Documentation=` line naming a doc that was renamed.
+Its `failed` state, left by that 2026-10-04 restart loop, was cleared with `reset-failed` at the
+same time. Two things to know before anyone starts it: the current unit needs `/etc/overseer.env`,
+which this box does not have because `provision.sh` has not run here since 2026-09-03, and
+`Restart=always` gives up after ten failed starts in five minutes, so a disk that stays full for
+an hour leaves the unit `failed` after the space comes back and something still has to start it.
+
 At 3am:
 
 ```
