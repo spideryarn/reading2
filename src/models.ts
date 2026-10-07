@@ -517,9 +517,13 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * so it's cheaper"*) and because the whole Help, about 28k tokens, is in every
  * request.
  *
- * **The quick tier's model for now, and not yet measured for this job.** Stage
- * 3 of the plan runs an eval against it and one cheaper model and records the
- * choice in docs/investigations/. Its own constant, though the string is
+ * **Measured for this job on 2026-10-07**, against DeepSeek V4.1 Flash, in
+ * docs/investigations/261007a-help-chat-model-and-refusals.md: every
+ * off-topic and jailbreak question declined, answers grounded in the pages,
+ * about a second to the first word, and a prefix cache that reads across
+ * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as
+ * well but three to four times slower, on whichever small upstream OpenRouter
+ * picked, with a cache that hit about half the time. Its own constant, though the string is
  * `QUICK_MODEL_OPENROUTER`'s, so moving one job does not move the other; and
  * not a `Task`, so no environment override can unpin it from what the eval
  * measured. Moving it to a non-OpenAI model is also a decision about caching:

@@ -802,11 +802,13 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
        sticky routing keys on the first system *and* first user message, so it
        is no help here either: the user message is the question.
 
-     **What is assumed rather than measured**: that OpenAI serves this model on
-     OpenRouter under the slug `openai`, and that its cache is shared across
-     our requests. Stage 3 of the plan measures cold and warm calls
-     (`cached_tokens`, the upstream, the cost), and the global fuse is sized
-     from the cold cost so that being wrong here costs money, not safety. */
+     **Measured on 2026-10-07**
+     (docs/investigations/261007a-help-chat-model-and-refusals.md): every
+     call landed on OpenAI, and every call after the first read ~26,750 cached
+     tokens whatever the question, still warm after 12 minutes of quiet; cold
+     $0.0068 (the write is billed at 1.25x input), warm $0.0006. The global
+     fuse is still sized from the cold cost, so a cache that stops reading costs
+     money, not safety. */
   "help-chat": {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -1173,9 +1175,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "command-suggest": { effort: "none" },
   /* Finding the right Help page and saying what it says, with the reader
      watching the box. `command-suggest`'s setting on the same model; whether
-     a little thinking buys better answers is for the plan's Stage 3 eval
-     (docs/plans/261007k-help-chatbot.md), and until then the ceiling of 800
-     tokens is all answer. */
+     a little thinking would buy better answers was not measured, because at
+     `none` the eval found nothing for it to fix
+     (docs/investigations/261007a-help-chat-model-and-refusals.md): every
+     refusal held and the answers kept to the pages, so the ceiling of 800
+     tokens stays all answer. */
   "help-chat": { effort: "none" },
   eval: {
     providerDefault:

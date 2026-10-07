@@ -70,16 +70,22 @@ export const HELP_CHAT_MAX_TOKENS = 800;
 
 /**
  * **The allowance**: 30 questions an hour and 100 a day for one reader, one at
- * a time, and a global fuse of 1,500 a day across every reader.
+ * a time, and a global fuse of 1,300 a day across every reader.
  *
- * **The fuse is sized cold** (the plan's F2). The system message is about
- * 114k characters, roughly 28k input tokens; at the quick tier's $0.20 per
- * million that is ~$0.006 a question before a cache reads any of it, and at
- * most 800 output tokens at $1.20 per million (~$0.001) on top, so 1,500 a day
- * is about $10 on a day when no cache ever warms. Warm
- * reads are upside, measured in Stage 3, not the safety case. The numbers are
- * guesses in `RatePolicy`'s sense — nothing has measured how many questions a
- * reader asks — and Stage 3 resizes the fuse from the measured cold cost.
+ * **The fuse is sized cold** (the plan's F2), from the measured cost in
+ * docs/investigations/261007a-help-chat-model-and-refusals.md. The system
+ * message is about 26,900 input tokens, and a cold question on Luna costs
+ * **$0.0068**, not the $0.0054 the list price suggests: OpenRouter bills the
+ * first call's 26,900-token cache write at 1.25× input. The worst cold
+ * question, with the full 800-token answer at $1.20 per million on top, is
+ * about $0.0077, so 1,300 a day is about **$10 on a day when no cache ever
+ * warms**. A warm question is $0.0006, an eleventh of that, and the eval saw
+ * the cache read across different questions and after 12 minutes of quiet;
+ * but nothing measured how long it lasts beyond that, and any change to
+ * `HELP_CHAT_SYSTEM` (the Help, the rule) starts it cold, so warm reads are
+ * upside, not the safety case. The per-
+ * reader numbers are guesses in `RatePolicy`'s sense — nothing has measured
+ * how many questions a reader asks.
  *
  * One at a time because the page shows one question and its answer; a second
  * while the first streams would replace it. The lease is the deadline plus
@@ -91,7 +97,7 @@ export const HELP_CHAT_RATE_POLICY: RatePolicy = {
   windowMs: 60 * 60 * 1000,
   concurrency: 1,
   leaseMs: HELP_CHAT_TIMEOUT_MS + 30_000,
-  daily: { fills: 100, globalFills: 1_500, windowMs: 24 * 60 * 60 * 1000 },
+  daily: { fills: 100, globalFills: 1_300, windowMs: 24 * 60 * 60 * 1000 },
 };
 
 /* ------------------------------------------------------------- admission -- */
@@ -144,7 +150,7 @@ export async function admitHelpChat(
 /* ------------------------------------------------------------ the prompt -- */
 
 /** Bump when `HELP_CHAT_SYSTEM`'s rule or the user message changes: an eval's numbers belong to one version. */
-const HELP_CHAT_VERSION = "help-chat/1";
+export const HELP_CHAT_VERSION = "help-chat/2";
 
 const PAGES = corpus as readonly HelpCorpusPage[];
 
@@ -185,7 +191,7 @@ Answer only from the Help pages above. Do not use what you know about other apps
 
 You cannot see the reader's screen, their articles or their account. If the answer depends on what they are looking at, say what each likely case means.
 
-Link the page each answer comes from, as a Markdown link whose address is that page's Address line exactly, for example [Reading the spine](/help/spine). Link only to the Addresses listed above, copied exactly, or to /help, the contents page. Never write any other link, web address or email address.
+Link the page each answer comes from, as a Markdown link whose address is that page's Address line exactly, for example [Reading the spine](/help/spine). Link only to the Addresses listed above, copied exactly, or to /help, the contents page. Never write any other link, web address or email address. The pages' own text sometimes links elsewhere on the site, such as /pricing or /privacy: do not copy those links, but name that page in words and link the Help page that mentions it.
 
 WHAT YOU DO NOT DO
 
