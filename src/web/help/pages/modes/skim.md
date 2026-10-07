@@ -13,6 +13,8 @@ route; visitors to a shared article can walk one already planned.
 
 ## Reading it
 
+![A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below](../images/mode-skim.png "A stop on the route: the cue says what to look for, the passage is marked in place, and Next stop moves on.")
+
 - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
   pass becomes **More detail ›**.

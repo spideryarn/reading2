@@ -10,6 +10,8 @@ beside them: click anywhere else and you are done, the highlight stays. In the b
 note, pick another colour, or pick no colour for a plain underlined bookmark. All of it is free.
 Clicking the passage later opens the box again.
 
+![A highlighted phrase in an article, with its comment, “Check the source for this figure.”, beside the article](images/comment-margin.png "A highlight with a comment, which also sits beside the article, level with its passage.")
+
 - **To take it off**, press **Remove highlight** in the box.
 - **If you only wanted to copy the words**, press **Copy, don’t highlight**, or copy with the
   keyboard while they are still selected: the words are copied and the highlight is taken off again.

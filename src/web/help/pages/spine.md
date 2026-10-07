@@ -44,6 +44,8 @@ matches it holds. A heading set in the author’s typeface is the author’s own
 written by the AI. Once a card is open, move slowly down the spine and the cards follow, so you can
 read the outline section by section.
 
+![A section’s card beside the spine: an outline with this section marked, a one-line gist, the passages inside it, and “258 words, 33% in”](images/spine-card.png "Point at the spine and each section has a card: where it sits, what it says, and how far in it starts.")
+
 **Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap
 opens the card and the second goes there, because most sections are too thin to tap blind. With the
 pointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time.

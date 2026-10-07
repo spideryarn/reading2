@@ -22,6 +22,8 @@ Spideryarn works best on a large screen. On a phone or tablet, these work differ
 - **On your home screen** there is no Back button: use the **↩ back to …** button above the bottom
   bar — see [Jumping around](/help/jumping-around).
 
+![An article on a phone: the spine down the left edge, the section’s name pinned at the top, and the bottom bar along the foot](images/phone.png "On a phone the article fills the screen, with the spine still down the left edge and the section you are in named at the top.")
+
 Anything explained only on hover, like the mode buttons’ descriptions, cannot be reached by touch.
 To make up for it, each mode shows its name and a sentence about it for a few seconds when you open
 it, and its page in Help has the rest.

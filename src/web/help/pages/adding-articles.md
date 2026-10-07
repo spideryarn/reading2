@@ -10,6 +10,8 @@ Paste a web address into **Add an article** on your shelf and press **Add**. You
 HTML. One file is read in full. Choose several at once and each is added with only its title,
 authors and abstract read; open one and press **Read this** when you want the whole of it.
 
+![The Add an article box: an address field, a File button and an Add button](images/adding-articles.png "Add an article, on your shelf: paste an address and press Add, or press File for a PDF or a saved web page.")
+
 You can also add a page from its address: go to `/add/` followed by the full URL, for example
 `spideryarn.com/add/https://example.com/essay`. That makes a bookmarklet easy.
 

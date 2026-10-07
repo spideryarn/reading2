@@ -23,6 +23,8 @@ related: spine, gutter, modes, keyboard
   you are in. On your own article you can also press **Commands** and type *help*, and wherever
   a mode has an (i), its card ends in **More in Help**.
 
+![The bottom bar: the wordmark, Commands, Plain, Structure and the other mode buttons, More, Marginalia, Quick search, Comments, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Structure open. Most mode buttons show only an icon: point at one for its name.")
+
 When there is not room for everything, the mode buttons drop their words and show only icons. Point
 at one to see its name and what it does; each mode also shows its name for a few seconds when you
 open it. On a narrow screen the panel covers the article instead of sitting beside it — see [Phones
