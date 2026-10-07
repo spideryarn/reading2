@@ -1412,7 +1412,7 @@ function QuoteRow({
         >
           <button
             type="button"
-            className={`quotes-why${why ? " on" : ""}`}
+            className={`quotes-why tap-target${why ? " on" : ""}`}
             aria-label={quote.reason ? "Why this one" : "Who chose this, and when"}
             aria-expanded={why}
             onClick={() => setWhy((was) => !was)}
@@ -1485,7 +1485,7 @@ function YoursRow({
         >
           <button
             type="button"
-            className={`quotes-why${about ? " on" : ""}`}
+            className={`quotes-why tap-target${about ? " on" : ""}`}
             aria-label="About your highlight"
             aria-expanded={about}
             onClick={() => setAbout((was) => !was)}

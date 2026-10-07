@@ -808,7 +808,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
       await act(async () => root.render(<IllustratedView slug="s" blocks={BLOCKS} onJump={() => {}} />));
       expect(asked).toContain("GET /api/sketch/s");
       expect(host.textContent).toContain("Nobody has painted this one yet.");
-      expect(host.querySelector("svg.cmt-spinner:not(.band-waiting-ghost)")).toBeNull();
+      expect(host.querySelector("svg.cmt-spinner")).toBeNull();
       const line = () => host.querySelector('.band-waiting[role="status"]');
       expect(line()?.textContent).toBe("");
       act(() => vi.advanceTimersByTime(599));

@@ -464,8 +464,42 @@ there looking like the one in force — and **`:active` arrived**, because a fin
 all and a tap that landed looked exactly like one that missed.
 
 **The rest of the band is still pointer-sized**: the threshold slider is 16px tall, and half a dozen
-buttons are between 19 and 28. Nothing generalises the rule; each control gets it when somebody
+buttons are between 19 and 28. Nothing generalises the size rule; each control gets it when somebody
 notices.
+
+### A bigger target, drawn the same size
+
+> yes to all as you see fit
+>
+> — Greg, 2026-10-07, to the UI sweep's "give each the invisible larger hit area the close cross
+> already has (40px to the finger, drawn the same size). Where two would overlap, the row grows
+> instead."
+
+**`.tap-target`** ([`styles/tap-target.css`](../../src/web/styles/tap-target.css)) is the close
+cross's invisible hit area made generic: under `any-pointer: coarse`, an `::after` centred on the
+control, at least its own box and at least 40 × 40px, and nothing at all for a mouse. It is on the
+controls the sweep measured as small at 390: Quotes' ⓘ (17px), a bare passage id (34 × 9),
+/profile's and Metadata's section headings (14px tall), "Forgot your password?" and "back to sign
+in" (18px). **`any-pointer`, not `pointer`**, for close.css's reason: nothing is drawn, so there is
+no chrome to ration, and an iPad with a keyboard still has a reader tapping the glass.
+
+What it took to keep one target from taking another's taps, measured with `elementFromPoint` at 390
+under a touch pointer:
+
+- **Quotes' ⓘ sat 2.3px left of its passage id**, so a 40px target would have taken the id's left
+  half. Under a finger the two stack in a 40px column with 18px between them (quotes.css § a
+  finger) — the row grows instead, and the quote gets wider, since the column is narrower than the
+  pair was.
+- **A passage id is bounded**: its own width, 1.3rem tall. Ids sit 3.2px apart in a chip row, and a
+  chat answer can put two runs of chips on consecutive lines 8.8px apart; 24px tall overlapped
+  there. A phrase link does not take the class (it is a line tall already, and an inline link that
+  wraps would stretch its `::after` across the lines between), nor does an id the article no longer
+  has, which is not a link.
+- **A section heading's 13px overhang** would have reached the body under it by 1px, so a
+  collapsible heading takes 16px below it instead of 12 under a finger.
+
+[controls.md](controls.md) has the row; [261007h § F5a](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)
+has the numbers.
 
 ## The gutter, and the row a finger is on
 

@@ -67,7 +67,9 @@ export function BandWaiting({
            (`.band-waiting-ghost`, mode-band.css), not text, so the live region
            holds no words to announce until they are real. */
         <>
-          <LoaderCircle className={`${spinnerClassName} band-waiting-ghost`} size={13} aria-hidden="true" />
+          {/* Not the spinner's class: nothing may count this as a spinner shown.
+              Its footprint is the same (13px, `flex: none`, mode-band.css). */}
+          <LoaderCircle className="band-waiting-ghost" size={13} aria-hidden="true" />
           <span className="band-waiting-ghost" aria-hidden="true" data-words={wordsOf(children)} />
         </>
       )}

@@ -1,0 +1,62 @@
+/* **A bigger target for a finger, drawn the same size** — `.tap-target`.
+
+   Greg, 2026-10-07, on the UI sweep's question 2 (docs/plans/261007a-ui-sweep-umbrella.md
+   § For Greg): *"yes to all as you see fit"*, to "give each the invisible
+   larger hit area the close cross already has (40px to the finger, drawn the
+   same size). Where two would overlap, the row grows instead."
+
+   The close cross's own (close.css) is written for a 32px box and reaches 4px
+   past it; this is the same idea for a control of any size: an invisible
+   `::after`, centred on the control, **at least the control's own box and at
+   least 40 × 40px**. Under `any-pointer: coarse` for close.css's reason — an
+   iPad with a keyboard reports `pointer: fine` while its reader taps the glass,
+   and nothing here is drawn, so there is no chrome to ration. **Nothing at all
+   happens for a mouse**: not the pseudo-element, not the `position`.
+
+   **Two things a caller owes it.**
+
+   - **Room.** The target reaches `(40 − size) / 2` past the control on each
+     side, and whatever sits inside that is under it: the later element in the
+     document wins the tap. So a control whose neighbours are close either
+     makes room under the same query (Quotes' ⓘ, quotes.css § a finger) or
+     bounds its target with `--tap-w` / `--tap-h` (a passage id, below).
+   - **A box to be positioned against.** The class sets `position: relative`.
+     It is imported straight after close.css, so a component rule that
+     positions the control some other way comes later and wins on order, and a
+     `tw:absolute` wins on layer — either way the control is still the
+     containing block, which is all the `::after` needs. Do not put it on an
+     inline element that can wrap: an inline box's `::after` spans from its
+     first fragment to its last, across the lines between (which is why
+     BlockRef gives it to the six-character id and not to a phrase).
+
+   docs/project/controls.md (the table) and docs/project/touch.md § How big a
+   thing has to be to press it. tests/tap-target.test.tsx. */
+@media (any-pointer: coarse) {
+  .tap-target {
+    position: relative;
+  }
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, var(--tap-w, 40px));
+    height: max(100%, var(--tap-h, 40px));
+    translate: -50% -50%;
+  }
+
+  /* **A passage id is bounded: no wider than itself, about a line tall.**
+     Ids sit 3.2px apart in a row of chips (`.cite-chips`, `.gloss-where`,
+     chat's pointers), so 40px would hand each one's taps to its neighbour
+     (GPT Sol's plan review, R15): not sideways at all, then. And a chat
+     answer can put a run of chips on two consecutive lines, 21.6px apart
+     with 8.8px between the drawn chips; 24px tall overlapped there by 2.5px
+     and gave the lower chip taps that were nearer the upper one (measured at
+     390, 2026-10-07). 1.3rem is 20.8px, leaves 0.7px between the two, and
+     scales with the type, so the same holds at a 12px root. A bare 34 × 9px
+     id becomes 34 × 21. */
+  .block-ref.tap-target {
+    --tap-w: 0px;
+    --tap-h: 1.3rem;
+  }
+}
