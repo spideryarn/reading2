@@ -68,7 +68,7 @@ import { describe, expect, it } from "vitest";
  * has ever contained a NUL — so they are checked like everything else, and the
  * day one does is a day worth hearing about.
  */
-const BINARY = new Set(["png", "jpg", "jpeg", "svg", "webm", "pdf", "ico", "woff", "woff2", "ttf", "gz"]);
+const BINARY = new Set(["png", "jpg", "jpeg", "svg", "webm", "pdf", "ico", "woff", "woff2", "ttf", "gz", "gif"]);
 
 /**
  * Everything git tracks, **plus everything untracked that is not ignored** —

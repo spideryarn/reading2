@@ -1,0 +1,21 @@
+No P0 or P1 findings. Five changes are worth making before implementation.
+
+- **M1 — P2: Preserve the reset line’s geometry.** S1, plan line 21; [ChatPanel.tsx:899](/var/tmp/spideryarn-worktrees/design-consistency-followups/src/web/ChatPanel.tsx:899). The proposed bare `BandWaiting` loses `chat-loading`’s padding, font size and colour, and introduces paragraph margins. **Fix:** use `<BandWaiting as="div" className="chat-loading" delayMs={0}>`. Extend the existing controller lifecycle test to check the prop during Live shutdown, pending DELETE and failure restoration.
+
+- **M2 — P2: Matching `data-size` does not ensure matching touch heights.** S2, plan lines 35–43; [citations.css:301](/var/tmp/spideryarn-worktrees/design-consistency-followups/src/web/styles/citations.css:301). Under `pointer: coarse`, Citations’ two buttons retain a 36px minimum; Glossary’s remain 32px at the normal root. **Fix:** preserve the touch floor and apply the same local treatment to Glossary’s pair, or explicitly retain this as an intentional exception. Check computed heights with coarse-pointer emulation. Most `.gloss-btn` appearance rules lose to Tailwind’s higher utility layer; they are not the principal obstacle.
+
+- **M3 — P2: Copying Quotes’ dimensions removes Diagram’s physical size floor.** S3, plan lines 51–59; [tokens.css:253](/var/tmp/spideryarn-worktrees/design-consistency-followups/styles/tokens.css:253). `--control-h-lg` is `2.75rem`: at the supported 12px root, the proposed square becomes **33×33**, replacing Diagram’s existing 44px minimum height. **Fix:** use `max(44px, var(--control-h-lg))` for both dimensions and prevent flex shrinking. Verify roots of 12, 16 and 20px.
+
+  The explicit 160→44px width trade-off is defensible for consistency, but removes roughly 72% of the landing area without saving vertical space. I would retain broad buttons under a coarse pointer and share the border, radius, colour and focus treatment.
+
+- **M4 — P2: S4’s test cannot establish either theme result.** Plan lines 73–82; [tokens.css:46](/var/tmp/spideryarn-worktrees/design-consistency-followups/src/web/styles/tokens.css:46). The scan passes even if `--shadow-strength` is `1` in both themes. **Fix:** supplement it with resolved-value checks for all seven declarations—the two chat declarations share one silhouette—confirming unchanged dark shadows and reduced light alphas.
+
+  **I favour the factor.** Numeric multiplication inside colour alpha is valid CSS. Keeping each colour notation and every offset, blur and spread unchanged, multiplying by `1` produces the same computed dark shadow; pixel-identical rendering is therefore expected. Six new tokens add bookkeeping, while reusing the three existing elevation tokens changes silhouettes. This follows [CSS arithmetic](https://www.w3.org/TR/css-values-4/#calc-notation) and [colour alpha syntax](https://www.w3.org/TR/css-color-4/#alpha-syntax). I obtained no browser pixel comparison.
+
+- **M5 — P2: S5 needs a layout decision for wider states and narrower bands.** Plan lines 90–94; [ChatPanel.tsx:3049](/var/tmp/spideryarn-worktrees/design-consistency-followups/src/web/ChatPanel.tsx:3049), [LiveButton.tsx:58](/var/tmp/spideryarn-worktrees/design-consistency-followups/src/web/live/LiveButton.tsx:58). Shortening idle “Live conversation” does not cover “Listening…”, “Writing it down…”, Live’s changing action labels, or the engine select’s 16px touch-font floor. A narrow band can also occur in a wide viewport. **Fix:** define the layout against available composer width; when space runs out, move the optional engine picker below the primary controls. Check the 288px band and 390px viewport through dictation, connecting, live, closing and answer-streaming states. Scope microphone sizing to the composer.
+
+Your S1 suspicion does not establish a visible “Fetching” flash: after DELETE, the read-loading branch mounts with a fresh 600ms delay, while the replacement conversation begins locally. A brief blank render is possible.
+
+Reviewed against `2cb3f60a7` where concurrent edits affected the named files. No repository edits made.
+
+**READY WITH CHANGES**

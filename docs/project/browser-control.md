@@ -18,13 +18,20 @@ cannot complete. This page is the fork in the road and nothing else; each branch
 The extension needs a Chrome that a human has signed into and granted permissions in, so there is no
 version of it that works on a headless server. That is the whole reason the second column exists.
 
-**A screenshot you keep under `docs/` gets `npm run screenshots:compress -- <file>` before you
-commit it.** On either machine, [the script](../../scripts/compress-screenshots.ts) compresses static
-PNG screenshots in this checkout. Quantisation is lossy; the plan's sampled light and dark text
+**A screenshot you keep under `docs/` is compressed automatically for ordinary Claude Code commits.**
+A Claude Code hook, [`compress-commit-pngs.sh`](../../.claude/hooks/compress-commit-pngs.sh), sees a
+`git commit` and runs [the script](../../scripts/compress-screenshots.ts) over the PNGs under `docs/`
+named as literal commit paths, or unchanged staged PNGs in a bare commit, in place. Other staged
+files are left alone; a bare commit also leaves later working edits alone. It refuses symlinked paths,
+never blocks a commit and says in one line what it did. A new file must be named in an earlier
+`git add` in the same command. It misses a commit made outside Claude Code
+and skips folder paths, shell expansion, `git -C` and unfamiliar commit options;
+for those, run `npm run screenshots:compress -- <file>` by hand, on either machine.
+Quantisation is lossy; the plan's sampled light and dark text
 showed no visible difference ([measurements and scope](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md#3-compressed-screenshots)).
-The `npm test` gate checks tracked and index-added PNGs, including nested folders. It is advisory:
-untracked files and edits made after the test can still enter a commit. Palette format is accepted
-as a convention; it does not prove a file is small or that pngquant ran.
+The `npm test` gate checks tracked and index-added PNGs, including nested folders, and stays as the
+backstop. It is advisory: untracked files and edits made after the test can still enter a commit.
+Palette format is accepted as a convention; it does not prove a file is small or that pngquant ran.
 
 ## On the laptop
 

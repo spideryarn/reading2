@@ -390,7 +390,7 @@ svg.band-waiting-ghost { flex: none; }
   border: 1px solid var(--rule-strong);
   border-left: 3px solid var(--highlight);
   border-radius: var(--radius);
-  box-shadow: 0 8px 22px -6px oklch(0 0 0 / 0.55);
+  box-shadow: 0 8px 22px -6px oklch(0 0 0 / calc(0.55 * var(--shadow-strength)));
   font-family: var(--font-ui);
   /* 3s, which is `HERALD_MS`: held for the first 2.5, faded over the last 0.5.
      The timer in ModeHerald.tsx is what removes it; this is only how it looks
@@ -1268,6 +1268,11 @@ svg.band-waiting-ghost { flex: none; }
 .learn .chat-composer { flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .learn .chat-input { flex-basis: 100%; }
 
+/* **The voice controls, as one group** (ChatPanel.tsx § Composer; plan
+   261007m S5). Nothing in Chat: its children are the row's items, as they
+   always were. Learn's layout is in § the Learn composer's order, below. */
+.chat-voice { display: contents; }
+
 .chat-talk {
   display: inline-flex;
   align-items: center;
@@ -1351,6 +1356,20 @@ svg.band-waiting-ghost { flex: none; }
   font-size: 0.83rem;
 }
 .chat-live-engine select:disabled { opacity: 0.5; }
+/* **Send's height for every control in the composer's row** (plan 261007m S5;
+   Greg, 2026-10-07: *"controls that do the same job should look the same in
+   every mode"*). The microphone and Live were 26px beside a 36px Send, in
+   Chat and in Learn. Scoped to the composer: `.prof-mic` is the profile box's
+   microphone too, and that row has its own size. */
+.chat-composer .prof-mic {
+  width: var(--control-h);
+  height: var(--control-h);
+}
+.chat-composer .chat-live-btn {
+  height: var(--control-h);
+  padding: 0 0.6rem;
+}
+.chat-composer .chat-live-engine select { min-height: var(--control-h); }
 
 /* **The live session's one status line**: a state word in a pill whose colour
    says it too, then the meter, then a sentence. Listening is the only filled
@@ -1602,7 +1621,26 @@ svg.band-waiting-ghost { flex: none; }
    dictation button is rendered after it — so they are ordered here. Send takes
    the `margin-left: auto` the stance picker had until 2026-10-02, when Recall
    became one voice and the picker went. */
+.learn .chat-voice {
+  order: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  /* A zero basis, so the row never breaks a line for the group's sake and
+     Send stays on it; the group takes the rest of the line and wraps inside
+     it (plan 261007m S5). tests/voice-row.test.tsx. */
+  flex: 1 1 0;
+  min-width: 0;
+}
 .learn .chat-talk { order: 1; }
-.learn .chat-live { order: 2; }
+.learn .chat-live {
+  order: 2;
+  /* Live and its optional engine picker must also wrap: at a 288px band
+     their combined width exceeds the voice group's space beside Send. */
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
 .learn .chat-send { order: 4; margin-left: auto; }
 .learn .prof-listening { order: 6; }

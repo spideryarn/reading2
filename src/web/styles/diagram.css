@@ -59,57 +59,52 @@
 
 /* ---- the step bar ----
  *
- * ↑ / ↓ under the picture, big enough for a thumb. Greg asked for these for the
- * iPad (2026-08-27), and the size is the whole feature: the picture's own hit
- * targets are a 6px band or a 3px dot, which is fine for a mouse and is not a
- * touch target at all. 44px is Apple's own minimum and WCAG 2.2's Target Size
- * (Minimum) is 24 — this takes the larger, because the two buttons sit next to
- * each other and the cost of missing is going somewhere you did not mean to.
+ * ↑ n / N ↓ under the picture, big enough for a thumb. Greg asked for these for
+ * the iPad (2026-08-27): the picture's own hit targets are a 6px band or a 3px
+ * dot, which is fine for a mouse and is not a touch target at all.
  *
- * A grid of three rather than `space-between`, so the readout is centred on the
- * panel rather than centred on whatever is left over — the two buttons are the
- * same width today and a `space-between` layout would move the number the
- * moment one of them was not.
+ * **Quotes' and Skim's shape since 2026-10-07** (plan 261007m S3, queue item
+ * qi-mpnpp2qp; Greg, 2026-10-07: *"controls that do the same job should look
+ * the same in every mode"*). Until then each button filled a third of the
+ * panel, about 160×44, in a faint border on a transparent ground; now both are
+ * the 44px squares (`--control-h-lg`, the house touch height and Apple's
+ * minimum) that Quotes' ‹ n › draws, centred round the readout. Smaller than
+ * before, still a thumb's target. tests/diagram-pager-shape.test.ts holds the
+ * box to `.quotes-arrow`'s. What stays Diagram's own (GPT Sol, 261007h R20):
+ * the chevrons point up and down because the steps walk the article
+ * vertically, the unavailable state is `aria-disabled`, and the readout is a
+ * tab stop for its card.
  *
  * `border-top` and no `border-bottom`: the footer card under it already has
  * one, and two rules 44px apart read as a boxed-off widget rather than as part
  * of the panel. */
 .diag-step {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-/* **Transparent, not filled**, which is a correction rather than a preference.
-   The first pass gave these `--surface-raised`, and at 160×44 that is two big
-   mid-grey slabs in a panel whose every other control is a thin outline — they
-   read as *disabled* even when live, which is the same mistake
-   design-css-overview.md records against the shelf's primary button. Seen in a
-   browser, 2026-08-27. The border and the chevron carry the affordance; the
-   fill arrives on hover, where it means something. */
-.diag-step-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  border: 1px solid var(--rule);
-  border-radius: calc(var(--radius) * 0.5);
-  background: transparent;
-  color: var(--ink-faint);
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.diag-step-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  /* **A 44px floor under the house size** (GPT Sol, plan review M3):
+     `--control-h-lg` is 2.75rem, so a reader's 12px root would make it 33px,
+     and the step bar has held 44px since Greg's iPad ask. */
+  width: max(44px, var(--control-h-lg));
+  height: max(44px, var(--control-h-lg));
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
   cursor: pointer;
-  transition: color 120ms, border-color 120ms, background-color 120ms;
-  /* The buttons fill their thirds, which is what makes them the biggest thing
-     a finger can land on in this panel. */
-  width: 100%;
 }
-.diag-step-btn:hover:not([aria-disabled="true"]) {
-  color: var(--highlight-text);
-  border-color: var(--highlight);
-  background: var(--highlight-wash);
-}
-.diag-step-btn:active:not([aria-disabled="true"]) { background: var(--surface-raised); }
+.diag-step-btn:hover:not([aria-disabled="true"]) { border-color: var(--highlight); }
+.diag-step-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Unavailable, not hidden, and not `:disabled` either.** At the two ends of
    the article one of these does nothing, and a button that disappeared would
    move the other one under the reader's thumb between presses. It is
@@ -118,9 +113,12 @@
    focus vanish from under them. The stronger reason was the hover card that
    said *why* it was dead, which a `disabled` button fires no events to open;
    that card was removed on 2026-08-31 at Greg's request. See DiagramPanel.tsx
-   § the step bar. */
-.diag-step-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
+   § the step bar. Quotes' 0.4, so an end looks the same in both. */
+.diag-step-btn[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 .diag-step-at {
+  /* Quotes' width, so the buttons do not shift as the count passes 9 and 99. */
+  min-width: 4.5rem;
+  text-align: center;
   font-family: var(--font-ui);
   font-size: 0.83rem;
   color: var(--ink-faint);

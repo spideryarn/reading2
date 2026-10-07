@@ -218,6 +218,10 @@ function toJob(row: Row): Job {
     // `cancelling` is `false` in the column and *absent* on the type when not
     // set, because the card reads `job.cancelling === true`.
     ...(row.cancelling && { cancelling: true }),
+    /* A `done` job carrying an accepted Stop is a Stop that came too late:
+       `requestCancel` stamps the column only on an active job and nothing
+       clears it, and a Stop that was honoured ends `cancelled`. `Job.stopCameTooLate`. */
+    ...(row.status === "done" && row.cancelRequestedAt !== null && { stopCameTooLate: true as const }),
     /* Absent at zero, for the same reason: it is nearly every job, and a field
        that is always there is a field the client has to test the value of.
        `Job.requeues` (src/types.ts) says what it is for. */

@@ -49,6 +49,7 @@ import {
   driverStalled,
   elapsedLabel,
   RUNNING_A_WHILE,
+  STOP_CAME_TOO_LATE,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -395,7 +396,20 @@ it("a stopped job is stopped, and still worth another go", () => {
 });
 
 it("a finished job is done", () => {
-  expect(displayJob(job("done"), START).state).toBe("done");
+  const shown = displayJob(job("done"), START);
+  expect(shown.state).toBe("done");
+  expect(shown.sentence, "a finished import is explained by the article").toBeNull();
+});
+
+/* A Stop that reached the claimant while the last step was finishing: the job
+   ends `done` and the article is kept (261007f). Without a word the card goes
+   from "Stopping…" to finished, and the reader cannot tell their press was
+   overridden. docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md § Part 2. */
+it("a finished job whose Stop came too late says so", () => {
+  const shown = displayJob(job("done", { stopCameTooLate: true }), START);
+  expect(shown.state).toBe("kept");
+  expect(shown.sentence).toBe(STOP_CAME_TOO_LATE);
+  expect(STOP_CAME_TOO_LATE).toMatch(/pressed Stop during the last step/);
 });
 
 /**
