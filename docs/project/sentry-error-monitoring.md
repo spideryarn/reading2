@@ -37,9 +37,18 @@ a second on several of them for a failure to *record* the result, and
 `grep -c 'captureFailure(' src/routes.ts`, and note the trailing `(`: without it the import line is
 counted too and the answer is one too many.
 
-**The rule for the request seams is the status we answered with**, `>= 500` — the same threshold
+**The rule for the request seams is the status assigned to the failure**, `>= 500` — the same threshold
 `logRequest` uses to choose between `warn` and `error`, so the log and the tracker cannot come to
 disagree about what counts as a fault.
+
+**A handler can fail after its response has started.** The catch's failure status decides both
+capture and log severity, while the request line records the status the reader actually received
+(usually a stream's 200). The fault is reported once. The response is left alone — no JSON, no
+change to `statusCode`, and it is ended only if nobody ended or destroyed it.
+Until 2026-10-07 the catch wrote its JSON
+regardless: `setHeader` threw `ERR_HTTP_HEADERS_SENT` out of it, the line said 500 for a 200, and
+[`src/vercel.ts`](../../src/vercel.ts)'s outer catch filed a second event about headers.
+[`tests/serve-api-after-headers.test.ts`](../../tests/serve-api-after-headers.test.ts).
 
 **`pinoIntegration` exists and must never be added.** It would forward log lines to Sentry, and the
 whole design of [logging.md](logging.md) rests on stdout being the only destination. The two

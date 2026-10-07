@@ -63,8 +63,9 @@ import type { Author, Meta } from "./types.js";
  * `Real&lt;/title&gt;&lt;img src=x onerror=…&gt;` gives us back a string with a
  * real `</title>` and a real `<img>` in it, and writing that into a template
  * puts them back in the document. Verified against real Readability output in
- * tests/extract-sanitize.test.ts, which is also where the byline — interpolated
- * straight into a `<div>` — was confirmed to be a working `<img onerror>`.
+ * tests/extract-sanitize.test.ts. (The byline and the site name were written
+ * into the page too until 2026-10-07, and the byline was a working
+ * `<img onerror>`; `debugPage` below says why they are no longer written.)
  *
  * All five characters, not the three that "look like markup". `"` is what holds
  * `lang` inside its attribute, and the source page's `lang` is the only one of
@@ -104,16 +105,22 @@ import type { Author, Meta } from "./types.js";
  * arrives clean is a no-op for it and blocks.json comes out identical — pinned
  * in tests/extract-sanitize.test.ts rather than assumed, because the two stages
  * share this file and stage 3 writes block ids back into it.
+ *
+ * **The body is the article and nothing else, since 2026-10-07.** Until then it
+ * opened with a header of ours: `<h1>{title}</h1>` and a `.meta` line of byline,
+ * site name and `~N min read`. Stage 3 splits this body into blocks, so the
+ * header became blocks 0 and 1 of every web article, and the reading view,
+ * whose masthead already shows all of it from `meta`, said the title twice.
+ * The title is still in `<head><title>`, which stage 3 does not read. Do not
+ * put chrome back in the body: whatever is in it is the author's words to every
+ * stage after this one. **New extractions only.** An article extracted before
+ * that day keeps its stored page and its two header blocks until it is
+ * extracted again.
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
+ * (reader report spya-t6cdve).
  */
 type Maybe = string | null | undefined;
-function debugPage(article: {
-  title: Maybe;
-  byline: Maybe;
-  siteName: Maybe;
-  lang: Maybe;
-  length: number | null | undefined;
-  content: Maybe;
-}): string {
+function debugPage(article: { title: Maybe; lang: Maybe; content: Maybe }): string {
   const text = (s: Maybe) => escapeHtml(s ?? "");
   return `<!doctype html>
 <html lang="${text(article.lang) || "en"}">
@@ -131,8 +138,6 @@ function debugPage(article: {
     color: #222;
     background: #fdfdfb;
   }
-  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.25rem; }
-  .meta { color: #777; font-family: -apple-system, sans-serif; font-size: 0.9rem; margin-bottom: 2rem; }
   img { max-width: 100%; height: auto; }
   figure { margin: 1.5rem 0; }
   figcaption { font-size: 0.85rem; color: #777; font-family: -apple-system, sans-serif; }
@@ -142,11 +147,6 @@ function debugPage(article: {
 </style>
 </head>
 <body>
-<h1>${text(article.title)}</h1>
-<div class="meta">
-  ${article.byline ? `${text(article.byline)} &middot; ` : ""}${text(article.siteName)}
-  ${article.length ? `&middot; ~${Math.round(article.length / 5 / 200)} min read` : ""}
-</div>
 ${sanitizeHtml(article.content ?? "")}
 </body>
 </html>`;
@@ -1313,7 +1313,8 @@ export async function runExtract(opts: {
   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
   const declared = authorsForByline(authors, byline);
   /* **Plain text, once, before it branches** into `meta.title`, the page's
-     `<h1>` (which stage 3 turns into a block) and the job's title. A page's
+     `<title>` and the job's title. (Until 2026-10-07 also an `<h1>` of ours in
+     the page's body, which stage 3 turned into a block: `debugPage`.) A page's
      `<title>` or `og:title` can say `&lt;i&gt;Drosophila&lt;/i&gt;`, which
      Readability decodes into literal tags.
      docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
@@ -1323,8 +1324,8 @@ export async function runExtract(opts: {
     /* **Tidied for the shelf, and only here** — capitals, a site's name on the
        end, the original kept beside it: by the tidier handed in (import's is a
        small model, src/title-tidy-model.ts, plan 261005j) or by the rule
-       (src/title-tidy.ts, plan 261005g). The page's `<h1>` below keeps `title`
-       as the author set it: the prose is theirs. */
+       (src/title-tidy.ts, plan 261005g). The page's `<title>` below keeps
+       `title` as the author set it. */
     ...(title
       ? await (opts.titleTidier ?? ruleTitleTidier)(title, {
           body: article.textContent,
@@ -1355,12 +1356,13 @@ export async function runExtract(opts: {
     slug,
     meta,
     ownIds,
-    /* **The byline chosen above, not Readability's**, so the line under the
-       title in the page and `meta.byline` name the same people. They differed
-       whenever the page's declared authors replaced Readability's guess, and
-       on a LaTeXML page the guess was a cited author or the word "and"
-       (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md). */
-    extractedHtml: debugPage({ ...article, title, byline: byline ?? article.byline }),
+    /* **No byline goes into the page any more** (2026-10-07, `debugPage`).
+       While one did, it had to be the byline chosen above and not
+       Readability's, which on a LaTeXML page was a cited author or the word
+       "and"
+       (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
+       `meta.byline` is now the only place it is written. */
+    extractedHtml: debugPage({ ...article, title }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,

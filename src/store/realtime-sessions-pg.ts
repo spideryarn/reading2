@@ -1,11 +1,10 @@
 /**
  * The live-conversation journal in Postgres — one row per issued session.
  *
- * The filesystem half is [realtime-sessions-fs.ts](realtime-sessions-fs.ts),
- * and it is a genuine second implementation rather than a fallback, like every
- * other pair in this directory: the store flag picks one at boot and the other
- * is never consulted. [index.ts](index.ts) explains why that distinction
- * matters.
+ * The only implementation. There was a filesystem half,
+ * `realtime-sessions-fs.ts`, picked by the store flag at boot; the flag and
+ * that file went with the filesystem store (the store on 2026-09-05, the flag
+ * the day after).
  *
  * ## What may be logged from this file
  *
@@ -27,6 +26,7 @@ import type { AiCallRow } from "../ai-spend.js";
 import { getDb } from "../db/client.js";
 import { aiCalls, articles, realtimeSessions } from "../db/schema.js";
 import { aiCallInsertValues } from "./ai-calls-pg.js";
+import { isUuid } from "../ids.js";
 import type { OwnerId } from "../owner.js";
 import type { RealtimeSession, RealtimeSessionStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -111,6 +111,15 @@ const rawPgRealtimeSessionStore: RealtimeSessionStore = {
   },
 
   async find(id: string, ownerId: string): Promise<RealtimeSession | null> {
+    /* **An id that is not a UUID is no session, not a database error.** The id
+       comes off the URL (`/api/live/:sessionId/…`, whose patterns admit any
+       `[\w-]+`), and Postgres refuses to compare a `uuid` column with a string
+       that is not one (SQLSTATE 22P02) — a 500 and a Sentry report for a typo.
+       Every route that takes a session id calls `find` first and answers `null`
+       with its 404, so this one guard covers the writes below it as well.
+       `isUploadId` in [pg-uploads.ts](pg-uploads.ts) is the same guard for the
+       same reason. */
+    if (!isUuid(id)) return null;
     const rows = await getDb()
       .select()
       .from(realtimeSessions)

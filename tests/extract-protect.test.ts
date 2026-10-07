@@ -414,19 +414,21 @@ describe("rule A — the four tables Readability deleted for saying they have he
     /* 4. Blocks affected. */
     const onBlocks = splitIntoBlocks(pageOf(on)).blocks;
     const offBlocks = splitIntoBlocks(pageOf(off)).blocks;
-    expect(offBlocks).toHaveLength(79);
-    expect(onBlocks).toHaveLength(79);
+    expect(offBlocks).toHaveLength(77);
+    expect(onBlocks).toHaveLength(77);
     expect(onBlocks.filter((b) => b.html.includes("<table")).length).toBe(3);
     expect(offBlocks.filter((b) => b.html.includes("<table")).length).toBe(1);
-    /* 5. The assertion that changes. Two of the three differing blocks are the
-          recovered tables; the third is the masthead's "~N min read", which
-          moves because `article.length` moved. */
+    /* 5. The assertion that changes. The two differing blocks are the
+          recovered tables. (There were three until 2026-10-07, and every block
+          count in this file was two higher: stage 2's page opened with a title
+          and a "~N min read" line of ours, and that line moved with
+          `article.length`. src/extract.ts § `debugPage`, plan 261007b.) */
     const gained = blocksOnlyIn(pageOf(on), pageOf(off));
     expect(gained.filter((b) => b.text.startsWith("GDP forecast or estimate")).map((b) => b.tag)).toEqual([
       "table",
       "table",
     ]);
-    expect(gained).toHaveLength(3);
+    expect(gained).toHaveLength(2);
     expect(on.chars).toBe(19_165);
     expect(off.chars).toBe(11_434);
   });
@@ -488,13 +490,13 @@ describe("rule A — the four tables Readability deleted for saying they have he
     expect((flow[at + 1]?.textContent ?? "").trim()).toMatch(/^As noted in Table 1/);
     expect((flow[at + 4]?.textContent ?? "").trim()).toBe("5 Training");
 
-    /* And at block granularity: the same 151 blocks, two of which now carry
-       their table, plus the masthead's reading-time line. */
+    /* And at block granularity: the same 149 blocks, two of which now carry
+       their table. */
     const onBlocks = splitIntoBlocks(pageOf(on)).blocks;
-    expect(onBlocks).toHaveLength(151);
-    expect(splitIntoBlocks(pageOf(off)).blocks).toHaveLength(151);
+    expect(onBlocks).toHaveLength(149);
+    expect(splitIntoBlocks(pageOf(off)).blocks).toHaveLength(149);
     const gained = blocksOnlyIn(pageOf(on), pageOf(off));
-    expect(gained).toHaveLength(3);
+    expect(gained).toHaveLength(2);
     expect(gained.filter((b) => /^Table [12]:/.test(b.text)).map((b) => b.tag)).toEqual(["figure", "figure"]);
     expect(gained.filter((b) => /^Table [12]:/.test(b.text)).every((b) => b.html.includes("<table"))).toBe(true);
     /* 41,528 / 40,430 until 2026-09-24, when ar5iv's formulas became delimited
@@ -545,8 +547,8 @@ describe("rule B — the correction notice a reader was never told about", CORPU
     }
     /* 4. Blocks affected: exactly two, and they are the heading and the
           citation. */
-    expect(splitIntoBlocks(pageOf(off)).blocks).toHaveLength(103);
-    expect(splitIntoBlocks(pageOf(on)).blocks).toHaveLength(105);
+    expect(splitIntoBlocks(pageOf(off)).blocks).toHaveLength(101);
+    expect(splitIntoBlocks(pageOf(on)).blocks).toHaveLength(103);
     const gained = blocksOnlyIn(pageOf(on), pageOf(off));
     expect(gained.map((b) => `${b.kind}/${b.tag}`)).toEqual(["heading/h2", "text/p"]);
     expect(gained[0]!.text.trim()).toBe("Correction");

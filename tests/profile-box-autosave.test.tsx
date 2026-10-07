@@ -34,6 +34,7 @@ vi.mock("../src/web/useDictation.js", () => ({
     toggle: () => {},
     error: null,
     startedAt: mic.armed ? 1_000 : null,
+    endsAt: null,
     deviceLabel: null,
     deviceId: null,
     deviceUnavailable: false,
