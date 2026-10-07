@@ -135,7 +135,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   reader in its key or value, so two readers in one browser never read each other's.
   [auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).
 - **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
-  then exactly one `done` or `error`.
+  then exactly one `done` or `error`. Each thing it throws is classed for `describeFetchFailure`,
+  so a caller's catch is one call
+  ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
   The lower-level `readEvents` is what most older hooks loop over by hand —
   [comments.md § streaming](comments.md#streaming).
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's

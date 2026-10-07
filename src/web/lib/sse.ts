@@ -15,7 +15,7 @@
  * it — comments.md#streaming.
  */
 import { ENDED_UNFINISHED } from "../../messages.js";
-import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
+import { MalformedReply, markUnreachable, ReaderFacingError } from "./reader-facing.js";
 
 export interface ServerEvent {
   name: string;
@@ -239,7 +239,14 @@ function parseFrame(frame: string): ServerEvent | null {
  * with holes in it. An `error` frame throws its sentence, and so does the body
  * simply ending, which is the case the whole design is arranged against — a
  * stream that stops cleanly looks exactly like one that finished. A stall
- * throws `StreamStalled` from `readEvents`, and the caller words it.
+ * throws `StreamStalled` from `readEvents`.
+ *
+ * **Every throw here says who it is for, by its class**, because each caller
+ * words its failure through `describeFetchFailure` (lib/describe-failure.ts),
+ * which shows a reader only what was declared for one: the `error` frame and
+ * the early end are `ReaderFacingError`s; a `done` the caller refuses is a
+ * `MalformedReply`. Until 2026-10-07 the last two were plain `Error`s, so the
+ * helper would have called a dropped connection a fault of the page.
  */
 export async function readAnswerStream<T>(
   body: ReadableStream<Uint8Array>,
@@ -281,10 +288,16 @@ export async function readAnswerStream<T>(
     if (event.name === "done") {
       const result = on.done(event.data);
       if (result === undefined) {
-        throw new Error(
-          "The answer arrived in a form this page could not read, so it is not shown as finished. " +
-            "Trying again starts a fresh answer.",
-        );
+        /* A reply of the wrong shape is this app's bug, so the reader gets
+           `PAGE_FAULT` and it is reported, as for every other one
+           (reader-facing.ts § `MalformedReply`). The sentence this used to
+           throw told them to try again, which starts a second paid answer;
+           Dig deeper and Investigate send `done` after saving, so reloading
+           (what `PAGE_FAULT` says) can recover those answers. The glossary's
+           ask box can finish without storing a new answer when the term
+           already exists or there is no glossary; the malformed reply is
+           still this app's bug, with no promise that this answer was kept. */
+        throw new MalformedReply("the stream's done frame is not the shape its reader accepts");
       }
       return result;
     }
@@ -297,5 +310,7 @@ export async function readAnswerStream<T>(
     }
     on.other?.(event.name, event.data);
   }
-  throw new Error(sentences.ended);
+  /* Declared for a reader, like the `error` frame above: `ENDED_UNFINISHED`
+     or the caller's own sentence for the same stop. */
+  throw new ReaderFacingError(sentences.ended);
 }

@@ -66,6 +66,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 const { Dock } = await import("../src/web/Dock.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { jumpFirstRunner, glossaryRunners } = await import("../src/web/command-runners.js");
+const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
 
 const SLUG = "a-piece";
 
@@ -394,8 +395,10 @@ describe("tags", () => {
   });
 
   it("keeps a refused save in the bar with the server's sentence", async () => {
+    /* The class the real save throws for a refusal (`HttpError` extends it);
+       the runner shows a reader only a sentence declared for one. */
     const edit = vi.fn(async () => {
-      throw new Error("An article can carry at most 30 tags.");
+      throw new ReaderFacingError("An article can carry at most 30 tags.");
     });
     reading({ shelfRow: { archive: archive(), tags: tags(edit) } });
     openBar();

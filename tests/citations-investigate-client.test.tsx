@@ -82,7 +82,9 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-vi.mock("../src/web/lib/api.js", () => ({
+vi.mock("../src/web/lib/api.js", async () => {
+  const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+  return {
   apiFetch: async (input: string, init?: { method?: string; signal?: AbortSignal }) => {
     if (init?.method === "POST" && input === `/api/citations/${SLUG}/${ID}/investigate`) {
       posts++;
@@ -111,11 +113,15 @@ vi.mock("../src/web/lib/api.js", () => ({
   leavingFetch: async () => undefined,
   readJson: async (res: Response) => {
     const body = await res.json();
-    if (!res.ok) throw new Error(body.error);
+    /* The class the real one throws (`HttpError` extends it): the hook words
+       its failure through `describeFetchFailure`, which shows a reader only a
+       sentence declared for one. */
+    if (!res.ok) throw new ReaderFacingError(body.error);
     return body;
   },
   failure: async (res: Response) => new Error(String(res.status)),
-}));
+  };
+});
 
 vi.mock("../src/web/useJobs.js", () => ({
   useJobs: () => ({

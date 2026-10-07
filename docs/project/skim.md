@@ -340,7 +340,9 @@ no purpose, a small box, *What do you want from this piece?*, and **Plan the rou
 saves the purpose and only then re-plans the route (unforced — the stamp's profile hash is what
 re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
 with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
-cannot be read, and no second ask under the stale or profile-changed banner.
+cannot be read, and no second ask under the stale or profile-changed banner. A save whose reply is
+lost is checked against what is stored before the box says whether it was saved
+([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
 **Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
