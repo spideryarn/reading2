@@ -4125,7 +4125,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore','guide')`),
     /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
        modes is wider than the union on purpose: the later callers are named
        in the plan, and widening a CHECK is a migration each time. Necessary
@@ -4204,6 +4204,15 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_explore")
       .on(t.articleId)
       .where(sql`${t.kind} = 'explore'`),
+    /**
+     * **One guide per article**: the conversation about how to read this
+     * piece, opened in the Chat band. The same reason, the same fallback
+     * (`targetOf`), and no fold, because no guide thread existed before the
+     * index. docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
+     */
+    uniqueIndex("chat_threads_one_guide")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'guide'`),
     /**
      * The thread list, newest first — what the chat panel opens with. Made by
      * hand in drizzle/0003_reader_state_owner_fks.sql and declared here on

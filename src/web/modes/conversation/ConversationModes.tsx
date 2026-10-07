@@ -26,11 +26,11 @@ import type {
   BlockId,
   ChatAnchor,
   ChatThread,
-  SingleThreadKind,
+  LearnKind,
   ThreadKind,
   ThreadOrigin,
 } from "../../../types.js";
-import { isSingleThreadKind } from "../../../types.js";
+import { isLearnKind } from "../../../types.js";
 import { chatFromParam, currentAt, modeParam, learnParam, threadParam } from "../../params.js";
 import { listedInChat, sourcesIn } from "../../thread-source.js";
 import { useRenderCount } from "../../perf.js";
@@ -287,8 +287,13 @@ function QuizSubBand({
  * Written as an `Exclude` rather than as `"chat" | "learn"` so that a fifth
  * kind arrives here as a compile error and somebody has to decide which side of
  * the line it is on.
+ *
+ * `guide` is on the far side too: it is a conversation the Chat band opens
+ * (one per article, pinned above Chat's list), not a band of its own, so no
+ * mode mounts this band with it. docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md
+ * (GPT Sol's F2: single-thread, openable in Chat, and Learn are three ideas).
  */
-type ConversationKind = Exclude<ThreadKind, "candidates">;
+type ConversationKind = Exclude<ThreadKind, "candidates" | "guide">;
 
 /**
  * **A question another mode has handed to chat, for a fresh conversation:
@@ -359,7 +364,7 @@ export interface ChatHandoff {
  */
 export function oneLearn(
   threads: readonly ChatThread[],
-  kind: SingleThreadKind = "learn",
+  kind: LearnKind = "learn",
 ): ChatThread | null {
   let best: ChatThread | null = null;
   for (const t of threads) {
@@ -540,7 +545,7 @@ export function ConversationBand({
   });
   /* Recall, Tutorial and Explore: each one conversation per article, no
      list. Named for Learn because that is where all three live. */
-  const single = isSingleThreadKind(kind) ? kind : null;
+  const single = isLearnKind(kind) ? kind : null;
   const learning = single !== null;
   /**
    * Start over has two ordered waits: Live must finish writing its last spoken

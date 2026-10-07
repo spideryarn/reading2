@@ -112,6 +112,7 @@ import { settledExchanges } from "./reader-notes.js";
 import { blockRefLeaks } from "./block-ref-leak.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
+import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
 import { plainWords } from "./plain-words.js";
 import {
   type OpenRouterMessage,
@@ -126,17 +127,22 @@ import {
  * **Which paying job a turn bills under**, and it is decided by the thread's
  * kind rather than by this file being called `converse`.
  *
- * Chat and Learn are one job: same prompt shape, same tools, same order of
- * magnitude per turn. Candidates is its own, `referee-candidates`, because it is
- * the only conversation in the app that runs several web searches on nearly
- * every turn — so its cost per turn does not look like chat's, and folding the
- * two together would move the chat line in `npm run cost` whenever somebody
- * spent an evening hunting reviewers, with nothing saying why. src/models.ts
- * § `referee-candidates`, and the mistake `quiz-mark` exists to have stopped
- * making: a call billed under another job's name is spend nobody can find later.
+ * Every ordinary conversation kind is one job: the same prompt shape and order
+ * of magnitude per turn. Candidates is its own, `referee-candidates`, because
+ * it is the only conversation in the app that runs several web searches on
+ * nearly every turn — so its cost per turn does not look like chat's, and
+ * folding the two together would move the chat line in `npm run cost` whenever
+ * somebody spent an evening hunting reviewers, with nothing saying why.
+ * src/models.ts § `referee-candidates`, and the mistake `quiz-mark` exists to
+ * have stopped making: a call billed under another job's name is spend nobody
+ * can find later.
  */
 export type ConverseJob = Extract<ChatJob, "chat" | "referee-candidates">;
 
+/* **The guide bills as chat, on purpose, for v1**: same route, same model,
+   the same order of cost per turn, and no new ledger row to read
+   (GPT Sol's F8 on docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
+   tests/guide-kind.test.ts pins it, so splitting it out is a decision, not a drift. */
 export const jobFor = (kind: ThreadKind): ConverseJob =>
   kind === "candidates" ? "referee-candidates" : "chat";
 
@@ -199,11 +205,13 @@ export const CHAT_STALL_MS = 45_000;
 /**
  * How many times in one turn the model may ask for tools and be answered.
  *
- * Three, plus a fourth with our tools withheld and told so — see the loop in
- * `converse`, where dropping the tools rather than counting to a number is what
- * guarantees termination. "Withheld, *and told*" is the whole of the correction
- * made on 2026-08-26: withholding alone does not make a round write prose, it
- * only makes the round after it never happen.
+ * Three, plus a fourth with use of our tools disabled and the model told so —
+ * see the loop in `converse`. Chat removes their definitions; Guide keeps its
+ * definitions for the preceding calls in the history and sends
+ * `tool_choice: "none"`. In both cases the loop ends after that round whether
+ * the provider honours the request. "Disabled, *and told*" is the whole of the
+ * correction made on 2026-08-26: disabling tools alone does not make a round
+ * write prose, it only makes the round after it never happen.
  *
  * The cost of a round is the whole request again: the article, the history, and
  * every tool result so far. So this is a budget for the reader's patience and
@@ -252,7 +260,12 @@ export const MAX_TOOL_ROUNDS = 3;
  * one.
  */
 export const webSearchTool = (kind: ThreadKind) =>
-  kind === "candidates"
+  /* **None for the guide.** Its subject is how to read this piece, not the
+     world, and every tool it has is the article's own (`GUIDE_TOOLS`,
+     src/chat-tools.ts). docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F1. */
+  kind === "guide"
+    ? null
+    : kind === "candidates"
     ? ({
         type: "openrouter:web_search",
         parameters: {
@@ -271,6 +284,30 @@ export const webSearchTool = (kind: ThreadKind) =>
         // A cap, not a quota — the model still decides whether to search.
         parameters: { max_uses: 4, max_results: 5 },
       } as const);
+
+/**
+ * **What one round of a turn is offered**: the provider's web search where the
+ * kind has one, and this process's own tools on every round but the last.
+ *
+ * A pure function so a test can read what a guide round sends. One case needs
+ * more than the old two-line rule: **a kind with no web search, on its last
+ * round**, would otherwise send no tools at all while its history holds the
+ * tool calls of the rounds before — and a request whose messages carry tool
+ * calls with no tools declared is one a provider may refuse. So that round
+ * keeps declaring the kind's tools and says `tool_choice: "none"`; the loop
+ * still ends on `!withTools` whatever comes back, so termination does not rest
+ * on the provider honouring it. Chat's and the others' rounds are the bytes
+ * they always were.
+ */
+export function roundTools(
+  kind: ThreadKind,
+  withTools: boolean,
+): { tools: unknown[]; tool_choice?: "none" } | Record<string, never> {
+  const search = webSearchTool(kind);
+  if (search) return { tools: withTools ? [search, ...toolsFor(kind)] : [search] };
+  if (withTools) return { tools: toolsFor(kind) };
+  return { tools: toolsFor(kind), tool_choice: "none" };
+}
 
 /* ----------------------------------------------------- the tool wire format --
    Chat's request is no longer a list of `OpenRouterMessage`. Two more shapes go
@@ -1543,6 +1580,108 @@ flattery, no announcing what you are skipping, and nothing of the description
 in a search.`;
 
 /**
+ * The system prompt for **the guide**: a conversation about how to read this
+ * piece well, with Spideryarn, for this reader. Opened in the Chat band, one
+ * per article. docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
+ *
+ * Greg, 2026-10-06 (`spya-tddvg2`): *"a chat less about the content and more
+ * about the reading experience. So more about a guide for the user about how
+ * to use Spideryarn and how to make the most of its features and also how to
+ * read this article given their needs."*
+ *
+ * **What it may not do is the vision's anti-goal**: replace the reading. So it
+ * talks about the piece only enough to say how to approach it, and never
+ * summarises it in place of reading (docs/project/vision.md § Anti-goals).
+ *
+ * **Shared by interpolation**: the id rule and the quotation rule from
+ * Recall and Explore; the tool-honesty and untrusted-content rules every
+ * prompt here carries; Chat's `COMMAND_CHIPS`, because the guide proposes
+ * actions as buttons the same way and under the same rules. No `WEB_LINKS` and
+ * no `CLAIM_ORIGINS`: it has no web search and no web page tool, so it has no
+ * link to give. Our words for the modes come from the generated catalogue
+ * (`modeWordsSection`, src/guide.ts), so a renamed mode renames itself here.
+ *
+ * Above the cache breakpoint like the other kinds, so its own cached prefix,
+ * and nothing in it varies per turn or per reader: how experienced the reader
+ * is goes in the final user message (`experienceLine`), GPT Sol's F7.
+ */
+const GUIDE_SYSTEM = `You are this reader's guide to reading one article well, with Spideryarn — the
+app they are reading it in. The subject of this conversation is their reading:
+why they are reading this piece, how to approach it, which parts to read
+closely and which to skim, and which of Spideryarn's modes would help them do
+that. It is not a conversation about what the piece says.
+
+You are here to make deep reading cheaper, not optional. Never summarise the
+piece, restate its argument or list its findings in place of the reader reading
+it. You may say what a part is for ("the Methods section is where the new
+technique is described"), so they know where to go. If they ask what the piece
+says, give one or two sentences at most, point to where it says it, and say
+that Chat (in the bottom bar) is the place for questions about the content.
+
+HOW TO GUIDE THEM
+
+- Start from why they are reading. Under WHO IS READING THIS, "Why they are
+  reading this piece:" is their reason, and "About the reader:" is what they
+  have told us about themselves. A line that is not there was not given, and no
+  section at all means neither was.
+- If they have not said why they are reading it, ask that first, in one short
+  question. The screen also shows them a box for it, so you may say they can
+  write it there. Until they say, keep any suggestion general.
+- If they have not told us about themselves, invite it once, lightly, in a
+  sentence — they can add it under About you on their profile page — and do not
+  ask again in this conversation. It is optional, and they owe us nothing.
+- Then suggest a way into the piece that fits their reason: where to begin,
+  what to read closely, what they can skim, and one or two modes that would
+  help, named as WHAT SPIDERYARN CAN SHOW THEM names them, each with what it
+  would do for this reader's reading.
+- Ask one question at a time, and put it last.
+- Match the introduction to how much they have used Spideryarn. HOW MUCH THEY
+  HAVE USED SPIDERYARN, beside their message, says. When it says they have
+  opened no other article still on their shelf, introduce the app briefly as
+  you go: what the bottom bar is, and one mode at a time, as it becomes useful.
+  For someone who has opened many, skip the tour and go straight to this piece.
+  If that line is missing, assume a little experience and do not ask.
+- Keep it short. Most replies are under 120 words. A list only when it really
+  is a list of a few things.
+
+${CITING_IDS}
+
+When you point them at a part of the piece, cite its block, so they can go
+straight there.
+
+${QUOTATION_IDS}
+
+${COMMAND_CHIPS}
+
+${modeWordsSection()}
+
+YOUR TOOLS
+
+You have tools for this article only: its exact words, its meaning, its links,
+its glossary, and the works it cites. Use them to find where something is, so
+you can point the reader at it. You cannot search the web or read any page, and
+you cannot see their other articles. Do not use a tool to find out what a part
+of the piece says: you have the whole article below.
+
+${NO_UNRUN_TOOL_CLAIMS}
+
+${UNTRUSTED_RESULTS}
+
+FORMAT
+
+Plain prose, short paragraphs separated by blank lines. No headings.
+
+${plainWords("explain", "ask")}
+
+${PROFILE_RULES}
+
+Two of those rules are different in this conversation, because here the reader
+and their reading are the subject. A sentence may be about them, their reason
+or the app, and not about the article. And you may speak to them directly and
+use the reason they gave. The rest hold: no flattery, no announcing what you
+are skipping, and nothing they told you in a tool argument.`;
+
+/**
  * Which system prompt a turn gets, and it is chosen by the **thread's** kind,
  * never by the request's.
  *
@@ -1571,6 +1710,8 @@ const systemFor = (kind: ThreadKind): string => {
       return CANDIDATES_SYSTEM;
     case "chat":
       return SYSTEM;
+    case "guide":
+      return GUIDE_SYSTEM;
     default: {
       /* A `switch` rather than a ternary chain, so a fourth `ThreadKind` is a
          red compile here instead of a conversation quietly answered with chat's
@@ -1607,6 +1748,10 @@ const readItFor = (kind: ThreadKind): string => {
       return "Read it. Shall I start with what reviewing this would take?";
     case "chat":
       return "Read it. What would you like to know?";
+    case "guide":
+      /* About the reading, not the content: the reader is about to say why
+         they are here, or has. src/guide.ts. */
+      return "I've read it. Let's work out how you might read it.";
     default: {
       /* Exhaustive, like `systemFor`: a `default` that returned chat's line
          would greet a fifth kind as a chat with nothing saying so. */
@@ -1723,6 +1868,13 @@ export interface ConverseRequest {
    */
   notes?: string | null;
   /**
+   * **Guide only**: how much the reader has used Spideryarn, as a bucket —
+   * `experienceOf` in src/guide.ts. The route resolves it per turn
+   * (`guideExperience` in src/routes.ts). Reaches the prompt in the final user
+   * message, like `profile`, and only when `kind` is `guide`.
+   */
+  experience?: GuideExperience | null;
+  /**
    * Which capable model answers — the article's High-powered AI setting
    * (plan 260930f). Required, so a route cannot forget to ask; `model` below
    * still overrides it for a test or an eval.
@@ -1741,7 +1893,7 @@ export interface ConverseRequest {
    */
   useTools?: boolean;
   /**
-   * Chat or Learn — which chooses the system prompt.
+   * The conversation kind, which chooses the system prompt.
    *
    * **The caller passes the THREAD's kind, not the request body's.** See
    * `streamChat` in src/routes.ts: a request may propose a kind for a thread it
@@ -1943,9 +2095,9 @@ export function buildConverseMessages(opts: {
    */
   anchor?: ChatAnchor | null;
   /**
-   * Chat or Learn, which picks the system prompt — the ONE thing here that
+   * The conversation kind, which picks the system prompt — the ONE thing here that
    * lands above the `cache_control` breakpoint and therefore changes the cached
-   * prefix. Two kinds means two prefixes per article, paid on entering the mode
+   * prefix. Each kind means another prefix per article, paid on entering the mode
    * rather than per turn. docs/plans/260827ah-review-mode.md § Where the stance goes.
    */
   kind?: ThreadKind;
@@ -1955,6 +2107,14 @@ export function buildConverseMessages(opts: {
    * one share one cached article prefix.
    */
   help?: boolean;
+  /**
+   * **How much the reader has used Spideryarn**, for a guide turn — see
+   * `experienceLine` in src/guide.ts. In the final user message, beside the
+   * profile, and **never** above the breakpoint: it changes per reader and
+   * over time (GPT Sol's F7). Carried for the guide only, decided here as well
+   * as in the route, as `notes` is for Explore.
+   */
+  experience?: GuideExperience | null;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
   const position =
@@ -1963,8 +2123,11 @@ export function buildConverseMessages(opts: {
       : readerPositionLine(opts.at);
   const who = profileSection(
     opts.profile ?? null,
-    kind === "explore" ? "with-the-reader" : "about-the-article",
+    kind === "explore" || kind === "guide" ? "with-the-reader" : "about-the-article",
   );
+  /* After the profile: the reader is who they say, then how much of the app
+     they have seen. The guide's only. */
+  const used = kind === "guide" ? experienceLine(opts.experience) : "";
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor: the reader is told *which* passage first, then how to
      explain it. Both are below the breakpoint, so the order is about how the
@@ -1998,7 +2161,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, about, teach, own, marked, brief, opts.question]
+      content: [position, who, used, about, teach, own, marked, brief, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -2062,6 +2225,10 @@ function lengthLine(kind: ThreadKind, opening = false): string {
      and linked none. */
   if (kind === "explore")
     return `${opening ? "This is your first reply: as START FROM WHAT IS THEIRS says, begin from one thing in the reader's notes when there is one, and name it. " : ""}As ONE MOVE A TURN and LENGTH say: one move, about 100 words and always under 150 words, one question at most and it comes last. If they ask what others have said, search before you answer. A quotation of the article has its [block id] straight after it, and each person, piece or finding from outside the article has its link where you say it, or is said to be from memory and unchecked; what is the reader's is named as theirs and your own view is said to be yours, and neither needs an id or a link.`;
+  /* The guide's, by the same lever: its rules sit ahead of a whole article,
+     and the one most worth repeating is the anti-goal. */
+  if (kind === "guide")
+    return "As HOW TO GUIDE THEM says: short, under 120 words as a rule, one question at most and it comes last. About their reading, not a summary of the piece.";
   if (kind !== "chat") return "";
   return "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
 }
@@ -2252,6 +2419,7 @@ export async function* converse({
   threadId,
   profile = null,
   notes = null,
+  experience = null,
   useTools = true,
   kind = "chat",
   anchor = null,
@@ -2296,6 +2464,8 @@ export async function* converse({
     profile,
     /* Only an Explore turn carries it; `notesSection` drops it for any other. */
     notes,
+    /* Only a guide turn carries it; `buildConverseMessages` drops it for any other. */
+    experience,
     kind,
     /* Unconditional, and `null` rather than absent when there is none: the
        option's type admits null and `anchorSection` returns "" for it, so an
@@ -2537,25 +2707,28 @@ export async function* converse({
 
   for (let round = 0; ; round++) {
     rounds = round + 1;
-    /* **The last round is offered no tools of ours, and that is what makes this
-       loop terminate.** A cap that simply stops after N rounds has to throw away
-       whatever the model asked for on round N, which leaves an assistant message
-       carrying tool calls that were never answered — malformed, as far as the
-       provider is concerned. Dropping the tools ends the loop instead, because
-       the round after this one never happens: the `break` below is taken on
-       `!withTools` whatever comes back.
+    /* **The last round cannot use tools of ours, and that is what makes this
+       loop terminate.** Chat removes their definitions; Guide declares its
+       article tools for the calls already in the history but sets
+       `tool_choice: "none"`. A cap that simply stops after N rounds has to
+       throw away whatever the model asked for on round N, which leaves an
+       assistant message carrying tool calls that were never answered —
+       malformed, as far as the provider is concerned. Disabling the tools ends
+       the loop instead, because the round after this one never happens: the
+       `break` below is taken on `!withTools` whatever comes back.
 
        **What it does *not* do is stop the model asking.** This comment used to
        say the model "cannot ask again, so the final round is always prose", and
-       that was wrong in a way worth keeping written down. Withholding the array
-       removes the *schema*; the model is still looking at three of its own turns
-       full of tool calls, which is a far stronger cue than a list it is not
-       obliged to read. It can and does ask for a fourth. So the round is nudged
-       below, and the case where it asks anyway has a guard and a sentence of its
-       own — see `KEPT_ASKING_FOR_TOOLS`. */
+       that was wrong in a way worth keeping written down. Removing the array or
+       setting `tool_choice: "none"` changes the request; the model is still
+       looking at three of its own turns full of tool calls, which is a far
+       stronger cue than a list it is not obliged to read. It can and does ask
+       for a fourth. So the round is nudged below, and the case where it asks
+       anyway has a guard and a sentence of its own — see
+       `KEPT_ASKING_FOR_TOOLS`. */
     const withTools = useTools && round < MAX_TOOL_ROUNDS;
     /**
-     * The round whose tools were taken away **because the cap was reached** —
+     * The round whose tool use was disabled **because the cap was reached** —
      * as opposed to a caller who never wanted them.
      *
      * `!withTools` means both, and using it for the two things below got that
@@ -2617,15 +2790,16 @@ export async function* converse({
        classifier does, and on the one path where a round throws there is no
        verdict to record. It is filled in beside the `switch` below. */
 
-    /* **Say out loud that the tools are gone.**
+    /* **Say out loud that tool use is finished.**
 
        Reaching here means the model asked for tools on every round it was
-       offered them, and this request is the one where they are withheld. Taking
-       the array away is not a message: from the model's side the last thing that
-       happened is three of its own turns full of tool calls, each one answered,
-       and nothing anywhere saying to stop. A model in that position asks for a
-       ninth search, gets no answer because there is nobody left to give one, and
-       the turn ends with the reader holding a tool strip and no words.
+       offered them, and this request is the one where their use is disabled.
+       Changing the request is not a message: from the model's side the last
+       thing that happened is three of its own turns full of tool calls, each
+       one answered, and nothing anywhere saying to stop. A model in that
+       position asks for a ninth search, gets no answer because there is nobody
+       left to give one, and the turn ends with the reader holding a tool strip
+       and no words.
 
        So the round is told, in the plain way the reader would be. The second
        sentence is the load-bearing one: without it a model that does not think
@@ -2635,11 +2809,12 @@ export async function* converse({
        prompt is the part of this conversation that must stay byte-identical for
        the cache. docs/project/chat-tools.md § Still open. */
     if (lastToolRound) {
+      const finished = kind === "guide" ? "article tools" : "article and library tools";
       messages.push({
         role: "user",
         content:
           "That is all the looking things up you can do inside this app for this question — the " +
-          "article and library tools are finished. Write the answer now from what you have " +
+          `${finished} are finished. Write the answer now from what you have ` +
           "already found. If it is not as much as you wanted, say what you did find and what is " +
           "still missing.",
       });
@@ -2693,13 +2868,13 @@ export async function* converse({
          paragraphs", which is what chat's WHAT IT MUST NOT DO section asks for
          and is not what this prompt asks for at all. */
       max_tokens: kind === "candidates" ? 12_000 : 4000,
-      /* **Web search is on in every round; our own tools are not.**
+      /* **Web search is on in every round; use of our own tools is not.**
 
          OpenRouter's is a *server* tool — it runs inside the provider and comes
          back in the same response — so it costs no round trip and there is never
          a reason to take it away. Ours cost a whole extra request each time,
-         which is why the last round drops them: see `MAX_TOOL_ROUNDS`. */
-      tools: withTools ? [webSearchTool(kind), ...toolsFor(kind)] : [webSearchTool(kind)],
+         which is why the last round disables them: see `MAX_TOOL_ROUNDS`. */
+      ...roundTools(kind, withTools),
       messages,
     };
 
@@ -3039,7 +3214,7 @@ export async function* converse({
       throw new Error(TOOL_CALL_LOST.message);
     }
 
-    /* **It asked anyway, on the round that had nothing to give it.**
+    /* **It asked anyway, on the round where tool use was disabled.**
 
        Only reachable when the nudge above did not land, which is why it is a
        guard rather than the main path — but it has to exist, because the
@@ -3080,7 +3255,7 @@ export async function* converse({
     if (lastToolRound && wanted.length > 0 && roundText.trim() === "" && !stopped) {
       line.error(
         { ...turnSoFar(), model: used, ms: since(started), asked: wanted.length },
-        `${used} asked for tools on the round that had none, and wrote nothing`,
+        `${used} asked for tools on the round where tool use was disabled, and wrote nothing`,
       );
       throw new Error(KEPT_ASKING_FOR_TOOLS.message);
     }

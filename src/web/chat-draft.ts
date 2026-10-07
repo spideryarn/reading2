@@ -43,7 +43,7 @@
  * revokes on the first typed or spoken submission, not something worked out
  * from the words or from a missing row, and once revoked it stays revoked.
  */
-import type { SingleThreadKind, ThreadOrigin } from "../types.js";
+import type { LearnKind, ThreadOrigin } from "../types.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 
 export interface ChatDrafts {
@@ -84,8 +84,8 @@ export interface ChatDrafts {
   setList(text: string): void;
 
   /** Recall's, Tutorial's or Explore's unsent words. */
-  learn(kind: SingleThreadKind): string;
-  setLearn(kind: SingleThreadKind, text: string): void;
+  learn(kind: LearnKind): string;
+  setLearn(kind: LearnKind, text: string): void;
 
   /**
    * Where Chat was: a conversation's id, `null` for the list, or `undefined`
@@ -107,7 +107,7 @@ export function createChatDrafts(): ChatDrafts {
      order wrong must not be able to undo it. */
   const spent = new Set<string>();
   let list = "";
-  const learnDrafts = new Map<SingleThreadKind, string>();
+  const learnDrafts = new Map<LearnKind, string>();
   let destination: string | null | undefined;
   return {
     thread: (id) => threads.get(id),

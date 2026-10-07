@@ -49,9 +49,13 @@
  *
  * **4. Not every tool is for every conversation, and the offer is not the
  * gate.** `toolsFor(kind)` decides what a request offers; `runTool` asks it
- * again before running a name, because Live's endpoint takes a name from the
- * browser and a model can ask for a tool it was never shown. A caller that says
- * no kind gets the shared eight and nothing else.
+ * again before running **any** name, because Live's endpoint takes a name from
+ * the browser and a model can ask for a tool it was never shown. A caller that
+ * says no kind gets the shared eight and nothing else. Until 2026-10-07 only
+ * `reader_notes` was checked, which was enough while every other kind was
+ * offered all eight; the guide is offered five (`GUIDE_TOOLS`), so the check
+ * moved to the top of the dispatcher (GPT Sol's F1 on
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
  *
  * ## What may be logged from this file
  *
@@ -506,6 +510,36 @@ export const READER_NOTES_TOOL: FunctionTool = {
 const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL];
 
 /**
+ * **The guide's tools: this article's, and nothing that leaves it.** The guide
+ * is about how to read this piece, not about the world (GPT Sol's F1 on
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md): no
+ * `read_web_page`, no reads of the reader's other articles, no notes, and no
+ * web search either (`webSearchTool` in src/converse.ts). The article tools
+ * stay, so it can say where in the piece something is.
+ *
+ * Named here and picked out of `CHAT_TOOLS`, so a definition has one home and
+ * a name with no definition fails at load rather than offering nothing.
+ * Built once, in `CHAT_TOOLS`'s order: the bytes are part of the cached prefix.
+ */
+export const GUIDE_TOOL_NAMES = [
+  "search_article_words",
+  "search_article_meaning",
+  "article_links",
+  "article_glossary",
+  "article_citations",
+] as const;
+
+export const GUIDE_TOOLS: FunctionTool[] = (() => {
+  const picked = CHAT_TOOLS.filter((t) =>
+    (GUIDE_TOOL_NAMES as readonly string[]).includes(t.function.name),
+  );
+  if (picked.length !== GUIDE_TOOL_NAMES.length) {
+    throw new Error("GUIDE_TOOL_NAMES names a tool CHAT_TOOLS does not define");
+  }
+  return picked;
+})();
+
+/**
  * The tools of ours a conversation of this kind is offered.
  *
  * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
@@ -523,6 +557,8 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
     case "tutorial":
     case "candidates":
       return CHAT_TOOLS;
+    case "guide":
+      return GUIDE_TOOLS;
     default: {
       const unknown: never = kind;
       throw new Error(`unknown thread kind: ${String(unknown)}`);
@@ -2052,15 +2088,17 @@ function noSuchTool(name: string, kind: ThreadKind | undefined): ToolOutcome {
  *
  * **A tool this kind of conversation is not offered is an unknown name** (rule
  * 4 in the header), and gets that same sentence: `reader_notes` asked for in a
- * Recall thread, or through Live's endpoint, reads nothing and is told there is
- * no such tool. The check sits on the name's own `case`, so there is no way to
- * the loader round it.
+ * Recall thread or through Live's endpoint, or `read_web_page` asked for in a
+ * guide, runs nothing — no fetch, no store read — and is told there is no such
+ * tool. The check is ahead of the whole `switch`, for every name and every
+ * kind, so no `case` can be reached round it.
  */
 export async function runTool(
   name: string,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<ToolOutcome> {
+  if (!toolsOf(ctx.kind).some((t) => t.function.name === name)) return noSuchTool(name, ctx.kind);
   switch (name) {
     case "search_article_words":
       return searchWords(args, ctx);
@@ -2079,9 +2117,7 @@ export async function runTool(
     case "read_web_page":
       return readWebPage(args.url, ctx);
     case "reader_notes":
-      return toolsOf(ctx.kind).includes(READER_NOTES_TOOL)
-        ? readReaderNotes(args, ctx)
-        : noSuchTool(name, ctx.kind);
+      return readReaderNotes(args, ctx);
     default:
       return noSuchTool(name, ctx.kind);
   }

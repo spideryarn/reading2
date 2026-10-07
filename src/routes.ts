@@ -386,6 +386,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
@@ -2955,6 +2956,40 @@ async function exploreNotes(
   }
 }
 
+/**
+ * **How much the reader has used Spideryarn, for a guide turn**, or `null`.
+ *
+ * The other articles on their shelf they have opened (`articlesOpenedBefore`),
+ * bucketed by `experienceOf` (src/guide.ts) — the bucket goes to the model,
+ * never the count. Resolved per turn, like the profile, from the stored
+ * thread's kind: `null` for every kind but `guide`.
+ *
+ * **A failed read costs the line, not the turn**, as `exploreNotes` above:
+ * the guide's prompt says what to assume when the line is missing. Logged with
+ * the slug and the error's kind, never a count.
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F7.
+ */
+async function guideExperience(
+  slug: string,
+  thread: Pick<ChatThread, "kind">,
+): Promise<GuideExperience | null> {
+  if (thread.kind !== "guide") return null;
+  try {
+    return experienceOf(await shelfStore.articlesOpenedBefore(slug));
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "guide: could not read how many articles the reader has opened; answering without it",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -3576,6 +3611,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the stored thread's kind and id, like `kind` below. `null` for every
          other kind, and for an Explore turn whose notes could not be read. */
       notes: await exploreNotes(slug, thread, article.blocks),
+      /* **How much the reader has used Spideryarn, on every guide turn**, from
+         the stored thread's kind like `notes` above. `null` for every other
+         kind, and for a guide turn whose count could not be read. */
+      experience: await guideExperience(slug, thread),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an

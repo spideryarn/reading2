@@ -90,7 +90,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "../types.js";
-import { isSingleThreadKind } from "../types.js";
+import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
@@ -417,9 +417,9 @@ export function ChatPanel({
   useRenderCount("ChatPanel");
   /* **Learn's layout, for all three of its conversations** — Recall,
      Tutorial and Explore are each one thread per article, dictated into a tall
-     box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+     box, with no list (`LEARN_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
-  const learn = isSingleThreadKind(kind);
+  const learn = isLearnKind(kind);
   /* Among `threads`, never among `listed`: what the list draws and what may
      be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -481,9 +481,9 @@ export function ChatPanel({
    * picked. GPT Sol's review of the plan above, F4.
    */
   const draftFor = (id: string): string =>
-    isSingleThreadKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
+    isLearnKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
   const setDraftFor = (id: string, text: string): void => {
-    if (isSingleThreadKind(kind)) drafts.setLearn(kind, text);
+    if (isLearnKind(kind)) drafts.setLearn(kind, text);
     else drafts.setThread(id, text);
   };
 
@@ -2681,7 +2681,7 @@ export function Composer({
      transcript above. */
   const [value, setValue] = useState(draft);
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
-  const learn = isSingleThreadKind(kind);
+  const learn = isLearnKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader

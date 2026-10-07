@@ -114,9 +114,12 @@ and this file does not change.
 | `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 
-**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation and Live share. The
-ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts), for the kinds
-that function names and no others.
+**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+for the kinds that function names and no others. **The guide** (plan
+[261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
+`GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
+notes, and no web search.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -337,8 +340,9 @@ reads and what to say when one fails.
   of our rows.
 
 **Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
-shared eight plus this for `chat` and `explore`, and the shared eight for every other kind; the
-`switch` is exhaustive, so a new kind has to be given an answer. Chat reaches for it when the reader
+shared eight plus this for `chat` and `explore`, the shared eight for Recall, Tutorial and
+Candidates, and the guide's five for the guide; the `switch` is exhaustive, so a new kind has to be
+given an answer. Chat reaches for it when the reader
 asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
 (learn-mode.md § The notes go with every turn), so there the tool is for reading one earlier
 conversation in full. Why each of the others is left out (PR-3):
@@ -350,11 +354,14 @@ conversation in full. Why each of the others is left out (PR-3):
   prompt. Either can be added later, with a check of how it behaves.
 - **Candidates** is Referee machinery.
 
-**The offer is not the gate.** `runTool` asks `toolsFor` again on the tool's own `case`, and a
-caller that names no kind has the shared eight. So a Recall model that asks for `reader_notes`
-anyway is told there is no such tool, and so is Live's endpoint, which also refuses the name before
-that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Each guard was switched off and the
-tests watched go red.
+**The offer is not the gate.** `runTool` asks `toolsFor` again before it runs **any** name, ahead
+of the whole dispatch, and a caller that names no kind has the shared eight. So a Recall model that
+asks for `reader_notes` anyway, or a guide model that asks for `read_web_page`, is told there is no
+such tool and nothing is fetched or read; and so is Live's endpoint, which also refuses the name
+before that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Until 2026-10-07 only
+`reader_notes` was checked, on its own `case`; the guide's narrower set moved the check to the top
+(GPT Sol's F1, plan 261007j). Each guard was switched off and the tests watched go red
+(`tests/guide-tool-gate.test.ts`, `tests/reader-notes-tool.test.ts`).
 
 **Whose notes.** The tool is handed a slug and never an owner. `commentStore.load` and
 `chatStore.load` resolve the slug through the article's owner before they read a child row

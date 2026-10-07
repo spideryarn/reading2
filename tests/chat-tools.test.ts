@@ -52,7 +52,7 @@ import {
   type PartialToolCall,
 } from "../src/converse.js";
 import { sameTarget } from "../src/urls.js";
-import type { Block, Meta } from "../src/types.js";
+import type { Block, Meta, ThreadKind } from "../src/types.js";
 
 /**
  * **No test in this file may ask real DNS.** `read_web_page` goes through
@@ -1206,14 +1206,14 @@ describe("converse — a turn that uses a tool", () => {
   });
 });
 
-/* --------------------------------------------- the round that has no tools -- */
+/* --------------------------------------- the round where tool use is disabled -- */
 
 /**
  * **What actually happens on the last round, as opposed to what we assumed.**
  *
- * `converse` withholds our tools on the final round so the model has to write
+ * `converse` disables our tools on the final round so the model has to write
  * prose, and the comment on that line used to say it therefore "cannot ask
- * again". It can. Taking the array away removes the schema; it does not remove
+ * again". It can. Changing the request does not remove
  * three of the model's own turns full of tool calls sitting in the history right
  * above, which is the stronger cue by far.
  *
@@ -1222,10 +1222,10 @@ describe("converse — a turn that uses a tool", () => {
  * sentence about a silence that never happened, and the sentence anybody would
  * then go and debug from.
  *
- * Both halves are pinned here: the round is now *told* the tools are gone, and
+ * Both halves are pinned here: the round is now *told* tool use is finished, and
  * if it asks regardless it fails in its own words rather than in `saidNothing`'s.
  */
-describe("the last round, where our tools are withheld", () => {
+describe("the last round, where our tool use is disabled", () => {
   const sent: Record<string, unknown>[] = [];
 
   /** A round that asks for one tool and says nothing else. */
@@ -1253,7 +1253,7 @@ describe("the last round, where our tools are withheld", () => {
     frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] }),
   ];
 
-  /** Every round asks for a tool, including the one that is offered none. */
+  /** Every round asks for a tool, including the one where tool use is disabled. */
   function alwaysAsks(): void {
     let call = 0;
     vi.stubGlobal(
@@ -1280,7 +1280,7 @@ describe("the last round, where our tools are withheld", () => {
     return typeof last?.content === "string" ? last.content : JSON.stringify(last?.content);
   };
 
-  const drain = async (): Promise<string | null> => {
+  const drain = async (kind: ThreadKind = "chat"): Promise<string | null> => {
     try {
       for await (const _ of converse({
         power: "standard",
@@ -1289,6 +1289,7 @@ describe("the last round, where our tools are withheld", () => {
         history: [],
         question: "search everything and compare it",
         slug: "example",
+        kind,
       })) {
         // drained
       }
@@ -1298,7 +1299,7 @@ describe("the last round, where our tools are withheld", () => {
     }
   };
 
-  it("tells the model the tools are gone, on that round and no other", async () => {
+  it("tells the model tool use is finished, on that round and no other", async () => {
     alwaysAsks();
     await drain();
 
@@ -1322,6 +1323,15 @@ describe("the last round, where our tools are withheld", () => {
     const tools = (sent[MAX_TOOL_ROUNDS] as { tools: { type: string }[] }).tools;
     expect(tools).toHaveLength(1);
     expect(tools[0]?.type).toBe("openrouter:web_search");
+  });
+
+  it("does not tell the guide that its unavailable library tools are finished", async () => {
+    alwaysAsks();
+    await drain("guide");
+
+    const last = lastMessage(sent[MAX_TOOL_ROUNDS] as Record<string, unknown>);
+    expect(last).toContain("article tools are finished");
+    expect(last).not.toContain("library tools");
   });
 
   it("says what really happened when it asks anyway, instead of blaming a silence", async () => {
