@@ -4,9 +4,9 @@ Up: [feedback.md](../project/feedback.md) · [feedback-reports.md](../project/fe
 reports `spya-cnbv8f` and `spya-sshjd2` (SPIDERYARN-READING2-E2, -E3) · queue item `qi-ewwnsr85` ·
 session and worktree `fbcnbv8f-earlier-tab-deferred-and-ask`
 
-Status as of 2026-10-07: **Stage 1 built in `16963ad41`, its review fixes in `394aed534`. Stage 2
-is built in this worktree and not yet committed, reviewed by GPT Sol or seen in a browser**
-(§ Progress).
+Status as of 2026-10-07: **both stages built, reviewed by GPT Sol (approve with fixes, each
+time), seen in a browser, and on `dev`; not deployed.** Evidence: stage 1 `16963ad41` and
+`394aed534`, stage 2 `ed62e3ab4` and `149665db6`; § Progress.
 
 ## What Greg asked for
 
@@ -305,9 +305,10 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
 
 ## Deferred, each to get its own queue entry
 
-- The fast path (Question 1).
-- The richer tab for other readers (Question 2).
-- Multiple-choice options as buttons in a question card (today: Greg types or says "1A").
+- The fast path: it is question file `q-f6ub8e`, so his answer is what starts it.
+- The richer tab for other readers: question file `q-bw83d2`, likewise.
+- Multiple-choice options as buttons in a question card (today: Greg types or says "1A"):
+  queue item `qi-kwkv4pct`.
 
 ## Progress
 
@@ -326,3 +327,21 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
   Mutations seen red: the owner predicate on each of the three reads, the environment check and
   the `acted` filter in `--answers`, the 409 in the store and in the route, and the open-only
   filter in the compile and in the route.
+- Stage 2 committed as `ed62e3ab4`. Before it, the reading-time and sharing notes went from
+  *awaiting* to *shipped*, with their lines taken off the waiting list, since both were decided
+  and built on 2026-10-05.
+- Stage 2 code review (`…-stage2-review-sol.md`): approve with fixes, C6 to C9, all applied by
+  the reviewer and committed as `149665db6`. C8 also settled the last two lines left on the
+  waiting list (the command bar's batching, decided 2026-10-06; OpenAlex, decided 2026-10-04),
+  so that section is now only the signpost. Plan-review rounds stopped at two, as the house rule
+  says; no finding was overruled.
+- Browser pass (Sonnet, Playwright, local): all five checks passed — the five pills and counts,
+  `#number`, the ten question cards, a reply sent and still answered after reopening, drafts kept
+  across boxes, phone width with no sideways scroll, light and dark, a non-admin's tab unchanged
+  and calling only `/api/feedback`, no console errors. Local data had no shipped, set-aside or
+  commented reports, so those rows were seen only in tests. Left as they are: question bodies are
+  long in the model's monospaced face, and the pill reads "Needs a decision 0 · 10 open
+  questions" when no report is waiting.
+- **Deploy order:** stages 1 and 2 go out together (a stage-2 client needs `questions` in the
+  admin answer). Both migrations are additive; the new table relies on the schema's default
+  privileges for the app role, which the deploy's preflight checks.
