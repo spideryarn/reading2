@@ -27,7 +27,7 @@ is per datum. Readiness is the worked example: a run's `durationMs` rides on the
 by [`ReadinessPanel.tsx`](../../tools/fleet/web/src/ReadinessPanel.tsx) with no new route.
 
 - [§ What a mode is](#what-a-mode-is) — the four things a tab is made of
-- [§ The registrations](#the-registrations) — the five edits for a new tab, and the one nothing checks
+- [§ The registrations](#the-registrations) — the five edits for a new tab, each of which the compiler now checks
 - [§ Ask this before you design the panel](#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about) — whether the tab may touch the fleet at all
 - [§ Where the panel's data comes from](#where-the-panels-data-comes-from-the-end-to-end-path) — pushed, on-demand or a write; the path for each
 - [§ The seam, which is invisible from the panel](#the-seam-which-is-invisible-from-the-panel) — why a tab compiles and shows nothing
@@ -49,6 +49,12 @@ Four things a reader can see, spread over five places a writer must edit:
 - the name in the URL hash — `#health`, `#overseer`. **The hash and not `useState`**, because this
   page is left open on a phone for hours and reloaded whenever iOS reclaims the tab; `mode.ts`'s
   header has the argument, and an unknown name falls back to Sessions rather than rendering nothing.
+  **Back undoes the last deliberate act**: a write is a new history entry for a mode change and for
+  opening a session from the list, and rewrites the current entry for everything else — another
+  session, closing the detail, an order, a limit, a filter. A new parameter needs no decision,
+  because `historyKindFor` in `mode.ts` decides from the before and after states and no panel
+  chooses. It is the reading app's rule ([url-state.md](url-state.md): a deliberate act pushes, a
+  selection or a continuous value replaces), restated here as this page's own.
 
 One more thing it gets for free: **the browser tab's title**, `(2) Box health · Fleet`, which takes
 the mode's `MODE_LABELS` word — so choose that word knowing it is also what a tab strip shows. The
@@ -64,33 +70,45 @@ rule (stale first, then who needs you, then the tab, `Fleet` last) is in
 | `MODE_LABELS` | `mode.ts` | the compiler |
 | `MODE_ICONS` | `Dock.tsx` | the compiler. **Not decoration**: at the bar's narrowest rung the glyph is all that is left of an inactive button. House defaults, [icons.md](icons.md) |
 | `MODE_TIPS` | `Dock.tsx` | the compiler. [§ The card on the button](#the-card-on-the-button) |
-| the mount | `App.tsx` | **nothing** — a ternary, not a `switch` with a `never` default |
+| the mount | `App.tsx` | the compiler, since 2026-10-06 — one `switch (mode)` whose `default` assigns `mode` to a `never` |
+
+A sixth used to be in this table and is no longer a registration: the share count in
+`.dock-modes { flex: N 0 auto }`, in `tailwind.css` under `@media (pointer: coarse)`. `Dock.tsx` has
+passed it as `--dock-mode-count: MODES.length` since 2026-09-09, so there is nothing to edit.
 
 The three maps are `Record<Mode, …>` rather than partials, so `npm run typecheck` catches a
 **half**-added mode. `Mode` is derived from `MODES`, so it cannot catch one removed from every
 register at once ([§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once)).
 
-**One register is checked by nothing: the `App.tsx` mount.** A mode in all four other registers with no arm there compiles, draws a button,
-  switches the hash, and shows an empty page.
+**Two registers used to be checked by nothing, and the second was the one nobody found for a day.**
+Both are closed; they are kept here because each is a shape that will turn up again.
 
-The coarse-pointer weighting of `.dock-modes` (`flex: 3 0 auto`, a literal count nobody updated) was
-the register nobody found for a day, GPT Sol found it on 2026-09-09. It is now
-`flex: var(--dock-mode-count, 8) 0 auto` in `tailwind.css`, with `Dock.tsx` setting the property from
-`MODES.length`, and tests pin it
-([`fleet-questions-panel.test.tsx`](../../tests/fleet-questions-panel.test.tsx)). Adding a mode needs
-no CSS edit.
+- **The `App.tsx` mount.** It was a ternary per mode, so a mode in all four registers with no arm
+  there compiled, drew a button, switched the hash, and showed an empty page. Since 2026-10-06 it is
+  one exhaustive `switch`, and a mode with no `case` fails `npm run typecheck` with *Type '"yours"'
+  is not assignable to type 'never'*. What the compiler still cannot see is a **wrong** arm — a
+  `case` that mounts another mode's panel, or nothing — which is what [§ The test](#the-test) is for.
+- **The coarse-pointer weighting.** On a touch device `.dock-modes` was given `flex: 3 0 auto` — a
+  literal share count, written when there were three modes, so that the segment spreads against
+  Refresh's `1` in proportion to what is inside it. It was **not** derived from `MODES.length`, and
+  adding a fourth mode without changing it gave four buttons three shares. The measured fit ladder
+  stops the row clipping; it does not repair the proportion. GPT Sol found this on 2026-09-09, after
+  `deploys` had landed and left it saying `3`, and the same day it became
+  `flex: var(--dock-mode-count, 8) 0 auto` with the property set from `MODES.length` in `Dock.tsx`.
+  The `8` is a fallback for a missing property, not a count anybody keeps.
 
-So the count is not "four registrations in two files" as the doc first said, and as the session below
-found it. It is **five places in three files, one of them unchecked**.
+So the count was never "four registrations in two files" as the doc first said, and as the session
+below found it. It was six places in three files, two of them unchecked; it is now **five places in
+three files, none of them unchecked**.
 
 > I went looking for the tab list expecting one place and found four, in two files, one of which
 > advertises itself as not needing edits.
 >
 > — session `usage-limits-tab`, 2026-09-09
 
-`Dock.tsx`'s own header says *"If a fourth mode arrives, nothing here needs touching"*. That was true
-of the bar's **fit measurement** and false of the file; the header now says so itself. It is a known cost, not
-a design — [§ What this costs](#what-this-costs).
+`Dock.tsx`'s own header said *"If a fourth mode arrives, nothing here needs touching"* until
+2026-09-09. That was true of the bar's **fit measurement** and false of the file; the header now
+says a new mode does need touching there, and names the four registrations and the mount.
 
 ## Ask this before you design the panel: may the fleet touch what your tab is about?
 
@@ -335,8 +353,9 @@ tests, both verified by mutation rather than by reading. Four assertions earn th
    is removed from every register at once
    ([§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once));
 2. **the hash opens into it** — set `window.location.hash` *before* mounting, then assert something
-   only your panel draws. This is the one that catches a missing `App.tsx` arm: mutate the arm to
-   `false` and watch it go red;
+   only your panel draws. Until 2026-10-06 this was the one thing that caught a missing `App.tsx`
+   arm; the compiler does that now, and this catches the **wrong** arm — a `case` that returns
+   another mode's panel or `null` compiles. Mutate yours that way and watch it go red;
 3. **pressing the button** writes the hash and switches the panel;
 4. **the empty state says which nothing it is**, rather than drawing nothing.
 
@@ -393,7 +412,8 @@ without ever raising a marker.
 
 - dropped from `MODES` and the three maps, **mount arm kept** → typecheck **fails**: TS2367 on
   `mode === "yours"` against a union that no longer contains it, and TS6133 on the now-unused icon
-  import. Caught.
+  import. Caught. (The arm is a `case` since 2026-10-06, so the first error will be on
+  `case "yours"` instead and its code may differ; that has not been re-measured.)
 - dropped from **every** register including the mount arm → clean, and only
   `expect(MODES).toContain("yours")` objects.
 
@@ -450,20 +470,23 @@ not scroll the page sideways, and the last row of your panel is not underneath t
 has two rungs — Refresh loses its word, then the modes lose theirs except the active one — and past
 the last rung the row scrolls rather than clipping, so extra modes degrade visibly.
 
-**Do this at a touch viewport specifically, not merely a narrow one.** The share count of the mode segment
-is now derived from `MODES.length`, and a test pins that. What nothing checks is how the bar *looks*: a
-cramped mode segment against Refresh is proportion rather than breakage, so look.
+**Do this at a touch viewport specifically, not merely a narrow one.** The coarse-pointer share count
+follows `MODES.length` on its own now, but what it produces is still something no test and no
+typecheck will ever mention: its symptom is proportion rather than breakage — the mode segment
+looking cramped against Refresh.
 
 ## What this costs
 
-Two things are worse than they need to be, written down rather than fixed on a night when four
-sessions were live in these files (a third, the hard-coded share count in CSS, has since been fixed):
+Three things were worse than they needed to be, written down rather than fixed on the night of
+2026-09-08 when four sessions were live in these files. One is left:
 
 - **Five places across three files**, with `MODES`/`MODE_LABELS` in `mode.ts`,
-  `MODE_ICONS`/`MODE_TIPS` in `Dock.tsx` and the mount in `App.tsx`. One table in one file would make
-  a mode one edit plus a mount, and would delete most of this page.
-- **`Dock.tsx`'s header once advertised that a new mode needs no edit there.** It now says the
-  opposite, but both sessions that went looking for the tab list read the old one the wrong way.
-
-Neither is worth a rewrite on its own. Both are worth doing the next time somebody is in these
-files for another reason.
+  `MODE_ICONS`/`MODE_TIPS` in `Dock.tsx` and the mount in `App.tsx`. One table in one file would
+  make a mode one edit plus a mount. It was weighed and **not** done on 2026-10-06: a table holding
+  icons makes lucide a dependency of every pure hash test through `mode.ts`, and all five places are
+  compiler-checked, so what is left is a cost in edits and not a hole —
+  [261006l § Stage 3](../plans/261006l-borrow-the-reading-app-s-machinery-for-the-fleet-dashboard.md#stage-3-a-mount-the-compiler-checks-and-the-doc-made-true).
+- ~~**`.dock-modes { flex: 3 0 auto }` hard-codes the mode count in CSS**~~ — closed 2026-09-09: the
+  count is `MODES.length`, set as a custom property from the one place that knows.
+- ~~**`Dock.tsx`'s header advertises that a new mode needs no edit there**~~ — closed 2026-09-09.
+  Both sessions that went looking for the tab list had read it the wrong way first.
