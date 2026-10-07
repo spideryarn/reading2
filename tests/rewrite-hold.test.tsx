@@ -36,6 +36,8 @@ import type { Article, Block, BlockId, Job } from "../src/types.js";
 
 let jobs: Job[] = [];
 const posted: { slug: string; steps: string[]; force?: string[] }[] = [];
+const retried: string[] = [];
+let retryRefused = false;
 /** Set to keep the POST in the air; call it to let the POST answer. */
 let postGate: Promise<void> | null = null;
 const job = (step: string, status: Job["status"]) =>
@@ -59,7 +61,11 @@ vi.mock("../src/web/useJobs.js", () => ({
       return job(request.steps[0] ?? "", "queued");
     },
     cancel: async () => {},
-    retry: async () => null,
+    retry: async (id: string) => {
+      retried.push(id);
+      if (postGate) await postGate;
+      return retryRefused ? null : { ...jobs.find((j) => j.id === id)!, id: "the-retry", status: "queued" };
+    },
   }),
 }));
 
@@ -124,7 +130,8 @@ if (!(globalThis as { CSS?: unknown }).CSS) {
 
 /* -------------------------------------------------------------- the article -- */
 
-const SLUG = "a-piece";
+const ORIGINAL_SLUG = "a-piece";
+let SLUG = ORIGINAL_SLUG;
 const BLOCKS: Block[] = [
   { id: "spya-aaaaaa" as BlockId, tag: "h1", kind: "heading", level: 1, text: "A piece", words: 2, html: "<h1>A piece</h1>", gistable: false },
   { id: "spya-bbbbbb" as BlockId, tag: "p", kind: "text", text: "The instrument was built first.", words: 5, html: "<p>The instrument was built first.</p>", gistable: true },
@@ -208,8 +215,8 @@ interface Row {
    */
   verb?: string;
   /**
-   * The artefact these tests serve when they do not say. A mode whose only
-   * forced control is on its stale banner needs a stale one, before and after.
+   * The artefact these tests serve when they do not say. A mode whose forced
+   * control needs a stale banner or a failure is served stale, before and after.
    */
   shape?: Shape;
   /** The quiet line a held panel with nothing running draws. */
@@ -229,7 +236,9 @@ const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { SketchView } = await import("../src/web/SketchView.js");
+const { useSketch } = await import("../src/web/useSketch.js");
 const { IllustratedView } = await import("../src/web/IllustratedView.js");
+const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
@@ -273,7 +282,7 @@ function CitationsOuter({ show }: { show: boolean }) {
     : null;
 }
 
-/** **The only forced control is on the stale banner**, so the artefact these rows are served is stale, before and after. */
+/** These modes offer their forced control on a stale banner without needing a failure. */
 const ON_THE_BANNER: Shape = { stale: true, profiled: false };
 
 const DEBATE_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
@@ -709,7 +718,9 @@ const paint = async () => {
     root.render(
       createElement(
         NuqsTestingAdapter,
-        { searchParams: row.search ?? "", hasMemory: true } as Parameters<typeof NuqsTestingAdapter>[0],
+        /* ArticlePage keys OwnedArticle on the slug, so navigation remounts
+           both the band and its always-mounted readers. */
+        { key: SLUG, ...({ searchParams: row.search ?? "", hasMemory: true } as Parameters<typeof NuqsTestingAdapter>[0]) },
         row.mount(showBand),
       ),
     ),
@@ -792,8 +803,11 @@ const finishJob = (status: Job["status"] = "done") => {
 };
 
 beforeEach(() => {
+  SLUG = ORIGINAL_SLUG;
   jobs = [];
   posted.length = 0;
+  retried.length = 0;
+  retryRefused = false;
   postGate = null;
   reads = 0;
   cache.clear();
@@ -843,6 +857,112 @@ it("releases a refused press even if the start callback rejects", async () => {
 });
 
 describe.each(ROWS)("$name", (mode) => {
+  it.skipIf(["Sketch", "Illustrated"].includes(mode.name))("Retry holds the old result through its completion GET", async () => {
+    /* Thread's current-result foot draws only the failure's sentence; its
+       stale banner is the loaded branch that offers JobProgress's Retry. */
+    start(mode, mode.name === "Thread" ? { ...PROFILED, stale: true } : mode.shape ?? PROFILED);
+    await paint();
+    await pressRegenerate();
+    finishJob("error");
+    await paint();
+    await press("Retry");
+    expect(retried).toEqual(["the-rewrite"]);
+    jobs = [{ ...job(mode.step, "running"), id: "the-retry" }];
+    await paint();
+
+    let land!: (res: Response) => void;
+    serve = () => new Promise((resolve) => { land = resolve; });
+    jobs = [{ ...job(mode.step, "done"), id: "the-retry" }];
+    await paint();
+    expect(onScreen("old")).toBe(true);
+    await expectHeld("the retried job finished, but its GET is still in flight");
+    expect(posted).toHaveLength(1);
+
+    await act(async () => land(json(mode.body("new", usual()))));
+    await flush();
+    expect(await regenerate()).toBe("enabled");
+  });
+
+  it.skipIf(["Sketch", "Illustrated"].includes(mode.name)).each(["error", "cancelled", "refused", "unchanged", "offline"] as const)(
+    "Retry releases or offers a read-only recovery after %s", async (outcome) => {
+      start(mode, mode.name === "Thread" ? { ...PROFILED, stale: true } : mode.shape ?? PROFILED);
+      await paint();
+      await pressRegenerate();
+      finishJob("error");
+      await paint();
+      retryRefused = outcome === "refused";
+      const [retry] = buttons("Retry");
+      expect(retry).toBeDefined();
+      await act(async () => { retry!.click(); retry!.click(); });
+      await flush();
+      expect(retried).toEqual(["the-rewrite"]);
+      if (outcome === "refused") {
+        expect(await regenerate()).toBe("enabled");
+        return;
+      }
+      jobs = [{ ...job(mode.step, "running"), id: "the-retry" }];
+      await paint();
+      if (outcome === "offline") serve = dropped;
+      jobs = [{ ...job(mode.step, outcome === "error" || outcome === "cancelled" ? outcome : "done"), id: "the-retry" }];
+      await paint();
+      if (outcome === "offline") {
+        await expectHeld("the retried result was read from the offline copy");
+        serve = () => json(mode.body("old", usual()));
+        await press(mode.readAgain);
+      }
+      expect(await regenerate()).toBe("enabled");
+      expect(posted).toHaveLength(1);
+    },
+  );
+
+  it("releases after a successful rewrite returns the same identity", async () => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    jobs = [job(mode.step, "running")];
+    await paint();
+    finishJob();
+    await paint();
+    expect(onScreen("old")).toBe(true);
+    expect(await regenerate()).toBe("enabled");
+    expect(posted).toHaveLength(1);
+  });
+
+  it.skipIf(!mode.verb)("a slug change does not disable another article, and returning releases a finished unchanged hold", async () => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    const originalPath = path;
+    const finished = job(mode.step, "done");
+    SLUG = "another-piece";
+    path = `${mode.path}${SLUG}`;
+    await paint();
+    expect(await regenerate(), "the second article has no rewrite hold").toBe("enabled");
+    jobs = [finished];
+    SLUG = ORIGINAL_SLUG;
+    path = originalPath;
+    await paint();
+    expect(await regenerate(), "the original ended with an unchanged server result").toBe("enabled");
+    expect(posted).toHaveLength(1);
+  });
+
+  it.skipIf(!mode.verb)("an unseen terminal job trimmed from the list remains held even after an online read", async () => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    showBand = false;
+    await paint();
+    /* It failed while closed, then was trimmed by later terminal jobs. No
+       mount saw its outcome, and the artefact was never replaced. */
+    jobs = [];
+    showBand = true;
+    await paint();
+    await expectHeld("no listed outcome can settle this press");
+    await press(mode.readAgain);
+    await expectHeld("a fresh unchanged read cannot prove the unlisted job ended");
+    expect(posted).toHaveLength(1);
+  });
+
   it.each([true, false])("keeps the read-only escape on a stale offline copy (profiled=%s)", async (profiled) => {
     start(mode);
     await paint();
@@ -1187,6 +1307,72 @@ describe.each(ROWS)("$name", (mode) => {
     expect(onScreen("new")).toBe(true);
     expect(buttons(label).filter((b) => !b.disabled), `${label} is offered again`).toHaveLength(1);
   });
+});
+
+/* Loaded pictures deliberately draw no JobProgress Retry. Exercise their real
+   hooks' shared failure callback without adding a control to either view. */
+describe.each(ROWS.filter((mode) => ["Sketch", "Illustrated"].includes(mode.name)))("$name Retry seam", (mode) => {
+  let owner: ReturnType<typeof useSketch> | ReturnType<typeof useIllustrated>;
+  function SketchProbe() {
+    owner = useSketch(SLUG, BLOCKS.map((block) => block.id));
+    return null;
+  }
+  function IllustratedProbe() {
+    owner = useIllustrated(SLUG, BLOCKS);
+    return null;
+  }
+  it.each(["slow", "error", "cancelled", "refused", "unchanged", "offline", "remounted"] as const)(
+    "holds Retry and recovers after %s", async (outcome) => {
+      start(mode);
+      row = { ...mode, mount: (show) => show ? createElement(mode.name === "Sketch" ? SketchProbe : IllustratedProbe) : null };
+      await paint();
+      await act(async () => owner.regenerate());
+      finishJob("error");
+      await paint();
+      const retry = owner.failed?.retry;
+      expect(retry).toBeTypeOf("function");
+      retryRefused = outcome === "refused";
+      let finishPost!: () => void;
+      if (outcome === "remounted") postGate = new Promise((resolve) => { finishPost = resolve; });
+      await act(async () => { retry!(); retry!(); });
+      await flush();
+      expect(retried).toEqual(["the-rewrite"]);
+      if (outcome === "refused") {
+        expect(owner.rewriting).toBe(false);
+        return;
+      }
+      expect(owner.rewriting).toBe(true);
+      if (outcome === "remounted") {
+        showBand = false;
+        await paint();
+        showBand = true;
+        await paint();
+        expect(owner.rewriting).toBe(true);
+        await act(async () => finishPost());
+        await flush();
+      }
+      jobs = [{ ...job(mode.step, "running"), id: "the-retry" }];
+      await paint();
+      let land!: (res: Response) => void;
+      if (outcome === "slow") serve = () => new Promise((resolve) => { land = resolve; });
+      if (outcome === "offline") serve = dropped;
+      jobs = [{ ...job(mode.step, outcome === "error" || outcome === "cancelled" ? outcome : "done"), id: "the-retry" }];
+      await paint();
+      if (outcome === "slow" || outcome === "offline") {
+        expect(owner.rewriting).toBe(true);
+        await act(async () => owner.regenerate());
+        expect(posted).toHaveLength(1);
+        if (outcome === "slow") await act(async () => land(json(mode.body("new", usual()))));
+        else {
+          serve = () => json(mode.body("old", usual()));
+          await act(async () => owner.refresh());
+        }
+        await flush();
+      }
+      expect(owner.rewriting).toBe(false);
+      expect(posted).toHaveLength(1);
+    },
+  );
 });
 
 /* ------------------------------------------------------ the membership guard --

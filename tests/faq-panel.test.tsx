@@ -320,6 +320,19 @@ describe("FaqPanel", () => {
     expect(host.textContent).not.toContain("Find them again");
   });
 
+  it("offers a forced foot run after a refused start on a current list", async () => {
+    const regenerate = vi.fn(async () => {});
+    await draw(owner({
+      regenerate,
+      failed: { message: "Couldn't start the job.", retryable: true, retry: null },
+    }));
+    const again = host.querySelector<HTMLButtonElement>(".faq-foot button");
+    expect(again?.textContent).toContain("Find them again");
+    expect(again?.disabled).toBe(false);
+    await act(async () => again?.click());
+    expect(regenerate).toHaveBeenCalledOnce();
+  });
+
   it("shows a Metadata-started job and failure on an outdated list without adding a second foot", async () => {
     await draw(owner({ outdated: true, job: RUNNING }));
     expect(host.querySelectorAll(":scope > aside > .faq-foot")).toHaveLength(1);

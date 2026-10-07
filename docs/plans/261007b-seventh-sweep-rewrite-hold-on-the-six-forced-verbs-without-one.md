@@ -40,8 +40,10 @@ that lives in the band is gone when it reopens. It also cannot tell a read the s
 one answered out of the offline copy. The shared hold already handles both, and using it is fewer
 new lines than a seventh private version.
 
-**Nothing new was added to `rewrite-hold.ts`.** Its release rules are untouched; the six hooks pass
-it an identity, their queue and their read's bookkeeping, as the first six do.
+**The builder's stage did not change `rewrite-hold.ts`'s logic.** Its release rules were untouched;
+the six hooks passed it an identity, their queue and their read's bookkeeping, as the first six do.
+The write-capable review later added Retry's registration at the shared seam; see § What the
+write-capable review repaired.
 
 ## The sibling each one copies
 
@@ -223,11 +225,9 @@ tenth is the showcase"); it is not a hook and was not touched.
 ## Left
 
 - **Skim's hold** (C10b).
-- **A Retry is not taken through the hold.** `JobProgress` offers Retry under a failed job in every
-  mode, and it re-runs the job without going through `useRewriteHold`. A hook hides the failure
-  while it is holding, so the two do not overlap; but after a retried run finishes, the gap this
-  plan closes is open again for that run. True of the first six as well. Not reproduced here, only
-  read.
+- **The builder left Retry's bypass unreproduced.** `JobProgress` re-ran a failed job without
+  going through `useRewriteHold`, reopening the completion-read gap for that run. The
+  write-capable review reproduced and repaired the shared seam; see below.
 - **The command bar's *Run again* rows and Metadata's re-run rows force a step with an artefact
   possibly on screen in another tab or behind them.** They are excluded from the guard with their
   reasons; whether they want a hold of some kind is a separate question.
@@ -254,6 +254,27 @@ touched files: 5 `useOptionalChain` warnings on the `waiting` line, written as
 existing complexity advisories on five panel functions and a new one on the guard's walker.
 No full `npm test`, no browser pass, no cross-family code review yet: the caller runs that before
 pushing.
+
+## What the write-capable review repaired
+
+Review reproduced the deferred Retry finding before changing code: nine mounted controls re-armed
+while the retried result GET was pending. Thread's first fixture had no Retry button and was
+corrected to use its stale banner; that harness failure is separate from those nine behavior
+failures. The repair registers each mode's existing hold with `useStepJob`'s Retry and returns
+the replacement job ID to it, preserving the retry endpoint and the existing release rules.
+The loaded Sketch and Illustrated branches remain as built; their actual hooks exercise the seam
+separately. The cause, history and countermeasures are in
+[the postmortem](../postmortems/261007b-an-alternate-paid-action-bypasses-the-completion-fence.md);
+the review cases are in [rewrite-hold.test.tsx](../../tests/rewrite-hold.test.tsx).
+
+Reviewer validation on the final tree: the complete hold suite **331 passed, 24 skipped, 0 failed**;
+the skips are the table's inapplicable branches, with the loaded picture hooks tested separately.
+Disabling only Retry's hold registration made the twelve completion-gap probes fail (12 failed,
+343 skipped); restoring it made the same probes pass (12 passed, 343 skipped).
+The six shared-job/doc-link regression suites passed **90 tests**. The 18 typed-fixture suites
+passed **726 tests** before the two new panel cases; the complete FAQ/Citations suites then passed
+**157 tests**. Those suite counts overlap. `node --import tsx scripts/typecheck.ts` passed all four
+projects and covered all 3,344 source files. No network, full `npm test`, browser pass or commit.
 
 ## What the documents got wrong
 

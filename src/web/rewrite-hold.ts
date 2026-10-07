@@ -178,7 +178,7 @@ export function useRewriteHold({
   step: StepName;
   /** What identifies the artefact on screen — `generatedAt`, Quiz's `batchId` — or null with none. */
   identity: string | null;
-  queue: Pick<StepJob<StepName>, "job" | "loaded" | "starting" | "failed" | "ended">;
+  queue: Pick<StepJob<StepName>, "job" | "loaded" | "starting" | "failed" | "ended" | "registerRetryHold">;
   /** The read's own bookkeeping — `useFreshReads`, on whichever hook holds the read. */
   fresh: FreshReads;
   /** The read's `refresh`. Called once, when the job is first seen ended. Never spends. */
@@ -266,6 +266,12 @@ export function useRewriteHold({
     },
     [key, identity],
   );
+
+  /* JobProgress's Retry uses the same hold, while preserving the retry
+     endpoint and the replacement job's id. The registration belongs to this
+     queue mount; Metadata has no artefact hold to register. */
+  const registerRetryHold = queue.registerRetryHold;
+  useEffect(() => registerRetryHold?.(run), [registerRetryHold, run]);
 
   return {
     /* An offline copy with a different identity does not settle the hold. */
