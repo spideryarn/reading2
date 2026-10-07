@@ -61,7 +61,11 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   revision_phrase_runs: { column: "computed_at" },
   revision_step_runs: { column: "started_at" },
   shelf_topic_scores: { column: "computed_at" },
-  upload_source_guesses: { column: "claimed_at" },
+  /* `upload_source_guesses` was here until 2026-10-07, with `claimed_at` as its
+     stand-in. That column is the claim's eligibility clock: every reclaim
+     re-stamps it and a release sets it to the epoch. A stand-in has to be a
+     time that stays put, which this check cannot see — it reads names and
+     types. The table has a real `created_at` now. */
   uploads: { column: "minted_at" },
 };
 
@@ -155,9 +159,11 @@ describe("every table says when its rows happened", () => {
     expect(createdAtProblems(tables, WITHOUT_CREATED_AT)).toEqual([]);
   });
 
-  it("holds the five tables stage 1 of 261003j added it to, nullable and defaulted", () => {
-    /* Nullable: a row from before 2026-10-03 has no time, and is not given one.
-       Defaulted: no store names the column, so the default is the only writer. */
+  it("holds the six tables it was added to after they had rows, nullable and defaulted", () => {
+    /* Nullable: a row from before the column has no time, and is not given one
+       (2026-10-03 for the five of 261003j stage 1, 2026-10-07 for
+       `upload_source_guesses`). Defaulted: no store names the column, so the
+       default is the only writer. */
     for (const value of Object.values(schema)) {
       if (!is(value, PgTable)) continue;
       const config = getTableConfig(value);
@@ -168,6 +174,7 @@ describe("every table says when its rows happened", () => {
           "glossary_lookups",
           "citation_finds",
           "citation_investigations",
+          "upload_source_guesses",
         ].includes(config.name)
       ) {
         continue;

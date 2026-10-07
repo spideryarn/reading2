@@ -429,17 +429,18 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: {
       exported: false,
       why:
-        "One row saying which job is running, reachable from an article only " +
-        "through `jobs` above. It describes this machine at this moment, not any " +
-        "article, and a rollback that restored it would name a job that is not " +
-        "running.",
+        "One row that every claim of a job locks before it decides, so claims " +
+        "are decided one at a time. It records nothing: its `running_job_id` is " +
+        "never written, and that unused column's foreign key to `jobs` is the " +
+        "only reason it is reachable from an article at all. Nothing in it to " +
+        "roll back.",
     },
     bundle: {
       exported: false,
       why:
-        "One row saying which job this server is running now, reachable from an " +
-        "article only through `jobs`. It describes the machine at this instant and " +
-        "says nothing about the article.",
+        "One row that every claim of a job locks before it decides. It holds " +
+        "nothing about any article or any job, and is reachable from one only " +
+        "through an unused foreign key to `jobs`.",
     },
   },
   /* The two the record could not see until 2026-09-01, because the guard's
