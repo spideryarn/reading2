@@ -3163,6 +3163,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */
   "tests/nav-label-status-pg.test.ts": "private-postgres",
+  /* New on 2026-10-07 (plan 261007f). Its own owner and throwaway articles,
+     every survey scoped to that owner. */
+  "tests/never-published-tidy.test.ts": "private-postgres",
   /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
      one column read back through four reads. */
   "tests/title-original-pg.test.ts": "private-postgres",
@@ -3746,6 +3749,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `lockBillingAccount` before it deletes anything. */
   "tests/article-delete-pg.test.ts": {
     "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
+  },
+  /* Plan 261007f. `seedAuthUser` in `beforeEach`, deleted again in `afterAll`:
+     the articles hang off it, and `destroy` creates its billing anchor. */
+  "tests/never-published-tidy.test.ts": {
+    "7e1d0000-0000-4000-8000-0000000000b1": { kind: "seeded" },
   },
   "tests/db-referee-criteria.test.ts": {
     "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },

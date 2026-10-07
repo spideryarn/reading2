@@ -682,6 +682,9 @@ Not done, in this order of importance:
      about 360 s; fetch on 150 s. Raising them costs requeue windows; the numbers were not touched.
    - Question 4 (the Generate button after a failed retry) is not "one line once C9 lands": the
      union was not adopted, so it is a few lines in each of twelve hooks.
+   - Question 8 was answered "yes, tidy them": the
+     [plan and script](261007f-tidy-the-never-published-production-articles.md) are ready and
+     reviewed (GPT Sol, three rounds), waiting for the index in production and 2026-10-08 18:31 UTC.
 4. **Left, each in its cluster's plan:** the command bar's *Run again* row bypasses every hold
    (reproduced, pinned by a test that goes red when it is fixed; P1 by Sol's grading and the most
    valuable thing left); the route opt-in for the last six "none yet" reads; stage 7 of the schema
