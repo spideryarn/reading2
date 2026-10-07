@@ -1,6 +1,6 @@
 # Shelf topics
 
-Parent: [reading-view-overview.md](reading-view-overview.md), beside [library.md](library.md).
+Up: [reading-view-overview.md](reading-view-overview.md), beside [library.md](library.md).
 
 A row of **topics** above the shelf, each with a count. Choose one and the shelf narrows to the
 articles in it; choose a second and it narrows to articles in both. **Since 2026-10-03 a model names
@@ -30,6 +30,24 @@ The design, the measurements and every decision are in the plan,
 algorithms, the libraries, other tools' interfaces, the dead ends) is
 [260928a-shelf-facet-terms-algorithms-and-ui.md](../research/260928a-shelf-facet-terms-algorithms-and-ui.md).
 This doc is what you need to work on it.
+
+## In this doc
+
+- [§ Topics a model names](#topics-a-model-names-broad-to-fine) — how the tree is built and filed, and why it is capped at 150 works
+- [§ Two steps](#two-steps-and-only-the-first-is-stored) — the phrase row you see with no model answer
+- [§ The model's judgement](#the-models-judgement) — what the model scores and how its answer is trusted
+- [§ The count](#the-count-one-formula) — why a pill's number is what it is
+- [§ A topic with nothing to show](#a-topic-with-nothing-to-show-is-not-drawn) — why a pill vanishes
+- [§ Archived](#archived) — what happens to topics when archived articles are shown
+- [§ Two views](#two-views-pills-and-more-detail) — the pill row versus the More-detail rows
+- [§ Colour](#colour-says-which-topics-are-related) — what a topic's hue means
+- [§ On each card and table row](#on-each-card-and-table-row) — topic pills on a card
+- [§ Touch](#touch) — the finger version
+- [§ The URL](#the-url) — `?topics=` and `?topicsView`
+- [§ Your own tags](#your-own-tags-in-the-row-above) — the reader's tags beside the topics, and `?tags=`
+- [§ Where the code is](#where-the-code-is) — every file and test
+- [§ Measuring a real shelf](#measuring-a-real-shelf) — `npm run shelf-terms:report`
+- [§ What v1 does not do](#what-v1-does-not-do) — the known gaps and what is queued
 
 ## Topics a model names, broad to fine
 
@@ -530,6 +548,7 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
 | the pills on a card and a table row, and the context they read | [`src/web/ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx) |
 | a topic's colour from the articles it shares with the others | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
+| the tests | [`tests/shelf-terms-extract.test.ts`](../../tests/shelf-terms-extract.test.ts), [`shelf-terms-choose`](../../tests/shelf-terms-choose.test.ts), [`shelf-terms-pg`](../../tests/shelf-terms-pg.test.ts), [`shelf-topic-model`](../../tests/shelf-topic-model.test.ts), [`shelf-topic-sets`](../../tests/shelf-topic-sets.test.ts), [`shelf-topic-sets-pg`](../../tests/shelf-topic-sets-pg.test.ts), [`shelf-topics-route`](../../tests/shelf-topics-route.test.ts), [`shelf-topics.test.tsx`](../../tests/shelf-topics.test.tsx), [`shelf-topics-detail`](../../tests/shelf-topics-detail.test.tsx) |
 
 ## Measuring a real shelf
 

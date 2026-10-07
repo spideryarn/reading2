@@ -190,9 +190,16 @@ export function quotesAppendOnOffer(read: Pick<QuotesRead, "status" | "quotes" |
   );
 }
 
-/** **A fresh Find more is what the quotes band offers right now** — `glossaryFindMoreOffered`'s twin. */
+/**
+ * **A fresh Find more is what the quotes band offers right now** —
+ * `glossaryFindMoreOffered`'s twin, down to the hold: the bar's press is the
+ * button's own, so it waits while a forced run's list has not loaded.
+ */
 export function quotesFindMoreOffered(
-  owner: Pick<UseQuotes, "status" | "quotes" | "stale" | "outdated" | "job" | "loaded" | "starting" | "failed">,
+  owner: Pick<
+    UseQuotes,
+    "status" | "quotes" | "stale" | "outdated" | "job" | "loaded" | "starting" | "failed" | "rewriting"
+  >,
 ): boolean {
-  return quotesAppendOnOffer(owner) && freshRunOffered(owner);
+  return quotesAppendOnOffer(owner) && freshRunOffered(owner) && !owner.rewriting;
 }

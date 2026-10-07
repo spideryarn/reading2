@@ -431,7 +431,7 @@ const CHAT: BandShape = {
  */
 const LEARN: BandShape = {
   className: "mode-band chat learn has-about",
-  label: "Remember what you took from this article",
+  label: "Recall what you took from this article",
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
@@ -1350,6 +1350,8 @@ function quotesOwner(quotes: Quotes | null): QuotesOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
   };
 }
 
@@ -1370,6 +1372,8 @@ function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> =
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }
@@ -1391,6 +1395,8 @@ function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): De
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }

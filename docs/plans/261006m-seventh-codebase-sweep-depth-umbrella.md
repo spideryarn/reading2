@@ -489,4 +489,71 @@ applies the fix is cheap: carry the existing check to the other side and keep bo
 
 ## What landed
 
-*(filled in as clusters land)*
+Each cluster: an Opus builder in its own worktree, red first; a GPT Sol code review, write-capable;
+an Opus reader who took Sol's diff as a proposal, saw each regression test go red without its fix,
+ran the gates and the Postgres cases Sol could not, merged `origin/dev` and pushed. No deploy. No
+browser pass was run on any of them. The full suite was not run per cluster; each ran the files it
+touched and their neighbours.
+
+- **C1, readiness records name the failing test files — landed 2026-10-07**, `73d6be783` and
+  `cca4957db` ([its plan](261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md)).
+  `failedTestFiles: { files, total } | null` on a failed run's record, from a streaming scanner;
+  a *Failing test files* card on the Readiness tab. Across 27 real failing logs on the box it named
+  every file and matched vitest's own count. **The audit's proposed mechanism was wrong:** the
+  counts are read from a log's head and tail, and vitest's summary sits about 96,000 lines into a
+  14 MB log, in neither. Sol's review fixed four places the card would have said something false
+  (a `FAIL` line quoted inside an error message counted as a second file; an older run called "the
+  latest"). **For the Overseer:** the dashboard and the readiness loop need a restart to show it.
+  One thing the real logs showed: `tests/store-roundtrip.test.ts` failed in every loop run from
+  05:06 to 20:34 on 2026-10-06.
+
+- **C2, six reader-client defects — landed 2026-10-07**, `02e4de13e` and `9f8109f0f`
+  ([its plan](261007a-seventh-sweep-client-tier-0-six-defects.md)). All six red first. WC2 and WC4
+  are now `Record<ModeWithSubModes, …>` tables in the files they were in, so a seventh sub-mode
+  fails to compile. **WCO7 was understated by both reads:** two refused Illustrated starts in a row
+  really did skip the Sketch re-ask, and Sol's review found identical refusals still did; it is a
+  refusal counter now. Sol also added the derived guard U7 asked for: a hook `OwnedReader` mounts
+  with a slug must be covered or named as excluded. Left, wider: a deleted cross-reference artefact
+  can be replayed from the offline API cache after a transport failure; an open Quiz band and the
+  always-mounted read both hear a completion (two GETs); `DeletePermanently` still interpolates a
+  raw exception message.
+
+- **C3, the job queue — landed 2026-10-07**, `7d3a4b4d9` … `3b4792e6a`
+  ([its plan](261007b-seventh-sweep-job-queue-tier-0.md)); two review rounds. PQ1's exits were
+  four, not one, all reproduced against Postgres. **The first review said "do not ship", and was
+  right:** a forced step's `done` reached the job row only through a later progress write, so a
+  failed write followed by a pause re-ran the step and paid for it again. It predated the cluster
+  through lease expiry; the builder's "a failed progress write logs and carries on" gave it a
+  cleaner route. Fixed properly in about twenty lines: the receipt is written in the product's own
+  transaction (`keepStepIn`). Sol's second round added a test that a receipt written in a second
+  transaction fails, and the lander proved it does. Also from review: a Stop carried on a progress
+  response was ignored; a blank title could erase a stored one; **one of the review's own tests
+  could not fail** (its assertions sat inside a step body). Left: the Stop question (For Greg 1);
+  `STEP_BUDGET_MS.assets` (185 s against about 360 s) and `fetch` (150 s) look too small and were
+  not changed; an explicit Retry re-runs a finished forced step, by design.
+
+- **C4, chat and comment rows — landed 2026-10-07**, `17ae67ee6` … `b4dcabb38`
+  ([its plan](261007b-seventh-sweep-chat-and-comment-invariants.md)). SV1, SV3/SVO4, SV2 and WC1
+  each reproduced through the route and Postgres. `streamChat`'s loads before `begin` went from up
+  to five to at most two. **Two existing tests asserted SV3's defect** (a different anchor is
+  ignored); Sol traced the history and the tolerance was never intended. Sol traced every sender
+  of a chat turn and found no ordinary single-tab request newly refused. Its review found one
+  defect in the new code: a `done` frame could carry another attempt's `pending` row and leave a
+  spinner for ever. Left: the seven answer-owned fields are listed by hand in several places.
+
+- **C10a, the rewrite hold on six more forced verbs — landed 2026-10-07**, `8720c3af3` …
+  `9ce88da24`
+  ([its plan](261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)). In every
+  one of the six, two clicks in one tick made two forced POSTs: the gap did not need a slow
+  network. A syntax-tree guard now fails if a file under `src/web` forces a run without being a
+  hold user or a named exclusion. **Review found the gap behind the gap, in all twelve hold
+  users:** *Retry* after a failed run reopened it (fixed at the shared seam); and a job that failed
+  with its band closed and was then trimmed from the list left the control dead until a reload
+  (fixed in about eleven lines: the job engine, which outlives every band, says when a job is
+  over). **Four new reader-facing sentences**, in the pattern of the existing six, for Greg to veto:
+  *The new quotes haven't loaded yet.* and the same for *timeline*, *search* (Debate) and
+  *citations*. **Not built:** moving the loaded branches of `SketchView` and `IllustratedView`
+  onto `JobProgress`, which would reverse three recorded decisions (a Stop beside a loaded picture,
+  a second run button, the failure colour) and wants a yes or no first. **Left, reproduced and
+  pinned by a test that goes red when it is fixed:** the command bar's *Run again* row posts a
+  forced run directly and bypasses every mode's hold. Skim's hold waits for C10b.

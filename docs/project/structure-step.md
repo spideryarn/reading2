@@ -1,5 +1,7 @@
 # Structure (the step)
 
+Up: [architecture.md](architecture.md)
+
 Pipeline stage 4 — `structure`, `npm run structure -- <slug> [--force]`. Builds the nested tree that Structure,
 Marginalia, the Spine and the rest render. (The step was called `hierarchy` until 2026-10-02, and this file was
 `hierarchy.md` — [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md). The Hierarchy
@@ -32,6 +34,25 @@ the filesystem store's copies moved with a one-off script that was deleted on 20
 after the store itself.
 "Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
 rather than the step.
+
+## In this doc
+
+- [§ Intent](#intent) — what the tree is for
+- [§ We store a tree and derive the flat rows](#we-store-a-tree-and-derive-the-flat-rows) — why `tree.json`, not rows
+- [§ Schema](#schema) — the tree's shape and fields
+- [§ The tree the author's headings give us for free](#heading-tree) — using existing headings
+- [§ Entry length grows with depth](#granularity) — how long each level's text is
+- [§ Every block gets a leaf; not every leaf gets a row](#every-block-gets-a-leaf-not-every-leaf-gets-a-row) — coverage of blocks
+- [§ Headings: verbatim unless genuinely uninformative](#headings-verbatim-unless-genuinely-uninformative) — when a title is rewritten
+- [§ Building the tree over a flat article](#building-the-tree-over-a-flat-article) — articles with no headings
+- [§ Two passes: the structure, then the labels](#two-passes) — the `structure` and `labels` steps; why two
+- [§ The budget](#the-budget) — token and time limits
+- [§ When one answer will not fit](#when-one-answer-will-not-fit) — chunking long articles
+- [§ The generation prompt](#the-generation-prompt) — the prompt itself
+- [§ The question under the claim](#the-question-under-the-claim) — what each node is asked
+- [§ A new prompt reaches new articles only](#prompt-versions) — prompt versions and old trees
+- [§ Worked example: the derived sidebar](#worked-example-the-derived-sidebar) — one article end to end
+- [§ See also](#see-also) — neighbouring docs
 
 ## Intent
 
@@ -370,8 +391,7 @@ to mend". For a while the snap *was* something left for it to mend, and that mat
 on: a scoped call would be shown a slice `planChildRanges` had derived while its own answer was
 derived by a rule with no snap in it. Both now call
 [`src/heading-snap.ts`](../../src/heading-snap.ts), and a differential test hands a normalised answer
-to the real `buildTree` and requires it to change no range and record no repair. Nothing wires that
-module into the pipeline or the evals yet.
+to the real `buildTree` and requires it to change no range and record no repair.
 
 **Where the two derivations still differ, on purpose**: a child whose start falls outside its
 parent. `planChildRanges` clamps it back inside and keeps the article — right for a whole-document
@@ -475,11 +495,14 @@ has nothing to render at its own zoom level. That is a rule
 denominator every paid arm is read against. If the eval measured one carving and the product shipped
 another, every number under `evals/results/` would describe something nobody reads.
 
-**What is not built yet.** Nothing in the pipeline produces one of these trees for a reader: the
-builder, the marker, the exemption and the public boundary are in place, and the publication
-boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
-are not. Those are steps 2–4 in
-[the research](../investigations/260830a-opening-an-article-before-the-toc.md).
+**What the pipeline uses of it.** `buildHeadingTree` itself is still only the eval's arm zero. The
+pipeline's trees from headings are the bounded variant, `buildBoundedHeadingTree`, which is the
+long-document fallback and the `provisional: "awaiting-structure"` publication of a first import
+([§ The fallback](#the-fallback-a-tree-from-the-documents-own-headings)); the browser swaps in the
+finished tree through `useLateStructure` ([`src/web/article/useLateStructure.ts`](../../src/web/article/useLateStructure.ts)).
+Steps 2–4 of
+[the research](../investigations/260830a-opening-an-article-before-the-toc.md) are the plan those
+grew from.
 
 ## Entry length grows with depth <a id="granularity"></a>
 
@@ -977,7 +1000,7 @@ So the stage now does three things instead of dying, in rising order of risk:
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
   `generateLabels`, so every caller gets it — it used to be enforced only by `generateStructure`,
-  while `npm run labels` (retired 2026-09-05) went round it,
+  while the old standalone `npm run labels` implementation (replaced by the queue CLI) went round it,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
@@ -1304,9 +1327,9 @@ tokens** of a 128,000 budget. The old estimate had refused it at 90,275. So the 
 refuse a book was the arithmetic, not the model, and the fix was to re-rate it: see
 [the budget](#the-budget).
 
-Past that, the **structure** call is what no longer fits, and generating it section by section is
-**still not built**. The budget refuses those out loud rather than half-doing them. The shape it
-should take, from GPT-5.6-sol's review and written up in
+Past that, the **structure** call is what no longer fits, and since 2026-10-05 the tree is asked for
+in slices instead ([§ When one answer will not fit](#when-one-answer-will-not-fit)). The shape first
+proposed for it, from GPT-5.6-sol's review and written up in
 [260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
 make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
 assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
@@ -1366,8 +1389,7 @@ Frozen is the load-bearing word — a key that carried the tree *as it stands* w
 neighbouring parent's answer landed, so a resumed attempt would miss every row the previous one
 wrote, under exactly the load the checkpoint exists for. A stored answer is re-read through the same
 `readExpansion` a fresh one goes through, against the parent as it is now, and one that no longer
-derives is a miss the next answer overwrites. Still called by nothing: the wiring and the wave's
-concurrency are stage 5.
+derives is a miss the next answer overwrites.
 
 **The nav labels are not in this response.** They were, and it is what took the stage over the
 128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
@@ -1529,8 +1551,8 @@ and the asymmetry is deliberate — the comment on `question` in [`types.ts`](..
 
 ## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
 
-**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
-`generateStructure` from [`src/structure.ts`](../../src/structure.ts) and no version constant; the
+**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports
+`generateStructure` and `checkCoverage` from [`src/structure.ts`](../../src/structure.ts) and no version constant; the
 tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and the
 tree-version chip came off the reading view on 2026-09-05. So when the prompt changes, an article
 already on somebody's shelf keeps the gists it was built with, silently and indefinitely.
@@ -1556,8 +1578,10 @@ they did not ask to be regenerated, and no reader is shown a warning about a lin
 perfectly well. The cost is the one that prompted the question: a change you make today is not
 visible on the articles you know best, so it is hard to judge whether it was an improvement.
 
-The escape is per-article rather than library-wide, and it is being built —
-**re-run the stage from the article's metadata page**. Greg, in the same breath:
+The escape is per-article rather than library-wide: **re-run the stage from the article's metadata
+page**. That is built for the other generated modes, but `structure` is deliberately not on it
+([`src/rerun-steps.ts`](../../src/rerun-steps.ts)) — a press would strip every paragraph label — so
+a tree is re-run with `npm run structure -- <slug> --force`. Greg, in the same breath:
 
 > there should be a way to re-run any of the generated modes (either within the UI for the mode, or
 > perhaps in the Metadata section)

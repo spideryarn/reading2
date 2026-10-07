@@ -94,6 +94,8 @@ const OWNER: UseDebate = {
   ensure: async () => {},
   regenerate: async () => {},
   cancel: () => {},
+  rewriting: false,
+  refresh: async () => {},
 };
 
 function summary(over: Partial<ThreadSummary> & { id: string }): ThreadSummary {

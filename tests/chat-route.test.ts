@@ -25,7 +25,7 @@
  * `chatStore`, which is the same object src/routes.ts writes it with.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -177,5 +177,152 @@ describe("the begin frame names both rows of the turn", () => {
     const stored = threads.find((t) => t.id === threadId);
     expect(stored?.messages).toHaveLength(2);
     expect(stored?.messages[0]?.text).toBe("what is it really about?");
+  });
+});
+
+/**
+ * SV1 of the seventh sweep
+ * (docs/investigations/261006d-seventh-sweep-depth-server-request-path-sol.md):
+ * an edit from a tab that has not seen the newest turn is refused by the
+ * store's tail check, and until 2026-10-07 the route had already stopped the
+ * live answer by then. `streamChat` now runs the same `requireTail` before
+ * `settleThread`.
+ *
+ * The model here hangs until its request is aborted, which is what lets an
+ * answer be "live" for the length of a test. Everything else in this file
+ * rejects at once.
+ *
+ * Checked by mutation: the `requireTail` line in the route's gate deleted, watched
+ * red on 2026-10-07 and undone: the first case fails on *the live answer was
+ * ended by a request that was refused*, and the second, the control, stays
+ * green, which is what says the first is not red for an unrelated reason.
+ */
+describe("an edit the store will refuse stops nothing", () => {
+  /** A request left open, with what it has written so far. */
+  interface Open {
+    status: () => number;
+    written: () => string;
+    settled: () => boolean;
+    finished: Promise<void>;
+  }
+
+  function open(body: unknown): Open {
+    const payload = [Buffer.from(JSON.stringify(body))];
+    const req = Object.assign(
+      (async function* () {
+        yield* payload;
+      })(),
+      { method: "POST", url: `/api/chat/${SLUG}`, headers: AUTHED_HEADERS },
+    ) as unknown as IncomingMessage;
+    let written = "";
+    let settled = false;
+    const res = {
+      statusCode: 0,
+      writableEnded: false,
+      destroyed: false,
+      setHeader() {},
+      flushHeaders() {},
+      on() {},
+      write(chunk: string) {
+        written += chunk;
+        return true;
+      },
+      end(chunk?: string) {
+        if (chunk) written += chunk;
+        (this as { writableEnded: boolean }).writableEnded = true;
+      },
+    } as unknown as ServerResponse;
+    const finished = handleApi(req, res, acceptAny).then(() => {
+      settled = true;
+    });
+    return {
+      status: () => res.statusCode,
+      written: () => written,
+      settled: () => settled,
+      finished,
+    };
+  }
+
+  const hanging = ((_url: unknown, init?: { signal?: AbortSignal }) =>
+    new Promise((_resolve, reject) => {
+      const gone = () => reject(init?.signal?.reason ?? new Error("aborted"));
+      if (init?.signal?.aborted) gone();
+      else init?.signal?.addEventListener("abort", gone, { once: true });
+    })) as unknown as typeof fetch;
+
+  /* The file's own stub, written out again: `globalThis.fetch` read here would
+     be the provider guard's, because this runs before the `beforeAll` above. */
+  const rejecting = (() =>
+    Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
+  afterEach(() => {
+    globalThis.fetch = rejecting;
+  });
+
+  const statuses = async (threadId: string) =>
+    (await asTestOwner(() => chatStore.load(SLUG)))
+      .find((t) => t.id === threadId)
+      ?.messages.map((m) => `${m.role}:${m.status}`);
+
+  /** Q1 answered (as an error: no model), then Q2 with its answer held open. */
+  async function withALiveSecondAnswer() {
+    const first = await ask({ threadId: "spya-t7r4wz", question: "q1" });
+    const threadId = first[0]?.data.threadId as string;
+    const q1 = first[0]?.data.questionId as string;
+    const a1 = first[0]?.data.messageId as string;
+
+    globalThis.fetch = hanging;
+    const live = open({ threadId, question: "q2" });
+    await vi.waitFor(() => expect(live.written()).toContain("event: begin"), { timeout: 10_000 });
+    const begin = /event: begin\ndata: (.*)\n/.exec(live.written())?.[1];
+    const a2 = (JSON.parse(begin as string) as { messageId: string }).messageId;
+    expect(await statuses(threadId)).toEqual([
+      "user:done",
+      "assistant:error",
+      "user:done",
+      "assistant:pending",
+    ]);
+    return { threadId, q1, a1, a2, live };
+  }
+
+  it("a stale edit gets its 409 and the other tab's answer goes on streaming", async () => {
+    const { threadId, q1, a1, live } = await withALiveSecondAnswer();
+
+    // Tab B last saw Q1/A1, and says so.
+    const stale = open({ threadId, edit: q1, question: "q1, reworded", expectedTailId: a1 });
+    await stale.finished;
+    expect(stale.status()).toBe(409);
+    expect(stale.written()).toContain("This conversation has moved on since you opened it");
+
+    /* What the reader in the first tab is left with. Before the fix: the
+       request ended, and its answer was stored `done`, `stopped`, empty. */
+    expect(live.settled(), "the live answer was ended by a request that was refused").toBe(false);
+    expect(live.written()).not.toContain("event: done");
+    expect(await statuses(threadId)).toEqual([
+      "user:done",
+      "assistant:error",
+      "user:done",
+      "assistant:pending",
+    ]);
+
+    // Let it go, so nothing is left streaming into the next test.
+    globalThis.fetch = rejecting;
+    await open({ threadId, edit: q1, question: "tidy up" }).finished;
+    await live.finished;
+  });
+
+  it("an edit that names the real tail still stops the live answer and replaces it", async () => {
+    const { threadId, q1, a2, live } = await withALiveSecondAnswer();
+
+    globalThis.fetch = rejecting;
+    const edit = open({ threadId, edit: q1, question: "q1, reworded", expectedTailId: a2 });
+    await edit.finished;
+    await live.finished;
+    expect(edit.status()).toBe(200);
+    expect(edit.written()).toContain("event: begin");
+    expect(live.written()).toContain('"stopped":true');
+
+    const stored = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === threadId);
+    expect(stored?.messages).toHaveLength(2);
+    expect(stored?.messages[0]?.text).toBe("q1, reworded");
   });
 });

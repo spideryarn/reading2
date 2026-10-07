@@ -185,7 +185,7 @@ describe("whether a fresh Find more is what the glossary band offers now (F1)", 
 
 describe("whether the quotes' list can be added to, and whether Find more is offered now", () => {
   const read = { status: "ready", quotes: quotesOf(3), stale: false, outdated: false } as const;
-  const idle = { ...read, job: null, loaded: true, starting: false, failed: null } as const;
+  const idle = { ...read, job: null, loaded: true, starting: false, failed: null, rewriting: false } as const;
 
   it("is so for a current list under the ceiling", () => {
     expect(quotesAppendOnOffer(read)).toBe(true);
@@ -210,6 +210,7 @@ describe("whether the quotes' list can be added to, and whether Find more is off
     ["a run failed and offers Retry", { ...idle, failed: { message: "x", retryable: true, retry: () => {} } }],
     ["a POST was refused", { ...idle, failed: { message: "x", retryable: true, retry: null } }],
     ["a run failed for good", { ...idle, failed: { message: "x", retryable: false, retry: null } }],
+    ["a forced run's list has not loaded", { ...idle, rewriting: true }],
   ] as const)("is drawn but not offered now when %s", (_, state) => {
     expect(quotesAppendOnOffer(state)).toBe(true);
     expect(quotesFindMoreOffered(state)).toBe(false);

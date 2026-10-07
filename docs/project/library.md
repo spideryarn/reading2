@@ -30,6 +30,24 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 - **What a card says, and the numbers on it** — [§ What a card says](#what-a-card-says-and-why).
 - **Searching the shelf** — [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one).
 
+## In this doc
+
+- [§ The routes](#the-routes) — which path is which page, the `/api/library` verbs, and what permanent delete takes with it
+- [§ What you can do to a card](#what-you-can-do-to-a-card) — the buttons, archive and Undo, rename, shelf tags, the tooltip, and why a button is disabled rather than hidden
+- [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one) — the search box, passages, topics, and archived hits
+- [§ Sorting the shelf](#sorting-the-shelf) — sort order, cards versus table, hidden columns, "a first few then ask", TanStack Table
+- [§ What a card says, and why](#what-a-card-says-and-why) — Shared badge, unread papers, where the numbers come from, the title fallback
+- [§ Adding an article](#adding-an-article-the-box-submits-now) — the add box (the queue itself is ingest-queue.md)
+- [§ The free-allowance box](#the-free-allowance-box) — what a free reader sees under the add box
+- [§ `meta.json`](#metajson-and-the-articles-identity) — the article's title, byline and source, and where they live now
+- [§ When this becomes Postgres](#when-this-becomes-postgres) — (history) why the shelf's row shape was chosen
+- [§ Where the code is](#where-the-code-is) — every file and test behind the shelf
+- [§ A repeat visit draws the shelf](#a-repeat-visit-draws-the-shelf-before-the-server-answers) — the saved copy that paints first, and who wins
+- [§ The five opened most recently](#the-five-opened-most-recently-are-fetched-while-the-shelf-is-on-screen) — the preload of recent articles
+- [§ Offline](#offline-the-shelf-lists-only-what-it-can-open) — what the shelf shows with no network
+- [§ The fixture](#the-fixture-was-always-on-the-shelf) — (history) the `example/` article, and how it is seeded now
+- [§ See also](#see-also)
+
 ## The routes
 
 | Path | Page |
@@ -47,10 +65,9 @@ The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `
 shape and the specific pattern has to win — otherwise the search box would read as a request to
 rename an article called "search".
 
-`DELETE /api/library/:slug` joined them on 2026-09-06 and **nothing calls it yet** — the control
-that will is Stage D of
-[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md), and
-until it lands this is reachable only by a `curl`. It destroys the article and everything cascading
+`DELETE /api/library/:slug` joined them on 2026-09-06; **the control that calls it is `DeletePermanently`
+on the article's metadata page** ([`src/web/Metadata.tsx`](../../src/web/Metadata.tsx), Stage D of
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md)). It destroys the article and everything cascading
 off it, answers 404 for a slug that is not yours and 409 while an import is running on it, and
 there is no undo: *Archive* below is the reversible ending, and this is the other one.
 
@@ -672,6 +689,17 @@ pen pressed it. Plan
    rather than left to the default, because on 2026-08-26 that default became `meaning`
    ([search.md § the URL](search.md#match-defaults-to-meaning-and-used-to-default-to-words)); this is
    the one link in the app that produces a bare `?find=`, so it is the one that had to say so.
+
+**The passages obey Unread, the topics and the tags, and not the box a second time.** The allowed
+articles are `narrowShelf` with an empty query (`passagesIn` in `Library.tsx`), not the cards on
+screen: the cards have the box's match on title, author and blurb applied, and taking them would
+hide the passage of an article whose body matches and whose card does not. The
+narrowing is in the browser, after the server's cap, so the lines under the list count what was left
+out (*"3 more passages are in articles that do not match everything chosen above"*) and never say
+that nothing matches. While the archived listing is loading or unavailable, those lines say only
+that passages found are not shown: missing shelf details establish neither reading history nor
+filter membership. `tests/shelf-passages-obey-the-filters.test.tsx`; plan
+[261007a K3](../plans/261007a-ui-sweep-k3-shelf-filter-and-false-copy.md).
 
 | Store | How |
 |---|---|
@@ -1300,9 +1328,10 @@ plan arrives, and nothing if the read fails — `/profile` is where a failed rea
 
 The shelf needs a title, a byline, a source and a date, and until now nothing wrote them down —
 `data/<slug>/` held blocks, a tree and an arc, and the reading view derived a title from the first
-`<h1>`. So stage 2 now writes [`data/<slug>/meta.json`](architecture.md#storage) on every run,
-which is where it was always meant to be
-([architecture.md § Stage ownership](architecture.md#stage-ownership)):
+`<h1>`. So stage 2 produces this metadata on every run, which is where it was always meant to be
+([architecture.md § Stage ownership](architecture.md#stage-ownership)). It was a file,
+`data/<slug>/meta.json`, until 2026-09-05; it is columns on `article_revisions` now, and this is the
+shape:
 
 ```json
 { "slug": "…", "title": "…", "byline": "…", "siteName": "…",
@@ -1321,9 +1350,10 @@ Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
   should follow.
 
-An article whose `meta.json` predates this still lists: the title falls back to the first `<h1>` and
-the date to the mtime of `blocks.json`. It just has no byline and no source link.
-`npm run extract -- <slug> --force` fixes it.
+An article with no stored title still lists: the title falls back to the first `<h1>`
+([`src/library-scalars.ts`](../../src/library-scalars.ts)), and the date is `fetched_at` with the article's `created_at`
+as its fallback (`ADDED_AT` and `listArticles` in `src/store/pg.ts`). A missing byline or source just is not shown.
+`npm run extract -- <slug> --force` re-runs the stage.
 
 ## When this becomes Postgres
 
@@ -1367,6 +1397,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **reusable**: sorting state ⇄ URL, the collator, and `sinkLast` |
 | [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the controls that are the shelf's own: Unread, cards-or-table, and where Columns sits |
 | [`src/web/shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts) | which table columns this browser has hidden, and the guarded storage behind it |
+| [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx), [`src/web/ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx), [`src/web/ShelfPhoneHint.tsx`](../../src/web/ShelfPhoneHint.tsx), [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts), [`src/web/library-home-title.ts`](../../src/web/library-home-title.ts) | the topics row ([shelf-terms.md](shelf-terms.md)), the topics on a card, the phone hint, the narrow-window switch, and the homepage's tab title ([page-titles.md](page-titles.md)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
 | [`src/web/TitleEditor.tsx`](../../src/web/TitleEditor.tsx) | **renaming, wherever the reader is** — the editor, the `PATCH`, and the heading-with-a-pencil the masthead and the metadata page both use |
 | [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |
@@ -1386,8 +1417,10 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
 | [`src/web/library-hits.ts`](../../src/web/library-hits.ts) | **the four parameters a hit's link must carry**, the browser's fold, and the query-term rule |
 | [`src/reading-time.ts`](../../src/reading-time.ts) | `~54 min`, said once for both the card and the masthead |
-| [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, and the six job routes |
-| [`src/extract.ts`](../../src/extract.ts) | stage 2, now writing `meta.json` |
+| [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, `PATCH`/`DELETE /api/library/:slug`, and the job routes |
+| [`src/extract.ts`](../../src/extract.ts) | stage 2, which produces the article's metadata (the shape in § `meta.json`) |
+| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | the metadata page, and `DeletePermanently`, the only caller of `DELETE /api/library/:slug` |
+| [`tests/article-delete-pg.test.ts`](../../tests/article-delete-pg.test.ts) | what a permanent delete takes out, and the races it must survive |
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
 | [`tests/article-rename.test.tsx`](../../tests/article-rename.test.tsx) | the pencil on the article and on its metadata page, mounted — cancelled, cleared, unchanged, and a write that fails |
@@ -1519,6 +1552,10 @@ listed the ordinary way, on that account's shelf, still flagged and still sorted
 
 ## See also
 
+- [shelf-terms.md](shelf-terms.md) — the topics row above the shelf
+- [public-shelf.md](public-shelf.md) — `/read/public`, the other shelf; [public-readable-sharing.md](public-readable-sharing.md) — what we say about republishing
+- [page-titles.md](page-titles.md) — what the tab says on the homepage and every other page
+- [privacy.md](privacy.md) — what permanent delete does and does not remove
 - [url-state.md](url-state.md) — the query string half of a link, and why position replaces history
 - [feedback.md](feedback.md) — the **Feedback** button, which since 2026-09-08 is a control in this
   page's own masthead row rather than a fixed corner beside it

@@ -118,6 +118,8 @@ function owner(quotes: Quotes | null, over: Partial<QuotesOwner> = {}): QuotesOw
     ensure: async () => {},
     regenerate: async () => {},
     cancel: noop,
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }

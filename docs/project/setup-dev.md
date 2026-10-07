@@ -11,6 +11,18 @@ and what the production host takes away that your laptop gives you for free — 
 [260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
 in a browser. It is written for somebody who has never opened the code.
 
+## In this doc
+
+- [§ Quickstart](#quickstart) — an empty checkout to a signed-in app, and a table of what a blank page or refused boot means
+- [§ One process, one terminal](#one-process-one-terminal) — why `npm run dev` is the only server, and why a stopped database stops it booting
+- [§ Secrets](#secrets) — what each key in `.env.local` is for, why sign-in shows a blank page, and which wins: the file or the shell
+- [§ Which model everything uses](#which-model-everything-uses) — changing the model for a job, the `SPIDERYARN_*_MODEL` overrides, and why a tier is not a name
+- [§ The database, locally](#the-database-locally) — the three `db:` commands and where Studio is
+- [§ The pipeline stages](#the-pipeline-stages) — running one stage on its own from a terminal, and what `--force` does and does not buy
+- [§ Adding a UI component](#adding-a-ui-component) — the four traps in `npx shadcn add`
+- [§ Where things live](#where-things-live) — what `data/`, `example/`, `output/` and `tests/` are now
+- [§ Before writing LLM code](#before-writing-llm-code) — the one line about model ids
+
 ## Quickstart
 
 ### What you need first
@@ -104,7 +116,7 @@ bundles and fail, naming the command, when there is none ([testing.md](testing.m
 |---|---|
 | A blank page, and a console error naming `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` | The three lines above are missing from `.env.local`, or Vite has not been restarted since you added them |
 | The dev server refuses to start, naming `npm run db:start` | The containers are down. `assertStoreReachable` in `vite.config.ts` runs one `select 1` before booting, on purpose — see [below](#the-database-locally) |
-| Vite says it is on **5274** or 5275 | Something else has 5273. Sign-in will fail for reasons that have nothing to do with your code — the port is on the redirect allow-list and the alternatives are not |
+| Vite says it is on **5274** or 5275 | Something else has 5273. 5273–5303 are all on the redirect allow-list, so sign-in should work — unless the running container baked in an older list ([§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it) |
 | Google sign-in succeeds and dumps you on the bare site URL | The allow-list is baked into a running container, not read from the file. [§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it |
 | The reading view works, but an ingest fails immediately | No `OPENROUTER_API_KEY` in `.env.local` |
 
@@ -135,8 +147,8 @@ checkout and the database can, which cost a third of all the AI spend we have ev
 ([260902j](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md)).
 
 **So a stopped database now refuses to boot the dev server.** `assertStoreReachable` in
-`vite.config.ts` runs one `select 1` first and fails loudly, naming `npm run db:start`,
-`DATABASE_URL`, and the way back to disk. Before that, every setting could be present with the
+`vite.config.ts` runs one `select 1` first and fails loudly, naming `npm run db:start` and
+`DATABASE_URL`, and saying there is no other store to fall back to. Before that, every setting could be present with the
 containers merely down and the server would start fine and die on the first `/api` request.
 
 **`npm run setup` is the whole of the database side of a fresh checkout**, and the one command to
@@ -199,8 +211,8 @@ Three things that will waste your afternoon otherwise.
 **Vite reads `.env.local` at startup**, so a new `VITE_` variable needs `npm run dev` restarting.
 
 **The redirect allow-list is baked into the running container, not read from the file.**
-[`supabase/config.toml`](../../supabase/config.toml) names `http://localhost:5273` and
-`http://127.0.0.1:5273` with `/**`, and GoTrue only picks that up when it starts. Check what is
+[`supabase/config.toml`](../../supabase/config.toml) names every port from 5273 to 5303 on both
+`localhost` and `127.0.0.1` (with `/**`), and GoTrue only picks that up when it starts. Check what is
 actually live rather than what the file says:
 
 ```bash
@@ -212,9 +224,10 @@ If `/**` is missing there, `npx supabase stop && npx supabase start`. Until you 
 sign-in **succeeds** and then returns you to the bare site URL instead of `/auth/callback` — so
 the callback never runs and you lose your place, with nothing anywhere saying why.
 
-**And the port has to be 5273.** Several agents run `npm run dev` in this one tree; if 5273 is
-taken, Vite quietly picks 5274 or 5275, which is not on the allow-list, and Google sign-in fails
-for a reason that has nothing to do with your code.
+**And the port has to be one of 5273–5303.** Several agents run `npm run dev` in this one tree; if
+5273 is taken, Vite quietly picks the next, which is on the allow-list as long as it is within that
+range (`DEV_PORT_RANGE` in `scripts/worktree-port.ts`). Past 5303, Google sign-in fails for a reason
+that has nothing to do with your code.
 
 **That one key now pays for everything.** Until 2026-08-27 it covered only the calls that happen in
 a request handler — the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
@@ -315,6 +328,8 @@ drifted a version behind.
 | **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
 | **paper metadata** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | OpenRouter, restricted to three zero-data-retention providers and preferring Fireworks, not a tier — `PAPER_METADATA_MODEL`. Reads a batch-added PDF's title, authors, abstract and DOI off its first two pages (`src/paper-metadata.ts`; chosen against Luna in [evals/results/paper-metadata-2026-10-01.md](../../evals/results/paper-metadata-2026-10-01.md)) |
 | **reading difficulty** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, not a tier — `READING_DIFFICULTY_MODEL`, job `reading-difficulty`. Rates an article's language and ideas from a sample at the end of the `blocks` step, for the reading-time estimate (`src/reading-difficulty.ts`; measured in [261005b](../investigations/261005b-reading-time-difficulty-multiplier-coefficients-and-where-the-rating-comes-from.md)) |
+| **shelf topics** | GPT-6 Luna — `openai/gpt-6-luna` | OpenRouter, not a tier — `SHELF_TOPICS_MODEL`, job `shelf-topics`. Scores the candidate topics shown above a shelf (`src/shelf-terms/model-scores.ts`; chosen by measurement in [260929c](../plans/260929c-shelf-topics-chosen-by-a-model.md)) |
+| **title tidy** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, on a copy of it, not a tier — `TITLE_TIDY_MODEL`, job `title-tidy`. Lightly tidies an imported title: its capitals, a site's name stuck on the end (`src/title-tidy-model.ts`; measured in [261005b](../investigations/261005b-title-tidying-rule-against-a-small-model.md)) |
 | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. Not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 | **quick search** | Jev 1.13 — `typesafe/jev-1.13` | OpenRouter's alpha `/api/alpha/decisions`, and not a tier — `QUICK_SEARCH_MODEL`, job `search-quick`. Requests this versioned id; the stored model is the id the provider returned ([search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second)) |
 | **command bar, a sentence** | Jev 1.13 — `typesafe/jev-1.13`, then GPT-5.6 Luna for the words | The same decisions endpoint, asked one `choice` — `COMMAND_PICK_MODEL`, job `command-pick`. When the pick is a command that takes words, the quick tier's model copies them out on chat/completions with reasoning `none` — job `command-pick-words`. Chosen in [261003e](../investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md); the run-at-once cut was measured on this Jev and means nothing on another ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) |
@@ -323,7 +338,8 @@ drifted a version behind.
 **This table names the models; it is not the inventory, and it has fallen behind before.** The
 lists that cannot drift are in [`src/models.ts`](../../src/models.ts): `TASK_TIER` for which job is
 on which tier, and `NON_TASK_MODELS` for every model on no tier — which includes the shelf-topics
-scorer, `SHELF_TOPICS_MODEL`, missing from this table until 2026-10-01. Two more live outside that
+scorer, `SHELF_TOPICS_MODEL`, and the title tidier, `TITLE_TIDY_MODEL` — both missing from this table
+until 2026-10-07. Two more live outside that
 file: `IMAGE_MODEL` in [`src/illustrated.ts`](../../src/illustrated.ts) draws Illustrated's
 pictures, and `LIVE_MODEL` in [`src/live.ts`](../../src/live.ts) is live conversation's realtime
 model, the one call that does not go through OpenRouter ([ai-gateway.md](ai-gateway.md)).
@@ -354,8 +370,8 @@ used to be *vendor A's address and vendor B's address* — one for the Anthropic
 `api.anthropic.com`, one for OpenRouter. Now everything is OpenRouter, every task sends
 `anthropic/claude-sonnet-5`, and `CAPABLE_MODEL` is on no request at all. It stayed because the
 second job it was doing is the one that never moved: it is the **name stamped into stored
-artefacts**, and `glossary.ts`, `summarise.ts` and `tweets.ts` each compare a file's `generator`
-against it to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
+artefacts**, and the pipeline compares recorded step stamps with the expected model through
+`sameStamp` in `src/store/artifacts.ts` (using `sameGenerator` in `src/models.ts`) to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
 marked the whole corpus stale in one edit and regenerated it at full price — a large bill, for a
 migration whose whole purpose was to see the bill. So the rule that arrived with `/profile` is the
 rule that saved it: **a provider prefix is an address, not a name.**
@@ -367,8 +383,8 @@ file gets to choose between them**:
 
 | Ask for | With | You get |
 |---|---|---|
-| what a task actually sends | `resolveModel(task)` | `{ id, provider, wire, source }` — the wire id, who serves it, which protocol it speaks, and whether the environment chose it |
-| just the id | `modelFor(task)` | the same `id` |
+| what a task actually sends | `resolveModel(task, power)` | `{ id, provider, wire, source }` — the wire id, who serves it, which protocol it speaks, and whether the environment chose it |
+| just the id | `modelFor(task, power)` | the same `id` |
 | which protocol it speaks | `wireFor(task)` | `"messages"` or `"chat"` |
 | what to show a person | `displayName(id)` | one name per model, no provider prefix |
 
@@ -411,8 +427,8 @@ That request-path list used to have a second copy inside `modelsInUse` in
 decided what ran. [`tests/models.test.ts`](../../tests/models.test.ts) is the rest of the guard.
 
 `/profile` shows the name, the effort where there is one, and the provider, with the exact wire id
-on hover — and three extra rows for the **PDF transcriber, the embedding model and the dictation
-model**, all on no tier and therefore in no table the route can loop over, so a page called *what's
+on hover — and extra rows for every model on **no tier** — the PDF transcriber, the embedding model, the
+dictation model and the rest of `NON_TASK_MODELS` — all on no tier and therefore in no table the route can loop over, so a page called *what's
 running* was listing ten Claude jobs and quietly omitting the app's calls to a model from somebody
 else. They are in `NON_TASK_MODELS`; sharing an inventory does not merge the decisions, and none of
 them is going on a tier. The provider column now reads `openrouter` on every row, which is the
@@ -426,9 +442,10 @@ that names every model this app calls. A tier is a choice about how much reasoni
 `voyageai/voyage-4` does no reasoning, and it was picked by measurement rather than by judgment —
 [the eval](../../evals/results/embedding-retrieval-2026-08-26.md) put four models over this
 project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.ts) rather than in
-`src/models.ts` for that reason. Only the Force diagram's dotted links use it today
-([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
-caller.
+`src/models.ts` for that reason. Only the Force diagram's dotted links and the Drift and Trail
+coordinates use it today ([diagram.md](diagram.md));
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned caller, and
+it is still deferred.
 
 **Every job is on the capable tier except the ones `TASK_TIER` marks `quick`.** The quick tier is
 about a tenth the price, and all of its jobs were **written for it** rather than moved onto it:
@@ -533,8 +550,8 @@ test that reads `MODEL_ENV_VAR` and this table and compares them.
 
 ## The database, locally
 
-There is a full Supabase stack in Docker for this repo — Postgres, auth, Studio — and **nothing in
-the app talks to it yet**. It is there to develop the storage layer against.
+There is a full Supabase stack in Docker for this repo — Postgres, auth, Studio — and **it is the
+app's only relational store**; tests also read committed and materialised filesystem fixtures.
 
 ```bash
 npm run db:start       # needs Docker running: `open -a OrbStack`
@@ -550,7 +567,7 @@ the ways it fails quietly are in [supabase-local.md](supabase-local.md).
 Each stage runs on its own against a slug, so any one can be re-run without the others
 ([architecture.md § Pipeline](architecture.md#pipeline)) — and **the queue is how you do that**, from
 a browser as `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`
-([ingest-queue.md](ingest-queue.md)), and from a terminal as the four commands below.
+([ingest-queue.md](ingest-queue.md)), and from a terminal as the five commands below (`ingest`, `extract`, `blocks`, `structure`, `labels`).
 
 **The eight article-reading stages lost their command lines on 2026-09-01** — `arc`, `tweets`,
 `glossary`, `ideas`, `quotes`, `timeline`, `quiz` and `sketch`. Each read `blocks.json`, `tree.json`
@@ -567,10 +584,10 @@ The five that were left had the same fault as the eight above, only quieter: eac
 `fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`
 (deleted 2026-09-05). Under Postgres they wrote files nothing reads, and reported success.
 
-They are [`scripts/stage.ts`](../../scripts/stage.ts) now — one script, four npm names, `enqueue`
+They are [`scripts/stage.ts`](../../scripts/stage.ts) now — one script, five npm names, `enqueue`
 then `advanceJob` in a loop. **It is the same code the queue runs**, which is what makes a re-run
 safe: a new draft off the published revision each time, published when the job settles, block ids
-carried rather than re-minted. Read that file's header for the whole contract; the four things worth
+carried rather than re-minted. Read that file's header for the whole contract; the five things worth
 knowing here:
 
 - **By slug, and only one you already have.** A slug that is not yours is refused before anything is
@@ -609,7 +626,7 @@ knowing here:
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
 | `npm run eval:structure-labels -- <dir>…` | not a test — measures nav-label quality against committed artefacts ([evals/README.md](../../evals/README.md)). Calls no model; run it after any change to stage 4 | `evals/results/<slug>-<date>.json` |
 | `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |
-| `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
+| `npm run lint` | Biome over the paths allow-listed in `biome.json` ([linting.md](linting.md)) | — |
 
 The comment endpoints have no CLI stage — they are driven from the reading view. They write rows in
 the `comments` table (`data/<slug>/comments.json` until 2026-09-05); deleting them forgets every

@@ -3,7 +3,7 @@
 `docs/plans/` holds **one file per piece of work**, written before it lands and kept afterwards, so
 the reasoning and the evidence survive the work. It is the first place to look when you want to know
 why something is the way it is — [find-previous-work.md](../reusable/find-previous-work.md) is how to
-search it, and there is a lot to search (1,118 files on 2026-09-06, counting review artefacts:
+search it, and there is a lot to search (4,920 files on 2026-10-07, counting review artefacts:
 `ls docs/plans | wc -l`).
 
 **How to write one is [write-planning-doc.md](../reusable/write-planning-doc.md).** This doc is only

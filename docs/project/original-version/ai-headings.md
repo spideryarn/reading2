@@ -1,8 +1,8 @@
 # AI headings — inventing structure for articles that don't have it
 
 **The most instructive story in that codebase.** It is the same problem as our
-[Q1](../open-questions.md#q1) — where does the hierarchy come from when the article is a flat wall
-of `<p>`? They built it, twice, reversing a decision in between, and then found a real bug in the
+Q1 (now closed) — where does the hierarchy come from when the article is a flat wall
+of `<p>`? Our answer is in [granularity-zoom.md § Where the tree comes from](../granularity-zoom.md#where-the-tree-comes-from). They built it, twice, reversing a decision in between, and then found a real bug in the
 version that shipped. All three stages are written down.
 
 Read this before touching [structure-step.md § Building the tree over a flat article](../structure-step.md#building-the-tree-over-a-flat-article).
@@ -122,8 +122,8 @@ round, and every round made things worse.
 
 1. **One-shot structuring of a long unstructured article was not good enough.** That is the finding
    underneath the whole saga, and it is direct evidence about our
-   [Q1](../open-questions.md#q1). They ended on iterate-with-a-cap and a human deciding when to
-   stop. Our stage 4 currently does a single pass ([`src/toc.ts`](../../../src/structure.ts)) — if the
+   Q1, [now closed](../granularity-zoom.md#where-the-tree-comes-from). They ended on iterate-with-a-cap and a human deciding when to
+   stop. Our stage 4 normally asks for the whole tree in one call, with slices when it will not fit ([`src/structure.ts`](../../../src/structure.ts) § `generateStructure`) — if the
    trees come back with arbitrary-feeling boundaries, this is the known next move rather than a
    surprise.
 2. **The ~200-words-between-headings figure is a usable target, once verified.** Our tree aims at a
@@ -151,7 +151,7 @@ Our tree is a *separate artefact* over an immutable block list — `tree.json` b
 ([architecture.md § Pipeline](../architecture.md#pipeline)) — and headings we invent are node
 `title`s, not elements inserted into the prose
 ([structure-step.md](../structure-step.md#headings-verbatim-unless-genuinely-uninformative)).
-Regenerating is `npm run toc`, which rewrites one file wholesale. The entire class of bug they hit
+Regenerating is `npm run structure -- <slug> --force`, which writes replacement artefacts to a draft revision and publishes them together. The entire class of bug they hit
 cannot occur here, and it cost us nothing to avoid — it fell out of the pipeline being stages over
 artefacts.
 
@@ -163,5 +163,9 @@ boring architecture.
 - [overview.md](overview.md) — the map to that codebase
 - [structure-panel.md](structure-panel.md) — how the resulting tree was *displayed*, which is the closer cousin to our zoom
 - [../structure-step.md](../structure-step.md) — our tree, its schema and its generation prompt
-- [../open-questions.md#q1](../open-questions.md#q1) — where our hierarchy comes from, still open
+- [../granularity-zoom.md § Where the tree comes from](../granularity-zoom.md#where-the-tree-comes-from) — where our hierarchy comes from (was Q1, closed)
 - [borrow-list.md](borrow-list.md) — where this sits in the priority order
+
+---
+
+Up: [overview.md](overview.md)

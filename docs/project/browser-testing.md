@@ -2,9 +2,26 @@
 
 Up: [code-quality-overview.md](code-quality-overview.md)
 
-The reading view has no DOM tests and won't for a while — see
-[testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). Until it
-does, **looking at it in a browser is the test harness for stage 6**, and that makes it worth
+## In this doc
+
+- [§ Before anything, check the server is actually up](#before-anything-check-the-server-is-actually-up) — the port, whose dev server it is, killing it safely, `file://`, a phone-width window, stale stylesheets, preview pages
+- [§ A hidden tab does not animate](#a-hidden-tab-does-not-animate-and-half-this-app-is-animated) — rAF, transitions and the empty spine in a background tab
+- [§ Click by reference, not by pixel](#click-by-reference-not-by-pixel) — hover and coordinates that land elsewhere
+- [§ Signed out is not signed out](#signed-out-is-not-signed-out-in-a-browser-you-have-used-before) — localStorage session, and why a raw `fetch` 401s
+- [§ The URLs and widths worth checking](#the-urls-and-widths-worth-checking) — the table of `?mode=` URLs to open
+- [§ Scroll, then read the address bar](#scroll-then-read-the-address-bar) — checking `?at=`; the long background-tab section sits under it
+- [§ The arrow keys](#the-arrow-keys-and-the-thing-that-makes-them-hard-to-check) — seven checks (describes the gist columns, gone since 2026-09-29: history)
+- [§ Do not judge colour from a screenshot](#do-not-judge-colour-from-a-screenshot) — read the resolved value
+- [§ Three traps this codebase has actually hit](#three-traps-this-codebase-has-actually-hit) — `<col>` custom properties, `color-mix`, sticky
+- [§ Two more, since Tailwind went in](#two-more-since-tailwind-went-in) — layer order, `source(none)`
+- [§ Where the pinned columns collide, and why 736px](#where-the-pinned-columns-collide-and-why-736px) — (history: the gist and text columns are gone)
+- [§ The tab stops running](#the-tab-stops-running-and-the-pages-own-polling-is-how-you-find-out) — every CDP call times out; uploads from page JS
+- [§ A browser subagent stalls silently](#a-browser-subagent-stalls-silently-unless-the-parent-does-the-handshake-first) — do the handshake in the parent
+- [§ Driving it from an agent, through the extension](#driving-it-from-an-agent-through-the-extension) — resize, synthetic wheel vs real, focus rings, short animations, driving rAF by hand
+
+Most component tests run under jsdom, which has no layout or browser rendering; a few Chrome tests now check drawn behaviour, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts), but they do not cover the whole reading view — see
+[testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). So
+**looking at it in a browser is the test harness for stage 6**, and that makes it worth
 writing down what to look at and where the eye lies to you.
 
 This doc is the how — what to look at, whichever automation you are driving the page with. **Which
@@ -425,6 +442,9 @@ from the other side: a check that returns the *same answer whatever the truth is
 This one always says 401. Before trusting a probe, ask what it would print if the thing you are
 testing were fine — and if the answer is "the same", do not write it into anybody's instructions.
 
+On the remote box, [`scripts/browser-sign-in.ts`](../../scripts/browser-sign-in.ts) does the whole
+sign-in for you ([browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in)).
+
 To sign in without a Google round trip, use email and password — the local stack has
 `mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
 click. Google needs the port to be on the local redirect allow-list; see
@@ -797,7 +817,7 @@ class present in the DOM.
 Everything Tailwind emits sits inside a cascade layer, and unlayered declarations beat layered ones
 whatever the order and whatever the specificity. The hand-written sheets are thousands of lines of
 descendant rules covering exactly the elements chrome components go on
-(`wc -l src/web/styles.css src/web/styles/*.css` — 15,951 over 38 files, 2026-09-06), so an
+(`wc -l src/web/styles.css src/web/styles/*.css` says how many), so an
 unlayered `styles.css` outranks every utility, silently. The guard is the
 `@import "./styles.css" layer(app)` in
 [`src/web/tailwind.css`](../../src/web/tailwind.css)

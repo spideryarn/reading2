@@ -32,8 +32,8 @@ Real features or subsystems, worth doing properly, in this order.
 
 The single largest lever, and the one they researched and never pulled. Our shape — one long
 article, dozens of short varying instructions — is the textbook case. Break-even is about two reuses;
-we do dozens. Finish by printing a total at the end of `npm run toc` and writing it into
-[Q7](../open-questions.md#q7), because their logging existed for a year and still couldn't answer
+we do dozens. Finish by printing a total at the end of the run and writing it down
+(Q7, [closed](../ai-gateway.md#what-an-article-costs)), because their logging existed for a year and still couldn't answer
 "what does this cost".
 → [prompt-caching.md](prompt-caching.md)
 
@@ -183,3 +183,7 @@ there.
 - [overview.md](overview.md) — the map to that codebase, and every doc in this folder
 - [../open-questions.md](../open-questions.md) — where several of these decisions land
 - [../vision.md](../vision.md) — the tiebreak for anything in the "not borrowing" list
+
+---
+
+Up: [overview.md](overview.md)

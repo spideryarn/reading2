@@ -137,3 +137,7 @@ Two rules to keep, both of which their experience justifies:
 - [../block-ids.md](../block-ids.md) — ours: why random, and what it took to survive re-extraction
 - [extraction.md](extraction.md) — the stage that produces the elements being identified
 - [ai-headings.md](ai-headings.md) — the feature whose ids churned, and why
+
+---
+
+Up: [overview.md](overview.md)

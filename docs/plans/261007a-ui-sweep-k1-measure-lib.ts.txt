@@ -1,0 +1,60 @@
+/* K1 browser helpers. Run with `npx tsx` from the worktree root. */
+import { chromium } from "/var/tmp/spideryarn-worktrees/agent-a9363ef371ceb477c/node_modules/playwright-core/index.mjs";
+import { signIn } from "/var/tmp/spideryarn-worktrees/agent-a9363ef371ceb477c/scripts/browser-sign-in.ts";
+
+export const BASE = process.env.SPIDERYARN_BASE_URL ?? "http://localhost:5273";
+
+export async function open(opts: { width: number; height?: number; touch?: boolean; theme: "dark" | "light" }) {
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: "/usr/bin/google-chrome-stable",
+    args: ["--no-sandbox"],
+  });
+  const context = await browser.newContext({
+    viewport: { width: opts.width, height: opts.height ?? 900 },
+    hasTouch: !!opts.touch,
+  });
+  await context.addInitScript({ content: "globalThis.__name = globalThis.__name || ((f) => f);" });
+  await context.addInitScript({
+    content: `try { localStorage.setItem("spya.appearance", ${JSON.stringify(opts.theme)}); } catch {}`,
+  });
+  const page = await context.newPage();
+  await signIn(page, BASE);
+  return { browser, context, page };
+}
+
+/** In-page helpers, installed as a string so tsx's keepNames cannot touch them. */
+export const IN_PAGE = `
+window.k1 = {
+  rgb(color) {
+    const c = document.createElement("canvas"); c.width = c.height = 1;
+    const x = c.getContext("2d", { willReadFrequently: true });
+    x.clearRect(0,0,1,1); x.fillStyle = "#000"; x.fillStyle = color; x.fillRect(0,0,1,1);
+    const d = x.getImageData(0,0,1,1).data; return [d[0], d[1], d[2], d[3] / 255];
+  },
+  token(name) {
+    const p = document.createElement("div"); p.style.color = "var(" + name + ")";
+    document.body.appendChild(p); const v = getComputedStyle(p).color; p.remove(); return v;
+  },
+  lum(c) {
+    const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  },
+  over(fg, bg, alpha) { return [0,1,2].map((i) => fg[i] * alpha + bg[i] * (1 - alpha)); },
+  ratio(fg, bg) {
+    const a = window.k1.lum(fg), b = window.k1.lum(bg);
+    return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
+  },
+  /** contrast of a CSS colour at an opacity over a CSS background colour */
+  contrast(fgCss, bgCss, opacity) {
+    const fg = window.k1.rgb(fgCss), bg = window.k1.rgb(bgCss);
+    const a = (opacity === undefined ? 1 : opacity) * fg[3];
+    return window.k1.ratio(window.k1.over(fg, bg, a), bg);
+  },
+  style(el, props) {
+    const cs = getComputedStyle(el); const o = {};
+    for (const p of props) o[p] = cs.getPropertyValue(p);
+    return o;
+  },
+};
+`;

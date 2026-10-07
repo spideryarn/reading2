@@ -310,6 +310,8 @@ describe("the panel, rendered", () => {
       ensure: async () => {},
       regenerate: async () => {},
       cancel: () => {},
+      rewriting: false,
+      refresh: async () => {},
       ...over,
     };
   }

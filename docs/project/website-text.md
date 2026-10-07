@@ -5,6 +5,19 @@ the features page, the privacy policy, the footer row that joins them, and the o
 writes to. Part of
 [reading-view-overview.md](reading-view-overview.md).
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ The contact address](#the-contact-address) — the one address, `CONTACT_EMAIL`
+- [§ The footer](#the-footer) — adding a link to the row; why `/read/*` has none
+- [§ The contact page](#the-contact-page) — `/contact`, and why the Feedback button comes first
+- [§ The open-source page](#the-open-source-page) — `/opensource`, and why `GitHubMark` is ours
+- [§ The privacy policy](#the-privacy-policy) — a pointer to privacy.md
+- [§ The landing page](#the-landing-page) — whose words, beta copy, sign-in moved to `/login`
+- [§ The features page](#the-features-page) — every mode has a tile; the Experimental tag
+- [§ The pricing page](#the-pricing-page) — plans copy versus `billing_tiers`, the FAQ, buying from here, the current-plan line
+
 Its sibling is [copy.md](copy.md), and the split between them is worth stating once: **copy.md is
 what a reader is told when something goes wrong**, in the middle of doing something. This is what a
 reader is told when they come looking — a stranger deciding whether to sign in, or somebody who
@@ -32,7 +45,8 @@ Anything that needs it imports it. That includes the browser —
 `site-text.js` is on the shared-import allowlist in `tests/client-imports.test.ts`, which it
 qualifies for by importing nothing at all. The alternative is a second copy of the address that
 survives a domain move, which is exactly the trap
-[CLAUDE.md § One source of truth](../../CLAUDE.md) describes.
+[signposting-and-single-source-of-truth.md](../reusable/signposting-and-single-source-of-truth.md)
+describes.
 
 ## The footer
 

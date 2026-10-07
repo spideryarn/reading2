@@ -76,12 +76,9 @@ describe("the job lease and the platform's kill", () => {
    * has never claimed to, and is what the per-chunk checkpoints and the
    * hand-back exist for.
    *
-   * Today every step gets its own fresh deadline, because each `/advance` takes
-   * its own claim. Under the claim-once coordinator the whole job runs inside
-   * **one** claim, so the budget stops being per-step and becomes per-job, and
-   * the sum below is what has to fit. It is asserted against `maxDuration`
-   * because that bound is true in both worlds: the job has to fit one
-   * invocation either way.
+   * Each `/advance` takes one claim with one deadline for the steps it walks.
+   * The sum below is an ordinary-page estimate, asserted against `maxDuration`
+   * and the claimant's deadline; it is not a bound for all source types.
    *
    * Requested by the session that owns the coordinator, for the reason that
    * makes it worth having: without it, **the next person to add a step to
@@ -89,10 +86,12 @@ describe("the job lease and the platform's kill", () => {
    * job aborting near the end of a long article — the most expensive possible
    * way to find out.
    *
-   * The costs are measurements, not guesses, and each is the worst observed:
-   * `structure` from the ledger, `assets` from a real run against the 10-image
-   * article (7.1s measured, but its 180s cap is what bounds it), and the three
-   * cheap steps rounded generously upward.
+   * The estimates mix observations, caps and guesses, labelled below.
+   * `structure` is from the ledger; `assets` uses `collectAssets`'s 180s cap
+   * without extra unwinding (7.1s observed on the 10-image article). This
+   * arithmetic totals 625.4s; jobs.ts's 630.4s includes 5s of assets unwinding.
+   * Neither includes PDF figure recovery or multiple paper-source fetches;
+   * src/jobs.ts § `LEASE_MS` explains those limits.
    */
   /* **"Fits one invocation" is about elapsed time, not about how many requests
      it actually takes** — and since 2026-09-04 those are different answers. The

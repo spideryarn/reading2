@@ -25,8 +25,9 @@
  * `app/globals.css`, which was itself a shadcn project. The migration had almost nothing to bridge.
  *
  * Consequences worth knowing before you edit anything here:
- *   - This file is imported inside `@layer app` (see src/web/tailwind.css). Custom properties are
- *     unaffected by layering, so these resolve exactly as before.
+ *   - This file is imported inside `@layer app` (see src/web/tailwind.css). Custom properties
+ *     cascade like any other declaration, layers included: the same name declared in a later
+ *     layer, or outside any layer, would win over the value here.
  *   - `shadcn add` and `shadcn init` will try to write their own palette. Revert it. A generated
  *     light `:root` loaded after this one turns the page white and the orange near-invisible.
  *   - Names match the original app where they exist there, so anything copied across keeps working.
@@ -188,6 +189,15 @@
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.97 0 0);
     --destructive: oklch(0.65 0.2 27.325);
+    /* The error-TEXT colour: the word "failed" on a status row. Not
+       `--destructive`, which is a fill (the destructive Button, the failed
+       count chip) and is tuned as one: as small text it reads 4.37:1 on the
+       raised surface here. This is the same hue and chroma, lighter, and was
+       chosen by measuring in Chrome against the three surfaces a status row
+       sits on: 6.65:1 on --page, 6.19:1 on --panel, 5.22:1 on
+       --surface-raised. Meant for full opacity; tests/appearance-palette.test.ts
+       holds all three at 4.5:1 in both themes. */
+    --danger: oklch(0.7 0.2 27.325);
     /* Required by every Radix overlay shadcn builds on (popover, dropdown,
        tooltip content). The value is the raised-panel grey that styles.css
        already calls --surface-raised: on a dark page, up is forward. */
@@ -296,8 +306,8 @@
     /* 17px x 1.4 = 23.8px. Theirs, from the research doc named in this file's header —
        arithmetic rather than evidence, but good arithmetic, and the thing that makes a page
        look considered rather than assembled. Every vertical gap in the reading column is a
-       multiple of a THIRD of it; --block-pad below is that third, and it is what the rules
-       are written against.
+       multiple of a QUARTER of it; --block-pad below is that quarter, and it is what the rules
+       are written against. (It was a third until the gap came down; § --block-pad.)
 
        Deliberately scoped to the reading column. The chrome keeps its per-rule rem values;
        sweeping 1,800 lines of styles.css onto a scale is a different job and Greg scoped this
@@ -404,6 +414,10 @@
     --accent: oklch(0.93 0 0);
     --accent-foreground: oklch(0.2 0 0);
     --destructive: oklch(0.55 0.2 27.325);
+    /* Error text on the light surfaces: darker than the fill above, as Dark's
+       is lighter than its fill. Measured 5.83:1 on --page, 5.44:1 on --panel,
+       6.09:1 on --surface-raised. */
+    --danger: oklch(0.52 0.2 27.325);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.2 0 0);
     --destructive-foreground: oklch(0.985 0 0);

@@ -7,15 +7,17 @@
  * >
  * > — Greg, 2026-08-31
  *
- * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline, Debate and
- * Citations; the Sketch and Illustrated pictures inside Diagram; the Quiz half
- * of Learn; Referee's Claims and Candidates (whose chip stopped arming it
- * on 2026-10-03, so nothing reaches that one today) — reached by twelve controls,
- * since Diagram's bar button and its Sketch chip both arm the Sketch. The Tweets
- * page was a twelfth target until 2026-09-15 and now starts on arrival instead:
- * `useAutoRunOnArrival` at the foot of this file. This is the whole of it, in
- * one place, because eleven copies of a rule about spending money is eleven
- * chances to get one of them wrong.
+ * The targets that can do this are `AutoRunTarget`'s, in auto-run-targets.ts,
+ * which is the list and says why each is on it; they are not counted here. Most
+ * are a mode with a generated artefact. Some are a part of one: the Sketch and
+ * Illustrated pictures inside Diagram, the Quiz half of Learn, Summary's
+ * plain-words levels, and Referee's Claims and Candidates (whose chip stopped
+ * arming it on 2026-10-03, so nothing reaches that one today). A target can have
+ * more than one control: Diagram's bar button and its Sketch chip both arm the
+ * Sketch. The Tweets page was a target a press armed until 2026-09-15 and now
+ * starts on arrival instead: `useAutoRunOnArrival` at the foot of this file.
+ * This is the whole of it, in one place, because a copy per mode of a rule
+ * about spending money is a chance per mode to get it wrong.
  *
  * **Two of them have no job behind them.** `claims` and `candidates` are SSE
  * streams rather than pipeline steps (auto-run-targets.ts), so `ensure` starts
@@ -114,9 +116,8 @@ export type ArtefactStatus = "loading" | "none" | "ready" | "error";
  * @returns whether this mount made the automatic attempt. The glossary, ideas,
  *   quotes and sketch panels used it to say *Using your profile* instead of
  *   offering a tickbox the run had already decided; both pieces of UI went on
- *   2026-09-13 and those four hooks now ignore the return. Timeline,
- *   citations, debate and illustrated still carry it as
- *   `automatic` for their own consumers.
+ *   2026-09-13 and those hooks now ignore the return. The hooks that still
+ *   carry it return it as `automatic`, for their own consumers.
  */
 export function useAutoRun(
   slug: string,

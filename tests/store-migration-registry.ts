@@ -2425,8 +2425,10 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
   "tests/article-cache-call-site.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  /* Three blocks added on 2026-10-07 (seventh sweep, C4/B), each with its
+     own mutation and its own blind spot, so the arrears stay at three. */
   "tests/chat-anchor-route.test.ts":
-    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
+    { date: "2026-09-04", stage: "B", mutations: 5, blindSpots: 5, blocksWithoutJudgement: 3 },
   "tests/chat-live-ticket-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 3, blocksWithoutJudgement: 4 },
   "tests/chat-live-turn.test.ts":

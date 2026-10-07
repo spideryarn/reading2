@@ -1,5 +1,7 @@
 # Controls: one height, one radius, one hover
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 > **Split out of [design-css-overview.md](design-css-overview.md) on 2026-09-07**, verbatim apart
 > from the heading levels and a couple of "see above" links that had to become cross-doc ones. That
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
