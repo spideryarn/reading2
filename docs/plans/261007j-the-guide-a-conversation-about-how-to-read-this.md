@@ -2,7 +2,7 @@
 
 Owned by [plans.md](../project/plans.md). Overseer queue item `qi-gjvvvc6n`; reports `spya-tddvg2`,
 `spya-kfjrzv` and the guide-agent third of `spya-ucftjt` (SPIDERYARN-READING2-E7, -EA, -E9). Session
-`fbtddvg2-guide-agent-on-open`. **Status: planned, before GPT Sol's plan review.**
+`fbtddvg2-guide-agent-on-open`. **Status: planned; GPT Sol's plan review said *build with changes*, F1–F8 accepted (§ After the plan review, which overrides the design where they differ).**
 
 ## What Greg asked for
 
@@ -108,6 +108,50 @@ seven.
      rows are). The fast pick stays first: it is instant and free. This is the 80/20 of *"the
      command bar is the guide agent"*: one agent, two doors, the guide's thread the place both
      answers live.
+
+## After the plan review (overrides the design above where they differ)
+
+[GPT Sol's review](261007j-plan-review-sol.md), *build with changes*, eight findings, all accepted.
+
+- **F1 — the guide's tools are its own, and the dispatcher enforces them.** `GUIDE_TOOLS` = the
+  article tools only (`search_article_words`, `search_article_meaning`, `article_links`,
+  `article_glossary`, `article_citations`); no `read_web_page`, no library reads, no web search.
+  `runTool` refuses any name not in `toolsFor(ctx.kind)` before dispatch, for every kind (today only
+  `reader_notes` checks). This *adds* a refusal in `src/chat-tools.ts`; it does not touch the
+  `isSlug` or URL-length defences that security-map.md lists for that file. Test: an excluded,
+  model-supplied call does no fetch and no store read.
+- **F2 — three separate ideas, not one.** `SingleThreadKind` (Learn's three plus guide: one per
+  article, `targetOf`), `LearnKind` (Learn's three: Learn's layout, `LEARN_VIEW_OF`), and
+  *openable in Chat* (chat and guide). The kind sent is the open thread's (or the handoff target's),
+  never the band's; `visible` only for a chat. Handoffs gain a required target, so *Ask in chat*
+  still starts a chat while the bar's row targets the guide. The guide row is pinned outside the
+  source filter. Tests per the review's list.
+- **F3 — `mode:<key>` resolves against the live command set**, at draw and at press: the Dock's
+  visible modes (experimental switch, context), not the whole catalogue. Its *generates* mark is
+  the mode's own (`modeGenerates` / `subModeGenerates`), not fixed per id.
+- **F4 — one first-open coordinator.** While the add page's mark is pending, `useLastView`'s
+  Summary default waits for it. The coordinator: reason stored → clear the mark, the ordinary
+  first-open default; definitively none and a band fits → clear the mark, open the guide (existing
+  or one new), no modal; definitively none and narrow → the modal as today; read failed → keep the
+  mark, decide nothing. Race-order and StrictMode tests.
+- **F5 — no `purpose` button.** Instead of a model proposing words to save as the reason for
+  reading, **the guide's greeting holds the same autosaving box the modal has** (`ProfileBox` with
+  `useAutosavedText`, as Metadata's *Why you're reading this one*). The reader's own words are saved;
+  nothing model-written ever becomes their reason. This removes the kind-aware chip check the
+  review said the button would need. The buttons added are `mode` and `quick-search`, for chat and
+  guide both.
+- **F6 — the bar's order.** The first Enter on an unmatched sentence still runs the fast pick; only
+  when it answers *could not tell* does that line become an *Ask the guide: "…"* row, and a fresh
+  press sends. Exactly one paid send; in-flight lock.
+- **F7 — experience is "articles opened before", bucketed, below the cache.** Owner-scoped, not
+  archived, excluding this one, `opens > 0`: *none*, *a few* (1–5), *many*. It goes in the final user
+  message beside the profile, never in `GUIDE_SYSTEM` or the cached prefix. The privacy page and
+  privacy.md say the guide is sent it — required, not conditional.
+- **F8 — no new route or gateway job.** The guide uses `/api/chat`; `jobFor("guide") === "chat"`, so
+  its cost is reported under chat, on purpose for v1 (a test pins it). security-map.md gains the
+  per-kind tool gate and the proposal allowlist. The paid eval includes hostile articles asking for
+  the new tokens, hidden and experimental mode ids, and is scored by the real draw-and-press
+  validator; written up in `docs/investigations/`.
 
 ## The simpler options passed over, and the larger ones deferred
 
