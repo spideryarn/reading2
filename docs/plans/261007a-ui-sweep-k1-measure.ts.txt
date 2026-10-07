@@ -1,0 +1,451 @@
+/* K1: measure every defect, before and after. `npx tsx k1-measure.ts <label>`.
+   Writes k1-measure-<label>.json beside itself. No control that runs a model is pressed. */
+import { writeFileSync } from "node:fs";
+import { open, BASE, IN_PAGE } from "./k1-lib.ts";
+
+const label = process.argv[2] ?? "run";
+const OUT = `/tmp/claude-1000/-home-greg-code-spideryarn2/91c44a45-b288-4082-afa2-ef5a83bfd537/scratchpad/k1-measure-${label}.json`;
+const result: Record<string, unknown> = {};
+
+const MORE = `
+window.k1.bgBehind = (el) => {
+  for (let n = el; n; n = n.parentElement) {
+    const c = window.k1.rgb(getComputedStyle(n).backgroundColor);
+    if (c[3] > 0.99) return getComputedStyle(n).backgroundColor;
+  }
+  return getComputedStyle(document.body).backgroundColor;
+};
+window.k1.focusInfo = () => {
+  const el = document.activeElement; const cs = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const ow = parseFloat(cs.outlineWidth) || 0, oo = parseFloat(cs.outlineOffset) || 0;
+  const hasOutline = cs.outlineStyle !== "none" && ow > 0;
+  const grow = hasOutline ? ow + oo : 0;
+  const box = { l: r.left - grow, t: r.top - grow, r: r.right + grow, b: r.bottom + grow };
+  const clippedBy = [];
+  for (let n = el.parentElement; n; n = n.parentElement) {
+    const s = getComputedStyle(n);
+    if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+    const a = n.getBoundingClientRect();
+    const d = { l: a.left - box.l, t: a.top - box.t, r: box.r - a.right, b: box.b - a.bottom };
+    const cut = Object.entries(d).filter(([, v]) => v > 0.01);
+    if (cut.length) clippedBy.push(n.tagName + "." + String(n.className).slice(0, 40) + " " + JSON.stringify(Object.fromEntries(cut)));
+  }
+  const behindSelf = window.k1.bgBehind(el);
+  const behindParent = el.parentElement ? window.k1.bgBehind(el.parentElement) : behindSelf;
+  const mark = hasOutline ? cs.outlineColor : null;
+  return {
+    el: el.tagName + "." + String(el.className).slice(0, 60),
+    focusVisible: el.matches(":focus-visible"),
+    outline: cs.outlineStyle + " " + cs.outlineWidth + " " + cs.outlineColor + " offset " + cs.outlineOffset,
+    borderColor: cs.borderTopColor, borderWidth: cs.borderTopWidth, boxShadow: cs.boxShadow, color: cs.color,
+    rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+    clippedBy,
+    outlineVsParentBg: mark ? window.k1.contrast(mark, behindParent) : null,
+    outlineVsOwnBg: mark ? window.k1.contrast(mark, behindSelf) : null,
+    borderVsParentBg: window.k1.contrast(cs.borderTopColor, behindParent),
+    borderVsOwnBg: window.k1.contrast(cs.borderTopColor, behindSelf),
+    textVsBg: window.k1.contrast(cs.color, behindSelf),
+    behindSelf, behindParent,
+  };
+};
+/* Put the sequential-focus starting point just before el, so one real Tab lands on it. */
+window.k1.startBefore = (el) => {
+  const range = document.createRange(); range.setStartBefore(el); range.collapse(true);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+};
+`;
+
+type Page = Awaited<ReturnType<typeof open>>["page"];
+
+async function ready(page: Page, path: string, wait?: string) {
+  await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+  if (wait) await page.waitForSelector(wait, { timeout: 20_000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  await page.addScriptTag({ content: IN_PAGE + MORE });
+}
+
+/** Land on the nth match with a real Tab: script focus goes to it only to find
+ *  its place in the order, then a real Shift+Tab leaves and a real Tab returns. */
+async function tabTo(page: Page, selector: string, nth = 0): Promise<unknown> {
+  const exists = await page.evaluate(
+    ([sel, n]) => {
+      const el = document.querySelectorAll(sel as string)[n as number] as HTMLElement | undefined;
+      if (!el) return false;
+      el.scrollIntoView({ block: "center" });
+      el.focus({ preventScroll: true });
+      (window as any).k1target = el;
+      return document.activeElement === el;
+    },
+    [selector, nth] as const,
+  );
+  if (!exists) return { missingOrUnfocusable: selector };
+  await page.keyboard.press("Shift+Tab");
+  const left = await page.evaluate(() => document.activeElement !== (window as any).k1target);
+  await page.keyboard.press("Tab");
+  const hit = await page.evaluate(() => document.activeElement === (window as any).k1target);
+  if (!hit) return { notReached: selector, left, at: await page.evaluate(() => document.activeElement?.tagName + "." + String(document.activeElement?.className).slice(0, 50)) };
+  await page.waitForTimeout(300);
+  const info = await page.evaluate(() => (window as any).k1.focusInfo());
+  return { leftThenTabbedBack: left, ...(info as object) };
+}
+
+const ROW_PROPS = ["padding-top", "padding-right", "padding-bottom", "padding-left", "font-family", "font-size", "white-space", "color", "opacity", "display", "line-height"];
+
+async function wide(theme: "dark" | "light") {
+  const out: Record<string, unknown> = {};
+  const { browser, page } = await open({ width: 1440, theme });
+  try {
+    /* ---------- status rows, tokens, candidates ---------- */
+    await ready(page, "/read/fowler-phrenology?mode=chat", ".mode-band.chat");
+    out.theme = await page.evaluate(() => document.documentElement.dataset.theme);
+    out.statusRows = await page.evaluate((props) => {
+      const k1 = (window as any).k1;
+      const band = document.querySelector(".mode-band.chat")!;
+      const host = document.createElement("div");
+      host.dataset.k1 = "chat";
+      host.innerHTML =
+        '<ul class="chat-tools">' +
+        '<li class="chat-tool" id="k1-ok"><span class="chat-tool-label">read the passage</span><span class="chat-tool-detail" id="k1-ok-d">3 passages</span></li>' +
+        '<li class="chat-tool error" id="k1-err"><span class="chat-tool-label">read the passage</span><span class="chat-tool-detail" id="k1-err-d">failed</span></li>' +
+        "</ul>";
+      band.appendChild(host);
+      const dock = document.createElement("ul");
+      dock.className = "dock-questions";
+      dock.dataset.k1 = "dock";
+      dock.innerHTML =
+        '<li><button class="dock-question"><span class="dock-question-quote">a passage</span>' +
+        '<span class="dock-question-state" id="k1-dq-ok">a preview</span></button></li>' +
+        '<li><button class="dock-question"><span class="dock-question-quote">a passage</span>' +
+        '<span class="dock-question-state error" id="k1-dq-err">failed</span></button></li>';
+      document.body.appendChild(dock);
+      const get = (id: string) => {
+        const el = document.getElementById(id)!;
+        const r = el.getBoundingClientRect();
+        return { ...k1.style(el, props), width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
+      };
+      const surfaces = { page: k1.token("--page"), panel: k1.token("--panel"), raised: k1.token("--surface-raised") };
+      const on = (id: string) => {
+        const el = document.getElementById(id)!;
+        const cs = getComputedStyle(el);
+        const op = parseFloat(cs.opacity);
+        return Object.fromEntries(Object.entries(surfaces).map(([n, bg]) => [n, k1.contrast(cs.color, bg, op)]));
+      };
+      return {
+        chatRowOk: get("k1-ok"), chatRowError: get("k1-err"),
+        chatDetailOk: get("k1-ok-d"), chatDetailError: get("k1-err-d"),
+        dockStateOk: get("k1-dq-ok"), dockStateError: get("k1-dq-err"),
+        contrast: { chatDetailError: on("k1-err-d"), chatDetailOk: on("k1-ok-d"), dockStateError: on("k1-dq-err") },
+        colourRgb: {
+          chatDetailError: k1.rgb(getComputedStyle(document.getElementById("k1-err-d")!).color),
+          dockStateError: k1.rgb(getComputedStyle(document.getElementById("k1-dq-err")!).color),
+        },
+        tokens: Object.fromEntries(
+          ["--page", "--panel", "--surface-raised", "--destructive", "--danger", "--highlight", "--highlight-text", "--ink-faint", "--rule-strong"].map((t) => [t, k1.token(t) + " = rgb " + k1.rgb(k1.token(t)).slice(0, 3).join(",")]),
+        ),
+        /* the two --ink-faintest users, and the destructive fallbacks */
+        soon: (() => {
+          const b = document.createElement("button"); b.className = "dock-btn soon"; document.body.appendChild(b);
+          const v = getComputedStyle(b).color; b.remove(); return v;
+        })(),
+        diagOptLabel: (() => {
+          const b = document.createElement("span"); b.className = "diag-opt-label"; document.body.appendChild(b);
+          const v = getComputedStyle(b).color; b.remove(); return v;
+        })(),
+        destructiveUsers: Object.fromEntries(
+          [["p", "srch-error", "color"], ["span", "srch-failed", "color"], ["span", "dock-count failed", "backgroundColor"], ["button", "chat-icon danger armed", "backgroundColor"]].map(([tag, cls, prop]) => {
+            const b = document.createElement(tag!); b.className = cls!; document.body.appendChild(b);
+            const v = (getComputedStyle(b) as any)[prop!]; b.remove(); return [cls, v];
+          }),
+        ),
+        pageError: (() => {
+          const b = document.createElement("pre"); b.className = "error"; document.body.appendChild(b);
+          const v = k1.style(b, ["padding-top", "font-family", "font-size", "white-space", "color"]); b.remove(); return v;
+        })(),
+        loading: (() => {
+          const b = document.createElement("div"); b.className = "loading"; document.body.appendChild(b);
+          const v = k1.style(b, ["padding-top", "font-family", "font-size", "white-space", "color"]); b.remove(); return v;
+        })(),
+      };
+    }, ROW_PROPS);
+
+    out.dangerCandidates = await page.evaluate(() => {
+      const k1 = (window as any).k1;
+      const surfaces = { page: k1.token("--page"), panel: k1.token("--panel"), raised: k1.token("--surface-raised") };
+      const rows: Record<string, unknown> = {};
+      for (let L = 40; L <= 85; L += 1) {
+        const css = `oklch(${(L / 100).toFixed(2)} 0.2 27.325)`;
+        const c = Object.fromEntries(Object.entries(surfaces).map(([n, bg]) => [n, k1.contrast(css, bg)]));
+        rows[css] = { ...c, min: Math.min(...(Object.values(c) as number[])), rgb: k1.rgb(css).slice(0, 3).join(",") };
+      }
+      return rows;
+    });
+
+    /* ---------- disabled gloss-btn under a real pointer ---------- */
+    await page.evaluate(() => {
+      const b = document.createElement("button");
+      b.className = "gloss-btn"; b.disabled = true; b.id = "k1-gloss"; b.textContent = "Find it";
+      b.style.cssText = "position:fixed;left:300px;top:300px;z-index:99999";
+      document.body.appendChild(b);
+    });
+    const restBefore = await page.evaluate(() => { const c = getComputedStyle(document.getElementById("k1-gloss")!); return { border: c.borderTopColor, color: c.color }; });
+    await page.mouse.move(310, 310);
+    await page.waitForTimeout(200);
+    out.glossBtnDisabled = {
+      atRest: restBefore,
+      hovered: await page.evaluate(() => { const el = document.getElementById("k1-gloss")!; const c = getComputedStyle(el); return { isHover: el.matches(":hover"), border: c.borderTopColor, color: c.color }; }),
+    };
+    await page.mouse.move(5, 5);
+    /* the same button, live and aria-disabled, under the same pointer */
+    const hoverAs = async (setup: string) => {
+      await page.evaluate((code) => { const b = document.getElementById("k1-gloss") as HTMLButtonElement; b.disabled = false; b.removeAttribute("aria-disabled"); new Function("b", code)(b); }, setup);
+      await page.mouse.move(310, 310);
+      await page.waitForTimeout(200);
+      const v = await page.evaluate(() => { const el = document.getElementById("k1-gloss")!; const c = getComputedStyle(el); return { isHover: el.matches(":hover"), border: c.borderTopColor, color: c.color }; });
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(100);
+      return v;
+    };
+    out.glossBtnLiveHovered = await hoverAs("");
+    out.glossBtnAriaDisabledHovered = await hoverAs('b.setAttribute("aria-disabled", "true")');
+
+    /* ---------- quotes hint, feedback pressed pill, sketch chips (injected) ---------- */
+    out.rest = await page.evaluate(() => {
+      const k1 = (window as any).k1;
+      const host = document.createElement("div");
+      host.innerHTML =
+        '<div class="quotes-empty"><p id="k1-qp">plain</p><p class="quotes-hint" id="k1-qh">hint</p></div>' +
+        '<button class="fb-kind-button" aria-pressed="true" id="k1-fb">Bug</button>' +
+        '<div class="sk-in-full"><div class="sk-bar"><div class="sk-scenes">' +
+        '<button class="sk-scene on" id="k1-sk-on">The long name of the scene that is open, which must be readable in full whatever its length is</button>' +
+        '<button class="sk-scene" id="k1-sk-off">The long name of a scene that is closed, which may be cut short to leave the row some room</button>' +
+        "</div></div></div>" +
+        '<div class="sk-bar"><div class="sk-scenes">' +
+        '<button class="sk-scene on" id="k1-sk-on-band">The long name of the scene that is open, which must be readable in full whatever its length is</button>' +
+        '<button class="sk-scene" id="k1-sk-off-band">The long name of a scene that is closed, which may be cut short to leave the row some room</button>' +
+        "</div></div>";
+      document.body.appendChild(host);
+      const chip = (id: string) => { const el = document.getElementById(id)!; return { maxWidth: getComputedStyle(el).maxWidth, truncated: el.scrollWidth > el.clientWidth, width: Math.round(el.getBoundingClientRect().width) }; };
+      const fb = getComputedStyle(document.getElementById("k1-fb")!).backgroundColor;
+      const r = {
+        quotesHint: k1.style(document.getElementById("k1-qh")!, ["color", "font-size", "line-height", "margin-bottom"]),
+        quotesPlain: k1.style(document.getElementById("k1-qp")!, ["color", "font-size"]),
+        feedbackPressed: { computed: fb, rgba: k1.rgb(fb) },
+        sketchFullOn: chip("k1-sk-on"), sketchFullOff: chip("k1-sk-off"),
+        sketchBandOn: chip("k1-sk-on-band"), sketchBandOff: chip("k1-sk-off-band"),
+      };
+      host.remove();
+      return r;
+    });
+
+    /* ---------- a stored Sketch, if any fixture has one ---------- */
+    const sketches: Record<string, unknown> = {};
+    for (const slug of ["fowler-phrenology", "vb-spya-vu3xen", "writes", "arxiv-1902-spya-pfud4c"]) {
+      await ready(page, `/read/${slug}?mode=diagram`, ".mode-band");
+      sketches[slug] = await page.evaluate(() => ({
+        chips: document.querySelectorAll(".sk-scene").length,
+        band: document.querySelector(".mode-band")?.className,
+        hits: document.querySelectorAll(".srch-hit").length,
+      }));
+    }
+    out.storedSketch = sketches;
+    await ready(page, "/read/fowler-phrenology?mode=diagram", ".sk-scene");
+    const zoom = page.locator("button.sk-zoom").first();
+    if (await zoom.count()) {
+      out.sketchZoomLabel = (await zoom.innerText()).trim();
+      await zoom.click();
+      await page.waitForSelector(".sk-in-full .sk-scene", { timeout: 8000 }).catch(() => {});
+      out.sketchFullReal = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".sk-in-full .sk-scene")].map((el) => ({ text: el.textContent, on: el.classList.contains("on"), maxWidth: getComputedStyle(el).maxWidth, truncated: el.scrollWidth > el.clientWidth, width: Math.round(el.getBoundingClientRect().width) })));
+      await page.keyboard.press("Escape");
+    }
+
+    /* ---------- focus marks, each after a real Tab ---------- */
+    const focus: Record<string, unknown> = {};
+    await ready(page, "/profile", ".prof-box-input");
+    focus.profileBoxInput = await tabTo(page, ".prof-box-input");
+    focus.profileSectionHeading = await tabTo(page, "section[data-section] h2 > button[aria-expanded]");
+    focus.profileSectionHeadingLast = await tabTo(
+      page, "section[data-section] h2 > button[aria-expanded]",
+      (await page.locator("section[data-section] h2 > button[aria-expanded]").count()) - 1,
+    );
+    out.profileHeadingCount = await page.locator("section[data-section] h2 > button[aria-expanded]").count();
+
+    await ready(page, "/read/fowler-phrenology/metadata", "section[data-section]");
+    out.metadataHeadingCount = await page.locator("section[data-section] h2 > button[aria-expanded]").count();
+    focus.metadataSectionHeading = await tabTo(page, "section[data-section] h2 > button[aria-expanded]");
+    focus.metadataSectionHeadingLast = await tabTo(
+      page, "section[data-section] h2 > button[aria-expanded]",
+      Math.max(0, (out.metadataHeadingCount as number) - 1),
+    );
+
+    await ready(page, "/add", ".prof-box-input");
+    focus.addBoxInput = await tabTo(page, ".prof-box-input");
+    out.addBoxInputs = await page.locator(".prof-box-input").count();
+
+    /* the reader-profile panel in the reading view, if it draws the box */
+    await ready(page, "/read/fowler-phrenology?mode=structure", ".mode-band");
+    out.structure1440 = await page.evaluate(() => ({ rows: document.querySelectorAll(".outln-row").length, focused: document.querySelectorAll(".outln-row.focused").length }));
+
+    for (const slug of ["vb-spya-vu3xen", "fowler-phrenology"]) {
+      await ready(page, `/read/${slug}?mode=marginalia`, ".marg-question, .marg-idea, .marg-arc, .marg-relation");
+      await page.waitForSelector(".marg-idea, .marg-relation", { timeout: 6000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      const counts = await page.evaluate(() => Object.fromEntries([".marg-question", ".marg-idea", ".marg-arc", ".marg-relation", ".marg-shut-button"].map((s) => [s, document.querySelectorAll(s).length])));
+      focus[`marginalia:${slug}:counts`] = counts;
+      for (const sel of [".marg-question", ".marg-idea", ".marg-arc", ".marg-relation", ".marg-shut-button"]) {
+        if ((counts as Record<string, number>)[sel]) focus[`marginalia:${slug}:${sel}`] = await tabTo(page, sel);
+      }
+      /* neighbours at a 12px root: does one mark reach the next button? */
+      focus[`marginalia:${slug}:gaps`] = await page.evaluate(() => {
+        const measure = () => {
+          const els = [...document.querySelectorAll<HTMLElement>(".marg-question, .marg-idea, .marg-arc, .marg-relation, .marg-shut-button")];
+          const shown = els.filter((e) => e.getBoundingClientRect().width > 0);
+          const rects = shown.map((e) => e.getBoundingClientRect());
+          let min = Infinity; let overlapsAt4 = 0; let markPairsUnder8 = 0; const close: string[] = [];
+          for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+            const a = rects[i]!, b = rects[j]!;
+            const dx = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
+            const dy = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
+            const gap = Math.max(dx, dy);
+            if (gap < min) min = gap;
+            if (gap < 4) { overlapsAt4++; close.push(shown[i]!.className + " | " + shown[j]!.className + " | dx " + dx.toFixed(1) + " dy " + dy.toFixed(1) + " | " + [a, b].map((r) => [r.left, r.top, r.width, r.height].map((v) => Math.round(v)).join(",")).join(" vs ")); }
+            if (gap < 8) markPairsUnder8++;
+          }
+          return { buttons: rects.length, minGap: Math.round(min * 100) / 100, pairsCloserThanOneMark_4px: overlapsAt4, pairsCloserThanTwoMarks_8px: markPairsUnder8, close };
+        };
+        const at16 = measure();
+        document.documentElement.style.fontSize = "12px";
+        void document.body.offsetHeight;
+        const at12 = measure();
+        document.documentElement.style.fontSize = "";
+        return { at16, at12 };
+      });
+    }
+
+    /* the shut chat card: the markup ChatDialog emits, injected, reached by a real Tab */
+    await ready(page, "/read/fowler-phrenology", "aside.spine");
+    await page.evaluate(() => {
+      const host = document.createElement("div");
+      host.className = "chat-dialog";
+      host.style.cssText = "position:fixed;left:200px;top:200px;width:320px;";
+      host.innerHTML = '<button type="button" class="chat-card-shut"><span class="chat-card-head"><span class="chat-dialog-title">A title</span></span></button>';
+      document.body.appendChild(host);
+    });
+    focus.chatCardShut = await tabTo(page, ".chat-card-shut");
+    out.focus = focus;
+  } finally {
+    await browser.close();
+  }
+
+  /* ---------- 820: the nested list ---------- */
+  for (const width of [820, 600]) {
+    const b = await open({ width, theme });
+    try {
+      await ready(b.page, "/read/fowler-phrenology?mode=structure", ".mode-band");
+      out[`outline${width}`] = await b.page.evaluate(() => {
+        const k1 = (window as any).k1;
+        const row = document.querySelector<HTMLElement>(".outln-row.focused");
+        if (!row) return { rows: document.querySelectorAll(".outln-row").length, focused: 0 };
+        const cs = getComputedStyle(row);
+        const m = cs.boxShadow.match(/^(.*?\))/);
+        const colour = m ? m[1]! : cs.boxShadow;
+        const bg = k1.bgBehind(row);
+        return {
+          rows: document.querySelectorAll(".outln-row").length, focused: document.querySelectorAll(".outln-row.focused").length,
+          hasKeyboardFocus: document.activeElement === row || row.contains(document.activeElement),
+          boxShadow: cs.boxShadow, outline: cs.outlineStyle + " " + cs.outlineWidth, shadowVsBg: k1.contrast(colour, bg), bg,
+        };
+      });
+    } finally {
+      await b.browser.close();
+    }
+  }
+
+  /* ---------- 390, a finger ---------- */
+  const n = await open({ width: 390, height: 844, touch: true, theme });
+  try {
+    await ready(n.page, "/read/fowler-phrenology?mode=search", ".mode-band");
+    out.narrow = await n.page.evaluate(() => {
+      const k1 = (window as any).k1;
+      const long = "A long passage of the kind a hover card shows, long enough that the card wants every pixel of the width it is allowed and takes it. ".repeat(4);
+      const host = document.createElement("div");
+      host.style.cssText = "position:fixed;left:0;top:0;width:max-content;z-index:99999";
+      host.innerHTML =
+        `<div class="tooltip" id="k1-tip">${long}</div>` +
+        `<div class="tooltip tip-cite" id="k1-tip-cite"><p class="tip-cite-text">${long}</p></div>` +
+        `<div class="tooltip tip-hit" id="k1-tip-hit"><p class="tip-hit-quote">${long}</p></div>`;
+      document.body.appendChild(host);
+      const w = (id: string) => { const el = document.getElementById(id)!; return { maxWidth: getComputedStyle(el).maxWidth, width: Math.round(el.getBoundingClientRect().width * 10) / 10, widerThanViewport: el.getBoundingClientRect().width > innerWidth }; };
+      const tips = { viewport: innerWidth, plain: w("k1-tip"), cite: w("k1-tip-cite"), hit: w("k1-tip-hit") };
+      host.remove();
+      const field = () => {
+        const el = document.querySelector<HTMLElement>(".srch-input") ?? document.querySelector<HTMLElement>("textarea, input[type=text], input:not([type])");
+        return el ? { el: el.tagName + "." + el.className, fontSize: getComputedStyle(el).fontSize } : null;
+      };
+      const coarse = matchMedia("(any-pointer: coarse)").matches;
+      const at16 = field();
+      document.documentElement.style.fontSize = "12px";
+      void document.body.offsetHeight;
+      const at12 = field();
+      document.documentElement.style.fontSize = "20px";
+      void document.body.offsetHeight;
+      const at20 = field();
+      document.documentElement.style.fontSize = "";
+      return { tips, anyPointerCoarse: coarse, fieldAtRoot16: at16, fieldAtRoot12: at12, fieldAtRoot20: at20, sideScroll: document.documentElement.scrollWidth > innerWidth };
+    });
+  } finally {
+    await n.browser.close();
+  }
+  /* ---------- 390 with a mouse: a real block-link card, and the real full-screen Sketch ---------- */
+  const m = await open({ width: 390, height: 844, theme });
+  try {
+    const real: Record<string, unknown> = {};
+    for (const path of ["/read/vb-spya-vu3xen?mode=faq", "/read/vb-spya-vu3xen?mode=citations", "/read/vb-spya-vu3xen?mode=quotes", "/read/fowler-phrenology?mode=summary"]) {
+      await ready(m.page, path, ".mode-band");
+      const link = m.page.locator(".mode-band [data-block-link]:not([data-block-missing])").first();
+      if (!(await link.count())) { real[path] = "no block link in the band"; continue; }
+      await link.scrollIntoViewIfNeeded();
+      await link.hover();
+      await m.page.waitForSelector(".tooltip.tip-cite", { timeout: 4000 }).catch(() => {});
+      await m.page.waitForTimeout(400);
+      real[path] = await m.page.evaluate(() => {
+        const t = document.querySelector<HTMLElement>(".tooltip.tip-cite");
+        if (!t) return "no card drawn";
+        const r = t.getBoundingClientRect();
+        return { viewport: innerWidth, clientWidth: document.documentElement.clientWidth, maxWidth: getComputedStyle(t).maxWidth, left: Math.round(r.left * 10) / 10, right: Math.round(r.right * 10) / 10, width: Math.round(r.width * 10) / 10, offScreen: r.left < 0 || r.right > document.documentElement.clientWidth, chars: t.textContent?.length };
+      });
+      await m.page.mouse.move(2, 2);
+      if (typeof real[path] === "object") break;
+    }
+    out.tipCiteReal390 = real;
+    const narrowFocus: Record<string, unknown> = {};
+    await ready(m.page, "/profile", "section[data-section]");
+    narrowFocus.profileHeading390 = await tabTo(m.page, "section[data-section] h2 > button[aria-expanded]");
+    await ready(m.page, "/read/fowler-phrenology/metadata", "section[data-section]");
+    narrowFocus.metadataHeading390 = await tabTo(m.page, "section[data-section] h2 > button[aria-expanded]");
+    narrowFocus.metadataBoxInputs = await m.page.locator(".prof-box-input").count();
+    if (narrowFocus.metadataBoxInputs) narrowFocus.metadataBoxInput390 = await tabTo(m.page, ".prof-box-input");
+    out.narrowFocus = narrowFocus;
+    await ready(m.page, "/read/fowler-phrenology?mode=diagram", ".sk-scene");
+    const zoom = m.page.locator("button.sk-zoom").first();
+    if (await zoom.count()) {
+      await zoom.click();
+      await m.page.waitForSelector(".sk-in-full .sk-scene", { timeout: 8000 }).catch(() => {});
+      out.sketchFullReal390 = await m.page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".sk-in-full .sk-scene")].map((el) => ({ text: el.textContent, on: el.classList.contains("on"), maxWidth: getComputedStyle(el).maxWidth, truncated: el.scrollWidth > el.clientWidth, width: Math.round(el.getBoundingClientRect().width) })));
+    } else out.sketchFullReal390 = "no enlarge button at 390";
+  } finally {
+    await m.browser.close();
+  }
+  return out;
+}
+
+for (const theme of ["dark", "light"] as const) {
+  try {
+    result[theme] = await wide(theme);
+  } catch (err) {
+    result[theme] = { failed: String((err as Error).stack ?? err) };
+  }
+}
+writeFileSync(OUT, JSON.stringify(result, null, 1));
+console.log("wrote", OUT);

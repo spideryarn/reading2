@@ -25,6 +25,14 @@ styles; it presses nothing that runs a model.
   in the order, then a real `Shift+Tab` leaves it and a real `Tab` returns, and the element must
   match `:focus-visible`.
 
+The script and its raw output are kept beside this doc:
+[the script](261007a-ui-sweep-k1-measure.ts.txt), [its helpers](261007a-ui-sweep-k1-measure-lib.ts.txt),
+[before](261007a-ui-sweep-k1-measure-before.json) and [after](261007a-ui-sweep-k1-measure-after.json).
+The script grew while the work went on, so the *before* file lacks three things the *after* file
+has: the headings at 390, the live and `aria-disabled` hover, and Metadata's box. The hover's
+before was taken in a later run, ahead of its edit, and is quoted below. The other two have no
+before of their own: the same rules were measured before at 1440.
+
 ## 1. Status rows
 
 ### The `.error` leak
