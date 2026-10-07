@@ -564,23 +564,22 @@ describe("no free way into a minimal paper", () => {
   });
 
   /**
-   * **Search and a referee criterion get `loadArticle`'s refusal, like every
-   * other reader.** Until 2026-10-07 these two asked a gate of their own first
-   * (`refuseAPaperNotReadYet`, one extra indexed read), kept only so their 409
-   * left out the `paper` field. Nothing reads that field on these routes: its
-   * one reader is the article load, src/web/article/access.ts. SVO5 in
-   * docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md.
+   * **Search and a referee criterion ask a gate of their own first**
+   * (`refuseAPaperNotReadYet` in src/routes.ts), ahead of `loadArticle`. For a
+   * minimal paper whose metadata has been published, as here, the two refuse
+   * alike but for the body: the gate's is exactly `{ error, code }`, and
+   * `loadArticle`'s (chat's) also carries `paper`.
    *
-   * Written before the gate went, and green both sides of it, with one line
-   * changed: the body used to be exactly `{ error, code }` and is now exactly
-   * what chat sends for the same paper. What must not move is that it is
+   * SVO5 deleted the gate as a duplicate on the strength of this case alone,
+   * and plan 261007d § 4 put it back: the case below this one is the state
+   * only the gate covers. What must not move in either is that the paper is
    * refused **before a row is written** — both routes store a run and then
    * stream, so a refusal that came late would be a stored failure.
    */
   it.each([
     ["a search", "search", { criterion: "entropy", kind: "meaning" }],
     ["a referee criterion", "referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
-  ] as const)("refuses %s as chat is refused, and stores nothing", async (_name, family, body) => {
+  ] as const)("refuses %s with chat's 409 and sentence, and stores nothing", async (_name, family, body) => {
     const rows = async () => {
       const out = (await getDb().execute(sql`
         select
@@ -593,16 +592,19 @@ describe("no free way into a minimal paper", () => {
     const reply = await call(READER, "POST", `/api/${family}/${slug}`, body);
     expect(reply.status).toBe(409);
     const chat = await call(READER, "POST", `/api/chat/${slug}`, { threadId: randomUUID(), question: "What is it about?" });
-    expect(reply.body).toEqual(chat.body);
+    expect(chat.status).toBe(409);
     expect(chat.body.paper).toBeDefined();
-    expect(reply.body).toMatchObject({ error: NOT_READ_YET.message, code: "not-processed" });
+    expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+    expect(chat.body).toMatchObject(reply.body);
     expect(await rows()).toEqual(before);
     expect(before).toEqual({ searches: 0, criteria: 0 });
   });
 
-  // Review regression: the removed gate could see an article before metadata
-  // published its first revision. These cases require Postgres and were not
-  // run in the C6 review sandbox.
+  /* **The state only the gate covers.** A minimal ingest creates the article
+     row before `metadata` publishes its first revision. `loadArticle`'s
+     revision join finds nothing then and would answer 404; the gate reads the
+     `articles` row alone and answers 409. Found by the C6 code review after
+     SVO5 had deleted the gate; red (404) without it. */
   it.each([
     ["search", { criterion: "entropy", kind: "meaning" }],
     ["referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],

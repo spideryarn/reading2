@@ -25,7 +25,7 @@ under `src/web/` was touched.
 | 1 | **SVO2.** `POST /api/live/<not-a-uuid>/connected`, `/usage`, `/close` | 500 `[db-failed]` and a Sentry report (SQLSTATE 22P02: a string compared with a `uuid` column) | 404 *No such live session.*, the answer a well-formed unknown id already got | Red at the route on all three |
 | 2 | **SVO3.** A handler that throws after its response has started | `serveApi`'s catch wrote JSON anyway: `ERR_HTTP_HEADERS_SENT` escaped, the request line said 500 for a 200, and a second Sentry event was filed | The fault is captured once; the response is not written to and its status is not changed; it is ended only if nobody ended or destroyed it | Red with a real `ServerResponse`, four cases |
 | 3 | **SVO6.** The 23505 retry `catch` in `pgCommentStore.create` | Could not run | Deleted. The no-row retry beside it is the one that works | Characterised: green before and after |
-| 4 | **SVO5.** `refuseAPaperNotReadYet` | A second gate before `loadArticle` in search and in a referee criterion, one extra read each | Deleted. `loadArticle` refuses the same paper | Characterised on both routes |
+| 4 | **SVO5.** `refuseAPaperNotReadYet` | A second gate before `loadArticle` in search and in a referee criterion, one extra read each | **Not done: the gate is back as it was.** It covers a state `loadArticle` does not. See § 4 | Both states pinned on both routes |
 | 5 | **SVO12.** `GET /api/comments/:slug` | Parsed `req.url` again for `?anchors=` | Reads the parsed `query` | Existing test covers both answers |
 | 6 | **SVO14.** `queueAnUpload`'s lost-claim block | A copy of `answerALostClaim` | Calls it | Characterised through the route, six cases |
 | 7 | **"None yet is not a 404", the other six reads** | Plain `Error` with `status: 404` | **Half done: see below.** The six loaders throw `ArtefactNotMadeYet`; the routes still answer 404 whatever is sent | Loader type red on all six; route 404s pinned |
@@ -84,22 +84,41 @@ a row*): minted again with the existing row untouched; `CommentIdTaken` after ex
 failure that is not a collision is not retried. A fourth case pins the premise, that `comments` has
 one unique index. `rethrowPlacementError` (cluster C5) is untouched.
 
-## 4. One minimal-paper gate
+## 4. The minimal-paper gate: deleted, and put back
 
-`loadArticle` gives a paper not yet read through the same 409, sentence and code. The only
-difference was that the helper's body left out `paper`, and the one reader of that field under
-`src/web` is the article load (`article/access.ts`). So search and a referee criterion now send
-exactly what chat sends for the same paper. Pinned on both routes in
-[`tests/minimal-paper.test.ts`](../../tests/minimal-paper.test.ts), including that no `search_runs`
-or `referee_criteria` row is written.
+**SVO5: not worth it; the second gate was covering a state the first does not.** The gate is back
+in `src/routes.ts` with its two calls, as it was before `4912e4de5`, and says in its own comment
+which state it covers.
 
-**Code review found a case that pin missed:** an article born minimal has no published revision
-until metadata finishes. The old gate saw its processing state; `loadArticle`'s revision join
-did not, so these two routes changed from 409 to 404. `loadArticle` now asks the existing
-owner-scoped `processingOf` only when the revision read finds nothing, preserving the saved read
-on the successful path. The pure reader regression was red first and is green; two Postgres
-route cases also pin the refusal, zero written runs and the other owner's 404, but were not run
-in the review sandbox.
+The first build deleted it because `loadArticle` gives a paper not yet read through the same 409,
+sentence and code, and the only difference was that the helper's body left out `paper`. That was
+true of the one state its characterisation looked at: a minimal paper whose metadata is published.
+
+**Code review found the state it missed:** an article born minimal has no published revision until
+`metadata` finishes. The gate reads the `articles` row alone and saw it; `loadArticle`'s revision
+join did not, so the two routes changed from 409 to 404. The review's fix made `loadArticle` ask
+`processingOf` whenever the revision read found nothing.
+
+**That fix worked and was not kept**, because what it left was not simpler than what we started
+with:
+
+- **Before the cluster:** a five-line helper beside the two routes that need it, and two calls.
+  Cost: one indexed read on a request that goes on to call a model.
+- **After the deletion and the fix:** the same lookup, now inside `loadArticle` in `src/store/pg.ts`
+  behind an `if (!found)`, with `src/store/pg.ts` importing `src/minimal-paper.ts` to get it. And
+  it no longer applied to two routes. Every caller of `loadArticle` (chat, live, comments,
+  citations, the article read itself, and the rest) would have changed from 404 to a 409 with no
+  `paper` in that state, which nobody characterised and the cluster's rule forbids. The article
+  page in particular reads `paper` off that 409 and rethrows the refusal when it is missing
+  (`src/web/article/access.ts` § `unreadPaperFrom`).
+
+So the saving was one indexed read, and the price was a wider behaviour change and a store that
+knows about a route's concern. Both states are pinned on both routes in
+[`tests/minimal-paper.test.ts`](../../tests/minimal-paper.test.ts): the published one (409, exactly
+`{ error, code }`, no row written) and the unpublished one (409, the other owner's 404, no row
+written). The unpublished cases are red, 404 for 409, with neither the gate nor the lookup.
+`tests/unpublished-minimal-paper.test.ts`, which pinned the lookup inside `loadArticle`, went with
+the lookup.
 
 ## 5. One parse of the query string
 
@@ -186,6 +205,43 @@ and the in-flight winner correctly; the comment retry explanation no longer assi
 The review's root causes and the checks that would catch these lifecycle gaps are in
 [261007d](../postmortems/261007d-the-tested-state-is-not-the-whole-lifecycle.md).
 
+## Review status
+
+**GPT Sol's code review, 2026-10-07: "ship with these fixes applied. Postgres verification remains
+unrun."** [The answer](261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches-code-review-sol.md),
+[the prompt](261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches-code-review-prompt.md).
+Its four findings, and what happened to each when the stage was landed:
+
+| | Finding | Outcome |
+|---|---|---|
+| C1 | A fault after a stream's headers were sent was logged at `info` | **Kept.** Severity follows the failure's status; the recorded status stays 200. `logging.md`'s `http` row now says so too |
+| C2 | SVO5 turned a 409 into a 404 for a minimal paper not yet published | **The finding stands; the fix was replaced.** SVO5 was reverted instead: § 4 |
+| C3 | A Stop that won the race with an upload claim was answered 409 | **Kept.** `claimUploadIn` answers `expired`, so 410 and the existing sentence. Its only two callers both go through `answerALostClaim` |
+| C4 | Comments that named code that does not exist or said the wrong thing | **Kept**, each checked against the code |
+
+**The Postgres runs the review could not make**, done at landing:
+
+- With Sol's fixes as written: `minimal-paper`, `unpublished-minimal-paper`, `uploads-api` and
+  `serve-api-after-headers`, 4 files, 65 tests, all passed.
+- C2's lookup switched off: three red, 404 for 409 (both route cases and the pure one).
+- C3's line removed: *is a 410 when a Stop got in between* red, 409 for 410.
+- With SVO5 reverted and the lookup gone: `npm run typecheck` clean; 181 test files, 4,122 tests,
+  all passed, run by file in five batches (every test that reads `src/routes.ts`, `src/store/pg.ts`
+  or another touched source file as text; `routes`; the live-session, upload, comment,
+  minimal-paper, search, referee, artefact and none-yet suites; `api-fetch-offline`,
+  `store-migration-registry`, `doc-links`). Biome on the touched files: no errors, the same seven
+  complexity notes.
+
+**Left:**
+
+- **Item 7's route opt-in for the six reads** (tweets, relations, skim, sketch, illustrated, arc).
+  It needs the six route rows wrapped in `orNullWhenNotMadeYet` **and** the six names added to
+  `NONE_YET_AS_NULL` in `src/web/lib/api.ts` in the same change, because
+  `tests/api-fetch-offline.test.ts` enforces that the two lists agree. Four of the six wrap their
+  load in `withProfileChanged` or load beside `resolveProfile` and need care. § 7 has the steps.
+- **Search and referee handlers can close without a terminal frame when storing the result
+  fails.** Sol's wider note. It predates this stage and is unchanged by it.
+
 ## Mutations
 
 Each fix or pin was broken on purpose at the end, and its test watched red:
@@ -196,7 +252,7 @@ Each fix or pin was broken on purpose at the end, and its test watched red:
 | 2 | the `res.headersSent` guard absent (the state before the fix) | four of five in `serve-api-after-headers`; the control stayed green |
 | 2 | `!res.destroyed` dropped from the guard | *a response the reader already dropped is not ended a second time* |
 | 3 | the no-row retry gives up after two tries, not three | *gives up after three tries* in `store-comments` |
-| 4 | `loadArticle` stops refusing a minimal paper | both *refuses … as chat is refused, and stores nothing* cases in `minimal-paper` |
+| 4 | the gate absent, and no lookup in `loadArticle` | both *refuses an unpublished minimal paper on … before writing a run* cases in `minimal-paper`, 404 for 409 |
 | 5 | `query.get("anchorz")` | *shows whole-block bookmarks only to a client that opts into their anchor shape* in `routes` |
 | 6 | `answerALostClaim`: `unknown` → 400, `expired` → 409, the winner's job not returned | the 404, 410 and job cases in `uploads-api` |
 | 7 | `loadSkim` back to a plain `Error` with `status: 404` | *skim: the loader says "not made yet" with the type the helper reads* |
@@ -208,6 +264,7 @@ not a collision* cases; item 8, which is comments.
 
 ## Gates
 
+**The build's own run, before the code review.** § Review status has the run made at landing.
 Run on 2026-10-07 after merging `origin/dev`, by file, never the full suite:
 
 - `npm run typecheck`: clean, all three projects.

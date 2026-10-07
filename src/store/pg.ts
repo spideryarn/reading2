@@ -45,7 +45,6 @@ import { withAddedEntries } from "../glossary-added.js";
 import { relocateEntries } from "../glossary-occurrences.js";
 import { decodeAuthors } from "../authors.js";
 import { NOT_READ_YET } from "../messages.js";
-import { processingOf } from "../minimal-paper.js";
 import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
@@ -2832,15 +2831,7 @@ const rawPgArticleReader: ArticleReader = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
-    if (!found) {
-      // A minimal ingest creates the article before publishing its first
-      // revision. The join above cannot distinguish that paper from absence.
-      // Only this unsuccessful read needs the extra owner-scoped lookup.
-      if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
-        throw new NotProcessed(NOT_READ_YET.message);
-      }
-      throw notFound(slug);
-    }
+    if (!found) throw notFound(slug);
     /* **A minimal paper is not an article yet, and every reader of one is told
        so the same way** — `NotProcessed`, a 409 carrying the paper's title,
        authors and abstract, where this used to be the 404 below (it has no
