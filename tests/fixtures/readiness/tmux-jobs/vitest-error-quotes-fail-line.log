@@ -1,0 +1,17 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/zzz-review-summary-probe.test.ts > child runner failure diagnostics
+Error: Child test run failed; output follows:
+ FAIL  unit  tests/not-actually-failed.test.ts > a child assertion
+
+ ❯ tests/zzz-review-summary-probe.test.ts:3:9
+      1| import { it } from "vitest";
+      2| it("child runner failure diagnostics", () => {
+      3|   throw new Error("Child test run failed; output follows:\n FAIL  unit…
+       |         ^
+      4| });
+      5|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

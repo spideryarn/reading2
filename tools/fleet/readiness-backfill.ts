@@ -331,6 +331,7 @@ export function readingFromLog(
       counts: { kind: "none" },
       treeAtEnd: UNKNOWN_TREE,
       logPath: file,
+      failedTestFiles: null,
       why:
         options.sessionLive === false
           ? "the log has no EXIT= line and the tmux session that was writing it is gone — whatever it printed, nothing recorded how it ended"
@@ -373,6 +374,12 @@ export function readingFromLog(
     treeAtEnd: UNKNOWN_TREE,
     logPath: file,
     why,
+    /* **Not `parseFailedTestFiles(contents.text)`.** That text is a head and a
+       tail, and a tail can hold the last few FAIL lines of a summary whose
+       heading scrolled out of it — a confident count of some of the failures.
+       Null says the names are not known, which for a log reconstruction is
+       true. */
+    failedTestFiles: null,
   };
   return { reading: { record: finished, state: outcome, atMs: contents.mtimeMs, why } };
 }

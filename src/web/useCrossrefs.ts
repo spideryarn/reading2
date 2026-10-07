@@ -19,7 +19,7 @@
  *
  * **The links to draw, or null.** Null while loading, when none were ever
  * generated (the ordinary case — a `200 null`, or a 404 from a server older
- * than plan 261006g), on an error, and — the one
+ * than plan 261006g), when the first read for this article fails, and — the one
  * that is a decision rather than an absence — **when the artefact is stale**
  * (Sol F8). A carried link can still name two surviving ids and a phrase that
  * still matches while no longer being true, and the prose has no panel to say
@@ -29,6 +29,14 @@
  * The array is the response's own, so its identity holds until the next read
  * lands — TableView keys its prose cache on it.
  *
+ * **A failed re-read changes nothing.** Links this article's last answered
+ * read gave stay drawn when a later read throws (a 500, a 401, a dropped
+ * connection with no saved copy): a failure is not an answer, and until
+ * 2026-10-06 it was treated as "none", which took the underlines out of the
+ * prose after a finished job. It is still silent — there is no panel to say
+ * it in. Only a read that answered clears: none, stale, or another article's.
+ * tests/crossrefs-revalidate.test.tsx.
+ *
  * ## It revalidates when a crossrefs job finishes
  *
  * The after-import box queues `crossrefs` while the article opens, so the
@@ -36,17 +44,18 @@
  * this article that writes `crossrefs` and reaches `done` while this page is
  * open **refreshes** the read — `refresh`, never `reload`, because a reload
  * joins a GET that may have read the database before the job wrote it
- * (useStepJob.ts § The read half is next door). `useJobs` announces only jobs
- * that finished after it began watching, so opening an article does not
- * refetch once per historical job. `"quiet"`: this mount has no progress to
- * show, so it does not keep the idle poll going on its own.
+ * (useStepJob.ts § The read half is next door). The listener is
+ * `useStepFinished`, the one the other always-mounted reads use: it announces
+ * only jobs that finished after it began watching, so opening an article does
+ * not refetch once per historical job, and it is quiet — this mount has no
+ * progress to show, so it does not keep the idle poll going on its own.
  */
 import { useCallback, useEffect, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
-import type { Crossref, CrossrefsResponse, Job } from "../types.js";
+import type { Crossref, CrossrefsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { useJobs } from "./useJobs.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useStepFinished } from "./useStepJob.js";
 
 /** What the prose may draw: this article's response links when fresh, else null. */
 export function drawableCrossrefs(
@@ -92,9 +101,12 @@ export function useCrossrefs(slug: string): readonly Crossref[] | null {
         if (!current()) return;
         setRead({ slug, links: drawableCrossrefs(found, slug) });
       } catch {
-        /* Nothing to say in the prose, and nothing to retry from: an owner's
-           reading view without its underlines is the page it was yesterday. */
-        if (current()) setRead({ slug, links: null });
+        /* Nothing to say in the prose, and nothing to retry from. **But a
+           failure is not an answer**: what this article's last answered read
+           gave stays as it is, links or none. Only when there is nothing for
+           this slug — the first read, or the last article's state still here —
+           does it settle on "nothing to draw". */
+        if (current()) setRead((was) => (was?.slug === slug ? was : { slug, links: null }));
       }
     },
     [slug],
@@ -109,13 +121,7 @@ export function useCrossrefs(slug: string): readonly Crossref[] | null {
     void reload();
   }, [reload]);
 
-  const onFinished = useCallback(
-    (job: Job) => {
-      if (job.slug === slug && job.steps.some((s) => s.name === "crossrefs")) void refresh();
-    },
-    [slug, refresh],
-  );
-  useJobs("quiet", onFinished);
+  useStepFinished(slug, "crossrefs", refresh);
 
   return read?.slug === slug ? read.links : null;
 }

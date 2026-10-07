@@ -84,7 +84,7 @@ import {
 } from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "../tools/fleet/readiness-store.js";
 import { WINDOW_HOURS } from "../tools/fleet/readiness-wiring.js";
-import type { TreeStamp } from "../tools/fleet/readiness.js";
+import { describeReadingOutcome, type TreeStamp } from "../tools/fleet/readiness.js";
 import { collectHealth } from "../tools/fleet/health.js";
 import { describeLockRefusal, releaseLock, stillOurs, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 
@@ -774,7 +774,7 @@ async function runReadinessCheck(runner: string, sha: string, store: ReadinessSt
     })
     .sort((a, b) => b.atMs - a.atMs)[0];
   const outcome =
-    latest?.state ??
+    (latest === undefined ? undefined : describeReadingOutcome(latest)) ??
     (result.error !== null
       ? `not started (${result.error.message})`
       : result.signal !== null

@@ -147,6 +147,7 @@ function finished(over: Partial<FinishedRecord> = {}): FinishedRecord {
     treeAtEnd: clean(),
     logPath: null,
     why: "the box refused the run",
+    failedTestFiles: null,
     ...over,
   };
 }
