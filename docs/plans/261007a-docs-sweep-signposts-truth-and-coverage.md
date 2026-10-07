@@ -491,51 +491,79 @@ its own job:
 bar). The job stopped at ten, as briefed.
 
 **Statements the splitters found false and left alone**, because this job moves text and does not
-correct it. Each is a one-line fix for whoever owns the area:
+correct it. Each is a one-line fix for whoever owns the area. **All taken on 2026-10-07 by
+a follow-up session, [§ Log](#log)**: each was checked against the code, and each is marked *fixed* or *wrong* (the doc
+was still true) below.
 
 - `ingest-queue.md` § When this becomes Postgres still argues from concurrency 1 and from files.
-  Concurrency is `SPIDERYARN_JOB_CONCURRENCY`, and the files are gone.
+  Concurrency is `SPIDERYARN_JOB_CONCURRENCY`, and the files are gone. — *Fixed*: the cap is now
+  "concurrency 1 when this was written, `SPIDERYARN_JOB_CONCURRENCY` since" (`src/jobs.ts`), and the
+  files sentence is in the past tense.
 - `search.md` § The mode band says the gist columns go away while you search. They were removed on
-  2026-09-29. The fallback bullet says "just under 0.7 prints as 70", but the floor is 0.65.
+  2026-09-29. The fallback bullet says "just under 0.7 prints as 70", but the floor is 0.65. —
+  *Fixed*, both (`QUICK_FLOOR = 0.65` in `src/quick-search.ts`).
 - `billing.md`: "The live row that needs a backfill" is probably moot, since that subscription ended
   2026-10-03. The ChatGPT-tiers note says multiples of 50 cents, while the live section says whole
-  units.
+  units. — *Fixed in part*: the ChatGPT note was right; it was the live section that was wrong
+  (`tests/billing-tiers.test.ts` asserts `% 50`). The section is now headed "probably moot,
+  unverified": `customer.subscription.deleted` resyncs the row, but the production read that would
+  confirm it was refused this session's permissions. **Still open: someone with production access
+  reads that row.**
 - `overseer-direction.md` says the scheduler has no home, but `scripts/overseer.ts` arms
   `OVERSEER_JOBS`. It also contradicts itself twice: Two tenses against Divergence on who owns the
-  vitals history, and § The gates against § Route on who drops a case.
+  vitals history, and § The gates against § Route on who drops a case. — *Fixed*, all three: the
+  scheduler is `tools/overseer/scheduler.ts` behind `OVERSEER_JOBS_ENABLED=1`; the vitals history is
+  the dashboard's (`tools/fleet/health-history.ts`); dropping a case is Greg's, as § The gates and
+  `overseer.md` say. **Code left for the Overseer:** `tools/overseer/attention-classify.ts`' prompt
+  still routes "whether a case can be dropped" to `"fable"`, which is both the wrong owner and a
+  retired model.
 - `glossary.md` § Where it lives says the Dock is a toggle; it is a `radiogroup`. § What is still
-  open has two near-duplicate bullets.
+  open has two near-duplicate bullets. — *Fixed*, both; the two bullets are one.
 - `diagram.md` contradicts itself in three places:
   - Lanes says sideways means centrality, but the moved story says `laneX` was rewritten away
-    from exactly that.
-  - The visitor section says Force is the default, but Sketch has been since 2026-09-04.
+    from exactly that. — *Fixed* (`src/web/scatter.ts`, `laneX`).
+  - The visitor section says Force is the default, but Sketch has been since 2026-09-04. — *Fixed*.
   - The Interaction bullets say ← folds a node, but the "Folding a part away is gone" bullet says
-    it does not.
+    it does not. — *Fixed* (`DiagramPanel.tsx`).
 
-  It also says "never the other six" when there are five pictures.
+  It also says "never the other six" when there are five pictures. — *Fixed*: "the other three",
+  five kinds less the two the gate covers.
 - `structure-step.md` § Worked example says the example tree stands in "until stage 4 exists". The
-  Schema block omits `question` and `treatment`.
+  Schema block omits `question` and `treatment`. — First *fixed*. Second *wrong* as a false
+  statement: the prose above the block already said those fields were missing. The block was
+  brought up to date anyway, from `src/types.ts`.
 - `testing.md`:
-  - Three lanes says "five today", but `LANES_BEYOND_THE_SCAN` needs counting.
-  - "A wedged row's second symptom" describes a skip that can no longer happen.
-  - The `takeRunLock` advice names a `reachable` that `pgReady` no longer returns.
+  - Three lanes says "five today", but `LANES_BEYOND_THE_SCAN` needs counting. — *Wrong*: it has
+    exactly five. `vitest.config.ts` and one entry's reason said four; both corrected.
+  - "A wedged row's second symptom" describes a skip that can no longer happen. — *Fixed*: it now
+    arrives as a failure, `Nothing answered on that DATABASE_URL`.
+  - The `takeRunLock` advice names a `reachable` that `pgReady` no longer returns. — *Fixed*.
 - `comments.md`:
-  - "There is one reader" is wrong, since `pg-comments.ts` stamps `ownerId`.
-  - The transport table says one POST, but the answer streams.
-  - "No way to see every comment at once" predates the drawer and Marginalia.
-  - "Three things" item 4 says a duplicate POST resets the comment, but `create` answers 409.
+  - "There is one reader" is wrong, since `pg-comments.ts` stamps `ownerId`. — *Fixed*.
+  - The transport table says one POST, but the answer streams. — *Fixed*.
+  - "No way to see every comment at once" predates the drawer and Marginalia. — *Fixed*, as history
+    with both named.
+  - "Three things" item 4 says a duplicate POST resets the comment, but `create` answers 409. —
+    *Fixed*, but the finding was half right: the same Save twice gets the stored row back, and
+    409 is only for a different comment. Retry resets in `beginAnswer`.
 - `library.md`:
-  - It says `/read/public` 404s, but the public shelf renders.
+  - It says `/read/public` 404s, but the public shelf renders. — *Fixed*.
   - "Both stores" and "the filesystem store has no visibility column" describe a store that is
-    gone.
-  - The **Archived** chip is now **Include archived**.
+    gone. — *Fixed*.
+  - The **Archived** chip is now **Include archived**. — *Fixed*.
 
 **Headings that are now false** and were left, because a heading's anchor is linked from elsewhere:
 `deployment.md` § *What does not work in production yet* and § *Still to do before this is a real
 deployment*; `sentry-error-monitoring.md` § *The two gaps, both open*; `auth.md` § *The button on the
 live site does not work yet*; `ai-gateway.md` § *The three calls allowed round the outside…* (five
 now) and § *One gateway, five wires* (six); `live-conversation.md` § *Which model, and why not
-GPT-Live yet*; `setup-dev.md` § *Signing in needs four more* (five).
+GPT-Live yet*; `setup-dev.md` § *Signing in needs four more* (five). — **Taken on 2026-10-07**: seven
+renamed, with every link to them repointed. They are now *What did not work in production at first*,
+*What it took to become a real deployment*, *The button on the live site did not work at first*,
+*The calls allowed round the outside, and the test that keeps them declared* (19 declarations and
+6 unmetered, so no count was right), *One gateway, a wire for each shape*, *The default model, and
+why it is not GPT-Live*, and *What signing in needs*. The Sentry one is *wrong*: both gaps are still
+open (`SENTRY_DSN` is `breaks: null` in `src/vercel-health.ts`, and nothing alerts).
 
 **Code areas no doc owns**, from the hub's survey of `tools/fleet/`: admission; holds, receipts and
 request keys; new, rename and describe session; the Deploys tab, diagnostics and revision; the
@@ -584,6 +612,13 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
 - 2026-10-07 — Greg said yes to item 6 (B) and question 3. The push hint was built and GPT
   Sol reviewed it (§ 6). The ten worst docs were split, with a GPT Sol review for each batch of three
   or four (§ For the next sweep, *The split*). Not deployed.
+- 2026-10-07 — the two left-alone lists taken by a follow-up session (worktree
+  `261007-docs-false-statements`), each claim checked against the code: of 26 statements, 23 fixed,
+  two wrong and one (the billing row) unverifiable without a production read; of eight headings,
+  seven renamed with every link repointed, one wrong. Four stale code comments found on the way were
+  corrected too (`vitest.config.ts`, `tests/store-migration-registry.ts`,
+  `tests/billing-tiers.test.ts`, `tests/helpers/pg-ready.ts`). Left for the Overseer: that
+  production read, and `attention-classify.ts` routing case-dropping to a retired model.
 
 **Where it stands: done enough to stop here.** The signposts were measured and mended, the tree was
 read for what is false, and the two areas with code and no hub have one. What remains is real and
