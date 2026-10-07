@@ -394,7 +394,8 @@
    why it is `aria-disabled` rather than `disabled`. */
 .crit-run { align-self: flex-start; }
 
-.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+/* A failure sentence: `--danger`, as in every band (plan 261007h § F4). */
+.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
 .crit-retry {
   font: inherit;
   font-size: 0.84rem;
@@ -612,7 +613,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    the class is a hook, and only where it sits is here. */
 .clm-run { align-self: flex-start; }
 
-.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
 .clm-retry {
   border: 0;
   padding: 0;
@@ -684,7 +685,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    the class is a hook, and only where it sits is here. */
 .mir-run { align-self: flex-start; }
 
-.mir-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+.mir-error { margin: 0; font-size: 0.86rem; color: var(--danger); }
 /* **Not an error colour, and not an error shape.** An empty answer is the
    commonest correct outcome this feature has; the sentence beside it is an
    answer, so it reads like every other quiet line in a panel. */
@@ -782,7 +783,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    likeliest to misread, since every other sub-mode is the referee's. */
 .cnd-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-quiet { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
-.cnd-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+.cnd-error { margin: 0; font-size: 0.86rem; color: var(--danger); }
 
 /* **The one press that spends money**, and the line under it that says so.
    `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a

@@ -297,7 +297,7 @@ export function TagEditor({
       </div>
 
       {problem && (
-        <p role="alert" className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive">
+        <p role="alert" className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-danger">
           {problem}
         </p>
       )}

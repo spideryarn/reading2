@@ -245,7 +245,7 @@
 }
 .cite-inv-error {
   margin: 0.2rem 0 0;
-  color: var(--highlight-ink);
+  color: var(--danger);
   font-size: 0.8rem;
   line-height: 1.4;
 }

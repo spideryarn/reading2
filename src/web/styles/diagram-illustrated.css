@@ -120,12 +120,10 @@
   background: var(--surface-raised);
 }
 /* A plate that is loading, that failed to fetch, or that the run never painted.
-   One rule for all three: they occupy the same place and say the same kind of
-   thing, and the words carry the difference.
-
-   **The same grey as every other failure in this band**, not a red — `.sk-failed`
-   above has the argument, including that `--destructive` is referenced in this
-   file six times and defined nowhere, so bare it is simply dropped. */
+   One box for all three: they occupy the same place, and the words carry the
+   difference. **The grey is the wait's and the empty's**; a failure adds
+   `.is-failed` below and takes `--danger`, as every band's failure does
+   (plan 261007h § F4; diagram-sketch.css § `.sk-failed` says why not grey). */
 .ill-plate-out {
   display: flex; align-items: center; gap: 0.4rem;
   margin: 0.4rem 0;
@@ -135,6 +133,10 @@
   font-family: var(--font-ui); font-size: 0.81rem; line-height: 1.4;
   color: var(--ink-faint);
 }
+/* A plate whose picture failed — the run failed it, or its bytes would not
+   load — rather than one still fetching or with no picture stored against it.
+   IllustratedView.tsx sets the class. */
+.ill-plate-out.is-failed { color: var(--danger); }
 
 /* ---- the sentence that says what this is ---- */
 
@@ -336,8 +338,12 @@
   display: flex; align-items: center; gap: 0.4rem;
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
-  font-family: var(--font-ui); font-size: 0.81rem; color: var(--ink-faint);
+  font-family: var(--font-ui); font-size: 0.81rem;
 }
+/* The wait keeps the faint grey; the failure is `--danger`, as every band's is
+   (plan 261007h § F4; diagram-sketch.css § `.sk-failed` says why not grey). */
+.ill-busy { color: var(--ink-faint); }
+.ill-failed { color: var(--danger); }
 .ill-wait, .ill-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
 .ill-wait { display: flex; align-items: center; gap: 0.4rem; }
 .ill-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
@@ -359,4 +365,4 @@
   resize: vertical;
 }
 .ill-steer-how { margin: 0.3rem 0 0; font-size: 0.75rem; line-height: 1.35; color: var(--ink-faint); }
-.ill-steer-long { color: var(--destructive); }
+.ill-steer-long { color: var(--danger); }
