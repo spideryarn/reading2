@@ -176,8 +176,10 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Check,
   Command,
   ChevronUp,
+  Ellipsis,
   FlaskConical,
   LoaderCircle,
   FileCog,
@@ -265,6 +267,8 @@ import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
+import { DropdownMenu } from "radix-ui";
+import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "./menu.js";
 import { DockQuickSearch } from "./DockQuickSearch.js";
 
 /**
@@ -408,6 +412,20 @@ interface Props {
    * `experimental?.on`.
    */
   experimental: DockExperimental;
+  /**
+   * **Play the entrance: absent for a second, then fade and rise** (plan
+   * 261007c, D7). The reading view passes it, for the first `Reader` mount of
+   * the page's lifetime and no other (reader/dock-entrance.ts); the Metadata
+   * page and the visitor pages never do.
+   *
+   * **Told, not inferred**, like everything else this bar is handed: a guard
+   * read in here would make every mount site a candidate, and the bar on the
+   * Metadata page would spend the Reader's entrance or play its own.
+   *
+   * All it does is put `dock-enter` on `.dock` and on the install hint above
+   * it — styles/dock.css § the entrance.
+   */
+  entrance?: boolean;
   /**
    * The drawer, on the one page that has one.
    *
@@ -710,6 +728,21 @@ interface ModeUi {
    * labels go and this word stays: it is the exit.
    */
   keepLabel?: true;
+  /**
+   * **Gathered under the More button rather than drawn in the bar** — Greg,
+   * 2026-10-06 (spya-dest8x): *"there's a whole bunch of modes in the middle
+   * that people probably don't need to open that often. I'm thinking of the
+   * glossary, FAQ, ideas, timeline, quotes … I wonder if we could maybe gather
+   * them together and create either a dot dot dot or a more button in their
+   * place."*
+   *
+   * Layout, like everything else on a row: the mode is as reachable as it was
+   * (`visibleModes` still lists it, so the command bar does), and only where
+   * its button stands has changed. `splitForMore` reads this and nothing else
+   * does. Which modes, and why no others:
+   * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md § D2.
+   */
+  more?: true;
 }
 
 /* `satisfies` and deliberately **not** `as const satisfies`, which is what
@@ -847,6 +880,7 @@ const MODES_UI = [
   {
     mode: "quotes",
     group: "guides",
+    more: true,
   },
   /* **Straight after Quotes, ahead of FAQ, since 2026-10-04** — Greg: *"move
      the glossary one to the left"* (spya-tnqt2t, plan 261004j). It had stood
@@ -854,6 +888,7 @@ const MODES_UI = [
   {
     mode: "glossary",
     group: "guides",
+    more: true,
   },
   /* **In the guides run since 2026-09-29** — Greg: *"Move FAQ
      and Search a little bit further left"* (SPIDERYARN-READING2-4E) — and
@@ -870,6 +905,7 @@ const MODES_UI = [
   {
     mode: "faq",
     group: "guides",
+    more: true,
   },
   /* After FAQ since Glossary moved left past it on 2026-10-04. It still
      follows Glossary in the run because these two are the same kind of thing
@@ -880,6 +916,7 @@ const MODES_UI = [
   {
     mode: "ideas",
     group: "guides",
+    more: true,
   },
   /* **Last of the guides run, after Glossary and Ideas.** Greg placed it
      after Ideas on 2026-08-31, asked for it *"further right"* on 2026-09-29
@@ -892,6 +929,7 @@ const MODES_UI = [
   {
     mode: "timeline",
     group: "guides",
+    more: true,
   },
   /* **First of the critical run — Citations, Referee, Debate — since
      2026-10-04**: Greg, *"Move the citations mode one to the left in the
@@ -1054,7 +1092,8 @@ function ModeIcon({ mode }: { mode: Mode }) {
 }
 
 /**
- * **Which of them the bar actually draws.** Two rules, and the second
+ * **Which of them this reader's bar offers** — drawn as a button, or listed
+ * under More (`splitForMore` below decides which). Two rules, and the second
  * is the one that is easy to lose.
  *
  * 1. Every row that is not experimental.
@@ -1102,6 +1141,52 @@ export function visibleModes(
       current: m.mode === current || (m.mode === "marginalia" && margin),
     }),
   );
+}
+
+/**
+ * **The bar's modes, split into what it draws and what its More menu holds.**
+ * Only `splitForMore` should build one: `fitSignature`, the two arms and the
+ * coarse-pointer counts all take this rather than a bare list, so the reachable
+ * set (`visibleModes`) cannot be handed to something that means *drawn*.
+ */
+export interface DockBar {
+  /** The rows drawn as buttons or links, in the bar's order. */
+  readonly drawn: readonly ModeUi[];
+  /** The rows listed under More. Empty means the bar draws no More button. */
+  readonly menu: readonly ModeUi[];
+}
+
+/**
+ * **`visibleModes`' reachable set, split for the bar** (plan 261007c, D3 and
+ * D5).
+ *
+ * - `drawn`: every row that is not gathered, **plus a gathered row that is the
+ *   mode the reader is in**. That is `visibleModes`' rule 2 applied to a second
+ *   reason for hiding, and for the same reason: the radiogroup must have one
+ *   button checked, a second press on the open mode must still close it, and
+ *   the reader must be able to see where they are.
+ * - `menu`: every gathered row in the reachable set, the open one included, so
+ *   the list does not shuffle as modes open and close.
+ *
+ * The reachable set itself still feeds the command bar, whose mode rows are
+ * what the bar offers **directly or under More**.
+ *
+ * Exported for tests/dock-more.test.tsx.
+ */
+export function splitForMore(reachable: readonly ModeUi[], current: BandMode | undefined): DockBar {
+  return {
+    drawn: reachable.filter((m) => m.more !== true || m.mode === current),
+    menu: reachable.filter((m) => m.more === true),
+  };
+}
+
+/**
+ * **How many buttons the bar's mode segment draws**: the drawn rows, and the
+ * More button where there is one. `--dock-mode-count`, the share a coarse
+ * pointer spreads the row by (narrow-window.css).
+ */
+function drawnCount(bar: DockBar): number {
+  return bar.drawn.length + (bar.menu.length > 0 ? 1 : 0);
 }
 
 /**
@@ -1291,7 +1376,8 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * rule is held; nothing else imports it.
  */
 export function fitSignature(
-  visible: readonly ModeUi[],
+  /** What the bar draws — `splitForMore`'s answer, never the reachable list. */
+  bar: DockBar,
   mode: BandMode | undefined,
   onMode: Props["onMode"],
   drawer: Props["drawer"],
@@ -1331,7 +1417,11 @@ export function fitSignature(
   quickSearch = false,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
-  const modes = visible.map((m) => m.mode).join(",");
+  /* **The drawn rows, and whether More is drawn after them** (plan 261007c).
+     A gathered mode that opens takes a place in the bar, so its name arrives
+     here by the rule above; `+more` is the More button's own width, which is
+     there or not with the menu. It cannot collide with a mode's name. */
+  const modes = [...bar.drawn.map((m) => m.mode), ...(bar.menu.length > 0 ? ["+more"] : [])].join(",");
   /**
    * **The chip in the Comments button, by what it draws rather than by what it
    * counts.** A failed write replaces the number with a `!` (§ the Comments
@@ -1753,6 +1843,7 @@ export function Dock({
   executor,
   drawer,
   experimental,
+  entrance = false,
 }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
@@ -1830,7 +1921,11 @@ export function Dock({
      string off it. Drawn by the toggle, and kept visible behind the switch
      while on, as the current mode is (`visibleModes`). */
   const margin = marginProp ?? marginInSearch(search);
-  const visible = visibleModes(experimental.on, mode ?? modeInSearch(search), margin);
+  const current = mode ?? modeInSearch(search);
+  /* The reachable set: what the command bar lists. */
+  const visible = visibleModes(experimental.on, current, margin);
+  /* What the bar draws of it, and what its More menu holds. */
+  const bar = splitForMore(visible, current);
 
   /* Computed once, above the fit measurement, because the same answer decides
      two things: whether the row is one button wider, and what that button
@@ -1888,7 +1983,7 @@ export function Dock({
      constant)"*. */
   const { ref: dockRef, fitClass } = useDockFit(
     fitSignature(
-      visible,
+      bar,
       mode,
       onMode,
       drawer,
@@ -1933,6 +2028,8 @@ export function Dock({
    * carries the full argument for asking the platform rather than keeping a
    * registry.
    *
+   * **And to the bar's own More menu** — see inside.
+   *
    * It does not fire for the command bar, which cannot be open over the drawer:
    * `useCommandBarChord`'s `show()` shuts the drawer on its way in,
    * deliberately, and says why.
@@ -1950,6 +2047,14 @@ export function Dock({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (document.querySelector("dialog[open]") !== null) return;
+      /* **And to the More menu**, which is the top overlay when both are up:
+         the bar stays operable over the drawer, so More can be opened over it,
+         and the first Escape must close the menu and leave the drawer for the
+         second. Radix's own listener is on `document`, after this one, so
+         standing aside is all it needs (GPT Sol, PR-2 of plan 261007c;
+         tests/dock-more.test.tsx). The same attribute narrow-window.css reads
+         to hold the bar home under an open menu. */
+      if (document.querySelector(MORE_OPEN) !== null) return;
       e.stopImmediatePropagation();
       if (isImeComposing(e)) {
         /* Capture also prevents the search box's handler from cancelling the
@@ -2161,7 +2266,9 @@ export function Dock({
       {/* Above the bar rather than in it: it is a sentence, and the bar is thirteen
           icons. Renders nothing at all except on an uninstalled iOS device that
           has not dismissed it — install-hint.ts. */}
-      <InstallHint />
+      {/* Entering with the bar, or for that second it would float over an
+          empty strip (GPT Sol, PR-5 of plan 261007c). */}
+      <InstallHint entering={entrance} />
 
       {/* **The command bar, mounted from here rather than from `App.tsx`.**
           Everything it needs is already in this component — `slug`, `mode`,
@@ -2171,10 +2278,12 @@ export function Dock({
           why the gate is inside it, are on `DockCommandBar` below. */}
       <DockCommandBar
         isVisitor={isVisitor}
-        /* The list the Dock drew, not a second computation of it: requirement
-           4 — *the bar lists exactly what the Dock lists* — is true by
-           construction this way, and would be a promise between two copies of
-           `visibleModes` any other way. */
+        /* **What the Dock offers, directly or under More** — the reachable
+           set, not only the drawn buttons, since 2026-10-07 (plan 261007c,
+           D5): a mode gathered under More stays one ⌘K away. The same array
+           `bar` above was split from, not a second computation of it, so the
+           contract is true by construction rather than a promise between two
+           copies of `visibleModes`. */
         modes={visible}
         activateMode={activateMode}
         activateSubMode={activateSubMode}
@@ -2196,7 +2305,11 @@ export function Dock({
         bar={commandBar}
       />
 
-      <div className={`dock${fitClass}`} ref={dockRef}>
+      {/* `dock-enter` only ever joins the list at mount and never leaves it
+          (`entrance` holds for the life of a Reader mount), so a change of fit
+          class beside it cannot restart the animation: CSS restarts one only
+          when its name changes. */}
+      <div className={`dock${fitClass}${entrance ? " dock-enter" : ""}`} ref={dockRef}>
         {/* **The way off this page, and the first thing in the bar.** See the
             header for why it is back here after 2026-08-26 took it away, and
             why the reason is the bar having changed rather than a wordmark
@@ -2264,16 +2377,19 @@ export function Dock({
             so the same visible mode list degrades to links back to it. */}
         {mode !== undefined && onMode ? (
           <DockModes
-            modes={visible}
+            bar={bar}
             mode={mode}
             /* The command bar's door, but toggling — see `useActivateMode`,
                which is where the arming and the `?mode=` write live. */
             onActivate={pressMode}
+            /* And the command bar's door itself, for a pick from More: it
+               names a destination, so it opens and never toggles shut. */
+            onOpen={activateMode}
             marked={marked}
             margin={margin}
           />
         ) : (
-          <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
+          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} />
         )}
 
         {/* **Quick search, from anywhere** (plan 261002h): a box where
@@ -2781,19 +2897,21 @@ export function withMargin(search: string, margin: boolean): string {
 const MARKED = "tw:opacity-55";
 
 function DockModes({
-  modes,
+  bar,
   mode,
   onActivate,
+  onOpen,
   marked,
   margin,
 }: {
   /**
-   * The rows to draw, already filtered — `visibleModes` above, which is where
-   * the two rules live. Handed in rather than read from `MODES_UI` here so that
-   * the buttons arm and the links arm cannot disagree about what is in the bar,
-   * and so that `fitSignature` is measuring the same set that is drawn.
+   * The rows to draw and the rows under More, already filtered and split —
+   * `visibleModes` and `splitForMore` above, which is where the rules live.
+   * Handed in rather than read from `MODES_UI` here so that the buttons arm and
+   * the links arm cannot disagree about what is in the bar, and so that
+   * `fitSignature` is measuring the same set that is drawn.
    */
-  modes: readonly ModeUi[];
+  bar: DockBar;
   mode: BandMode;
   /**
    * **Opening a mode**, which since 2026-09-07 is one callback rather than the
@@ -2806,6 +2924,14 @@ function DockModes({
    * opening a mode, so it stays on the button below.
    */
   onActivate(next: Mode): void;
+  /**
+   * **Opening a mode by naming it** — a pick from the More menu. The command
+   * bar's own callback (`Dock` § `activateMode`), not `onActivate`: a menu item
+   * names a destination, so picking the mode you are in leaves you there
+   * rather than closing it. The bar button a gathered mode gets while it is
+   * open is what a second press closes.
+   */
+  onOpen(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
   /** Whether Marginalia's column is on — `?margin=1`, the toggle's pressed state. */
   margin: boolean;
@@ -2863,11 +2989,14 @@ function DockModes({
      Marginalia's third frame was absent with Experimental off and the notes
      closed until 2026-10-05, when the mode left the switch. The lines between runs (`groupStarts`) are drawn inside the
      bands' frame only: a frame's edge already separates the other two.
-     docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
-  const radios = modes.filter((m) => m.mode !== "marginalia");
+     docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+
+     **And a fourth since 2026-10-07: the More button's**, after the
+     radiogroup and before Marginalia's — `DockMore`. */
+  const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
   const exits = radios.filter((m) => m.group === "exit");
   const bands = radios.filter((m) => m.group !== "exit");
-  const toggle = modes.find((m) => m.mode === "marginalia");
+  const toggle = bar.drawn.find((m) => m.mode === "marginalia");
   const starts = groupStarts(bands);
   const radio = (m: ModeUi) => (
     <Tooltip
@@ -2958,7 +3087,7 @@ function DockModes({
   return (
     /* `--dock-mode-count`: on a coarse pointer the row grows by one share per
        button it holds (narrow-window.css), not a fixed eight. */
-    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
+    <div className="dock-modes" style={{ "--dock-mode-count": drawnCount(bar) } as CSSProperties}>
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div
           className="dock-modes-radios"
@@ -2975,6 +3104,7 @@ function DockModes({
             {bands.map(radio)}
           </div>
         </div>
+        <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
         {toggle && (
           <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
             <MarginToggle
@@ -3060,14 +3190,15 @@ function MarginToggle({
 function DockModeLinks({
   slug,
   search,
-  modes,
+  bar,
   marked,
 }: {
   slug: string;
   search: string;
-  /** Already filtered, by `visibleModes` — the same list the segment is given,
-   *  so the two arms cannot disagree about what is in the bar. */
-  modes: readonly ModeUi[];
+  /** Already filtered and split, by `visibleModes` and `splitForMore` — what
+   *  the segment is given, so the two arms cannot disagree about what is in
+   *  the bar. */
+  bar: DockBar;
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
   /* **The segment's non-empty frames, and its lines between runs** — the same
@@ -3080,6 +3211,7 @@ function DockModeLinks({
      **Links in plain `div`s: no radiogroup, no radio, nothing checked.** No
      mode is open on this page, so nothing here may say it is the selected one.
      docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md. */
+  const modes = bar.drawn;
   const toggles = modes.filter((m) => m.mode === "marginalia");
   const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
   const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
@@ -3126,7 +3258,7 @@ function DockModeLinks({
     );
   }
   return (
-    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
+    <div className="dock-modes" style={{ "--dock-mode-count": drawnCount(bar) } as CSSProperties}>
       {/* **One group, so these scrub like the segment does.** Fourteen
           independent 300ms waits is what a row of tooltips feels like without
           it — Tooltip.tsx § grouping. Only the modes are in it; the three
@@ -3136,8 +3268,227 @@ function DockModeLinks({
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {frame(exits)}
         {frame(bands)}
+        {/* The same place as on the reading view: after the bands, before
+            Marginalia. Its items are these same links (`modeLinkHref`). */}
+        <DockMore
+          menu={bar.menu}
+          marked={marked}
+          pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+        />
         {frame(toggles)}
       </TooltipGroup>
+    </div>
+  );
+}
+
+/** The More button's word, and its accessible name on the rungs that drop the word. */
+const MORE_LABEL = "More";
+
+/**
+ * **An open More menu, as a selector** — Radix writes `data-state` on the
+ * trigger. The drawer's Escape handler asks this (`Dock`), and
+ * narrow-window.css § the guard spells the same selector to hold the bar home
+ * on a phone, because the menu is portalled out of `.dock` and takes focus
+ * with it. tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the
+ * stylesheet's copy to this one.
+ */
+export const MORE_OPEN = '.dock-more-trigger[data-state="open"]';
+
+/**
+ * **What picking an item under More does**, which differs by arm exactly as a
+ * bar button does: on the reading view it opens the mode; off it, where there
+ * is no band, it is the mode's link. A union rather than two optional props,
+ * so an item cannot be given both or neither.
+ */
+type MorePick =
+  | {
+      kind: "open";
+      open(mode: Mode): void;
+      /** The mode the band is in, so the menu can mark it. */
+      current: BandMode;
+    }
+  | { kind: "link"; href(mode: Mode): string };
+
+/**
+ * **The More button: the modes a reader needs less often, behind one button.**
+ * Greg, 2026-10-06 (spya-dest8x), the whole of it on `ModeUi.more`:
+ *
+ * > And if you click on them, it sort of expands upwards to let them choose
+ * > from those. And that way, it would indicate somehow that they aren't as
+ * > important as the other modes like summary, structure, chat, learn, search,
+ * > marginalia.
+ *
+ * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
+ *
+ * **Not a radio, and outside the radiogroup** (D6): a frame of its own between
+ * `.dock-modes-radios` and Marginalia's, which is outside the group for the
+ * same reason. A menu button announced as one of *what the middle column
+ * shows* would be a lie. So it stands after Learn rather than where the five
+ * were; the cost is named in the plan.
+ *
+ * **Never `.on`.** The open gathered mode is drawn in the bar as its own
+ * checked radio (`splitForMore`), so this button never has to mean two things.
+ *
+ * **Radix `DropdownMenu`, portalled, `side="top"`** — sharing the shelf "⋯" menu's
+ * look and finger handling (ShelfEntry.tsx § `ShelfActionsMenu`) through
+ * menu.ts. Portalled because `.dock`
+ * clips (`overflow-y: hidden`) and has a `transform`. Being outside `.dock`
+ * is what three other things had to be told about:
+ *
+ * - the drawer's capture-phase Escape yields to it (`Dock`, `MORE_OPEN`);
+ * - the tooltip card is shut while it is open, or both would stand over the
+ *   same button — hovering does not end when the menu opens;
+ * - a phone's hide-on-scroll rule holds the bar home under it
+ *   (narrow-window.css § the guard).
+ *
+ * **A `.dock-btn` with a `.dock-btn-label`**, so every rung of the fit ladder
+ * and the coarse pointer's 44px floor treat it as they treat its neighbours
+ * with no rule of its own (dock-fit.css, narrow-window.css).
+ *
+ * Draws nothing when there is nothing gathered to list.
+ */
+function DockMore({
+  menu,
+  marked,
+  pick,
+}: {
+  menu: readonly ModeUi[];
+  marked?: ReadonlyMap<Mode, string> | undefined;
+  pick: MorePick;
+}) {
+  const [open, setOpen] = useState(false);
+  /* A finger that lands here at the start of a sideways scroll of the bar must
+     not open the menu — menu.ts § `useFingerPressMenu`. */
+  const finger = useFingerPressMenu(open, setOpen);
+  /**
+   * **Was the pick a real click?** Set by the item, read once as the menu
+   * closes. Radix hands focus back to the trigger when a menu shuts, which is
+   * right for a keyboard and for Escape — and wrong after a mouse pick, for
+   * the reason every mode button here blurs itself after a click (`DockModes`
+   * § the blur on click, Greg 2026-08-26): the reader has just opened a mode,
+   * the arrows they press next are meant for the article, and a focused More
+   * button would take ↓ and open its menu again. `detail` is 0 for a click
+   * synthesised from Enter or Space.
+   */
+  const pickedByPointer = useRef(false);
+  if (menu.length === 0) return null;
+  const names = menu.map((m) => MODE_LABEL[m.mode]).join(", ");
+  return (
+    <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
+      {/* **`modal={false}`**, where the shelf's menu takes Radix's default.
+          This bar stays operable over its own drawer (`Dock` § there is
+          deliberately no trap), and a modal menu would be the one thing in it
+          that is not: it blocks every press outside itself, so a reader who
+          opens More and then wants Chat presses twice. It also locks the
+          page's scroll, which pads `body` by the scrollbar's width and moves
+          whatever is pinned to the right-hand edge — this bar's own end
+          (postmortem 261002a). Focus still moves into the list and back,
+          Escape and a press outside still close it. */}
+      <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+        <Tooltip
+          placement="top"
+          className="tip-soon"
+          /* Shut while the menu is open (GPT Sol, PR-3). `enabled`, not a
+             conditional wrapper, which would remount the trigger and drop a
+             keyboard reader's focus (Tooltip.tsx § `enabled`). */
+          enabled={!open}
+          content={
+            <ControlTip
+              head={MORE_LABEL}
+              what={`The modes you will reach for less often: ${names}.`}
+              how="Opens a list. Nothing is generated until you choose one."
+            />
+          }
+        >
+          <DropdownMenu.Trigger asChild {...finger}>
+            <button
+              type="button"
+              className="dock-btn dock-more-trigger"
+              /* Explicit, for the reason every button here gives: the fit
+                 ladder hides the word. Radix names the menu from it too. */
+              aria-label={MORE_LABEL}
+            >
+              <Ellipsis size={15} />
+              <span className="dock-btn-label">{MORE_LABEL}</span>
+            </button>
+          </DropdownMenu.Trigger>
+        </Tooltip>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            side="top"
+            align="center"
+            sideOffset={6}
+            collisionPadding={10}
+            onCloseAutoFocus={(e) => {
+              if (!pickedByPointer.current) return;
+              pickedByPointer.current = false;
+              e.preventDefault();
+            }}
+            /* Five items with descriptions — and, for some visitors, a state
+               sentence too — can be taller than a phone in landscape. Radix
+               publishes the collision-aware room; use it as a ceiling and
+               scroll the list so no mode leaves the viewport. */
+            className={`dock-more-menu ${MENU_SURFACE} tw:max-h-[var(--radix-dropdown-menu-content-available-height)] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:overflow-y-auto`}
+          >
+            {menu.map((m) => {
+              const Icon = MODE_ICON[m.mode];
+              const sentence = marked?.get(m.mode);
+              const isCurrent = pick.kind === "open" && pick.current === m.mode;
+              const inside = (
+                <>
+                  <Icon size={16} aria-hidden="true" className="tw:shrink-0" />
+                  <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+                    <span>{MODE_LABEL[m.mode]}</span>
+                    {/* **A visitor's sentence, in the item itself**, and first,
+                        as on a bar button's card: it is the one line
+                        explaining why the item is dimmed (visitor.ts §
+                        `markedModes`). */}
+                    {sentence && <span className="tw:text-xs tw:text-muted-foreground">{sentence}</span>}
+                    {/* **What the mode is, in the item**, because an item has
+                        no hover card and these five lost theirs by moving
+                        here: the catalog's `description`, the card's first
+                        paragraph and the line the command bar draws beside the
+                        same name. The card's second paragraph (`how`) is on
+                        the mode's own bar button once it is open. */}
+                    <span className="tw:text-xs tw:text-muted-foreground">{MODE_CATALOG[m.mode].description}</span>
+                  </span>
+                  {isCurrent && <Check size={14} aria-hidden="true" className="tw:shrink-0 tw:text-highlight-text" />}
+                </>
+              );
+              /* `MARKED`'s dimming, and not `disabled`, for the reason `MARKED`
+                 gives: the item still opens the band that explains itself. */
+              const className = `dock-more-item ${MENU_ITEM}${sentence ? ` ${MARKED}` : ""}`;
+              return pick.kind === "link" ? (
+                /* A real anchor, through `asChild`, so ⌘-click and "copy link
+                   address" survive — the shelf menu's reason. The same href
+                   the bar's own link for this mode has. */
+                /* No `pickedByPointer` here: the pick leaves the page. */
+                <DropdownMenu.Item key={m.mode} className={className} data-mode-label={MODE_LABEL[m.mode]} asChild>
+                  <Link href={pick.href(m.mode)}>{inside}</Link>
+                </DropdownMenu.Item>
+              ) : (
+                <DropdownMenu.Item
+                  key={m.mode}
+                  className={className}
+                  data-mode-label={MODE_LABEL[m.mode]}
+                  /* The mode the band is in, marked for a screen reader as
+                     the tick marks it for the eye. The menu lists it rather
+                     than dropping it so its contents do not shuffle (D3). */
+                  aria-current={isCurrent ? "true" : undefined}
+                  /* Runs before Radix's own click handler, which is what
+                     selects — so the flag is set by the time the menu closes. */
+                  onClick={(e) => {
+                    pickedByPointer.current = e.detail > 0;
+                  }}
+                  onSelect={() => pick.open(m.mode)}
+                >
+                  {inside}
+                </DropdownMenu.Item>
+              );
+            })}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

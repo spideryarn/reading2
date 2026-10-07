@@ -104,6 +104,8 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
       ensured += 1;
     },
     regenerate: async () => {},
+    rewriting: false,
+    refresh: async () => {},
     cancel: () => {},
     ...over,
   };

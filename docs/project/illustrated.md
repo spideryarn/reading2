@@ -402,7 +402,7 @@ about the bytes exactly as the storage key is.
 | the paper's own figures, found and loaded | [`src/illustrated-figures.ts`](../../src/illustrated-figures.ts) |
 | the step | `illustrated` in [`src/pipeline.ts`](../../src/pipeline.ts) |
 | the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.(jpeg\|png)`, [`src/routes.ts`](../../src/routes.ts) |
-| the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
+| the read (the painting and its flags as one value: [sketch.md § The scene is checked again in the browser](sketch.md#the-scene-is-checked-again-in-the-browser)), and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
 | the plate, the plate row, Enlarge, and the *what it depicts* list | [`src/web/IllustratedView.tsx`](../../src/web/IllustratedView.tsx) |
 | the harness that paints one offline | [`evals/illustrated/`](../../evals/illustrated/) |
 | the tests | [`illustrated-plate.test.ts`](../../tests/illustrated-plate.test.ts), [`illustrated-run.test.ts`](../../tests/illustrated-run.test.ts), [`illustrated-image.test.ts`](../../tests/illustrated-image.test.ts), [`illustrated-figures.test.ts`](../../tests/illustrated-figures.test.ts), [`illustrated-route.test.ts`](../../tests/illustrated-route.test.ts), [`illustrated-view.test.tsx`](../../tests/illustrated-view.test.tsx) |

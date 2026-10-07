@@ -65,6 +65,7 @@ import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 import { TermCard, type TermActions } from "./ProseHoverCard.js";
 import type { GlossaryEntry } from "../types.js";
@@ -591,19 +592,28 @@ export function SkimPanel({ access, view, away }: Props) {
     if (!exists) setSnippet(null);
   }, [currentId, snippetOpen, view.card]);
 
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — FaqPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+
   /**
    * @param again whether this is the button beside a route already there. The
    *   empty state's must be `ensure`, the automatic run's own request, or it
    *   buys a second model call — useIdeas.ts § `ensure`.
    */
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new route hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="skim"
@@ -664,7 +674,7 @@ export function SkimPanel({ access, view, away }: Props) {
         ready &&
         !owner.stale &&
         !owner.profileChanged &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
           </div>

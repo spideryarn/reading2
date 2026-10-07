@@ -182,6 +182,38 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
     ).toContain(":where(.reader.band-covers) .mode-band");
   });
 
+  /**
+   * **And while its own More menu is open** (plan 261007c, GPT Sol's PR-4).
+   *
+   * The menu is portalled out of `.dock` — the bar clips — and Radix moves
+   * focus into it, so `.dock:focus-within` goes false the moment the list
+   * appears. With `data-bars="hidden"` the bar could then slide away from
+   * under its own menu. The trigger carries `data-state="open"` for as long as
+   * the list is up, and the guard names it.
+   *
+   * **As an argument of the same `:root:has()`**, not a rule of its own: the
+   * guard restores three coupled variables (the case below), and a second
+   * rule is a second place to restore only one of them. The spelling is
+   * `MORE_OPEN` in Dock.tsx, which tests/dock-more.test.tsx holds to this one.
+   */
+  it("holds the dock down while its More menu is open", () => {
+    const block = dockQuery();
+    const at = block.indexOf("--dock-bottom: var(--dock-space)");
+    const guard = block.slice(0, at).lastIndexOf(":root:has(");
+    expect(guard).toBeGreaterThan(-1);
+    const args = block
+      .slice(guard + ":root:has(".length, block.indexOf("{", guard))
+      .split(",")
+      .map((arg) => arg.trim().replace(/\)$/, "").trim());
+    /* The splitter is read back first, so a list it failed to parse cannot
+       pass for a list with the argument missing — or present. */
+    expect(args).toContain(".dock:focus-within");
+    expect(args).toContain(".dock-drawer");
+    expect(args, "an open More menu no longer pins the dock on a phone").toContain(
+      '.dock-more-trigger[data-state="open"]',
+    );
+  });
+
   it("still keeps the dock's slide for the case where the reader can scroll it back", () => {
     const block = dockQuery();
     /* `transition: none` says "the dock arrived because a panel opened", which

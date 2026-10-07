@@ -93,6 +93,7 @@ import type { Article, Block, BlockId, Ideas, Timeline } from "../src/types.js";
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here — a store, so the page can be signed in. */
 const who = vi.hoisted(() => {
@@ -611,12 +612,12 @@ async function modeAfterPress(before: string): Promise<string> {
   return modeInUrl();
 }
 
-function modeButton(label: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+/* The bar's button, or the mode's item under More where it is one of the
+   five gathered there (plan 261007c) — `modeDoor` opens More to find it. */
+function modeButton(label: string): HTMLElement {
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 async function press(label: string): Promise<void> {
