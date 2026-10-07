@@ -86,7 +86,8 @@ being shown somebody else's price. They were set at roughly GBP/USD 1.35 and EUR
 up to whole units, which lands each about 4–8% above spot — headroom on purpose, because a price
 set at spot goes underwater the moment the rate moves and **Stripe prices cannot be edited**. Two
 properties `tests/billing-tiers.test.ts` pins against the real rows: every active tier is priced in
-every currency any tier offers, and the amounts are whole units — the prosumer-tool convention
+every currency any tier offers, and the amounts are round — multiples of 50 cents, which the seeded
+whole units satisfy — the prosumer-tool convention
 (Linear, Copilot, Notion) rather than the `.99` of consumer subscriptions. The seeded numbers also
 keep a 5× ratio between tiers in every currency, so the pricing page tells one story everywhere.
 
@@ -415,6 +416,11 @@ payload above rather than from a boolean.
 > [The live row that needs a backfill](#the-live-row-that-needs-a-backfill).
 
 ### The live row that needs a backfill
+
+**Probably moot since 2026-10-03, unverified.** The subscription was scheduled to end that day, and
+when Stripe ends one it sends `customer.subscription.deleted`, which is in `HANDLED_EVENTS` and
+resyncs the customer like any other handled event ([`src/billing/webhook.ts`](../../src/billing/webhook.ts)).
+Nobody has read the production row since to confirm it; check it before acting on what follows.
 
 **One production row, and nothing automatic will fix it.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
 cancelled on 2026-09-03; the `customer.subscription.updated` webhook that carried the cancellation
@@ -1571,7 +1577,8 @@ any time. See [admin.md](admin.md).
   admin check.
 - **Backfilling the one live cancelled row** — see
   [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). The code is fixed; the
-  row predates the column.
+  row predates the column. Probably moot since the subscription's scheduled end on 2026-10-03, but
+  unverified.
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.

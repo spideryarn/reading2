@@ -235,7 +235,7 @@ interface Missing {
  * fail with a confusing 42703 rather than an instruction.
  *
  * **`information_schema.columns` is privilege-filtered**, so a role that cannot
- * see a column gets the right verdict — skip — with the wrong reason attached,
+ * see a column gets the right verdict — a refusal — with the wrong reason attached,
  * "run npm run db:migrate", when the column is there and unreadable. Left as it
  * is because the test role here is the local superuser and the wrong-reason case
  * cannot arise; `pg_catalog.pg_attribute` is the fix if that ever changes,

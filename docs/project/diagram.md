@@ -835,9 +835,9 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   cell, a spine segment and an arrow key use.
 - **Keyboard** → the picture is one tab stop, not one per node, and the arrows
   move inside it: ↑ / ↓ step through the drawn order **and take the article with
-  them**, Home / End jump to the ends, Enter jumps the article. **←** closes an
-  open node and otherwise goes to its parent; **→** opens a closed one and
-  otherwise steps into its first child.
+  them**, Home / End jump to the ends, Enter jumps the article. **←** goes to the
+  parent and **→** steps into the first child; neither opens or closes
+  anything (see the folding line below).
   That is the [W3C tree-view pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/),
   and it is written out rather than inherited because SVG has no `ul` and no
   `button` — which is also why each node carries `aria-level`, `aria-setsize` and
@@ -1255,9 +1255,10 @@ reduction algorithms"* — and they answer different questions.
   topics with k-means and gives each topic a column. A subject the article
   returns to is a second stack of dots in the same column, a long way further
   down — which is the thing no other picture in this app can show.
-  **Within a lane, sideways means how central to the topic that paragraph is**:
-  the core is a tight column down the middle, marginal members lean out, and
-  which way they lean is which neighbouring topic they lean towards. That is a
+  **Within a lane, sideways is the paragraph's own first principal component**,
+  the axis Spread uses, rescaled to the lane — not how central it is to its
+  topic, and the lane next door is the one the article reaches next, not the
+  nearest topic (the cards, above). That is a
   fact, not jitter — and a reader cannot tell the two apart by looking, which is
   exactly why the pixels are spent on something true.
 - **Spread** (`?dx=spread`) puts every paragraph on the first principal
@@ -1419,7 +1420,7 @@ known, and the first thing to fix here; GPT Sol's finding on the built code.
 
 Like Force, this is a fetch a reader can start without pressing anything that
 says what it will do, so the gate is narrow: exactly these two pictures, never
-the other six.
+the other three.
 
 **In the browser, laying out 276 dots costs 2.7ms** — measured on `constitution`,
 2026-08-27, both pictures, averaged over 200 runs. That matters because the
@@ -1456,7 +1457,7 @@ it had `owners-only`.
 
 **What made this the one judgement call in that table** was never the band — the default picture is
 drawn from the tree already on the page and costs nothing — but the panel, which mounts hooks that
-POST. Force is the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
+POST. Force was then the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
 recorded as "real work and not slice 1a's", and it turned out to be a prop:
 [`DiagramPanel`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union, and the visitor arm
 

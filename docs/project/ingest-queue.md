@@ -2645,17 +2645,18 @@ Three things that changed since this table was first written:
   cancellation that must *not* release the global slot, de-duplication on forced steps — and would
   have to exist beside pg-boss's own, leaving two sources of truth about the same work. **Revisit
   when redelivery or backoff becomes a requirement rather than a nicety.**
-- **`SKIP LOCKED` does not give concurrency 1.** The obvious
-  `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` lets two workers claim two *different* jobs, which is
-  exactly the global concurrency-1 guarantee this document chose on purpose. Claiming must lock the
-  singleton `queue_state` row first.
+- **`SKIP LOCKED` does not give a global cap.** The obvious
+  `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` lets two workers claim two *different* jobs, which
+  breaks the global cap this document chose on purpose — concurrency 1 when this was written,
+  `SPIDERYARN_JOB_CONCURRENCY` since. Claiming must lock the singleton `queue_state` row first.
 - **`LISTEN/NOTIFY` is not available.** It is session-scoped, and we reach Postgres through a
   transaction-mode pooler, which hands out a connection per transaction. It would not error at
   connect time — it would simply never deliver. **Keep polling**, which this document already says is
   the right answer.
 
 The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`, `cancelJob`,
-`retryJob`, `forgetJob`. Nothing above those six knows there are files.
+`retryJob`, `forgetJob`. Nothing above those six knew there were files, which is why the move to
+Postgres could happen beneath them.
 
 ## The CLI *is* this queue <a id="they-are-the-same-functions-the-cli-runs"></a>
 

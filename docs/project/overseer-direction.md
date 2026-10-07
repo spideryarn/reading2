@@ -368,8 +368,8 @@ Two agents are building here at once, so the boundary is a rule rather than an i
 - **The dashboard owns the present tense** — what is true right now. Collection, status, the pending
   question, rendering, SSE, delivering a steering message. Its unit of work is a request.
 - **The Overseer owns the past and future tense** — what has been true over time, and what should
-  happen next. The store, the vitals history, ranked attention, the job schedule. Its unit of work is
-  a tick.
+  happen next. The store, ranked attention, the job schedule. Its unit of work is a tick. (The vitals
+  history was meant to be here too; it went to the dashboard — § Divergence below.)
 
 In practice: the Overseer writes a current-state file, the dashboard reads and renders it and never
 writes it; the Overseer lives in `tools/overseer/` and never edits `tools/fleet/server.ts`,
@@ -426,8 +426,9 @@ readers are strict by design. The guard belongs in whatever *makes* a specimen �
 and refuse to proceed on a non-zero exit — rather than in the memory of whoever is making one.
 
 **Divergence, 2026-09-08: the vitals history is being built in the DASHBOARD, not here.** The bullet
-above assigns it to the Overseer and `daemon.ts` says outright *"No health history and no local
-collection"*; both are now describing an intention rather than the code. Agreed between the two
+above used to assign it to the Overseer; it now lives in
+[`tools/fleet/health-history.ts`](../../tools/fleet/health-history.ts), and `daemon.ts` says outright
+*"No health history and no local collection"*. Agreed between the two
 agents rather than decided by one: the reading already exists in-process where it is collected, so
 writing it at the source removes a transport hop **and** removes the dependency on the Overseer being
 up — which matters most in exactly the hour Greg is opening the graph to ask about. It gets its own
@@ -566,9 +567,11 @@ Greg, 2026-09-08, asked which capability to build first, and reordered the optio
 
 Two notes on reading that. **Attention triage arrives first but cannot be built first**, because
 ranking by "who has needed me longest" requires a duration and a duration requires the store — so the
-store is not a detour before triage, it is triage's first half. And **the scheduler is last by Greg's
-choice despite having no home today** ([cron-scheduler.md](cron-scheduler.md)); that is a deliberate
-ordering, not an oversight, and it should not be quietly promoted.
+store is not a detour before triage, it is triage's first half. And **the scheduler was last by Greg's
+choice despite having no home then** ([cron-scheduler.md](cron-scheduler.md)); that was a deliberate
+ordering, not an oversight. It has since been built into the daemon
+([`tools/overseer/scheduler.ts`](../../tools/overseer/scheduler.ts)), off unless
+`OVERSEER_JOBS_ENABLED=1`.
 
 ### It defers work; it never declines it
 
@@ -1025,8 +1028,9 @@ these before designing anything that talks to a session.**
   not identify their own author.**
 - **Scheduling: the built-in `/loop` offers a cloud schedule that survives the session but runs in
   Anthropic's cloud, so it cannot touch this box's worktrees.** The session-local cron is in-memory
-  and dies with its session. So "run job J on the box every M minutes" has no home yet — Greg
-  deferred building one on 2026-09-08. See [cron-scheduler.md](cron-scheduler.md), which says the
+  and dies with its session. So "run job J on the box every M minutes" had no home — Greg
+  deferred building one on 2026-09-08; it is now the Overseer daemon's
+  ([§ The scheduler](#the-scheduler)), armed by `OVERSEER_JOBS_ENABLED=1`. See [cron-scheduler.md](cron-scheduler.md), which says the
   same thing from the product side.
 
 ## Attention, and who the Overseer is really watching
@@ -1099,7 +1103,8 @@ the override:
   overloaded?" from vitals it already has; and a question already answered today for another session
   gets the same answer.
 - **Sol** for technical questions whose evidence is in the tree; **Opus** (Fable until Greg retired it,
-  2026-09-28) for wording, defaults, and whether a case can be dropped.
+  2026-09-28) for wording and defaults — not whether a case can be dropped, which is Greg's
+  ([§ The gates](#the-gates)).
 - **Greg** for anything irreversible or externally visible, anything changing a rule doc, anything
   where the routed model *disagreed with the agent's own recommendation* (**disagreement is the
   signal, not a low score**), and any question of the form *would a small product tweak remove a lot
