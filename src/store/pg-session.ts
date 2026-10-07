@@ -110,7 +110,7 @@ import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
 import { RELEASED, settleReservation, supersedeMinimal } from "./pg-billing.js";
-import { finishIn, releaseStepIn } from "./pg-jobs.js";
+import { finishIn, keepStepIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
   NotTheLiveAttempt,
@@ -455,18 +455,26 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
      * **The step is done and the job goes on, holding its claim.** Case 0, and
      * it is the one the coordinator takes between the steps of a walk.
      *
-     * Nothing about the *job row* belongs in this transaction. The step's
-     * artefacts and its `revision_step_runs` row have just been written by the
-     * caller and are what `stepIsDone` reads; the job's `steps` array is a
-     * progress bar, written by `noteProgress` outside this transaction and
-     * deliberately not renewing the lease. Widening the transaction to touch
-     * the job row for a field nothing decides anything on would take the job
-     * lock on every step of a walk for no gain.
+     * **The job's `steps` are written here, and nothing else on the row is.**
+     * Until 2026-10-07 this branch wrote nothing, on the argument that `steps`
+     * is a progress bar nothing decides anything on. One thing does: a forced
+     * step runs again unless its stored status is `done` (`stillForced`,
+     * src/jobs.ts), and the artefacts cannot say that for it. Left to
+     * `noteProgress`, outside this transaction, the receipt could be lost
+     * while the product was kept, and the next claim paid for the step twice.
+     * It took no new lock to put it here: `finishStepRun`, a statement
+     * earlier, already holds the job row. See `keepStepIn`.
+     *
+     * The lease is not renewed and `cancelling` is not read; `noteProgress`
+     * still follows, and is still how the walk hears a Stop.
      *
      * **And the draft stays exactly where it is**, which is the whole point of
      * keeping the claim: the next step in this same walk writes into it.
      */
-    if (transition.kind === "keep") return { settlement: { kind: "kept" }, announce: {} };
+    if (transition.kind === "keep") {
+      await keepStepIn(tx, transition.jobId, transition.attempt, transition.steps);
+      return { settlement: { kind: "kept" }, announce: {} };
+    }
     if (transition.kind === "release") {
       /* Case 1 and case 4, and which of the two it is cannot be decided here.
          `releaseStepIn`'s `case when cancelling` is the authority on it; asking

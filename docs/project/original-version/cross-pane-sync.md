@@ -165,3 +165,7 @@ card to show it on.
 - [structure-panel.md](structure-panel.md) — the ToC that was being kept in sync
 - [../granularity-zoom.md#the-spine-a-birds-eye-rail](../granularity-zoom.md#the-spine-a-birds-eye-rail) — our rail, and why it must not scroll
 - [../url-state.md](../url-state.md) — where our reader position lives
+
+---
+
+Up: [overview.md](overview.md)

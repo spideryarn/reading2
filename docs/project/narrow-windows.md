@@ -1,5 +1,7 @@
 # Narrow windows, and the screen behind them
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 > **Split out of [design-css-overview.md](design-css-overview.md) on 2026-09-07**, verbatim apart
 > from the heading levels and a couple of "see above" links that had to become cross-doc ones. That
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
@@ -198,7 +200,8 @@ Three things worth carrying to whatever is built next:
 and `100vw` above is the layout viewport. A zoom survives a rotation and a later zoom change fires no
 window `resize`, so a reader who rotated zoomed-in was laid out for a window two-thirds of theirs
 until something else resized it — Structure's one column on a landscape iPad, 2026-09-12. So the
-reading view reads `layoutViewportWidth()` in [`src/web/reader/measure.ts`](../../src/web/reader/measure.ts),
+reading view reads `layoutViewportWidth()` in [`src/web/reader/measure.ts`](../../src/web/reader/measure.ts)
+(since 2026-10-02 `pageWidth()` prefers the root's `clientWidth` and keeps that as its fallback),
 and `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` anywhere else in `src/web`
 unless the file is on its list with a reason.
 [260912b](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md); the class is

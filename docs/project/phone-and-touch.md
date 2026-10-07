@@ -231,6 +231,24 @@ A phone-width desktop window is not a phone, and emulation has no real notch or 
 [touch.md § What only a real iPad can tell us](touch.md#what-only-a-real-ipad-can-tell-us) says
 what no emulation can show.
 
+**To reproduce something at a phone's width**, which tool you have decides how
+([browser-control.md](browser-control.md) says which machine gets which):
+
+- **On the box (Playwright):** a headless viewport has no minimum, so `viewport: { width: 390, height: 844 }`
+  is granted exactly and the width media queries match; add `hasTouch: true` for `(pointer: coarse)`.
+  [browser-testing-playwright.md § The traps that go away](browser-testing-playwright.md#the-traps-that-go-away)
+  has the recipe's limits, and
+  [§ Under `isMobile: true`, three things lie to you](browser-testing-playwright.md#under-ismobile-true-three-things-lie-to-you)
+  covers `innerWidth`, tap coordinates and scroll-then-tap.
+- **On the Mac (Chrome extension):** a window cannot go below 605px, so use a same-origin iframe of the
+  exact size —
+  [browser-testing.md § A phone-width window does not exist, so use an iframe](browser-testing.md#a-phone-width-window-does-not-exist-so-use-an-iframe),
+  including what the iframe cannot do (scroll, touch media queries).
+- **Anything that reads a safe-area inset** (the notch, the home indicator) is zero in both, so a layout
+  rule can look right and be wrong:
+  [browser-testing-playwright.md § The insets are zero here, and a phone's are not](browser-testing-playwright.md#the-insets-are-zero-here-and-a-phones-are-not)
+  and `scripts/safe-area-check.ts`.
+
 **Text that is bigger than its stylesheet says on an iPhone in landscape** can be Safari's text
 autosizing. That is the strong but unreproduced diagnosis for report `spya-ar65p3`; the box's
 desktop Chrome cannot test it. `html { -webkit-text-size-adjust: 100% }` turns autosizing off,

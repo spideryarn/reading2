@@ -2,6 +2,18 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ Who is reading this](#who-is-reading-this) — the design constraint
+- [§ The four rules](#the-four-rules) — what happened, whose problem (`retry` / `ours` / `bug` / `blocked`), what next, never echo the provider
+- [§ The bracketed code](#the-bracketed-code) — code prefixes, stability, and which families live outside `src/messages.ts` (`mic-`, import states, boundaries, picker)
+- [§ Writing a new one](#writing-a-new-one) — adding a message: `CODE_KINDS` and `FROM_FACTORIES`
+- [§ The seam between the two audiences](#the-seam-between-the-two-audiences) — why a thrown `Error.message` never reaches the reader (`stageFailure`, `sayToReader`)
+- [§ The same seam in the browser](#the-same-seam-in-the-browser) — `describeFetchFailure`, `ReaderFacingError`, `PAGE_FAULT`
+- [§ The one control that cannot be undone](#the-words-on-the-one-control-that-cannot-be-undone) — *Delete permanently* wording
+- [§ What this does not cover yet](#what-this-does-not-cover-yet) — copy still written where it is used
+- [§ See also](#see-also)
+
 The words the reader sees, and the rules they follow. Mostly this is about
 **error messages**, because those are where writing badly costs the most: an
 empty state that reads oddly is a shrug, but a failure the reader misreads sends
@@ -217,14 +229,13 @@ vector art" would be a confident guess. What we can say is that we looked and co
 that there is an original to open — so the sentence says that, and *view the original* sits beside
 it.
 
-**The paragraph-label sentences are the fourth exception**, and they follow the import-state family
-exactly: *"Paragraph labels are still arriving."* / *"Paragraph labels aren't available."*, in
-[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) beside the rule that decides which one applies,
-and **no bracketed code**. Not in `src/messages.ts` because that file is about failures a model call
-can return, and a label pass that has not finished yet is not one; no code because neither sentence
-is a problem the reader could report or act on. The `failed` one is where rule 4 bites hardest — a
-labels run fails for whatever reason a provider gives, and none of that reaches the reader or the
-DTO: the enum is the whole of what crosses.
+**The paragraph-label sentences were the fourth exception, and are gone.** *"Paragraph labels are
+still arriving."* / *"Paragraph labels aren't available."* followed the import-state family exactly
+(no bracketed code, because neither was a problem the reader could act on) until 2026-09-29, when
+they went with Hierarchy mode. The layer is now **withheld without a word**, by the one rule in
+[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts). What stays true is rule 4's half: a labels
+run fails for whatever reason a provider gives, and none of that reaches the reader or the DTO —
+the enum is the whole of what crosses.
 [granularity-zoom.md § the paragraph outline](granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose).
 
 **The three error boundaries are the fifth exception.** `[render]` is the whole

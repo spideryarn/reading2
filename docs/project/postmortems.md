@@ -19,7 +19,7 @@ is true here in particular.
 - **The commonest class in this directory is [silent success](../reusable/silent-success.md)** —
   something reporting success while doing nothing, with the obvious check agreeing because it shares
   an assumption with the code. If you are hunting for a pattern worth fixing, start there. Roughly a
-  third of the 86 files here are that shape
+  third of the 86 files then here were that shape (295 files on 2026-10-07; the share was not re-counted)
   ([260906a](../postmortems/260906a-a-red-first-test-defends-the-change-not-the-code.md#and-it-is-the-most-common-shape-in-this-directory),
   counted 2026-09-06).
 - **Root-cause it in a subagent**, so the digging stays out of the main context and the write-up is

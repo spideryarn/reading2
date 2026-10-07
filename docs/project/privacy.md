@@ -1,8 +1,33 @@
 # Privacy
 
 **What we do with a reader's data, and the page that tells them so** —
-[`/privacy`](../../src/web/PrivacyPage.tsx). Part of
-[reading-view-overview.md](reading-view-overview.md).
+[`/privacy`](../../src/web/PrivacyPage.tsx).
+
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ The four decisions](#the-four-decisions-greg-made) — controller, deletion, whether we read content, facts
+- [§ The cross-family review](#what-the-cross-family-review-changed-and-what-is-still-open) — what the first review found; the legal gaps still open
+- [§ What a bug report carries](#what-a-bug-report-carries) — the Feedback consents, the whole URL, the article copy to Sentry
+- [§ What protects us](#what-protects-us-and-what-was-deliberately-left-out) — beta, responsibility, under-18s
+- [§ If something here is yours](#if-something-here-is-yours) — the takedown section
+- [§ Where a reader's voice goes](#where-a-readers-voice-goes) — dictation lost zero-data-retention; the sources the copy is written from
+- [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
+- [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Shelf topics](#shelf-topics) — what the topic model is shown
+- [§ Quick search](#quick-search) — what a quick search sends
+- [§ A sentence in the command bar](#a-sentence-in-the-command-bar) — what the pick models see
+- [§ The command bar's suggestions](#the-command-bars-suggestions-are-made-from-the-profile) — profile to a model, and no promise about names
+- [§ Admin sign-up notices](#the-admins-sign-up-and-upgrade-notices-carry-the-address) — the address in the notice
+- [§ A gift email](#a-gift-email-to-an-existing-reader-carries-their-allowance) — counts in Resend's log
+- [§ Feedback-shipped email](#a-reader-is-emailed-when-their-feedback-ships) — what goes through Resend
+- [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
+- [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
+- [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ A private link](#a-private-link) — the four places the page names it
+- [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
+- [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
 
 This doc is the reasoning; the page is the promise. Its sibling is
 [website-text.md](website-text.md), which owns the rest of the public-facing

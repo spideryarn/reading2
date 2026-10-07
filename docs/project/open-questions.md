@@ -1,75 +1,11 @@
 # Open questions
 
+Up: [vision.md](vision.md)
+
 Undecided calls, each with a recommendation so work isn't blocked. When one gets decided, write the
-decision into the relevant doc ([vision](vision.md) / [granularity-zoom](granularity-zoom.md) /
-[architecture](architecture.md)) and delete it from here — this file should shrink over time.
-
----
-
-## Q1 — Where does the tree come from? <a id="q1"></a>
-
-Greg's framing was structural:
-
-> imagine a book, you could think of the book as being divided into chapters, which are divided into
-> sections, which are divided into, I don't know, pages or paragraphs
-
-But most web essays aren't books. The test article (Noema, Anil Seth —
-`output/noema-mythology-of-conscious-ai.html`) is ~54 minutes of largely bare `<p>` with few
-subheads, so "chapters → sections" mostly has to be *invented* rather than read off the document.
-
-| Option | For | Against |
-|---|---|---|
-| Source headings only | faithful, free, the author's own seams | depth varies wildly; flat articles collapse to 2 levels, which kills the left-right axis |
-| LLM segments semantically | uniform depth on any article | boundaries are the model's opinion; costs a structuring pass |
-| **Headings as hard boundaries, LLM subdivides the gaps** | keeps the author's seams where they exist, gives flat articles real depth | tree shape differs between articles; more code paths |
-
-**Recommendation: the third.** Provisionally adopted in
-[granularity-zoom.md § Where the tree comes from](granularity-zoom.md#where-the-tree-comes-from).
-Target branching factor ~5–9 so levels feel like even strides.
-
----
-
-## Q2, Q3 — decided <a id="q2"></a><a id="q3"></a>
-
-Both settled on 2026-08-24 and written up where they belong. Anchors kept so older links still land.
-
-- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + structure agent), and ids are
-  **random**, not sequential, because sequential ids silently break on re-extraction. See
-  [block-ids.md](block-ids.md#why-random-and-not-sequential). Note this went *against* the
-  recommendation recorded here, which was sequential-plus-`textHash`; the hash-migration step it
-  proposed is unnecessary once ids simply survive.
-- **Q3 — what is a "block"?** The **finest** unit a reader takes in as one thing: an `<li>` is a
-  block, the `<ul>` is a tree node. See
-  [architecture.md § What a block is](architecture.md#what-a-block-is). Also against the
-  recommendation here, which was one block per top-level flow element — that would have made
-  "a ToC row per list item" permanently unreachable.
-
----
-
-## Q4 — Discrete levels or continuous zoom? <a id="q4"></a>
-
-Greg described it as continuous motion:
-
-> by scrolling rightwards, you get more detail. By scrolling downwards, you progress through the
-> chronology of the article
-
-A true continuous axis would need interpolation between compression levels, which nothing about the
-tree gives us for free.
-
-**Recommendation:** discrete depths with animated transitions in v1; a continuous-feeling *gesture*
-(horizontal scroll / trackpad swipe) that snaps to depths. Revisit only if the snapping feels wrong
-in the hand.
-
----
-
-## Q5 — Uniform-level zoom, or focus+context? <a id="q5"></a>
-
-The brief describes the whole article at a uniform granularity. But the likely real usage is: scan
-the coarse level, spot the one part you care about, and drop into *that* alone while the rest stays
-coarse.
-
-**Recommendation:** build both, default to uniform, instrument which gets used. Noted as a failure
-mode in [granularity-zoom.md § What would make this fail](granularity-zoom.md#what-would-make-this-fail).
+decision into the doc that owns it and delete it from here — this file should shrink over time.
+Three are open: [Q6](#q6), [Q11](#q11) and [Q12](#q12). [§ Closed](#closed) at the bottom says where
+each of the others went.
 
 ---
 
@@ -86,112 +22,6 @@ experiment and a demo. Explicitly *not* time-in-app or articles-completed
 A study that would answer it, for Greg to run:
 [260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../investigations/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
 — written 2026-09-10, not yet run.
-
----
-
-## Q7 — Which model, and how much does a tree cost? — **answered 2026-09-07** <a id="q7"></a>
-
-**Sonnet 5, and about six cents.** Measured on two fresh ingests against the local database, with the
-dollars taken from the ledger rather than from arithmetic —
-[ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs) is the answer
-and the method; the headline is here because eight things link to this anchor.
-
-| | blocks | words | **structure** | labels | total |
-|---|---:|---:|---:|---:|---:|
-| *How to Work Hard* | 96 | 3,341 | **$0.0620** | $0.0437 | $0.1057 |
-| *How to Do Great Work* | 330 | 11,890 | **$0.1671** | $0.2144 | $0.3815 |
-
-About **a tenth of a cent per block**, and close to linear. **The tree is one model call** whatever
-the size, and it is the only paid step in the default ingest — so the money between pasting a URL and
-being able to read is the structure column alone. `labels` is bigger on a long article and the reader
-does not wait for it. These are credits; the bank sees about 5.5% more.
-
-**Two things this question assumed that turned out to be wrong**, which is most of why it stayed open:
-
-- *"bottom-up generation is roughly one call per node plus one per leaf batch"* — no. It is **one
-  long-context call for the whole tree**, and has been since the structure prompt was written. The
-  per-node estimate would have been an order of magnitude out on a long article.
-- *"still unmeasured for the tree"* — it needed no experiment built for it in the end.
-  `src/pipeline.ts` already logged the four token counters per step, and `ai_calls` already held the
-  settled cost, so the answer was two ingests and a query.
-
-The 2026-08-26 caching numbers below are kept because they answer a different question — the
-per-token economics of a *search* pass, and what a warm prefix saves.
-
-What 2026-08-26 established, from `npm run eval:caching` against the live API
-([evals/results/](../../evals/results/README.md)) — these are *search* calls, not tree generation, so
-they answer the per-token economics rather than the question as asked:
-
-| | tokens | cold | warm | uncached |
-|---|---:|---:|---:|---:|
-| `constitution`, 360 blocks | 47,739 | $0.11945 | $0.00965 | $0.09558 |
-| `noema`, 141 blocks | 18,793 | — | $0.00386 | $0.03769 |
-
-So one pass over the constitution's text costs about **10 cents** uncached, and about **1 cent** once
-the prefix is cached. A tree is more than one pass — the structure call plus a label batch per
-section — but the unit price is now known rather than guessed, and
-[prompt-caching.md](prompt-caching.md) means the repeat passes are the cheap ones.
-
-**Nothing is left** — that was done on 2026-09-07 and is the table at the top of this question.
-[260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) § *Stage 5* has the
-commands, the two slugs, and the labels failure that the long article's figure includes.
-
----
-
-## Q8 — Where does a sentence's rank come from, in the fisheye view? <a id="q8"></a>
-
-Only bites once the [fisheye view](granularity-zoom.md#the-other-view-fisheye) is built; the
-[tabular view](granularity-zoom.md#the-tabular-view) needs only per-node gists and is unaffected.
-
-Fisheye varies granularity *within* one screen, so it needs a number per sentence, not per node.
-Two ways to get one:
-
-| Option | For | Against |
-|---|---|---|
-| **Hierarchical budget** — each node promotes its best sentence, which inherits the node's depth | coverage is guaranteed even; the far-left view is literally "one sentence per chapter", which is what the brief asked for; only local judgments, which LLMs are good at | a dull section gets the same airtime as the crux |
-| Global salience score | honest about where the substance actually is | clumps badly; whole sections render as nothing when zoomed out, so the map develops blind spots |
-| Global score with a per-section quota floor | strictly better output than either | two interacting mechanisms to tune and debug |
-
-**Recommendation: the hierarchical budget**, because it delivers the brief's own description of the
-leftmost column and because it degrades gracefully. Revisit if the coarse levels feel like they are
-giving equal weight to unequal material.
-
-Related and also open: the fisheye sketch leans toward showing the author's **real sentences** where
-the tabular view shows **generated gists**. Those are different bargains with
-[principle 1](vision.md#principles) and should be reconciled deliberately.
-
-
----
-
-## Q9 — decided <a id="q9"></a>
-
-**A hostile article could run JavaScript in the reading view.** Settled 2026-08-25 and written up in
-[security.md](security.md), which is now the place for anything on this. Anchor kept so older links
-still land.
-
-Short version: Readability is not a sanitiser and never claimed to be, so `<img onerror>`,
-`<svg onload>`, `<span onmouseover>` and `<video onerror>` all reached `dangerouslySetInnerHTML`.
-DOMPurify now runs at **stage 3** in [`src/blocks.ts`](../../src/blocks.ts), before ids are minted,
-so `blocks.json` is clean and every later consumer inherits that. Video embeds survive behind an
-exact-origin allowlist; author CSS does not.
-
-Two things worth carrying forward rather than burying:
-
-- The payload table originally written here **was wrong in a reassuring direction** — it had
-  `onmouseover` and `<iframe>` as stripped, which is true only for the cases it happened to test.
-  Corrected in [security.md § What was wrong](security.md#what-was-wrong).
-- The linter found this (`lint/security/noDangerouslySetInnerHtml`), and the rule was deliberately
-  left unsuppressed until it was really fixed. It stayed useful precisely because nobody silenced it.
-
----
-
-## Q10 — decided <a id="q10"></a>
-
-**Should a tooltip be hoverable?** Per use, decided by Greg on 2026-10-02: a card with something to
-press takes `<Tooltip interactive>`; every other card, the spine's above all, keeps
-`pointer-events: none`. Written up in
-[tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter). Anchor kept
-so older links still land.
 
 ---
 
@@ -233,13 +63,13 @@ plan for it would have to settle:
 - **The default when the fetch fails.** Hotlink protection and 403s are ordinary. *Unknown* must mean
   *sheet*, because the failure of omission is an unreadable equation and the failure of commission is
   a mat.
-- **Whose stage it is.** Fetching images is acquisition, which is stage 1's job
-  ([fetching.md](fetching.md)) — but nothing there fetches anything but the document today.
+- **Whose stage it is.** Stage 4.5's, which already has the bytes
+  ([`src/collect-assets.ts`](../../src/collect-assets.ts)).
 
-**And there is a larger prize behind the same door.** If we are fetching every image at ingest, we
-could *host* them: hotlinks rot, publishers block by referer, and today every reader's browser
-announces itself to the publisher's CDN on every read. That is a bigger piece of work than this
-question, and it would make this one free.
+**The fetching this option was charged with has since been built for another reason.** Stage 4.5
+attempts to download and host supported images within its caps ([article-images.md](article-images.md)), so successfully stored images' bytes are already in
+hand at ingest and the first two "against"s in the table are paid for those images. What is left of the cost is the
+decode, the map and the client-side join.
 
 ---
 
@@ -274,3 +104,21 @@ GPT-Live. What to look at, from the four conditions in
 back-and-forth and cost per dense minute; Greg's own report is that GPT-Live "seems to be working
 better" in WhatNext. When it is decided, the loser's files are deleted under a follow-up plan and
 this question goes.
+
+---
+
+## Closed
+
+One line each, so an old link still lands on a pointer. The decision itself is in the doc named.
+
+| | Question | Where it went |
+|---|---|---|
+| <a id="q1"></a>Q1 | Where does the tree come from? | Adopted: the author's headings as hard boundaries, a model subdividing the gaps — [granularity-zoom.md § Where the tree comes from](granularity-zoom.md#where-the-tree-comes-from) |
+| <a id="q2"></a>Q2 | Who assigns block ids, and how stable are they? | 2026-08-24: stage 3, and random — [block-ids.md § Why random](block-ids.md#why-random-and-not-sequential) |
+| <a id="q3"></a>Q3 | What is a "block"? | 2026-08-24: the finest unit a reader takes in as one thing — [architecture.md § What a block is](architecture.md#what-a-block-is) |
+| <a id="q4"></a>Q4 | Discrete levels or continuous zoom? | Moot: it was a question about the gist columns, removed 2026-09-29 — [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) |
+| <a id="q5"></a>Q5 | Uniform-level zoom, or focus+context? | Moot, the same way — [granularity-zoom.md § What would make this fail](granularity-zoom.md#what-would-make-this-fail) |
+| <a id="q7"></a>Q7 | Which model, and how much does a tree cost? | 2026-09-07: Sonnet, one call, about a tenth of a cent per block — [ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs) |
+| <a id="q8"></a>Q8 | Where does a sentence's rank come from, in the fisheye view? | Never decided; the view was never built — [granularity-zoom.md § The other view: fisheye](granularity-zoom.md#the-other-view-fisheye) holds the options |
+| <a id="q9"></a>Q9 | Could a hostile article run JavaScript in the reading view? | 2026-08-25: it could, and DOMPurify now runs at stage 3 — [security.md](security.md) |
+| <a id="q10"></a>Q10 | Should a tooltip be hoverable? | 2026-10-02: per use — [tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter) |

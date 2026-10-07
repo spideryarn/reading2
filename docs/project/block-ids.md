@@ -1,5 +1,7 @@
 # Block ids
 
+Up: [architecture.md](architecture.md)
+
 The spine. Every other artefact in Spideryarn addresses text by block id, so this is the one
 decision that is expensive to revisit — see
 [AGENTS.md § The one contract that matters](../../AGENTS.md#the-one-contract-that-matters).
@@ -7,6 +9,21 @@ decision that is expensive to revisit — see
 Assigned by [`src/blocks.ts`](../../src/blocks.ts) (pipeline stage 3,
 [architecture.md § Pipeline](architecture.md#pipeline)); the id itself is minted by
 [`src/ids.ts`](../../src/ids.ts).
+
+## In this doc
+
+- [§ Intent](#intent) — what the ids are for, in Greg's terms
+- [§ The format](#the-format) — what an id looks like, before parsing or matching one
+- [§ Why random and not sequential](#why-random-and-not-sequential) — why ids are not positions, and how they survive a re-run
+  - [Surviving stage 2](#surviving-stage-2-which-is-the-case-that-actually-matters) — a re-extraction changed or lost ids
+  - [The freshness guard](#the-freshness-guard-and-the-two-ways-it-was-wrong) — a re-run kept, or refused to keep, the previous ids
+  - [Two passes](#two-passes-and-the-second-one-refuses-to-guess) — how an old block is matched to a new one
+  - [The cost we accepted](#the-cost-we-accepted) — what random ids give up, including range checks
+- [§ What gets an id](#what-gets-an-id) — which elements are blocks, and why something you want to point at has none
+- [§ The article's own links](#the-articles-own-links) — in-page `href`s and footnotes that must resolve to a block
+- [§ Showing an id](#showing-an-id) — putting an id in front of a reader, or in a URL
+- [§ If this ever changes](#if-this-ever-changes) — what a format change would have to migrate
+- [§ See also](#see-also) — the neighbouring docs
 
 ## Intent
 

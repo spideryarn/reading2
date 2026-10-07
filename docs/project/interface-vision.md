@@ -78,7 +78,7 @@ anchored, so placing it costs layout, not a model call.
 | Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`) |
 | FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
-| Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **no** — a new model pass (the relation words in [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) stage 2) |
+| Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **partly** — the relation words *so*, *but* and *vs* are in the margin since 2026-10-03 ([marginalia.md § Relation words](marginalia.md#relation-words)); fuller rebuttals and conclusions are not, and would be a new model pass |
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
 | Structure | the whole | left | yes, as a band |
 | Summary | the whole, linked to passages | left | yes, as a band |
@@ -196,8 +196,10 @@ Each step is useful on its own, and none commits us to the next.
 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
    one only once its content reaches the reader through the middle or the right; Timeline does not
    reach either yet.
-5. **New model passes for the margin** — relation words, rebuttals, conclusions — measured on the
-   eval corpus before shipping, as any new prompt is ([prompting-guide.md](prompting-guide.md)).
+5. **New model passes for the margin** — relation words (done, 2026-10-03,
+   [261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)), rebuttals,
+   conclusions — measured on the eval corpus before shipping, as any new prompt is
+   ([prompting-guide.md](prompting-guide.md)).
 6. **The left as a column of its own**, if the band turns out not to be enough.
 
 ## Decluttering the bottom bar

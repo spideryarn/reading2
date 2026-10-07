@@ -2,6 +2,25 @@
 
 Up: [security-map.md](security-map.md)
 
+## In this doc
+
+- [§ What was wrong](#what-was-wrong) — the original stored-XSS chain, before any fix (history)
+- [§ The fix, and where it lives](#the-fix-and-where-it-lives) — how the sanitiser is built and called, before touching it
+- [§ Four ways to break this silently](#four-ways-to-break-this-silently) — config changes that leave articles rendering but unclean
+- [§ Why the string path, not `IN_PLACE`](#why-the-string-path-not-in_place) — why DOMPurify is fed a string
+- [§ Stage 2's debug page](#stage-2s-debug-page) — the unsanitised debug file and the holes found with it (history)
+- [§ An artefact that was cleaned by nothing](#the-stamp) — the filesystem-era stamp; current Postgres readers re-clean every read
+- [§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) — path traversal, slug rules, what a capture may become
+- [§ A PDF](#pdfs) — the same untrusted content in a second format, and the parser's limits
+- [§ What the model returns](#a-third-untrusted-party-what-the-model-returns) — model output that becomes an `href`, `src` or `id`
+- [§ What the model asks us to fetch](#chat-tools) — chat tools, the address guard, and a GET as a channel
+- [§ The manuscript addressing the model](#hidden-instructions) — hidden-text injection, and what the scan cannot see
+- [§ The bibliographic registries](#registries) — Crossref, DataCite, OpenAlex strings on the page
+- [§ Whoever signs in](#the-gate) — the gate's two properties that belong to the system
+- [§ The database connection](#database-tls) — verified TLS or refusal
+- [§ Known gaps](#known-gaps) — where to look if you want work
+- [§ If you are changing any of this](#if-you-are-changing-any-of-this) — what to read and run first
+
 **Two untrusted parties, and neither is another user.**
 
 **The content**, which is what most of this document is about. Spideryarn is a local, single-user
@@ -360,6 +379,8 @@ interpolated into markup is markup, however it was obtained.
 
 ## An artefact that was cleaned by nothing looks exactly like one that was cleaned <a id="the-stamp"></a>
 
+**Current Postgres path:** both readers call `sanitizeStoredBlocks(blocks, undefined)`, so every read is re-sanitised in memory; there is no stored sanitiser-version column or stale-stamp warning ([`pg.ts`](../../src/store/pg.ts) § `blocksFor`, [`public-reader.ts`](../../src/store/public-reader.ts) § `loadArticle`). The stamp fast path and file writes described below are filesystem-era history; stage 3's returned artefact and the export still carry the stamp, but the Postgres readers do not read it.
+
 **Fixed 2026-08-26.** `blocks.json` files written before DOMPurify landed are dirty on disk and were
 trusted as-is on read. This document carried that as a known gap with a remedy attached — *"Re-run
 stage 3 to clean them"* — and the remedy was correct. **The flaw was that nothing ever asked for it.**
@@ -463,7 +484,7 @@ decoration unless something keeps it complete.
 Two consequences for how this is built:
 
 - **`sanitizeStoredBlocks` takes blocks and a stamp, not a file.** In Postgres the blocks are rows and
-  the stamp is a column, so a parameter shaped like `blocks.json` would fit one caller and have to be
+  the stamp argument is currently `undefined`, so a parameter shaped like `blocks.json` would fit one caller and have to be
   faked by the other. The stamp argument is *required* even though `undefined` is legal, because
   forgetting an optional argument and deciding you have no stamp are the same keystrokes otherwise,
   and only one of them is a decision.
@@ -471,7 +492,7 @@ Two consequences for how this is built:
   stamp.** A reader that passes `undefined` re-sanitises every time: correct, and slow. That is the
   right order to land the two halves in — safety needs no migration, only the fast path does.
 
-Where the stamp lives once blocks are rows: on **`article_revisions`**, one column, not on
+The proposed home for a stored stamp, which has not been built: on **`article_revisions`**, one column, not on
 `revision_blocks`. A revision is exactly one `blocks.json` and one cleaning pass, so per-block would
 be storing the same number several hundred times and inviting a revision whose blocks disagree about
 when they were cleaned.
@@ -642,8 +663,9 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
   `slugPart` refuses a leading underscore, so this was a false invariant rather than a live hole —
   which is the kind most worth closing, because the next caller to reach a reader-state module by
   another path inherits the assumption without the screening. Found by cross-model review, 2026-08-26.
-- **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
-  is not fine on the public internet — see
+- **Nothing rate-limited or authenticated any of this when this was written**, which is fine for one
+  process on a laptop and is not fine on the public internet (the auth gate landed 2026-08-27; see
+  [§ whoever signs in](#the-gate)) — see
   [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md), which has this going online.
 
 ## The first untrusted party arrives in a second format: a PDF <a id="pdfs"></a>
@@ -759,8 +781,9 @@ Three things bound it, and only the last is new:
   denied until 2026-08-28 on the strength of a measurement that never happened
   ([260828a-the-config-file-is-not-the-bucket.md](../postmortems/260828a-the-config-file-is-not-the-bucket.md)). A
   second line under our own checks, never a replacement: a bucket cannot tell a PDF from a file named
-  one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, so the list is
-  `application/pdf` and `text/html`.
+  one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, and the article's
+  own images since 2026-08-29, so the list is `application/pdf`, `text/html`, `image/png`,
+  `image/jpeg` and `image/gif` (`supabase/config.toml`).
 - **`%PDF-` over the bytes, and our SHA-256 against the browser's**, in `acquireUpload` before
   anything expensive runs. Both over *one* download, because reading the object twice is the one
   sequence content addressing does not cover.
@@ -1084,9 +1107,7 @@ here because they are properties of this system rather than of that feature.
 [`src/auth.ts`](../../src/auth.ts) admits whoever Supabase vouches for — and that is Greg's explicit decision, made twice
 and in writing ([260826w-auth-supabase.md § Who gets in](../plans/260826w-auth-supabase.md#who-gets-in)). A security
 doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
-`OPENROUTER_API_KEY` at two model calls per article — every paid call in the app is on that one key
-since 2026-08-27 ([ai-gateway.md](ai-gateway.md)); **the control that is actually missing is a
-spend limit**, and an allowlist of one never limited what Greg could spend either.
+`OPENROUTER_API_KEY` for pipeline and on-demand calls (Live uses OpenAI separately); ingest allowances already apply ([billing.md](billing.md)), while a general per-reader dollar cap is deliberately absent under Greg's global-cap decision ([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 
 **And until 2026-08-27 it did not say whose data is whose.** `currentOwnerId()` was process-wide and
 the reads did not filter by owner, so every admitted person saw the same shelf, profile and chats.
@@ -1100,7 +1121,7 @@ the second.
 [`src/routes.ts`](../../src/routes.ts) puts the verified `sub` into a request-scoped
 `AsyncLocalStorage`, and every path from a slug to an article carries
 `and(eq(articles.ownerId, currentOwnerId()))` through one predicate, `ownedSlug()` in
-[`src/store/pg.ts`](../../src/store/pg.ts). Comments, chat threads, searches and glossary lookups are
+[`src/store/owned-slug.ts`](../../src/store/owned-slug.ts). Comments, chat threads, searches and glossary lookups are
 reached only through an `articleId` that came from one of those paths, so the filter is transitive.
 A slug you do not own answers 404 rather than 403 — "there is no such article" is all a stranger
 should learn about it. The reasoning, and the four ways this fails silently, are in
@@ -1109,9 +1130,9 @@ should learn about it. The reasoning, and the four ways this fails silently, are
 static guard so that the next `eq(articles.slug, …)` written anywhere under `src/store/` fails a test
 rather than leaking a library.
 
-**What that does *not* close**: anybody with a Google account can still sign in and spend the model
-budget, which is the risk Greg accepted twice and which a spend limit is the real control for. The
-ingest queue is still on disk and carries no owner. And there is still no RLS — the filtering is in
+**What that does *not* close**: a signed-in reader can still spend on repeatable paid operations outside the ingest allowance; the global OpenRouter cap bounds that bill, with no general per-reader dollar cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)). The
+ingest queue was given an owner the same week (it is the `jobs` table now, filtered by
+`owner_id`; [auth.md](auth.md#whose-data-is-it)). And there is still no RLS — the filtering is in
 the queries, not in the database, so a query written without the predicate is the whole exposure.
 
 **An article may not address our own API.** The sanitiser keeps relative URLs by design — the block
@@ -1191,7 +1212,7 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
 - **A PDF is parsed in-process, unsandboxed.** pdf.js over a stranger's bytes, in the server, with
   no worker isolation, no memory cap and no time limit beyond the job's. The mitigation today is
   that we ask it only for text and coordinates. The plan says to bound pages, objects, time and
-  memory ([260826c-pdf-ingestion.md § Limits](../plans/260826c-pdf-ingestion.md)); only the page cap is built.
+  memory ([260826c-pdf-ingestion.md § Limits](../plans/260826c-pdf-ingestion.md)); page caps and cooperative cancellation are built (`refuseAnOverlongPdf` passes the step's signal to `countPdfPages`), but there is no independent parser deadline or memory isolation, and an abort cannot interrupt a synchronous pdf.js parse step.
 
   ~~**And the page cap does not bound the parse.**~~ **Closed, 2026-08-26.** It did not: the check
   was `pass.pages.length > MAX_PAGES` in `readPdf`, which runs only after `pass0` has opened the

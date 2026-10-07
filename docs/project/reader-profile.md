@@ -20,6 +20,22 @@ per-document "Reading Intent" were both stored, both displayed, and neither ever
 So the textareas are the easy half and the least of it. That is why this doc is mostly about the
 wiring.
 
+## In this doc
+
+- [§ Two boxes, one string](#two-boxes-one-string) — the About you and Why-I'm-reading boxes, caps, normalising, autosave
+- [§ Where it goes in the prompt](#where-it-goes-in-the-prompt) — adding a profiled call: after the breakpoint, and the `PROFILE_RULES` that every prompt carries
+- [§ The glossary](#the-glossary-is-the-case-this-feature-is-really-for) — why difficulty scores need the profile
+- [§ Provenance](#provenance-what-was-this-written-with-and-is-it-still-true) — `profileHash`, the staleness rule, and the "changed" badge
+- [§ No control, one label](#no-control-one-label) — the provenance icon, and why there is no "use my profile" checkbox
+- [§ What editing your profile costs](#what-editing-your-profile-costs) — why one typo fix marks every artefact "profile changed"
+- [§ The microphone](#the-microphone-and-what-it-took-to-make-it-believable) — dictation into the boxes, the level meter, the errors (history of a long debugging run)
+- [§ And then it was still broken](#and-then-it-was-still-broken-and-the-microphone-was-not) — the Teams virtual device that produced digital silence, and what that changed (history)
+- [§ The page's six sections](#the-pages-six-sections) — `/profile` layout, which sections fold, the contents list
+- [§ Where the pieces are](#where-the-pieces-are) — every file and test, profile and microphone
+- [§ What is still open](#what-is-still-open) — known gaps
+- [§ The sticker came off](#the-sticker-came-off) — (history) the "unreliable" mark on the microphone, and the promise that replaced it
+- [§ See also](#see-also)
+
 ## Two boxes, one string
 
 | Box | Scope | Stored | Edited at |
@@ -79,8 +95,9 @@ use. [261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md).
 
 Both are **reader state**: they survive re-extraction and the pipeline cannot undo them. That is the
 argument [`src/shelf.ts`](../../src/shelf.ts) already makes for the renamed title, and it holds here
-word for word — a re-extraction rewrites `meta.json`, and anything of the reader's stored in there
-dies quietly weeks later.
+word for word — a re-extraction rewrites the article's metadata (`meta.json`, in the days it was a
+file; columns on `article_revisions` now), and anything of the reader's stored in there dies quietly
+weeks later.
 
 [`src/profile.ts`](../../src/profile.ts) joins the two into **one string**, and it is the only module
 that knows there were two:
@@ -133,8 +150,8 @@ overweight this and give a really distorted summary"*. Read clause by clause aga
 three of its five rules already had an equivalent and **two did not**: *never add, sharpen, or bend a
 claim to fit*, and *keep the piece's own proportions* — and there was nothing about proportions in
 `PROFILE_RULES` at all. Those two moved rather than going in the bin — **into
-`src/summarise.ts`'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
-distinction was a correction rather than a preference. The shared string reaches *seven* prompts, and
+`src/summarise.ts`'s own `SYSTEM` (a file deleted on 2026-08-31 with the summary step), not into `PROFILE_RULES`**, and that
+distinction was a correction rather than a preference. The shared string reached *seven* prompts then (it reaches more now), and
 *"if the article does not say it, it does not go in"* is exactly backwards for two of them: `ideas`
 defines its more valuable half as what the piece *never states*, and a glossary entry's `background`
 is explicitly not the article's knowledge. A profiled ideas run could have obeyed the shared rule by
@@ -160,7 +177,10 @@ article never changes. [prompt-caching.md](prompt-caching.md) records the same m
 | `glossary` | `system[0]`, breakpoint on it | the user message |
 | `tweets` | `system[0]`, breakpoint on it | the user message |
 | `quiz` | `system[0]`, breakpoint on it | the user message, after the skeleton |
-| `summarise` | the user prompt — not cached, on purpose | near the top, with the other framing |
+
+The table is the calls that set the pattern, not every profiled call (a `summarise` row went with its
+stage on 2026-08-31): each other caller of `profileSection` in `src/*.ts` says in its own docstring
+where it puts the profile.
 
 The positioning rule inside the varying part is one rule, not two: **the thing the model must
 actually do goes last.** So chat and explain put the profile before the question; the batch stages
@@ -236,8 +256,10 @@ never stored on the server and never logged.
 
 ### The rules live in `SYSTEM`, and they are always there
 
-`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all seven profiled system prompts —
-explain, converse (twice), glossary, sketch, summarise, ideas and tweets —
+`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to every profiled system prompt —
+`grep -n PROFILE_RULES src/*.ts` is the list: explain, converse, glossary, sketch, ideas, tweets,
+quotes, skim, link-summary, simple-summary and citation-investigate (the quiz carries its own rules,
+below) —
 **whether or not the reader has a profile**. Two reasons, and the second decided it: `SYSTEM` sits
 ahead of the article in explain and converse, so a varying one would split the cache in two and
 re-write the whole article whenever the reader toggled; and a rule that only appears alongside the
@@ -921,7 +943,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
   nobody, with the owner's personalisation as a separate layer on top, was designed and part-built,
   and Greg deferred it as *someday maybe* on 2026-10-01: personal value comes first —
   [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md).
-- **Two tabs.** Last write wins, which is what `shelf.json` already does.
+- **Two tabs.** Last write wins. (It was what `shelf.json` did, before the filesystem store went.)
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.
 

@@ -121,10 +121,12 @@ import { voiceClass, withVoice } from "./voice.js";
  * `QuotesAccess` are built on (src/web/reader-capability.ts), and GPT Sol's
  * recommendation when it reviewed this stage.
  *
- * **The visitor arm is what pins `kind` to `force`**, and that is the whole
- * safety property: `force` is the only picture that draws from the tree the
- * page already holds. `drift` and `trail` need `useProjection`'s POST to draw
- * anything, and `sketch` and `illustrated` mount children that auto-run a job.
+ * **The visitor arm is what pins `kind` to `sketch`**, and that is the whole
+ * safety property: a visitor's Sketch is the stored one this arm carries, or
+ * a sentence saying there is none, and `SketchView`'s visitor arm has no slug
+ * to run a job with. `drift` and `trail` need `useProjection`'s POST to draw
+ * anything, and `illustrated` mounts a child that auto-runs a job. (The pin
+ * was to `force` when this was written; the code below is the authority.)
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
  */
 export type DiagramAccess =
@@ -263,7 +265,7 @@ interface Props {
  * **It is not a gate and must not be read as one.** Hiding a chip hides a
  * control; it authorises nothing. What actually stops a stranger buying a
  * picture is `access` — a visitor gets no picker at all and is pinned to
- * `force` — plus `requireUser` on the two endpoints that spend.
+ * `sketch` — plus `requireUser` on the two endpoints that spend.
  * docs/project/security-map.md, docs/project/experimental-features.md.
  */
 const KIND_UI: Record<
@@ -972,7 +974,7 @@ export function DiagramPanel({
      is not wired up — `similar.ts` still embeds the article itself, so a cold
      Force → Drift buys them twice. ⟨Sol⟩, 2026-08-30. See useProjection.ts. */
   const wantsPoints = NEEDS_POINTS.has(kind);
-  /* Unreachable for a visitor anyway, because `kind` is pinned to `force`
+  /* Unreachable for a visitor anyway, because `kind` is pinned to `sketch`
      above and `wantsPoints` is false for it — and gated here regardless. Two
      independent reasons a POST cannot happen is the right number for a request
      that spends: the pin is a product rule and could be relaxed by somebody who
@@ -1627,7 +1629,7 @@ export function DiagramPanel({
           *absent* for a visitor, and an element that is in the DOM is one a
           later change can reveal.
 
-          `kind` is pinned to `force` above regardless, so this is the
+          `kind` is pinned to `sketch` above regardless, so this is the
           presentation half of a rule enforced elsewhere; the enforcement is not
           here. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
 

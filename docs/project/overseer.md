@@ -69,6 +69,23 @@ queue."* That includes a doc he asks for and a loop he asks for. The one-line-fi
 for keeping the fleet running — a re-pin, a status line in a plan, a line in the log, a pointer under
 an entry point — not for his requests.
 
+## In this doc
+
+- [§ The gates](#the-gates) — may you decide this on Greg's behalf? Read before answering an agent or acting
+  - [On editing docs whose wording is a rule](#on-editing-docs-whose-wording-is-a-rule) — an agent wants a rule doc changed
+- [§ What you actually do](#what-you-actually-do) — the work of a waking
+  - [The standing jobs](#the-standing-jobs) — what to check for when nothing is asking
+  - [The tick](#the-tick) — what one wake does, in order
+  - [The three deterministic rules that pay back most](#the-three-deterministic-rules-that-pay-back-most) — the checks worth running every time
+  - [Steering, and the actions you have](#steering-and-the-actions-you-have) — an agent is stuck, idle or off course
+  - [Deploying](#deploying) — somebody asks for a deploy to production
+  - [Dependabot alerts](#dependabot-alerts) — an alert arrived
+  - [Keeping `/home` from filling](#keeping-home-from-filling) — the box's disk is low
+  - [Dispatching agents](#dispatching-agents) — starting a new agent for a piece of work
+- [§ Things that will catch you](#things-that-will-catch-you) — the traps, before trusting what a tool just told you
+- [§ The log, and the surface Greg reads](#the-log-and-the-surface-greg-reads) — where to write down what you did
+- [§ What you are not](#what-you-are-not) — the limits of the role
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
@@ -608,6 +625,30 @@ have permission going forwards. Perhaps add this and other measures to keep the 
 down to some routine daemon/service"*. Image files under `docs/plans/` (and the other dated folders)
 last committed more than a week ago may be deleted from the tree in an ordinary commit; they stay in
 git history. A plan that links one is left with a dead image link, which is acceptable.
+**This one is yours to run, weekly or when a disk is tight**, because it is a commit and nothing
+unattended commits in the shared checkout: `npx tsx scripts/prune-old-screenshots.ts` lists them
+from anywhere. **`--apply` runs only in a worktree of your own** and refuses in the primary, because
+no check can stop a peer editing one of the files in the moment before the commit. So: make a
+worktree from `origin/dev`, run `--apply` there, `git push origin HEAD:dev`, remove the worktree.
+What counts as a week old is in the script's header.
+
+**The rest runs by itself since 2026-10-07.** `box-tidy.timer` runs
+[`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs) every hour; what it deletes and
+what it leaves for you is in
+[hetzner-remote-server-box.md § Keeping the disks from filling](hetzner-remote-server-box.md#keeping-the-disks-from-filling).
+It never removes a worktree or a Docker image, and when a disk reaches 80% its last lines in
+`journalctl -u box-tidy -n 20` say so and name the commands that are yours. **You hear about a
+filling disk from the Box health verdict**, which reads `/home` as well as `/` since the same day
+(strained at 90%, critical at 97%), on the dashboard and in `overseer.ts tick`.
+
+**Your working scripts are in the repo**, in
+[`scripts/overseer-tools/`](../../scripts/overseer-tools/README.md), since 2026-10-07: the tick and
+queue screens, `release.sh`, the two brief writers, the daemon launcher and the scripts behind the
+feedback-sweep and dashboard-refresh loops. They lived in your `/tmp` scratchpad, which systemd
+empties at every boot. Set `OVERSEER_SCRATCH` to a directory outside `/tmp` for your briefs and
+pause state. `tick.sh` also prints whether the tidy and watchdog timers are running and how each
+last ended: on 2026-10-05 the daemon died of `ENOSPC` and was down for 46 hours with nothing saying
+so, and that line is what says so now.
 
 ### Dispatching agents
 

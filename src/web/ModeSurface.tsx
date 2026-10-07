@@ -138,7 +138,7 @@ export function ModeSurface({
    * **Required, because there are no unlabelled bands.** An `<aside>` is a
    * landmark; an unnamed one is announced as "complementary" and a reader
    * moving by landmark cannot tell Chat from Quotes. Several panels vary it
-   * with state — Chat says "Remember what you took from this article" in
+   * with state — Chat says "Recall what you took from this article" in
    * Learn mode — so it is a value rather than a constant.
    */
   label: string;
