@@ -71,7 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHARED_BY_PRIVATE_LINK, SHARED_WITH_YOU } from "../src/messages.js";
+import { REPEAT_PASTE_ON_THE_SHELF, SHARED_BY_PRIVATE_LINK, SHARED_WITH_YOU } from "../src/messages.js";
 import type { Arc, Article, BlockId, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
@@ -103,8 +103,8 @@ const authListeners: ((event: string, session: unknown) => void)[] = [];
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
-      getSession: async () => ({ data: { session: { access_token: "t" } } }),
-      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
+      getSession: async () => ({ data: { session: { access_token: "t", user: session.user } } }),
+      refreshSession: async () => ({ data: { session: { access_token: "t", user: session.user } } }),
       onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
         authListeners.push(fn);
         return { data: { subscription: { unsubscribe() {} } } };
@@ -583,6 +583,7 @@ function reply(url: string, method: string): Response {
      store in `loadError` and every case here reading the same `on: false` for
      the wrong reason — docs/reusable/silent-success.md, one layer out. */
   if (url === "/api/reader") return json({ experimentalSince });
+  if (url === "/api/library") return json({ articles: [] });
   /* An upload's search for its own page (src/web/useSourceGuess.ts): answers
      what `guessAnswer` holds, so the owner case can watch the line fill in. */
   if (method === "POST" && url === `/api/source-guess/${SLUG}`) return json(guessAnswer);
@@ -607,6 +608,7 @@ function reply(url: string, method: string): Response {
    5-second default and the other four were reported as failures of the code.
    `vi.mock` is hoisted above this, so the mocks are already in place. */
 const { App } = await import("../src/web/App.js");
+const { addHref } = await import("../src/web/router.js");
 
 /* **Dynamic, for the same reason `App` is** — and here it is not only speed.
    `experimental-store.ts` imports `lib/api.ts`, which subscribes to
@@ -2713,7 +2715,9 @@ describe("when the reader changes underneath the page", () => {
  * 404. So their trace carries one extra request — `GET /api/article/:slug` —
  * and it must be **one**. Two more are theirs rather than this article's, and
  * each is pinned as exactly-once below: `GET /api/jobs`, their own queue, and
- * `GET /api/reader`, their own experimental-features switch. Anything else is
+ * `GET /api/reader`, their own experimental-features switch. A public source
+ * URL also permits one `GET /api/library` for the private-copy offer (261007m).
+ * Anything else is
  * either a hook that mounted for one reader and not the other, or a public read
  * that quietly went through `apiFetch`.
  */
@@ -2771,6 +2775,7 @@ describe("a signed-in reader who does not own it", () => {
     /* A page until 2026-09-29, and the mode since (plan 260929f). */
     ["the Tweets mode", "", "?mode=tweets"],
   ])("asks for the same things as a stranger on %s", async (_name, view, search) => {
+    served = { ...ARTICLE, meta: { ...ARTICLE.meta, url: "https://example.com/the-piece" } };
     const stranger = await asksFor(view, search);
     /* The fixture must actually make requests, or two empty lists match and
        this proves nothing. */
@@ -2846,9 +2851,84 @@ describe("a signed-in reader who does not own it", () => {
       "one read of the switch for the session, not one per Dock",
     ).toHaveLength(1);
 
+    const shelf = "GET /api/library";
+    expect(stranger.filter((l) => l === shelf), "a signed-out visitor never asks for a shelf").toHaveLength(0);
+    expect(withAnAccount.filter((l) => l === shelf), "one shelf read for the private-copy offer").toHaveLength(1);
+    expect(host.querySelector('[data-private-copy="add"] a')?.getAttribute("href"))
+      .toBe(addHref("https://example.com/the-piece"));
     expect(
-      withAnAccount.filter((l) => l !== probe && l !== sessionPoll && l !== readerSetting),
+      withAnAccount.filter((l) => l !== probe && l !== sessionPoll && l !== readerSetting && l !== shelf),
     ).toEqual(stranger);
+  });
+
+  it("the owner's page does not read the shelf for a private-copy offer", async () => {
+    session.user = { id: "the-owner", email: "owner@example.com" };
+    await open("?mode=article");
+    expect(host.querySelector("[data-private-copy]")).toBeNull();
+    expect(trace.filter((r) => r.url === "/api/library")).toEqual([]);
+    expect(host.querySelector(".reader")).not.toBeNull();
+  });
+
+  it("the private-copy link uses the next reader's shelf after an account change", async () => {
+    const address = "https://example.com/the-piece";
+    served = { ...ARTICLE, meta: { ...ARTICLE.meta, url: address } };
+    owned = () => json({ error: "not yours" }, 404);
+    const originalFetch = globalThis.fetch;
+    const shelfReaders: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/library") {
+        const reader = session.user?.id ?? "nobody";
+        shelfReaders.push(reader);
+        return Promise.resolve(json({ articles: [{ slug: `${reader}-copy`, url: address }] }));
+      }
+      return originalFetch(input, init);
+    });
+    session.user = { id: "reader-a", email: "a@example.com" };
+    // Keep the mocked useSession and the real API session in step before mount.
+    // The production session store clears reader caches before notifying React.
+    await act(async () => {
+      for (const fn of [...authListeners]) fn("SIGNED_IN", { user: session.user });
+    });
+    await open("", "/metadata");
+    expect(host.querySelector('[data-private-copy="open"] a')?.getAttribute("href"))
+      .toBe("/read/reader-a-copy");
+    session.user = { id: "reader-b", email: "b@example.com" };
+    await act(async () => {
+      for (const fn of [...authListeners]) fn("SIGNED_IN", { user: session.user });
+      root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+    });
+    await settle();
+    expect(host.querySelector('[data-private-copy="open"] a')?.getAttribute("href"))
+      .toBe("/read/reader-b-copy");
+    expect(shelfReaders).toEqual(["reader-a", "reader-b"]);
+    expect(host.innerHTML).not.toContain("reader-a-copy");
+  });
+
+  it("following the private-copy Link starts the add without a full page load", async () => {
+    const address = "https://example.com/the-piece?source=shared#part";
+    served = { ...ARTICLE, meta: { ...ARTICLE.meta, url: address } };
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    const originalFetch = globalThis.fetch;
+    const postedBodies: unknown[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/jobs" && init?.method === "POST") {
+        trace.push({ url: "/api/jobs", method: "POST", auth: new Headers(init.headers).get("Authorization") });
+        postedBodies.push(JSON.parse(String(init.body)));
+        return Promise.resolve(json({ article: "my-copy", repeat: true }));
+      }
+      return originalFetch(input, init);
+    });
+    await open("", "/metadata");
+    const link = host.querySelector<HTMLAnchorElement>('[data-private-copy="add"] a');
+    expect(link?.getAttribute("href")).toBe(addHref(address));
+    await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+    await settle();
+    expect(location.pathname).toBe(addHref(address));
+    expect(trace.filter((r) => r.url === "/api/jobs" && r.method === "POST")).toHaveLength(1);
+    // The add page strips the fragment; the query belongs to the fetched URL.
+    expect(postedBodies).toEqual([{ url: "https://example.com/the-piece?source=shared" }]);
+    expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
   });
 
   /**

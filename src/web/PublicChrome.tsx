@@ -58,6 +58,11 @@ import {
   CONTINUE_SIGNED_OUT,
   MAKE_AN_ACCOUNT,
   NOT_SHARED,
+  PRIVATE_COPY_ADD,
+  PRIVATE_COPY_COST,
+  PRIVATE_COPY_HELD,
+  PRIVATE_COPY_OPEN,
+  PRIVATE_COPY_WHY,
   REAUTH_REQUIRED,
   REAUTH_REQUIRED_HEADING,
   SESSION_UNCONFIRMED,
@@ -74,7 +79,8 @@ import { ModeSurface } from "./ModeSurface.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { useRenderCount } from "./perf.js";
 import { addressParts, GuessedSourceLink } from "./Masthead.js";
-import { LOGIN_HREF, PRIVACY_HREF, TAKEDOWN_HREF } from "./router.js";
+import { type ShelfLookup, useShelfEntry } from "./link-facts.js";
+import { addHref, LOGIN_HREF, PRIVACY_HREF, readHref, TAKEDOWN_HREF } from "./router.js";
 import type { PublicSharedBy } from "../public-types.js";
 import { CONTACT_EMAIL } from "../site-text.js";
 import type { SourceGuess } from "../types.js";
@@ -164,6 +170,7 @@ export function SharedNotice({
   sessionUnconfirmed,
   sharedBy,
   source,
+  copyFrom,
 }: {
   signedIn: boolean;
   /**
@@ -184,6 +191,13 @@ export function SharedNotice({
    * re-dressed by access.ts), read only when there is no `url`.
    */
   source?: { url: string | null; guess: SourceGuess | undefined };
+  /**
+   * **The address a private copy would be added from**, or null for none —
+   * `webSource(meta)`, the published address and never a guessed one.
+   * Required, unlike `source`, because the details page draws its own source
+   * row but still needs the offer. See `privateCopyOffer`.
+   */
+  copyFrom: string | null;
   /**
    * **The owned route answered 401 and the public one answered 200.**
    *
@@ -246,7 +260,109 @@ export function SharedNotice({
           piece* — none of which an account provides until stage 3 lets a second
           reader hold the same document. GPT Sol, 2026-08-28. */}
       {!signedIn && <SignUp reason="to read your own articles this way" />}
+      <PrivateCopy
+        signedIn={signedIn}
+        sessionUnconfirmed={sessionUnconfirmed}
+        sharedBy={sharedBy}
+        copyFrom={copyFrom}
+      />
     </div>
+  );
+}
+
+export type PrivateCopyOffer = { kind: "add"; href: string } | { kind: "open"; href: string };
+
+/** What decides the offer, bar the shelf. The banner and the visitor's band both take it. */
+export interface PrivateCopyFacts {
+  signedIn: boolean;
+  sessionUnconfirmed: boolean;
+  sharedBy: PublicSharedBy;
+  copyFrom: string | null;
+}
+
+/**
+ * **Whether a visitor is offered their own private copy, and where the press
+ * goes** — option B of plan 261006k, which Greg chose (2026-10-06). Pure, so
+ * the rule reads and tests without a session:
+ * docs/plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md.
+ *
+ * Offered only to a reader who could add it: signed in, with the session
+ * confirmed, on an article reached as **public** (a private link is a door the
+ * owner handed to somebody, not an invitation to copy) and carrying its
+ * published address. Never built from a shared upload's guessed source.
+ *
+ * **A reader who already holds an article at this address is sent to it.** The
+ * server would not charge them anyway — a plain add of an address already on
+ * the shelf answers `{ article, repeat: true }` and reserves nothing (plan
+ * 261007k) — so this is the shorter way to the same place, and it keeps the
+ * offer from telling them it uses an article when it would not.
+ */
+export function privateCopyOffer({
+  shelf,
+  ...facts
+}: PrivateCopyFacts & { shelf: ShelfLookup }): PrivateCopyOffer | null {
+  const from = copyableFrom(facts);
+  if (from === null) return null;
+  switch (shelf.kind) {
+    /* **Nothing while the shelf is being asked**, rather than *Add* and then a
+       flip to *Open your copy* a few seconds later, which invites a press on
+       the wrong one (browser check, plan 261007m). */
+    case "asking":
+      return null;
+    case "held":
+      return { kind: "open", href: readHref(shelf.entry.slug, "", "article") };
+    case "absent":
+      return { kind: "add", href: addHref(from) };
+    default: {
+      const unreachable: never = shelf;
+      return unreachable;
+    }
+  }
+}
+
+/** The address a copy may be made from, or null when this reader is offered none. */
+function copyableFrom({ signedIn, sessionUnconfirmed, sharedBy, copyFrom }: PrivateCopyFacts): string | null {
+  if (!signedIn || sessionUnconfirmed || sharedBy !== "public") return null;
+  return copyFrom;
+}
+
+/**
+ * The offer, drawn. The shelf is asked only when there is something to offer:
+ * `useShelfEntry(null)` asks nothing, so a signed-out visitor makes no request.
+ * If the shelf cannot be read, the add is shown, which is safe because the
+ * server makes a repeat free and the cost line is conditional.
+ *
+ * Exported for the visitor's search panel, the third place it is drawn
+ * (SearchPanel.tsx).
+ */
+export function PrivateCopy({
+  className = "tw:mt-2 tw:mb-0",
+  ...props
+}: PrivateCopyFacts & {
+  /** The line's spacing: the banner's by default; the search panel passes its own. */
+  className?: string;
+}) {
+  const shelf = useShelfEntry(copyableFrom(props));
+  const offer = privateCopyOffer({ ...props, shelf });
+  if (offer === null) return null;
+  if (offer.kind === "open") {
+    return (
+      <p data-private-copy="open" className={className}>
+        {PRIVATE_COPY_HELD}{" "}
+        <Link href={offer.href} className={BANNER_LINK}>
+          {PRIVATE_COPY_OPEN}
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <p data-private-copy="add" className={className}>
+      {PRIVATE_COPY_WHY}{" "}
+      <Link href={offer.href} className={BANNER_LINK}>
+        {PRIVATE_COPY_ADD}
+      </Link>
+      . {PRIVATE_COPY_COST}
+    </p>
   );
 }
 
@@ -326,13 +442,18 @@ function BannerSource({ url, guess }: { url: string | null; guess: SourceGuess |
  * visitor sentence is still a mode band, and a failure drawing it must leave
  * the shared article readable too.
  */
-export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
+export function VisitorBand({ gap, copy }: { gap: VisitorGap; copy: PrivateCopyFacts }) {
   useRenderCount("VisitorBand");
   return (
     <ModeSurface label="Not available on a shared link">
       <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center tw:gap-3 tw:px-4 tw:py-6 tw:text-sm tw:text-ink-faint">
         <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
-        {offerAnAccount(gap, signedIn) && <SignUp reason="to read your own articles this way" />}
+        {offerAnAccount(gap, copy.signedIn) && <SignUp reason="to read your own articles this way" />}
+        {/* **The way out, at the dead end itself** — where plan 261006k drew
+            it, and the one place it is still on screen when a covering band
+            has hidden the banner above the article (narrow-window.css § a band
+            with no room). GPT Sol, plan review F3. */}
+        <PrivateCopy {...copy} />
       </div>
     </ModeSurface>
   );

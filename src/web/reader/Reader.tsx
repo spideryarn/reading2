@@ -3578,6 +3578,7 @@ export function Reader({
             onFound={setFound}
             openHit={openHit}
             onOpenHit={setOpenHit}
+            copy={{ signedIn, sessionUnconfirmed, sharedBy, copyFrom: webSource(article.meta) }}
           />
         );
       /* **The owner alone, like every other mode that spends money**, and it is
@@ -3640,7 +3641,15 @@ export function Reader({
        front of the mode's own component. It belongs under the same boundary:
        leaving it beside this function would make the public half of eight
        modes the one visible band that could still take the article with it. */
-    const content = !owner && gap ? <VisitorBand gap={gap} signedIn={signedIn} /> : modeBand();
+    const content =
+      !owner && gap ? (
+        <VisitorBand
+          gap={gap}
+          copy={{ signedIn, sessionUnconfirmed, sharedBy, copyFrom: webSource(article.meta) }}
+        />
+      ) : (
+        modeBand()
+      );
     if (MODE_CONTAINMENT[mode].kind === "exempt") return content;
     return (
       <ModeBoundary
@@ -3961,6 +3970,7 @@ export function Reader({
           sessionUnconfirmed={sessionUnconfirmed}
           sharedBy={sharedBy}
           source={{ url: webSource(article.meta), guess: article.sourceGuess }}
+          copyFrom={webSource(article.meta)}
         />
       )}
       {/* **Why the article and the mode panel are never both on screen here**,

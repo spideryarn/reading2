@@ -148,6 +148,14 @@ the no-training claim with the same hedge, and links `/privacy` for it.
 `tests/shared-notice-banner.test.tsx` holds the training wording to both pages. The banner does not
 ask for evidence, because `/privacy` promises we won't.
 
+**A signed-in visitor is also offered a private copy**, in the banner and in the band they meet on
+an owner's mode such as Chat: *Add a private copy to your shelf*, a link to `/add/<the published
+address>`, or *Open your copy* when their shelf already has it. Only on a public article (never a
+private link), only with a published address, never with an unconfirmed session. It edits no
+defence: it is a link to a door the reader could already type. Greg chose it on 2026-10-06; the plan
+is [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md), the rule is
+`privateCopyOffer` in `src/web/PublicChrome.tsx`.
+
 ## A private link: the same republishing, to fewer people
 
 Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
