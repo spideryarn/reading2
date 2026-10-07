@@ -1,6 +1,6 @@
-# `evals/extraction/fixtures/` — thirty-seven pages Readability has to get right
+# `evals/extraction/fixtures/` — thirty-nine pages Readability has to get right
 
-Captured **2026-08-28**, **2026-08-30**, **2026-09-04** and **2026-10-06**, hashed, and committed. Run by hand, not by
+Captured **2026-08-28**, **2026-08-30**, **2026-09-04**, **2026-10-06** and **2026-10-07**, hashed, and committed. Run by hand, not by
 `npm test` — see [evals/README.md](../../README.md) and
 [../../../docs/plans/260827ab-readability-repair-pass.md](../../../docs/plans/260827ab-readability-repair-pass.md),
 which is the plan the first twenty-one were chosen for. The fourteen added 2026-09-04 (below, "The
@@ -211,16 +211,27 @@ Both are registered in `corpus.mts`'s `EXTRA_FIXTURES`, each with a `notAnArticl
 brings the manifests to seventeen (`MANIFESTS_EXPECTED` in [../score.mts](../score.mts)). The counts further down
 this file are the ones measured on the dates they give.
 
+## The comment threads added 2026-10-07
+
+| file | source | rights holder | what it is here to break |
+|---|---|---|---|
+| `xena_wordpress_comments.html` | [xenaproject.wordpress.com](https://xenaproject.wordpress.com/2026/10/01/to-grieve-or-not-to-grieve/) | © the Xena Project blog's author (Kevin Buzzard); **copyright in each comment rests with the reader who posted it**, as for `hn_dropbox.html` | Greg's own example ([`spya-eqjfgv`](../../../docs/user-feedback/261007_1008-readers-comments-left-out-of-a-blog-import.md)): a wordpress.com post above 48 readers' comments in `#comments > ol.commentlist`. The thread must not reach the article, and the post must reach it whole |
+| `lemire_wordpress_comments.html` | [lemire.me](https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/) | © Daniel Lemire; each comment its poster's | A self-hosted WordPress post under `.comments-area > ol.comment-list`. With its post cut to 150 characters, Readability's short-page retry returned the comments as the article ("5 thoughts on …"): the case [`src/reader-comments.ts`](../../../src/reader-comments.ts) closes, in `tests/extract-reader-comments.test.ts` |
+
+Plain GET with a browser-ish User-Agent, bytes unedited, registered in `corpus.mts`'s
+`EXTRA_FIXTURES`. The work is
+[261007k](../../../docs/plans/261007k-readers-comments-left-out-of-a-blog-import-on-every-pass.md).
+
 ## What is NOT in this directory: the shape corpus, added 2026-09-06
 
-**The thirty-five pages here cannot exercise most of what the two hard gates do.** Every blocker
+**The thirty-nine pages here cannot exercise most of what the two hard gates do.** Every blocker
 found from GPT Sol's fourth review onwards needed a page built by hand, and the fifteen shipped
 extractions between them reach **two** of the order walk's seven placement branches (`owner` and
 `page`, measured 2026-09-06 and printed by the run). So the gates'
 cases live in [../shapes.mts](../shapes.mts) instead: named source shapes, named candidate
 transformations, and each case pinning the resolution path and exposure counts rather than only
 pass/fail. `npx tsx evals/extraction/shapes.mts` prints the matrix;
-[../score.mts](../score.mts) prints a summary beside the fifteen and exits non-zero on a failure.
+[../score.mts](../score.mts) prints a summary beside the seventeen and exits non-zero on a failure.
 
 They are **not** fixtures and must not become some: a fixture is a real page with real bytes and a
 provenance line, and a shape is a five-element document that exists to make one branch fire. Keeping
@@ -228,7 +239,7 @@ them apart is what stops a synthetic page being quoted as evidence about the web
 
 ## The assertion manifests, added 2026-09-05
 
-Fifteen of the thirty-five now carry a `<name>.manifest.json` beside the HTML: what an extraction
+Seventeen of the thirty-nine now carry a `<name>.manifest.json` beside the HTML: what an extraction
 of that page has to contain, what it must not, the structure floors, the exact byline, and **which
 part of the page is the article**. The schema and the reasoning are in
 [../manifest.mts](../manifest.mts); the scorer that reads them is
