@@ -677,6 +677,71 @@ describe("restore", () => {
     }
   });
 
+  it("after a run that stopped part-way, restores exactly the subset named by --ids", async () => {
+    /* Sol's round-2 D3. One backup covers every article, but each is deleted in
+       its own transaction: here the first goes, and the second is then given a
+       title, so the run refuses it and stops. The backup now names one missing
+       article and one present one. */
+    const a = await failedFirstImport("partial-a", { identities: 3, checkpoint: true });
+    const b = await failedFirstImport("partial-b", { identities: 2, checkpoint: true });
+    for (const slug of [a.slug, b.slug, b.slug]) {
+      await pgCostStore.record(aiCall({ articleSlug: slug, finishedAt: new Date(Date.now() - 30 * DAY).toISOString() }));
+    }
+    await age([a.id, b.id]);
+    const snapshot = { [a.id]: await everything([a.id]), [b.id]: await everything([b.id]) };
+
+    const s = scratch([a.id, b.id]);
+    let backupFile = "";
+    let first: string | undefined;
+    const h = harness({
+      writeBackup: async (...args) => {
+        const written = await writeBackup(...args);
+        backupFile = written.file;
+        return written;
+      },
+      destroy: async (slug, opts) => {
+        const done = await pgShelfStore.destroy(slug, opts);
+        if (first === undefined) {
+          first = slug;
+          const other = slug === a.slug ? b : a;
+          await getDb().update(articles).set({ titleOverride: "Typed mid-run" }).where(eq(articles.id, other.id));
+        }
+        return done;
+      },
+    });
+    try {
+      await expect(main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], h.deps)).rejects.toThrow(/1 already deleted/);
+      const gone = first === a.slug ? a : b;
+      const kept = gone === a ? b : a;
+      expect([await stillThere(gone.id), await stillThere(kept.id)]).toEqual([false, true]);
+
+      /* Without --ids, the old all-or-nothing refusal: one of them is there. */
+      await expect(main(["--restore", backupFile], harness().deps)).rejects.toThrow(/already there/);
+      /* Naming the present one is refused too, and so is an id the backup lacks. */
+      const keptFile = path.join(s.dir, "kept.txt");
+      writeFileSync(keptFile, `${kept.id}\n`);
+      await expect(main(["--restore", backupFile, "--ids", keptFile], harness().deps)).rejects.toThrow(/already there/);
+      const strangerFile = path.join(s.dir, "stranger.txt");
+      writeFileSync(strangerFile, `${gone.id}\n55555555-5555-4555-8555-555555555555\n`);
+      await expect(main(["--restore", backupFile, "--ids", strangerFile], harness().deps)).rejects.toThrow(/not in the backup/);
+      expect(await stillThere(gone.id)).toBe(false);
+
+      const goneFile = path.join(s.dir, "gone.txt");
+      writeFileSync(goneFile, `${gone.id}\n`);
+      const r = harness();
+      expect(await main(["--restore", backupFile, "--ids", goneFile], r.deps)).toBe(0);
+      const want = snapshot[gone.id];
+      expect(r.lines.join("\n")).toMatch(
+        new RegExp(`1 articles, ${want?.block_identities.length} block identities, 1 checkpoints; ${gone === a ? 1 : 2} ai_calls re-linked`),
+      );
+      /* Every column of the restored article's rows, and the whole ledger, as
+         before the run: nothing of the kept article was touched. */
+      expect(await everything([gone.id])).toEqual(want);
+    } finally {
+      s.done();
+    }
+  });
+
   it("refuses a file that is not a backup, before connecting", async () => {
     const s = scratch([]);
     const h = harness();

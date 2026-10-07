@@ -7,6 +7,7 @@
  *     npx tsx scripts/never-published-tidy.ts --prod --delete \
  *       --ids <file of article ids> --backup-dir <dir outside the repo>
  *     npx tsx scripts/never-published-tidy.ts --restore <backup file>  # the undo (add --prod only to undo the real run)
+ *     npx tsx scripts/never-published-tidy.ts --restore <backup file> --ids <subset>  # undo a run that stopped part-way
  *
  * `beginRevision`/`lockOrCreateArticle` write the `articles` row before there
  * is anything in it, so a first import that fails leaves a row no reader can
@@ -404,9 +405,10 @@ async function dumpRows(tx: Pick<Tx, "execute">, ids: readonly string[]): Promis
   };
 }
 
-/** The part of a backup that is about one article, in the backup's own order. */
-function backupOf(backup: BackupRows, articleId: string): BackupRows {
-  const mine = (key: string) => (r: Row) => r[key] === articleId;
+/** The part of a backup that is about the named articles, in the backup's own order. */
+function backupOf(backup: BackupRows, articleIds: readonly string[]): BackupRows {
+  const wanted = new Set(articleIds);
+  const mine = (key: string) => (r: Row) => wanted.has(String(r[key]));
   return {
     articles: backup.articles.filter(mine("id")),
     block_identities: backup.block_identities.filter(mine("article_id")),
@@ -488,17 +490,35 @@ export interface Restored {
  * (`json_populate_recordset` over each table's own row type, so every column
  * comes back), and each unlinked `ai_calls` row pointed at its article again —
  * only where its `article_id` is still null. One transaction, and every count
- * must match the file or it all rolls back. Refuses if any article is already
- * there. The `uploads` rows were never changed, so there is nothing to put
- * back for them.
+ * must match the file or it all rolls back. Refuses if any article it is
+ * putting back is already there. The `uploads` rows were never changed, so
+ * there is nothing to put back for them.
+ *
+ * **`only`, to undo a run that stopped part-way** (GPT Sol's round-2 D3). One
+ * backup covers every article, but each is deleted in its own transaction, so
+ * a run refused at the second article leaves a backup naming one missing
+ * article and others still present — and without `only`, that is refused.
+ * `only` must be a subset of the backup; the article rows, identities,
+ * checkpoints and ledger links are all cut to it by one filter (`backupOf`,
+ * the one the check under the lock uses), and only those articles must be
+ * absent.
  *
  * Exercised on throwaway local data by tests/never-published-tidy.test.ts §
  * "restore". It has not been, and is not to be, run against production
  * except to undo this plan's delete, by somebody cleared to write there.
  */
-export async function restoreBackup(db: Db, backup: Backup): Promise<Restored> {
+export async function restoreBackup(db: Db, backup: Backup, only?: readonly string[]): Promise<Restored> {
+  let rows: BackupRows = backup;
+  if (only !== undefined) {
+    const inBackup = new Set(backup.articles.map((r) => String(r.id)));
+    const outside = only.filter((id) => !inBackup.has(id));
+    if (outside.length > 0) {
+      throw new TidySafetyError(`refusing: --ids names ${outside.length} article(s) not in the backup (${outside.join(", ")})`);
+    }
+    rows = backupOf(backup, only);
+  }
   return await db.transaction(async (tx) => {
-    const ids = backup.articles.map((r) => String(r.id));
+    const ids = rows.articles.map((r) => String(r.id));
     if (ids.length === 0) throw new TidySafetyError("refusing: the backup holds no articles");
     const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
     const [present] = (await tx.execute(sql`select count(*)::int as n from spideryarn.articles where id in (${list})`)).rows as Row[];
@@ -515,20 +535,20 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<Restored> {
       return rows.length;
     };
     const restored = {
-      articles: await put("articles", backup.articles),
-      blockIdentities: await put("block_identities", backup.block_identities),
-      checkpoints: await put("checkpoints", backup.checkpoints),
+      articles: await put("articles", rows.articles),
+      blockIdentities: await put("block_identities", rows.block_identities),
+      checkpoints: await put("checkpoints", rows.checkpoints),
       aiCallsRelinked: 0,
     };
-    if (backup.ai_calls_unlinked.length > 0) {
+    if (rows.ai_calls_unlinked.length > 0) {
       const relinked = await tx.execute(sql`
         update spideryarn.ai_calls c set article_id = x.article_id
-        from json_to_recordset(${JSON.stringify(backup.ai_calls_unlinked)}::json) as x(id uuid, article_id uuid)
+        from json_to_recordset(${JSON.stringify(rows.ai_calls_unlinked)}::json) as x(id uuid, article_id uuid)
         where c.id = x.id and c.article_id is null`);
-      if (relinked.rowCount !== backup.ai_calls_unlinked.length) {
-        throw new TidySafetyError(`refusing: ${relinked.rowCount} of ${backup.ai_calls_unlinked.length} ai_calls rows could be re-linked`);
+      if (relinked.rowCount !== rows.ai_calls_unlinked.length) {
+        throw new TidySafetyError(`refusing: ${relinked.rowCount} of ${rows.ai_calls_unlinked.length} ai_calls rows could be re-linked`);
       }
-      restored.aiCallsRelinked = backup.ai_calls_unlinked.length;
+      restored.aiCallsRelinked = rows.ai_calls_unlinked.length;
     }
     return restored;
   });
@@ -566,7 +586,7 @@ export async function refusalUnderTheLock(
   const proof = await proveEligible(tx, [target.articleId], quietDays);
   if (!proofIsClean(proof, 1)) return `it is no longer eligible (${JSON.stringify(proof)})`;
   const now = await dumpRows(tx, [target.articleId]);
-  const then = backupOf(backup, target.articleId);
+  const then = backupOf(backup, [target.articleId]);
   const differ = (Object.keys(now) as (keyof BackupRows)[]).filter((k) => !isDeepStrictEqual(now[k], then[k]));
   if (differ.length > 0) {
     return `its rows are not the rows the backup holds (${differ.map((k) => `${k}: ${now[k].length} now, ${then[k].length} backed up`).join("; ")})`;
@@ -755,9 +775,11 @@ export async function main(args: readonly string[], deps: MainDeps = realDeps())
     /* Read and checked before connecting: a file that is not a backup is
        refused without touching the database. */
     const backup = readBackup(restoreFile);
+    const onlyFile = value("--ids");
+    const only = onlyFile === undefined ? undefined : parseIdsFile(deps.readText(onlyFile));
     const { db, end } = deps.connect(url, true);
     try {
-      const r = await restoreBackup(db, backup);
+      const r = await restoreBackup(db, backup, only);
       out(`Restored from ${restoreFile}: ${r.articles} articles, ${r.blockIdentities} block identities, ` +
         `${r.checkpoints} checkpoints; ${r.aiCallsRelinked} ai_calls re-linked.`);
       return 0;
