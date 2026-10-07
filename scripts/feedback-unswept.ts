@@ -3,6 +3,7 @@
  *
  *     npx tsx scripts/feedback-unswept.ts [--since 30d | 12h | <ISO date>]
  *     npx tsx scripts/feedback-unswept.ts --show spya-xxxxxx
+ *     npx tsx scripts/feedback-unswept.ts --show 212        # or '#212': the report's number
  *
  * Lists every production `feedback` row since `--since` (default 30d) whose id
  * is named neither by a `docs/user-feedback/` note's `reports:` header nor by
@@ -53,7 +54,17 @@ import type { QueryResultRow, default as pg } from "pg";
 import { isAdmin } from "../src/admin.js";
 import { type QueueRead, queueRoot, readQueue } from "../tools/overseer/idea-queue.js";
 import { type NoteFile, parseNoteHeader, readNotes } from "./feedback-endings.js";
-import { CannotTell, isMainModule, productionClient } from "./feedback-reporter.js";
+import {
+  CannotTell,
+  isMainModule,
+  NUMBER_COLUMN,
+  NUMBERED_SQL,
+  NUMBERS_NOT_DEPLOYED,
+  parseReportRef,
+  productionClient,
+  type ReportRef,
+  reportRefLabel,
+} from "./feedback-reporter.js";
 
 /** One row, as much of it as a listing needs — never the body. */
 export interface UnsweptRow {
@@ -71,6 +82,8 @@ export interface UnsweptRow {
   slug: string | null;
   mirroredAt: Date | null;
   sentryEventId: string | null;
+  /** `feedback.number`, or null on a production from before the column (261007d). */
+  number: number | null;
   /**
    * When an administrator pressed Ignore on `/admin/feedback`, or null. A
    * marked row is never listed (`unswept`). Null on a database that does not
@@ -180,6 +193,8 @@ export function renderUnswept(row: UnsweptRow, admin: boolean): string {
       ? `Sentry: confirmed${row.sentryEventId === null ? "" : ` (event ${row.sentryEventId})`}`
       : `Sentry: unconfirmed, search report_id:${row.id}`;
   return [
+    /* Its number first when production has one (261007d): that is how it is said. */
+    ...(row.number === null ? [] : [`#${row.number}`]),
     row.id,
     row.createdAt.toISOString(),
     admin ? "admin" : "reader",
@@ -259,6 +274,7 @@ interface StoredRow extends QueryResultRow {
   mirrored_at: Date | null;
   sentry_event_id: string | null;
   ignored_at: Date | null;
+  number: number | null;
 }
 
 const toRow = (r: StoredRow): UnsweptRow => ({
@@ -272,6 +288,7 @@ const toRow = (r: StoredRow): UnsweptRow => ({
   mirroredAt: r.mirrored_at,
   sentryEventId: r.sentry_event_id,
   ignoredAt: r.ignored_at,
+  number: r.number,
 });
 
 /**
@@ -323,11 +340,15 @@ async function readProduction<T extends QueryResultRow>(
  * `absent.ignored_at` in `SELECT_FROM`, which is null. Still one `select`.
  * tests/admin-feedback-store.test.ts runs it against a table with the column
  * and one without. docs/plans/261003j-….
+ *
+ * **`number` is read the same way** (261007d), with feedback-reporter.ts's
+ * `NUMBER_COLUMN`, and one `absent` supplies both nulls.
  */
 const COLUMNS =
   "f.id, f.owner_id, f.created_at, f.kind, f.url, f.slug, f.mirrored_at, f.sentry_event_id, " +
-  "(select ignored_at from (select f.*) as present) as ignored_at";
-const absentIgnoredAt = "cross join (select null::timestamptz as ignored_at) as absent";
+  `(select ignored_at from (select f.*) as present) as ignored_at, ${NUMBER_COLUMN} as number`;
+const absentIgnoredAt =
+  "cross join (select null::timestamptz as ignored_at, null::integer as number) as absent";
 /* A report id is unique only within one owner. Notes and queue sources carry
    no owner id, so coverage by id is safe only when the database says the id is
    globally unambiguous. The count deliberately ranges over the whole table,
@@ -347,10 +368,10 @@ export function listSql(table = "spideryarn.feedback"): string {
       where f.created_at >= $1
       order by f.created_at`;
 }
-export function showSql(table = "spideryarn.feedback"): string {
+export function showSql(table = "spideryarn.feedback", by: "id" | "number" = "id"): string {
   return `select ${COLUMNS}, f.body, ${idOccurrences(table)}
        from ${table} as f ${absentIgnoredAt}
-      where f.id = $1
+      where ${by === "id" ? "f.id" : NUMBER_COLUMN} = $1
       order by f.created_at`;
 }
 
@@ -374,11 +395,24 @@ async function list(since: Date): Promise<number> {
  * whoever filed it: an admin's report is trusted through
  * `feedback-reporter.ts`, which proves it — this does not.
  */
-async function show(id: string): Promise<number> {
-  const { target, rows } = await readProduction<StoredRow & { body: string }>(showSql(), [id]);
+async function show(report: ReportRef): Promise<number> {
+  if (typeof report === "number") {
+    /* Before the deploy that adds the column a number names nothing, and
+       "no report #212" would be a wrong answer to give for that. */
+    const deployed = await readProduction<{ numbered: boolean }>(NUMBERED_SQL, []);
+    if (deployed.rows[0]?.numbered !== true) {
+      console.log(`Target: ${deployed.target}`);
+      console.log(NUMBERS_NOT_DEPLOYED);
+      return 2;
+    }
+  }
+  const { target, rows } = await readProduction<StoredRow & { body: string }>(
+    showSql(undefined, typeof report === "number" ? "number" : "id"),
+    [report],
+  );
   console.log(`Target: ${target}`);
   if (rows.length === 0) {
-    console.log(`no report ${id} in production`);
+    console.log(`no report ${reportRefLabel(report)} in production`);
     return 1;
   }
   /* Ids are minted by the browser and unique only per owner, so one id can be
@@ -392,18 +426,19 @@ async function show(id: string): Promise<number> {
   return 0;
 }
 
-type Command = { kind: "list"; since: Date } | { kind: "show"; id: string };
+type Command = { kind: "list"; since: Date } | { kind: "show"; report: ReportRef };
 
 export function parseCommand(argv: readonly string[], now: Date = new Date()): Command {
   const [flag, value, ...rest] = argv;
   if (flag === undefined) return { kind: "list", since: parseSince("30d", now) };
   if (rest.length > 0 || value === undefined) {
-    throw new Error("usage: feedback-unswept.ts [--since 30d | 12h | <ISO date>] | --show spya-xxxxxx");
+    throw new Error("usage: feedback-unswept.ts [--since 30d | 12h | <ISO date>] | --show spya-xxxxxx | --show 212");
   }
   if (flag === "--since") return { kind: "list", since: parseSince(value, now) };
   if (flag === "--show") {
-    if (!/^spya-[a-z0-9]{6}$/.test(value)) throw new Error(`not a report id: ${JSON.stringify(value)}`);
-    return { kind: "show", id: value };
+    const report = parseReportRef(value);
+    if (report === null) throw new Error(`not a report id or number: ${JSON.stringify(value)}`);
+    return { kind: "show", report };
   }
   throw new Error(`unknown option ${flag}`);
 }
@@ -417,7 +452,7 @@ async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
   try {
-    return command.kind === "list" ? await list(command.since) : await show(command.id);
+    return command.kind === "list" ? await list(command.since) : await show(command.report);
   } catch (error) {
     console.error(
       error instanceof CannotTell ? error.message : "reading production failed unexpectedly (details withheld)",

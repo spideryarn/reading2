@@ -21,7 +21,10 @@ has no Sentry sign-in and did not write the Sentry status; the next feedback swe
 > this will all function correctly. and consider other related edge cases too.
 
 **Ending: Shipped.** On `dev`, not deployed. The design questions are a deferred half with their
-own queue entry (`qi-a8wyhr67`) and a line on [awaiting-approval.md](awaiting-approval.md).
+own queue entry (`qi-a8wyhr67`) and a question file, `docs/user-feedback/questions/q-bmt755.md`
+(moved there from `awaiting-approval.md` on 2026-10-07), which Greg sees and answers in the
+Feedback dialog
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
 
 What we did, in
 [261007f](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md):

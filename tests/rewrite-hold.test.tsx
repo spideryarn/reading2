@@ -1600,15 +1600,14 @@ describe.each(ROWS.filter((mode) => ["Sketch", "Illustrated"].includes(mode.name
   );
 });
 
-/* **A pin of a known-open defect, not a requirement** (GPT Sol's C4, plan
-   261007b § What is left; the form is tests/adversarial-shapes.test.ts's).
-   The command bar's *Run again* row posts its forced run straight through the
-   queue and knows nothing of the mode's hold, so with FAQ held it buys a
-   second run for the one result on screen. Read it as news if it goes red:
-   when the row is taken through the hold, invert the count and strike the
-   item from the plan. It drives the row's own action out of `besideTheModes`
-   rather than the drawn bar, so it says nothing about which rows are drawn. */
-it("pins C4: the command bar's Run again posts a second forced run over a held mode", async () => {
+/* **The command bar's *Run again* row asks the mode's hold** (GPT Sol's C4,
+   plan 261007b § Left; fixed in plan 261007i). Until then the row posted its
+   forced run straight through the queue, so with FAQ held it bought a second
+   run for the one result on screen; this test was a pin of that, and was seen
+   red in this form against the unfixed row (two POSTs, and the row went on to
+   Metadata). It drives the row's own action out of `besideTheModes` rather
+   than the drawn bar, so it says nothing about which rows are drawn. */
+it("the command bar's Run again refuses while the mode's rewrite is held (C4)", async () => {
   const { besideTheModes } = await import("../src/web/CommandBar.js");
   const { useJobs } = await import("../src/web/useJobs.js");
   const mode = ROWS.find((r) => r.step === "faq")!;
@@ -1629,15 +1628,19 @@ it("pins C4: the command bar's Run again posts a second forced run over a held m
   }).find((command) => command.kind === "action" && command.id === "rerun-faq");
   expect(again?.kind).toBe("action");
   if (again?.kind !== "action") return;
-  /* The row then navigates to Metadata; put the address back for whatever runs next. */
   const here = location.href;
-  await act(async () => void (await again.run()));
+  let outcome: Awaited<ReturnType<typeof again.run>> | undefined;
+  await act(async () => void (outcome = await again.run()));
+  const landed = location.href;
+  /* A row that ran would have gone to Metadata; put the address back for whatever runs next. */
   history.replaceState(null, "", here);
+  expect(outcome).toEqual({
+    kind: "stay",
+    message: "FAQ was just run again and hasn't loaded yet. Open it to see the result first.",
+  });
+  expect(landed).toBe(here);
   await expectHeld("the mode's own controls are still held");
-  expect(posted).toEqual([
-    { slug: SLUG, steps: ["faq"], force: ["faq"] },
-    { slug: SLUG, steps: ["faq"], force: ["faq"] },
-  ]);
+  expect(posted).toEqual([{ slug: SLUG, steps: ["faq"], force: ["faq"] }]);
 });
 
 /* ------------------------------------------------------ the membership guard --
@@ -1702,7 +1705,7 @@ const NOT_HELD: Record<string, string> = {
   "Metadata.tsx":
     "the Metadata page's *AI processing* re-run rows, not a mode's artefact hook: no artefact is on screen beside the button to be mistaken for the new one, and the row has a press latch of its own (§ `RerunRow`).",
   "CommandBar.tsx":
-    "the command bar's *Run again* rows, which are Metadata's re-runs reached by typing: the press leaves for the Metadata section, where the row above shows the job.",
+    "the command bar's *Run again* rows, which are Metadata's re-runs reached by typing: the press leaves for the Metadata section, where the row above shows the job. It asks a mode's hold before posting (`rewriteHeld`, plan 261007i) but has no artefact identity to take one of its own.",
   "StructureNotice.tsx":
     "the Structure notice's press for the real tree, with `RerunRow`'s press latch (§ `run`). The tree is part of the article, not a mode artefact with a read of its own for a hold to watch.",
   "ShelfEntry.tsx":

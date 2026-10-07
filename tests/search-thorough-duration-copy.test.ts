@@ -18,7 +18,9 @@ describe("thorough search duration copy", () => {
   });
 
   it("the /help Search section says about ten seconds", () => {
-    const src = read("src/web/help/help-modes.tsx");
+    /* The file as written, with its line breaks taken out: Help's words are
+       Markdown since 2026-10-07 and a sentence wraps where the file wraps. */
+    const src = read("src/web/help/pages/modes/search.md").replace(/\s+/g, " ");
     const i = src.indexOf("on a quick search runs the full meaning search");
     expect(i).toBeGreaterThan(-1);
     const passage = src.slice(i, i + 200);

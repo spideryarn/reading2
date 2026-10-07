@@ -272,15 +272,24 @@ export type Route =
    */
   | { kind: "changelog" }
   /**
-   * How to use it — `/help`: contents, a search box, and an anchor on every
-   * section. See help/HelpPage.tsx and docs/plans/261002b-help-page.md.
+   * How to use it — `/help`, the contents, and `/help/<page>`, one page of it.
+   * See help/HelpPage.tsx, docs/plans/261002b-help-page.md, and for the pages
+   * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+   * § Routing and old links.
+   *
+   * **`page` is the segment as it was typed, and the router does not judge
+   * it.** Whether it names a page, a page that has moved, or nothing at all is
+   * Help's to say (help/help-anchors.ts § `resolveHelpPage`), so this file
+   * imports none of Help and `/help/nonsense` gets Help's own answer, with
+   * the contents under it, rather than the app's *not found*. Absent for
+   * `/help` itself.
    *
    * Signed out for the reason `changelog` is: it is a page somebody is *sent*
-   * — `/help#spine` in a reply to a question — and nothing on it is about the
+   * — `/help/spine` in a reply to a question — and nothing on it is about the
    * reader's account. A link into Help that bounced a stranger to the sign-in
    * page would be a link that does not work.
    */
-  | { kind: "help" }
+  | { kind: "help"; page?: string }
   /**
    * Where the code lives, and what it is licensed under — `/opensource`. See
    * OpenSourcePage.tsx.
@@ -501,6 +510,8 @@ export function parseRoute(pathname: string): Route {
   for (const [href, kind] of STATIC_ROUTES) {
     if (new RegExp(`^${href}/?$`).test(pathname)) return { kind };
   }
+  const help = helpRoute(pathname);
+  if (help) return help;
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
@@ -776,10 +787,10 @@ export const CHANGELOG_HREF = "/changelog";
  */
 export const CHANGELOG_LABEL = "What’s new";
 /**
- * How to use it, section by section — linked from the footer. **Build a link
- * to one section with `helpHref` (help/help-anchors.ts), never by appending a
- * fragment to this**: `helpHref` takes a typed anchor, so a link to a section
- * that does not exist does not compile.
+ * How to use it: the contents of Help — linked from the footer. **Build a link
+ * to one page of it with `helpHref` (help/help-anchors.ts), never by appending
+ * to this**: `helpHref` takes a typed anchor, so a link to a page that does not
+ * exist does not compile.
  */
 export const HELP_HREF = "/help";
 /**
@@ -871,10 +882,25 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
   /* Same shape as `/changelog` above, and indifferent to order for the same
      reason: top level, sharing a prefix with nothing. */
   [OPENSOURCE_HREF, "opensource"],
-  // The same again. Its sections are fragments, not paths: `/help/spine` is
-  // nobody's address, so it falls through to `not-found` like any other.
-  [HELP_HREF, "help"],
+  /* `/help` was the last row here until 2026-10-07. It has pages under it
+     now (`/help/spine`), so its variant carries one and it is no longer an
+     address that is exactly itself: § `helpRoute`, below. */
 ] as const;
+
+/**
+ * **`/help`, or `/help/<one segment>`**, or null for anything else.
+ *
+ * One segment and no more: `/help/a/b` is nobody's address and falls through
+ * to `not-found`. The segment is decoded and handed over as it is, whether or
+ * not it names a page — see the `help` variant for why that is Help's call.
+ * A trailing slash is the same address at both lengths, as it is for every
+ * other route here (§ `parseRoute`).
+ */
+function helpRoute(pathname: string): Route | null {
+  const m = new RegExp(`^${HELP_HREF}(?:/([^/]+))?/?$`).exec(pathname);
+  if (!m) return null;
+  return m[1] === undefined ? { kind: "help" } : { kind: "help", page: safeDecode(m[1]) };
+}
 
 /**
  * The canonical address for "add this URL": `/add/<the URL, percent-encoded>`.

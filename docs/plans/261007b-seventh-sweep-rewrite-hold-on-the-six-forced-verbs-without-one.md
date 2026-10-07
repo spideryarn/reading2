@@ -229,6 +229,8 @@ tenth is the showcase"); it is not a hook and was not touched.
   going through `useRewriteHold`, reopening the completion-read gap for that run. The
   write-capable review reproduced and repaired the shared seam; see below.
 - **The command bar's *Run again* row buys a second run over a held mode** (GPT Sol's C4).
+  **Fixed on 2026-10-07 in [261007i](261007i-command-bar-run-again-row-honours-the-rewrite-hold.md)**;
+  the pin below is now the test of the fix. What follows is the finding as it stood.
   `CommandBar.tsx` § `rerunRows` posts `stepRunRequest(slug, step, { force: true })` straight
   through the queue and then navigates to Metadata; it never asks the mode's hold. **Reproduced at
   the row's action, not in the drawn bar:** with FAQ held (the rewrite finished, its GET still in
@@ -316,7 +318,8 @@ the prompt and the answer are beside this file
   speaks only once the server's job is finished (a job still going cannot be forgotten), and the
   read must start after a band has seen that. A job that succeeded and was trimmed is released by
   the same read, which carries the new identity.
-- **C4, the command bar's *Run again* bypasses every hold: not fixed, reproduced and pinned.** See
+- **C4, the command bar's *Run again* bypasses every hold: not fixed here, reproduced and pinned;
+  fixed afterwards in [261007i](261007i-command-bar-run-again-row-honours-the-rewrite-hold.md).** See
   § Left.
 
 One thing the review's own edit got wrong: its `key` on the test's adapter did not pass

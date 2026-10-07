@@ -103,7 +103,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
-| `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
+| `referee` | which of Referee's five sub-modes is open: `criteria` (the default), `claims`, `mirror`, `candidates` or `hidden` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
 | `learn` | which part of Learn is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [learn-mode.md](learn-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?learn=quiz` |
@@ -638,7 +638,12 @@ flew over on the way. `POSITION_SETTLE_MS` is 300ms.
 
 `?at=` always holds a **block id**. Ordinary scrolling writes the id of the **first block of the
 section the reader is in** — depth `leafDepth - 1`, what the reader sees called "Sections"
-(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). A deliberate jump may name a finer block, and the spy preserves it while the reader
+(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). **When that first block is hidden,
+the section's first visible block is written instead**: a section that starts in the front matter
+folded away under the title is written as the first block after it, and an id a fold has since
+hidden is replaced by the folded heading (`visibleFrom` in [`fold.ts`](../../src/web/fold.ts)), so
+that restoring `?at=` never opens something the reader did not open. A deliberate jump may name a
+finer block, and the spy preserves it while the reader
 stays inside that block's section; that is the paragraph below on what the spy writes. Three things
 follow from the unit the spy works in:
 

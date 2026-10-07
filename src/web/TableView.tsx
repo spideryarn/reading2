@@ -71,6 +71,7 @@ import {
 } from "./zoomable.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
+import { frontMatter } from "./front-matter.js";
 import { FoldToggle } from "./FoldToggle.js";
 import { mastheadEcho } from "./masthead-echo.js";
 
@@ -796,9 +797,22 @@ function TableViewInner({
     () => mastheadEcho({ blocks, meta: { title }, titleOverridden }),
     [blocks, title, titleOverridden],
   );
+  /* **The byline blocks under the title start folded away** (Greg,
+     spya-duh4w3: *"default collapse them so that you kind of jump straight
+     into the article itself"*). Hidden the way the echo is, through the fold
+     store, but the reader can open them: the masthead's "Show authors and
+     details", or a jump to one of them (fold.ts § The front matter). Owner
+     and visitor alike. Keyed on the two fields of `meta` the rule reads, so
+     an unrelated change to `meta` does not hand the store a new array.
+     docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md */
+  const { authors, byline } = article.meta;
+  const front = useMemo(
+    () => frontMatter({ blocks, meta: { authors, byline } }, echo),
+    [blocks, authors, byline, echo],
+  );
   /* Which article the fold store is about, and ⌘⌥T — fold.ts. Subscribes to
      nothing, so folding never re-renders this table; the chevrons do that. */
-  useFoldArticle(slug, blocks, echo);
+  useFoldArticle(slug, blocks, echo, front);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html

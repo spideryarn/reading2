@@ -1,6 +1,7 @@
 ---
 reports: spya-caue42
 ending: shipped
+comment: Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?
 ---
 
 # Debate: Reception and Claims sub-modes, and a tidier panel
@@ -28,3 +29,7 @@ Not built, each queued:
   On this paper the open web has no discussion to find and 39 papers cite it, so this is what
   would answer "how has it been received".
 - A run that fails on an unclosed fence: qi-3vrt4czt.
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-sn37bt.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

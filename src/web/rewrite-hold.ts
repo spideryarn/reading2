@@ -134,6 +134,18 @@ function drop(key: string, hold: Hold): void {
 }
 
 /**
+ * **Whether a forced run of `step` is held** — the same check `run` makes
+ * before it posts, for a press that is not a mode hook's: the command bar's
+ * *Run again* row (CommandBar.tsx § `rerunRows`), which until plan 261007i
+ * posted beside the hold and bought a second run for one result. A hold whose
+ * job ended while no band was mounted stays up until a band reads again, so
+ * a caller that refuses here says how to release it: open the mode.
+ */
+export function rewriteHeld(slug: string, step: StepName): boolean {
+  return holdAt(keyOf(slug, step)) !== null;
+}
+
+/**
  * **A read's start number, and whether what landed was the server's word.**
  *
  * The bookkeeping a mode's read keeps for the hold, and nothing else about the

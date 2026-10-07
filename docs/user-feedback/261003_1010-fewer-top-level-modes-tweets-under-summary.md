@@ -2,6 +2,7 @@
 reports: spya-thpsnd
 ending: shipped
 parts: 3
+comment: Part 1 of 3 shipped: Tweets is now Summary's Thread. Two questions from it are queued for you: one bar button that opens a menu of the list modes, and whether to stop writing the Simple level.
 ---
 # Fewer top-level modes: Tweets becomes Summary's Thread
 

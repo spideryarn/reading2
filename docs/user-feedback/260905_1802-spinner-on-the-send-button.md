@@ -1,6 +1,7 @@
 ---
 reports: spya-vgwt4z
 ending: declined
+comment: No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).
 ---
 # A spinner on the feedback Send button
 

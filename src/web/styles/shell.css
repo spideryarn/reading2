@@ -421,8 +421,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 /* The fold-all at the end of the line (FoldToggle.tsx § `FoldAllButton`, plan
    261002e): the line's own size and colour, a dotted word rather than a box,
-   the way `.author-name` below reads. A button, so the dot rule above skips it. */
-.facts > .fold-all {
+   the way `.author-name` below reads. A button, so the dot rule above skips it.
+   "Show authors and details" beside it is drawn the same (§ `FrontMatterButton`,
+   plan 261007d). */
+.facts > .fold-all,
+.facts > .front-matter-toggle {
   margin-left: 0.6rem;
   padding: 0;
   border: 0;
@@ -433,7 +436,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   cursor: pointer;
 }
 .facts > .fold-all:hover,
-.facts > .fold-all:focus-visible { color: var(--highlight-text); }
+.facts > .fold-all:focus-visible,
+.facts > .front-matter-toggle:hover,
+.facts > .front-matter-toggle:focus-visible { color: var(--highlight-text); }
 
 /* One author in the masthead or on the Metadata page: a name first, a link
    second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */

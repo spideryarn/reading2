@@ -332,7 +332,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
 
         {/* ------------------------------------------------- for peer reviewers -- */}
         <H2 eyebrow="A mode for one job">For peer reviewers.</H2>
-        {/* docs/project/referee-mode.md, its title and its four sub-modes; the
+        {/* docs/project/referee-mode.md, its title and its five sub-modes; the
             confidentiality sentence is the one the mode itself shows. */}
         <Showcase shot={SHOTS.referee} title="Referee mode." mode="referee" offset under>
           Helps a referee read a paper without reading it for them. Your own criteria, streamed

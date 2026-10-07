@@ -38,7 +38,9 @@ const SAMPLES: Record<Route["kind"], readonly string[]> = {
   pricing: ["/pricing"],
   contact: ["/contact"],
   changelog: ["/changelog"],
-  help: ["/help"],
+  /* A page of Help, and an address under it that names none: the router
+     gives Help both, and Help draws its contents at the second. */
+  help: ["/help", "/help/", "/help/spine", "/help/spine/", "/help/questions", "/help/nonsense"],
   opensource: ["/opensource"],
   callback: ["/auth/callback"],
   "not-found": [
@@ -50,7 +52,7 @@ const SAMPLES: Record<Route["kind"], readonly string[]> = {
     "/read//a-piece",
     "/reset/a-secret-token",
     "/features/unknown",
-    "/help/extra",
+    "/help/a/b",
   ],
 };
 
@@ -94,6 +96,21 @@ describe("feedbackPageLabel", () => {
       "/add",
     );
     expect(feedbackPageLabel("https://www.spideryarn.com/add")).toBe("/add");
+  });
+
+  /* A report filed from a page of Help says it came from Help, and not which
+     page: the segment is whatever was typed after `/help/`, and Help draws
+     itself there whether or not it names anything, so it is somebody's
+     arbitrary text exactly as an unrecognised path is. GPT Sol, plan review
+     of 261007e, R2. */
+  it("says only /help for any page of Help, real or not, and never the segment", () => {
+    expect(feedbackPageLabel("https://www.spideryarn.com/help")).toBe("/help");
+    expect(feedbackPageLabel("https://www.spideryarn.com/help/spine")).toBe("/help");
+    expect(feedbackPageLabel("https://www.spideryarn.com/help/questions#faq-older-profile")).toBe("/help");
+    expect(feedbackPageLabel("https://www.spideryarn.com/help/nonsense")).toBe("/help");
+    expect(feedbackPageLabel("https://www.spideryarn.com/help/a-secret-token/")).toBe("/help");
+    expect(feedbackPageLabel("https://www.spideryarn.com/help/a/b")).toBeNull();
+    expect(feedbackPageLabel("https://www.spideryarn.com/helpful")).toBeNull();
   });
 
   /* GPT Sol's plan review, P1: a reader can file from any address, and the

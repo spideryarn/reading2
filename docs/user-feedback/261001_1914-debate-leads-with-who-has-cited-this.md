@@ -1,6 +1,7 @@
 ---
 reports: spya-zuk4f7
 ending: shipped
+comment: Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.
 ---
 
 # Debate leads with who has cited this article
@@ -16,7 +17,7 @@ SPIDERYARN-READING2-9D · report `spya-zuk4f7` · suggestion from Greg (admin, p
 > mode also includes stuff like, oh, you know, are the claims corroborated? but I'd say that's
 > secondary.
 
-**Ending: shipped (stage 1); stage 2 awaiting Greg.** Rows about the piece already led the panel;
+**Ending: shipped.** Rows about the piece already led the panel;
 on a well-known paper there were almost none. Replaying what the model said showed it often found
 the right replies and our checks threw them away: we checked quotes against only the first of
 several extracts the search returned for a page (a bug —
@@ -25,6 +26,7 @@ and its "this names the article" quote often left out the title. Stage 1 fixes b
 search for work that cites the piece. Over twelve paid runs on two papers, the rows kept about the
 piece went from 4 to 10, and they are the published critiques and replies.
 
-Listing every citer needs a citation index, a new outside service, so stage 2 is Greg's call. It is
-on [awaiting-approval.md](awaiting-approval.md) and in the Overseer's queue:
-[261002i](../plans/261002i-debate-leads-with-who-has-cited-this-article.md).
+Greg chose OpenAlex on 2026-10-04. Debate now sends the article's DOI to it and shows its count and
+list of citing papers. The decision and both stages are in
+[261002i](../plans/261002i-debate-leads-with-who-has-cited-this-article.md); the OpenAlex work is
+recorded in [261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md).

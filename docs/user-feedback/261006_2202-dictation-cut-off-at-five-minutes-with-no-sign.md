@@ -1,6 +1,7 @@
 ---
 reports: spya-n8cuqq
 ending: shipped
+comment: Shipped: dictation runs fifteen minutes and warns before it stops. Still waiting on you: should Feedback take fifteen minutes of non-stop speech? It takes 12,000 characters now; 20,000 means raising the database's own cap.
 ---
 # Dictation cut off at five minutes, with no sign
 
@@ -29,3 +30,7 @@ Not deployed: the Overseer deploys.
   at any pace. That means raising the database's own cap on a report, which the code describes as
   what stops a pasted article reaching Sentry, so it was written up and not built: queue item
   qi-8qvg5gwv, and a line in [awaiting-approval.md](awaiting-approval.md).
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-sa4yuq.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

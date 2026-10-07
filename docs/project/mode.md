@@ -736,7 +736,8 @@ walks `MODES` and requires the new mode to be named a producer or a non-producer
 guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to make the compiler
 stop.
 
-**Since 2026-10-02 the Help page asks too**, with two more `Record<Mode, …>` tables in
-`src/web/help/`: the mode's own section (when to use it, how to read it) and its row in *Which mode
-when*. Write them for a reader, not a developer — [help-page.md](help-page.md). Retiring a mode keeps
-its `#mode-…` link working on its own, through `RETIRED_MODES`.
+**Since 2026-10-02 Help asks too**, with two more `Record<Mode, …>` tables in `src/web/help/`: the
+mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (when to use it, how to read
+it), and its row in *Which mode when*. Write them for a reader, not a developer —
+[help-page.md](help-page.md). Retiring a mode keeps its `/help/mode-…` link working on its own,
+through `RETIRED_MODES`.

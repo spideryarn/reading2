@@ -371,7 +371,8 @@ describe("the stylesheet backs the ladder", () => {
         `${rung} does not hide Feedback's word`,
       ).toBe(true);
       /* Help, beside Feedback since 2026-10-02 (261002b, R5): app-level, so
-         its word goes with theirs. On a visitor's bar only since 2026-10-04. */
+         its word goes with theirs. On every bar again since 2026-10-07
+         (261007e), after three days on a visitor's only. */
       expect(
         here.some((x) => x.includes(".dock-help") || x === `.dock.${rung} .dock-btn-label`),
         `${rung} does not hide Help's word`,
