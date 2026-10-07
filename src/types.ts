@@ -6222,12 +6222,14 @@ export type CrossrefsFound = CrossrefsResponse;
 
 /**
  * **"If it has not been made yet, say so with `200 null`, not a 404."** A
- * request header, sent with any value, on ten artefact reads: `GET
- * /api/<name>/:slug` for quiz, crossrefs and citations — the three every
- * owner's article view makes whichever mode is open — and, since plan 261006h,
- * simple, ideas, faq, timeline, debate, glossary and quotes.
+ * request header, sent with any value, on every artefact read, `GET
+ * /api/<name>/:slug`: quiz, crossrefs and citations — the three every owner's
+ * article view makes whichever mode is open — then, in plan 261006h, simple,
+ * ideas, faq, timeline, debate, glossary and quotes, and in plan 261007n
+ * tweets, relations, skim, sketch, illustrated and arc. The list is
+ * src/store/artefact-not-made-yet.ts.
  *
- * "Not made yet" is the ordinary answer to all ten, and a browser prints
+ * "Not made yet" is the ordinary answer to all sixteen, and a browser prints
  * every 4xx in red, so an ordinary page load showed failures that were not
  * failures. A header rather than `200 null` for everybody because a tab left
  * open across the deploy reads `loaded.quiz` or `loaded.ideas.…` off the body
@@ -6235,14 +6237,11 @@ export type CrossrefsFound = CrossrefsResponse;
  * because the offline cache and several tests match these URLs by a pattern
  * that ends at the slug. "No such article" is a 404 either way.
  *
- * **Not every artefact read.** Six still answer a 404 whatever is sent; they
- * are named, with what is left to do for each, in
- * src/store/artefact-not-made-yet.ts, which is the one list.
- *
  * The server's half is `orNullWhenNotMadeYet` in src/routes.ts. It goes, and
  * `200 null` becomes unconditional, the day there is a client-version
  * boundary. docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md,
- * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md.
+ * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md,
+ * docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md.
  */
 export const NONE_YET_AS_NULL_HEADER = "x-spideryarn-none-yet-as-null";
 

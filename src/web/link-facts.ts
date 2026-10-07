@@ -262,6 +262,8 @@ let shelfFailed = false;
  */
 let shelfInstalled = 0;
 let shelfRead = 0;
+/** Changes only when the reader changes, so mounted lookups ask for the new shelf. */
+let shelfGeneration = 0;
 
 /**
  * Told whenever the shelf map is replaced, so a card already on screen can
@@ -269,7 +271,7 @@ let shelfRead = 0;
  *
  * A bare listener set rather than a store: the answer is derived during render
  * from the module cache (see `useLinkFacts`), so all a subscriber needs is a
- * poke. `useLinkFacts` is the only subscriber today.
+ * poke. `useLinkFacts` and `useShelfEntry` subscribe.
  */
 const shelfWatchers = new Set<() => void>();
 
@@ -362,6 +364,7 @@ function applyShelf(): Promise<boolean> {
  * and installs.
  */
 function forgetShelf(): void {
+  shelfGeneration += 1;
   shelf = undefined;
   shelfPending = null;
   shelfFailed = false;
@@ -417,6 +420,52 @@ function loadShelf(): Promise<void> {
  */
 export function refreshShelf(): Promise<boolean> {
   return applyShelf();
+}
+
+/**
+ * What the shelf says about one address: still being asked, the reader's own
+ * article there, or none we can see. *Absent* covers "could not be read" too,
+ * because that read is not retried this session (`loadShelf`) and a caller
+ * waiting on it would wait for ever.
+ */
+export type ShelfLookup = { kind: "asking" } | { kind: "held"; entry: LibraryEntry } | { kind: "absent" };
+
+/**
+ * **The reader's own article at this address.** Pass null to ask nothing at
+ * all, which answers `absent`.
+ *
+ * `asking` is its own answer so that a caller can draw nothing rather than
+ * guess: the private-copy offer used to show *Add* for the seconds the shelf
+ * took, then flip to *Open your copy*, inviting a press on the wrong one
+ * (browser check, plan 261007m).
+ *
+ * The same module shelf the hover card reads, so one request serves both, and
+ * the reader-change fence below covers it. Derived during render from that
+ * cache, as `useLinkFacts` is, so the answer cannot belong to an earlier `url`.
+ * The private-copy offer on a public article is the caller (PublicChrome.tsx §
+ * `privateCopyOffer`).
+ */
+export function useShelfEntry(url: string | null): ShelfLookup {
+  const generation = shelfGeneration;
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: generation restarts a mounted lookup after the reader-change fence empties the shelf.
+  useEffect(() => {
+    if (!url) return;
+    let live = true;
+    const wake = () => {
+      if (live) bump();
+    };
+    const unwatch = watchShelf(wake);
+    void loadShelf().then(wake);
+    return () => {
+      live = false;
+      unwatch();
+    };
+  }, [url, generation]);
+  if (!url) return { kind: "absent" };
+  if (shelf === undefined) return shelfFailed ? { kind: "absent" } : { kind: "asking" };
+  const entry = shelf.get(urlKey(url));
+  return entry ? { kind: "held", entry } : { kind: "absent" };
 }
 
 /* -------------------------------------------------------------- wikipedia -- */

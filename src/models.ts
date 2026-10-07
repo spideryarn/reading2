@@ -743,6 +743,12 @@ export type Task =
      nobody can find later — the mistake `quiz-mark` exists to have stopped
      making. */
   | "referee-mirror"
+  /* Hidden text's Opus check — the scan's flagged rows, never the article, one
+     opinion per row, only when the referee presses for it
+     (docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md,
+     src/referee-hidden-check.ts). Its own task for `referee-mirror`'s reason:
+     spend billed under another job's name is spend nobody can find later. */
+  | "referee-hidden-check"
   /* One of the referee's own criteria, run over the paper —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1. Search's shape
      (one JSON object, passages by block id) and, on a `literature` criterion,
@@ -1133,6 +1139,8 @@ export const TASK_TIER: Record<Task, Tier> = {
   "dig-deeper-search": "quick",
   search: "capable",
   "referee-mirror": "capable",
+  /* Capable, and on Opus for every article: `ALWAYS_HIGH_POWER` below. */
+  "referee-hidden-check": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
      block ids, which is the same job of work. */
   "referee-criteria": "capable",
@@ -1213,11 +1221,19 @@ export const TASK_TIER: Record<Task, Tier> = {
  * stays: Opus still made a fault only it caught.
  * docs/plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md.
  *
+ * `referee-hidden-check` (plan 261007l): the feature is "hand it to Opus", so
+ * it is Opus whatever the article's setting.
+ *
+ * **Membership alone does nothing at a call site**: `modelFor` does not apply
+ * `powerFor`, so a caller that wants this has to resolve
+ * `modelFor(task, powerFor(task, articlePower))` itself, as
+ * src/referee-hidden-check.ts § `defaultModel` and the `simple` step do.
+ *
  * Removing a task puts it back on the article's setting. A stored artefact
  * stays fresh either way, because `generationKey` treats the two models as one
  * generation.
  */
-export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple"]);
+export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple", "referee-hidden-check"]);
 
 /** The power `task` runs at on an article whose own setting is `articlePower`. */
 export function powerFor(task: Task, articlePower: ModelPower): ModelPower {
@@ -1401,6 +1417,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "simple-check": "chat",
   search: "chat",
   "referee-mirror": "chat",
+  "referee-hidden-check": "chat",
   "referee-criteria": "chat",
   "referee-claims": "chat",
   "referee-candidates": "chat",
@@ -1573,6 +1590,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      would make the arm and the shipped path different things. */
   "pdf-frontmatter": "SPIDERYARN_PDF_FRONTMATTER_MODEL",
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
+  "referee-hidden-check": "SPIDERYARN_REFEREE_HIDDEN_CHECK_MODEL",
   "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
   "referee-claims": "SPIDERYARN_REFEREE_CLAIMS_MODEL",
   "referee-candidates": "SPIDERYARN_REFEREE_CANDIDATES_MODEL",

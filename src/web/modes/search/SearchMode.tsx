@@ -39,6 +39,7 @@ import { useMadeFor } from "../../lib/made-for.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
 import { SearchPanel } from "../../SearchPanel.js";
+import type { PrivateCopyFacts } from "../../PublicChrome.js";
 import {
   type BandTyping,
   searchDraftFor,
@@ -547,6 +548,7 @@ export function VisitorSearchBand({
   onFound,
   openHit,
   onOpenHit,
+  copy,
 }: {
   searches: SavedSearch[];
   blocks: Article["blocks"];
@@ -554,6 +556,8 @@ export function VisitorSearchBand({
   onFound(next: Found[]): void;
   openHit: string | null;
   onOpenHit(next: string | null): void;
+  /** For the private-copy offer in the panel (SearchPanel.tsx § `SearchAccess`). */
+  copy: PrivateCopyFacts;
 }) {
   useRenderCount("VisitorSearchBand");
   const { panel } = useSearchMode({
@@ -565,7 +569,7 @@ export function VisitorSearchBand({
     openHit,
     onOpenHit,
   });
-  return <SearchPanel {...panel} access={{ kind: "visitor" }} />;
+  return <SearchPanel {...panel} access={{ kind: "visitor", copy }} />;
 }
 
 /**

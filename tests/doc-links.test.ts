@@ -709,7 +709,15 @@ function resolveCodePath(from: string, written: string): Target | null {
   const rel = path.isAbsolute(written) ? repoRelative(written) : written;
   if (path.isAbsolute(rel)) return null;
   const candidates = [rel, path.join(path.dirname(from), rel), path.join("src", rel), path.join("src/web", rel)];
-  const file = candidates.map((p) => path.normalize(p)).find(existsSync);
+  // Every candidate is read relative to the repo root, which is the cwd here,
+  // and one that climbs out of it is not this repo's file. The deploy runs the
+  // suite in `/tmp/spideryarn-deploy-*/tree`, so a doc's `../../package.json`,
+  // tried as written from the cwd, was `/tmp/package.json`: a stranger's file,
+  // which then failed `holds`.
+  const file = candidates
+    .map((p) => path.normalize(p))
+    .filter((p) => p !== ".." && !p.startsWith(`..${path.sep}`))
+    .find(existsSync);
   if (file) return { file };
   const root = path.normalize(rel).split(path.sep)[0] ?? "";
   return REPO_ROOTS.includes(root) ? { missing: rel } : null;
@@ -823,6 +831,13 @@ describe("evergreen docs cite code by symbol, not by line", () => {
     expect(symbols("[the parser](../../src/blocks.ts) § `nonsuch`")).toEqual([["src/blocks.ts", "nonsuch"]]);
     expect(symbols("`src/x.ts` § `gone`")).toEqual([["src/x.ts — no such file", "gone"]]);
     expect(symbols("database.md § heading")).toEqual([]);
+    // A doc-relative link is not tried from the cwd as well, where it can climb
+    // out of the repo and land on some other file of the same name. Here the
+    // climb lands back on this checkout by its directory name, so the file
+    // always exists and the control cannot pass by luck.
+    const outside = `../${path.basename(process.cwd())}/package.json`;
+    expect(existsSync(outside)).toBe(true);
+    expect(symbols(`[\`package.json\`](${outside}) § \`scripts\``)).toEqual([]);
 
     // `holds` is the filter behind the assertion below; a filter that let
     // everything through would leave that list empty too. Not tried against

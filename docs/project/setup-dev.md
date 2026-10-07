@@ -523,6 +523,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
 | `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Learn's quiz |
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
+| `SPIDERYARN_REFEREE_HIDDEN_CHECK_MODEL` | Hidden text's *Ask Opus about these*, an opinion on each row the source scan flagged. Opus whatever the article's High-powered AI setting, unless this is set ([referee-mode.md](referee-mode.md)) |
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |

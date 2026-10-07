@@ -44,6 +44,8 @@ import { markAnswerStream } from "../src/quiz-mark.js";
 import { runClaimsStream } from "../src/referee-claims-run.js";
 import { runCriterionStream } from "../src/referee-criteria-run.js";
 import { mirrorStream } from "../src/referee-mirror.js";
+import { hiddenCheckStream } from "../src/referee-hidden-check.js";
+import { grouped } from "../src/scan-groups.js";
 import { findPassagesStream } from "../src/search.js";
 import type { Block, BlockId, Comment, Meta } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -100,6 +102,12 @@ const RUNNERS: Record<string, () => AsyncIterable<unknown>> = {
       config: { kind: "single" },
     }),
   "src/referee-mirror.ts": () => mirrorStream({ power: "standard", blocks, comments: [COMMENT] }),
+  /* One flagged row, because a check over none is no model call at all. */
+  "src/referee-hidden-check.ts": () =>
+    hiddenCheckStream({
+      power: "standard",
+      groups: grouped([{ kind: "colour-on-background", where: "body > p", text: "Hidden words.", detail: "color: #fff" }]),
+    }),
 };
 
 async function drain(events: AsyncIterable<unknown>): Promise<void> {

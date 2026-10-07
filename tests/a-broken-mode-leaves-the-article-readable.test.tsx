@@ -493,9 +493,20 @@ function reply(url: string, method: string): Response {
      **And the reads that check their reply has its artefact**, for the same
      reason: citations since plan 261006g, and Simple, FAQ, Timeline and
      Debate since 261006h, each of which the fall-through's `{}` is now a
-     reported fault for rather than an `undefined` quietly published. */
-  if (/^\/api\/(glossary|quotes|quiz|citations|simple|faq|timeline|debate)\//.test(url)) {
+     reported fault for rather than an `undefined` quietly published — and
+     Tweets, Relations, Skim, Sketch and Illustrated since 261007n. */
+  if (/^\/api\/(glossary|quotes|quiz|citations|simple|faq|timeline|debate|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
     return new Response(null, { status: 404 });
+  }
+  /* **Arc too since 261007n, but as one that is there**: a missing arc starts
+     a job on every owned article (useArc.ts), and the cases below count the
+     POSTs a retry or a change of reader must not make. */
+  if (url.startsWith("/api/arc/")) {
+    return json({
+      arc: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash", generatedAt: "2026-09-01T09:00:00.000Z", elapsedMs: 1, entries: [] },
+      stale: false,
+      outdated: false,
+    });
   }
   if (url.startsWith("/api/ideas/")) return json(IDEAS_BODY);
   if (url === "/api/jobs") return json({ jobs: [] });

@@ -1,7 +1,7 @@
 ---
 id: q-cspj2t
 report: spya-rgq3f6
-status: open
+status: answered
 asked: 2026-10-07
 title: One line in AGENTS.md: controls that do the same job look the same
 refs: SPIDERYARN-READING2-E5 · qi-9sv8cha4 · docs/plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md · docs/user-feedback/261006_2142-design-system-refresh-controls-that-look-the-same-in-every-mode.md
@@ -23,3 +23,9 @@ C. Leave AGENTS.md alone. controls.md and /design carry the aim, and the tests a
 What would decide it: how much you want each new mode to start from the shared pieces, against the cost of words in a file every agent reads.
 
 Recommended: B. It's the smallest line that still reaches an agent adding a mode, and the detail stays in controls.md, where it is kept up to date.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> yes to 20-word plus signposting
+
+B, applied to AGENTS.md § Writing code.
