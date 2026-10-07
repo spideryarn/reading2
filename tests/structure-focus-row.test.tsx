@@ -188,3 +188,52 @@ describe("Structure's current row when the first section starts on the masthead'
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
   });
 });
+
+/**
+ * **A section that starts inside the shut front matter** (front-matter.ts;
+ * Greg, spya-duh4w3;
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § Sections that start inside the run). A front-matter row is hidden through
+ * the fold store without being folded away, so a section that starts on one
+ * and carries on past it is still the one in focus, and one wholly inside the
+ * run loses the tie to the section whose row is on screen.
+ */
+describe("Structure's current row when a section starts in the shut front matter", () => {
+  const T = "spya-tttttt";
+  const R = "spya-rrrrrr";
+  const V = "spya-vvvvvv";
+  const blocks = [
+    { id: T, kind: "heading", tag: "h1", level: 1 },
+    { id: R, kind: "text", tag: "p" },
+    { id: V, kind: "text", tag: "p" },
+    { id: B, kind: "text", tag: "p" },
+  ] as Block[];
+  const at = (row: number, blockId: string, n: number) =>
+    ({ row, blockId, nodeId: `n000${n}`, title: `S${n}`, titleVoice: "ai" }) as Section;
+
+  /** The hidden rows `T` and `R` sit, at no height, at the top of `V`. */
+  function place(tops: Record<string, number>): void {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const top = tops[this.dataset.block ?? ""] ?? 0;
+      return { top, bottom: top + 20, height: 20 } as DOMRect;
+    });
+  }
+
+  beforeEach(() => setFoldArticle("slug", blocks, new Set([T as BlockId]), [R as BlockId]));
+
+  it("is that section while the reader is in the part of it that shows", () => {
+    /* The section is R and V. Its hidden start ties with V, above the line at 80. */
+    place({ [T]: 20, [R]: 20, [V]: 20, [B]: 150 });
+    act(() => root.render(<Harness sections={[at(0, T, 1), at(1, R, 2), at(3, B, 3)]} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("1");
+  });
+
+  it("is never a section that is wholly inside the run", () => {
+    /* The section is R alone. V starts the next one, on the same pixel. */
+    place({ [T]: 20, [R]: 20, [V]: 20, [B]: 150 });
+    act(() => root.render(<Harness sections={[at(0, T, 1), at(1, R, 2), at(2, V, 3), at(3, B, 4)]} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("2");
+  });
+});

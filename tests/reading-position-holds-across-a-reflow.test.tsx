@@ -47,7 +47,7 @@ import {
   glideTarget,
   scrollToBlock,
 } from "../src/web/scroll.js";
-import { clearFoldArticle, setFoldArticle, toggleFold } from "../src/web/fold.js";
+import { clearFoldArticle, isFolded, setFoldArticle, toggleFold } from "../src/web/fold.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
 
 enableHistorySync();
@@ -112,14 +112,14 @@ let host: HTMLDivElement;
 let root: Root;
 
 /** The hook under test, with `layoutKey` driven from a prop. */
-function Harness({ layoutKey }: { layoutKey: string }): ReactNode {
-  useReadingPosition(SECTIONS, BLOCKS, layoutKey);
+function Harness({ layoutKey, sections }: { layoutKey: string; sections: Section[] }): ReactNode {
+  useReadingPosition(sections, BLOCKS, layoutKey);
   return null;
 }
 
-function render(layoutKey: string): void {
+function render(layoutKey: string, sections: Section[] = SECTIONS): void {
   act(() =>
-    root.render(createElement(NuqsAdapter, null, createElement(Harness, { layoutKey }))),
+    root.render(createElement(NuqsAdapter, null, createElement(Harness, { layoutKey, sections }))),
   );
 }
 
@@ -464,5 +464,91 @@ describe("an article whose first rows are the masthead's echo", () => {
     render("k");
     await settle();
     expect(scrollY).toBe(0);
+  });
+});
+
+/**
+ * **A section that starts inside the shut front matter** (front-matter.ts;
+ * Greg, spya-duh4w3;
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § Sections that start inside the run). Row 0 is the echo and rows 1 to 3 the
+ * front matter, all four drawn at no height. A section whose first block is in
+ * the run and which carries on past it is on screen, so it is the one named;
+ * but `?at=` is restored through `scrollToBlock`, which opens the run for any
+ * block of it. So it is named by its first *visible* block (fold.ts §
+ * `visibleFrom`), and a reload or a turned phone leaves the front matter shut.
+ */
+describe("an article whose front matter is shut", () => {
+  const section = (row: number, n: number): Section => ({
+    row,
+    blockId: block(row),
+    nodeId: `n000${n}` as NodeId,
+    title: `Section ${n}`,
+    titleVoice: "ai",
+  });
+  /** The byline and the abstract as one section: it starts on row 2, hidden, and runs to row 11. */
+  const SPANNING = [section(0, 1), section(2, 2), section(12, 3), section(24, 4)];
+  /** A section that is rows 1 to 3 and nothing else: wholly hidden. */
+  const WHOLLY = [section(0, 1), section(1, 2), section(4, 3), section(12, 4)];
+  const front = [block(1), block(2), block(3)];
+
+  beforeEach(() => {
+    echoRows = 4;
+    setFoldArticle("x", BLOCKS, new Set([block(0)]), front);
+  });
+
+  it("names the section the reader is in by its first visible block", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    expect(isFolded(block(2))).toBe(true);
+  });
+
+  it("goes on naming it as the reader moves through it, and the next one after", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    window.scrollTo({ top: 9 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    window.scrollTo({ top: 13 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(12));
+  });
+
+  it("leaves the front matter shut when the phone is turned in that section", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("portrait", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    rowHeight = LANDSCAPE;
+    render("landscape", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+    expect(atNow()).toBe(block(4));
+  });
+
+  it("never names a section that is wholly inside the run", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", WHOLLY);
+    await settle();
+    window.scrollTo({ top: 5 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    expect(isFolded(block(1))).toBe(true);
+  });
+
+  it("opens the front matter for a link that names one of its blocks", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    render("k", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+    expect(isFolded(block(0))).toBe(true); // the echo stays
   });
 });

@@ -28,7 +28,7 @@ import { positionToWrite, type Section } from "../position.js";
 import { beginJump, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFoldedAway, subscribeFold } from "../fold.js";
+import { isFoldedAway, subscribeFold, visibleFrom } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -189,8 +189,16 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         },
       });
       if (next === null) return;
-      synced.current = next.at;
-      void setAt(next.at);
+      /* **A section that starts in the shut front matter is written as its
+         first visible block** (fold.ts § `visibleFrom`; Greg, spya-duh4w3).
+         The restore effect and the re-anchor above both go through
+         `scrollToBlock`, which opens the front matter for any block of it: a
+         reload, or a turned phone, would have opened it under a reader who was
+         in the abstract. A finer block inside the section is a value this spy
+         already leaves standing (position.ts § `positionToWrite`). */
+      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId);
+      synced.current = at;
+      void setAt(at);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);

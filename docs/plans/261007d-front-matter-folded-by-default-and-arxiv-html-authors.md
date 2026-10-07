@@ -197,6 +197,63 @@ such block changes the rule, not the count. Counted too: comments, highlights an
 anchored in a run. Forty-nine articles cannot prove a rule for every future import, which is why
 the rule needs positive evidence per block and fails towards showing.
 
+**Built 2026-10-07, and what the building changed.**
+
+- **`?at=` names such a section by its first visible block** (the "likely shape" above was wrong
+  for the reading position, and the builder found it red). The spy wrote the section's hidden
+  first block; a reload, or turning a phone, restores `?at=` through `scrollToBlock`, which opens
+  the run, so the front matter opened under a reader who was in the abstract. The spy now writes
+  `visibleFrom(id)`, the first block after the run. A pasted link that names a run block still
+  opens the run.
+- **One store question, `visibleFrom(id)`**, in place of a predicate about sections (Sol's F3
+  said a range-aware predicate was required; it was not). `steppableStarts` in `keynav.ts` maps
+  each start through it and merges two that land on the same row, which is how a section wholly
+  inside the run is stepped over.
+- **The control goes by what is on screen**: `frontOpen` is false while a real fold covers the
+  run, so a press always shows something.
+- **A run never ends on a heading**: a trailing `Authors` label is not folded away from lines
+  still showing under it.
+- **What moved in the rule, each on the measurement:**
+  - names are taken from `meta.byline` split on `; , &` and ` and `, with footnote marks off each
+    piece, not on `;` alone. Eight production papers open with exactly the PDF's own byline line
+    (`Taylor Webb1,*, Keith J. Holyoak1 , and Hongjing Lu1,2`) and nothing else to go on; this
+    took 14 articles with a run to 22. A piece of one word is dropped, so `Hasson, Uri` gives
+    nothing;
+  - one lower-case letter glued after a name counts as a mark when a mark follows it (`Singha,1`);
+  - `Departments` joins the institution words;
+  - the lead-phrase allowance is 20 words, not 40. At 40 a 33-word block folded that ran a
+    corresponding author's address into *"All authors approve the paper. Competing interest
+    statement…"* and the keywords, which this plan says stays showing;
+  - "opens with a lead phrase" means within its first three words (this plan's own example,
+    *"These authors contributed equally"*, does not open with one).
+
+**The measurement** (read-only, all 49 current revisions; every hidden block read in full by the
+builder; the text stayed in the scratch directory):
+
+| | |
+|---|---|
+| articles with a run | 22 of 49 |
+| run length | 1 to 8 blocks, median 2; 45 blocks hidden in all |
+| hidden blocks that are the article's own prose | **0** |
+| comments and chat threads anchored in a run | 0 |
+| model-made items naming a run block | Relations 1, arc 3, and Structure rows on most |
+
+By article: the reported one hides its 133-word fused author paragraph and lands on the
+`Abstract` heading; the Attention paper hides all eight stacked author blocks; the web essays
+hide nothing (one hides a single name line). **Left showing, and why:** two PDFs whose `meta`
+names nobody; one arXiv page whose authors are fused with a funding disclaimer (197 words, reads
+as prose); three PDFs whose block 0 is not an `h1`; two whose credits are not byline-shaped; one
+long contact block. All are the safe direction. The five local fixtures get no run, so no
+existing test changed its meaning.
+
+**Known, not fixed:** a Title Case *paragraph* with an institution word directly under the title
+(*"How Harvard University Lost Its Way"* as a `p`, not a heading) would fold. None in
+production; no cheap test separates it from an affiliation line.
+
+Red first on the store (25), the arrow keys, the reading position, marginalia on an ordinary fold
+(Sol's F4 measured: 16px for two hidden notes) and the table. 92 mutants; nine survived the first
+pass, eight got a test, one is equivalent.
+
 ### Stage 2. The arXiv HTML author reader takes two more shapes (names only)
 
 **The first draft of this stage was already built, and the prior-work check missed it.** It
@@ -344,3 +401,4 @@ university; a heading using *School* as a noun; a surname that is a word).
 - 2026-10-07: stage 2 built by an Opus subagent: three shapes, 6 to 12 of 19 pages right, none
   wrong. It narrowed the brief's "any `.ltx_note` sibling" to the `\thanks` note the four pages
   actually carry, and traced `2610.08750` to an ORCID-linked name.
+- 2026-10-07: stage 1 built by an Opus subagent; § Built, and what the building changed.

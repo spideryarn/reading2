@@ -56,7 +56,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
 /* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
-import { isFolded, isFoldedAway, isMastheadEcho } from "./fold.js";
+import { isFolded, isFoldedAway, isMastheadEcho, visibleFrom } from "./fold.js";
 import { blockRow } from "./rows.js";
 
 /**
@@ -196,6 +196,36 @@ export function itemStarts(cells: Cell[]): number[] {
   for (const cell of cells) {
     starts.push(row);
     row += cell.rowSpan;
+  }
+  return starts;
+}
+
+/**
+ * **The starts a keypress may step to right now**, given what the fold store
+ * is hiding (fold.ts). Asked at the press, because folding changes nothing the
+ * plan is memoised on.
+ *
+ * - A start a fold hides is left out (`isFoldedAway`).
+ * - **A start inside the shut front matter moves to the first row after it**
+ *   (`visibleFrom`; Greg, spya-duh4w3). A section can start on a byline row
+ *   and carry on into the abstract, so it is on screen and must be reachable,
+ *   but a jump to its own first row would open the front matter. Two starts
+ *   that land on the same row are one stop, which is how a section wholly
+ *   inside the run is stepped over.
+ *   docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ *   § Sections that start inside the run.
+ */
+function steppableStarts(all: readonly number[], blocks: readonly Block[]): number[] {
+  const starts: number[] = [];
+  for (const start of all) {
+    const id = blocks[start]?.id;
+    let row = start;
+    if (id !== undefined) {
+      if (isFoldedAway(id)) continue;
+      const lands = visibleFrom(id);
+      while (blocks[row] !== undefined && blocks[row]?.id !== lands) row++;
+    }
+    if (starts[starts.length - 1] !== row) starts.push(row);
   }
   return starts;
 }
@@ -682,10 +712,7 @@ export function useArrowNav(
          stays a start, because block 0 is where the first section begins.
          ↑ to it goes to the top of the page (scroll.ts § `scrollToBlock`);
          filtered out, ↑ from inside the first section had nowhere to go. */
-      const starts = (plan.starts[d] ?? []).filter((row) => {
-        const id = blocks[row]?.id;
-        return id === undefined || !isFoldedAway(id);
-      });
+      const starts = steppableStarts(plan.starts[d] ?? [], blocks);
       /* The aim this press steps from, if one still stands — kept so a ↓ that
          moves nothing can put it back, below. */
       const before = chainedRow(chain.current, true) === null ? null : chain.current;
