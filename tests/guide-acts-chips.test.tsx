@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **A guide answer's chip pressing itself** — plan
- * docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md,
+ * docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md,
  * Item 1. CommandChip.tsx's effect, with the act handed in through
  * `GuideActContext` (src/web/guide-acts.ts) as the guide's conversation hands it.
  *

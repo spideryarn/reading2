@@ -31,6 +31,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { LinkFacts } from "../src/web/link-facts.js";
 import type { LinkPreview } from "../src/web/link-preview.js";
+import { MalformedReply } from "../src/web/lib/reader-facing.js";
+import { captureClientFailure } from "../src/web/monitoring.js";
+
+vi.mock("../src/web/monitoring.js", () => ({ captureClientFailure: vi.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,6 +51,7 @@ interface HeldStream {
   end(): void;
   /** The connection breaks. */
   fail(): void;
+  malformed(): void;
 }
 
 /** Every summary stream the client opened, in order. */
@@ -99,6 +104,10 @@ vi.mock("../src/web/lib/api.js", () => {
         },
         end: () => controller.close(),
         fail: () => controller.error(new TypeError("network error")),
+        malformed: () => {
+          controller.enqueue(encoder.encode("event: ready\ndata: {not json\n\n"));
+          controller.close();
+        },
       });
       return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
     },
@@ -148,6 +157,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 /** Let the chained lookups and any stream frames land. */
@@ -174,6 +185,20 @@ async function emit(send: () => void): Promise<void> {
   await act(async () => send());
   await settle();
 }
+
+it("reports malformed summary frames and clears the unfinished text", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  await hover("https://destination.example/malformed-frame");
+  await emit(() => streams[0]!.delta("Unfinished words"));
+  expect(shown).toEqual({ text: "Unfinished words", streaming: true });
+  await emit(() => streams[0]!.malformed());
+  expect(shown).toBeNull();
+  expect(streams[0]!.body.locked).toBe(false);
+  expect(captureClientFailure).toHaveBeenCalledTimes(1);
+  expect(captureClientFailure).toHaveBeenCalledWith(
+    expect.any(MalformedReply), { where: "describeFetchFailure" }, { neverAuthored: true },
+  );
+});
 
 it.each([
   ["saveProfile", () => saveProfile("A different description.")],

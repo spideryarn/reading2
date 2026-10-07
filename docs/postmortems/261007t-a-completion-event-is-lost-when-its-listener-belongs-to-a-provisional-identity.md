@@ -1,7 +1,7 @@
 # A completion event is lost when its listener belongs to a provisional identity
 
 Up: [postmortems.md](../project/postmortems.md). Found during the code review of
-[261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md),
+[261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md),
 2026-10-07. Production impact was not measured.
 
 ## The class: a live event outlives the identity that owns its listener

@@ -29,7 +29,7 @@
  * - **Asked here only where the guide cannot ask instead** (plan 261007j F4).
  *   On a first open that `useLastView` claimed, with a band's room beside the
  *   text, the article opens on the guide in Chat (every first open has since
- *   2026-10-07, plan 261007o), whose greeting holds the same box — and no modal. Below that width (a phone, where a band covers
+ *   2026-10-07, plan 261007p), whose greeting holds the same box — and no modal. Below that width (a phone, where a band covers
  *   the article), and on any open that was not a claimed first open, the modal
  *   as before. The one decision, and the race it settles with the first-open
  *   default, is src/web/first-open-purpose.ts; this component reports its read

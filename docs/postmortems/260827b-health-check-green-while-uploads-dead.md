@@ -46,7 +46,7 @@ The second one is the one that loses data, and **in production it never actually
 has exactly one caller, `acquireUpload` in [`src/pipeline.ts`](../../src/pipeline.ts), reached only
 by a job created from an upload that was minted — and minting was the thing being refused. Ingest
 does not run on this host at all yet
-([deployment.md § What does not work in production yet](../project/deployment.md#what-does-not-work-in-production-yet)).
+([deployment.md § What did not work in production at first](../project/deployment.md#what-did-not-work-in-production-at-first)).
 So the data loss was **latent, not realised**. It is still the more serious half: it is armed by
 *absence*, it is chosen silently, and it becomes real the day the queue runs on the host — which is
 the direction the whole project is moving.

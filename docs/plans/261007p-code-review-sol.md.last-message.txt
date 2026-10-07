@@ -1,5 +1,5 @@
 Verdict: **land with your fixes**. Fixed the guide’s thread-renaming completion race and stale timing comments.
 
-[Review report](/var/tmp/spideryarn-worktrees/guide-acts-and-greets/docs/plans/261007o-code-review-sol.md) records all findings and the wider issue left unchanged.
+[Review report](/var/tmp/spideryarn-worktrees/guide-acts-and-greets/docs/plans/261007p-code-review-sol.md) records all findings and the wider issue left unchanged.
 
 217 tests pass; typecheck passes via direct Node invocation. Nothing committed.

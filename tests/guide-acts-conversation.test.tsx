@@ -2,7 +2,7 @@
 /**
  * **The guide's conversation hears its answer finish, and lets that answer act**
  * — plan
- * docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md,
+ * docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md,
  * Item 1. ChatPanel.tsx § `Conversation`: it subscribes to `onAnswered` only
  * when it is the guide and on screen, and hands a fresh `GuideAct` to the one
  * answer the event names.

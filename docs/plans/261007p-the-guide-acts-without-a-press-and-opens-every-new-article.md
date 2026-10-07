@@ -1,8 +1,13 @@
-# 261007o — The guide acts without a press, and opens every new article
+# 261007p — The guide acts without a press, and opens every new article
 
 Owned by [plans.md](../project/plans.md). Overseer queue items `qi-kc47m5pw` and `qi-yfa6gs7m`
 (report `spya-tddvg2`), the two follow-ups [261007j](261007j-the-guide-a-conversation-about-how-to-read-this.md)
-deferred. **Status: plan, for GPT Sol's review.**
+deferred. **Status: built, reviewed by GPT Sol (plan and code), on `dev`, not deployed.**
+
+**Named `261007o` until the merge with `dev`**, where another session's plan
+(`261007o-openrouter-spend-the-ledger-does-not-record.md`) had taken the same letter and the same
+review file names; this plan and its reviews moved to `261007p`. The first three commits'
+messages still say `261007o`.
 
 ## What Greg said
 
@@ -122,7 +127,7 @@ stays, with his 2026-10-07 answer under it as what replaced it.
 
 ## After the plan review (overrides the above where they differ)
 
-[GPT Sol](261007o-plan-review-sol.md): *build with changes*, five findings, all accepted.
+[GPT Sol](261007p-plan-review-sol.md): *build with changes*, five findings, all accepted.
 
 - **F1 (P1) — Search writes on mount.** Opening Search tidies remembered quick/thorough pairs and
   its swap deletes a superseded quick result (`auto-thorough.ts`, `SearchMode.tsx`), so `find` and

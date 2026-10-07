@@ -191,7 +191,7 @@ interface Props {
   /**
    * Hear each answer that finishes arriving in this tab — `useChat`'s
    * `onAnswered`. Only the guide listens: its answer may press one of its own
-   * buttons (guide-acts.ts, plan 261007o). Absent, nothing acts.
+   * buttons (guide-acts.ts, plan 261007p). Absent, nothing acts.
    */
   onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
   /** The open conversation, or null for the thread list. From `?thread=`. */
@@ -1419,7 +1419,7 @@ export function Conversation({
   const scroller = useRef<HTMLDivElement>(null);
   /**
    * **The guide's one act for the answer that has just finished here**
-   * (guide-acts.ts, plan 261007o). Made only on the controller's `Answered`
+   * (guide-acts.ts, plan 261007p). Made only on the controller's `Answered`
    * event for this conversation, while it is mounted and shown — never from a
    * transcript that arrived some other way — and handed to that answer's chips
    * alone. The effect after it spends it once the commit its chips' effects

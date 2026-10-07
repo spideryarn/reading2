@@ -1,6 +1,6 @@
 /**
  * **The chat controller's `Answered` event** — plan
- * docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md,
+ * docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md,
  * Item 1 (GPT Sol's F2): the guide acts on an answer that has just finished
  * arriving in a turn this tab started, and on nothing else.
  *

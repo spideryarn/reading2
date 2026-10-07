@@ -573,7 +573,7 @@ export function writeLastView(
  * And Greg, 2026-10-07, on whether the guide should replace Summary as that
  * band (q-kgrhm4): *"yes. but perhaps with a fixed starting message?"* — so
  * the band is the guide, whose greeting is ours and free (GuideGreeting.tsx),
- * plan docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md.
+ * plan docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md.
  *
  * One more case in the same decision: a bare address **and no key for this
  * slug** arrives at a default instead of at the article alone. Three pure
@@ -764,7 +764,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
     /* **The add page's mark holds this arrival's decision**, so it can apply
        the guide immediately and let the purpose read decide only the modal
-       (first-open-purpose.ts, plan 261007o). Measured here, at the claim, so
+       (first-open-purpose.ts, plan 261007p). Measured here, at the claim, so
        `PurposePrompt` can know whether a band fits before the settings store
        has answered. Every arrival holds afresh or drops the hold. */
     holdFirstOpen(
@@ -799,7 +799,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
      the mark and suppressed its modal, but no guide/default can ever be
      released. `App` hands this hook a null slug until the session is known, so
      `readerId` already answers signed-in status for this held path. The apply
-     no longer waits for the purpose outcome (first-open-purpose.ts, plan 261007o).
+     no longer waits for the purpose outcome (first-open-purpose.ts, plan 261007p).
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never

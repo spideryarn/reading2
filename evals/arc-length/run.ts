@@ -149,9 +149,14 @@ else if (cmd === "generate") {
   const i = rest.indexOf("--arm");
   if (i < 0 || !rest[i + 1]) throw new Error("--arm <name> is required");
   const arm = rest[i + 1]!;
-  await generate(
-    arm,
-    rest.filter((_, j) => j !== i && j !== i + 1),
+  loadEnvLocal();
+  const { withLedger } = await import("../../src/cli-ledger.js");
+  /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+  await withLedger("eval", () =>
+    generate(
+      arm,
+      rest.filter((_, j) => j !== i && j !== i + 1),
+    ),
   );
 } else if (cmd === "report") report();
 else console.log("usage: list | generate --arm <name> <slug>… | report");

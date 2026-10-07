@@ -28,7 +28,7 @@ const B = "4d4d4d4d-4444-4444-8444-000000000001";
 const MARK = "spideryarn.ask-purpose";
 
 describe("firstOpenWithPurpose: the table", () => {
-  /* Since 2026-10-07 (plan 261007o) the ordinary default is the guide, so
+  /* Since 2026-10-07 (plan 261007p) the ordinary default is the guide, so
      the purpose read no longer says where a first open lands, only whether
      the modal shows: where no band fits and no reason is stored. */
   const wide = "?mode=chat&guide=1&margin=1";

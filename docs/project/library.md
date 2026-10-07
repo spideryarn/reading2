@@ -358,9 +358,8 @@ turns it on.
 **And archiving takes it out of the public listing too**, which is the one place the shelf rule bends.
 [`publicLibraryQuery`](../../src/store/public-library.ts) asks for `visibility = 'public'`, a
 published revision **and `archived_at is null`** — so an article its owner has shared *and* archived
-is answered at its own link and named in no list. (That query is all there is today: `/read/public`
-still renders a 404 in [`App.tsx`](../../src/web/App.tsx), and the showcase page that will use it is
-[260904b](../plans/260904b-pricing-page-and-public-showcase.md).)
+is answered at its own link and named in no list. (That query is what `/read/public` lists —
+`PublicLibraryPage` in [`App.tsx`](../../src/web/App.tsx); [public-shelf.md](public-shelf.md).)
 
 The first version
 had no clause, on the rule above — visibility is a property of the work, archiving is a property of
@@ -450,10 +449,9 @@ article has just left. Archive on `/read/<slug>/metadata` leaves the reader look
 `Archived 3 minutes ago` with **Put back** beside it, for as long as it is true. That is the stronger
 promise of the two, and it is affordable only because this page is about one article. The state
 comes from `ArticleMetadata.archivedAt`, off the same shelf read that already answers `purpose`, so
-it costs no extra request. Both stores answer it, and there is a test per store —
-[`tests/shelf.test.ts`](../../tests/shelf.test.ts) and
-[`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) — because one store answering
-and the other not is the divergence a parity test cannot see: both answers typecheck.
+it costs no extra request. [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts)
+checks it does — when there were two stores, one answering and the other not was the divergence a
+parity test could not see, because both answers typecheck.
 
 There is no confirmation dialog there either, and the reason is sharper than on the shelf: a modal
 asking you to confirm something that is undone by a button in the same place, for ever, teaches
@@ -730,7 +728,7 @@ explicitly.
 ### Topics, and the archive in the same search
 
 Since 2026-09-28 a **Topics** row sits between `ShelfControls` and the "n of m" line: chips picked by
-a program from the articles' own words, which narrow the shelf in both views. With the **Archived**
+a program from the articles' own words, which narrow the shelf in both views. With the **Include archived**
 chip on (`?archived=1`), the archived articles are in the same list and narrowed by the same search,
 Unread and topics. A topic with nothing left to show is not drawn unless chosen. All of it is in
 [shelf-terms.md](shelf-terms.md).
@@ -1107,7 +1105,7 @@ from the sharing card, `SHARING_ON` in [`src/messages.ts`](../../src/messages.ts
 **A private article gets nothing at all.** The shelf is almost entirely private, so a chip on every
 card would be decoration, and it would cost the shared one the only thing it has. `LibraryEntry`
 carries `visibility` only when it is `"public"` for the same reason — and because the filesystem
-store has no visibility column to answer with at all ([database.md](database.md)).
+store, gone since 2026-09-05, had no visibility column to answer with at all ([database.md](database.md)).
 
 **And a third marker, at the top of the article itself** —
 [`SharingMark`](../../src/web/Masthead.tsx), since 2026-09-04. A globe or a **lock** beside the
@@ -1115,8 +1113,8 @@ title, with a tooltip, linking to that article's metadata page where the switch 
 no-private-twin rule above on purpose: one mark on one article is not a chip on every card, and the
 question an owner asks there — *would the link I am about to paste work?* — is asked exactly as
 often about a private article. Answering it by absence would be indistinguishable from a mark that
-had not loaded. It reads `Article.visibility`, which the Postgres store fills and the filesystem
-store cannot, and it draws **nothing** when nobody could say.
+had not loaded. It reads `Article.visibility`, which the Postgres store fills (the filesystem
+store could not), and it draws **nothing** when nobody could say.
 [260904b-sharing-mark-on-the-article-masthead.md](../plans/260904b-sharing-mark-on-the-article-masthead.md).
 
 **A badge, not a filter.** There is deliberately no way to sort or narrow *this* shelf by it until

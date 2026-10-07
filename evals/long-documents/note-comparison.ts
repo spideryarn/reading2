@@ -10,8 +10,8 @@
  *
  *   npx tsx evals/long-documents/note-comparison.ts
  *
- * Paid: five calls. Reads the local database only and writes no row: spend is
- * collected by `collectSpend` and kept in the results file. Results hold ids,
+ * Paid: five calls. Reads the local database, and its only write there is one
+ * `ai_calls` row per paid call; spend is also kept in the results file. Results hold ids,
  * titles and gists, never block prose.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,9 +19,11 @@ import path from "node:path";
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { MAX_BATCH } from "../../src/labels.js";
+import { environmentOwnerId } from "../../src/owner.js";
 import { finishedText, streamMessage } from "../../src/messages-stream.js";
 import { estimateStructureTokens, parseWholeDocumentAnswer, STRUCTURE_HEADROOM, wholeDocumentRequest } from "../../src/structure.js";
 import { promotedSections, SLICE_NOTE, withSliceNote } from "../../src/structure-slices.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { splitBlocks } from "../../src/supplement.js";
 import type { Block } from "../../src/types.js";
 
@@ -104,7 +106,10 @@ async function one(c: (typeof cases)[number], note: boolean): Promise<Row> {
         return { error: (err as Error).message.slice(0, 200) };
       }
     },
-    { attribution: { scopeKind: "eval", articleSlug: c.name.startsWith("paper") ? PAPER : BOOK }, sink: async () => {} },
+    {
+      attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: c.name.startsWith("paper") ? PAPER : BOOK },
+      sink: (row) => costStore.record(row),
+    },
   );
   const spent = { seconds: Math.round((Date.now() - began) / 100) / 10, dollars: totalSpend(report.calls).nanos / 1e9 };
   if ("error" in result) return { ...base, reused: false, ok: false, error: result.error, ...spent, ...empty };

@@ -1,6 +1,6 @@
 /**
  * **One owner for the first open of an article the add page marked** — plan
- * 261007j § After the plan review, F4, and since 2026-10-07 plan 261007o.
+ * 261007j § After the plan review, F4, and since 2026-10-07 plan 261007p.
  *
  * Two things decide a first open. `useLastView` (last-view.ts § The
  * first-open default) replaces a bare address with the default, and
@@ -17,10 +17,10 @@
  * | failed / purposeFailed   | the guide        | the article alone |
  *
  * **Where the reader lands no longer waits for the purpose read** (plan
- * 261007o: the guide is every first open's default, not only a reasonless
+ * 261007p: the guide is every first open's default, not only a reasonless
  * one's), so a held arrival is applied the moment `useLastView` can apply it.
  * It is still held, rather than handed to the ordinary path, for one reason
- * (GPT Sol's F4 on 261007o): the ordinary path waits for the settings store,
+ * (GPT Sol's F4 on 261007p): the ordinary path waits for the settings store,
  * and a settings read that fails or serves an offline copy would then leave
  * the modal suppressed and the guide never opened.
  *

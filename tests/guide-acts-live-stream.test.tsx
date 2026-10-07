@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **The guide acts on an answer streamed through the real controller** — plan
- * docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md,
+ * docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md,
  * Item 1. The other guide-acts tests fire `Answered` by hand into a
  * conversation already drawn with the finished answer. Here the answer arrives
  * the way it does in the app: a real `ChatController`, a parent that reads it

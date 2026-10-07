@@ -4,7 +4,7 @@
  * `modeWordsSection`, which marks each mode *Opens at once* or *Button*) and by
  * the page that does the opening (src/web/guide-acts.ts), so the two cannot
  * disagree about which sentence the model may write: *"I've opened it"* or an
- * offer. Plan docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md.
+ * offer. Plan docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md.
  *
  * Greg, 2026-10-07, on q-tyvutf: *"yes. err on the side of capability for the
  * guide, unless there's high risk/stakes"*. The line is the brief's: free and

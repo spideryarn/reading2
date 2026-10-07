@@ -955,7 +955,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   question once there is one.
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
-  [261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on
+  [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on
   q-tyvutf: *"yes. err on the side of capability for the guide, unless there's high risk/stakes"*).
   When a guide answer finishes arriving in this tab, from a turn this tab started, with the guide
   on screen, the first of its buttons that only moves the reader runs as if pressed: a jump, or a

@@ -179,7 +179,7 @@ export type SpokenLanded =
  * **An answer that has just finished arriving in this tab, from a turn this
  * tab started** — a send, a retry or an edit whose stream ended with its
  * `done` frame. The guide acts on these and on nothing else (src/web/guide-acts.ts,
- * plan 261007o, GPT Sol's F2): a recovered answer arrives as `recovery.found`,
+ * plan 261007p, GPT Sol's F2): a recovered answer arrives as `recovery.found`,
  * a refused retry puts an old answer back without a `done`, and a transcript
  * loaded from the server never streams at all, so none of them is one.
  *

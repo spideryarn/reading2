@@ -123,7 +123,7 @@ export function modeToken(key: string): string {
  * ` Opens at once: [cmd:mode:…]` for an ordinary row the guide may open
  * without a press, ` Button: [cmd:mode:…]` for one it may not, nothing for an
  * experimental one. The split is `modeActsAlone` (src/acts-alone.ts), the rule
- * the page applies when it does the opening (plan 261007o).
+ * the page applies when it does the opening (plan 261007p).
  */
 function button(row: CatalogueRow): string {
   if (experimental(row) !== "") return "";

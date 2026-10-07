@@ -376,7 +376,7 @@ export interface ChatApi {
   /**
    * **Hear each answer as it finishes arriving from a turn this tab started**
    * — chat/controller.ts § `Answered`. The guide's one act listens here
-   * (guide-acts.ts, plan 261007o). Returns the unsubscribe.
+   * (guide-acts.ts, plan 261007p). Returns the unsubscribe.
    */
   onAnswered(listener: (answered: Answered) => void): () => void;
   /** A failure of the *transport*. Model failures live on the message. */

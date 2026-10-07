@@ -7,7 +7,7 @@
  * (docs/project/chat-llm-help-commands-vision.md § Decided): the model never
  * causes a run, **with one exception since 2026-10-07: in the guide, the first
  * chip of an answer that has just finished on screen presses itself if it only
- * moves the reader** (guide-acts.ts, plan 261007o). Nothing else here runs on
+ * moves the reader** (guide-acts.ts, plan 261007p). Nothing else here runs on
  * render; a press runs the proposal
  * through the executor the reading view built for the bar
  * (command-runners.ts § `chatExecutor`), so the bookmark is Reader's memoised
@@ -107,7 +107,7 @@ export function CommandChip({
     const now = chipFor(raw, commands, blocks);
     if (now === null || !now.enabled || !actsAlone(now)) return;
     /* Spent whether or not it runs: a chip the reader cannot see now must not
-       act when the band comes back (GPT Sol's F3 on plan 261007o). */
+       act when the band comes back (GPT Sol's F3 on plan 261007p). */
     act.used = true;
     if (button.current === null || !isShown(button.current)) return;
     pressRef.current?.();

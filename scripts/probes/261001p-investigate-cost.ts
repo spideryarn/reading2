@@ -8,12 +8,15 @@
  * Runs the production `investigateCitation` (src/store/index.ts) as the
  * environment owner, inside `collectSpend`, and prints each paid call's job,
  * model, tokens and cost, and the press total. It writes a real investigation
- * row to the local database, which is what a reader's press would do.
+ * row to the local database, which is what a reader's press would do, and one
+ * `ai_calls` row per paid call (`eval` scope; an eval's spend is refused
+ * without a ledger).
  */
 import { collectSpend } from "../../src/ai-spend.js";
 import { closeDb } from "../../src/db/client.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { investigateCitation } from "../../src/store/index.js";
 
 async function main(): Promise<void> {
@@ -35,6 +38,10 @@ async function main(): Promise<void> {
         }
         return { stages, ending };
       }),
+      {
+        attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
+        sink: (row) => costStore.record(row),
+      },
     );
     console.log(`\n${target} — ${result.ending}, ${((Date.now() - started) / 1000).toFixed(1)} s, stages ${result.stages.join(" → ")}`);
     let total = 0;

@@ -77,9 +77,11 @@ import { useEffect, useReducer } from "react";
 import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
-import { apiFetch, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson } from "./lib/api.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
+import { MalformedReply } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { CHAT_CARD_HOST_ATTR } from "./layout.js";
 import type { LinkPreview } from "./link-preview.js";
 
@@ -897,11 +899,11 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
        * lands in the `catch`, which is the same trade the other sources make
        * and at least says so. GPT Sol, 2026-09-05.
        */
-      if (!res.ok) throw new Error(`link summary: ${res.status}`);
+      if (!res.ok) throw await failure(res);
       if (!res.headers.get("content-type")?.includes("text/event-stream")) {
-        throw new Error("link summary: not a stream");
+        throw new MalformedReply("link summary: not a stream");
       }
-      if (!res.body) throw new Error("no body");
+      if (!res.body) throw new MalformedReply("link summary: no body");
       let text = "";
       let settled = false;
       for await (const event of readEvents(res.body, { stallMs: STREAM_STALL_MS })) {
@@ -941,10 +943,15 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
       /* No terminal frame: the route hit an error and framed nothing rather
          than manufacturing a fact about this link. Cached as nothing. */
       if (!settled && current()) summaryCache.set(key, null);
-    } catch {
-      /* A transport failure, a stall, an offline moment. `apiFetch` has already
-         put it in the console. */
-      if (current()) summaryCache.set(key, null);
+    } catch (err) {
+      /* Optional summaries disappear on a transport failure or stall. A bad
+         frame is this app's fault and must still be reported: it is parsed
+         after `apiFetch` resolves, so that helper cannot report it. There is
+         no failure row on this card to put the helper's sentence in. */
+      if (current()) {
+        if (err instanceof MalformedReply) describeFetchFailure(err);
+        summaryCache.set(key, null);
+      }
     } finally {
       /* Only its own entries. An overtaken run's were dropped by
          `forgetSummaries`, and what is under this key now is a newer run's. */

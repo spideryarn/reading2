@@ -1498,7 +1498,7 @@ function ControlsAcrossModes() {
         rule={
           <>
             three shadows, softer in Light; a shadow with its own shape multiplies its alpha by
-            --shadow-strength, which softens it by the same ratio. Not for swatch rings, inset marks, table dividers or
+            --shadow-strength, which softens it by roughly the same ratio. Not for swatch rings, inset marks, table dividers or
             focus rings, which are not elevation.
           </>
         }

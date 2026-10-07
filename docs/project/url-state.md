@@ -762,7 +762,7 @@ omission.
 One more case in the same decision, since 2026-10-05
 ([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)),
 and the guide rather than Summary since 2026-10-07
-([261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md)).
+([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)).
 A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
 it, arrives at:
 
@@ -813,7 +813,7 @@ it.
   which is what Greg asked for ([marginalia.md § Relation words](marginalia.md#relation-words)).
 - **And the add page's "Why are you reading this?" is asked by the guide where it can be**
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4, simplified by
-  [261007o](../plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md)). While
+  [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)). While
   the add page's *ask why* mark names this article, the arrival is applied at once, without waiting
   for the settings store, and the owner's purpose read decides only the modal
   ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): with room for a band, the

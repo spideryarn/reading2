@@ -1,6 +1,6 @@
 /**
  * **The guide acts without a press** — plan
- * docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md
+ * docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md
  * (qi-kc47m5pw). Greg, 2026-10-07, on q-tyvutf: *"yes. err on the side of
  * capability for the guide, unless there's high risk/stakes"*.
  *

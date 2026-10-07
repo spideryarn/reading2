@@ -1,14 +1,13 @@
-You are reviewing a short implementation plan, read-only. Repo: this worktree (Spideryarn, TypeScript/React).
+Review this plan before it is built: docs/plans/261007o-openrouter-spend-the-ledger-does-not-record.md, in the repo you are in. Read-only: do not edit anything.
 
-Plan: docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md (untracked file in the worktree).
-Background plan it extends: docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
+Context: the dev OpenRouter key spent ~$120 in October 2026 that the local cost ledger (spideryarn.ai_calls) has no row for. About $79 of that is evals and probes that called models through the gateway (src/ai-call.ts, src/messages-stream.ts) with no persisting spend collector open (src/ai-spend.ts: `collectSpend`, `beginSpend`, `recordSpend`, `persistingSpend`, `write`). The plan proposes that `beginSpend` throw when no persisting collector is open AND the process's entry file (process.argv[1]) is under evals/ or scripts/.
 
-Key code to read: src/web/command-proposal.ts (RISK, proposalRisk), src/web/chat-commands.ts (chipFor), src/web/CommandChip.tsx, src/web/Cited.tsx (cited(), how chips are drawn), src/web/ChatPanel.tsx (Conversation, Answer, Turn), src/web/useChat.ts (message status lifecycle), src/web/command-runners.ts (modeDoor, chatExecutor), src/guide.ts (modeWordsSection), src/converse.ts (GUIDE_SYSTEM), src/web/first-open-purpose.ts, src/web/last-view.ts (firstOpenSearch, useLastView), src/web/PurposePrompt.tsx, src/web/activation.ts (MODE_TARGET, modeGenerates, subModeGenerates), docs/project/security-map.md (chat-commands row).
+Please read src/ai-spend.ts, the two gateways' calls to `beginSpend` (src/ai-call.ts Meter constructor ~line 1558, src/messages-stream.ts ~646), src/cli-ledger.ts, src/spend-declarations.ts (the `unscoped` kind and its test tests/no-undeclared-spend.test.ts), tests/setup/no-provider-calls.ts, and docs/project/cost-tracking.md.
 
 Questions:
-1. Security: is "act only on proposalRisk === navigate, in a guide thread, on an answer seen to finish on screen, first eligible chip only" a sound line given an article may contain a planted instruction? Any navigate-classified proposal that actually spends, writes, or leaves the article (e.g. a mode whose band spends on mount but modeGenerates says false; find opening Search; Chat mode; Learn sub-modes)? Check MODE_TARGET/subModeGenerates against what each band does on mount.
-2. Is the "pending then done observed in this mount" trigger correct given useChat's provisional-id swap at the begin frame, recovery of pending rows, retry, edit, stop, and the dialog vs band surfaces? Is the effect-from-chip design (claim object via context) sound under StrictMode and React effect ordering?
-3. Item 2: is shrinking first-open-purpose.ts as described correct? Any race or case (failed read, account change, link with state, metadata view) that the current coordinator handles and the shrunk one would get wrong?
-4. Anything simpler that gets the same result, or anything the plan misses (docs, tests, the help page, privacy).
+1. Is throwing in `beginSpend` safe at both call sites — is it before any network I/O, and does any caller catch-and-continue in a way that would turn the refusal into a silent skip or, worse, a call that proceeds unmetered? Are there other gateway entry points that spend without going through `beginSpend` (embeddings, images, transcription, decisions wires)?
+2. Is "entry file under evals/ or scripts/" the right discriminator? What processes run with such an entry that legitimately call the gateway with no persisting collector — e.g. scripts/stage.ts or anything under scripts/ that runs the job worker, the dev server, a deploy, readiness loops, the overseer? Would any of them break? Is there a better discriminator that is still not a flag somebody must remember?
+3. Does `persistingSpend()` mean what the plan needs (a sink present and not closed)? A sink that only pushes to an in-memory array passes it — the plan handles that by converting those evals, but say if that is a hole worth closing differently.
+4. Anything the plan misses or gets wrong, and anything simpler that would do the same job.
 
-Output: a verdict (build / build with changes / rethink), then findings with ids F1.., each with severity P0-P3, evidence (file:line), and the change you recommend. Be concise.
+Answer with numbered findings, each with file:line evidence and a severity, then a one-line verdict.

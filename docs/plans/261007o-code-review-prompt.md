@@ -1,18 +1,13 @@
-You are the code reviewer-fixer for plan docs/plans/261007o-the-guide-acts-without-a-press-and-opens-every-new-article.md (read it, including "After the plan review" and "As built", and your own plan review at docs/plans/261007o-plan-review-sol.md).
+Code review of commit f3367eed1 in this repo (`git show f3367eed1`), built from docs/plans/261007o-openrouter-spend-the-ledger-does-not-record.md after your plan review in docs/plans/261007o-plan-review-sol.md. The findings it fixes are in docs/investigations/261007c-openrouter-spend-the-ledger-does-not-record.md.
 
-The work is two commits on this worktree's HEAD: `git diff a373ada00..HEAD` (stage 1 `6830d4317`: the first-open default becomes the guide; stage 2 `bc94cf25a`: the guide's first move-only chip presses itself). Ignore merge noise outside those two commits.
+What it does: `beginSpend` in src/ai-spend.ts throws `UnrecordedSpendRefused` before any network I/O when the process entry file (realpath of process.argv[1]) is under evals/ or scripts/ and no collector with a sink is open; transcribe.ts and structure-slices.ts rethrow it; about thirty evals/scripts were converted so they record (sinks + owners, `withLedger("eval", …)`, long-structure's `evalSpend` helper that writes to costStore only on non-fake runs).
 
-Review for correctness and security, then FIX what you find that is inside this work, narrowly, writing a failing test first where a fix changes behaviour. Report — do not fix — anything wider. Do not commit; do not run git commands that discard work (no checkout/restore/reset/stash/clean). Do not edit docs/user-feedback or the Overseer queue. Never invent a quote from Greg; any quote you add must already exist verbatim in the repo.
+You may fix what you find, inside this change's scope: edit files, add tests. Do not commit, do not run anything that calls a paid API or touches a production database, and do not run git commands that discard work. Run `npm run typecheck` and the relevant vitest files (`npx vitest run <files>`) after any edit.
 
-You have no network: tests that need Postgres will not run for you. These run without it and you may run them:
-npx vitest run tests/guide-acts-rules.test.ts tests/guide-acts-controller.test.ts tests/guide-acts-chips.test.tsx tests/guide-acts-conversation.test.tsx tests/guide-acts-live-stream.test.tsx tests/first-open-purpose.test.tsx tests/purpose-prompt.test.tsx tests/first-open-default-wiring.test.tsx tests/last-view.test.ts tests/guide-kind.test.ts tests/chat-command-chips.test.tsx
-and `npm run typecheck`.
+Check especially:
+1. Each converted eval/script: does every paid path now run inside a collector with a durable sink, without an inner sinkless collector shadowing it? Is `process.exit`/`closeDb` still after the awaited `withLedger`/`collectSpend`? Was `loadEnvLocal()` called before `environmentOwnerId()` / costStore use where needed? Did any conversion change what a free subcommand does (e.g. now needs a database it did not)?
+2. long-structure `evalSpend` (evals/long-structure/calls.ts): is fake-ness detected correctly in every caller, so the dry run never writes and never needs costStore?
+3. The refusal: correctness of `refusesUnrecordedSpend`/`real()` (Windows separators irrelevant; symlinks; an entry like `scripts/stage.ts` that runs job steps — those are under runStep's sinked collector, confirm), the test seam, and that nothing in src/ that a server or test process runs could now throw.
+4. Any doc or comment the commit made false or left false (grep the changed evals' headers for "not recorded"/"no ai_calls row").
 
-Things I am least sure of (check these last, after your own reading):
-1. src/web/CommandChip.tsx: the effect that presses; `pressRef` assigned during render; deps; whether the press inside an effect can run against a stale executor; whether a chip that is disabled at the first commit and enabled a moment later is correctly NOT acted on.
-2. src/web/ChatPanel.tsx Conversation: `drawnAct` gating; the subscription's deps (`onAnswered` identity from useChat is stable? `visible`); the Conversation remount at the begin frame when a new guide thread is named (ChatPanel keys Conversation by thread id).
-3. src/web/chat/controller.ts: emitting Answered inside dispatch before commands run; a retry/edit shape; a superseded op.
-4. Whether any `mode` that modeActsAlone allows actually spends or writes when its band mounts (check activation.ts MODE_TARGET and subModeGenerates against the bands: plain, structure, chat, referee, learn and its sub-modes).
-5. Stage 1: first-open-purpose.ts's run() now applies without an outcome; any case where the modal and the guide both show, or neither, on a marked first open.
-
-Write your answer to the output file: a verdict (land / land with your fixes / do not land), each finding with an id CR1.., severity P0–P3, file:line, what you changed (if anything) and the test that shows it, and a separate list of wider things you did not fix.
+Report numbered findings with file:line and severity, what you fixed, the commands you ran and their results, and a one-line verdict.

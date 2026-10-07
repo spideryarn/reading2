@@ -28,8 +28,9 @@
  *   `effort: "low"` (a verdict, not a piece of writing).
  *
  * Both borrow an existing job's route so the probe adds nothing to `src/`. The
- * spend collector has no sink, so **no `ai_calls` row is written**; cost is
- * read from the collector's own records. One JSONL line per level to
+ * spend collector writes each call to the ledger (`ai_calls`, `eval` scope,
+ * the environment owner; an eval's spend is refused without one), and the cost
+ * printed is read from the collector's own records. One JSONL line per level to
  * `docs/plans/261001h-fidelity-guard-<model>.jsonl`. A level already in that
  * file is never called again, whatever its outcome, so an unreadable answer
  * stays recorded as one. It stops before the next run once `--budget` dollars
@@ -275,6 +276,9 @@ async function checkLevel(key: ModelKey, level: CorpusLevel, blocks: Record<stri
   let answeredBy: string | null = null;
   let verdicts: Verdict[] | null = null;
   let error: string | undefined;
+  /* Imported here, not at the top, so `score` stays offline. */
+  const { environmentOwnerId } = await import("../../src/owner.js");
+  const { costStore } = await import("../../src/store/ai-calls.js");
   const { report } = await collectSpend(async () => {
     try {
       const answer = await ask(key, userMessage(level, blocks));
@@ -284,6 +288,9 @@ async function checkLevel(key: ModelKey, level: CorpusLevel, blocks: Record<stri
     } catch (err) {
       error = err instanceof Error ? `${err.constructor.name}: ${err.message.slice(0, 120)}` : "error";
     }
+  }, {
+    attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: level.slug },
+    sink: (row) => costStore.record(row),
   });
   const spend = totalSpend(report.calls);
   return {
@@ -351,6 +358,8 @@ async function check(key: ModelKey, armFilter: string[] | null, budget: number):
     );
   }
   console.log(`spent $${spent.toFixed(4)} this invocation`);
+  const { closeDb } = await import("../../src/db/client.js");
+  await closeDb();
 }
 
 /* ------------------------------------------------------------------- score -- */
