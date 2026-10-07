@@ -382,7 +382,7 @@ function writesStep(job: Job, step: StepName): boolean {
  * Ideas through their read halves, and with the margin open beside the band
  * that runs one of them, the band's read was refreshed and the margin's was
  * not. The always-mounted reads `OwnedReader` holds for the prose — citations,
- * glossary, quotes — are the others: the band refreshed them, but only while it
+ * glossary, quotes, quiz — are the others: the band refreshed them, but only while it
  * was mounted (useCitations.ts § An always-mounted read is not an always-fresh
  * read). Calling `useStepJob` in either place would work and would hand each a
  * `start` it must never call — the thing the read halves were split out to

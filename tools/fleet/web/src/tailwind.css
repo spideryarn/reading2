@@ -716,6 +716,14 @@
     /* No `transform-origin`: `useTransitionStyles` writes a placement-aware one
        inline, so the card grows out of the control it belongs to. */
   }
+  /* The session list's preview (SessionsPanel.tsx § `PreviewOn`) is ONE width,
+     the cap above. Left to its content it was anywhere from 169px to 326px, so
+     pointing down the column made the card jump in size from row to row. Not on
+     `.tooltip` itself: every other card is a sentence or two and should stay as
+     small as that. */
+  .tooltip.session-preview-card {
+    width: min(22rem, calc(100vw - 1.75rem));
+  }
   .tip-head {
     font-size: 0.68rem;
     font-weight: 600;

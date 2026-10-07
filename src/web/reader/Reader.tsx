@@ -157,7 +157,7 @@ import {
   type BandMode,
   type Mode,
 } from "../params.js";
-import { returnToSubMode, subModeParams } from "../sub-modes.js";
+import { type ModeWithSubModes, returnToSubMode, subModeParams } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
@@ -2592,6 +2592,13 @@ export function Reader({
    * Recall to Quiz is a new foreground choice even though `mode` stays
    * `learn`. GPT Sol, P1 on the plan and code review of 261002j.
    *
+   * **Every mode's, by construction**: `subModesNow` is built from a
+   * `Record<ModeWithSubModes, …>`, so a new mode with sub-modes does not
+   * compile until its parameter is in it. The five were listed by hand until
+   * 2026-10-06, and Debate's — the sixth, added a day after this was written —
+   * was not, so a box could open over a Debate view chosen during the round
+   * trip. The same snapshot answers the held selection create below.
+   *
    * **Hover cards and modals are deliberately not in it.** Sol's code review
    * also checked the DOM for any new `role="dialog"`; that was taken out,
    * because the prose's hover cards are dialogs too, so a pointer drifting
@@ -2605,37 +2612,20 @@ export function Reader({
    * view, before the browser can accept another press.
    */
   const surface = useRef<readonly unknown[]>([]);
+  const subModeViews: Record<ModeWithSubModes, string> = {
+    learn: subNav.learn,
+    diagram: subNav.diagram,
+    referee: subNav.referee,
+    summary: subNav.summary,
+    structure: subNav.structure,
+    debate: subNav.debate,
+  };
+  /* One string, so the effect below has one dependency for all of them. The
+     views are fixed vocabularies with no NUL in them. */
+  const subModesNow = Object.values(subModeViews).join("\u0000");
   useLayoutEffect(() => {
-    surface.current = [
-      note,
-      thread,
-      chatDraft,
-      annotating,
-      panel,
-      mode,
-      margin,
-      bandAway,
-      subNav.learn,
-      subNav.diagram,
-      subNav.referee,
-      subNav.summary,
-      subNav.structure,
-    ];
-  }, [
-    note,
-    thread,
-    chatDraft,
-    annotating,
-    panel,
-    mode,
-    margin,
-    bandAway,
-    subNav.learn,
-    subNav.diagram,
-    subNav.referee,
-    subNav.summary,
-    subNav.structure,
-  ]);
+    surface.current = [note, thread, chatDraft, annotating, panel, mode, margin, bandAway, subModesNow];
+  }, [note, thread, chatDraft, annotating, panel, mode, margin, bandAway, subModesNow]);
   const bookmarkPress = useRef(0);
   const createComment = owner?.comments.create;
   const bookmarkBlock = useMemo(() => {
