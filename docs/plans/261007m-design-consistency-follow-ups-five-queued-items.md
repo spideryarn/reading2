@@ -60,8 +60,11 @@ and Apple's minimum; Greg's iPad ask (2026-08-27) was for a target a thumb could
 still is, and the queue item asks for exactly this shape. The comment that says "the size is the
 whole feature" is rewritten to say what changed and why.
 
-**The missing up-cell border** is diagnosed in the browser first (which rule removes it); if it is
-a rule rather than a rendering artefact it goes, with a test on the computed rule if one is cheap.
+**The missing up-cell border** — diagnosed in the browser baseline: not missing. Computed style
+gives 1px on all four sides of both buttons. At the start of the article the up button is
+`aria-disabled`, drawn at `opacity: 0.3` with a `--rule` border on a near-black ground, which is
+nearly invisible. Quotes' box (`--rule-strong` border, raised ground) and Quotes' 0.4 for an end
+cure it as part of the shape change; no separate fix.
 
 ## S4 — `qi-a5gzv44d`: six elevation shadows soften in light
 
@@ -87,11 +90,23 @@ in `src/web/styles/` uses a `--shadow-*` token or `var(--shadow-strength)`; red 
 conversation", the menu, Send; at 390 Learn's Send drops to its own line. The mic and Live button
 are 1.65rem (26px); Send is `--control-h` (36px).
 
-**Change** (details after the browser baseline): one height for the row's controls, and Learn's
-row ordered and sized so Send stays on the line at 390 — the label "Talk" stays (R20: it is
-deliberate). Candidate: at narrow widths Learn's Live label shortens to "Live", as in Chat, since
-the longer label is what pushes Send off. Decided against the screenshots, written here before
-building.
+**Why Send drops.** The baseline at 390 (Experimental on): mic+Talk, "Live conversation" and the
+engine select fill the line under the box and Send wraps. A flex row breaks its lines from each
+item's natural width before shrinking anything, so the last item — Send — is the one that goes.
+
+**Change, decided.** The microphone and Live go in one `<span class="chat-voice">` in the
+composer. In Chat it is `display: contents`, so Chat's row is unchanged. In Learn it is the row's
+growing item (`flex: 1 1 0; min-width: 0; flex-wrap: wrap`): a zero basis means the row never
+breaks a line for it, so Send stays at the end of the line under the box, and the group wraps
+inside itself — Live (with its engine select) goes under Talk when there is no room. That holds
+in every state Sol's M5 named ("Listening…", "Writing it down…", Hang up, Cancel), at 390 and in
+the iPad's 288px band, because it does not depend on any label's width. And the microphone, the
+Live button and the engine select take Send's 36px (`--control-h`) inside `.chat-composer` only,
+in both modes. "Talk" and "Live conversation" stay (R20).
+
+**Simpler option passed over:** shortening Learn's label to "Live" at narrow widths. It fixes idle
+at 390 but not a longer state or the 288px band, and it needs a width the CSS cannot ask the band
+for without a container query, which this repo has backed out of once (structure-mode.css).
 
 ## Not in this job
 

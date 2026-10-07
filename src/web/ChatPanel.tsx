@@ -3054,6 +3054,14 @@ export function Composer({
           </button>
         </Tooltip>
       )}
+      {/* **The voice controls are one group** (plan 261007m S5). In Chat it
+          is `display: contents` and the row is what it was. In Learn it is
+          the growing item of the line under the box and wraps inside itself,
+          so a narrow band or a longer label ("Writing it down…") moves Live
+          under Talk rather than pushing Send onto a line of its own — a flex
+          row breaks its lines before it shrinks anything, so the last item
+          is the one that goes. mode-band.css § `.chat-voice`. */}
+      <span className="chat-voice">
       {dictate.dictation.supported &&
         (learn ? (
           /* **Labelled, and first in the row.** Greg asked for the microphone to
@@ -3089,6 +3097,7 @@ export function Composer({
           continues={continuesLive}
         />
       )}
+      </span>
       <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
       {live && onStartLive && <LiveStatus
         live={live}
