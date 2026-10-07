@@ -140,6 +140,14 @@ const READER_TABLES = [
   "comments", "chat_threads", "search_runs", "referee_criteria", "referee_claims",
   "glossary_lookups", "glossary_hidden_entries", "citation_finds", "citation_investigations",
   "reading_time", "quiz_attempts", "link_summaries", "article_tags", "upload_source_guesses",
+  /* **And the history that outlives the article** (`on delete set null`): a
+     share link made and turned off, a publish and unpublish, a spoken
+     conversation. The delete would only null their `article_id`, and the
+     backup does not record those links, so a restore could not put them back.
+     `turnOff` clears both share columns without stamping `updated_at`, so these
+     rows are the only trace that an article was ever shared. GPT Sol's
+     round-2 D2. */
+  "article_share_link_events", "article_visibility_changes", "realtime_sessions",
 ] as const;
 
 function readerRowsOf(alias: string) {

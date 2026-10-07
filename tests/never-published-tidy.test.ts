@@ -50,6 +50,7 @@ import { mintId } from "../src/ids.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import { aiCallInsertValues, pgCostStore } from "../src/store/ai-calls-pg.js";
 import { createPgCheckpointStore } from "../src/store/checkpoints-pg.js";
+import { pgShareLinkStore } from "../src/store/pg-share-link.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { lockOrCreateArticle } from "../src/store/pg-revisions.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -116,6 +117,9 @@ function aiCall(over: Partial<AiCallRow> = {}): AiCallRow {
   };
 }
 
+const stillThere = async (id: string) =>
+  (await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, id))).length === 1;
+
 const survey = (quietDays = 7) => surveyNeverPublished(getDb(), { quietDays, ownerId: OWNER });
 
 /** Back the targets up to a throwaway directory, then destroy them as the script does. */
@@ -147,6 +151,9 @@ async function clear(): Promise<void> {
   await pool.query("delete from spideryarn.uploads where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.ai_calls where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.article_share_link_events where actor_owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.article_visibility_changes where actor_owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.realtime_sessions where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.articles where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
 }
@@ -249,6 +256,18 @@ describe("the two queries protect the same things", () => {
     }],
     ["a revision, made long ago", (a) => getDb().insert(articleRevisions).values({ articleId: a.id, status: "failed", createdAt: old() })],
     ["a reservation by slug", (a) => getDb().insert(ingestEvents).values({ ownerId: OWNER, slug: a.slug, reservedAt: old() })],
+    /* Sol's round-2 D2: three tables whose rows outlive the article (`on
+       delete set null`), so the backup cannot put their links back. Each one
+       attached, however old, holds the article back. */
+    ["an article_share_link_events row", (a) => pool.query(
+      "insert into spideryarn.article_share_link_events (article_id, slug, actor_owner_id, event, rights_confirmed, created_at) values ($1, $2, $3, 'turned-off', false, $4)",
+      [a.id, a.slug, OWNER, old()])],
+    ["an article_visibility_changes row", (a) => pool.query(
+      "insert into spideryarn.article_visibility_changes (article_id, slug, actor_owner_id, from_visibility, to_visibility, rights_confirmed, at) values ($1, $2, $3, 'public', 'private', false, $4)",
+      [a.id, a.slug, OWNER, old()])],
+    ["a realtime_sessions row", (a) => pool.query(
+      "insert into spideryarn.realtime_sessions (id, owner_id, article_id, article_slug, model, issued_at, accepts_until) values ($1, $2, $3, $4, 'gpt-realtime', $5, $5::timestamptz + interval '1 minute')",
+      [crypto.randomUUID(), OWNER, a.id, a.slug, old()])],
   ];
 
   it.each(cases)("%s", async (_name, protect) => {
@@ -353,6 +372,30 @@ describe("--delete refuses", () => {
     expect(await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, a.id))).toHaveLength(1);
   });
 
+  it("a share link made and turned off after the backup: the article row is unchanged, the two audit rows refuse it", async () => {
+    /* Sol's round-2 D2. `turnOff` clears both token columns and neither call
+       stamps `updated_at`, so the article row ends as the backup holds it;
+       only the `article_share_link_events` rows (`on delete set null`, which
+       the backup cannot restore) show that it was ever shared. */
+    const a = await failedFirstImport("share-on-off", { identities: 2 });
+    await age([a.id]);
+    const targets = checkDeletion(await survey(), [a.id]);
+    const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
+    const rowNow = async () => (await pool.query("select row_to_json(t) as j from spideryarn.articles t where id = $1", [a.id])).rows[0]?.j;
+    try {
+      const { backup } = await writeBackup(getDb(), [a.id], dir);
+      await asOwner(() => pgShareLinkStore.create(a.slug));
+      await asOwner(() => pgShareLinkStore.turnOff(a.slug));
+      expect(await rowNow(), "the article row is exactly the backed-up one").toEqual(backup.articles[0]);
+      const events = await pool.query("select event from spideryarn.article_share_link_events where article_id = $1 order by created_at", [a.id]);
+      expect(events.rows.map((r: { event: string }) => r.event)).toEqual(["created", "turned-off"]);
+      await expect(destroyEach(getDb(), targets, 7, backup)).rejects.toThrow(TidySafetyError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(await stillThere(a.id)).toBe(true);
+  });
+
   it("a backup directory inside the repository", async () => {
     await expect(writeBackup(getDb(), [A], path.resolve(import.meta.dirname, "..", "data"))).rejects.toThrow(/inside the repository/);
   });
@@ -444,9 +487,6 @@ function scratch(ids: readonly string[]) {
   writeFileSync(idsFile, `# reviewed\n${ids.join("\n")}\n`);
   return { dir, idsFile, backupDir: path.join(dir, "backup"), done: () => rmSync(dir, { recursive: true, force: true }) };
 }
-
-const stillThere = async (id: string) =>
-  (await getDb().select({ id: articles.id }).from(articles).where(eq(articles.id, id))).length === 1;
 
 describe("the command refuses, and never reaches destroy", () => {
   it("a database in .env.local that is not local, without --prod — before it connects", async () => {
