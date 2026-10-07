@@ -232,6 +232,16 @@ const ALLOWED: readonly AllowGroup[] = [
     names: ["SPIDERYARN_BASE_URL", "SPIDERYARN_ENV_PINNED"],
   },
   {
+    /* src/mcp/session.ts, plan 261007j. `SPIDERYARN_MCP_HOME` moves the
+       directory the local MCP server keeps its sign-in files in, default
+       `~/.config/spideryarn-mcp`; the tests and the spike point it at a
+       scratch directory. src/mcp/ runs only on the machine of the person who
+       launched `scripts/spideryarn-mcp.ts`, never in a deployment, so a health
+       report has nothing to say about it. */
+    why: "The local MCP server's own setting, read only on the machine that launched it",
+    names: ["SPIDERYARN_MCP_HOME"],
+  },
+  {
     /* Whole-run switches somebody sets for one command: the reasoning effort
        every pipeline stage asks for (`effortFor`, src/models.ts), and the three
        structure-deepening experiments (src/structure-deepen.ts, whose exported

@@ -14,6 +14,7 @@
  */
 
 import { execFile as nodeExecFile } from "node:child_process";
+import os from "node:os";
 
 /** One operation, as the person is asked about it. */
 export interface Operation {
@@ -87,7 +88,7 @@ export function readDialogAnswer(stdout: string): boolean {
 export function defaultApprover(
   deps: { platform?: NodeJS.Platform; execFile?: ExecFile } = {},
 ): Approver {
-  const platform = deps.platform ?? process.platform;
+  const platform = deps.platform ?? os.platform();
   const run = deps.execFile ?? (nodeExecFile as unknown as ExecFile);
   return {
     async approve(op: Operation): Promise<boolean> {

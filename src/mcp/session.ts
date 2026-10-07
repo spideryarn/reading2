@@ -123,8 +123,21 @@ export function tokenClaims(token: string): { sub?: string; sessionId?: string }
 
 /* ------------------------------------------------------------ the files -- */
 
+/**
+ * Through `os.userInfo()` rather than `process.getuid()`: src/ may use only a
+ * short allowlist of `process` properties (tests/helpers/env-reads.ts). Its
+ * `uid` is -1 on Windows, where there is no owner to compare, as `getuid` was
+ * missing there. It throws when this user has no passwd entry, and then
+ * nothing is ours — refusing is safer than trusting a file we cannot place.
+ */
 function ownedByUs(uid: number): boolean {
-  return typeof process.getuid !== "function" || uid === process.getuid();
+  let ours: number;
+  try {
+    ours = os.userInfo().uid;
+  } catch {
+    return false;
+  }
+  return ours === -1 || uid === ours;
 }
 
 /**

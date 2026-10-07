@@ -24,7 +24,7 @@ import { TOOLS, voucherId } from "../src/mcp/tools.js";
 const SITE = "https://sy.test";
 const ACCESS = "SENTINEL-ACCESS-7f3a9c";
 const REFRESHED = "SENTINEL-REFRESHED-2b8e1d";
-const USER = "11111111-2222-4333-8444-555555555555";
+const USER = "6b2f1c4e-9a37-4d81-b5e0-3c7a2d9f8e14";
 const VOUCHER = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 
 interface Seen {
