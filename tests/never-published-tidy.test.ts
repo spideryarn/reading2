@@ -27,14 +27,28 @@ import {
   destroyEach,
   main,
   parseIdsFile,
+  proofIsClean,
+  proveEligible,
   surveyNeverPublished,
   writeBackup,
 } from "../scripts/never-published-tidy.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articleRevisions, articles, blockIdentities, checkpoints, jobs } from "../src/db/schema.js";
+import type { AiCallRow } from "../src/ai-spend.js";
+import {
+  aiCalls,
+  articleRevisions,
+  articleTags,
+  articles,
+  blockIdentities,
+  checkpoints,
+  ingestEvents,
+  jobs,
+  uploads,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
+import { aiCallInsertValues } from "../src/store/ai-calls-pg.js";
 import { createPgCheckpointStore } from "../src/store/checkpoints-pg.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { lockOrCreateArticle } from "../src/store/pg-revisions.js";
@@ -78,6 +92,26 @@ async function age(ids: readonly string[]) {
   const then = new Date(Date.now() - 30 * DAY);
   await getDb().update(articles).set({ createdAt: then }).where(inArray(articles.id, [...ids]));
   await getDb().update(checkpoints).set({ createdAt: then, lastUsedAt: then }).where(inArray(checkpoints.articleId, [...ids]));
+  await getDb().update(blockIdentities).set({ firstSeenAt: then }).where(inArray(blockIdentities.articleId, [...ids]));
+}
+
+/** One model call of this file's owner, as the ledger writes it; the shape of tests/store-ai-calls.test.ts's. */
+function aiCall(over: Partial<AiCallRow> = {}): AiCallRow {
+  return {
+    id: crypto.randomUUID(), runId: crypto.randomUUID(), generationId: null, scopeKind: "job_step",
+    ownerId: OWNER, articleSlug: null, jobId: null, stepName: "structure", wire: "messages", job: "structure",
+    requestedModel: "anthropic/claude-sonnet-5", answeredModel: "anthropic/claude-sonnet-5", upstream: "Anthropic",
+    providerAccount: "openrouter", costSource: "provider", computedCostNanos: null, priceVersion: null,
+    credentialFingerprint: null, startedAt: new Date(Date.now() - 30 * DAY).toISOString(), finishedAt: null,
+    durationMs: 1, outcome: "ok", attempt: null, failurePhase: null, failureClass: null, failureStatus: null,
+    creditsUsedNanos: 1, byokUpstreamNanos: null, isByok: false, reportedInputTokens: 1, outputTokens: 1,
+    cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, reasoningTokens: 0,
+    webSearches: null, serviceTier: null, inferenceGeo: null, realtimeSessionId: null, providerEventId: null,
+    eventKind: null, providerStatus: null, inputTextTokens: null, inputAudioTokens: null, inputImageTokens: null,
+    cachedTextTokens: null, cachedAudioTokens: null, outputTextTokens: null, outputAudioTokens: null,
+    transcriptionSeconds: null, voiceSeconds: null,
+    ...over,
+  };
 }
 
 const survey = (quietDays = 7) => surveyNeverPublished(getDb(), { quietDays, ownerId: OWNER });
@@ -108,6 +142,9 @@ async function waitUntilSomebodyWaitsForALock(): Promise<void> {
 
 async function clear(): Promise<void> {
   await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.uploads where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.ai_calls where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.articles where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
 }
@@ -162,6 +199,64 @@ describe("the rule", () => {
     await getDb().insert(articleRevisions).values({ articleId: a.id, status: "published" });
     await age([a.id]);
     expect((await survey()).candidates).toEqual([]);
+  });
+});
+
+describe("the two queries protect the same things", () => {
+  /* Sol's R4. Each case starts from a quiet, untouched failed import and sets
+     one protected thing alone; the survey must hold it back AND the second
+     query (which is also the check under `destroy`'s lock) must refuse it. A
+     clock or a setting either query forgets turns its case red. */
+  const recent = () => new Date(Date.now() - 60 * 60 * 1000);
+  const old = () => new Date(Date.now() - 30 * DAY);
+  const set = (id: string, values: Partial<typeof articles.$inferInsert>) =>
+    getDb().update(articles).set(values).where(eq(articles.id, id));
+  const call = (articleId: string, over: Partial<AiCallRow>) =>
+    getDb().insert(aiCalls).values(aiCallInsertValues(aiCall(over), articleId));
+
+  const cases: [string, (a: { id: string; slug: string }) => Promise<unknown>][] = [
+    ["articles.created_at", (a) => set(a.id, { createdAt: recent() })],
+    ["articles.updated_at", (a) => set(a.id, { updatedAt: recent() })],
+    ["articles.last_opened_at, old", (a) => set(a.id, { lastOpenedAt: old() })],
+    ["articles.last_opened_at, recent", (a) => set(a.id, { lastOpenedAt: recent() })],
+    ["articles.opens", (a) => set(a.id, { opens: 1 })],
+    ["articles.high_power_since", (a) => set(a.id, { highPowerSince: old() })],
+    ["articles.title_override", (a) => set(a.id, { titleOverride: "x" })],
+    ["articles.purpose", (a) => set(a.id, { purpose: "x" })],
+    ["articles.archived_at", (a) => set(a.id, { archivedAt: old() })],
+    ["articles.share_token", (a) => set(a.id, { shareToken: "A".repeat(22), shareTokenAt: old() })],
+    ["articles.visibility and public_at", (a) => set(a.id, { visibility: "public", publicAt: old() })],
+    ["articles.public_at alone", (a) => set(a.id, { publicAt: old() })],
+    ["a reader table (article_tags)", (a) => getDb().insert(articleTags).values({ articleId: a.id, tag: "x" })],
+    ["checkpoints.last_used_at", (a) => getDb().update(checkpoints).set({ lastUsedAt: recent() }).where(eq(checkpoints.articleId, a.id))],
+    ["checkpoints.created_at", (a) => getDb().update(checkpoints).set({ createdAt: recent() }).where(eq(checkpoints.articleId, a.id))],
+    ["block_identities.first_seen_at", (a) => getDb().update(blockIdentities).set({ firstSeenAt: recent() }).where(eq(blockIdentities.articleId, a.id))],
+    /* Each clock alone, however unlikely the pair: `aiCallInsertValues` turns a
+       null `finishedAt` into 1970, so "finished long ago" is what a null is. */
+    ["ai_calls.started_at", (a) => call(a.id, { startedAt: recent().toISOString(), finishedAt: old().toISOString() })],
+    ["ai_calls.finished_at, started long ago", (a) => call(a.id, { startedAt: old().toISOString(), finishedAt: recent().toISOString() })],
+    ["ai_calls.created_at, both clocks long ago", (a) => call(a.id, { startedAt: old().toISOString(), finishedAt: old().toISOString() })],
+    ["uploads.minted_at", (a) => getDb().insert(uploads).values({
+      id: crypto.randomUUID(), ownerId: OWNER, filename: "x.pdf", claimedBytes: 1, claimedSha256: "0".repeat(64), status: "pending",
+      grantExpiresAt: new Date(Date.now() + DAY), slug: a.slug,
+    })],
+    ["a job, finished long ago", async (a) => {
+      await getDb().insert(jobs).values({ id: mintId(), ownerId: OWNER, slug: a.slug, steps: [], status: "error", workKey: `work-${mintId()}` });
+      await getDb().update(jobs).set({ createdAt: old() }).where(eq(jobs.slug, a.slug));
+    }],
+    ["a revision, made long ago", (a) => getDb().insert(articleRevisions).values({ articleId: a.id, status: "failed", createdAt: old() })],
+    ["a reservation by slug", (a) => getDb().insert(ingestEvents).values({ ownerId: OWNER, slug: a.slug, reservedAt: old() })],
+  ];
+
+  it.each(cases)("%s", async (_name, protect) => {
+    const a = await failedFirstImport("one-thing", { identities: 2, checkpoint: true });
+    await age([a.id]);
+    expect((await survey()).eligible.map((c) => c.articleId), "the starting point is eligible").toEqual([a.id]);
+    await protect(a);
+    const s = await survey();
+    const held = s.candidates.find((c) => c.articleId === a.id)?.hold ?? [];
+    const proof = await getDb().transaction(async (tx) => await proveEligible(tx, [a.id], 7), { accessMode: "read only" });
+    expect({ surveyHolds: held.length > 0, proofRefuses: !proofIsClean(proof, 1) }).toEqual({ surveyHolds: true, proofRefuses: true });
   });
 });
 
@@ -246,7 +341,8 @@ describe("--delete refuses", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
     try {
       const { backup } = await writeBackup(getDb(), [a.id], dir);
-      await getDb().insert(blockIdentities).values({ articleId: a.id, blockId: mintId() });
+      /* Dated a month back, so no clock sees it and only the comparison can. */
+      await getDb().insert(blockIdentities).values({ articleId: a.id, blockId: mintId(), firstSeenAt: new Date(Date.now() - 30 * DAY) });
       await expect(destroyEach(getDb(), targets, 7, backup)).rejects.toThrow(/not the rows the backup holds.*block_identities: 3 now, 2 backed up/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -360,6 +456,7 @@ describe("the command refuses, and never reaches destroy", () => {
     const a = await failedFirstImport("two-days");
     const twoDaysAgo = new Date(Date.now() - 2 * DAY);
     await getDb().update(articles).set({ createdAt: twoDaysAgo }).where(eq(articles.id, a.id));
+    await getDb().update(blockIdentities).set({ firstSeenAt: twoDaysAgo }).where(eq(blockIdentities.articleId, a.id));
     expect((await survey(1)).eligible.map((c) => c.articleId)).toEqual([a.id]);
     const s = scratch([a.id]);
     const { deps, calls } = harness();

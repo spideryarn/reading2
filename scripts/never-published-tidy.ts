@@ -147,12 +147,18 @@ function readerRowsOf(alias: string) {
   );
 }
 
-/** Shelf state a reader set by hand: a title, a purpose, archiving, sharing, an open. */
+/**
+ * Shelf state a reader set by hand: a title, a purpose, archiving, sharing
+ * (now or ever), an open, the high-powered-AI switch. The survey's spelling;
+ * `proveEligible` has its own, and tests/never-published-tidy.test.ts § "the
+ * two queries protect the same things" fails if they part.
+ */
 function shelfStateOf(alias: string) {
   return sql.raw(
     `(case when ${alias}.title_override is not null or ${alias}.purpose is not null or ` +
-      `${alias}.archived_at is not null or ${alias}.share_token is not null or ` +
-      `${alias}.visibility <> 'private' or ${alias}.public_at is not null or ${alias}.opens > 0 ` +
+      `${alias}.archived_at is not null or ${alias}.share_token is not null or ${alias}.share_token_at is not null or ` +
+      `${alias}.visibility <> 'private' or ${alias}.public_at is not null or ${alias}.opens > 0 or ` +
+      `${alias}.last_opened_at is not null or ${alias}.high_power_since is not null ` +
       `then 1 else 0 end)`,
   );
 }
@@ -182,18 +188,18 @@ export async function surveyNeverPublished(
             (select count(*) from spideryarn.block_identities b where b.article_id = a.id) as block_identities,
             (select count(*) from spideryarn.checkpoints c where c.article_id = a.id) as checkpoints,
             (select count(*) from spideryarn.ai_calls c where c.article_id = a.id) as ai_calls,
-            (select count(*) from spideryarn.jobs j where j.slug = a.slug and j.owner_id = a.owner_id) as jobs,
+            (select count(*) from spideryarn.jobs j where j.slug = a.slug) as jobs,
             (select count(*) from spideryarn.ingest_events e
-               where e.article_id = a.id or (e.slug = a.slug and e.owner_id = a.owner_id)) as reservations,
+               where e.article_id = a.id or e.slug = a.slug) as reservations,
             (select count(*) from spideryarn.uploads u where u.slug = a.slug) as uploads_by_slug,
             ${readerRowsOf("a")} + ${shelfStateOf("a")} as reader_state,
-            greatest(a.created_at, coalesce(a.updated_at, a.created_at), coalesce(a.last_opened_at, a.created_at),
-              coalesce((select max(greatest(j.created_at, coalesce(j.started_at, j.created_at), coalesce(j.finished_at, j.created_at)))
-                        from spideryarn.jobs j where j.slug = a.slug and j.owner_id = a.owner_id), a.created_at),
-              coalesce((select max(c.last_used_at) from spideryarn.checkpoints c where c.article_id = a.id), a.created_at),
-              coalesce((select max(coalesce(c.finished_at, c.started_at)) from spideryarn.ai_calls c where c.article_id = a.id), a.created_at),
-              coalesce((select max(u.minted_at) from spideryarn.uploads u where u.slug = a.slug), a.created_at),
-              coalesce((select max(r.created_at) from spideryarn.article_revisions r where r.article_id = a.id), a.created_at)
+            greatest(a.created_at, a.updated_at, a.last_opened_at,
+              (select max(greatest(j.created_at, j.started_at, j.finished_at)) from spideryarn.jobs j where j.slug = a.slug),
+              (select max(greatest(c.created_at, c.last_used_at)) from spideryarn.checkpoints c where c.article_id = a.id),
+              (select max(greatest(c.created_at, c.started_at, c.finished_at)) from spideryarn.ai_calls c where c.article_id = a.id),
+              (select max(u.minted_at) from spideryarn.uploads u where u.slug = a.slug),
+              (select max(r.created_at) from spideryarn.article_revisions r where r.article_id = a.id),
+              (select max(b.first_seen_at) from spideryarn.block_identities b where b.article_id = a.id)
             ) as newest,
             now() as now
           from spideryarn.articles a
@@ -260,10 +266,14 @@ export function proofIsClean(proof: EligibleProof, expected: number): boolean {
 
 /**
  * **The second query.** It shares the reader-table list with the first and
- * nothing else: no candidate predicate, and the recency is asked of the four
- * clocks most likely to move (job, checkpoint, model call, upload) by a
- * different shape of SQL. Disagreement is the only way agreement means
- * anything — docs/reusable/silent-success.md.
+ * nothing else: no candidate predicate, its own spelling of the shelf settings,
+ * and every clock the survey reads asked one by one with `exists` rather than
+ * folded into one `greatest`. Disagreement is the only way agreement means
+ * anything — docs/reusable/silent-success.md. **Independent in shape, the same
+ * in what it protects**: GPT Sol's R4 found this one missing three clocks and
+ * the high-power switch, and tests/never-published-tidy.test.ts § "the two
+ * queries protect the same things" now sets each protected column alone and
+ * asks both. It is also the check `refusalUnderTheLock` runs inside `destroy`.
  */
 export async function proveEligible(
   tx: Pick<Tx, "execute">,
@@ -282,12 +292,22 @@ export async function proveEligible(
         count(*) filter (where exists (select 1 from spideryarn.article_revisions r where r.article_id = a.id))::int as revisions,
         count(*) filter (where exists (select 1 from spideryarn.jobs j where j.slug = a.slug))::int as jobs,
         count(*) filter (where exists (select 1 from spideryarn.ingest_events e where e.article_id = a.id or e.slug = a.slug))::int as reservations,
-        count(*) filter (where ${readerRowsOf("a")} + ${shelfStateOf("a")} > 0)::int as reader_state,
+        count(*) filter (where ${readerRowsOf("a")} > 0
+          or coalesce(a.title_override, a.purpose, a.share_token) is not null
+          or num_nonnulls(a.archived_at, a.share_token_at, a.public_at, a.last_opened_at, a.high_power_since) > 0
+          or a.visibility is distinct from 'private' or a.opens <> 0)::int as reader_state,
         count(*) filter (where a.created_at >= now() - ${days}
-          or exists (select 1 from spideryarn.jobs j where j.slug = a.slug and j.created_at >= now() - ${days})
-          or exists (select 1 from spideryarn.checkpoints c where c.article_id = a.id and c.last_used_at >= now() - ${days})
-          or exists (select 1 from spideryarn.ai_calls c where c.article_id = a.id and c.started_at >= now() - ${days})
-          or exists (select 1 from spideryarn.uploads u where u.slug = a.slug and u.minted_at >= now() - ${days}))::int as recent
+          or a.updated_at >= now() - ${days}
+          or a.last_opened_at >= now() - ${days}
+          or exists (select 1 from spideryarn.jobs j where j.slug = a.slug
+                     and (j.created_at >= now() - ${days} or j.started_at >= now() - ${days} or j.finished_at >= now() - ${days}))
+          or exists (select 1 from spideryarn.checkpoints c where c.article_id = a.id
+                     and (c.created_at >= now() - ${days} or c.last_used_at >= now() - ${days}))
+          or exists (select 1 from spideryarn.ai_calls c where c.article_id = a.id
+                     and (c.created_at >= now() - ${days} or c.started_at >= now() - ${days} or c.finished_at >= now() - ${days}))
+          or exists (select 1 from spideryarn.uploads u where u.slug = a.slug and u.minted_at >= now() - ${days})
+          or exists (select 1 from spideryarn.article_revisions r where r.article_id = a.id and r.created_at >= now() - ${days})
+          or exists (select 1 from spideryarn.block_identities b where b.article_id = a.id and b.first_seen_at >= now() - ${days}))::int as recent
       from spideryarn.articles a
       where a.id in (${list})`)
   ).rows as Row[];
