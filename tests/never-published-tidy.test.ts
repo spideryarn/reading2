@@ -103,7 +103,8 @@ function aiCall(over: Partial<AiCallRow> = {}): AiCallRow {
     ownerId: OWNER, articleSlug: null, jobId: null, stepName: "structure", wire: "messages", job: "structure",
     requestedModel: "anthropic/claude-sonnet-5", answeredModel: "anthropic/claude-sonnet-5", upstream: "Anthropic",
     providerAccount: "openrouter", costSource: "provider", computedCostNanos: null, priceVersion: null,
-    credentialFingerprint: null, startedAt: new Date(Date.now() - 30 * DAY).toISOString(), finishedAt: null,
+    credentialFingerprint: null, startedAt: new Date(Date.now() - 30 * DAY).toISOString(),
+    finishedAt: new Date(Date.now() - 30 * DAY).toISOString(),
     durationMs: 1, outcome: "ok", attempt: null, failurePhase: null, failureClass: null, failureStatus: null,
     creditsUsedNanos: 1, byokUpstreamNanos: null, isByok: false, reportedInputTokens: 1, outputTokens: 1,
     cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, reasoningTokens: 0,
@@ -232,8 +233,9 @@ describe("the two queries protect the same things", () => {
     ["checkpoints.last_used_at", (a) => getDb().update(checkpoints).set({ lastUsedAt: recent() }).where(eq(checkpoints.articleId, a.id))],
     ["checkpoints.created_at", (a) => getDb().update(checkpoints).set({ createdAt: recent() }).where(eq(checkpoints.articleId, a.id))],
     ["block_identities.first_seen_at", (a) => getDb().update(blockIdentities).set({ firstSeenAt: recent() }).where(eq(blockIdentities.articleId, a.id))],
-    /* Each clock alone, however unlikely the pair: `aiCallInsertValues` turns a
-       null `finishedAt` into 1970, so "finished long ago" is what a null is. */
+    /* Each clock alone, however unlikely the pair: the old survey read
+       `coalesce(finished_at, started_at)`, so a set `finished_at` hid a later
+       `started_at`. */
     ["ai_calls.started_at", (a) => call(a.id, { startedAt: recent().toISOString(), finishedAt: old().toISOString() })],
     ["ai_calls.finished_at, started long ago", (a) => call(a.id, { startedAt: old().toISOString(), finishedAt: recent().toISOString() })],
     ["ai_calls.created_at, both clocks long ago", (a) => call(a.id, { startedAt: old().toISOString(), finishedAt: old().toISOString() })],
