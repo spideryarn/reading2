@@ -61,8 +61,8 @@ import { mintId } from "./ids.js";
 
    This comment described an artefact store "the filesystem session writes
    through" until 2026-10-07, and promised that stage 4 would delete the
-   import. Neither was true of this line: there has been no filesystem session
-   since 2026-09-05, and the import is the ledger. */
+   import. Neither was true of this line: production has used no filesystem
+   session since 2026-09-05, and the import is the ledger. */
 import { costStore, totalLedger } from "./store/ai-calls.js";
 import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
@@ -268,8 +268,9 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * Neither number was changed with this note. What rests on them is the sum
  * above, and `STEP_BUDGET_MS.assets`, which decides whether `assets` is started
  * after `structure` in the same window: a step admitted on 185 s can outlive
- * the deadline, and when it does it is put down and run again
- * (`transitionAfter`), not ended.
+ * the deadline. `transitionAfter` discards its product; `pauseForDeadline`
+ * requeues while budget remains, lets Stop win, or refuses a stale claim.
+ * Exhausting the budget ends the job as interrupted.
  *
  * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
  * requests.** `STEP_BUDGET_MS.structure` is now 700s, so a walk that has spent
@@ -539,8 +540,9 @@ export function jobConcurrency(): number {
  * hands the claim back **intact**, spends no budget, and stays `queued`, and
  * the next request continues. (This said the job ended `error` and that a
  * scratch directory on Vercel went with the invocation. There has been no
- * scratch directory since 2026-09-05, and since 2026-09-04 a step the deadline
- * stops is paused with its draft, not ended.)
+ * scratch directory since 2026-09-05. Since 2026-09-04 a step that throws on
+ * deadline can pause with its draft while requeue budget remains; late returns
+ * take that path too since 2026-10-07.)
  *
  * Every number is either measured or a generous guess and **says which**, which
  * is the discipline `tests/jobs-lease-budget.test.ts` learned the hard way:
@@ -724,7 +726,8 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      real worst case is about 360 s and this number is under it. Unchanged
      here; whether to raise it is reported in
      docs/plans/261007b-seventh-sweep-job-queue-tier-0.md. A step that does
-     outlive the deadline is put down and run again, not ended. */
+     outlive the deadline discards its product and asks `pauseForDeadline` for
+     another window; exhausted budget ends the job as interrupted. */
   assets: 185_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
      up hard because it is a model call and one measurement is one sample. */
@@ -1102,12 +1105,11 @@ function stepPreviews(
  * two drivers until both went: `runJob`, which looped it, and an `advanceJob`
  * that called it once per HTTP request.)
  *
- * **Never throws — with one exception, and it is not a step failure.** A failure
- * is an outcome, recorded on the job and on the step, because both callers have
- * to tell the same story about it. The exception is `StaleAttemptError` out of
- * `note`: that does not mean the step went wrong, it means *this claimant no
- * longer owns this job*, and carrying on would spend a model call whose result
- * nothing will accept. It propagates, and `advanceJob` turns it into `busy`.
+ * **Ordinary step failures are outcomes, recorded on the job and the step.**
+ * `StaleAttemptError` propagates because this claimant no longer owns the job;
+ * `advanceJob` answers `busy`. `DraftGoneError` also propagates: the claim is
+ * still ours but its draft is gone, so the walk ends it through storage recovery.
+ * A settlement that itself cannot be written is left to the lease.
  *
  * **The one job write this makes is the step's own transition**, and it makes it
  * through `session.commit` so that the artefacts, the step's completion and the
@@ -1134,7 +1136,7 @@ async function runStep(
   /* The caller's progress write. It answers with the job row as it now stands —
      which is how the walk notices a Stop pressed on another instance — but that
      is the caller's business and nothing here reads it. */
-  note: () => Promise<unknown>,
+  note: () => Promise<Job | undefined>,
   session: StoreSession,
   registry: StepRegistry,
   decide: () => JobTransition,
@@ -1269,7 +1271,14 @@ async function runStep(
     // stage skips the four before it — so at `info` this would be the bulk of
     // the log and the lines that matter would be sitting in it.
     jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
-    await note();
+    const skipped = await note();
+    /* A skipped tail can otherwise reach the all-skipped publication door
+       after a previous progress failure missed Stop. This is a boundary
+       response, not a Stop arriving during an already-running last step. */
+    if (skipped?.cancelling) {
+      markCancelled(job, "Cancelled");
+      return { outcome: "cancelled" };
+    }
     return { outcome: "skipped" };
   }
 
@@ -1285,13 +1294,20 @@ async function runStep(
      would otherwise be shown under this one. */
   delete step.preview;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
-  await note();
+  const starting = await note();
 
   /* Filled by `collectSpend`'s `onDone` below, which fires on both paths — so
      this is readable from the `catch` as well as from the success path. */
   let spend: SpendReport = emptySpend();
 
   try {
+    /* A failed kept-step note can miss Stop. The starting write is another
+       look at the row: honour its cancellation before beginning paid work.
+       Preview writes during an already-running step keep their existing rule. */
+    if (starting?.cancelling) {
+      controller.abort();
+      controller.signal.throwIfAborted();
+    }
     if (!powerRead.ok) throw powerRead.error;
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
@@ -1367,7 +1383,9 @@ async function runStep(
        Until 2026-10-07 only `extract` was lifted, so that job never had one. */
     step.status = "done";
     step.finishedAt = new Date().toISOString();
-    if (step.name === "extract" || step.name === "metadata") job.title = product.detail;
+    if ((step.name === "extract" || step.name === "metadata") && product.detail?.trim()) {
+      job.title = product.detail;
+    }
 
     /* **The whole of what used to be four calls, three here and one in the
        caller.** `commit` validates the product against `produces` before it
@@ -2123,15 +2141,16 @@ export interface Advanced {
  *
  * ## What this deliberately does not do
  *
- * **Take over a lapsed claim's work inside the request that finds it.** The
- * sweep at the top of `advanceJobWith` moves the row and nothing more: back to
- * `queued` with its draft while `REQUEUE_BUDGET` lasts, and after that ended
- * as interrupted, with Retry the reader's to press. Whoever claims the queued
- * row next carries on from the artefacts.
+ * **Resume work as part of the sweep itself.** The sweep at the top of
+ * `advanceJobWith` only moves rows: Stop ends cancelled; otherwise back to
+ * `queued` with the draft while `REQUEUE_BUDGET` lasts, then ended interrupted.
+ * This request can immediately claim its requeued job; another request can
+ * claim it too. The successful claimant carries on from the artefacts.
  *
- * That requeue is safe because every durable write is inside the fenced
- * transaction (src/store/pg-session.ts), so a claimant that turns out to be
- * alive after all cannot write. Until that was built (2026-09-01, with the
+ * That requeue is safe because artefact rows, step completion and the job's
+ * release or ending share a fenced transaction (src/store/pg-session.ts).
+ * A stale claimant cannot commit them. Checkpoints and the cost ledger have
+ * their own lifetimes. Until that was built (2026-09-01, with the
  * requeue following on 2026-09-03) this paragraph said a lapsed job was simply
  * failed, because guessing that an owner is dead is how two runners end up
  * writing one article — the fault docs/plans/260826q-job-queue-rethink.md
@@ -2464,9 +2483,9 @@ export async function advanceJobWith(
    * true. With `REQUEUE_BUDGET` windows left the row goes back to `queued` on
    * the same id and the very next claimant may take it — the reader sees a card
    * that carries on, not a failure. It is only once the budget is spent that the
-   * job is settled and offered a button. Either way the sweep never *takes over*
-   * the work in this request: it moves the row and returns, and something else
-   * claims it. GPT Sol, reviewing the built stage 3, finding 6.
+   * job is settled and offered a button (Stop cancels regardless of budget).
+   * The sweep only moves rows. The claim below may immediately resume the
+   * requested job; another request may claim it instead.
    *
    * **And it is deliberately not scoped to `owner`, which is in scope on the
    * line above and would look like a free improvement.** `settleExpired` takes
@@ -2610,10 +2629,10 @@ export async function advanceJobWith(
  *
  * ## What ends the walk
  *
- * Five things, and each has a branch below: the job runs out of steps, a step
- * fails, a step is cancelled, a Stop lands between two steps, or there is not
- * enough of the claimant's own deadline left for the next step — the last being
- * the only one that hands the claim back with the job still to do.
+ * The branches below handle completion, step failure, Stop, a lost claim or
+ * draft, and hand-back. Hand-back happens between steps when time is short,
+ * or mid-step on our deadline or `NeedsAnotherWindow`; the latter two share
+ * the bounded `pauseForDeadline` path.
  */
 async function walkClaim(
   job: Job,
@@ -2850,13 +2869,17 @@ async function walkClaim(
 
      **A write that fails answers `undefined` and the walk goes on**, unless the
      failure is the fence saying the claim has moved, which still propagates.
-     Every call is awaited outside `runStep`'s `try` (a skip, a step starting,
+     The three direct calls sit outside `runStep`'s `try` (a skip, a step starting,
      a kept step), so until 2026-10-07 any other failure left the walk through
      its outer `catch` with the row still `running` behind a live lease. This
-     is a progress bar: the next fenced write, which is the step's own
-     `beginStep` or its commit, is what decides whether the store can be
-     reached. What a failed write costs is one look at `cancelling`, so a Stop
-     pressed on another instance is noticed one step later.
+     normally updates the card, but a forced step's `done` status also spends
+     its force request (`stillForced`). Losing that receipt can repeat committed
+     work after a pause; the review records the wider atomic-receipt defect.
+     The next fenced write, the step's own `beginStep` or commit, decides whether the store can be
+     reached. A failed write loses one look at `cancelling`. A successful
+     starting write notices Stop before running the next runnable step; repeated write
+     failures can delay it across several steps. The finite step list and the
+     claim deadline bound that delay, not a promise of one step.
      tests/jobs-walk.test.ts § the exits of a claim. */
   const note = async (): Promise<Job | undefined> => {
     try {

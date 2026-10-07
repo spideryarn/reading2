@@ -38,16 +38,15 @@
  *
  * ## What an expired lease means, and what it deliberately does not
  *
- * It means *nobody is coming back*, and `settleExpired` moves the row: back
- * to `queued` with its draft kept while the job has requeue budget left, so
- * the next claimant carries on; and once the budget is spent, settled so a
- * reader can press Retry — as `error` ordinarily, or as `cancelled` if they
- * had already pressed Stop.
+ * `settleExpired` cancels a row whose reader pressed Stop, regardless of its
+ * remaining budget. Otherwise it moves the row back to `queued` with its draft
+ * kept while requeue budget remains; once spent, it ends `error` for Retry.
  *
- * Handing a lapsed job to another claimant is safe because every durable write
- * is fenced: artefacts, the step's completion and the job's move commit in one
- * transaction that checks the live attempt (src/store/pg-session.ts,
- * src/store/job-fence.ts), so a claimant whose lease has lapsed cannot write.
+ * Handing a lapsed job to another claimant is safe because artefact rows,
+ * step completion and the job's release or ending commit in one transaction
+ * that checks the live attempt (src/store/pg-session.ts, src/store/job-fence.ts).
+ * A claimant whose lease has lapsed cannot commit those; checkpoints and ledger
+ * writes have separate lifetimes.
  *
  * This section said the opposite until 2026-10-07: that an expired lease does
  * **not** let another claimant take the job, because "the artefacts are still
@@ -729,8 +728,8 @@ export interface JobStore {
    * claimant's own timer is the thing that has to fire first, and it cannot if
    * progress keeps pushing the lease away from it.
    *
-   * `title`, when given, is written with the steps; left out, the row keeps the
-   * one it has. It is here because a pause and a lapsed-lease requeue answer
+   * A nonblank `title` is written with the steps; absent or blank, the row keeps
+   * the one it has. It is here because a pause and a lapsed-lease requeue answer
    * from the row, and a title the claimant held only in memory was lost to both.
    */
   noteProgress(id: string, attempt: string, steps: JobStep[], title?: string): Promise<Job>;

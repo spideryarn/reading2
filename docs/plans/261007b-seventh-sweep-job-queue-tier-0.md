@@ -1,8 +1,8 @@
 # Seventh sweep: the job queue's tier 0
 
-Status as of 2026-10-07: built and committed in a worktree, five commits; not pushed, and not yet
-reviewed by GPT Sol. Evidence: the cases in `tests/jobs-walk.test.ts` § *the exits of a claim*,
-each red before its fix and red again under the mutation listed at the foot.
+Status as of 2026-10-07: built in five commits, reviewed by GPT Sol with uncommitted fixes;
+not pushed. The builder's original Postgres evidence is recorded below. The review's additional
+Postgres checks are unrun because its sandbox has no database or network.
 
 **The five commits are titled `261007a`**, which is what this file was called until `dev` was
 merged in and another plan turned out to hold that letter. It is `261007b`; the commits are these.
@@ -348,3 +348,41 @@ which is what they are for.
 - **Another cluster's:** PQ3, PQO3, PQO5.
 - A GPT Sol review of these commits, which the orchestrating agent runs before pushing.
 
+## Write-capable review, 2026-10-07
+
+The review retained tolerant progress writes, with two corrections: a successful starting or
+skipped-step write carrying Stop must be consumed, and repeated failures can hide Stop across
+several steps. The earlier claim of exactly one extra step was too strong. `beginStep` and commit
+still fence lost claims; a persistent database outage stops work at `beginStep`. Failures of the
+settlement write remain covered by the lease rather than reported as an ending that was not stored.
+
+Blank titles now preserve the existing title at the coordinator and progress-store boundaries;
+forwarding test spies carry the optional title too. The deadline regression now returns novel
+metadata and reads the real draft, so fake freshness cannot conceal an erroneous late commit.
+Additional offline cases cover the four pause outcomes, earlier commits, exhausted requeue budget,
+lost claims and unavailable storage. Both running-last-step Stop characterisations remain intact.
+
+All 55 comment edits were reviewed, not sampled. Corrections include the retained test-only
+filesystem session, Stop preceding expiry-budget classification, same-request reclamation after
+the sweep, bounded resumption, the actual exception and exit sets, obsolete step counts, the
+625.4s test arithmetic and the scope of transactional fencing. `db08f2408`'s five files compiled
+identically with comments stripped: 85,336 bytes on each side. No budget constant was changed.
+
+**Review verdict: do not ship yet.** Repeated progress failures expose a wider receipt defect:
+`session.commit` with `keep` stores the artefacts but not the job's completed force status. If the
+kept note and next starting note both fail, pausing resets the stored running step to pending.
+The next claim forces that already-committed step again. An offline characterisation reproduced
+two executions; a new Postgres regression asserts one and is unrun. This is also reachable through
+lease expiry after a failed progress write, so it predates tolerance; treating the write as harmless
+does not close it. An atomic receipt needs session/store work beyond this review's permitted files.
+
+Review additions to `tests/jobs-walk.test.ts` are **unrun**, not failed: there is no Postgres or
+network in the review sandbox. The orchestrator must run that file before landing these fixes.
+The [postmortem](../postmortems/261007b-a-progress-write-can-carry-a-stop-and-a-blank-title-can-erase-a-heading.md)
+records the classes and the checks that missed them. No review fix was committed or pushed.
+
+Validation in the review sandbox: the four-file offline run passed 42/42; adding the wider receipt
+characterisation then gave 14/14 in the updated offline queue file (43 distinct offline cases
+across those four files). Typechecking passed all four projects, covering 3,339 sources. Scoped
+lint retains one pre-existing error, one warning and five complexity notices; no new lint
+diagnostic remains. `git diff --check` passed. No `npm test` or database test was run.

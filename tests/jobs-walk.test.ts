@@ -552,9 +552,9 @@ describe("one claim walks the whole job", () => {
     const claimed = vi.spyOn(pgJobStore, "claim");
     const attempts = new Set<string>();
     const realNote = pgJobStore.noteProgress.bind(pgJobStore);
-    vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+    vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
       attempts.add(attempt);
-      return await realNote(id, attempt, steps);
+      return await realNote(id, attempt, steps, title);
     });
 
     const advanced = await advanceAsOwner(job.id, parts);
@@ -1055,12 +1055,12 @@ describe("one claim walks the whole job", () => {
         },
       });
       const realNote = pgJobStore.noteProgress.bind(pgJobStore);
-      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
         if (steps.some((s) => s.preview)) {
           refused += 1;
           throw refusal(id);
         }
-        return await realNote(id, attempt, steps);
+        return await realNote(id, attempt, steps, title);
       });
 
       const advanced = await advanceAsOwner(job.id, parts);
@@ -1104,11 +1104,11 @@ describe("one claim walks the whole job", () => {
       });
       const realNote = pgJobStore.noteProgress.bind(pgJobStore);
       let delayed = 0;
-      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
-        if (!steps.some((s) => s.preview)) return await realNote(id, attempt, steps);
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (!steps.some((s) => s.preview)) return await realNote(id, attempt, steps, title);
         delayed += 1;
         const asAsked = structuredClone(steps);
-        const landing = new Promise((go) => setTimeout(go, 200)).then(() => realNote(id, attempt, asAsked));
+        const landing = new Promise((go) => setTimeout(go, 200)).then(() => realNote(id, attempt, asAsked, title));
         late = landing;
         return await landing;
       });
@@ -1152,9 +1152,11 @@ describe("one claim walks the whole job", () => {
   /**
    * **The ways a claim was put down wrongly, or not put down at all** — the
    * seventh sweep's tier 0 for the queue
-   * (docs/plans/261007b-seventh-sweep-job-queue-tier-0.md). Each case was
-   * watched red against the code as it stood, and each fix was mutated back at
-   * the end; the plan lists both.
+   * (docs/plans/261007b-seventh-sweep-job-queue-tier-0.md). The builder watched
+   * its original cases red and mutated each fix back. GPT Sol's review added
+   * cases and strengthened the late-product assertion with no database to run
+   * them on; they were run against Postgres afterwards, and each of its fixes
+   * taken out again to watch its case go red. The plan has which did what.
    */
   describe("the exits of a claim (seventh sweep, tier 0)", () => {
     const sleep = (ms: number) => new Promise((go) => setTimeout(go, ms));
@@ -1243,10 +1245,10 @@ describe("one claim walks the whole job", () => {
       const { ran, job, parts } = await fixture(`test-walk-note-fails-${nth}`, names);
       const realNote = pgJobStore.noteProgress.bind(pgJobStore);
       let calls = 0;
-      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
         calls += 1;
         if (calls === nth) throw new Error("the database blinked");
-        return await realNote(id, attempt, steps);
+        return await realNote(id, attempt, steps, title);
       });
 
       const advanced = await advanceAsOwner(job.id, parts);
@@ -1264,17 +1266,19 @@ describe("one claim walks the whole job", () => {
       fresh.note("test-walk-note-fails-skip", "fetch");
       const realNote = pgJobStore.noteProgress.bind(pgJobStore);
       let calls = 0;
-      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
         calls += 1;
         if (calls === 1) {
           expect(steps[0]?.status, "the first write is the skip's").toBe("skipped");
+          expect(steps[1]?.status, "the skip must be written before the next step starts").toBe("pending");
           throw new Error("the database blinked");
         }
-        return await realNote(id, attempt, steps);
+        return await realNote(id, attempt, steps, title);
       });
 
       const advanced = await advanceAsOwner(job.id, parts);
 
+      expect(calls, "the failing skipped-step write must have happened").toBeGreaterThan(0);
       expect(ran.names).toEqual(["extract"]);
       expect(advanced?.job.status).toBe("done");
     });
@@ -1297,34 +1301,93 @@ describe("one claim walks the whole job", () => {
       await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
     });
 
+    it("honours the next starting write's Stop after a kept progress write fails", async () => {
+      const { ran, job, parts } = await fixture("test-walk-note-fails-stop", ["fetch", "extract"]);
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (++calls === 2) {
+          await pgJobStore.requestCancel(id, OWNER);
+          throw new Error("progress write lost");
+        }
+        return await realNote(id, attempt, steps, title);
+      });
+      const advanced = await advanceAsOwner(job.id, parts);
+      expect(calls).toBe(3);
+      expect(ran.names).toEqual(["fetch"]);
+      expect(advanced?.job.status).toBe("cancelled");
+      expect((await rowOf(job.id))?.status).toBe("cancelled");
+    });
+
+    it("honours a skipped tail's Stop after a kept progress write fails", async () => {
+      const slug = "test-walk-note-fails-stop-skip";
+      const { ran, job, parts, fresh } = await fixture(slug, ["fetch", "extract"]);
+      fresh.note(slug, "extract");
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (++calls === 2) {
+          await pgJobStore.requestCancel(id, OWNER);
+          throw new Error("progress write lost");
+        }
+        return await realNote(id, attempt, steps, title);
+      });
+      const advanced = await advanceAsOwner(job.id, parts);
+      expect(calls).toBe(3);
+      expect(ran.names).toEqual(["fetch"]);
+      expect(advanced?.job.status).toBe("cancelled");
+      expect(advanced?.job.steps[1]?.status).toBe("skipped");
+      expect((await rowOf(job.id))?.status).toBe("cancelled");
+    });
+
     /* ------------------------------------------------------------ PQO1 -- */
 
     it("puts the job down with its draft, not ends it, when a step returns after our own deadline", async () => {
       const slug = "test-walk-returns-after-deadline";
-      const { job, parts, fresh, made } = await fixture(slug, ["fetch"]);
+      const { job, parts, fresh, made } = await fixture(slug, ["metadata"]);
+      const lateTitle = "A title the deadline must not commit";
+      expect(made.metadata?.parts).toBeTruthy();
+      const originalMeta = (made.metadata!.parts as { meta: { title: string } }).meta;
+      expect(originalMeta.title).not.toBe(lateTitle);
+      const lateProduct = {
+        ...made.metadata,
+        detail: lateTitle,
+        parts: { meta: { ...originalMeta, title: lateTitle } },
+      } as StepProduct;
+      let draftReads: ArtifactReads | undefined;
+      let commits = 0;
       let runs = 0;
       let abortedWhenItReturned: boolean | undefined;
       /* A step that ignores its signal, and is not marked fresh by a run the
          queue did not keep: under the real reads the unfinished run's marker is
          what says so, and `freshness()` has no marker. */
       const ignoresItsSignal = {
-        name: "fetch",
-        label: STEPS.fetch.label,
-        produces: STEPS.fetch.produces,
+        name: "metadata",
+        label: STEPS.metadata.label,
+        produces: STEPS.metadata.produces,
         async run(ctx: StepContext): Promise<StepProduct> {
           runs += 1;
           if (runs === 1) {
             await sleep(400);
             abortedWhenItReturned = ctx.signal.aborted;
           } else {
-            fresh.note(slug, "fetch");
+            fresh.note(slug, "metadata");
           }
-          return made.fetch as StepProduct;
+          return lateProduct;
         },
       } as PipelineStep;
       const withStep: AdvanceParts = {
         ...parts,
-        steps: { ...parts.steps, fetch: ignoresItsSignal } as AdvanceParts["steps"],
+        steps: { ...parts.steps, metadata: ignoresItsSignal } as AdvanceParts["steps"],
+        session: async (j, attempt) => {
+          const session = await claimSession(j, attempt);
+          draftReads = session.reads;
+          return {
+            ...session,
+            reads: fresh.reads,
+            commit: async (...args) => { commits += 1; return await session.commit(...args); },
+          };
+        },
       };
 
       const first = await advanceAsOwner(job.id, {
@@ -1333,6 +1396,7 @@ describe("one claim walks the whole job", () => {
       });
 
       expect(abortedWhenItReturned, "the deadline has to have fired while the step ran").toBe(true);
+      expect(commits, "the late product must not enter the commit at all").toBe(0);
       expect(first?.done, "there is still work to do").toBe(false);
       expect(first?.busy).toBe(false);
       expect(first?.job.status).toBe("queued");
@@ -1341,11 +1405,15 @@ describe("one claim walks the whole job", () => {
       const paused = await rowOf(job.id);
       expect(paused?.draft, "the draft is kept").toBeTruthy();
       expect(await revisionStatus(paused?.draft)).toBe("draft");
+      expect((await draftReads?.read(slug, "metadata", "meta"))?.title,
+        "real draft reads, not fake freshness, prove the late product was discarded").toBe(originalMeta.title);
 
       const second = await advanceAsOwner(job.id, withStep);
 
       expect(runs, "the product the deadline overtook was not kept, so the step ran again").toBe(2);
       expect(second?.job.status).toBe("done");
+      expect(commits).toBe(1);
+      expect((await draftReads?.read(slug, "metadata", "meta"))?.title).toBe(lateTitle);
       expect(await revisionStatus(paused?.draft)).toBe("published");
     });
 
@@ -1410,6 +1478,36 @@ describe("one claim walks the whole job", () => {
     });
 
     /* ------------------------------------------------------------ PQO2 -- */
+
+    it.each([undefined, "", "   "])("noteProgress preserves a stored title when given %j", async (title) => {
+      const slug = `test-walk-title-absent-${title === undefined ? "undefined" : title.length}`;
+      /* **Read inside the step, asserted outside it.** As first written the
+         three `expect`s sat in the step's body, where a failure is a throw
+         `runStep` records as the step's own: the job ended `error` carrying the
+         title the claimant still held in memory, and the one assertion outside
+         passed. With the store's guard taken out, all three cases stayed green.
+         And the row is read here, at once, because the walk's own next progress
+         write would put the claimant's title back over a blank. */
+      let seen: { answered: string | undefined; stored: string | null | undefined } | undefined;
+      const { job, parts } = await fixture(slug, ["fetch"], {
+        fetch: async () => {
+          const [held] = await getDb().select({ attempt: jobsTable.attemptId }).from(jobsTable)
+            .where(eq(jobsTable.id, job.id));
+          const after = await pgJobStore.noteProgress(job.id, held?.attempt ?? "", job.steps, title);
+          seen = { answered: after.title, stored: (await rowOf(job.id))?.title };
+        },
+      });
+      await getDb().update(jobsTable).set({ title: "Stored title" }).where(eq(jobsTable.id, job.id));
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(advanced?.job.status, "the write inside the step must not have failed it").toBe("done");
+      expect(seen, "what the store answered, and what the row held straight after").toEqual({
+        answered: "Stored title",
+        stored: "Stored title",
+      });
+      expect(advanced?.job.title).toBe("Stored title");
+    });
 
     it("keeps the title across a mid-step hand-back", async () => {
       let asked = false;

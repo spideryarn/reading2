@@ -3564,8 +3564,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 4.5 — the article's own images, fetched and kept beside it.
      src/collect-assets.ts does the work; src/assets.ts is its pure half.
 
-     **A step whose cost is the network**, which is why it is in
-     DEFAULT_INGEST_STEPS while the four after `arc` are not: nobody has to
+     **A step that hosts the article's images**, included in
+     DEFAULT_INGEST_STEPS without an extra request: nobody has to
      ask for it, because leaving it undone means every reader's browser
      announces itself to the publisher's CDN once per image, per read. It is
      not free of model calls, as this said until 2026-10-07: for a PDF,
@@ -3957,7 +3957,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * everything up to `arc` makes the article readable, and everything after it
    * is a thing somebody asks for.
    *
-   * A **converted** step, like `sketch` and unlike its eight other neighbours:
+   * A **converted** step, like every step now in this registry:
    * `generateQuotes` writes nothing and this returns the artefact as `parts`.
    * A step that wrote `<dir>/quotes.json` inside `run` worked on the
    * filesystem store (gone 2026-09-05) and cannot work through one that puts

@@ -1986,10 +1986,10 @@ const rawPgJobStore: JobStore = {
     /* `steps`, and the title when the claimant has one — not the status, and
        **not the lease**. See the contract: renewing here would turn the lease
        into a heartbeat, and the claimant's own deadline has to be the thing
-       that fires first. No title given leaves the row's alone. */
+       that fires first. An absent or blank title leaves the row's alone. */
     const moved = await db
       .update(jobs)
-      .set({ steps, ...(title !== undefined && { title }) })
+      .set({ steps, ...(title?.trim() && { title }) })
       .where(fence(id, attempt))
       .returning();
     if (!moved[0]) throw new StaleAttemptError(id);

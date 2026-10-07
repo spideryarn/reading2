@@ -1567,7 +1567,8 @@ which does the same job for what a failure offers.
 lifted and the title reached the row only at a release or an ending, so a minimal paper's job
 (`fetch`, `metadata`) never had one, and a job that paused mid-step after `extract` lost it for
 good, because the next claim skips `extract`. One gap is left: a claimant that dies between
-`extract`'s commit and the progress write after it. No column was added; `jobs.title` was there.
+`extract`'s commit and the progress write after it. An absent or blank title preserves the stored
+one. No column was added; `jobs.title` was there.
 
 `displayJob(job, now)` is **pure, with the clock injected** — a mapper that reads the wall clock is a
 mapper nothing can test — and returns one of eight states: `waiting`, `working`, `slow`, `stopping`,
@@ -2127,10 +2128,13 @@ Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
   with its draft failed and its pointer cleared. It is never taken as "not current", which would
   start paid work on a question nobody answered.
 - **A progress write that fails is logged and the walk goes on**, unless the failure is the fence
-  saying the claim has moved, which still stops the claimant. The write is a progress bar; the
+  saying the claim has moved, which still stops the claimant. The write also records when a
+  force request was spent (`stillForced`); the review records an unresolved duplicate-work path
+  if that receipt is lost before a pause. The
   step's own `beginStep` or commit, which comes next, is what decides whether the store can be
-  reached. The cost is one look at `cancelling`, so a Stop pressed on another server is noticed one
-  step later.
+  reached. A failed write loses one look at `cancelling`; a successful starting write checks it
+  again before the next runnable step runs. Repeated failures can delay Stop over several steps, bounded
+  by the finite step list and the claim deadline.
 
 **What is still left to the lease** is a failure of the write that *settles* the job
 (`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to
