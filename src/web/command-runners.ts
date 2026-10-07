@@ -214,6 +214,8 @@ export type ModeCommand = Extract<Command, { kind: "mode" | "submode" }>;
 export interface ModeDoor {
   readonly targets: ReadonlyMap<string, ModeTarget>;
   open(key: string): void;
+  /** The same move with nothing armed — the guide's own act (plan 261008a). */
+  openUnarmed(key: string): void;
 }
 
 /**
@@ -230,13 +232,15 @@ export interface ModeDoor {
  * press arms and moves the band the way it does, so the chip's `generates`
  * marker (`modeGenerates`, `subModeGenerates`) is a statement about what the
  * press will do, not a guess beside it.
+ *
+ * `unarmed` is the same pair built with `arms` false, for the guide's act
+ * (`CommandExecutor.openModeUnarmed`): the band moves exactly as a press moves
+ * it, and no run is armed.
  */
 export function modeDoor(
   commands: readonly ModeCommand[],
-  activate: {
-    mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
-    sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
-  },
+  activate: ModeActivators,
+  unarmed: ModeActivators,
 ): ModeDoor {
   const byKey = new Map<string, ModeCommand>();
   const targets = new Map<string, ModeTarget>();
@@ -253,25 +257,30 @@ export function modeDoor(
       generates: command.kind === "mode" ? modeGenerates(command.mode) : subModeGenerates(command.sub),
     });
   }
-  return {
-    targets,
-    open(key) {
-      const command = byKey.get(key);
-      if (command === undefined) return;
-      if (command.kind === "mode") activate.mode(command);
-      else activate.sub(command);
-    },
+  const through = (pair: ModeActivators) => (key: string) => {
+    const command = byKey.get(key);
+    if (command === undefined) return;
+    if (command.kind === "mode") pair.mode(command);
+    else pair.sub(command);
   };
+  return { targets, open: through(activate), openUnarmed: through(unarmed) };
+}
+
+/** The Dock's two activators, as `modeDoor` takes them. */
+export interface ModeActivators {
+  mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
+  sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
 }
 
 /**
  * **Open the mode a chip names** — refused, in a sentence, if the door no
  * longer offers it (it went behind the switch between draw and press).
  */
-export function modeRunner(door: ModeDoor): Runner<"mode"> {
+export function modeRunner(door: ModeDoor, armed: "armed" | "unarmed" = "armed"): Runner<"mode"> {
   return ({ key }) => {
     if (!door.targets.has(key)) return { kind: "stay", message: "That mode isn't available here any more." };
-    door.open(key);
+    if (armed === "armed") door.open(key);
+    else door.openUnarmed(key);
     return CLOSE;
   };
 }
@@ -346,6 +355,7 @@ export function readingExecutor({
       ...(glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } }),
       ...(modes === undefined ? {} : { modes: modes.targets }),
     },
+    ...(modes === undefined ? {} : { openModeUnarmed: modeRunner(modes, "unarmed") }),
     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
     ...(quickSearch === undefined ? {} : { quickSearch }),
     ...(askThroughLens === undefined
@@ -413,5 +423,7 @@ export function chatExecutor({
       },
     },
     sources: reading.sources,
+    /* The guide's act, which is chat's alone. */
+    ...(reading.openModeUnarmed === undefined ? {} : { openModeUnarmed: reading.openModeUnarmed }),
   };
 }

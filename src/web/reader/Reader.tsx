@@ -2716,7 +2716,12 @@ export function Reader({
    * the switch is off. The press is the Dock's own pair of activators, through
    * `modeActivators` (set below, beside `onDockMode`).
    */
-  const modeActivators = useRef<{ mode(next: Mode): void; sub(sub: SubMode): void } | null>(null);
+  const modeActivators = useRef<{
+    mode(next: Mode): void;
+    sub(sub: SubMode): void;
+    modeUnarmed(next: Mode): void;
+    subUnarmed(sub: SubMode): void;
+  } | null>(null);
   const chipModes = useMemo(() => {
     if (!isOwner) return undefined;
     const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
@@ -2733,10 +2738,17 @@ export function Reader({
           experimental.on ||
           (c.kind === "mode" ? !MODE_CATALOG[c.mode].experimental : !subModeWords(c.sub).experimental),
       );
-    return modeDoor(rows, {
-      mode: (c) => modeActivators.current?.mode(c.mode),
-      sub: (c) => modeActivators.current?.sub(c.sub),
-    });
+    return modeDoor(
+      rows,
+      {
+        mode: (c) => modeActivators.current?.mode(c.mode),
+        sub: (c) => modeActivators.current?.sub(c.sub),
+      },
+      {
+        mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
+        sub: (c) => modeActivators.current?.subUnarmed(c.sub),
+      },
+    );
   }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
@@ -3861,7 +3873,28 @@ export function Reader({
     marginOpen,
   );
   const activateSubModeHere = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, isOwner);
-  modeActivators.current = { mode: activateModeHere, sub: activateSubModeHere };
+  /* **The same two with `arms` false, for the guide's own act** (plan 261008a,
+     GPT Sol's F1): it moves the band exactly as a chip's press does and arms
+     nothing, so a stored Glossary or Summary it opens cannot buy a run even if
+     the artefact went between the server's read and the band's. */
+  const activateModeUnarmed = useActivateMode(
+    slug,
+    carriedSearch(location.search),
+    subNav.diagram,
+    summaryView,
+    onDockMode,
+    false,
+    mode,
+    false,
+    marginOpen,
+  );
+  const activateSubModeUnarmed = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, false);
+  modeActivators.current = {
+    mode: activateModeHere,
+    sub: activateSubModeHere,
+    modeUnarmed: activateModeUnarmed,
+    subUnarmed: activateSubModeUnarmed,
+  };
 
   return (
     /* Every block link inside — panels, chips, the chat dialog through its

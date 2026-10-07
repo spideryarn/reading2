@@ -11,6 +11,11 @@
  * spent runs nothing; a chip the reader cannot see spends the act without
  * running; and with no act, nothing runs on render, as before.
  *
+ * Since plan 261008a: a mode the act opens goes through `openModeUnarmed`, never
+ * the press's armed `runners.mode` — here `mode` is the unarmed opener and
+ * `armed` the press's runner — and a generating mode the server found made for
+ * the turn (`GuideAct.made`) acts like a free one.
+ *
  * jsdom has no `Element.prototype.checkVisibility` (checked below), so `isShown`
  * falls back to the ancestors' computed `display`, which inline style answers.
  */
@@ -48,12 +53,18 @@ const MODES = new Map<string, ModeTarget>([
   ["mode:quotes", target("mode:quotes", false)],
   ["mode:glossary", target("mode:glossary", true)],
   ["mode:search", target("mode:search", false)],
+  ["mode:ideas", target("mode:ideas", true)],
+  ["submode:summary:brief", target("submode:summary:brief", true)],
+  ["submode:summary:thread", target("submode:summary:thread", true)],
 ]);
 
 const STRUCTURE = "[cmd:mode:mode%3Astructure]";
 const QUOTES = "[cmd:mode:mode%3Aquotes]";
 const GLOSSARY = "[cmd:mode:mode%3Aglossary]";
 const SEARCH = "[cmd:mode:mode%3Asearch]";
+const IDEAS = "[cmd:mode:mode%3Aideas]";
+const BRIEF = "[cmd:mode:submode%3Asummary%3Abrief]";
+const THREAD = "[cmd:mode:submode%3Asummary%3Athread]";
 const JUMP = "[cmd:jump-first:the%20method]";
 const QUICK = "[cmd:quick-search:imaging%20method]";
 const FIND = "[cmd:find:imaging]";
@@ -61,7 +72,10 @@ const BOOKMARK = `[cmd:bookmark:${BLOCK}]`;
 
 function spies() {
   return {
+    /** The unarmed opener the act uses (`openModeUnarmed`). */
     mode: vi.fn((_p: { key: string }) => CLOSE),
+    /** The press's own `runners.mode`, which arms a run: an act never calls it. */
+    armed: vi.fn((_p: { key: string }) => CLOSE),
     "jump-first": vi.fn(() => CLOSE),
     "quick-search": vi.fn(() => CLOSE),
     find: vi.fn(() => CLOSE),
@@ -69,8 +83,8 @@ function spies() {
   };
 }
 
-function executor(runners: ReturnType<typeof spies>): CommandExecutor {
-  return { runners, sources: { modes: MODES } };
+function executor(r: ReturnType<typeof spies>): CommandExecutor {
+  return { runners: { ...r, mode: r.armed }, sources: { modes: MODES }, openModeUnarmed: r.mode };
 }
 
 /** An answer whose tokens are each on a line of their own. */
@@ -85,7 +99,7 @@ function paint(text: string, commands: CommandExecutor, guide: GuideAct | null, 
 }
 
 const chips = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>("button.cmd-chip")];
-const fresh = (): GuideAct => ({ messageId: "spya-ans001", used: false });
+const fresh = (made: readonly string[] = []): GuideAct => ({ messageId: "spya-ans001", used: false, made: new Set(made) });
 
 it("runs in a DOM with no checkVisibility, so isShown reads computed display (the premise of the hidden case)", () => {
   expect(typeof (Element.prototype as { checkVisibility?: unknown }).checkVisibility).toBe("undefined");
@@ -171,7 +185,7 @@ describe("when the act must not happen", () => {
 
   it("runs nothing when the act is already used", () => {
     const r = spies();
-    paint(answer(STRUCTURE, JUMP), executor(r), { messageId: "spya-ans001", used: true });
+    paint(answer(STRUCTURE, JUMP), executor(r), { messageId: "spya-ans001", used: true, made: new Set() });
     expect(r.mode).not.toHaveBeenCalled();
     expect(r["jump-first"]).not.toHaveBeenCalled();
   });
@@ -222,5 +236,55 @@ describe("when the act must not happen", () => {
     paint(answer(STRUCTURE, JUMP), { runners: rest, sources: { modes: MODES } }, guide);
     expect(chips()[0]?.disabled).toBe(true);
     expect(r["jump-first"], "the next eligible, enabled chip acts").toHaveBeenCalledTimes(1);
+  });
+});
+
+/* Plan 261008a (qi-ztp3w9az): Glossary and Summary's Brief and Fuller open by
+   themselves when the server found them made for this turn, and never armed. */
+describe("a generating mode that is already made", () => {
+  it("opens a made Glossary by itself, unarmed", () => {
+    const r = spies();
+    const guide = fresh(["mode:glossary"]);
+    paint(answer(GLOSSARY), executor(r), guide);
+    expect(r.mode).toHaveBeenCalledTimes(1);
+    expect(r.mode.mock.calls[0]?.[0].key).toBe("mode:glossary");
+    expect(r.armed, "the act never arms a run").not.toHaveBeenCalled();
+    expect(guide.used).toBe(true);
+  });
+
+  it("opens a made Summary › Brief by itself", () => {
+    const r = spies();
+    paint(answer(BRIEF), executor(r), fresh(["submode:summary:brief"]));
+    expect(r.mode.mock.calls[0]?.[0].key).toBe("submode:summary:brief");
+  });
+
+  it("leaves a Glossary that is not made a button, and lets the Structure after it act", () => {
+    const r = spies();
+    paint(answer(GLOSSARY, STRUCTURE), executor(r), fresh(["submode:summary:brief"]));
+    expect(r.mode).toHaveBeenCalledTimes(1);
+    expect(r.mode.mock.calls[0]?.[0].key).toBe("mode:structure");
+  });
+
+  it("does not let `made` widen the act to a key outside the table, even if the server named it", () => {
+    const r = spies();
+    paint(answer(IDEAS, THREAD), executor(r), fresh(["mode:ideas", "submode:summary:thread"]));
+    expect(r.mode).not.toHaveBeenCalled();
+  });
+
+  it("opens no mode by itself where there is no unarmed door, and leaves the act for a jump", () => {
+    const r = spies();
+    const guide = fresh(["mode:glossary"]);
+    paint(answer(GLOSSARY, STRUCTURE, JUMP), { ...executor(r), openModeUnarmed: undefined }, guide);
+    expect(r.mode).not.toHaveBeenCalled();
+    expect(r.armed).not.toHaveBeenCalled();
+    expect(r["jump-first"]).toHaveBeenCalledTimes(1);
+  });
+
+  it("still arms through the press when the reader presses the same chip", () => {
+    const r = spies();
+    paint(answer(GLOSSARY), executor(r), null);
+    act(() => chips()[0]?.click());
+    expect(r.armed).toHaveBeenCalledTimes(1);
+    expect(r.mode).not.toHaveBeenCalled();
   });
 });

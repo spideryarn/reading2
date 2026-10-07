@@ -310,7 +310,7 @@ describe("the mode door", () => {
   ];
 
   it("offers exactly the rows it is handed, each with the mode's own marker", () => {
-    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() });
+    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() }, { mode: vi.fn(), sub: vi.fn() });
     expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:tutorial"]);
     expect(door.targets.get("mode:summary")?.generates).toBe(true);
     expect(door.targets.get("mode:structure")?.generates).toBe(false);
@@ -321,7 +321,8 @@ describe("the mode door", () => {
   it("opens a mode or a sub-mode through the activator it was handed, once", () => {
     const mode = vi.fn();
     const sub = vi.fn();
-    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }) });
+    const unarmed = { mode: vi.fn(), sub: vi.fn() };
+    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }, unarmed) });
     expect(executor.sources.modes?.has("mode:summary")).toBe(true);
     expect(executor.runners.mode?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
     expect(mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
@@ -329,11 +330,30 @@ describe("the mode door", () => {
     expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
     expect(mode).toHaveBeenCalledTimes(1);
     expect(sub).toHaveBeenCalledTimes(1);
+    expect(unarmed.mode, "a press never goes through the unarmed pair").not.toHaveBeenCalled();
+    expect(unarmed.sub).not.toHaveBeenCalled();
+  });
+
+  /* Plan 261008a, GPT Sol's F1: the guide's own act opens a mode through the
+     pair built with `arms` false, and never through the press's. */
+  it("opens through the unarmed pair for the guide's act, and offers it to chat", () => {
+    const armed = { mode: vi.fn(), sub: vi.fn() };
+    const unarmed = { mode: vi.fn(), sub: vi.fn() };
+    const reading = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, armed, unarmed) });
+    expect(reading.openModeUnarmed?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
+    expect(unarmed.mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
+    expect(reading.openModeUnarmed?.({ id: "mode", key: "submode:learn:tutorial" })).toEqual({ kind: "close" });
+    expect(unarmed.sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
+    expect(armed.mode).not.toHaveBeenCalled();
+    expect(armed.sub).not.toHaveBeenCalled();
+    const chat = chatExecutor({ reading, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(chat.openModeUnarmed).toBe(reading.openModeUnarmed);
+    expect(readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() }).openModeUnarmed).toBeUndefined();
   });
 
   it("refuses a key it does not offer, and opens nothing", () => {
     const mode = vi.fn();
-    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }));
+    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }, { mode, sub: vi.fn() }));
     expect(runner({ id: "mode", key: "mode:debate" })).toEqual({
       kind: "stay",
       message: "That mode isn't available here any more.",

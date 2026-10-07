@@ -101,16 +101,18 @@ export function CommandChip({
   const act = useContext(GuideActContext);
   /* Assigned on every render below; the effect runs after the render that
      assigned it, so it presses with this render's executor and blocks. */
-  const pressRef = useRef<(() => void) | null>(null);
+  const pressRef = useRef<((how?: "unarmed") => void) | null>(null);
   useEffect(() => {
     if (act === null || act.used) return;
     const now = chipFor(raw, commands, blocks);
-    if (now === null || !now.enabled || !actsAlone(now)) return;
+    if (now === null || !now.enabled || !actsAlone(now, act.made)) return;
+    /* A mode the guide opens is opened unarmed, or not at all (plan 261008a). */
+    if (now.proposal.id === "mode" && commands.openModeUnarmed === undefined) return;
     /* Spent whether or not it runs: a chip the reader cannot see now must not
        act when the band comes back (GPT Sol's F3 on plan 261007p). */
     act.used = true;
     if (button.current === null || !isShown(button.current)) return;
-    pressRef.current?.();
+    pressRef.current?.("unarmed");
   }, [act, raw, commands, blocks]);
   const chip = chipFor(raw, commands, blocks);
   // Cited.tsx only mounts this for a token that is a chip; if it stopped being
@@ -134,7 +136,8 @@ export function CommandChip({
     }
   };
 
-  const press = () => {
+  /** `"unarmed"` is the guide's act alone: a mode opens with no run armed. */
+  const press = (how?: "unarmed") => {
     if (inFlight.current) return;
     /* Asked again now, not remembered from the draw: the owner, the runner and
        the block are all facts about this moment. */
@@ -146,7 +149,10 @@ export function CommandChip({
     const done = doneWords(now.proposal.id);
     let outcome: ReturnType<typeof runProposal>;
     try {
-      outcome = runProposal(commands.runners, now.proposal);
+      outcome =
+        how === "unarmed" && now.proposal.id === "mode"
+          ? (commands.openModeUnarmed?.(now.proposal) ?? null)
+          : runProposal(commands.runners, now.proposal);
     } catch {
       outcome = { kind: "stay", message: RUN_FAILED };
     }
@@ -180,7 +186,7 @@ export function CommandChip({
         title={description}
         disabled={!chip.enabled}
         aria-busy={pending}
-        onClick={press}
+        onClick={() => press()}
       >
         <span className="cmd-chip-name">{voiced(label)}</span>
         {generates && <span className="cmd-chip-generates">{GENERATES_MARKER}</span>}

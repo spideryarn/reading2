@@ -45,6 +45,7 @@ const CLOSE: ActionOutcome = { kind: "close" };
 
 const MODES = new Map<string, ModeTarget>([
   ["mode:structure", { key: "mode:structure", label: "Structure", description: "Its shape.", generates: false }],
+  ["mode:glossary", { key: "mode:glossary", label: "Glossary", description: "Its terms.", generates: true }],
 ]);
 
 function reply(over: Partial<ChatMessage> = {}): ChatMessage {
@@ -72,9 +73,9 @@ function answeredHub() {
         listeners.delete(listener);
       };
     },
-    fire(a: Omit<Answered, "startedThreadId">) {
+    fire(a: Omit<Answered, "startedThreadId" | "opensFree"> & { opensFree?: ReadonlySet<string> }) {
       act(() => {
-        for (const l of [...listeners]) l({ ...a, startedThreadId: a.threadId });
+        for (const l of [...listeners]) l({ opensFree: new Set(), ...a, startedThreadId: a.threadId });
       });
     },
     get size() {
@@ -118,7 +119,7 @@ const chips = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonEle
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   mode = vi.fn((_p: { key: string }) => CLOSE);
-  executor = { runners: { mode }, sources: { modes: MODES } };
+  executor = { runners: { mode }, sources: { modes: MODES }, openModeUnarmed: mode };
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -204,6 +205,27 @@ describe("any other conversation", () => {
     expect(chips(), "chat draws the same chip").toHaveLength(1);
     expect(hub.size, "chat does not listen").toBe(0);
     hub.fire({ threadId: THREAD, message: reply() });
+    expect(mode).not.toHaveBeenCalled();
+  });
+});
+
+/* Plan 261008a: the server's snapshot reaches the act through `Answered`. */
+describe("a guide answer that opens a mode already made", () => {
+  const glossaryReply = reply({ text: "I've opened the Glossary for you.\n\n[cmd:mode:mode%3Aglossary]" });
+
+  it("opens the Glossary when the server said it was made for this turn", () => {
+    const hub = answeredHub();
+    paint(thread("guide", glossaryReply), hub);
+    hub.fire({ threadId: THREAD, message: glossaryReply, opensFree: new Set(["mode:glossary"]) });
+    expect(mode).toHaveBeenCalledTimes(1);
+    expect(mode.mock.calls[0]?.[0].key).toBe("mode:glossary");
+  });
+
+  it("leaves it a button when the server did not", () => {
+    const hub = answeredHub();
+    paint(thread("guide", glossaryReply), hub);
+    hub.fire({ threadId: THREAD, message: glossaryReply });
+    expect(chips()).toHaveLength(1);
     expect(mode).not.toHaveBeenCalled();
   });
 });

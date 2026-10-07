@@ -124,6 +124,27 @@ describe("the controller's Answered event", () => {
     expect(heard).toHaveLength(1);
   });
 
+  /* Plan 261008a: the server's snapshot of what is already made rides on the
+     `done` frame to the guide, and never onto the message. */
+  it("carries the done frame's opensFree to the listener, and keeps it off the message", async () => {
+    const { c, sink } = await opened();
+    const heard: Answered[] = [];
+    c.onAnswered((a) => heard.push(a));
+    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m", opensFree: ["mode:glossary", 7 as unknown as string] });
+    expect([...(heard[0]?.opensFree ?? [])]).toEqual(["mode:glossary"]);
+    expect(heard[0]?.message).not.toHaveProperty("opensFree");
+    const row = c.threads.find((t) => t.id === SERVER_THREAD)?.messages.find((m) => m.id === SERVER_REPLY);
+    expect(row).not.toHaveProperty("opensFree");
+  });
+
+  it("carries an empty opensFree when the done frame has none", async () => {
+    const { c, sink } = await opened();
+    const heard: Answered[] = [];
+    c.onAnswered((a) => heard.push(a));
+    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    expect(heard[0]?.opensFree.size).toBe(0);
+  });
+
   it("tells every listener, each once", async () => {
     const { c, sink } = await opened();
     const one = vi.fn();

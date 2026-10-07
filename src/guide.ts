@@ -1,6 +1,7 @@
 /**
- * **The guide's two pieces of context that no other conversation gets**: our
- * words for the modes, and how much the reader has used Spideryarn before.
+ * **The guide's pieces of context that no other conversation gets**: our
+ * words for the modes, how much the reader has used Spideryarn before, and
+ * (since plan 261008a) which of its *Button* modes are already made.
  *
  * The guide is the conversation about how to read this piece with Spideryarn
  * (`GUIDE_SYSTEM` in src/converse.ts,
@@ -16,9 +17,10 @@
  *   (docs/project/prompt-caching.md).
  * - **The experience line changes per reader and over time**, so it rides in
  *   the final user message beside the profile, below the breakpoint, and never
- *   in the system prompt (GPT Sol's F7 on the plan above).
+ *   in the system prompt (GPT Sol's F7 on the plan above). So does the
+ *   already-made line, which changes per article and over time.
  */
-import { modeActsAlone } from "./acts-alone.js";
+import { keysOpenFree, type MadeArtefact, modeActsAlone } from "./acts-alone.js";
 import catalogue from "./command-pick-catalogue.generated.json" with { type: "json" };
 
 /* ------------------------------------------------------- the mode words -- */
@@ -102,7 +104,10 @@ you, so you can see how the parts fit"; "I've taken you to where the method
 starts"). Everything else stays an offer the reader presses — a mode marked
 "Button:", which makes something new or changes their saved searches, a quick
 search, a find, and the rest above — so for those, do not ask "Want me to open
-it?" and do not say you have done it.
+it?" and do not say you have done it. The one exception: a mode marked
+"Button:" that the line ALREADY MADE FOR THIS ARTICLE, beside their message,
+names is already made, so opening it makes nothing, and in that answer it opens
+at once like a mode marked "Opens at once:".
 
 ${lines.join("\n")}`;
 }
@@ -134,6 +139,34 @@ function button(row: CatalogueRow): string {
 
 function experimental(row: CatalogueRow): string {
   return row.contexts.includes(EXPERIMENTAL_OFF) ? "" : " (experimental)";
+}
+
+/* ----------------------------------------------------- the already-made line -- */
+
+/**
+ * **Which of the *Button* modes are already made for this article**, as the
+ * line beside the reader's message, or `""` when none is (or the read failed:
+ * the model then treats them as buttons, the safe direction). Plan
+ * docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md.
+ *
+ * Below the cache breakpoint like `experienceLine`, because it changes per
+ * article and over time; the system prompt's sentence about it is static.
+ * Each key is named as `modeWordsSection` names its row, so the model can find
+ * the token printed beside it. The page decides the act from its own read
+ * (src/web/guide-acts.ts); this only keeps the model's sentence in step.
+ */
+export function madeLine(made: readonly MadeArtefact[] | null | undefined, rows: readonly CatalogueRow[] = catalogue): string {
+  if (made === null || made === undefined) return "";
+  const names: string[] = [];
+  for (const key of keysOpenFree(made)) {
+    const row = rows.find((r) => r.id === key && r.contexts.includes(OWNER_ARTICLE));
+    if (row === undefined) continue;
+    if (row.kind === "submode") {
+      const parent = rows.find((r) => r.kind === "mode" && key.startsWith(`submode:${r.id.slice("mode:".length)}:`));
+      names.push(parent === undefined ? row.label : `${parent.label} › ${row.label}`);
+    } else names.push(row.label);
+  }
+  return names.length === 0 ? "" : `ALREADY MADE FOR THIS ARTICLE: ${names.join("; ")}.`;
 }
 
 /* --------------------------------------------------- the experience line -- */

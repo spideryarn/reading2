@@ -29,3 +29,34 @@ const SEARCH = /^(?:mode:search|submode:search:[a-z-]+)$/;
 export function modeActsAlone(key: string, generates: boolean): boolean {
   return !generates && !SEARCH.test(key);
 }
+
+/**
+ * **The generating modes that open free once their artefact is stored** —
+ * plan docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md
+ * (qi-ztp3w9az). A press on one of these keys arms a run, but the band claims
+ * the press, waits for its own read, and retires it without a run when the read
+ * answers with something stored (src/web/useAutoRun.ts, step 2); neither band
+ * spends on mount otherwise. So when the artefact exists, opening the key only
+ * moves the reader, and the guide may do it. When it does not, the key stays
+ * the *Button* `modeActsAlone` says it is.
+ *
+ * By the artefact each key's band reads. Not the bare `mode:summary`: it lands
+ * on whatever `?summary=` says, and the Thread view writes on arrival. Not
+ * Diagram or Marginalia: they spend on mount whatever is stored. A new row
+ * needs the store read on the server (src/routes.ts § `guideMade`) and the
+ * band's read on the page (Reader.tsx § `madeNow`).
+ */
+export const OPENS_FREE_ONCE_MADE = {
+  glossary: ["mode:glossary"],
+  simple: ["submode:summary:brief", "submode:summary:fuller"],
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
+/** An artefact whose being stored lets some generating mode open free. */
+export type MadeArtefact = keyof typeof OPENS_FREE_ONCE_MADE;
+
+/** The catalogue keys that open free, given which artefacts are stored. */
+export function keysOpenFree(made: Iterable<MadeArtefact>): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const artefact of made) for (const key of OPENS_FREE_ONCE_MADE[artefact]) keys.add(key);
+  return keys;
+}

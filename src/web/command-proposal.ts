@@ -506,6 +506,18 @@ export interface CommandExecutor {
   readonly runners: ProposalRunners;
   readonly sources: ArgumentSources;
   /**
+   * **Open the mode a `mode` proposal names without arming a run** — what the
+   * guide's own act uses in place of `runners.mode`, never a press (plan
+   * 261008a, GPT Sol's F1; src/web/guide-acts.ts). A press arms the band's run
+   * and the band retires it unspent when its read finds the artefact; the
+   * guide's act does not lean on that, so an artefact that vanished between the
+   * server's read and the band's costs nothing.
+   *
+   * **Absent means the guide opens no mode by itself**: the reading view hands
+   * it over for the owner alone, as it does `runners.mode`.
+   */
+  readonly openModeUnarmed?: ProposalRunners["mode"];
+  /**
    * **The bands whose *Find more* the bar may press, each with its press** —
    * since 2026-10-04, plan 261004k. Not a proposal: it takes no argument, so
    * it is a row of the bar's own (find-more.ts § `findMoreCommand`) and chat's

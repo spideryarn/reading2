@@ -793,6 +793,13 @@ export interface TurnDone {
   truncated?: boolean;
   model?: string;
   stopped?: boolean;
+  /**
+   * **A guide turn's only**: the catalogue keys of generating modes whose
+   * artefact the server found stored for this turn, so the guide may open them
+   * by itself (src/acts-alone.ts § `OPENS_FREE_ONCE_MADE`, plan 261008a). Never
+   * stored and never on the message: `Answered` carries it to the guide.
+   */
+  opensFree?: string[];
 }
 
 /**

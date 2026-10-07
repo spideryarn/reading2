@@ -112,7 +112,8 @@ import { settledExchanges } from "./reader-notes.js";
 import { blockRefLeaks } from "./block-ref-leak.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
-import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
+import type { MadeArtefact } from "./acts-alone.js";
+import { type GuideExperience, experienceLine, madeLine, modeWordsSection } from "./guide.js";
 import { plainWords } from "./plain-words.js";
 import {
   type OpenRouterMessage,
@@ -1894,6 +1895,12 @@ export interface ConverseRequest {
    */
   experience?: GuideExperience | null;
   /**
+   * **Guide only**: which artefacts are already stored, so the modes that read
+   * them open at once — `madeLine` in src/guide.ts. The route resolves it per
+   * turn (`guideMade` in src/routes.ts); `null` when it could not read.
+   */
+  made?: readonly MadeArtefact[] | null;
+  /**
    * Which capable model answers — the article's High-powered AI setting
    * (plan 260930f). Required, so a route cannot forget to ask; `model` below
    * still overrides it for a test or an eval.
@@ -2134,6 +2141,12 @@ export function buildConverseMessages(opts: {
    * as in the route, as `notes` is for Explore.
    */
   experience?: GuideExperience | null;
+  /**
+   * **Which *Button* modes are already made**, for a guide turn — `madeLine`
+   * in src/guide.ts. Beside `experience`, below the breakpoint, for the same
+   * reason: it changes per article and over time. Guide only.
+   */
+  made?: readonly MadeArtefact[] | null;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
   const position =
@@ -2147,6 +2160,8 @@ export function buildConverseMessages(opts: {
   /* After the profile: the reader is who they say, then how much of the app
      they have seen. The guide's only. */
   const used = kind === "guide" ? experienceLine(opts.experience) : "";
+  /* Then which of the modes it may suggest are made already, so open at once. */
+  const ready = kind === "guide" ? madeLine(opts.made) : "";
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor: the reader is told *which* passage first, then how to
      explain it. Both are below the breakpoint, so the order is about how the
@@ -2180,7 +2195,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, used, about, teach, own, marked, brief, opts.question]
+      content: [position, who, used, ready, about, teach, own, marked, brief, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -2439,6 +2454,7 @@ export async function* converse({
   profile = null,
   notes = null,
   experience = null,
+  made = null,
   useTools = true,
   kind = "chat",
   anchor = null,
@@ -2485,6 +2501,7 @@ export async function* converse({
     notes,
     /* Only a guide turn carries it; `buildConverseMessages` drops it for any other. */
     experience,
+    made,
     kind,
     /* Unconditional, and `null` rather than absent when there is none: the
        option's type admits null and `anchorSection` returns "" for it, so an

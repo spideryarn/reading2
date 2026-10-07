@@ -391,6 +391,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
@@ -2965,6 +2966,55 @@ async function exploreNotes(
   }
 }
 
+/** The store read behind each band's GET — total, so a new row cannot go unread. */
+const MADE_READS: Record<MadeArtefact, (slug: string) => Promise<unknown>> = {
+  glossary: loadGlossary,
+  simple: loadSimpleSummary,
+};
+
+/**
+ * **Which artefacts behind the guide's *Button* modes are stored, for a guide
+ * turn**, or `null` — src/acts-alone.ts § `OPENS_FREE_ONCE_MADE`, plan
+ * docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md.
+ *
+ * The same store reads the bands' GETs make (`loadGlossary` behind
+ * `GET /api/glossary/:slug`, `loadSimpleSummary` behind `/api/simple/:slug`),
+ * where `ArtefactNotMadeYet` is "none". **Any other failure costs the line,
+ * not the turn**, as `guideExperience` below: with no line the model treats
+ * them as buttons, which is the direction that spends nothing.
+ */
+async function guideMade(slug: string, thread: Pick<ChatThread, "kind">): Promise<MadeArtefact[] | null> {
+  if (thread.kind !== "guide") return null;
+  const stored = async (load: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await load();
+      return true;
+    } catch (err) {
+      if (err instanceof ArtefactNotMadeYet) return false;
+      throw err;
+    }
+  };
+  try {
+    const answers = await Promise.all(
+      (Object.keys(MADE_READS) as MadeArtefact[]).map(async (artefact) =>
+        (await stored(() => MADE_READS[artefact](slug))) ? [artefact] : [],
+      ),
+    );
+    return answers.flat();
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "guide: could not read which modes are already made; answering without it",
+    );
+    return null;
+  }
+}
+
 /**
  * **How much the reader has used Spideryarn, for a guide turn**, or `null`.
  *
@@ -3591,6 +3641,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       attempt,
     });
 
+    const made = await guideMade(slug, thread);
     for await (const event of converse({
       power: powerOf(article),
       meta: article.meta,
@@ -3624,6 +3675,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the stored thread's kind like `notes` above. `null` for every other
          kind, and for a guide turn whose count could not be read. */
       experience: await guideExperience(slug, thread),
+      /* **Which of its *Button* modes are already made, on every guide turn**:
+         one snapshot, told to the model here and to the page on the `done`
+         frame below, so the model says "I've opened it" exactly when the page
+         will (GPT Sol's F3 on plan 261008a). `null` for every other kind, and
+         for a turn whose reads failed. */
+      made,
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -3703,7 +3760,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         ...(event.stopped ? { stopped: true } : {}),
       };
       await chatStore.finish(slug, thread.id, reply.id, finished, { attempt: storeAttempt });
-      frame("done", finished);
+      /* `opensFree` rides on the frame and is never stored: it is a fact about
+         the moment this answer finished, and only an answer this tab watched
+         finish may act on it (src/web/guide-acts.ts). A guide turn's alone. */
+      frame("done", made === null ? finished : { ...finished, opensFree: [...keysOpenFree(made)] });
     }
   } catch (err) {
     /* **Nothing in here may throw**, and that is why it is wrapped again.

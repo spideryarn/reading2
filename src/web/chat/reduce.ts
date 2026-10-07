@@ -1088,12 +1088,15 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          a spread alone cannot clear a stale one. This row may be a retry of one
          that *was* stopped, and a complete answer wearing "Stopped" underneath
          it is what leaving the field off looks like. */
+      /* `opensFree` is the guide's, for this moment (`Answered`), and not a
+         field of the message. */
+      const { opensFree: _opensFree, ...done } = event.done;
       const reply: ChatMessage = {
         ...op.reply,
         stopped: false,
         truncated: false,
         tools: [],
-        ...event.done,
+        ...done,
         status: "done",
       };
       return { state: commit(state, { ...op, reply }), commands: NOTHING };

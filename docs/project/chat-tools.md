@@ -961,8 +961,17 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   on screen, the first of its buttons that only moves the reader runs as if pressed: a jump, or a
   mode that makes nothing and writes nothing (`modeActsAlone` in
   [`src/acts-alone.ts`](../../src/acts-alone.ts) — not one that generates, and not Search, whose
-  opening tidies the reader's saved searches). Everything else stays a press: a quick search, a
-  find, a look-up, a tag, a bookmark, a generating mode. The prompt marks each mode *Opens at once*
+  opening tidies the reader's saved searches). **Since 2026-10-08 Glossary and Summary's Brief and
+  Fuller act too, when what they show is already stored**
+  ([261008a](../plans/261008a-guide-opens-glossary-and-summary-when-already-made.md),
+  `OPENS_FREE_ONCE_MADE`): the route reads the same stores the bands' GETs read, once per guide
+  turn (`guideMade`), tells the model in the last message (`madeLine`, *ALREADY MADE FOR THIS
+  ARTICLE*) and the page on the `done` frame (`opensFree`, never stored), so the sentence and the
+  act come from one snapshot. And every mode the guide opens by itself is opened **unarmed**
+  (`openModeUnarmed`), so if the artefact went in between, the band shows its own *Write it* and
+  nothing is bought. Everything else stays a press: a quick search, a find, a look-up, a tag, a
+  bookmark (it writes into the reader's comments), any other generating mode, and Summary by its
+  bare name or its Thread (the Thread writes on arrival). The prompt marks each mode *Opens at once*
   or *Button* from the same rule, and tells the guide to say *"I've opened…"* for the first kind
   only. A transcript loaded, recovered or put back never acts, nor does a stopped or cut-off
   answer, nor a band stepped aside on a phone

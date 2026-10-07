@@ -54,7 +54,8 @@ Nothing happens until you press the button; Chat cannot do any of these itself.
 this article with Spideryarn, rather than about what it says. A new article opens on it when there
 is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
 until you send something. The guide can do one thing per answer by itself, if it only moves you:
-take you to a passage, or open a mode that has nothing to write, such as Structure or Learn. It
+take you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the
+Glossary or Summary's Brief or Fuller once they have already been written for this article. It
 says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
 as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
 

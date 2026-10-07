@@ -89,7 +89,7 @@ function setUp(panel = false) {
   };
   const c = new ChatController(SLUG, effects);
   const mode = vi.fn((_p: { key: string }) => CLOSE);
-  const executor = { runners: { mode }, sources: { modes: MODES } };
+  const executor = { runners: { mode }, sources: { modes: MODES }, openModeUnarmed: mode };
   let select: (id: string | null) => void = () => {};
 
   function Band() {

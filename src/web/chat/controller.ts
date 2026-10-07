@@ -191,6 +191,17 @@ export interface Answered {
   /** The name at Send, before `begin` corrected it; a mounted panel may still hold that name. */
   readonly startedThreadId: string;
   readonly message: ChatMessage;
+  /**
+   * The generating modes the server found already made for this turn
+   * (`TurnDone.opensFree`): the one snapshot the guide's prompt was also told,
+   * so its act and its sentence agree (plan 261008a). Empty for anything else.
+   */
+  readonly opensFree: ReadonlySet<string>;
+}
+
+/** `TurnDone.opensFree` off the wire: strings only, anything else is nothing. */
+function opensFreeOf(value: unknown): ReadonlySet<string> {
+  return new Set(Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []);
 }
 
 /** What React reads: the state, and the two things derived from it. */
@@ -397,7 +408,8 @@ export class ChatController {
         .find((t) => t.id === operation.threadId)
         ?.messages.find((m) => m.id === operation.replyId);
       if (message?.status === "done") {
-        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message });
+        const opensFree = opensFreeOf(event.done.opensFree);
+        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message, opensFree });
       }
     }
     for (const command of commands) this.#perform(command);
