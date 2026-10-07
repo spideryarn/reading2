@@ -1113,30 +1113,39 @@ hand, and `diff` is the whole of the verification:
 diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
 ```
 
-**What actually runs, as of 2026-10-04: the dashboard is under systemd, the Overseer daemon is
-not.** `overseer.service` is installed but **disabled**, and the unit sets no `OPENROUTER_API_KEY`,
-so a daemon it started would run with attention off. The live daemon is a tmux session
-(`overseer-daemon<N>-<HHMM>`) started from a launch script that reads the key out of `.env.local`
-and execs `npx tsx scripts/overseer.ts run` in the primary checkout. That script is
-[`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh) since
-2026-10-07 (it lived in the Overseer's scratchpad under `/tmp` before, which a reboot empties), so
-**a reboot still loses the daemon, and no longer the script.** It also has nothing to restart it: it
-stopped on 2026-10-05 with `ENOSPC` when `/home` filled, and stayed down 46 hours. Only one
-daemon can run: a second start, from systemd or anywhere else, prints *"An Overseer is already
-running … Refusing to start a second one"*, and under `Restart=always` the unit retries every five
-seconds until stopped. That happened on 2026-10-04, when `sudo systemctl restart overseer` was run
-while the tmux daemon held the lock; `sudo systemctl stop overseer` ended it. Check which one is
-live with `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
-`systemctl is-active overseer`. Moving the daemon back under the unit needs the key supplied to it
-(for example an `EnvironmentFile=`), which is a box change for Greg.
+**What actually runs: the dashboard is under systemd, and the Overseer daemon is moving there.**
+Greg approved it on 2026-10-07
+([the plan](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md)), and the
+unit is ready: it reads `OPENROUTER_API_KEY` from **`/etc/overseer-secrets.env`**, root-owned and
+mode 0600, which systemd reads as root before it drops to `greg`. No agent can read the file
+without `sudo`; every agent can read the running daemon's `/proc/<pid>/environ`, as it always could
+under tmux. The unit refuses to start without the file (no leading `-`), the same refusal the tmux
+launch script makes. Until the Overseer does the switch, the live daemon is still the tmux session
+(`overseer-daemon-<HHMM>`) started by
+[`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh), which
+reads the key out of `.env.local`. Check which one is live with
+`npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
+`systemctl is-active overseer`.
 
-**The installed unit file was brought up to the repo's on 2026-10-07**, still disabled and not
-started; it had been 59 lines behind, with a `Documentation=` line naming a doc that was renamed.
-Its `failed` state, left by that 2026-10-04 restart loop, was cleared with `reset-failed` at the
-same time. Two things to know before anyone starts it: the current unit needs `/etc/overseer.env`,
-which this box does not have because `provision.sh` has not run here since 2026-09-03, and
-`Restart=always` gives up after ten failed starts in five minutes, so a disk that stays full for
-an hour leaves the unit `failed` after the space comes back and something still has to start it.
+**The switch is one command, and it is the Overseer's**:
+`sudo npx tsx scripts/overseer-activate.ts --disarm` to read the plan, then the same with
+`--apply`. It writes `/etc/overseer.env` disarmed if it is missing, installs the unit, refuses
+without the key file, stops whichever daemon holds the store lock and waits for the lock, enables
+and restarts the unit, and fails unless a checkpoint is written after the restart and the new
+daemon has not logged `attention: off`. It finds the lock in the store the unit names, not under
+`$HOME`, which `sudo` makes root's. To go back: `sudo systemctl disable --now overseer`, then the
+command in `daemon-launch.sh`'s header.
+
+**It never stops retrying.** Only one daemon can run, and a second start prints *"An Overseer is
+already running … Refusing to start a second one"*; that happened on 2026-10-04, when
+`sudo systemctl restart overseer` was run while the tmux daemon held the lock. Until 2026-10-07
+the unit then gave up after ten failed starts in five minutes and sat `failed`, which is also what
+a disk full for an hour would have left it in. Now `StartLimitIntervalSec=0` and a fixed
+`RestartSec=30s`: it retries twice a minute for as long as the cause lasts, and is back within
+thirty seconds of it going. `sudo bash infra/hetzner/test-overseer-restart.sh` proves that on a
+transient unit with the real settings, three ways (a full disk, a missing key file, and the old
+settings, which must give up). A unit that cannot start shows as `activating (auto-restart)` with
+a climbing `NRestarts`, in the watchdog's journal line and in the Overseer's `tick.sh`.
 
 At 3am:
 
@@ -1149,9 +1158,10 @@ sudo systemctl stop overseer             # stays stopped; Restart=always respect
 
 `Restart=always`, not `on-failure`, because on this box the things that send a clean `SIGTERM` are
 not the service's owner — a stray `pkill`, a tidy-up script, an agent killing what it thinks is its
-own process — and `on-failure` reads every one of those mistakes as a decision. A `StartLimitBurst`
-in `[Unit]` stops a genuinely broken build restarting for ever: it crash-loops visibly in the
-journal for about a minute and then sits in `failed`.
+own process — and `on-failure` reads every one of those mistakes as a decision. The dashboard's
+`StartLimitBurst` in `[Unit]` stops a genuinely broken build restarting for ever: it crash-loops
+visibly in the journal and then sits in `failed`. The Overseer's unit has no limit since 2026-10-07
+and retries every thirty seconds instead, for the reason above.
 
 **They run out of the primary checkout, `/home/greg/code/spideryarn2`, never a worktree** — a
 worktree is deleted by normal tidying, and an `ExecStart` inside one is a service that disappears
@@ -1187,9 +1197,18 @@ There are two disks and both fill. `/home` is the 49 GB volume: worktrees, trans
 It reached 100% on 2026-10-05, peers' commits failed, and the Overseer daemon died of `ENOSPC` and
 stayed down 46 hours. `/` is 301 GB and sat at 83–89% that week, and what fills it is `/tmp`: test
 runs leave about fifty thousand `mkdtemp` directories a day and remove none, so `/tmp` was 150 GB
-and 806,000 entries on 2026-10-07. systemd ages `/tmp` out after 30 days and **empties it at every
-boot** (`/usr/lib/tmpfiles.d/tmp.conf`), so nothing kept there is kept, an agent's scratchpad
-included.
+and 806,000 entries on 2026-10-07. systemd **empties `/tmp` at every boot**, so nothing kept there
+is kept, an agent's scratchpad included.
+
+**`/tmp` ages out after 7 days**, not systemd's 30, since 2026-10-07 (Greg approved it that day:
+[the plan](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md)). It is
+[`infra/hetzner/tmpfiles.d/tmp.conf`](../../infra/hetzner/tmpfiles.d/tmp.conf), installed as
+`/etc/tmpfiles.d/tmp.conf`, which replaces the packaged rule of the same name, and
+`systemd-tmpfiles-clean.timer` applies it daily. An entry goes when nothing has modified or read it
+for a week. What has to outlive a week untouched is kept longer, and the file says why for each:
+Claude Code's scratchpads (live loops run scripts from them) and temporary browser profiles stay at
+30 days, tmux's socket and Codex's runtime directories are never aged. Tests that remove what they
+make are still the real fix; this only shortens the wait.
 
 Greg, 2026-10-06: *"Perhaps add this and other measures to keep the hard disk fullness down to some
 routine daemon/service"*. Three things do that now
@@ -1231,6 +1250,11 @@ sessions at critical. That is the alert. There is no separate one.
 
 **Old screenshots** are deleted from git by a script the Overseer runs, not by the timer, because it
 is a commit: [`scripts/prune-old-screenshots.ts`](../../scripts/prune-old-screenshots.ts).
+**New ones are compressed** before they are committed, since 2026-10-07:
+`npm run screenshots:compress -- <file>` quantises a PNG with `pngquant`, about 40% of the size
+with its text unchanged, and `tests/screenshots-compressed.test.ts` fails on a tracked PNG under
+`docs/` that has not been through it
+([`scripts/compress-screenshots.ts`](../../scripts/compress-screenshots.ts)).
 
 ## Traps
 

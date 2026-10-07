@@ -150,7 +150,7 @@ Claude Code 2.1.289:
 - **`.worktreeinclude` is read by the hook now, not by Claude Code**, and the hook understands only
   plain root-level names — `.env.local`, `.env`. A pattern with a `/` or a glob makes every
   `EnterWorktree` fail with a message naming the line, rather than making trees with no environment.
-- **`/var/tmp`, not `/tmp`.** `/tmp` is aged out after 30 days on the box and would delete the
+- **`/var/tmp`, not `/tmp`.** `/tmp` is aged out after 7 days on the box and would delete the
   unread half of a live tree's `node_modules`; `/var/tmp` has no such rule.
 - **It is the disposable disk.** A rebuilt server has an empty `/var/tmp`, and
   [`provision.sh`](../../infra/hetzner/provision.sh) makes the directory again. Unpushed work in a

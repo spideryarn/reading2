@@ -1,7 +1,7 @@
 ---
 id: q-t2vhv6
 report: spya-vc6pnm
-status: open
+status: answered
 asked: 2026-10-06
 title: May a gift voucher's email carry a starter article by private link?
 refs: SPIDERYARN-READING2-ED · qi-zqkjnadh · docs/plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md § Q-starter: may the voucher email carry a private link? · docs/user-feedback/261006_2222-gift-voucher-name-note-and-a-starter-article.md
@@ -21,3 +21,9 @@ D. Nothing built: send the link from your own email. You said you might write to
 What would decide it: if you expect to send more than a handful of these, A, which is the thing you asked for. Its risk is modest, because the article is yours, the link can be turned off, and you would be mailing the same link from your own address anyway. D if you would rather watch how the first few go before adding anything. B only if keeping the key in one column matters more to you than the article staying unlisted.
 
 Recommended: A. Until then, D rather than pasting the link into the note.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> I think mostly I want to make the UI easy to generate an article with a shareable link (functionality we already have) at the same time as generating the gift voucher. Hopefully this is mostly a UI tweak that chains together existing functionality rather than adding anything major that's new. If I've misunderstood, hold off on this until we've discussed further.
+
+Read as A, plus pasting an address on the voucher form to import it and make its private link: existing pieces chained. qi-zqkjnadh authorised on that reading.

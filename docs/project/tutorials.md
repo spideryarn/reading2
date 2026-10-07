@@ -39,6 +39,14 @@ diagram actually looked at in a browser rather than trusted from the markup.
   passes, 168 ideas, the reading-science case against the obvious ones), the rules, the playground
   in `experiments/decorated/`, one paragraph where the skim path highlights the view the essay
   rejects, and the five decisions still open.
+- [261007a-harness-of-harness-and-the-overseer.html](../tutorials/261007a-harness-of-harness-and-the-overseer.html)
+  — a paper set beside our own machinery: arXiv 2609.01481's planner → developer → tester loop,
+  matched to one of our jobs (plan → build → GPT Sol review), and the Overseer as the layer above it
+  the paper has no counterpart for. Also Mindstone's relatives: CHIEF_ENGINEER (closest to the paper:
+  read-only reviewers from several families), the remote agent fleet, and the landing board (our
+  Overseer, copied on 2026-09-10). One feedback report followed through both, and what we might
+  borrow — chiefly running the loop more than once on one piece of work, and checking that Sol's own
+  fixes really do get a second review.
 
 ## Naming
 
