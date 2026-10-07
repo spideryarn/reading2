@@ -30,6 +30,11 @@ version of it that works on a headless server. That is the whole reason the seco
 Do the handshake in the parent session, then hand the clicking to a Sonnet subagent — the
 screenshots are large and the reasoning is small.
 
+**A screenshot you keep under `docs/` gets `npm run screenshots:compress -- <file>` before you
+commit it**, or `npm test` fails on it. It quantises the PNG to about 40% of its size with the text
+unchanged; there are about twenty checkouts on the box
+([hetzner-remote-server-box.md § Keeping the disks from filling](hetzner-remote-server-box.md#keeping-the-disks-from-filling)).
+
 ## On the remote box
 
 - **[playwright-browser-control.md](../reusable/playwright-browser-control.md)** — the cheatsheet:
