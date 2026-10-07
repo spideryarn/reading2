@@ -312,41 +312,40 @@ const rawPgCommentStore: CommentStore = {
 
     /* No usable id from the client, so mint one. This half still has to look
        before it writes — you cannot ask Postgres for "an id nothing is using" —
-       so it keeps the transaction, and it retries on a key collision.
+       so it keeps the transaction, and it mints again on a key collision.
 
        Minting needs the ids already taken FOR THIS ARTICLE. Block ids are
        unique only within an article and so are these; the primary key is
        `(article_id, id)`. Passing every comment id in the database would be
-       both wrong and slower. */
+       both wrong and slower.
+
+       **A collision is no row, never an error**, so there is no `catch` here.
+       The insert is `on conflict (article_id, id) do nothing` and that primary
+       key is the table's only unique index, so two requests minting one id in
+       the same instant leave the loser with `undefined`, which is minted again
+       below. Until 2026-10-07 a second retry sat in a `catch` for SQLSTATE
+       23505; it could not run, and it tested a `.code` Drizzle's wrapper does
+       not carry (db-errors.ts § `violatesConstraint`). Anything that does throw
+       is a real failure and leaves at once: 23503 in particular is the block
+       identity FK, which means stage 3 re-minted ids and has to be seen.
+       tests/store-comments.test.ts § "a minted id that is already a row". */
     for (let attempt = 0; ; attempt++) {
-      try {
-        const stored = await db.transaction(async (tx) => {
-          const takenRows = await tx
-            .select({ id: commentsTable.id })
-            .from(commentsTable)
-            .where(eq(commentsTable.articleId, articleId));
-          return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
-        }, READ_COMMITTED);
-        /* `undefined` means the insert conflicted on an id we had just proved
-           was free, which is the collision the retry below is for. */
-        if (!stored) {
-          if (attempt >= 2) throw new CommentIdTaken("(minted)");
-          continue;
-        }
-        logger.info(
-          { slug, id: stored.id, blockId: stored.blockId, repeat: false },
-          "comment created",
-        );
-        return stored;
-      } catch (err) {
-        /* 23505 is unique_violation, and here it means two requests minted the
-           same random id in the same instant — one chance in a billion, which
-           at enough requests is a Tuesday. Anything else is a real failure and
-           must not be swallowed: 23503 in particular is the block identity FK,
-           which means stage 3 re-minted ids and has to be seen. */
-        const code = (err as { code?: string }).code;
-        if (code !== "23505" || attempt >= 2) throw err;
+      const stored = await db.transaction(async (tx) => {
+        const takenRows = await tx
+          .select({ id: commentsTable.id })
+          .from(commentsTable)
+          .where(eq(commentsTable.articleId, articleId));
+        return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
+      }, READ_COMMITTED);
+      if (!stored) {
+        if (attempt >= 2) throw new CommentIdTaken("(minted)");
+        continue;
       }
+      logger.info(
+        { slug, id: stored.id, blockId: stored.blockId, repeat: false },
+        "comment created",
+      );
+      return stored;
     }
   },
 
