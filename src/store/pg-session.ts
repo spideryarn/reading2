@@ -97,6 +97,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { jobs as jobsTable } from "../db/schema.js";
+import { currentOwnerId } from "../owner.js";
 import { assertProduced } from "../pipeline.js";
 import type { StepName } from "../types.js";
 import {
@@ -110,7 +111,7 @@ import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
 import { RELEASED, settleReservation, supersedeMinimal } from "./pg-billing.js";
-import { finishIn, keepStepIn, releaseStepIn } from "./pg-jobs.js";
+import { anotherJobCarriesLabelsIn, finishIn, keepStepIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
   NotTheLiveAttempt,
@@ -586,9 +587,22 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
        * ever started does not reach this line. And **`error` only** — a reader
        * who pressed Stop has not been told anything went wrong, and asking again
        * is the remedy the pending sentence already implies.
+       *
+       * **And only when nobody else is going to make them.** A job that fails
+       * here while another `labels` job for this article is still queued has not
+       * lost the article its labels, and saying so would be a sentence that is
+       * wrong until it heals. `anotherJobCarriesLabelsIn` (./pg-jobs.ts) is the
+       * same question the lease sweep asks, in one place since 2026-10-07; this
+       * job is named to it because it is still `running` and would otherwise
+       * count as its own successor. The ambient owner, as the mark itself uses:
+       * a claimant runs as the article's owner.
        */
       const navLabelsFailed =
-        unfinished === "labels" && ending.status === "error"
+        unfinished === "labels" &&
+        ending.status === "error" &&
+        !(await anotherJobCarriesLabelsIn(tx, { slug, ownerId: currentOwnerId() }, [
+          transition.jobId,
+        ]))
           ? await markNavLabelsFailedIn(tx, slug, ref.revisionId)
           : null;
       announce = {

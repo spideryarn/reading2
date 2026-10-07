@@ -762,6 +762,11 @@ What that means in practice:
   settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
   ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
   lease is its *ordinary* ending rather than an exotic one.
+  **Neither marks while another job is still going to make the labels**: both ask
+  `anotherJobCarriesLabelsIn` (`pg-jobs.ts`), which counts another active, non-cancelling job of the
+  same owner on the article with a `labels` step, and never the job that is ending. Until 2026-10-07
+  only the sweep asked, so a live failure wrote `failed` over a successor still queued
+  ([261007d](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)).
 - **`structure` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.

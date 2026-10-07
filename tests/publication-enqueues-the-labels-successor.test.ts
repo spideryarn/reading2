@@ -79,6 +79,24 @@
  * | the warning branch in `logPublication` deleted | case 9 → `nothing in the log says this revision will never get its labels` |
  * | `lockArticlesInSlugOrder` made to return everything it was handed | case 15d → `a row whose article could not be locked was reported as locked`. **Not** 15c, which cannot tell the two apart and says so in its own comment |
  *
+ * ## And the four for the shared predicate, watched red on 2026-10-07
+ *
+ * `anotherJobCarriesLabelsIn` (src/store/pg-jobs.ts), which the live ending and
+ * the sweep both ask since that day. Before the live path asked at all, case 15f
+ * → `a live failure told the reader the labels failed while the job that makes
+ * them was still queued: expected 'failed' to be 'pending'`.
+ *
+ * | mutation | red |
+ * |---|---|
+ * | the settling job no longer excluded | cases 8 and 15g → `expected 'pending' to be 'failed'`: a running job counted as its own successor, so no live failure marks at all |
+ * | the owner clause dropped | case 15g alone → `a job that will not make this article's labels was counted as the one that will` |
+ * | the `labels` membership test dropped, so any active job counts | case 15g alone, same line |
+ * | the sweep's call removed | case 15e alone, as on 2026-09-07 |
+ *
+ * **Not covered:** `not(cancelling)`. A cancelling job is `running`
+ * (`jobs_cancelling_is_running`), and no case here has two running jobs on one
+ * article. The clause moved with the query, unchanged.
+ *
  * **The sixth is the one worth reading twice, because the symptom is not what
  * the design expected.** The plan predicted that copying the parent's
  * `ingestEventId` would surface as *"Too many articles already have that name"* —
@@ -1491,6 +1509,105 @@ describe("publication enqueues the free labels successor", () => {
     expect
       .soft((await jobRow(successor?.id ?? ""))?.status, "the successor is no longer there to keep it")
       .toBe("queued");
+  });
+
+  /* ---------------------------------------------------------------- 15f -- */
+
+  /**
+   * **The same question, asked by the claimant that is still alive** — and until
+   * 2026-10-07 it got the other answer.
+   *
+   * The case above is the sweep. This is the same ordering with job A failing
+   * *live* inside `labels` rather than lapsing: `settleIn`
+   * (src/store/pg-session.ts) marked the base `failed` without asking whether
+   * anybody else was still going to make the labels, while B sat queued to make
+   * exactly those. One article, one position, two durable answers depending on
+   * how the job died
+   * (docs/investigations/261006d-seventh-sweep-depth-pipeline-and-import-queue-sol.md
+   * § PQ3). Both callers now ask `anotherJobCarriesLabelsIn`
+   * (src/store/pg-jobs.ts).
+   */
+  mine("a live labels failure does not mark failed while another job still carries the labels", async () => {
+    const slug = `${SLUG_PREFIX}promise-elsewhere-live`;
+    const fixture = await publishPending(slug);
+    const successor = (await successorsOf(slug))[0];
+    expect(successor, "no successor to be the surviving promise").toBeTruthy();
+
+    const older = await queueBehind(slug, ["structure", "labels"], new Date(Date.now() - 60_000));
+    const attempt = mintAttempt();
+    const job = await claimWhenSlotFree(older, attempt);
+    const session = await openPgStoreSession({ slug, job: { id: older, attemptId: attempt } });
+    await session.beginStep(slug, "labels");
+    await session.settleJob({
+      kind: "end",
+      jobId: older,
+      attempt,
+      ending: { status: "error", steps: job.steps, error: "the label pass gave up" },
+    });
+
+    expect((await jobRow(older))?.status, "job A did not end as an error").toBe("error");
+    expect
+      .soft(
+        await navLabelStatusOf(fixture.revisionId),
+        "a live failure told the reader the labels failed while the job that makes them was still queued",
+      )
+      .toBe("pending");
+    expect
+      .soft((await jobRow(successor?.id ?? ""))?.status, "the successor is no longer there to keep it")
+      .toBe("queued");
+  });
+
+  /* ---------------------------------------------------------------- 15g -- */
+
+  /**
+   * **And what does not count as somebody else carrying them**, one control per
+   * clause of `anotherJobCarriesLabelsIn`, each through the live path:
+   *
+   * - **another reader's job on a slug of the same name** — slugs are per owner,
+   *   so that job is about a different article;
+   * - **a job with no `labels` step** — it is in the article's line and will make
+   *   nothing the sentence promises.
+   *
+   * The third clause, *the settling job is not its own successor*, is case 8
+   * itself: there the failing job is `running` with a `labels` step when the mark
+   * is decided, and nothing else is queued.
+   */
+  mine("a live labels failure still marks failed when nobody else of this owner carries them", async () => {
+    const slug = `${SLUG_PREFIX}promise-nowhere-live`;
+    const fixture = await publishPending(slug);
+    const claimed = await claimTheSuccessor(slug);
+
+    /* Theirs: same slug, `labels`, queued — and not this article. */
+    const theirs = mintId();
+    await db()
+      .insert(jobsTable)
+      .values({
+        id: theirs,
+        ownerId: STRANGER,
+        slug,
+        steps: stepsOf(["labels"]),
+        status: "queued",
+        workKey: `labels-successor-fixture-${theirs}`,
+      });
+    /* Ours, queued behind, and buying something else. */
+    const unrelated = await queueBehind(slug, ["arc"]);
+
+    await claimed.session.beginStep(slug, "labels");
+    await claimed.session.settleJob({
+      kind: "end",
+      jobId: claimed.jobId,
+      attempt: claimed.attempt,
+      ending: { status: "error", steps: claimed.steps, error: "the label pass gave up" },
+    });
+
+    expect((await jobRow(theirs))?.status, "the stranger's job is not there to be miscounted").toBe(
+      "queued",
+    );
+    expect((await jobRow(unrelated))?.status).toBe("queued");
+    expect(
+      await navLabelStatusOf(fixture.revisionId),
+      "a job that will not make this article's labels was counted as the one that will",
+    ).toBe("failed");
   });
 
   /* ---------------------------------------------------------------- 15d -- */
