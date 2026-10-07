@@ -1256,7 +1256,7 @@ describe("the panel", () => {
   it("offers to plan a route when there is none", async () => {
     await draw(owner({ status: "none", skim: null }), view({ rows: [], position: 0, depth: null }));
     expect(host.querySelector(".band-head")).toBeNull();
-    expect(text(".gloss-empty")).toContain("Nobody has planned a route");
+    expect(text(".gloss-empty")).toContain("Nobody has planned a route through this one yet.");
   });
 });
 

@@ -129,7 +129,7 @@
  * `publicDebate`, plan 260929c), and a visitor's panel draws the stored rows
  * with no job, no verb and no read: nothing on it can start a search.
  */
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleHelp,
@@ -238,6 +238,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
@@ -1645,8 +1646,10 @@ function DebateViews({
   counts: Record<DebateView, number>;
   onView(view: DebateView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, view);
   return (
-    <div className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
+    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {DEBATE_VIEWS.map((v) => (
           <Tooltip

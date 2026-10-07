@@ -423,41 +423,26 @@
 }
 
 /* **The Fisheye / Expanded toggle** (StructureMode.tsx § `StructureViewToggle`),
-   in the head row of both faces. Referee's chips (referee.css § `.ref-view-btn`)
-   are the look; the row is the band's own `.band-head`, bled to the edges of
-   this band's padding the way outline-mode.css does for the list's. The grid
-   below takes the height that is left, and its capacities are measured from it,
-   so the row costs the columns' fit nothing to account for.
+   in the head row of both faces. It is the part-switcher every mode shares,
+   `.summ-views` / `.summ-view-btn` (mode-band.css § the part-switcher), so
+   nothing of its look is here; `.struct-views` / `.struct-view-btn` stay on it
+   as hooks. The row is the band's own `.band-head`, bled to the edges of this
+   band's padding the way outline-mode.css does for the list's. The grid below
+   takes the height that is left, and its capacities are measured from it, so
+   the row costs the columns' fit nothing to account for.
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
 .mode-band.struct > .band-head { margin: -0.75rem -0.75rem 0.5rem; }
-.struct-views { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.struct-view-btn {
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.84rem;
-  cursor: pointer;
-}
-.struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-.struct-view-btn.on {
-  border-color: var(--rule-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-weight: 600;
-}
-.struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
-/* **The structure-arriving line** (StructureArriving.tsx), under the chips in
+/* **The structure-arriving line** (StructureArriving.tsx), under the toggle in
    the same head row, in all three presentations: the row wraps (the rule
    below, shared with `.struct-notice`) and the note takes a whole line of it.
 
-   Nothing new to look at: the sentence is `.struct-empty`, this band's own
-   fixed-sentence style (the app's face, `--font-ui`), and the button is the
-   toggle's chip. The head row's own right padding already clears the corner
-   (i) (mode-band.css § `.has-about > .band-head`).
+   The sentence is `.struct-empty`, this band's own fixed-sentence style (the
+   app's face, `--font-ui`). Its two buttons, *Build* and *Try again*, still
+   carry `.struct-view-btn` and are drawn here as a single outlined chip: they
+   are actions, not parts, so they do not take the part-switcher's joined look.
+   The head row's own right padding already clears the corner (i)
+   (mode-band.css § `.has-about > .band-head`).
    docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
 .struct-arriving-note {
   flex: 1 1 100%;
@@ -468,7 +453,19 @@
   gap: 0.3rem 0.6rem;
 }
 .struct-arriving-failed { flex: 1 1 100%; }
-.struct-view-btn:disabled { cursor: default; opacity: 0.6; }
+.struct-arriving-note > .struct-view-btn {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.struct-arriving-note > .struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.struct-arriving-note > .struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.struct-arriving-note > .struct-view-btn:disabled { cursor: default; opacity: 0.6; }
 
 /* **The line a headings tree draws, and the owner's press under it**
    (StructureNotice.tsx), in the same head row as the chips and under them:

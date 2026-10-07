@@ -172,6 +172,85 @@
   white-space: nowrap;
 }
 
+/* -------------------------------------------------- § the part-switcher --
+   **The one row that switches a mode's parts**, drawn the same in every mode:
+   Summary (Brief | Fuller | Thread), Debate, Structure, Referee and the kind
+   row under its criterion box, Learn, Diagram, Search's matchers and Skim's
+   depths. Greg, 2026-10-07: *"controls that do the same job should look the
+   same in every mode, though use your judgment."* Plan 261007h § F2.
+
+   The look is the one Greg chose for Summary on 2026-10-03 (spya-thpsnd):
+   *"Not buttons, like group buttons. Not radio buttons exactly, but like, you
+   know, a sense that you can have one of those three."* So the parts are drawn
+   joined, one outline around the group and a rule between neighbours, with the
+   chosen one raised. It lived in summary.css until it had a second user.
+
+   **Orange marks the mode; a part within it is marked neutrally.** The dock's
+   tab is the mode's orange, so a chosen part takes the raised fill and the
+   weight, never the accent: two levels of choice in one colour read as one.
+
+   **The classes are the group's and the button's, not a component.** Each
+   mode keeps its own markup and its own class beside these (`struct-views`,
+   `ref-view-btn`, `diag-kind`, …) as a hook for tests and its own refinements,
+   which load after this file. Roles stay each mode's: the radiogroups are
+   radiogroups, Learn's and Skim's are `aria-pressed` toggles. Every button is
+   its own tab stop and none handles a key, because the arrows belong to the
+   article (tests/arrows-belong-to-the-article.test.tsx).
+
+   **Narrow: it scrolls sideways inside itself rather than wrap**, since a
+   joined bar that wraps is two broken halves. The buttons keep their width
+   (`flex: none`, `nowrap`) and the group takes at most its row
+   (`max-width: 100%`, `min-width: 0`); the chosen part is kept in view by
+   useRevealChosen.ts, the logic OrderGroup's order rows share. The scrollbar is
+   hidden, as the order rows' is on touch: the bar's own outline is the frame.
+   The focus ring is drawn inside each button, so the clipping costs it nothing. */
+.summ-views {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.summ-views::-webkit-scrollbar { display: none; }
+.summ-view-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  padding: 0.15rem 0.6rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.summ-view-btn + .summ-view-btn { border-left: 1px solid var(--rule); }
+.summ-view-btn:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
+.summ-view-btn:last-child { border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
+/* One part alone (Diagram for a reader with the experimental switch off) is
+   both ends at once. */
+.summ-view-btn:only-child { border-radius: calc(var(--radius) - 1px); }
+.summ-view-btn:hover { color: var(--ink); }
+.summ-view-btn.on {
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+/* Inside the group's outline, so the ring is not clipped by a neighbour. */
+.summ-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
+/* A finger gets the house's large target. */
+@media (any-pointer: coarse) {
+  .summ-view-btn { min-height: var(--control-h-lg); padding-inline: 0.8rem; }
+}
+
 /* ------------------------------------------------------- § the wait line --
    Every band's wait: `BandWaiting.tsx`, docs/project/loading-spinner.md. The
    caller's own class (`gloss-quiet`, `chat-loading`, `diag-wait`, …) brings
@@ -185,7 +264,16 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 1lh;
+}
+/* Before the 600ms: the spinner and sentence laid out but unseen, so the empty
+   line is already its own height (BandWaiting.tsx). `content` rather than text,
+   so nothing is in the live region to announce early. */
+.band-waiting-ghost {
+  flex: none;
+  visibility: hidden;
+}
+.band-waiting-ghost::before {
+  content: attr(data-words);
 }
 
 /* ------------------------------------------------------------ § the herald --

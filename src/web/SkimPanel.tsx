@@ -63,6 +63,7 @@ import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
@@ -308,23 +309,23 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
   if (owner.quotesFirst && owner.ideasFirst) {
     return (
       "First the article's Quotes are chosen and its key Ideas found — finding the Ideas is the " +
-      "long part, tens of seconds — then a short model pass puts the Quotes in an order that " +
+      "long part, tens of seconds — then a short model call puts the Quotes in an order that " +
       `covers the Ideas. ${kept}`
     );
   }
   if (owner.ideasFirst) {
     return (
       "First the article's key Ideas are found — the long part, tens of seconds — then a short " +
-      `model pass puts its Quotes in an order that covers them. ${kept}`
+      `model call puts its Quotes in an order that covers them. ${kept}`
     );
   }
   if (owner.quotesFirst) {
     return (
-      "The article's Quotes are chosen first, then a short model pass puts them in an order — " +
+      "The article's Quotes are chosen first, then a short model call puts them in an order — " +
       `longer than the order alone. ${kept}`
     );
   }
-  return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
+  return `A short model call puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
 }
 
 /**
@@ -379,6 +380,8 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
  */
 function RouteHead({ view, total }: { view: SkimView; total: number }) {
   const [sparkOpen, setSparkOpen] = useState(false);
+  const depths = useRef<HTMLFieldSetElement>(null);
+  useRevealChosen(depths, view.depth);
   const here = view.rows[view.position - 1]?.position ?? null;
   const said =
     `Stop ${view.position} of ${total}` +
@@ -455,12 +458,16 @@ function RouteHead({ view, total }: { view: SkimView; total: number }) {
           skim.css § .skim-head-end. */}
       <div className="skim-head-end">
         {view.depths.length > 1 && (
-          <fieldset className="skim-depths" aria-label="How deep">
+          /* The part-switcher every mode shares (mode-band.css § the
+             part-switcher, plan 261007h § F2), at the house's 36px rather
+             than its own 26 because it is this mode's main control beside the
+             44px stepper (skim.css § the depths). */
+          <fieldset ref={depths} className="skim-depths summ-views" aria-label="How deep">
             {view.depths.map((d) => (
               <button
                 key={d.depth}
                 type="button"
-                className={`skim-depth${d.depth === view.depth ? " on" : ""}`}
+                className={`skim-depth summ-view-btn${d.depth === view.depth ? " on" : ""}`}
                 aria-pressed={d.depth === view.depth}
                 onClick={() => {
                   if (d.depth !== view.depth) view.onDepth(d.depth);
@@ -688,7 +695,7 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has planned a route through this piece yet.</p>
+          <p>Nobody has planned a route through this one yet.</p>
           <p className="gloss-hint">{emptyHint(owner)}</p>
           {run("Plan the route")}
         </div>

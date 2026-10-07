@@ -213,17 +213,17 @@
    earns. */
 .ref-scan-caveat { color: var(--ink-faint); }
 
-/* The sub-modes. Deliberately the same shape as the quotes panel's order
-   buttons, because it is the same gesture:
-   one of these is on, you press another, the panel below changes. The markup is
-   Diagram's — a `role="radiogroup"` of `role="radio"` buttons, each its own tab
-   stop and none of them handling a key — so the styling has to carry the
-   selected state on its own; see App.tsx § RefereeViews. */
+/* The sub-modes: the part-switcher every mode shares, `.summ-views` /
+   `.summ-view-btn` (mode-band.css § the part-switcher, plan 261007h § F2), so
+   their look is not here; `.ref-views` / `.ref-view-btn` stay on them as hooks.
+   The markup is a `role="radiogroup"` of `role="radio"` buttons, each its own
+   tab stop and none of them handling a key; see RefereeMode.tsx § RefereeViews. */
 /* **One row at the top of the band: the chips, then Notices.** It wraps, so
-   on the ~300px band an iPad gives this mode the button drops to a second line
-   rather than squeezing the chips. The right padding keeps the row clear of
-   the band's (i), which is out of flow in the corner (mode-band.css
-   § `--band-about-room`). */
+   on a band too narrow for both, Notices drops to a line of its own under the
+   chips rather than squeezing them; on one too narrow for the chips alone,
+   they scroll sideways inside their own outline. The right padding keeps the
+   row clear of the band's (i), which is out of flow in the corner
+   (mode-band.css § `--band-about-room`). */
 .ref-top {
   display: flex;
   flex-wrap: wrap;
@@ -234,12 +234,13 @@
   flex: none;
 }
 .mode-band.has-about > .ref-top { padding-right: calc(0.7rem + var(--band-about-room)); }
-/* `contents`, so the four chips and the Notices button wrap as one run. As a
-   flex box of its own the group took a whole line once it wrapped, which put
-   Notices alone on a third line of the ~300px band an iPad gives this mode
-   (116px of top row, measured 2026-10-03). The radiogroup role is on the
-   element whatever its box is. */
-.ref-views { display: contents; }
+/* **A boxed group now, not `display: contents`.** Until 2026-10-07 the four
+   chips and Notices wrapped as one run, because as a flex box of its own the
+   group took a whole line once it wrapped (116px of top row on a ~300px band,
+   measured 2026-10-03). A joined bar cannot be `contents` — the outline is the
+   group's own box — and it no longer wraps inside itself, so the run is
+   two items: the bar, and Notices beside it or under it. GPT Sol's plan
+   review, R4. */
 /* **The notices, as one button.** Quieter than a chip — no fill, no weight —
    because it is not one of the four and must not read as a fifth. The icon is
    the app's ordinary ink, not red: nothing has gone wrong (§ `.ref-notice`). */
@@ -262,28 +263,6 @@
 .ref-notices-btn:hover { color: var(--ink); border-color: var(--rule); }
 .ref-notices-btn[aria-expanded="true"] { color: var(--ink); border-color: var(--rule-strong); }
 .ref-notices-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.ref-view-btn {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-/* Fill rather than a border change: the selected one has to be tellable from
-   the hovered one at a glance, and a border is the channel hover is already
-   using. */
-.ref-view-btn.on {
-  border-color: var(--rule-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-weight: 600;
-}
-.ref-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-
 /* The scroller. `.mode-band` is a fixed flex column from the controls bar to
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
    child inside it — without one the panel's last rows sit below the bottom of
@@ -376,19 +355,13 @@
 }
 .crit-poles { display: flex; flex-direction: column; gap: 0.25rem; }
 
-.crit-kinds { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.crit-kind-btn {
-  font: inherit;
-  font-size: 0.84rem;
-  color: var(--ink-faint);
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
-  cursor: pointer;
-}
-.crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
-.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **Find passages | For–against | Check the literature**: which kind of
+   criterion this is, a choice of one, so it is the part-switcher every mode
+   shares (`.summ-views`, mode-band.css § the part-switcher; plan 261007h § F2,
+   GPT Sol's R6) rather than a pill row. `.crit-kinds` / `.crit-kind-btn` stay
+   as hooks. `flex-start`, or the column it sits in would stretch the bar's
+   outline to the band's width. */
+.crit-kinds { align-self: flex-start; }
 .crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }

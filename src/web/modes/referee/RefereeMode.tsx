@@ -11,7 +11,7 @@
  * and docs/project/referee-mode.md for the mode itself.
  */
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import { Info, TriangleAlert } from "lucide-react";
 import type { Block, BlockId, Comment } from "../../../types.js";
@@ -28,6 +28,7 @@ import { REFEREE_SUB_MODES } from "../../sub-modes.js";
 import { useRenderCount } from "../../perf.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { usePressToggle } from "../../usePressToggle.js";
+import { useRevealChosen } from "../../useRevealChosen.js";
 /* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
    the deterministic scan of the document's own source, inside Notices because
    a hidden instruction bears on all four panels. src/injection-scan.ts
@@ -410,8 +411,12 @@ export function RefereeViews({
   view: RefereeView;
   onView(next: RefereeView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, view);
   return (
-    <div className="ref-views" role="radiogroup" aria-label="What Referee is showing">
+    /* The part-switcher every mode shares (mode-band.css § the part-switcher,
+       plan 261007h § F2): a boxed group, with Notices beside it in `.ref-top`. */
+    <div ref={group} className="ref-views summ-views" role="radiogroup" aria-label="What Referee is showing">
       {/* **A card on every chip**, which until 2026-09-02 was the one radiogroup
           in this app with nothing on it at all — four one-word labels naming four
           sub-modes that do four unrelated things, one of which spends money and
@@ -449,7 +454,7 @@ export function RefereeViews({
                  leaving it here while removing the handler would make all but one
                  of them unreachable by keyboard altogether. */
               tabIndex={0}
-              className={`ref-view-btn${v === view ? " on" : ""}`}
+              className={`ref-view-btn summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
                 /* **The gesture seam for Claims.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,

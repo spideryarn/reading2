@@ -52,14 +52,14 @@
 
 /* ---- Reception | Claims ----
    Debate's two sub-modes (DebatePanel.tsx § DebateViews), drawn with Summary's
-   own row and joined buttons — `.summ-controls`, `.summ-views`,
-   `.summ-view-btn` in summary.css — so the two segmented controls cannot drift
-   apart. What is here is only what differs: this row sits *under* the band's
+   own row (`.summ-controls`, summary.css) and the part-switcher every mode
+   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the
+   part-switcher), so the segmented controls cannot drift apart. What is here is only what differs: this row sits *under* the band's
    head rather than being its top row, so it does not need the room Summary's
    leaves for the (i) in the corner; and each segment carries a count. */
 .mode-band.has-about > .dbt-controls { padding-right: 0.6rem; }
+/* Spaced from its label by the part-switcher's own gap. */
 .dbt-view-count {
-  margin-left: 0.4em;
   color: var(--ink-faint);
   font-size: 0.9em;
   font-weight: 400;

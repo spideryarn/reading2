@@ -127,7 +127,11 @@ Greg, 2026-10-03 (`spya-vbeyse`):
 Measured that day at 1280 × 800, the criterion box started 607px down a 760px band. So, top to
 bottom, the band is now:
 
-1. **One row: the four chips and a *Notices* button**, with the band's (i) in the corner.
+1. **One row: the four chips and a *Notices* button**, with the band's (i) in the corner. The
+   chips are the part-switcher every mode shares (`mode-band.css` § the part-switcher, since
+   2026-10-07): one joined bar, with Notices beside it, or on a line under it when the band is too
+   narrow for both. On the 288px band an iPad gives this mode the bar scrolls sideways inside its
+   own outline, the chosen chip kept in view.
 2. **The Notices box, only while it is open** — the source scan, then the confidentiality
    sentences in full. It is shut on every visit and remembers nothing. **It opens itself when the
    scan found something** (`sourceScanOpens` in
