@@ -487,19 +487,26 @@ export function Library({
   const narrowed =
     (searching || show === "unread" || topics.length > 0 || tagsChosen.length > 0) && showing !== total;
 
-  /* The slugs the Unread chip lets through, whatever the search box says — the
-     passages are the answer to the search, so narrowing them by the search
-     twice would be wrong. `null` when the chip is off, which is "do not narrow"
-     rather than "narrow to nothing". */
+  /* The slugs the Unread chip and the chosen topics and tags let through,
+     whatever the search box says — the passages are the answer to the search,
+     so narrowing them by the search twice would be wrong. That is why this is
+     `narrowShelf` with an empty query and not the slugs of `rows`: `rows` has
+     the card's title, author and blurb match applied, and would hide the
+     passage of an article whose body matches and whose card does not (plan
+     261007a § K3; until then only Unread reached the passages, and a chosen
+     topic listed passages from articles outside it). `null` when nothing is
+     narrowing, which is "do not narrow" rather than "narrow to nothing". */
   /* Over `scope`, not the active shelf alone: with Include archived on, an
      archived article nobody has opened is as unread as any other, and its
      passages must not vanish when the cards keep it (plan 260930d). */
-  const unread = useMemo(
+  const passagesIn = useMemo(
     () =>
-      show === "unread" && scope
-        ? new Set(scope.filter((a) => a.opens === 0).map((a) => a.slug))
+      scope && (show === "unread" || chosenSets.length > 0)
+        ? new Set(
+            narrowShelf(scope, { query: "", unread: show === "unread", topics: chosenSets }).map((a) => a.slug),
+          )
         : null,
-    [scope, show],
+    [scope, show, chosenSets],
   );
 
   /* Whichever column is sorted first decides what a card says about itself. */
@@ -919,13 +926,22 @@ export function Library({
         </ArticleTopicsContext.Provider>
       )}
 
-      {/* The passages obey the Unread chip too. Without that, turning Unread on
-          and searching for something only an opened article contains printed
-          "No unopened article matches …" and then listed passages from that
-          very article — two answers to one question, on one screen. The hidden
-          ones are counted rather than silently dropped, because "it is in
-          something you have already read" is the useful half of that answer. */}
-      {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
+      {/* The passages obey the Unread chip, the topics and the tags too.
+          Without that, turning Unread on and searching for something only an
+          opened article contains printed "No unopened article matches …" and
+          then listed passages from that very article — two answers to one
+          question, on one screen. The hidden ones are counted rather than
+          silently dropped, because "it is in something you have already read"
+          is the useful half of that answer. */}
+      {searching && (
+        <Passages
+          state={passages}
+          query={query}
+          only={passagesIn}
+          chosen={chosenSets.length > 0}
+          archived={archivedOn}
+        />
+      )}
 
       {/* **Right after the search's answer: what it left out, how much, and the
           button.** Greg, spya-s9fhmw. ShelfSearchAlso.tsx; plan 261002b § Part D. */}
@@ -1309,6 +1325,7 @@ function Passages({
   state,
   query,
   only,
+  chosen,
   archived,
 }: {
   state: ReturnType<typeof useLibrarySearch>;
@@ -1316,7 +1333,8 @@ function Passages({
   /** The Include archived chip — what the search was asked, and what "nothing" means. */
   archived: boolean;
   /**
-   * The slugs the Unread chip is letting through, or `null` for "everything".
+   * The slugs the Unread chip and the chosen topics and tags are letting
+   * through, or `null` for "everything".
    *
    * Narrowing happens **here rather than in the request**, and that has a cost
    * worth stating: the server caps the list before we see it, so a query whose
@@ -1328,6 +1346,12 @@ function Passages({
    * were hidden — a caller reporting "found nothing" cannot do either.
    */
   only: Set<string> | null;
+  /**
+   * Whether a topic or a tag is among what narrowed `only`. With Unread alone
+   * the passages left out are "in articles you have already opened"; with a
+   * topic or a tag chosen that would be false of some of them.
+   */
+  chosen: boolean;
 }) {
   if (state.error) {
     return (
@@ -1361,25 +1385,30 @@ function Passages({
   /* Counted here rather than read from `state.articles`, which is the server's
      count over the hits it sent (`new Set(hits.map(h => h.slug)).size` in
      routes.ts — the same expression). It has to be the count of what is *shown*
-     once the Unread chip can remove some, and the two agree exactly when
-     nothing is removed. */
+     once a filter can remove some, and the two agree exactly when nothing is
+     removed. */
   const articles = new Set(hits.map((h) => h.slug)).size;
 
   /* Counted, never silently dropped: "it is in something you have already read"
      is the useful half of the answer, and a list that just came up empty with
-     no explanation reads as a broken search. */
+     no explanation reads as a broken search. "Everything chosen above" is
+     `nothingLeft`'s phrase for the same filters. */
   const alsoIn = hidden > 0 && (
     <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-      {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles you have already
-      opened.
+      {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles{" "}
+      {chosen ? "that do not match everything chosen above" : "you have already opened"}.
     </p>
   );
 
   if (hits.length === 0) {
     return (
       <section className="tw:mt-8">
+        {/* About the passages found, not about the articles: the server
+            caps the list before the filters see it, so "nothing in an
+            unopened article matches" is more than this can know. */}
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          Nothing in an unopened article's text matches “{query.trim()}”.
+          None of the passages found for “{query.trim()}” is in{" "}
+          {chosen ? "an article that matches everything chosen above" : "an unopened article"}.
         </p>
         {alsoIn}
       </section>

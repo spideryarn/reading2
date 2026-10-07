@@ -50,6 +50,7 @@ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useCopy } from "./useCopy.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { articleTitleVoice, gistVoice, withVoice } from "./voice.js";
 
 /* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
@@ -396,11 +397,17 @@ export function ShelfCard({
               somebody driving the page by voice cannot say what they can see,
               and WCAG 2.5.3 Label in Name is failed. Caught by a cross-family
               review, 2026-08-26; the comment here already said the label had to
-              track the text, and the code did not. */}
+              track the text, and the code did not.
+
+              **Focus draws an outline as well as the colour.** Until
+              2026-10-07 the outline was off and a Tab changed only the ink of
+              one short date, which is not a mark anybody finds. The card's own
+              `focus-within` border says focus is somewhere in this card; this
+              says where (plan 261007a § K3). */}
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight-text"
+            className="tw:relative tw:cursor-help tw:rounded-xs tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
           >
             {note}
           </button>
@@ -453,7 +460,10 @@ export function Details({ entry }: { entry: LibraryEntry }) {
     ["Added", exactly(entry.addedAt) ?? "unknown"],
     ["Opened", opensLine(entry)],
     ["Marked", entry.comments === 1 ? "1 comment" : `${entry.comments} comments`],
-    ["Built", built.length ? built.join(" · ") : "nothing beyond the tree"],
+    /* Of these three only: they are all `LibraryEntry.has` carries. It said
+       "nothing beyond the tree" for none until 2026-10-07, which an article
+       with summaries, ideas or quotes made false (plan 261007a § K3). */
+    ["Built", built.length ? built.join(" · ") : "no arc, thread or glossary"],
     [
       "Size",
       `${entry.words.toLocaleString()} words · ${entry.blocks} blocks · ${entry.parts} parts · ${entry.sections} sections`,
@@ -732,7 +742,13 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
         body: JSON.stringify({ slug: entry.slug, force: [hasWebUrl ? "fetch" : "extract"] }),
       });
     } catch (e) {
-      shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
+      /* Three things throw here: a refusal carrying the server's own sentence
+         (`fetchOk`), a request that never arrived, whose message is the
+         browser's ("Failed to fetch", "Load failed"), and anything unexpected.
+         Only the first was written for a reader, so the helper chooses. */
+      shelf.report(
+        `Couldn't queue a rebuild: ${describeFetchFailure(e instanceof Error ? e : new Error(String(e)))}`,
+      );
     } finally {
       setRerunning(false);
     }

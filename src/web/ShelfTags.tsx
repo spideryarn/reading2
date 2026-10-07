@@ -18,6 +18,7 @@ import { Plus, Tag } from "lucide-react";
 import { Popover } from "radix-ui";
 
 import type { LibraryEntry } from "../types.js";
+import { isImeComposing } from "./key-chord.js";
 import { TagEditor } from "./TagEditor.js";
 import type { Shelf } from "./useShelf.js";
 import { voiceClass } from "./voice.js";
@@ -69,6 +70,15 @@ export function ShelfTags({
                hears Escape on the document before the editor's own handler can
                stop it, so ask the focused box whether its list is open. */
             onEscapeKeyDown={(e) => {
+              /* Nor does an Escape an input method is using close anything: it
+                 dismisses the candidate words, and with the list hidden it
+                 used to take the popover and the half-typed tag with it.
+                 docs/project/keyboard.md § A key an input method is using is
+                 not ours. */
+              if (isImeComposing(e)) {
+                e.preventDefault();
+                return;
+              }
               const box = document.activeElement;
               if (box?.getAttribute("role") === "combobox" && box.getAttribute("aria-expanded") === "true") {
                 e.preventDefault();

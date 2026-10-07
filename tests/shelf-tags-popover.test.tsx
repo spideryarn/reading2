@@ -85,4 +85,40 @@ describe("ShelfTags' popover", () => {
     await escape();
     expect(setTagging).toHaveBeenCalledWith(null);
   });
+
+  /* A reader typing Japanese or Chinese presses Escape to dismiss the input
+     method's candidate list. With our own suggestion list hidden (nothing
+     matches what is typed), that Escape closed the popover and dropped the tag
+     being typed. docs/project/keyboard.md § A key an input method is using is
+     not ours; plan 261007a § K3. */
+  it("leaves the popover open on an Escape an input method is using", async () => {
+    const setTagging = paint("a-piece");
+    const input = box()!;
+    await act(async () => {
+      input.focus();
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "neu");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const pressEscape = (init: KeyboardEventInit) =>
+      act(async () => {
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init }));
+      });
+    /* One Escape of ours shuts the list. It is hidden from here on, which is
+       the case the open-list rule above misses. */
+    await pressEscape({});
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(setTagging).not.toHaveBeenCalledWith(null);
+
+    await pressEscape({ isComposing: true });
+    expect(setTagging).not.toHaveBeenCalledWith(null);
+    expect(box()?.value).toBe("neu");
+    /* The older sentinel some engines send in place of the flag. */
+    await pressEscape({ keyCode: 229 });
+    expect(setTagging).not.toHaveBeenCalledWith(null);
+
+    /* And an Escape that is ours still closes it. */
+    await pressEscape({});
+    expect(setTagging).toHaveBeenCalledWith(null);
+  });
 });
