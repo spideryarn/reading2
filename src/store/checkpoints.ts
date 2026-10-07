@@ -190,7 +190,13 @@ export type CheckpointNamespace =
   | "structure-deepen"
   | "structure-labels"
   | "structure-whole-document"
-  | "pdf-chunk";
+  | "pdf-chunk"
+  /**
+   * Illustrated's brief, kept between two lease windows of one job so the
+   * plates can be drawn in the next one without buying it again. Keyed by the
+   * job, so a new press asks again. src/pipeline.ts § `STEPS.illustrated`.
+   */
+  | "illustrated-brief";
 
 /** Every namespace, for the CHECK, the tests and anything that has to enumerate. */
 export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = [
@@ -198,6 +204,7 @@ export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = [
   "structure-labels",
   "structure-whole-document",
   "pdf-chunk",
+  "illustrated-brief",
 ];
 
 /**

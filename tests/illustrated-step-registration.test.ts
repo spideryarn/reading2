@@ -94,7 +94,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { readArticle } from "../src/article-input.js";
 import { readerFailureOf } from "../src/job-failure.js";
 import { isBodyEvidence } from "../src/block-policy.js";
-import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
+import {
+  BRIEF_CAP_MS,
+  inputFingerprint as illustratedFingerprint,
+  SETTLE_MARGIN_MS,
+} from "../src/illustrated.js";
 import { hashProfile, profileIsStale } from "../src/profile.js";
 import {
   inputFingerprint as sketchFingerprint,
@@ -107,7 +111,8 @@ import type { Sketch } from "../src/sketch-scene.js";
 import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import { STAMP_SOURCE } from "../src/store/artifacts.js";
 import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
-import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { nullCheckpointStore, type CheckpointStore } from "../src/store/checkpoints.js";
+import { NeedsAnotherWindow } from "../src/another-window.js";
 
 /* ------------------------------------------------------- the stubbed models -- */
 
@@ -121,6 +126,7 @@ import { nullCheckpointStore } from "../src/store/checkpoints.js";
  */
 const answers: string[] = [];
 let briefCalls = 0;
+let briefTakesMs = 0;
 let plateCalls = 0;
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
@@ -144,7 +150,11 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
       return {
         onText: () => undefined,
         aborted: () => false,
-        finalMessage: () => Promise.resolve(message),
+        finalMessage: () => {
+          /* How long the brief "takes", on a faked `Date` (see the window test). */
+          if (briefTakesMs > 0) vi.setSystemTime(Date.now() + briefTakesMs);
+          return Promise.resolve(message);
+        },
       };
     },
   };
@@ -616,7 +626,17 @@ describe("the plates", () => {
     }
   });
 
-  it.each([false, true])("a provider-cancelled set with Stop during storage=%s preserves the Stop rule", async (stopDuringStorage) => {
+  /**
+   * **A provider's own abort is that plate's failure, not a Stop.** Until
+   * 2026-10-07 an `AbortError` with the reader's signal live stopped the set and
+   * returned it as cancelled, part-painted, and 261007f had to stop that set
+   * being published (`discardOnAbort`). Now only the reader's signal stops the
+   * set: the plate fails, the rest are drawn, and the set is whole, so a Stop
+   * that lands while it is being stored meets the keep rule like any other
+   * last step that returned its product (src/jobs.ts § `transitionAfter`).
+   * docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md.
+   */
+  it.each([false, true])("a provider's own abort fails one plate and the set is whole (Stop during storage=%s)", async (stopDuringStorage) => {
     const stop = new AbortController();
     const call = await import("../src/ai-call.js");
     const images = await import("../src/illustrated-image.js");
@@ -636,15 +656,10 @@ describe("the plates", () => {
     });
     try {
       await script();
-      const result = STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore());
-      if (stopDuringStorage) {
-        await expect(result).rejects.toBeDefined();
-      } else {
-        const product = await result;
-        expect(product.discardOnAbort, "the runner must also check any later Stop before commit").toBe(true);
-        const partial = product.parts?.illustrated as Illustrated;
-        expect(partial.plates.filter((plate) => plate.image)).toHaveLength(1);
-      }
+      const product = await STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore());
+      const set = product.parts?.illustrated as Illustrated;
+      expect(set.plates.filter((plate) => plate.image)).toHaveLength(1);
+      expect(set.plates[1]?.failed, "the aborted plate says why it has no picture").toBeTruthy();
       expect(draws).toBe(2);
       expect(stored).toBe(1);
     } finally {
@@ -718,6 +733,126 @@ describe("the plates", () => {
 });
 
 /* -------------------------------------------------------------- freshness -- */
+
+/**
+ * **Two windows of one job, then another job.** The brief is banked in a
+ * checkpoint keyed by the job, so the job's next window draws the plates
+ * without asking the model again, and a new press asks again.
+ * docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md § Part 1.
+ *
+ * **Mutation.** Run 2026-10-07: the job id taken out of the brief's checkpoint
+ * key (src/pipeline.ts § `briefBank`) turns this red ("a new job does not
+ * inherit the last brief": 1 brief call, not 2). It touches the checkpoint
+ * store, not the artefact store.
+ */
+describe("the brief between windows", () => {
+  /** A checkpoint store held in memory, so the test needs no database. */
+  function memoryCheckpoints(): CheckpointStore & { size(): number } {
+    const rows = new Map<string, unknown>();
+    return {
+      size: () => rows.size,
+      async read<T>(_slug: string, namespace: string, keys: readonly string[]) {
+        const out = new Map<string, T>();
+        for (const key of keys) {
+          const found = rows.get(`${namespace}/${key}`);
+          if (found !== undefined) out.set(key, found as T);
+        }
+        return out;
+      },
+      async write(_slug: string, namespace: string, key: string, value: unknown) {
+        rows.set(`${namespace}/${key}`, JSON.parse(JSON.stringify(value)));
+      },
+    };
+  }
+
+  it("banks the brief for the job's next window, and not for another job", async () => {
+    const checkpoints = memoryCheckpoints();
+    await script();
+    briefCalls = 0;
+    plateCalls = 0;
+
+    /* Window one: room for the brief, and a brief that takes 500 s of it, so
+       the plates (two, on 120 s clocks) no longer fit. Only `Date` is faked:
+       the clocks' own timers stay real and never fire in a test this short. */
+    const deadlineAt = Date.now() + BRIEF_CAP_MS + SETTLE_MARGIN_MS + 1_000;
+    briefTakesMs = 500_000;
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
+    try {
+      const first = { ...ctxFor(), jobId: "spya-jobone", deadlineAt };
+      await expect(STEPS.illustrated.run(first, store, checkpoints)).rejects.toBeInstanceOf(NeedsAnotherWindow);
+    } finally {
+      vi.useRealTimers();
+      briefTakesMs = 0;
+    }
+    expect(briefCalls).toBe(1);
+    expect(plateCalls).toBe(0);
+    expect(checkpoints.size(), "the brief was banked").toBe(1);
+
+    /* Window two of the same job: a fresh claim. No brief is bought. */
+    const second = { ...ctxFor(), jobId: "spya-jobone", deadlineAt: Date.now() + 720_000 };
+    const result = await STEPS.illustrated.run(second, store, checkpoints);
+    expect(briefCalls, "the banked brief was read back").toBe(1);
+    expect(plateCalls).toBe(2);
+    expect((result.parts.illustrated as Illustrated).plates).toHaveLength(2);
+
+    /* Another job, a new press: it asks again. */
+    await script();
+    const other = { ...ctxFor(), jobId: "spya-jobtwo", deadlineAt: Date.now() + 720_000 };
+    await STEPS.illustrated.run(other, store, checkpoints);
+    expect(briefCalls, "a new job does not inherit the last brief").toBe(2);
+  });
+
+  it.each([null, [], { raw: 17 }, { raw: "not JSON" }, { raw: "{}" }])(
+    "replaces malformed checkpoint values through the pipeline bank (%j)",
+    async (value) => {
+      const checkpoints = memoryCheckpoints();
+      const read = vi.spyOn(checkpoints, "read").mockImplementationOnce(async (_slug, _namespace, keys) =>
+        new Map(keys.map((key) => [key, value])),
+      );
+      await script();
+      briefCalls = 0;
+      plateCalls = 0;
+      const ctx = { ...ctxFor(), jobId: "spya-badbank", deadlineAt: Date.now() + 720_000 };
+      const result = await STEPS.illustrated.run(ctx, store, checkpoints);
+      expect(briefCalls).toBe(1);
+      expect(plateCalls).toBe(2);
+      expect(checkpoints.size()).toBe(1);
+      expect((result.parts.illustrated as Illustrated).plates.filter((p) => p.image)).toHaveLength(2);
+      read.mockRestore();
+      await STEPS.illustrated.run(ctx, store, checkpoints);
+      expect(briefCalls, "the replacement is reusable").toBe(1);
+    },
+  );
+
+  it("a failed checkpoint read is a miss, and a failed write cannot hand back a lost brief", async () => {
+    const checkpoints = memoryCheckpoints();
+    vi.spyOn(checkpoints, "read").mockRejectedValue(new Error("checkpoint read unavailable"));
+    vi.spyOn(checkpoints, "write").mockRejectedValue(new Error("checkpoint write unavailable"));
+    await script();
+    briefCalls = 0;
+    plateCalls = 0;
+    const ctx = { ...ctxFor(), jobId: "spya-bankfail", deadlineAt: Date.now() + 720_000 };
+    const oneClaim = await STEPS.illustrated.run(ctx, store, checkpoints);
+    expect((oneClaim.parts.illustrated as Illustrated).plates.filter((p) => p.image)).toHaveLength(2);
+    expect(briefCalls).toBe(1);
+    expect(checkpoints.size()).toBe(0);
+
+    await script();
+    briefTakesMs = 500_000;
+    plateCalls = 0;
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
+    try {
+      const needsSplit = STEPS.illustrated.run(ctx, store, checkpoints);
+      await expect(needsSplit).rejects.toThrow(/could not be saved/);
+      await expect(needsSplit).rejects.not.toBeInstanceOf(NeedsAnotherWindow);
+      expect(briefCalls).toBe(2);
+      expect(plateCalls).toBe(0);
+    } finally {
+      briefTakesMs = 0;
+      vi.useRealTimers();
+    }
+  });
+});
 
 /**
  * **No mutation of its own: the header's first arm is this block's.** Hashing

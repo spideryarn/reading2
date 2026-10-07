@@ -5867,7 +5867,7 @@ export const checkpoints = spideryarn.table(
      */
     check(
       "checkpoints_namespace",
-      sql`${t.namespace} in ('structure-deepen','structure-labels','structure-whole-document','pdf-chunk')`,
+      sql`${t.namespace} in ('structure-deepen','structure-labels','structure-whole-document','pdf-chunk','illustrated-brief')`,
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the

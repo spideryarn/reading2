@@ -1970,10 +1970,19 @@ claim, then up to four unclocked image calls, and production's worst run was 739
 back and starts as a fresh claim's first step, avoiding a late start that risks discard.
 Admission requires total claim time of at most 40 s instead of 140 s; faster, unmeasured Sketch
 runs can still admit it. Only chains in that interval gain a hand-back. Release spends no retry
-window; the extra request can wait for queue capacity. That it can outlive even a whole claim is an open design question (a cap on plates or
-on the brief per request, or two steps). `tests/jobs-lease-budget.test.ts` derives the token floors from
-the steps' exported sizing and pins Illustrated's known timing gap explicitly.
+window; the extra request can wait for queue capacity. `tests/jobs-lease-budget.test.ts` derives the
+token floors from the steps' exported sizing.
 [261007h](../plans/261007h-five-more-step-budgets-to-what-they-measure.md).
+
+**And since the same day no Illustrated request outruns a claim.** The step is two units, the brief and
+the plates. The brief is sized to fit (50,000 tokens, `BRIEF_CAP_MS` 658 s, on a clock of its own) and
+each plate has a 120 s clock (`PLATE_CAP_MS`); each unit starts only when the claim has room for its
+clocks plus a 20 s settling margin, and otherwise throws `NeedsAnotherWindow`. A brief bought before
+the plates have to wait is banked in an `illustrated-brief` checkpoint keyed by the job, so the next
+window draws the plates without buying it again, and a new press asks again. Without a window left
+the job ends *interrupted* rather than starting a request the claim would kill. The 739.3 s run was a
+246 s brief and two plates that each failed after 241 s.
+[261007l](../plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md) § Part 1.
 
 **Stop in the same position is a different signal with a different rule**: a last step that
 returns after the reader's Stop is kept and published —

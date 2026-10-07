@@ -1423,8 +1423,10 @@ batch of nav labels as it comes back — the `labels` step's since 2026-09-06, t
 still carries the old owner's name (below) — and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
-**Four namespaces**, and the list is `CheckpointNamespace` in
+**Five namespaces**, and the list is `CheckpointNamespace` in
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
+`illustrated-brief` for Illustrated's brief between two windows of one job (keyed by the job, so a
+new press asks again; [261007l](../plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md)),
 and three named for the `structure` step (called `hierarchy` until 2026-10-02) — `structure-whole-document` (the one whole-document
 call for the tree), `structure-deepen` (each scoped call that splits a section too fat to read,
 [`src/structure-deepen.ts`](../../src/structure-deepen.ts)) and `structure-labels` (the nav-label

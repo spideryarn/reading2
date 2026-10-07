@@ -936,17 +936,17 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      Sequential by design: bounded parallelism here would multiply against the
      global job concurrency above.
 
-     **700 s since 2026-10-07, and it is a reservation, not a ceiling: this
-     step's estimated full-token time does not fit in a claim.** The brief is one streamed call
-     timed by nothing in the step (see `tweets` above); its `max_tokens` is
-     `budgetFor` over `ILLUSTRATED_ANSWER_TOKENS` (src/illustrated.ts), 72,000
-     tokens, which `deadlineFor` turns into **948 s** on its own. Then up to
-     `MAX_PLATES` image calls in sequence, each up to three transport attempts
-     and none with a clock. Production measured the same day
+     **700 s since 2026-10-07, and it is a reservation, not a ceiling.** When
+     it was set, this step's estimated full-token time did not fit in a claim:
+     the brief was one streamed call timed by nothing in the step, its
+     `max_tokens` 72,000 tokens, which `deadlineFor` turns into **948 s** on its
+     own, then up to `MAX_PLATES` image calls in sequence, none with a clock.
+     The same day that was fixed (the last paragraph below). Production measured the same day
      (`revision_step_runs`, rows this step ran): 15 runs, median 291.9 s, p90
      483.0 s, max **739.3 s** — only 0.7 s below a fresh claim's nominal
      740 s, before that claim's setup, reads and settlement overhead. The 417–450 s worst
-     case above is out of date.
+     case above is out of date. That 739.3 s run was a 246 s brief and two plates
+     that each failed after 241 s (`ai_calls`, job `spya-jcpz2w`), not a long brief.
 
      **What this number does now, and what it does not.** It decides one
      shape: Illustrated's own chain, `["sketch", "illustrated"]`, which the
@@ -967,14 +967,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      table's usual "whole window less a preceding step" (`extract`,
      `structure`, `labels`).
 
-     **The design question this leaves open, not answered here**: even as a
-     claim's first step the brief's estimated full-token time exceeds the claim,
-     and production's worst step runtime nearly uses the whole nominal
-     window. Extending the claim beyond the host's current 800 s window needs `vercel.json`'s `maxDuration` raised first, and
-     tests/jobs-lease-budget.test.ts refuses the pair being broken. The levers
-     inside the step are a cap on plates or on the brief per request, or
-     splitting the brief and the plates into two steps.
-     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+     **The question that left open is answered (2026-10-07)**: no Illustrated
+     request outruns a claim. The brief is sized to fit (`BRIEF_CAP_MS`, 658 s,
+     on a clock of its own) and the plates each have one (`PLATE_CAP_MS`); each
+     unit starts only when the claim has room for it, and the brief waits in a
+     checkpoint when the plates have to go to the next window. This reservation
+     is what lets a claim that admits the step start the brief at once:
+     tests/jobs-lease-budget.test.ts holds `BRIEF_CAP_MS` + the settling margin
+     under it. docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
   illustrated: 700_000,
   /* **A GUESS, and the honest label matters here more than usual**, because
      nothing this step does is bounded by a parameter.
@@ -1328,6 +1328,9 @@ async function runStep(
        recomputed: a step that can decline to start work it cannot finish needs
        to know *when*, not only *that*. See `StepContext.deadlineAt`. */
     deadlineAt,
+    /* Which job, for a step that banks work between this job's windows and must
+       not hand it to another job's (Illustrated's brief). */
+    jobId: job.id,
     stepBudgetMs: STEP_BUDGET_MS[step.name],
     /* Which lease window this is, and whether `pauseForDeadline` would grant
        one more. `requeues` is absent at zero (src/store/pg-jobs.ts), so it is
@@ -1519,10 +1522,6 @@ async function runStep(
        write has landed (`stepPreviews`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
-    /* A partial run can return before a Stop, then yield while its ledger or
-       preview settles. Keep the step's retention condition until this final
-       decision boundary, rather than trusting a check inside its run. */
-    if (product.discardOnAbort) controller.signal.throwIfAborted();
     step.detail = product.detail;
     /* **Marked done before the commit, not after, and that is the ordering the
        atomic boundary needs.** `decide` below asks whether this was the job's

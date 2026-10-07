@@ -5,9 +5,10 @@
  * The queue already hands a job back when its own deadline cancels a step
  * (src/jobs.ts § "We ran out of our own time inside a step"). That covers a
  * step the queue had to stop. This is for a step that stops *itself* ahead of
- * that deadline and would otherwise return a lesser product: the structure
- * step's slices (src/structure.ts § `generateStructure`), which keep their
- * answers in checkpoints, so a second window starts from them.
+ * that deadline and would otherwise return a lesser product, or start a
+ * request it cannot finish: the structure step's slices (src/structure.ts §
+ * `generateStructure`), which keep their answers in checkpoints, and
+ * Illustrated, which keeps its brief in one; a second window starts from them.
  *
  * In a file of its own because both ends import it: `src/structure.ts` throws
  * it and `src/jobs.ts` catches it, and `jobs.ts` imports `pipeline.ts`, which
@@ -36,9 +37,17 @@ export interface LeaseWindow {
 /**
  * Thrown by a step to hand its job back for another window. Not a failure:
  * `runStep` reports it as its own outcome and the walk puts the job down
- * exactly as it does at its own deadline. A step may throw it only when
- * `LeaseWindow.anotherAvailable` was true, and only once every call it started
- * has settled, so the step's spend is complete when it is recorded.
+ * exactly as it does at its own deadline. A step may throw it only once every
+ * call it started has settled, so the step's spend is complete when it is
+ * recorded.
+ *
+ * **With no window left the job ends *interrupted*** (`pauseForDeadline`
+ * answers `budget-spent`), so a step that has a lesser product to return
+ * instead throws it only when `LeaseWindow.anotherAvailable` is true: the
+ * structure step's slices fall back to the headings tree. A step with nothing
+ * lesser throws it either way, because starting a request the claim cannot
+ * finish ends the same way and costs the request: Illustrated
+ * (src/illustrated.ts § `generateIllustrated`).
  */
 export class NeedsAnotherWindow extends Error {
   constructor() {

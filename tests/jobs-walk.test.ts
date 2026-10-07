@@ -140,12 +140,14 @@ import { articleRevisions, articles, jobs as jobsTable } from "../src/db/schema.
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { NeedsAnotherWindow } from "../src/another-window.js";
+import { INTERRUPTED } from "../src/messages.js";
 import {
   advanceJobWith,
   cancelJob,
   claimSession,
   DEADLINE_MARGIN_MS,
   LEASE_MS,
+  REQUEUE_BUDGET,
   STEP_BUDGET_MS,
   type AdvanceParts,
 } from "../src/jobs.js";
@@ -1585,6 +1587,28 @@ describe("one claim walks the whole job", () => {
       expect(commits).toBe(1);
       expect((await draftReads?.read(slug, "metadata", "meta"))?.title).toBe(lateTitle);
       expect(await revisionStatus(paused?.draft)).toBe("published");
+    });
+
+    it("an explicit hand-back with no window left ends interrupted and keeps no product", async () => {
+      let window: StepContext["window"];
+      const { job, parts, ran } = await fixture("test-walk-no-window-left", ["metadata"], {
+        metadata: (ctx: StepContext) => {
+          window = ctx.window;
+          throw new NeedsAnotherWindow();
+        },
+      });
+      await getDb().update(jobsTable).set({ requeues: REQUEUE_BUDGET }).where(eq(jobsTable.id, job.id));
+      const ended = await advanceAsOwner(job.id, parts);
+      expect(window).toEqual({ number: REQUEUE_BUDGET + 1, anotherAvailable: false });
+      expect(ran.names).toEqual(["metadata"]);
+      expect(ended?.done).toBe(true);
+      expect(ended?.job.status).toBe("error");
+      expect(ended?.job.error).toBe(INTERRUPTED.message);
+      expect(ended?.job.failureKind).toBe(INTERRUPTED.kind);
+      expect(ended?.job.steps[0]?.error).toBe(INTERRUPTED.message);
+      expect(ended?.job.requeues).toBe(REQUEUE_BUDGET);
+      expect((await pgJobStore.get(job.id, OWNER))?.failureKind).toBe(INTERRUPTED.kind);
+      expect((await rowOf(job.id))?.draft).toBeNull();
     });
 
     /**
