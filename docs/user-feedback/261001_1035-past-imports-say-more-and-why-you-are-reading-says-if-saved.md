@@ -1,5 +1,5 @@
 ---
-reports: spya-a5gzb9, spya-hbqezu
+reports: spya-a5gzb9
 ending: shipped
 comment: Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.
 ---

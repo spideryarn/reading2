@@ -51,6 +51,15 @@ describe("the committed map", () => {
     expect(feedbackComment("constructor")).toBeNull();
   });
 
+  it("does not put a resolved question or another report's question under a shipped row", () => {
+    /* Both were caught in the first set of real comments: the first question
+       had already been answered in its own note; the second came from a note
+       that used to name two otherwise unrelated reports. */
+    expect(feedbackComment("spya-jghnva")).toBeNull();
+    expect(feedbackComment("spya-a5gzb9")).toMatch(/failed import/);
+    expect(feedbackComment("spya-hbqezu")).toBeNull();
+  });
+
   it("sorts every report under exactly one ending", () => {
     const by = feedbackIdsByEnding();
     expect(by.shipped).toEqual(shippedFeedbackIds());

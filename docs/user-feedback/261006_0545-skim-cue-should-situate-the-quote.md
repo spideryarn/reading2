@@ -1,7 +1,6 @@
 ---
 reports: spya-jghnva
 ending: shipped
-comment: Shipped as skim/10: the cue sets a scene when the quote leans on words it does not explain. Still waiting on you: should it set one more often? A middle wording is not written or measured yet.
 ---
 # Skim: the question above a quote should set the quote up
 

@@ -4,8 +4,8 @@ Up: [feedback.md](../project/feedback.md) · [feedback-reports.md](../project/fe
 reports `spya-cnbv8f` and `spya-sshjd2` (SPIDERYARN-READING2-E2, -E3) · queue item `qi-ewwnsr85` ·
 session and worktree `fbcnbv8f-earlier-tab-deferred-and-ask`
 
-Status as of 2026-10-07: **planned, not built** — evidence: no hit for `feedback-questions` or
-`EarlierFeedbackStatus` under `src/`.
+Status as of 2026-10-07: **Stage 1 built in `16963ad41`; review fixes applied in this worktree but
+not committed. Stage 2 is not built** — there is still no `feedback-questions` implementation.
 
 ## What Greg asked for
 
@@ -250,7 +250,7 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
 
 ### Stage 1 — statuses, comments and numbers (`spya-cnbv8f`)
 
-- [ ] Tests first, red: `tests/feedback-endings.test.ts` (`comment`, its cap, the selection rule
+- [x] Tests first, red: `tests/feedback-endings.test.ts` (`comment`, its cap, the selection rule
       including a lone `ending: shipped, parts: 2` note); the admin route (status per report,
       each `?show=`, counts summing to All, 403 for a non-admin, owner scoping);
       `tests/feedback-store.test.ts` (status in SQL including `ignored_at` over `awaiting`;
@@ -258,19 +258,20 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
       `tests/authenticated-api-route-contract.test.ts` (the new rows);
       `tests/feedback-dialog.test.tsx` (an admin gets five pills, the status word, `#number`, the
       comment; a non-admin's tab is unchanged; a 404 from the admin route falls back).
-- [ ] `scripts/feedback-endings.ts`: `comment` in `HEADER_FIELDS`; the generated module carries
+- [x] `scripts/feedback-endings.ts`: `comment` in `HEADER_FIELDS`; the generated module carries
       it; `REPORT_ID` fixed to the real id rule (`src/ids.ts`). Every consumer of the generated
       map updated (`src/feedback-ending.ts`, `scripts/feedback-shipped-emails.ts`, which reads
       the file at a commit and so must read both shapes, `scripts/feedback-unswept.ts`).
-- [ ] Migration `feedback_number` (hand-written, `npm run db:generate -- --custom`). Applied
+- [x] Migration `feedback_number` (hand-written, `npm run db:generate -- --custom`). Applied
       locally only; production gets it from the deploy.
-- [ ] Store, route, wire types, client, CSS.
-- [ ] Scripts: `--show` and `--report-id` take a number, absent-safe.
-- [ ] `comment:` on the existing declined and awaiting notes and on the shipped notes with a half
+- [x] Store, route, wire types, client, CSS.
+- [x] Scripts: `--show` and `--report-id` take a number, absent-safe.
+- [x] `comment:` on the existing declined and awaiting notes and on the shipped notes with a half
       waiting on Greg, from what each note already says.
-- [ ] Docs: `feedback.md` (and its stale "fifth field" wording), `feedback-reports.md` § The
+- [x] Docs: `feedback.md` (and its stale "fifth field" wording), `feedback-reports.md` § The
       note, `admin.md`, `/help` if it describes the tab.
-- [ ] Gates: typecheck, the touched suites, doc-links. Sol code review. Commit.
+- [ ] Gates: typecheck, the touched suites, doc-links. Sol code review. Commit. The candidate's
+      gates and commit are done; the review fixes above are deliberately uncommitted.
 
 ### Stage 2 — needs input (`spya-sshjd2`)
 
@@ -306,4 +307,7 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
 
 ## Progress
 
-(nothing yet)
+- Stage 1 landed as `16963ad41`. Its first code review found and fixed four narrow issues in the
+  review worktree: numeric typos no longer look like attempted abuse, the CLI accepts the full
+  positive Postgres-integer range, two comments no longer describe the wrong report or a resolved
+  question, and the production `FeedbackHost` → admin-list seam has a mutation-checked test.

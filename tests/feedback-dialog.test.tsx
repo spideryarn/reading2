@@ -18,7 +18,7 @@ import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ADMIN_EMAIL } from "../src/admin.js";
+import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
@@ -1516,6 +1516,30 @@ describe("the Earlier tab", () => {
       click(tab("Earlier"));
       await act(async () => {});
     }
+
+    it("gets the admin list through the production FeedbackHost's reader-id check", async () => {
+      function OpenFeedback() {
+        const open = useFeedbackOpen();
+        return <button type="button" onClick={() => open?.()}>Open feedback</button>;
+      }
+      host = document.createElement("div");
+      document.body.append(host);
+      root = createRoot(host);
+      listAnswer = page(ADMIN_REPORTS);
+      act(() => {
+        root.render(
+          <FeedbackHost readerId={ADMIN_USER_ID_LOCAL}>
+            <OpenFeedback />
+          </FeedbackHost>,
+        );
+      });
+      click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+      click(tab("Earlier"));
+      await act(async () => {});
+
+      expect(lists).toEqual([ADMIN_PATH]);
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+    });
 
     it("reads the admin route, and shows five pills with report counts", async () => {
       asAdmin = true;

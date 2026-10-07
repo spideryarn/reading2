@@ -70,9 +70,12 @@ import { isSpideryarnId } from "../src/ids.js";
 export type ReportRef = string | number;
 export function parseReportRef(value: string): ReportRef | null {
   if (isSpideryarnId(value)) return value;
-  /* No leading zero, and at most nine digits: inside a Postgres `integer`. */
-  const numbered = /^#?([1-9]\d{0,8})$/.exec(value);
-  return numbered?.[1] === undefined ? null : Number(numbered[1]);
+  /* No leading zero, and the whole positive range of the Postgres `integer`
+     identity column — ten digits alone would also admit values past it. */
+  const numbered = /^#?([1-9]\d{0,9})$/.exec(value);
+  if (numbered?.[1] === undefined) return null;
+  const parsed = Number(numbered[1]);
+  return parsed <= 2_147_483_647 ? parsed : null;
 }
 
 /** A reference as a person would write it back: `#212`, or the id. */
@@ -137,6 +140,7 @@ export interface ReportRow {
 export type ReporterVerdict =
   | { kind: "admin"; row: ReportRow; eventMatched: boolean }
   | { kind: "stranger"; why: string; suspicious: boolean }
+  | { kind: "missing-number" }
   | { kind: "unknown"; why: string };
 
 /** A Sentry event id: 32 hex digits. Dashes are tolerated; anything else is not one. */
@@ -470,6 +474,12 @@ function renderVerdict(verdict: ReporterVerdict, report: ReportRef, target: stri
         );
       }
       return { status: 1, lines };
+    case "missing-number":
+      lines.push(
+        `· NO REPORT (${reportId}) — production has no feedback row with this report number.`,
+        "  Check the number; this is not evidence that somebody forged a Sentry event.",
+      );
+      return { status: 1, lines };
     case "unknown":
       return { status: 2, why: verdict.why };
   }
@@ -509,7 +519,11 @@ export async function run(
   let found: LookupResult;
   try {
     found = await lookup(reportId);
-    const rendered = renderVerdict(judge(found.rows, eventId), reportId, found.target);
+    const verdict: ReporterVerdict =
+      typeof reportId === "number" && found.rows.length === 0
+        ? { kind: "missing-number" }
+        : judge(found.rows, eventId);
+    const rendered = renderVerdict(verdict, reportId, found.target);
     if (rendered.status === 2) return cannotTell(rendered.why);
     for (const line of rendered.lines) out(line);
     return rendered.status;

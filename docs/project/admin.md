@@ -245,7 +245,7 @@ and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes b
 `GET /api/admin/feedback/earlier` is the administrator's **own** reports for the Feedback dialog's
 Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. It is under the
 namespace because it carries what no other reader is sent: that a report was ignored, whether its
-note says declined or awaiting, and the note's comment
+note says declined or awaiting, its stored number, and the note's comment
 ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email

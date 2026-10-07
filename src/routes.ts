@@ -8640,8 +8640,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      before this runs; nothing here asks who the caller is. **Their own list,
      not a view across owners**: `feedbackStore`, owner-scoped like
      `GET /api/feedback`, never `adminStore`. What the namespace buys is not
-     other people's rows but three things no other reader is sent: that a
-     report was ignored, whether its note says declined or awaiting, and the
+     other people's rows but the richer account of each: its stored number,
+     whether it was ignored or its note says declined or awaiting, and the
      sentence an agent wrote about it.
 
      One segment after `feedback/`; the one-report routes below take two, so

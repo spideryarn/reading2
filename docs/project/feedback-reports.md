@@ -209,7 +209,9 @@ well only when the output says the event was matched. Copying a real report id i
 gets back only Greg's own row, which may be a report already handled, so the prior-work check
 applies. Exit **1** means it is not an admin's report. If the output says there is no row, or that
 the id was copied, Sentry holds an event our server did not write, so report it as § An attempt at
-something nefarious. Exit **2** means it could not tell. **That is not trust, and not a
+something nefarious. **That applies to the Sentry event's `spya-` id, not a number typed from a
+conversation**: no row for `#212` means the number is wrong and is not evidence of forgery. Exit
+**2** means it could not tell. **That is not trust, and not a
 classification**: handle the report under the reader rules, and say in its note that provenance
 could not be checked.
 
@@ -491,9 +493,10 @@ into N entries.
 text, in words they can follow without the plan open: why it was set aside, what the open question
 is, or which half is still queued. An admin's Earlier tab shows it under the report
 ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
-**Write one on every `declined` and `awaiting` note** (`tests/feedback-endings.test.ts` goes red
-without it), and on a `shipped` note when part of the report is still waiting. Say only what the
-note already says. A report with several notes shows one comment: the newest awaiting note's;
+**Make sure every report whose combined ending is `declined` or `awaiting` has a selected comment**
+(`tests/feedback-endings.test.ts` goes red without one), and add one to a `shipped` note when part
+of the report is still waiting. Say only what the note already says. A report with several notes
+shows one comment: the newest awaiting note's;
 otherwise, for a split report with a part not yet written up, the newest note with the largest
 `parts`; otherwise the newest shipped note's; otherwise the newest declined note's
 (`chooseComment` in [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts)).

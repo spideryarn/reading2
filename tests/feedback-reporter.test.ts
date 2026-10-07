@@ -21,6 +21,7 @@ import {
   isMainModule,
   judge,
   normaliseEventId,
+  parseReportRef,
   productionConnection,
   readReportRows,
   run,
@@ -145,6 +146,12 @@ describe("run", () => {
     expect(before.out).toContain(`report: no number yet · ${REPORT_ID}`);
   });
 
+  it("accepts every positive Postgres integer as a report number, and nothing beyond it", () => {
+    expect(parseReportRef("1000000000")).toBe(1_000_000_000);
+    expect(parseReportRef("#2147483647")).toBe(2_147_483_647);
+    expect(parseReportRef("2147483648")).toBeNull();
+  });
+
   it("refuses a report that is neither an id nor a number, without reading anything", async () => {
     for (const given of ["0", "#0", "-3", "12.5", "#", "212abc", "0212", "99999999999"]) {
       let read = false;
@@ -177,6 +184,14 @@ describe("run", () => {
     const { status, out } = await collect(["--report-id", REPORT_ID], found());
     expect(status).toBe(1);
     expect(out).toContain("nefarious");
+  });
+
+  it("does not call a nonexistent report number an attempted forgery", async () => {
+    const { status, out } = await collect(["--report-id", "999"], found());
+    expect(status).toBe(1);
+    expect(out).toContain("no feedback row with this report number");
+    expect(out).not.toContain("Sentry holds an event our server did not write");
+    expect(out).not.toMatch(/nefarious/i);
   });
 
   it("exits 2 when production cannot be read, whatever the failure", async () => {
