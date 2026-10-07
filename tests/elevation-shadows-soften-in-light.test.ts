@@ -81,7 +81,7 @@ describe("elevation shadows", () => {
       inLight: (m.index ?? 0) > light,
     }));
     /* Dark first, so the old literals compute unchanged; light second, and
-       less — the same ratio as the three tokens beside it. */
+       less — roughly the same ratio as the three tokens beside it. */
     expect(values).toEqual([
       { value: 1, inLight: false },
       { value: 0.38, inLight: true },

@@ -74,7 +74,7 @@ revealed gutter (`gutter.css`), the dock drawer (`dock.css`, upward), the mode h
 literals, so they are heavy on a white page.
 
 **Change.** One factor rather than six tokens: `--shadow-strength: 1` in the dark block,
-`0.38` in the light one (the ratio the three F6 tokens already use), and each of the six writes
+`0.38` in the light one (roughly the ratio the three F6 tokens already use), and each of the six writes
 its alpha as `calc(<dark alpha> * var(--shadow-strength))`. Dark computes to the same number, so
 it is pixel-identical; each silhouette stays its own. **Simpler option passed over:** six new
 tokens, each with a dark and a light value — twelve numbers to keep in step, for silhouettes used
@@ -174,6 +174,6 @@ S1 `bd7a7056a`, S2 `1cf3d283c`, S4 `13a22e307`, S3 + plan-review fixes `157cf5bd
 GPT Sol's code-review fix C1 `f398443df` ([review](261007m-code-review-sol.md), READY WITH THESE
 FIXES). Browser check at 1440, 1024, 768 (the 288px band) and 390, mouse and emulated touch: every
 item as planned; dark shadows equal the old literals, light ones 0.38 of them; Start over shows its
-line 29ms after the press. **Left:** Quotes' and Skim's arrows still shrink to 33px at a 12px root
-(Sol's C2); Citations' row still wraps raggedly at 390 and 1024, now with 32px buttons — the same
-shape it had before.
+line 29ms after the press. **Follow-up `116e01c1f`:** Quotes' and Skim's arrows now have Diagram's
+44px floor too (Sol's C2). **Left:** Citations' row still wraps raggedly at 390 and 1024, now with
+32px buttons — the same shape it had before.

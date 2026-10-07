@@ -83,7 +83,7 @@ lines need nothing.
 - The **client** throws at module load without `VITE_SUPABASE_URL` and
   `VITE_SUPABASE_PUBLISHABLE_KEY`, so running `npm run dev` before you have them gives you a
   **blank page** — deliberately, because the alternative is a sign-in button that does nothing
-  ([§ Signing in needs four more](#signing-in-needs-four-more)).
+  ([§ What signing in needs](#what-signing-in-needs)).
 - Vite reads `.env.local` once, **at startup**. Adding a variable means restarting `npm run dev`.
 
 ### Signing in
@@ -116,8 +116,8 @@ bundles and fail, naming the command, when there is none ([testing.md](testing.m
 |---|---|
 | A blank page, and a console error naming `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` | The three lines above are missing from `.env.local`, or Vite has not been restarted since you added them |
 | The dev server refuses to start, naming `npm run db:start` | The containers are down. `assertStoreReachable` in `vite.config.ts` runs one `select 1` before booting, on purpose — see [below](#the-database-locally) |
-| Vite says it is on **5274** or 5275 | Something else has 5273. 5273–5303 are all on the redirect allow-list, so sign-in should work — unless the running container baked in an older list ([§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it) |
-| Google sign-in succeeds and dumps you on the bare site URL | The allow-list is baked into a running container, not read from the file. [§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it |
+| Vite says it is on **5274** or 5275 | Something else has 5273. 5273–5303 are all on the redirect allow-list, so sign-in should work — unless the running container baked in an older list ([§ What signing in needs](#what-signing-in-needs) has the `docker inspect` to check it) |
+| Google sign-in succeeds and dumps you on the bare site URL | The allow-list is baked into a running container, not read from the file. [§ What signing in needs](#what-signing-in-needs) has the `docker inspect` to check it |
 | The reading view works, but an ingest fails immediately | No `OPENROUTER_API_KEY` in `.env.local` |
 
 When something is broken and it is not on that list, [debugging.md](debugging.md) is where to start.
@@ -187,11 +187,12 @@ from the reader's browser straight to OpenAI and no row is written
 `!.env.example` — so it must never gain a real value. `.env.prod` records what the remote project
 needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.env.local`.
 
-### Signing in needs four more
+### What signing in needs
 
-Since 2026-08-27 the app has a gate ([auth.md](auth.md)), and **without these the client throws at
-module load and you get a blank page** — deliberately, because the alternative is a sign-in button
-that does nothing and no clue why.
+Since 2026-08-27 the app has a gate ([auth.md](auth.md)). **Without the two `VITE_` variables the
+client throws at module load and you get a blank page** — deliberately, because the alternative is
+a sign-in button that does nothing and no clue why. The server key is for verifying sign-in;
+the last two variables configure Google sign-in in the Supabase stack.
 
 ```
 VITE_SUPABASE_URL=http://127.0.0.1:54361
