@@ -55,7 +55,12 @@ import moreOpenPng from "./pages/images/more-open.png";
 import passageLinkPng from "./pages/images/passage-link.png";
 import phonePng from "./pages/images/phone.png";
 import readingViewPng from "./pages/images/reading-view.png";
-import spineCardPng from "./pages/images/spine-card.png";
+import jumpBackGif from "./pages/images/jump-back.gif";
+import jumpBackStillPng from "./pages/images/jump-back-still.png";
+import skimStepsGif from "./pages/images/skim-steps.gif";
+import skimStepsStillPng from "./pages/images/skim-steps-still.png";
+import spineWalkGif from "./pages/images/spine-walk.gif";
+import spineWalkStillPng from "./pages/images/spine-walk-still.png";
 
 export interface HelpImage {
   /** The hashed address Vite gives the file. */
@@ -101,14 +106,38 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     window: "1440×900 at 2×",
     taken: "2026-10-07",
   },
-  "spine-card.png": {
-    src: spineCardPng,
-    w: 800,
-    h: 610,
-    shows: "Pointing at a section on the spine; cropped to the spine’s edge and the card.",
+  "spine-walk.gif": {
+    src: spineWalkGif,
+    w: 1200,
+    h: 980,
+    shows:
+      "?mode=plain; the pointer onto the spine, then slowly down it across five sections so the card follows. Clip x0 y110 w600 h490 CSS, a frame every ~120ms, scripts/frames-to-gif.ts --delay 120 --colours 128. The still is the “What hackers choose at home” card.",
     article: "Great Hackers (gh-spya-whnhkx)",
     window: "1440×900 at 2×",
     taken: "2026-10-07",
+    still: { src: spineWalkStillPng, file: "spine-walk-still.png" },
+  },
+  "skim-steps.gif": {
+    src: skimStepsGif,
+    w: 1320,
+    h: 740,
+    shows:
+      "?mode=skim on the route already planned; → pressed twice, so the outlined stop moves twice. Page zoom 0.92 so the prose and Next stop fit; clip x640 y250 w660 h370 CSS. The still is the “first principle” stop.",
+    article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×, page zoom 0.92",
+    taken: "2026-10-07",
+    still: { src: skimStepsStillPng, file: "skim-steps-still.png" },
+  },
+  "jump-back.gif": {
+    src: jumpBackGif,
+    w: 1344,
+    h: 780,
+    shows:
+      "?mode=plain; a click on the spine jumps to another section and “↩ back to …” appears, then pressing it returns. A narrow window so the button and the prose share 672 CSS px; clip x0 y470 w672 h390 CSS. The still is the button just after the jump.",
+    article: "Great Hackers (gh-spya-whnhkx)",
+    window: "760×900 at 2×",
+    taken: "2026-10-07",
+    still: { src: jumpBackStillPng, file: "jump-back-still.png" },
   },
   "gutter.png": {
     src: gutterPng,
