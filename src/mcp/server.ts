@@ -48,11 +48,15 @@ export function buildServer(options: ServerOptions): McpServer {
       { title: t.title, description: t.description, inputSchema: t.input, annotations: t.annotations },
       async (args: Record<string, unknown>) => {
         try {
-          const operation = t.ask ? await t.ask(api, args, ctx) : null;
-          if (operation !== null && !(await approver.approve(operation))) {
+          /* Bind before any out-of-band question. In particular, a server that
+             started while signed out must not show a dialog and only decide
+             which reader it is after the person has approved the operation. */
+          if (t.ask) await ctx.identity();
+          const approval = t.ask ? await t.ask(api, args, ctx) : null;
+          if (approval !== null && !(await approver.approve(approval.operation))) {
             return text(`Not approved, so nothing was sent or published: ${t.name} did not run.`);
           }
-          return text(await t.handler(api, args, ctx));
+          return text(await (approval?.run ? approval.run() : t.handler(api, args, ctx)));
         } catch (err) {
           return failure(describeFailure(t.name, err));
         }

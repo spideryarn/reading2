@@ -224,8 +224,13 @@ export async function writeSessionFile(file: string, data: SessionData): Promise
  * - **Recoverable**: one older than thirty seconds is taken over. It is
  *   *renamed* aside rather than deleted, and the renamed file is checked to
  *   be the stale one we looked at; if a live holder's fresh lock was caught
- *   instead, it is put back. Two waiters taking over the same stale lock
- *   therefore cannot both win.
+ *   instead, it is put back.
+ *
+ * Acquisition and stale takeover share a short-lived `<lock>.acquire` gate.
+ * Without it, one waiter can rename the stale lock, a second can install a
+ * fresh lock, and the first can then rename that fresh lock away; a third
+ * waiter enters while the second still owns the critical section. The gate is
+ * held only for local filesystem operations, never for `fn` or a network call.
  */
 export async function withLock<T>(file: string, fn: () => Promise<T>): Promise<T> {
   await checkHome(path.dirname(file), true);
@@ -233,8 +238,52 @@ export async function withLock<T>(file: string, fn: () => Promise<T>): Promise<T
   const token = randomBytes(16).toString("hex");
   const started = Date.now();
   for (;;) {
+    const acquired = await withAcquisitionGate(lock, async () => {
+      for (;;) {
+        try {
+          const handle = await fs.open(lock, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
+          try {
+            await handle.writeFile(token);
+          } finally {
+            await handle.close();
+          }
+          return true;
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+          if (!(await takeOverIfStale(lock))) return false;
+          /* Still holding the acquisition gate: no other waiter can fill the
+             name between taking the stale inode aside and this retry. */
+        }
+      }
+    });
+    if (acquired) break;
+    if (Date.now() - started > LOCK_WAIT_MS) {
+      throw new SessionError(`Gave up waiting for ${lock}. If no other copy is running, delete it.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 40));
+  }
+  try {
+    return await fn();
+  } finally {
+    const holder = await fs.readFile(lock, "utf8").catch(() => undefined);
+    if (holder === token) await fs.rm(lock, { force: true });
+  }
+}
+
+/**
+ * Serialize the few filesystem operations that acquire or replace `lock`.
+ * This guard is deliberately not subject to automatic stale takeover: doing
+ * that safely would need another compare-and-swap gate and recreate the same
+ * race one level up. A process can strand it only in this tiny, network-free
+ * window; refusing with a deletion instruction is safer than two holders.
+ */
+async function withAcquisitionGate<T>(lock: string, fn: () => Promise<T>): Promise<T> {
+  const gate = `${lock}.acquire`;
+  const token = randomBytes(16).toString("hex");
+  const started = Date.now();
+  for (;;) {
     try {
-      const handle = await fs.open(lock, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
+      const handle = await fs.open(gate, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
       try {
         await handle.writeFile(token);
       } finally {
@@ -243,18 +292,17 @@ export async function withLock<T>(file: string, fn: () => Promise<T>): Promise<T
       break;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      if (await takeOverIfStale(lock)) continue;
       if (Date.now() - started > LOCK_WAIT_MS) {
-        throw new SessionError(`Gave up waiting for ${lock}. If no other copy is running, delete it.`);
+        throw new SessionError(`Gave up waiting for ${gate}. If no other copy is starting, delete it.`);
       }
-      await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 40));
+      await new Promise((resolve) => setTimeout(resolve, 10 + Math.random() * 20));
     }
   }
   try {
     return await fn();
   } finally {
-    const holder = await fs.readFile(lock, "utf8").catch(() => undefined);
-    if (holder === token) await fs.rm(lock, { force: true });
+    const holder = await fs.readFile(gate, "utf8").catch(() => undefined);
+    if (holder === token) await fs.rm(gate, { force: true });
   }
 }
 
@@ -416,8 +464,16 @@ export class Session {
   }
 
   private bindTo(data: SessionData): Binding {
-    const { sessionId } = tokenClaims(data.accessToken);
-    this.binding = { userId: data.userId, ...(sessionId ? { sessionId } : {}) };
+    const { sub, sessionId } = tokenClaims(data.accessToken);
+    if (!sub || !sessionId) {
+      throw new SessionError(
+        `The session at ${this.file} has an access token that does not identify its user and session. Run \`login\` again.`,
+      );
+    }
+    if (sub !== data.userId) {
+      throw new SessionError(`The access token in ${this.file} does not match the session file's user. Run \`login\` again.`);
+    }
+    this.binding = { userId: data.userId, sessionId };
     return this.binding;
   }
 

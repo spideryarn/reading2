@@ -302,15 +302,18 @@ local stack on port 5273): **30/30**, by a Sonnet subagent.
 - Presence and absence: the admin's canary tag on `john-von-neumann-spya-yx9t8u` showed in the
   admin's `list_tags` and `list_articles` and in neither of reader-b's; reader-b's search had
   `hits: []`; reader-b's `edit_tags` on that slug got the server's 404 (*"No article artefacts
-  for …"*), which does not confirm the slug exists. Canary removed. Gap: search does not index
-  tags, so it has no positive control.
+  for …"*), which does not confirm the slug exists. Canary removed. **Search proves less than
+  it looks** (Sol's C10): it does not index tags, so the canary cannot appear in anybody's search,
+  and reader-b's empty `hits` show only that the admin's slug was not among them, with no positive
+  control. The isolation claim rests on `list_articles`, `list_tags` and `edit_tags`.
 - All four admin tools under reader-b: *"Spideryarn refused: That page is for the site's
   administrator. [admin-only]"*.
 - Admin, approver stubbed to approve: a voucher to an `@example.com` address `queued`; the same call
   again `replayed`, one voucher; the same key with 2 articles refused (*"That idempotency_key was
   already used for a different gift; nothing was sent"*), still one; then revoked.
 - Deliberate break: the absence check run on the admin's session went red
-  (`{"articles":true,"tags":true}`), so it can fail.
+  (`{"articles":true,"tags":true,"search":false}`): the two list checks can fail; search, as
+  above, could not.
 - Production, no credentials: `GET /api/library` → 401; `whoami` with no session → one line,
   exit 1, no stack trace. No production sign-in was attempted.
 - Not exercised: `import_article` for real (it spends model money on the shared box); the tool's
@@ -390,3 +393,20 @@ client-supplied and so does not prove a human decided; overruled because MCP's t
 the host and our adversary controls only the model's output, and the gate is now a native dialog
 outside the host altogether. Sol's objection to `--allow-without-asking` is accepted; the flag is
 gone.*
+
+**Code review, round 1 (GPT Sol, 2026-10-07, write-capable, on `33c268b00`):** `VERDICT: not
+ready`, ten findings,
+[261007j-mcp-server-code-review-sol.md](261007j-mcp-server-code-review-sol.md). Sol fixed eight,
+each red first: C1 two simultaneous stale-lock takeovers (a short gate now serialises them); C2 a
+token without `sub`/`session_id`, or with a `sub` the file disagreed with, was bound; C3 an asking
+tool could open its dialog unbound and run after another reader signed in; C4 a retry re-read the
+voucher after approval and could send a different delivery; **C5 (P0) a token could reach a result
+or an error after a refresh, now scrubbed from every response**; C7 `set_auto_modes` returned the
+reader's profile text; C8 argument parsing; C9 a stdio test that hung when it could not listen.
+Reported, and settled here: **C6** the retry dialog showed the voucher's *current* name, count and
+note, but a retry re-sends the email as first written. Fixed by the orchestrator without touching
+the route: the dialog now names only the address and says the email goes exactly as first written,
+with a test that it holds none of today's fields. **C10** the spike's search check proves less than
+it claimed; § What landed now says so. Gates after the fixes: the three MCP suites 80/80,
+typecheck green, biome clean. The not-ready verdict rested on C6, which is fixed. A second round
+was not run: the fixes are narrow, and each has its own red-first test.

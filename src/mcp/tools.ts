@@ -37,6 +37,17 @@ export interface ToolContext {
   identity(): Promise<{ userId: string; email: string }>;
 }
 
+/** What must be shown, plus an optional write already bound to the facts shown. */
+export interface ApprovalRequest {
+  readonly operation: Operation;
+  /**
+   * Used when describing the operation required a read whose result selects the
+   * write. Keeping the closure makes approval and execution one snapshot rather
+   * than re-reading and possibly acting on a different object afterwards.
+   */
+  readonly run?: () => Promise<unknown>;
+}
+
 export interface Tool<S extends z.ZodObject = z.ZodObject> {
   readonly name: string;
   readonly title: string;
@@ -48,7 +59,7 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
    * operation to put to them, or `null` when this call needs no approval (an
    * `update_gift_voucher` that does not change the address).
    */
-  readonly ask?: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<Operation | null>;
+  readonly ask?: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<ApprovalRequest | null>;
   readonly handler: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
 }
 
@@ -293,7 +304,10 @@ export const TOOLS: readonly Tool[] = [
       "for all of them; there is no per-mode choice.",
     input: z.strictObject({ on: z.boolean() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async (api, { on }) => await api.call("PATCH", "/api/reader", { autoModes: on }),
+    handler: async (api, { on }) => {
+      const reader = await api.call<{ autoModes: boolean }>("PATCH", "/api/reader", { autoModes: on });
+      return { autoModes: reader.autoModes };
+    },
   }),
 
   tool({
@@ -319,16 +333,18 @@ export const TOOLS: readonly Tool[] = [
       const entries = [...(await shelf(api, false)), ...(await shelf(api, true))];
       const title = entries.find((e) => e.slug === slug)?.title;
       return {
-        title: "Spideryarn: make an article public?",
-        lines: [
-          `Make this article public, so anyone with its link can read its full text?`,
-          "",
-          `Article: ${title ? `${quoted(title)} ` : ""}(${slug})`,
-          `Link: ${articleLink(api, slug)}`,
-          `Site: ${api.site}`,
-          "",
-          `Approving confirms: ${SHARING_RIGHTS_CONFIRM}`,
-        ],
+        operation: {
+          title: "Spideryarn: make an article public?",
+          lines: [
+            `Make this article public, so anyone with its link can read its full text?`,
+            "",
+            `Article: ${title ? `${quoted(title)} ` : ""}(${slug})`,
+            `Link: ${articleLink(api, slug)}`,
+            `Site: ${api.site}`,
+            "",
+            `Approving confirms: ${SHARING_RIGHTS_CONFIRM}`,
+          ],
+        },
       };
     },
     handler: async (api, { slug }) => {
@@ -374,16 +390,18 @@ export const TOOLS: readonly Tool[] = [
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ask: async (api, a) => ({
-      title: "Spideryarn: send a gift email?",
-      lines: [
-        "Send this gift email?",
-        "",
-        `To: ${a.email.trim()}`,
-        ...(a.recipientName ? [`Opens: Dear ${a.recipientName},`] : []),
-        `Gift: ${freeArticles(a.articles)}`,
-        `Note to them: ${a.recipientNote ? quoted(a.recipientNote) : "(none)"}`,
-        `Site: ${api.site}`,
-      ],
+      operation: {
+        title: "Spideryarn: send a gift email?",
+        lines: [
+          "Send this gift email?",
+          "",
+          `To: ${a.email.trim()}`,
+          ...(a.recipientName ? [`Opens: Dear ${a.recipientName},`] : []),
+          `Gift: ${freeArticles(a.articles)}`,
+          `Note to them: ${a.recipientNote ? quoted(a.recipientNote) : "(none)"}`,
+          `Site: ${api.site}`,
+        ],
+      },
     }),
     handler: async (api, a, ctx) => {
       const id = voucherId(api.site, (await ctx.identity()).userId, a.idempotency_key);
@@ -427,17 +445,19 @@ export const TOOLS: readonly Tool[] = [
       a.email === undefined
         ? null
         : {
-            title: "Spideryarn: send a gift email to a new address?",
-            lines: [
-              "Change this gift voucher's address? That sends the gift email to the new address.",
-              "",
-              `Voucher: ${a.id}`,
-              `New address: ${a.email.trim()}`,
-              ...(a.recipientName ? [`Opens: Dear ${a.recipientName},`] : []),
-              ...(a.articles !== undefined ? [`Gift: ${freeArticles(a.articles)}`] : []),
-              ...(a.recipientNote ? [`Note to them: ${quoted(a.recipientNote)}`] : []),
-              `Site: ${api.site}`,
-            ],
+            operation: {
+              title: "Spideryarn: send a gift email to a new address?",
+              lines: [
+                "Change this gift voucher's address? That sends the gift email to the new address.",
+                "",
+                `Voucher: ${a.id}`,
+                `New address: ${a.email.trim()}`,
+                ...(a.recipientName ? [`Opens: Dear ${a.recipientName},`] : []),
+                ...(a.articles !== undefined ? [`Gift: ${freeArticles(a.articles)}`] : []),
+                ...(a.recipientNote ? [`Note to them: ${quoted(a.recipientNote)}`] : []),
+                `Site: ${api.site}`,
+              ],
+            },
           },
     handler: async (api, { id, ...change }) => {
       const body = Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined));
@@ -460,27 +480,32 @@ export const TOOLS: readonly Tool[] = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     ask: async (api, { voucherId: id, which }) => {
       const v = await findVoucher(api, id);
+      const email = v.emails[which];
+      if (!email) throw new ApiError(404, `That voucher has no ${which} email to retry.`);
       return {
-        title: "Spideryarn: send a voucher email again?",
-        lines: [
-          "Send this voucher email again?",
-          "",
-          ...(which === "gift"
-            ? [
-                `The gift email, to: ${v.email}`,
-                ...(v.recipientName ? [`Opens: Dear ${v.recipientName},`] : []),
-                `Gift: ${freeArticles(v.articles)}`,
-                `Note to them: ${v.recipientNote ? quoted(v.recipientNote) : "(none)"}`,
-              ]
-            : [`The "your gift was claimed" notice to the voucher's creator, about ${v.email}`]),
-          `Site: ${api.site}`,
-        ],
+        operation: {
+          title: "Spideryarn: send a voucher email again?",
+          lines: [
+            "Send this voucher email again?",
+            "",
+            /* **Only the address, never the voucher's current name, count or note.** A
+               retry re-sends the email exactly as it was first written
+               (src/store/pg-voucher-emails.ts keeps the rendered text so a retry sends the
+               same bytes), and the route does not expose that text. Showing today's fields
+               would let the person approve words that are not the ones sent, whenever the
+               voucher was edited after the first attempt. Sol's C6, code review 261007j.
+               The address is right: the route refuses a voucher re-addressed since. */
+            ...(which === "gift"
+              ? [`The gift email, to: ${v.email}`, "Exactly as first written: any edits to the voucher since are not in it."]
+              : [`The "your gift was claimed" notice to the voucher's creator, about ${v.email}`]),
+            `Site: ${api.site}`,
+          ],
+        },
+        run: async () => await api.call("POST", `/api/admin/voucher-emails/${seg(email.id)}/retry`),
       };
     },
-    handler: async (api, { voucherId: id, which }) => {
-      const email = (await findVoucher(api, id)).emails[which];
-      if (!email) throw new ApiError(404, `That voucher has no ${which} email to retry.`);
-      return await api.call("POST", `/api/admin/voucher-emails/${seg(email.id)}/retry`);
+    handler: async () => {
+      throw new Error("retry_gift_voucher_email must run the delivery prepared for approval");
     },
   }),
 ];

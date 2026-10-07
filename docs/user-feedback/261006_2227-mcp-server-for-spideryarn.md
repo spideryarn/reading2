@@ -13,4 +13,23 @@ page. The words are from that row:
 **Ending: Shipped**, on `dev`. Plan
 [261007j](../plans/261007j-mcp-server-for-spideryarn-admins-first.md).
 
-(What was built, and what waits for Greg, is filled in when the work lands.)
+- **Built: a local MCP server**, `scripts/spideryarn-mcp.ts`, which Claude Desktop, Cowork on the
+  desktop or Claude Code runs on your Mac. You sign it in once with your email and password; it
+  then calls Spideryarn's own API as you, so **it can do exactly what your account can do** (the
+  "dream" in your words: an admin's voucher tools work, anybody else's are refused by the server).
+  Tools: list and search your articles, list and edit tags, import a URL and follow the import,
+  the run-modes-on-import switch, make an article public or private, and list, create, edit,
+  revoke and re-send gift vouchers with their name and note. Set-up:
+  [mcp.md](../project/mcp.md).
+- **Sending mail and publishing open a dialog on your Mac** naming the exact gift or article, and
+  nothing happens without *Approve*: an agent that reads your email can be steered by what an
+  email says, and the model cannot press that button. A retried gift is sent once.
+- **Tested** against the local stack with two real accounts (30/30), and production read-only
+  with no credentials. Signing in to production is yours to try first: an account that has only
+  used Google may need *Forgot password* on `/login` to get a password.
+- **Not built, questions for you** (on [awaiting-approval.md](awaiting-approval.md)): signing in
+  from Cowork on the web or phone (`qi-n9ntngfq`), and whether an agent may hold a private link's
+  key or every reader's address (`qi-2a8nh33e`).
+- **Your list of people** (who, why, which articles) stays in the agent's own notes, as you
+  suggested; it answers the open question on [the starter-article note](261006_2222-gift-voucher-name-note-and-a-starter-article.md)
+  (`qi-dajb32q7`) in part.

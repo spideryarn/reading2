@@ -27,12 +27,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionFileFor, writeSessionFile } from "../src/mcp/session.js";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/spideryarn-mcp.ts", import.meta.url));
-const OLD_ACCESS = "SENTINEL-OLD-ACCESS-44e1";
 const OLD_REFRESH = "SENTINEL-OLD-REFRESH-0a7b";
 const NEW_REFRESH = "SENTINEL-NEW-REFRESH-c3d9";
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const OLD_ACCESS = `${b64({ alg: "none" })}.${b64({ sub: "user-a", session_id: "sess-a" })}.SENTINEL-OLD-SIG-44e1`;
 const NEW_ACCESS = `${b64({ alg: "none" })}.${b64({ sub: "user-a", session_id: "sess-a" })}.SENTINEL-NEW-SIG-5f`;
-const SENTINELS = [OLD_ACCESS, OLD_REFRESH, NEW_REFRESH, "SENTINEL-NEW-SIG-5f"];
+const SENTINELS = [OLD_ACCESS, "SENTINEL-OLD-SIG-44e1", OLD_REFRESH, NEW_REFRESH, "SENTINEL-NEW-SIG-5f"];
 
 let server: Server;
 let site: string;
@@ -78,7 +78,14 @@ beforeAll(async () => {
     res.statusCode = 403;
     res.end(JSON.stringify({ error: `Admins only (you sent ${req.headers.authorization}).` }));
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => {
+    const failed = (err: Error) => reject(err);
+    server.once("error", failed);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", failed);
+      resolve();
+    });
+  });
   site = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   home = await fs.mkdtemp(path.join(os.tmpdir(), "spideryarn-mcp-stdio-"));
   await writeSessionFile(sessionFileFor(site, home), {
@@ -94,8 +101,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => server.close(resolve));
-  await fs.rm(home, { recursive: true, force: true });
+  if (server.listening) await new Promise((resolve) => server.close(resolve));
+  if (home) await fs.rm(home, { recursive: true, force: true });
 });
 
 describe("serve over stdio", () => {

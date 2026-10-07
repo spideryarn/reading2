@@ -9,8 +9,9 @@
  *
  * `serve` is the default command and is what an AI app runs. It speaks MCP on
  * stdin and stdout, so **nothing but protocol may reach stdout**: diagnostics
- * go to stderr, and `console.log` is pointed there too before anything else
- * runs, in case some import ever logs.
+ * go to stderr, and `console.log` is pointed there as soon as `main` starts.
+ * ESM evaluates static imports first, so the spawned stdio test also checks
+ * every byte they write during module loading.
  *
  * The site is required (`--site`, or `SPIDERYARN_SITE`): a local dev server's
  * port is not knowable from here, and guessing production would be worse.
@@ -43,29 +44,39 @@ interface Args {
 const COMMANDS = ["serve", "login", "logout", "whoami"] as const;
 const VALUED = new Set(["--site", "--env-file", "--email"]);
 
+/** Parse one `--option`, returning whether it consumed the following argv item. */
+function parseOption(arg: string, next: string | undefined, flags: Map<string, string | true>): 0 | 1 {
+  const [name = "", inline] = arg.split(/=(.*)/s, 2);
+  if (VALUED.has(name)) {
+    const value = inline ?? next;
+    if (value === undefined || value.startsWith("--")) throw new SessionError(`${name} needs a value.`);
+    if (flags.has(name)) throw new SessionError(`${name} was given more than once.`);
+    flags.set(name, value);
+    return inline === undefined ? 1 : 0;
+  }
+  if (name === "--help") {
+    if (inline !== undefined) throw new SessionError("--help does not take a value.");
+    flags.set(name, true);
+    return 0;
+  }
+  throw new SessionError(`Unknown option ${name}.`);
+}
+
 export function parseArgs(argv: readonly string[]): Args {
   const flags = new Map<string, string | true>();
-  let command = "serve";
+  let command: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (arg.startsWith("--")) {
-      const [name = "", inline] = arg.split(/=(.*)/s, 2);
-      if (VALUED.has(name)) {
-        const value = inline ?? argv[++i];
-        if (value === undefined) throw new SessionError(`${name} needs a value.`);
-        flags.set(name, value);
-      } else if (name === "--help") {
-        flags.set(name, true);
-      } else {
-        throw new SessionError(`Unknown option ${name}.`);
-      }
+      i += parseOption(arg, argv[i + 1], flags);
     } else if ((COMMANDS as readonly string[]).includes(arg)) {
+      if (command !== undefined) throw new SessionError(`Choose one command, not both ${command} and ${arg}.`);
       command = arg;
     } else {
       throw new SessionError(`Unknown command ${arg}. Commands: ${COMMANDS.join(", ")}.`);
     }
   }
-  return { command, flags };
+  return { command: command ?? "serve", flags };
 }
 
 function siteFrom(args: Args): string {
@@ -208,7 +219,8 @@ async function runServe(args: Args): Promise<number> {
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
-  /* Before anything can print: stdout belongs to the protocol in `serve`. */
+  /* From the entrypoint onward stdout belongs to the protocol in `serve`.
+     Static imports have already run; the spawned stdio test checks them too. */
   console.log = console.error;
   console.info = console.error;
   const out = (line: string) => process.stderr.write(`${line}\n`);

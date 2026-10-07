@@ -13,6 +13,18 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-EE (spya-bkkjzy; the report itself shipped: a local MCP server
+  your Mac's Claude apps can run, signed in as you, with a native dialog before anything is sent
+  or published, see [mcp.md](../project/mcp.md); this is its deferred half) · three questions. Q1:
+  should it also work from Cowork on the web or phone? Stay local (recommended for now), a fixed
+  key for you alone (half a day), or OAuth through Supabase's beta OAuth server, the "Allow?" page
+  you described (a day or two); either remote option edits the sign-in gate. Q2: may the agent
+  hold a private link's key? Q3: may it list every reader's email address (privacy page gets a
+  line)? First, before any of it: sign in once with `login` and say whether it worked, since a
+  Google-only account may need *Forgot password* to get a password · qi-n9ntngfq, qi-2a8nh33e ·
+  [261007j § Questions for Greg](../plans/261007j-mcp-server-for-spideryarn-admins-first.md#questions-for-greg) ·
+  [note](261006_2227-mcp-server-for-spideryarn.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-E4 (spya-rvbmss; the report itself shipped: two readers'
   copies of one article are now tested end to end, this is its deferred half) · two small design
   questions. Q1: when two readers both share one article, the public shelf shows two identical

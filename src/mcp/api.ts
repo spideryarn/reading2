@@ -44,7 +44,19 @@ export function makeApi(options: { site: string; tokens: TokenSource; fetch?: Fe
   const site = options.site.replace(/\/$/, "");
   const doFetch = options.fetch ?? fetch;
 
-  async function once(method: HttpMethod, path: string, body: unknown, token: string): Promise<Response> {
+  const scrub = (text: string, secrets: readonly string[]) => {
+    let safe = text;
+    for (const secret of secrets) if (secret) safe = safe.split(secret).join("[redacted]");
+    return safe;
+  };
+
+  async function once(
+    method: HttpMethod,
+    path: string,
+    body: unknown,
+    token: string,
+    attemptedTokens: readonly string[],
+  ): Promise<Response> {
     try {
       return await doFetch(`${site}${path}`, {
         method,
@@ -58,9 +70,7 @@ export function makeApi(options: { site: string; tokens: TokenSource; fetch?: Fe
     } catch (err) {
       /* fetch's own message names the address, not the headers. Scrubbed
          anyway: this is the one place a token and outside text meet. */
-      const said = String((err as Error)?.message ?? err)
-        .split(token)
-        .join("[redacted]");
+      const said = scrub(String((err as Error)?.message ?? err), attemptedTokens);
       throw new ApiError(0, `Could not reach ${site} (${said}).`);
     }
   }
@@ -69,12 +79,18 @@ export function makeApi(options: { site: string; tokens: TokenSource; fetch?: Fe
     site,
     async call<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
       let token = await options.tokens.accessToken();
-      let res = await once(method, path, body, token);
+      const attemptedTokens = [token];
+      let res = await once(method, path, body, token, attemptedTokens);
       if (res.status === 401) {
         token = await options.tokens.refreshAfterRejection(token);
-        res = await once(method, path, body, token);
+        attemptedTokens.push(token);
+        res = await once(method, path, body, token, attemptedTokens);
       }
-      const text = await res.text();
+      /* A route should never echo Authorization, but this is the boundary that
+         promises no token reaches a tool result. Scrub every attempted token,
+         including the rejected one after a 401, before either parsing a success
+         or choosing text for an error. */
+      const text = scrub(await res.text(), attemptedTokens);
       let json: unknown;
       try {
         json = text === "" ? undefined : JSON.parse(text);
@@ -86,7 +102,7 @@ export function makeApi(options: { site: string; tokens: TokenSource; fetch?: Fe
           json && typeof json === "object" && typeof (json as { error?: unknown }).error === "string"
             ? (json as { error: string }).error
             : `the site answered ${res.status} without saying why`;
-        throw new ApiError(res.status, said.split(token).join("[redacted]"));
+        throw new ApiError(res.status, said);
       }
       if (json === undefined && text !== "") {
         throw new ApiError(res.status, `the site answered ${res.status} with something that is not JSON`);

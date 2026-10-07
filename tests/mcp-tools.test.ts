@@ -99,7 +99,15 @@ class StubApprover implements Approver {
   }
 }
 
-async function harness(routes: Routes = {}, approver: Approver = new StubApprover(true), tokens?: TokenSource) {
+async function harness(
+  routes: Routes = {},
+  approver: Approver = new StubApprover(true),
+  tokens?: TokenSource,
+  identity: () => Promise<{ userId: string; email: string }> = async () => ({
+    userId: USER,
+    email: "greg@example.com",
+  }),
+) {
   const seen: Seen[] = [];
   const all = { ...DEFAULT_ROUTES, ...routes };
   const fakeFetch = async (url: string, init?: RequestInit): Promise<Response> => {
@@ -123,7 +131,7 @@ async function harness(routes: Routes = {}, approver: Approver = new StubApprove
   });
   const server = buildServer({
     api,
-    ctx: { identity: async () => ({ userId: USER, email: "greg@example.com" }) },
+    ctx: { identity },
     approver,
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -239,6 +247,37 @@ describe("each tool calls the route it claims", () => {
       giftEmail: { status: "failed", retryable: true },
     });
   });
+
+  it("set_auto_modes returns only the setting, not the reader's profile text", async () => {
+    const h = await harness({
+      "PATCH /api/reader": {
+        body: {
+          profile: "PRIVATE-READER-PROFILE",
+          experimentalSince: "2026-10-01T00:00:00Z",
+          autoModes: false,
+        },
+      },
+    });
+    const result = await h.call("set_auto_modes", { on: false });
+    expect(result.json()).toEqual({ autoModes: false });
+    expect(result.text).not.toContain("PRIVATE-READER-PROFILE");
+  });
+
+  it("whoami returns only identity and auto-modes, not the reader's profile text", async () => {
+    const h = await harness({
+      "GET /api/reader": {
+        body: {
+          profile: "PRIVATE-READER-PROFILE",
+          purpose: "PRIVATE-ARTICLE-PURPOSE",
+          experimentalSince: "2026-10-01T00:00:00Z",
+          autoModes: true,
+        },
+      },
+    });
+    const result = await h.call("whoami");
+    expect(result.json()).toEqual({ email: "greg@example.com", userId: USER, site: SITE, autoModes: true });
+    expect(result.text).not.toContain("PRIVATE-");
+  });
 });
 
 describe("the site's refusals come back as readable tool errors", () => {
@@ -329,6 +368,18 @@ describe("the asking tools ask the person first, and send nothing without a yes"
     },
   ];
 
+  it("binds the server to its reader before opening a dialog or allowing a write", async () => {
+    const approver = new StubApprover(true);
+    const h = await harness({}, approver, undefined, async () => {
+      throw new Error("There is no signed-in reader to bind to.");
+    });
+    const result = await h.call("update_gift_voucher", { id: VOUCHER, email: "new@example.com" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("no signed-in reader");
+    expect(approver.asked).toEqual([]);
+    expect(h.seen).toEqual([]);
+  });
+
   for (const c of asking) {
     it(`${c.tool}: a no sends nothing, and says so without an error`, async () => {
       const approver = new StubApprover(false);
@@ -404,6 +455,50 @@ describe("the asking tools ask the person first, and send nothing without a yes"
     expect(result.isError).toBe(false);
     expect(approver.asked).toEqual([]);
     expect(h.seen).toHaveLength(1);
+  });
+
+  it("retry sends the exact delivery the person approved, even if the voucher changes afterwards", async () => {
+    const oldEmailId = adminVoucher.emails.gift.id;
+    const newEmailId = "77777777-6666-4555-8444-333333333333";
+    let reads = 0;
+    const h = await harness({
+      "GET /api/admin/vouchers": () => {
+        reads += 1;
+        return {
+          body: {
+            vouchers: [
+              reads === 1
+                ? adminVoucher
+                : {
+                    ...adminVoucher,
+                    email: "different@example.com",
+                    emails: { ...adminVoucher.emails, gift: { ...adminVoucher.emails.gift, id: newEmailId } },
+                  },
+            ],
+          },
+        };
+      },
+    });
+    const result = await h.call("retry_gift_voucher_email", { voucherId: VOUCHER });
+    expect(result.isError, result.text).toBe(false);
+    expect(reads).toBe(1);
+    expect(h.seen.find((seen) => seen.method === "POST")?.path).toBe(
+      `/api/admin/voucher-emails/${oldEmailId}/retry`,
+    );
+  });
+
+  it("the retry dialog names the address and never today's name, count or note, which a retry does not send", async () => {
+    /* A retry re-sends the email as first written (C6). Showing the voucher's
+       current fields would ask the person to approve words that are not sent. */
+    const approver = new StubApprover(true);
+    const h = await harness({}, approver);
+    await h.call("retry_gift_voucher_email", { voucherId: VOUCHER });
+    const lines = approver.asked[0]?.lines.join("\n") ?? "";
+    expect(lines).toContain("ada@example.com");
+    expect(lines).toContain("Exactly as first written");
+    expect(lines).not.toContain("RECIPIENT-NOTE-xyz");
+    expect(lines).not.toContain("Dear Ada");
+    expect(lines).not.toContain("20 free articles");
   });
 
   it("when no person can be asked, it is an error and nothing is sent", async () => {
@@ -555,5 +650,27 @@ describe("no token reaches a result", () => {
     expect(everything).not.toContain(ACCESS);
     expect(everything).not.toContain(REFRESHED);
     expect(new ApiError(500, "x").message).not.toContain(ACCESS);
+  });
+
+  it("scrubs both the rejected and refreshed access tokens from the retry's answer", async () => {
+    const h = await harness({
+      "GET /api/jobs": (seen) =>
+        seen.auth === `Bearer ${ACCESS}`
+          ? { status: 401, body: { error: "expired" } }
+          : { status: 500, body: { error: `the old token was ${ACCESS}; the new token was ${REFRESHED}` } },
+    });
+    const result = await h.call("list_imports");
+    expect(result.isError).toBe(true);
+    expect(result.text).not.toContain(ACCESS);
+    expect(result.text).not.toContain(REFRESHED);
+    expect(result.text).toContain("the old token was [redacted]; the new token was [redacted]");
+  });
+
+  it("scrubs an access token even if a successful route accidentally echoes it", async () => {
+    const h = await harness({ "GET /api/jobs": { body: { jobs: [], debug: `Bearer ${ACCESS}` } } });
+    const result = await h.call("list_imports");
+    expect(result.isError).toBe(false);
+    expect(result.text).not.toContain(ACCESS);
+    expect(result.text).toContain("Bearer [redacted]");
   });
 });

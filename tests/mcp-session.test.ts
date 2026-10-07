@@ -12,9 +12,10 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeApi } from "../src/mcp/api.js";
+import { parseArgs } from "../scripts/spideryarn-mcp.js";
 import {
   login,
   readSessionFile,
@@ -229,6 +230,110 @@ describe("refreshing", () => {
     expect(await fs.readFile(`${file}.lock`, "utf8")).toBe("the-new-owner");
   });
 
+  it("never lets a third process acquire during two simultaneous stale takeovers", async () => {
+    const file = sessionFileFor(SITE, home);
+    const lock = `${file}.lock`;
+    await fs.mkdir(home, { recursive: true, mode: 0o700 });
+    await fs.writeFile(lock, "stale-owner", { mode: 0o600 });
+    const old = new Date(Date.now() - 60_000);
+    await fs.utimes(lock, old, old);
+
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    const firstRenameReached = deferred();
+    const letFirstRenameRun = deferred();
+    const restoreLinkReached = deferred();
+    const letRestoreLinkRun = deferred();
+    const enteredSecond = deferred();
+    const enteredThird = deferred();
+    const releaseSecond = deferred();
+    const releaseThird = deferred();
+    const originalRename = fs.rename.bind(fs);
+    const originalLink = fs.link.bind(fs);
+    let takeoverRenames = 0;
+    let active = 0;
+    let overlapped = false;
+
+    vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      if (from === lock && String(to).endsWith(".stale")) {
+        takeoverRenames += 1;
+        if (takeoverRenames === 1) {
+          firstRenameReached.resolve();
+          await letFirstRenameRun.promise;
+        }
+      }
+      await originalRename(from, to);
+    });
+    vi.spyOn(fs, "link").mockImplementation(async (from, to) => {
+      if (to === lock && String(from).endsWith(".stale")) {
+        restoreLinkReached.resolve();
+        await letRestoreLinkRun.promise;
+      }
+      await originalLink(from, to);
+    });
+
+    const enter = async (entered: { resolve(): void }, release: Promise<void>) => {
+      active += 1;
+      if (active > 1) overlapped = true;
+      entered.resolve();
+      await release;
+      active -= 1;
+    };
+
+    try {
+      const first = withLock(file, async () => undefined);
+      await firstRenameReached.promise;
+
+      const second = withLock(file, async () => await enter(enteredSecond, releaseSecond.promise));
+      const secondEnteredDuringTakeover = await Promise.race([
+        enteredSecond.promise.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
+      ]);
+
+      if (secondEnteredDuringTakeover) {
+        /* The broken implementation gets here: B replaced the stale lock while
+           A was paused. Let A move B aside, then C can enter the empty name. */
+        letFirstRenameRun.resolve();
+        await restoreLinkReached.promise;
+        const third = withLock(file, async () => await enter(enteredThird, releaseThird.promise));
+        await enteredThird.promise;
+        expect(overlapped).toBe(false);
+        letRestoreLinkRun.resolve();
+        releaseSecond.resolve();
+        releaseThird.resolve();
+        await Promise.all([first, second, third]);
+      } else {
+        /* With acquisition serialized, B cannot replace the lock while A is
+           deciding its stale takeover. Once A is done, B enters; C still waits. */
+        letFirstRenameRun.resolve();
+        await first;
+        await enteredSecond.promise;
+        const third = withLock(file, async () => await enter(enteredThird, releaseThird.promise));
+        const thirdEnteredAlongsideSecond = await Promise.race([
+          enteredThird.promise.then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 100)),
+        ]);
+        expect(thirdEnteredAlongsideSecond).toBe(false);
+        expect(overlapped).toBe(false);
+        releaseSecond.resolve();
+        await enteredThird.promise;
+        releaseThird.resolve();
+        await Promise.all([second, third]);
+      }
+    } finally {
+      letFirstRenameRun.resolve();
+      letRestoreLinkRun.resolve();
+      releaseSecond.resolve();
+      releaseThird.resolve();
+      vi.restoreAllMocks();
+    }
+  });
+
   it("never puts a token or the password in an error", async () => {
     const auth = fakeAuth();
     const wrong = await login(
@@ -248,6 +353,22 @@ describe("refreshing", () => {
 });
 
 describe("a running server stays the reader it started as (Sol F14)", () => {
+  it("refuses to bind when the access token cannot prove its user and session", async () => {
+    const auth = fakeAuth();
+    const { file, data } = await signIn(auth);
+    await writeSessionFile(file, { ...data, accessToken: "not-a-jwt" });
+    const session = new Session(SITE, { home, fetch: auth.fetch });
+    await expect(session.bind()).rejects.toThrow(/does not identify its user and session/);
+  });
+
+  it("refuses to bind when the access token names a different user than the file", async () => {
+    const auth = fakeAuth();
+    const { file, data } = await signIn(auth);
+    await writeSessionFile(file, { ...data, accessToken: jwt("user-b", "sess-b", 9) });
+    const session = new Session(SITE, { home, fetch: auth.fetch });
+    await expect(session.bind()).rejects.toThrow(/does not match the session file/);
+  });
+
   it("refuses once somebody logs in as another account, and sends nothing", async () => {
     const auth = fakeAuth();
     await signIn(auth);
@@ -357,5 +478,19 @@ describe("the file's shape", () => {
     const other: SessionData = { ...data, site: "https://www.spideryarn.com" };
     await writeSessionFile(file, other);
     await expect(new Session(SITE, { home }).accessToken()).rejects.toThrow(/is for https:\/\/www.spideryarn.com/);
+  });
+});
+
+describe("command-line arguments", () => {
+  it("rejects two commands instead of silently running the last one", () => {
+    expect(() => parseArgs(["login", "logout", "--site", SITE])).toThrow(/Choose one command/);
+  });
+
+  it("reports a missing option value when the next token is another option", () => {
+    expect(() => parseArgs(["serve", "--site", "--help"])).toThrow(/--site needs a value/);
+  });
+
+  it("rejects a duplicate option instead of silently replacing it", () => {
+    expect(() => parseArgs(["serve", "--site", SITE, `--site=${SITE}`])).toThrow(/--site was given more than once/);
   });
 });
