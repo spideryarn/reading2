@@ -217,6 +217,8 @@ queue.
 
 ## Deferred, each with a queue entry before the note says shipped
 
+Queued 2026-10-07 as `qi-d6btb5rp`.
+
 - **Search engines listing the pages under `/help/`.** Today `/help` is one of the eight pages a
   search engine may list (`src/site-pages.ts`); every other address gets `noindex` from
   `vercel.json`. After this, `/help` is still listed but is a contents page, and `/help/spine` is
