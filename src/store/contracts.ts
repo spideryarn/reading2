@@ -1473,12 +1473,19 @@ export interface RefereeCriteriaStore {
  *
  * **And only the fields a finish writes.** `createdAt` and `sourceHash` are
  * `begin`'s: the adapter ignored them in a patch, silently, so the type now
- * refuses them. An `error` finish may carry `claims: []`, which is why this is
- * a `Pick` rather than the two-armed union its siblings are.
+ * refuses them.
+ *
+ * **Two arms, like its siblings, since 2026-10-07.** It was one `Partial<Pick>`
+ * with a `status` beside it, which let an `error` finish carry claims. Nothing
+ * did, and the database now refuses the row (`referee_claims_empty_unless_done`
+ * in src/db/schema.ts), so the type refuses it first. The `error` arm may still
+ * say `claims: []`, as the route does: typed as the **empty tuple**, so `[]`
+ * compiles and anything with a claim in it does not.
+ * tests/store-pg-referee-claims.test.ts holds both halves.
  */
-export type ClaimsFinish = Partial<Pick<ClaimsRun, "claims" | "model" | "claimsOmitted" | "error">> & {
-  status: "done" | "error";
-};
+export type ClaimsFinish =
+  | { status: "done"; claims: ClaimsRun["claims"]; model?: string; claimsOmitted?: number }
+  | { status: "error"; error: string; claims?: [] };
 
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */

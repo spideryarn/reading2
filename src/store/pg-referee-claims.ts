@@ -266,14 +266,21 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
        columns over a blob. tests/store-pg-referee-claims.test.ts holds the round
        trip that goes red when it happens, and `EVERY_RUN_FIELD` in that file
        makes the *next* one a typecheck failure rather than a silent drop. */
+    /* `ClaimsFinish` is a two-armed union; this is its fields with the arms
+       folded together, so each is written when it is there. An `error` arm's
+       `claims` can only be `[]` (the type), and the row it lands on is `pending`
+       and so already empty (`referee_claims_empty_unless_done`): whatever is
+       written here is written as given, and a caller that cast its way past
+       the type is refused by the database rather than tidied up. */
+    const fields: Partial<Pick<ClaimsRun, "claims" | "model" | "claimsOmitted" | "error">> = patch;
     const rows = await db
       .update(refereeClaims)
       .set({
         status: patch.status,
-        ...(patch.claims === undefined ? {} : { claims: patch.claims }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.claimsOmitted === undefined ? {} : { claimsOmitted: patch.claimsOmitted }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        ...(fields.claims === undefined ? {} : { claims: fields.claims }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.claimsOmitted === undefined ? {} : { claimsOmitted: fields.claimsOmitted }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way.
         attemptId: null,
         /* **When the claims landed, or the call failed** — in the fenced

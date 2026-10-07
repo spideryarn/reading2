@@ -136,9 +136,58 @@ rejecting`), green after; and *takes what configToRow writes, for every kind, on
 reset*, which hands the database that function's output for all three kinds and every reset
 between them.
 
+## Stage 3: claims are empty unless the run is done
+
+**Production, read 2026-10-07 01:07 UTC:** 4 rows (3 `done`, 1 `error`), **0** violating, 0 whose
+`claims` is not an array. Local: 0 of 2.
+
+**The SQL** (`drizzle/20261007010954_referee_claims_empty_unless_done.sql`, generated, unedited):
+
+```sql
+ALTER TABLE "spideryarn"."referee_claims" ADD CONSTRAINT "referee_claims_empty_unless_done"
+  CHECK ("status" = 'done' or jsonb_array_length("claims") = 0);
+```
+
+**The mechanism "no ordinary write violates this" rests on**, three links, each a test case in
+`tests/store-pg-referee-claims.test.ts`:
+
+1. `begin` writes `claims: []` on the insert and in the `ON CONFLICT DO UPDATE`, in the same
+   statement that sets `pending`. So `done` with claims becomes `pending` and empty at once, with
+   no illegal instant between.
+2. `finish` and the orphan sweep match only `status = 'pending'`, so the row they touch is already
+   empty; the sweep names no `claims`.
+3. **An `error` finish cannot carry claims.** GPT Sol's caution: `ClaimsFinish` was one
+   `Partial<Pick<…>>`, so `{ status: "error", claims: [a claim] }` compiled. Every caller was read
+   (`src/routes.ts` § `runRefereeClaims` is the only one in `src/`; it passes `claims: []` on the
+   error path) and none did it. The type is now a two-armed union like `SearchFinish` and
+   `CriterionFinish`, with the `error` arm's `claims` typed as the **empty tuple**: `claims: []`
+   still compiles, so `routes.ts` is untouched, and anything with a claim in it does not. A
+   `@ts-expect-error` in the test holds the compiler's half; the same case casts past the type and
+   shows the database refusing the write whole, with the row still `pending` and the attempt still
+   usable.
+
+Other writers: `scripts/db-reown.ts` (`owner_id` only). One test helper stood in for a writer and
+made a row no writer makes: `tests/referee-stream-lifetime.test.ts` put a finished run back to
+`pending` without emptying it. It now sets `claims: []` as `begin` does.
+
+**Tested:** *the database refuses claims on a pending run and on a failed one* (claims written under
+a `pending` row; a `done` row with claims relabelled `error` or `pending` by a `status`-only
+`UPDATE`) and the cast-past-the-type case were both **red before the migration**; *every ordinary
+ending leaves a row the rule allows* walks begin, both error shapes, the sweep, and both `done`
+shapes.
+
+**What the docs got wrong:** the schema comment *"No `empty unless done` check, deliberately"* gave
+the filesystem store as its reason. Rewritten. `ClaimsFinish`'s own comment said it was a `Pick`
+*"rather than the two-armed union its siblings are"* because an error may carry `claims: []`; the
+empty tuple says that without admitting the rest.
+
+**One thing to know:** `jsonb_array_length` raises on a non-array, so a `claims` of `{}` is refused
+with error 22023 rather than with the constraint's name. No writer can produce one.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
 
 1. `20261007005448_revision_blocks_article_block_index`
 2. `20261007010230_referee_criteria_shape_all_or_none`
+3. `20261007010954_referee_claims_empty_unless_done`

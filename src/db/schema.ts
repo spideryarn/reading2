@@ -2185,12 +2185,30 @@ export const refereeClaims = spideryarn.table(
   },
   (t) => [
     check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
-    /* **No `empty unless done` check, deliberately.** It was written and taken
-       out again: `begin` does write `[]` over whatever was there, so a `pending`
-       row carrying claims would be a half-applied write — but the filesystem
-       store cannot refuse one, and a constraint only one of the two stores keeps
-       turns a shrug on a laptop into a 500 on Vercel. The invariant is held
-       where both stores can hold it, in `begin`. */
+    /* **Claims are empty unless the run is done.** A `pending` or `error` row
+       carrying claims is yesterday's answer under today's spinner, or under a
+       failure.
+
+       Three things keep an ordinary write clear of it, and
+       tests/store-pg-referee-claims.test.ts holds each: `begin` writes `[]` on
+       the insert and in the upsert, in the same statement that moves the
+       status; `finish` and the sweep match only a `pending` row, which is
+       therefore empty; and an `error` finish cannot carry claims, because
+       `ClaimsFinish` (src/store/contracts.ts) types them as the empty tuple.
+
+       **This was written in 2026-09 and taken out again**, because the
+       filesystem store could not refuse the same row and a constraint only one
+       of two stores keeps turns a shrug on a laptop into a 500 on Vercel. That
+       store was deleted on 2026-09-05; the CHECK came back on 2026-10-07 with
+       0 of 4 production rows against it.
+
+       `jsonb_array_length` raises on a value that is not an array, which is a
+       refusal too, with a less helpful name. The column is `not null default
+       '[]'` and every writer hands it an array. */
+    check(
+      "referee_claims_empty_unless_done",
+      sql`${t.status} = 'done' or jsonb_array_length(${t.claims}) = 0`,
+    ),
   ],
 );
 
