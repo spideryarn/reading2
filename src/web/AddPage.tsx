@@ -59,6 +59,7 @@ import {
   DIRECT_ADD_SENT_TEXT_AWAY,
   UPLOAD_STILL_ARRIVING,
   ADD_IMPORT_LOST,
+  REPEAT_PASTE_ON_THE_SHELF,
   worthRetrying,
 } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -142,6 +143,13 @@ interface Completion {
   slug: string;
   /** Which `/add/` address produced it, so an older address cannot finish this one. */
   source: string;
+  /**
+   * **A repeat paste**: the address was an article the reader already has, and
+   * the server answered with it, free and with nothing queued. The page stops
+   * at `repeat` to say so rather than opening by itself.
+   * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
+   */
+  repeat?: true;
 }
 
 /**
@@ -167,6 +175,8 @@ interface Completion {
 type Phase =
   | { kind: "running" }
   | { kind: "ready"; completion: Completion; opening: boolean }
+  /** The article was already on the shelf: one sentence and one button. See `Completion.repeat`. */
+  | { kind: "repeat"; completion: Completion }
   | { kind: "opened" };
 
 /**
@@ -711,6 +721,7 @@ export function AddPage({
     };
   }
   const highPower = highPowerRef.current.intent;
+  const highPowerNow = useSyncExternalStore(highPower.subscribe, highPower.get);
 
   /**
    * **Why the reader is reading this**, asked while the import runs: the one
@@ -743,7 +754,11 @@ export function AddPage({
   const claimed = useRef<string | null>(null);
   /* The retention-path `{article}` answer to this page's own POST, recorded
      rather than acted on — see `completion` below. */
-  const [articleAnswer, setArticleAnswer] = useState<{ slug: string; source: string } | null>(null);
+  const [articleAnswer, setArticleAnswer] = useState<{
+    slug: string;
+    source: string;
+    repeat: boolean;
+  } | null>(null);
 
   /* The component is reused when the address after `/add/` changes. What the
      reader did in the old article's box must not follow it to the new one, and
@@ -830,8 +845,11 @@ export function AddPage({
          with a job — `queueAnUpload` in src/routes.ts. There is no card to
          show and nothing to wait for, so this is a completion arriving a step
          earlier — recorded, and decided with the other two below. */
+      /* **Or the address was already one of the reader's articles** — a repeat
+         paste, answered `{ article, repeat: true }` with nothing spent and
+         nothing queued. The same completion, marked, so the page says so. */
       if ("article" in queued) {
-        setArticleAnswer({ slug: queued.article, source: wanted });
+        setArticleAnswer({ slug: queued.article, source: wanted, repeat: queued.repeat === true });
         return;
       }
       /* The job itself is kept, and not only its id: it is what the page
@@ -1018,10 +1036,12 @@ export function AddPage({
               key: `article:${wanted}:${articleAnswer.slug}`,
               slug: articleAnswer.slug,
               source: wanted,
+              ...(articleAnswer.repeat ? { repeat: true as const } : {}),
             }
           : null;
   const completionKey = completion?.key ?? null;
   const completionSlug = completion?.slug ?? null;
+  const completionRepeat = completion?.repeat === true;
   /* Published with the committed screen. A prospective completion in a
      suspended render must not disable the old screen's Open button. */
   const activeCompletionKey = useRef<string | null>(completionKey);
@@ -1183,7 +1203,12 @@ export function AddPage({
   useEffect(() => {
     if (completionKey === null || completionSlug === null) return;
     if (claimed.current === completionKey) return;
-    const finished = { key: completionKey, slug: completionSlug, source: wanted };
+    const finished: Completion = {
+      key: completionKey,
+      slug: completionSlug,
+      source: wanted,
+      ...(completionRepeat ? { repeat: true as const } : {}),
+    };
     /* A different completion supersedes a press still waiting on the old one.
        The waiting effect below checks this guard before doing anything. */
     claimed.current = null;
@@ -1206,6 +1231,19 @@ export function AddPage({
     const sharingUnsettled =
       (sharing !== null && shareUnsettled(sharing.get())) ||
       (linking !== null && linkUnsettled(linking.get()));
+    /* **A repeat paste never leaves by itself**: nothing was imported, and
+       opening at once would show the reader nothing they could notice. Greg
+       asked for the repeat to be signalled (plan 261007k). */
+    if (completionRepeat) {
+      /* The request can be slow enough for the reader to enter a purpose.
+         Keep their draft and the save controls instead of hiding a refused save. */
+      setPhase(
+        purposeTouchedRef.current || purposeRef.current?.session.get().unsaved
+          ? { kind: "ready", completion: finished, opening: false }
+          : { kind: "repeat", completion: finished },
+      );
+      return;
+    }
     /* **Nothing to wait for**: the box is not focused, and it holds nothing
        the server does not have. Never typed in, or typed and saved with no
        write in flight. Read from the session in this tick, not from a render. */
@@ -1228,7 +1266,7 @@ export function AddPage({
     }
     /* Otherwise wait, indefinitely. A blur saves; it is not a decision to leave. */
     setPhase({ kind: "ready", completion: finished, opening: false });
-  }, [completionKey, completionSlug, wanted, highPower]);
+  }, [completionKey, completionSlug, completionRepeat, wanted, highPower]);
 
   const mayOpen = (done: Completion): boolean =>
     claimed.current !== done.key &&
@@ -1268,6 +1306,12 @@ export function AddPage({
     if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
   }, [phase, purposeNow]);
 
+  /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
+  const openTheRepeat = (): void => {
+    if (phase.kind !== "repeat" || !mayOpen(phase.completion)) return;
+    finish(phase.completion);
+  };
+
   /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
   const openWithoutSaving = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
@@ -1290,7 +1334,11 @@ export function AddPage({
      moving in this tab or still arriving in another one. The choice matters in
      all of those states, especially the minutes-long file transfer; showing it
      only once a job row appeared made the upload path needlessly different. */
-  const showAutoModes = offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
+  /* A repeat offers no new import choices. A purpose already entered or a
+     High-powered choice made while awaiting the answer still needs its controls. */
+  const repeated = completionRepeat;
+  const showAutoModes =
+    !repeated && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
   /* Waiting on the reader, with the add finished. The tick box stays up
      through this too: it is the reader's setting and can still be changed. */
   const deciding = phase.kind === "ready";
@@ -1394,8 +1442,11 @@ export function AddPage({
           what the first version did, put the past tense over a file the reader
           had just pressed Stop on, over a queue request refused 402, and in a
           second tab that then said the text had gone and that the file was still
-          arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3. */}
-      {ok && (
+          arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3.
+
+          **Not over a repeat paste**, which sent nothing anywhere: the server
+          answered with the article already on the shelf (plan 261007k). */}
+      {ok && !repeated && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
           {textHasGone(mine, origin.kind === "upload", startedId !== null)
             ? DIRECT_ADD_SENT_TEXT_AWAY
@@ -1430,7 +1481,9 @@ export function AddPage({
           above is already describing at length. "Queueing it…" over a progress
           bar would be naming a request that has not been made and will not be
           for another two minutes. */}
-      {ok && !job && !failed && !mine && (
+      {/* And not once the POST has answered with an article, which is a
+          completion with no job: the upload retention path, or a repeat. */}
+      {ok && !job && !failed && !mine && !completion && (
         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
       )}
 
@@ -1556,7 +1609,7 @@ export function AddPage({
           exists. Each change is sent to the reader's setting, and the server
           reads the committed choice when the import publishes.
           src/web/auto-modes-setting.ts. */}
-      {(showAutoModes || deciding) && (
+      {!repeated && (showAutoModes || deciding) && (
         <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
           <input
             type="checkbox"
@@ -1585,7 +1638,9 @@ export function AddPage({
           </span>
         </label>
       )}
-      {(showAutoModes || deciding) && <AddHighPower intent={highPower} />}
+      {((!repeated && (showAutoModes || deciding)) || (repeated && highPowerNow.kind !== "off")) && (
+        <AddHighPower intent={highPower} repeat={repeated} />
+      )}
       {/* Under High-powered AI, once the job has a slug to share: one row,
           shut until the reader opens it or a control has something to say
           (AddSharing.tsx). `offer` is the interval the two boxes above are
@@ -1597,7 +1652,7 @@ export function AddPage({
           key={JSON.stringify([readerId, share.slug])}
           share={share}
           link={link}
-          offer={showAutoModes || deciding}
+          offer={!repeated && (showAutoModes || deciding)}
         />
       )}
 
@@ -1626,8 +1681,9 @@ export function AddPage({
       {phase.kind === "ready" && (
         <div className="tw:mt-3">
           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            Ready. Any first modes that were queued use the reason saved when the import finished.
-            Changes saved after that reach chat and anything you generate later.
+            {phase.completion.repeat
+              ? REPEAT_PASTE_ON_THE_SHELF
+              : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."}
           </p>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button type="button" size="sm" disabled={phase.opening} onClick={openTheArticle}>
@@ -1641,6 +1697,15 @@ export function AddPage({
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {phase.kind === "repeat" && (
+        <div data-add-repeat className="tw:mt-3">
+          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
+          <Button type="button" size="sm" onClick={openTheRepeat}>
+            Open the article
+          </Button>
         </div>
       )}
 

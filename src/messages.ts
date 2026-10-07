@@ -4667,6 +4667,20 @@ export const SHARE_AT_ADD_WHAT =
 export const SHARE_AT_ADD_ALREADY_AN_ARTICLE =
   "This article is already on your shelf. Share it from Access & sharing on its Metadata page.";
 
+/**
+ * **A repeat paste**: the address is an article the reader already has, so
+ * nothing was imported and no slot was spent. Greg, 2026-10-06: *"yes repeat
+ * pastes should be free (and signal they're a repeat in the UI)"*. The add
+ * page stops on this with an *Open the article* button rather than opening by
+ * itself, because opening at once would show the reader nothing to notice.
+ * docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
+ */
+export const REPEAT_PASTE_ON_THE_SHELF =
+  "This article is already on your shelf, so adding it again cost nothing.";
+
+/** The same, on a link's hover card, in the card's own lower-case voice. */
+export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
+
 /** Confirmed, and not sent yet: the import has not made the article's row. */
 export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
 

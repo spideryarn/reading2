@@ -269,10 +269,19 @@ export const TOOLS: readonly Tool[] = [
     description:
       "Adds the article at a web address to your shelf. It runs in the background: this answers the import job, " +
       "and get_import_status says when it is done. On a free plan it uses one of your free articles; when they " +
-      "are gone Spideryarn refuses.",
+      "are gone Spideryarn refuses. An address you already have answers that article instead " +
+      "({ article, repeat: true }), and costs nothing.",
     input: z.strictObject({ url: z.string().url() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async (api, { url }) => withLink(api, await api.call("POST", "/api/jobs", { url })),
+    /* A job, or — for an address the reader already has — `{ article, repeat: true }`,
+       free and with nothing queued (plan 261007k). The link is the article's in both. */
+    handler: async (api, { url }) => {
+      const answer = await api.call("POST", "/api/jobs", { url });
+      if (answer && typeof answer === "object" && typeof (answer as { article?: unknown }).article === "string") {
+        return { ...answer, link: articleLink(api, (answer as { article: string }).article) };
+      }
+      return withLink(api, answer);
+    },
   }),
 
   tool({
