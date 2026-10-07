@@ -43,6 +43,11 @@ app was broken when they could fix it themselves by clearing one placement.
 `tests/referee-routes-postgres.test.ts` § *OPEN QUESTION 3a* pins the behaviour and says which half
 turns over under each answer.
 
+**Superseded the same day (2026-10-07).** Greg answered 3a and then the cap itself: no criterion is
+ever dropped, the trim is gone, and an add at a ceiling of 200 is refused instead. The full-list
+refusal described here (`CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS`, item (b) above, sentence 2 below)
+became unreachable and was deleted; the *OPEN QUESTION 3a* case was turned over. See [261007f](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+
 **The client restores on a 409 and on nothing else.** A 500 or a dropped connection does not say
 whether the row was deleted, so those leave the row off the screen as before.
 
@@ -68,7 +73,8 @@ delete."*), which these two follow: what is in the way, then what to do, in the 
    > placed on it, so a new criterion cannot be added until you clear those placements or delete
    > those comments.
 
-Both are final as landed and both are still open to a veto. The second was reworded by the
+Both are final as landed and both are still open to a veto. *(2026-10-07: the second was deleted
+with the trim it described, [261007f](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md); the first stands.)* The second was reworded by the
 orchestrator after the review, not by the owner.
 
 **Reused, not new:** *"criterionId is not one of your criteria on this article"*
@@ -105,7 +111,8 @@ sentence, is a wording question for the owner.
 
 - **`src/routes.ts` was out of bounds for the builder.** The review was authorised to correct
   `tidyMark`'s stale header and import `CRITERION_NOT_ON_ARTICLE`; both are now done.
-- **Questions 3 and 3a** are Greg's.
+- **Questions 3 and 3a** are Greg's. *(2026-10-07: both answered. 3a and the cap: [261007f](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md). 3b, the
+  hand delete: keep refusing, so `CRITERION_HAS_COMMENTS` stays as built here.)*
 
 ## Code review corrections
 
@@ -176,7 +183,8 @@ is a check and not a second cross-family review):
 - **`violatesForeignKey` does not distinguish schemas.** It matches SQLSTATE and constraint name.
   Sol found no reachable collision: the statements target the schema-qualified tables.
 - **The 400 sentence's register**, above.
-- **"The one that would be dropped"** is singular, and the trim can have more than one candidate
+- *(Moot since 2026-10-07: the sentence below was deleted with the trim, [261007f](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).)*
+  **"The one that would be dropped"** is singular, and the trim can have more than one candidate
   when older pending rows have since finished. The sentence is then true of one of them and silent
   about the rest; clearing that one lets the add through.
 
