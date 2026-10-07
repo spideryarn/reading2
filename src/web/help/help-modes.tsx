@@ -332,7 +332,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           breach of confidentiality, and where a venue does allow AI help it usually asks you to say
           so.
         </p>
-        <p>Four parts, chosen by the chips at the top:</p>
+        <p>Five parts, chosen by the chips at the top:</p>
         <ul>
           <li>
             <strong>Criteria</strong>: write what you are judging against, or start from a preset such
@@ -352,6 +352,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             <strong>Candidates</strong>: the expertise a reviewer would need, then names if you ask. No
             conflict-of-interest check is run, and it may send words from the paper to a search engine.
           </li>
+          <li>
+            <strong>Hidden text</strong>: the check of the original web page for words a reader would
+            not see but an AI would read. Its chip carries a dot when it found something.
+          </li>
         </ul>
         <p>Referee is only for whoever added the article.</p>
       </>
@@ -359,11 +363,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
-          person would not see but an AI would read — text the colour of its background, too small to
+          <strong>Hidden text</strong> checks the original web page for text a person would not see
+          but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it
-          says which.
+          says which. Each finding says in plain words what the trick is; identical ones are listed
+          once, with a count. A filled dot on the chip means something without an everyday
+          explanation was found, a ring that everything found has one — such as a page's own menus.
         </p>
         <p>Colour means two different things:</p>
         <ul>

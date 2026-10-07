@@ -156,7 +156,7 @@ export const DIAGRAM_SUB_MODES: Readonly<Record<DiagramKind, SubModeWords>> = {
   },
 };
 
-/** Referee's four views. The chips, RefereeMode.tsx § `RefereeViews`. */
+/** Referee's five views. The chips, RefereeMode.tsx § `RefereeViews`. */
 export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
   criteria: {
     label: "Criteria",
@@ -176,6 +176,11 @@ export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
   candidates: {
     label: "Candidates",
     description: "Who could review this piece, and what expertise it would take",
+    experimental: false,
+  },
+  hidden: {
+    label: "Hidden text",
+    description: "Text the document hides from a reader but a model would read, found in its source",
     experimental: false,
   },
 };

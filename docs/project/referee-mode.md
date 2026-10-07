@@ -5,11 +5,11 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 ## In this doc
 
 - Status (the paragraphs below, before the first section) — what is built, with the day each part landed (largely history)
-- [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now
+- [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now; and [§ The scan has its own chip](#the-scan-has-its-own-chip-since-2026-10-07)
 - [§ How to read a panel](#how-to-read-a-panel-one-press-away-since-2026-10-03) — where the "how to read this" sentences went
 - [§ The job](#the-job-and-the-tension-it-was-built-to-hold) — Greg's tension and the research number behind it
 - [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
-- [§ The four sub-modes](#the-four-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4)
+- [§ The five sub-modes](#the-five-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4), Hidden text (§ 5)
 - [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
 - [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
 - [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
@@ -90,10 +90,11 @@ caller**, which the cross-family review put plainly: *"it does not run before a 
 cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothing found'."*
 `GET /api/referee/scan/:slug` now runs it over the stored **raw source**
 ([`src/source-scan.ts`](../../src/source-scan.ts)), and
-[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer at the
-**mode** level — inside Notices, whichever panel is open — because a hidden
-instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
-alike. Rule 5 below says where each of its rules is enforced.
+[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer as the
+**Hidden text** sub-mode since 2026-10-07, with a mark on its chip when it found something
+(§ The scan has its own chip). Before that it was drawn at the mode level, above every panel,
+because a hidden instruction is a fact about the document. Rule 5 below says where each of its
+rules is enforced.
 
 **The referee's own judgement is built, reachable and editable**, as of 2026-09-01 — and for one
 day it was none of those while looking finished from a test file, which is worth keeping in view:
@@ -153,6 +154,47 @@ which also has the before and after screenshots. Where a later section describes
 collapse, the line above the chips or the chip starting Candidates, it is describing the
 arrangement before this one and the reasoning that arrangement answered.
 [`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) holds the new one.
+
+### The scan has its own chip, since 2026-10-07
+
+Greg, 2026-10-07 (`spya-y6590g`):
+
+> Re Referee / Hidden instructions:
+> - Perhaps squirrel this info away as a sub-mode? It doesn't seem important enough to be right at
+>   the top of Criteria
+> - And it found stuff like `Characters that render as nothing / math#footnote1.m1.ltx_Math >
+>   semantics > mrow > mo / 1× zero-width space U+200B`. Firstly, this is uninterpretable gibberish
+>   to the user, and secondly it looks innocuous. Let's pre-filter with a small LLM to try and only
+>   show stuff that might actually be of real concern/interest.
+
+The paper he was reading gave the scan 41 findings: 39 single zero-width spaces, one per invisible
+operator arXiv's LaTeX-to-HTML converter writes into MathML, and two `navigation`-labelled bits of
+arXiv's own page. Notices opened itself for any finding, so the first thing above Criteria was 39
+rows of CSS path. Now:
+
+- **The scan is the fifth chip, *Hidden text*** (`?referee=hidden`), last in the row. Pressing it
+  runs nothing; the band has already fetched the scan. **Notices holds only the confidentiality
+  sentences and never opens itself.**
+- **The chip carries a mark when something was found** (`sourceScanMark` in
+  [`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx)): a filled dot for a finding with
+  no everyday label, a ring when every finding wears one, and the same sentence either way for a
+  screen reader. A ring and not nothing, because a label is read off class names and a document
+  can wear one on purpose; a ring and not a dot, because arXiv's own furniture would otherwise light
+  the dot on nearly every paper.
+- **Each finding is in plain words** — a sentence per kind saying what the trick is and what it
+  would look like if it mattered, where it sits *as markup* ("marked up as maths", never "inside a
+  formula": the tag names are the document's own), and the CSS path and code points last, under
+  *In the source*. **Identical findings are one row with a count**, keyed on every field a referee
+  reads except the path, so a payload's own words always make it a row of its own; every path is
+  still listed.
+
+**What this gave up**: rule 5's *before anything else*. A referee who never presses the chip sees
+a dot, not the finding. That was Greg's call. **What it did not do** is the pre-filter he asked
+for, or anything else that changes what the scanner finds or labels: those edit a defence, and are
+waiting on him in
+[261007h § Questions for Greg](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md#questions-for-greg).
+`tests/referee-notices.test.tsx` § *a finding marks the Hidden text chip* and
+`tests/source-scan-notice.test.tsx` § *findings in plain words* hold it.
 
 ### How to read a panel: one press away, since 2026-10-03
 
@@ -224,9 +266,9 @@ Greg had not seen the name when the plan was written; the button's word is **one
 It was three until 2026-09-02 — the dock and the visitor's owners-only sentence each kept their own
 copy — and now everything that names a mode reads that record.
 
-## The four sub-modes
+## The five sub-modes
 
-`?mode=referee` with `?referee=criteria|claims|mirror|candidates`
+`?mode=referee` with `?referee=criteria|claims|mirror|candidates|hidden`
 ([`src/web/referee-views.ts`](../../src/web/referee-views.ts)), following Diagram's `?diagram=`
 precedent — a `role="radiogroup"` of buttons, each its own tab stop, arrow-key *selection*
 deliberately withheld so the article's own arrow keys still reach the article
@@ -792,6 +834,13 @@ asserts there is no digit on a candidate row that is not a block id.
 co-authorship COI checks and that is the obvious next step. It is also a different project, and
 Greg's own framing was *"see how far we can get in a stage or two"*.
 
+### 5. Hidden text — the check of the document's own source
+
+Not a model and not a question: the deterministic scan for text a reader would not see and a model
+would read, which has already run by the time the band opens. It became a sub-mode on 2026-10-07
+(§ The scan has its own chip); what it does, its five rules and where each is enforced are rule 5
+under § The rules the whole mode obeys.
+
 ## Every control says what it does
 
 > The new Referee mode is very confusing. Add lots of explanatory tooltips to buttons etc.
@@ -996,10 +1045,11 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    [`src/source-scan.ts`](../../src/source-scan.ts) → `scanRawSource`, over the document `loadSource`
    hands back — the **raw source**, never the extracted blocks, because extraction throws hidden
    text away with everything else it does not keep. The panel is
-   [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn by
-   [`RefereeBand`](../../src/web/modes/referee/RefereeMode.tsx) above the sub-mode chips rather than
-   as a fifth chip: rule
-   5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
+   [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn as the **Hidden
+   text** sub-mode since 2026-10-07. Until then it was drawn above the sub-mode chips rather than
+   as a fifth chip, because rule 5 says *before anything else* and a chip is one more thing a
+   referee can fail to press; Greg asked for the chip, and the mark on it is what is left of
+   *before anything else* (§ The scan has its own chip). The band
    opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
    one. **The wait has an end**: after `SOURCE_SCAN_DEADLINE_MS` (a minute) the read is given up on

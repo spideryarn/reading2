@@ -108,9 +108,9 @@
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
-/* **The source scan.** src/web/SourceScanNotice.tsx, first inside Notices,
-   before the confidentiality paragraphs, because it belongs to the mode
-   rather than to a panel: a hidden instruction is a fact about the document.
+/* **The source scan.** src/web/SourceScanNotice.tsx, the Hidden text
+   sub-mode's whole panel since 2026-10-07 (plan 261007h); it was inside
+   Notices before that.
 
    Styled as a notice, not as an error, for the same reason `.ref-notice` above
    is: most articles have nothing in them and the ordinary state of this box is
@@ -118,10 +118,11 @@
    `--ink` rather than a colour — *not checked at all* is neither a finding nor a
    failure, and a red box would make a referee read it as one and dismiss it.
 
-   The list is capped and scrolls. `MAX_FINDINGS` is 100, and a badly built HTML
-   export really can produce that many; a band whose first screen is a wall of
-   navigation chrome is a band a referee stops reading, which is the failure
-   src/injection-scan.ts is most afraid of. */
+   The list is not capped on its own any more: it is the sub-mode's panel and
+   `.ref-panel` is its scroller, so a second scroller inside it would only make
+   a hundred findings harder to read. Identical findings are one row
+   (`grouped` in SourceScanNotice.tsx), which is what keeps a wall of them off
+   the first screen. */
 .ref-scan {
   margin: 0.5rem 0.7rem 0;
   padding: 0.55rem 0.6rem;
@@ -178,8 +179,6 @@
 .ref-scan-list {
   margin: 0.45rem 0 0;
   padding: 0;
-  max-height: 14rem;
-  overflow-y: auto;
   list-style: none;
 }
 /* One block per finding, every field on its own line, because a referee reading
@@ -200,14 +199,22 @@
 .ref-scan-item.explained { opacity: 0.7; }
 .ref-scan-kind { color: var(--ink); font-weight: 600; }
 .ref-scan-tag { color: var(--ink-faint); font-style: italic; }
-.ref-scan-where, .ref-scan-detail {
+/* How many, and where in words: read with the label, so the same ink. */
+.ref-scan-count { color: var(--ink-soft); }
+/* What the trick is (`KIND_MEANS`): the sentence that turns the row from a
+   code-point count into something a referee can weigh. Plan 261007h. */
+.ref-scan-means { color: var(--ink-soft); }
+/* The evidence, for whoever goes to look: last, smaller, and the path and
+   code points in mono so they can be searched for in the source. */
+.ref-scan-source {
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.81rem;
+  font-size: 0.79rem;
   overflow-wrap: anywhere;
 }
+.ref-scan-where, .ref-scan-detail { font-family: var(--font-mono); }
 /* The words themselves, which is the thing the referee actually needs to see. */
 .ref-scan-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+.ref-scan-empty { color: var(--ink-faint); font-style: italic; }
 /* Why this one may be innocent — required on the type for a visible
    instruction, and drawn so it cannot be read with the certainty hidden text
    earns. */
@@ -283,6 +290,22 @@
   font-weight: 600;
 }
 .ref-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **The Hidden text chip's mark** (`sourceScanMark`): a filled dot when the
+   source scan found something with no everyday explanation, a ring when every
+   finding wears one. Ink rather than red, for `.ref-notice`'s reason: a red
+   mark is read as chrome and dismissed, and most of what sets it is a
+   typesetter's habit rather than an attack. */
+.ref-view-dot {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.3rem;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  vertical-align: 0.15em;
+}
+.ref-view-dot.found { background: var(--ink); }
 
 /* The scroller. `.mode-band` is a fixed flex column from the controls bar to
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`

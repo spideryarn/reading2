@@ -346,7 +346,7 @@ function expectEarnsItsHover(card: Card, control: string): void {
  * reason: the band owns `?referee=` and this component is a pure function of two
  * props.
  */
-describe("the four sub-mode chips say what their sub-mode is", () => {
+describe("the five sub-mode chips say what their sub-mode is", () => {
   function paint(view: RefereeView = "criteria"): void {
     act(() => {
       root.render(createElement(RefereeViews, { slug: "a-piece", view, onView: () => {} }));
@@ -356,9 +356,9 @@ describe("the four sub-mode chips say what their sub-mode is", () => {
   it("puts a card on every chip, and each card is that chip's", { timeout: 20000 }, async () => {
     paint();
     const chips = [...host.querySelectorAll('.ref-views [role="radio"]')];
-    expect(chips.length, "the chip row is not drawn").toBe(4);
+    expect(chips.length, "the chip row is not drawn").toBe(5);
 
-    /* Collected, so the last assertion can prove the four are four different
+    /* Collected, so the last assertion can prove the five are five different
        cards. One shared card wired onto all of them would satisfy every
        per-chip check below — the head would be wrong, but only if the head is
        read from the chip, which is why it is. */
@@ -371,7 +371,7 @@ describe("the four sub-mode chips say what their sub-mode is", () => {
       expect(chip.hasAttribute("title"), `${label} fell back to a title attribute`).toBe(false);
       bodies.push(card.body);
     }
-    expect(new Set(bodies).size, "two chips are showing the same card").toBe(4);
+    expect(new Set(bodies).size, "two chips are showing the same card").toBe(5);
   });
 });
 
