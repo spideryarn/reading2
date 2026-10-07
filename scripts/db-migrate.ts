@@ -140,7 +140,30 @@ const ssl = sslDecisionFor(url);
  * both attempt the same DDL — one of them fails halfway through with something
  * that reads like a broken migration. GPT Sol, 2026-08-31.
  */
-const pool = new Pool({ connectionString: url, max: 2, ssl: ssl.ssl });
+/**
+ * Each lock acquisition waits at most 15 s, and each statement runs at most ten minutes.
+ *
+ * Every pending file runs in one transaction, so a lock taken early (an index build's SHARE on
+ * `revision_blocks`, say) is held while a later statement queues behind somebody's long
+ * transaction, blocking the app's writes for as long as that wait lasts. Production's own
+ * default `lock_timeout` is 0, which waits for ever. Hitting either limit rolls the whole run
+ * back, which is the safe failure: nothing applied, run it again.
+ *
+ * A `SET`, not the `options` startup parameter or `PGOPTIONS`: Supabase's pooler drops startup
+ * options without saying so (measured 2026-10-07: `options: "-c lock_timeout=15s"`, then
+ * `SHOW lock_timeout` → `0`). Port 5432 is its session mode, so a `SET` lasts the connection.
+ * docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+ * § Before applying to production, item 1.
+ */
+const pool = new Pool({
+  connectionString: url,
+  max: 2,
+  ssl: ssl.ssl,
+  // Unlike the connect event, onConnect awaits setup and destroys the client on failure.
+  onConnect: async (client) => {
+    await client.query("set lock_timeout = '15s'; set statement_timeout = '10min'");
+  },
+});
 
 /** The ledger, or an empty one when the bookkeeping table does not exist yet. */
 async function readLedger(client: PoolClient): Promise<LedgerRow[]> {
