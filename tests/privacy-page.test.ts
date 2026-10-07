@@ -262,6 +262,19 @@ describe("the privacy page", () => {
     expect(models).toContain('{ job: "command-suggest", id: QUICK_MODEL_OPENROUTER');
   });
 
+  it("says a question asked in Help goes to the model, and is neither kept nor logged", () => {
+    /* Plan 261007k. `gpt-5.6-luna` was already on the page, so the model-name
+       check cannot notice this disclosure being deleted. Held to the job: if
+       the call moves to another model, this clause should move with it. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("to answer a question you ask in Help’s <em>Ask about Spideryarn</em>");
+    expect(prose).toContain("box, for which it is shown that question and the Help pages, and nothing of yours besides");
+    expect(prose).toContain("the question is not kept, and is not written to our logs");
+    const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
+    expect(models).toContain('{ job: "help-chat", id: HELP_CHAT_MODEL');
+    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";');
+  });
+
   it("says the guide is told roughly how many other articles you have opened", () => {
     /* Plan 261007j, GPT Sol's F7: a derived account datum sent to the chat
        model, below the cache breakpoint (src/guide.ts § experienceLine). The

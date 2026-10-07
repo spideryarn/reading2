@@ -492,6 +492,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/command-suggest/w1"],
   },
   {
+    /* Ask about Spideryarn, the Help pages' chatbot, 261007k. */
+    match: { kind: "literal", path: "/api/help-chat" },
+    methods: ["POST"],
+    witnesses: ["/api/help-chat"],
+  },
+  {
     match: { kind: "literal", path: "/api/feedback" },
     methods: ["GET", "POST"],
     witnesses: ["/api/feedback"],
@@ -950,11 +956,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 /** Loud failure controls. Never the oracle — see the header. */
 /* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
-   feedback (plan 261007d); 96 with their replies to questions (its stage 2). */
-const EXPECTED_MATCHER_COUNT = 96;
+   feedback (plan 261007d); 96 with their replies to questions (its stage 2);
+   97 with the Help pages' chatbot (plan 261007k). */
+const EXPECTED_MATCHER_COUNT = 97;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
-   with the admin's earlier feedback; 118 with their replies to questions. */
-const EXPECTED_GUARD_COUNT = 118;
+   with the admin's earlier feedback; 118 with their replies to questions; 119
+   with the Help pages' chatbot. */
+const EXPECTED_GUARD_COUNT = 119;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2137,6 +2145,8 @@ describe("the authenticated API's route contract", () => {
         "POST literal /api/command-pick",
         // the bar's short list from why you are reading, 261005k
         "POST regex /^\\/api\\/command-suggest\\/([\\w.%-]+)$/",
+        // Ask about Spideryarn, the Help pages' chatbot, 261007k — beside the bar's two model calls
+        "POST literal /api/help-chat",
         "POST literal /api/feedback",
         // the reader's own earlier reports, 260916c — beside the POST it lists
         "GET literal /api/feedback",

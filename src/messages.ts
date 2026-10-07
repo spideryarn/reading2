@@ -318,6 +318,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* *Dig deeper* — src/dig-deeper.ts. */
   "dig-resting": "blocked",
   "dig-no-search": "retry",
+  /* *Ask about Spideryarn* — src/help-chat-call.ts. */
+  "help-resting": "blocked",
   "cite-lookup-failed": "retry",
   "cite-gone": "blocked",
   "guess-resting": "blocked",
@@ -6415,6 +6417,24 @@ export const DIG_DEEPER_RESTING: ReaderFacingFailure = {
   message:
     "Dig deeper has done as many as it can for today, so asking again today will get the same " +
     "answer. Try again tomorrow; this request did not change anything. [dig-resting]",
+};
+
+/**
+ * ***Ask about Spideryarn* refused by its allowance** (`HELP_CHAT_RATE_POLICY`,
+ * src/help-chat-call.ts, plan 261007k) — Dig deeper's three above in shape.
+ * Nothing was asked, so each says only that, and where the answer may be found
+ * meanwhile.
+ */
+export const HELP_CHAT_BUSY =
+  "Your last question is still being answered. Wait for it to finish, then ask this one.";
+export const HELP_CHAT_LIMITED =
+  "You have asked a lot of questions recently. Try again in a while; the Help pages and their search are still here.";
+/** The 503 of the three, so it carries a code, as `DIG_DEEPER_RESTING` does. */
+export const HELP_CHAT_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Questions about Spideryarn have reached today's limit for everyone, so asking again today will " +
+    "get the same answer. Try again tomorrow; the Help pages and their search are still here. [help-resting]",
 };
 
 /**

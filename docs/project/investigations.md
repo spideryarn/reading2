@@ -40,6 +40,10 @@ measured with scripted readers and a blind judge:
 - [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) — two versions of the
   guide's prompt, each run twice, with buttons scored by the renderer's own `chipFor`: the shorter
   second version improved the measured failures, while the client still refused an injected mode.
+- [261007b](../investigations/261007b-help-chat-model-and-refusals.md) — Ask about Spideryarn on
+  Luna against DeepSeek: 24 questions, every off-topic and jailbreak one declined, $0.0068 a question
+  cold and $0.0006 warm, a cache that reads across questions and twelve quiet minutes, and the fuse
+  sized cold anyway.
 
 ## Naming
 
