@@ -325,9 +325,11 @@ ORDER BY c.relname;
 
 -- Inspect immediately before applying: SHARE conflicts with writers to blocks;
 -- later ACCESS EXCLUSIVE locks conflict with readers too — including queue_state,
--- which every job claim locks FOR UPDATE NOWAIT, so claims answer busy while the
--- migration holds it; and dropping the foreign key locks jobs. This is a point-in-time
--- sample, not a guarantee: use a finite lock_timeout on the migration connection.
+-- which every job claim locks FOR UPDATE NOWAIT. NOWAIT applies only to row locks;
+-- claims wait for the table lock until commit/rollback and can occupy runtime pool
+-- connections. Dropping the foreign key also locks jobs. This is a point-in-time
+-- sample, not a guarantee: use finite lock_timeout and statement_timeout on the
+-- migration connection.
 -- pg_stat_activity text is intentionally not selected (reader data may appear in it).
 SELECT l.relation::regclass AS relation, l.mode, l.granted, l.pid,
        a.state, clock_timestamp()-a.xact_start AS transaction_age,

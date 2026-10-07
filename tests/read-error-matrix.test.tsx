@@ -42,7 +42,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { act, createElement, type ReactElement } from "react";
+import { act, createElement, StrictMode, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -520,7 +520,7 @@ async function reply(url: string, method: string, body: string | null): Promise<
 
 const { App } = await import("../src/web/App.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
-const { resetActivations } = await import("../src/web/activation.js");
+const { armActivation, resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { SketchView } = await import("../src/web/SketchView.js");
@@ -593,11 +593,12 @@ async function settle(turns = 8): Promise<void> {
   }
 }
 
-/** The whole app at the owner's article. Not under `<StrictMode>`: requests are counted. */
-async function open(search = ""): Promise<void> {
+/** The whole app at the owner's article; StrictMode is opt-in for its control. */
+async function open(search = "", strict = false): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}${search}`);
   await act(async () => {
-    root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+    const app = createElement(NuqsAdapter, null, createElement(App, null));
+    root.render(strict ? createElement(StrictMode, null, app) : app);
   });
   await act(async () => {
     for (const fn of [...authListeners]) fn("SIGNED_IN", { user: OWNER });
@@ -1230,6 +1231,27 @@ describe("Try again answered by a 404", () => {
   const ideasBand = () => host.querySelector(".mode-band.ideas");
   const threadBand = () => host.querySelector(".mode-band.summ.tweets");
 
+  it("an armed press over none plus a failed read spends once in StrictMode, even after another failed retry", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { ideas: "missing" };
+    await open("?mode=ideas", true);
+    expect(posts).toEqual([]);
+    answers = { ideas: "transport" };
+    await finishes("ideas");
+    await press(tryAgain(ideasBand()));
+    expect(posts).toEqual([]);
+    expect(readable(ideasBand())).toContain(COULD_NOT_REACH.message);
+    /* The command bar can arm the current mode; its bottom-bar button closes it. */
+    await act(async () => armActivation(SLUG, "ideas"));
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["ideas"]]);
+    expect(posts[0]?.force ?? []).toEqual([]);
+    await press(tryAgain(ideasBand()));
+    await act(async () => armActivation(SLUG, "ideas"));
+    await settle();
+    expect(posts.map((p) => p.steps), "failed reads and a second press must not loop").toEqual([["ideas"]]);
+  });
+
   it("honours a press still in hand: exactly one unforced run, as if the first read had answered", async () => {
     answers = { ideas: "transport" };
     await open("");
@@ -1432,6 +1454,49 @@ describe.each(AFTER_NONE_READS)("$kind: what a failed Try again remembers", ({ k
     expect(seen.status, "the first article's answer stood in for the second's").toBe("error");
     expect(seen.error).toBe(COULD_NOT_REACH.message);
   });
+
+  it("none yet followed by a list never becomes none on a failed refresh or retry", async () => {
+    answers = { ...needs, [kind]: "missing" };
+    await mount();
+    answers = { ...needs, [kind]: "ok" };
+    await act(async () => seen.refresh());
+    await settle(2);
+    expect(seen.status).toBe("ready");
+    answers = { ...needs, [kind]: "transport" };
+    await act(async () => seen.refresh());
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status).toBe("ready");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+    expect(posts).toEqual([]);
+  });
+});
+
+it("Glossary's cleared list on returning to a slug cannot revive a superseded none answer", async () => {
+  let seen!: ReturnType<typeof useGlossaryRead>;
+  function Probe({ slug }: { slug: string }) {
+    seen = useGlossaryRead(slug);
+    return null;
+  }
+  answers = { glossary: "missing" };
+  await act(async () => root.render(createElement(Probe, { slug: SLUG })));
+  await settle();
+  expect(seen.status).toBe("none");
+  answers = { glossary: "ok" };
+  await act(async () => seen.refresh());
+  await settle(2);
+  expect(seen.status).toBe("ready");
+  elsewhere = { "another-piece": { glossary: "transport" } };
+  await act(async () => root.render(createElement(Probe, { slug: "another-piece" })));
+  await settle();
+  answers = { glossary: "transport" };
+  await act(async () => root.render(createElement(Probe, { slug: SLUG })));
+  await settle();
+  await act(async () => seen.retryRead());
+  await settle(2);
+  expect(seen.glossary).toBeNull();
+  expect(seen.status, "the latest answer for this slug was a list, not none").toBe("error");
+  expect(posts).toEqual([]);
 });
 
 /* Sketch and Illustrated have a second "none": a 200 with nothing drawable in
@@ -1441,13 +1506,13 @@ describe.each([
   {
     kind: "sketch" as const,
     use: (slug: string) => useSketch(slug, BLOCKS.map((b) => b.id)),
-    empty: { ...BODIES.sketch, sketch: { ...(BODIES.sketch as { sketch: object }).sketch, scenes: [] } },
+    empty: { ...(BODIES.sketch as { sketch: object }), sketch: { ...(BODIES.sketch as { sketch: object }).sketch, scenes: [] } },
   },
   {
     kind: "illustrated" as const,
     use: (slug: string) => useIllustrated(slug, BLOCKS),
     empty: {
-      ...BODIES.illustrated,
+      ...(BODIES.illustrated as { illustrated: object }),
       illustrated: { ...(BODIES.illustrated as { illustrated: object }).illustrated, plates: [] },
     },
   },

@@ -498,8 +498,11 @@ one destructive statement in the set.
 (105,774 rows, 144 MB) and blocks writes to it until the whole transaction commits. The later
 statements need `ACCESS EXCLUSIVE` on four other tables, and the eighth on `queue_state` (with a
 lock on `jobs` to drop the key), so a long-running transaction on any of those keeps the migration
-waiting while it already blocks block writes. While it holds `queue_state`, every job claim —
-which takes that row `FOR UPDATE NOWAIT` — answers busy and is tried again later. So:
+waiting while it already blocks block writes. While it holds `queue_state`, every job claim
+waits for its table lock until the migration commits or rolls back: `FOR UPDATE NOWAIT`
+applies only to row locks. This can occupy the runtime connection pool. The drop is the last
+pending file and needs no table rewrite, but its lock lasts to the transaction's end and its
+duration has not been measured under production contention. So:
 
 1. Set a finite `lock_timeout` and `statement_timeout` on the migration connection. The runner
    sets neither. At the 02:31 read the connection's own were `lock_timeout` 0 (wait for ever) and

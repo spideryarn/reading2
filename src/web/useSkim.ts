@@ -159,6 +159,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         setProfileChanged(loaded.profileChanged);
         setNotOnRoute(loaded.notOnRoute);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;

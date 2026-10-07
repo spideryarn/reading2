@@ -232,6 +232,7 @@ export function useIdeasRead(slug: string): IdeasRead {
       });
       landed(started, res, loaded.ideas.generatedAt);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;

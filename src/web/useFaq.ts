@@ -163,6 +163,7 @@ export function useFaqRead(slug: string): FaqRead {
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;

@@ -279,6 +279,7 @@ export function useQuotesRead(slug: string): QuotesRead {
       setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;

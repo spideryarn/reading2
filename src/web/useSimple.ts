@@ -203,6 +203,7 @@ export function useSimple(slug: string): UseSimple {
         setProfileChanged(loaded.profileChanged);
         landed(started, res, loaded.simpleSummary.generatedAt);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;

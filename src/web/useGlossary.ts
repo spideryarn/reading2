@@ -408,6 +408,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         setPanelRun(loaded.panelRun);
         landed(started, res, loaded.glossary.generatedAt);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;

@@ -216,6 +216,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       });
       setFaults(report.faults);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;

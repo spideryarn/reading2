@@ -39,6 +39,12 @@ effect and cannot be out of step with the read it describes; the ordering machin
 Illustrated have two "none" branches each (a 404, and a 200 with nothing drawable); both set it,
 and the faults the second sets are left as they were.
 
+**Code-review correction.** A later accepted result clears `saidNoneFor` in all twelve hooks.
+Otherwise Glossary's unkeyed A → B → A slug reset can revive an absence superseded by a list,
+when A's next read fails. The added regression went red (`none` instead of `error`); the actual
+article view is keyed by slug, so no reader-facing occurrence was established.
+[Postmortem](../postmortems/261007g-a-remembered-absence-must-expire-when-a-newer-result-arrives.md).
+
 **Simpler options passed over.**
 - *Change only `retryRead`* — go to `loading` only from `error`, so a retry over `none` never
   leaves it. One token per hook and no ref, but the retry's *Looking…* would vanish and a
@@ -123,3 +129,66 @@ and `updated_at`, its key gone, its CHECK, primary key, delete trigger and one r
 **Production, read-only.** Inside `BEGIN READ ONLY; … ROLLBACK;` as `spideryarn_app`: one
 `queue_state` row, none with a `running_job_id`, the key present, the ledger at 153. Then the
 updated pre-flight, the result in 261007c.
+
+**The pre-flight's "holds a value" arm, seen to fire.** The code review found that the arm
+reporting a non-null `running_job_id` had never been run against a row that should trip it; a
+`WHERE false` in its place would have passed every check cited above. So, on a throwaway database
+created and dropped for this alone (`scratch_q4q6_negative_control`, on the local Postgres; neither
+the shared `postgres` database's `queue_state` nor production was touched), a `spideryarn` schema
+with a `jobs (id)` table and a `queue_state (id, running_job_id)` whose foreign key matches
+`0000`'s definition exactly, then the block exactly as committed (pre-flight lines 224–236) run
+twice, first with the column null and then set:
+
+```
+$ CREATE DATABASE scratch_q4q6_negative_control
+CREATE DATABASE
+--- control: running_job_id NULL; the block as committed (preflight lines 224-236):
+ problem 
+---------
+(0 rows)
+
+--- seeded: running_job_id set non-null:
+UPDATE 1
+                 problem                  
+------------------------------------------
+ queue_state.running_job_id holds a value
+(1 row)
+
+$ DROP DATABASE scratch_q4q6_negative_control
+DROP DATABASE
+```
+
+The other two arms stayed silent in both runs, so the column and key definitions in the scratch
+copy match what the pre-flight expects.
+
+## Review status
+
+GPT Sol's code review ([prompt](261007g-keep-the-generate-button-and-drop-the-unused-queue-column-code-review-prompt.md),
+[answer](261007g-keep-the-generate-button-and-drop-the-unused-queue-column-code-review-sol.md)):
+**ship with these fixes applied.** Its three findings, all fixed inside the stage and checked
+afterwards:
+
+- **C1** — a remembered "none" outlived a later list. All twelve hooks now clear `saidNoneFor` on
+  an accepted result
+  ([postmortem](../postmortems/261007g-a-remembered-absence-must-expire-when-a-newer-result-arrives.md)).
+  Checked by hand: with the clear removed from `useGlossary.ts` alone, "Glossary's cleared list on
+  returning to a slug cannot revive a superseded none answer" went red (expected `error`, received
+  `none`); restored, green.
+- **C2** — the rollout notes said claims answer busy while the migration holds `queue_state`. They
+  wait: `FOR UPDATE NOWAIT` covers row locks only, and the table lock it still needs conflicts
+  with the migration's `ACCESS EXCLUSIVE`. Both 261007c documents now say so.
+- **C3** — the Sketch and Illustrated "none" fixtures spread a value typed `unknown`; narrowed
+  casts, and `npm run typecheck` is clean.
+
+The negative control above answers the gap it named. Ran: `npm run typecheck` (clean); 23 test
+files by name — the read-state, rewrite-hold, race, Sketch/Illustrated view, schema, migration,
+export-coverage, job/claim, migration-registry and doc-links suites — 1022 passed, 18 skipped, 0
+failed, on a private lane; `db:chain` clean; `db:generate -- --allow-empty` no changes; biome
+clean on the touched files.
+
+**As left.** How long the migration's table lock on `queue_state` makes claims wait has not been
+measured under production contention. Claims wait rather than answer busy, so applying the eight
+needs the finite `lock_timeout` and `statement_timeout` that 261007c § Before applying to
+production already requires. The local migration was not applied to the shared database: the two
+peer feedback migrations in its ledger are still not on `origin/dev` (checked after a fetch,
+2026-10-07), so the guard's refusal stands.
