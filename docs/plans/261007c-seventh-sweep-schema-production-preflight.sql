@@ -1,12 +1,17 @@
 -- C7 first-application preflight, reviewed HEAD d4bbcd76e plus uncommitted review fixes.
 -- Read-only; not executed in this review. Run on production's SESSION connection
 -- using the migration credential. It expects the complete original 153-row ledger,
--- followed by exactly these eight pending files. Rebuild this ledger literal if
+-- followed by exactly these nine pending files. Rebuild this ledger literal if
 -- the final deployment commit contains additional migrations.
--- The eighth, 20261007065807_drop_queue_state_running_job_id, was added on
+-- The eighth, 20261007053304_billing_voucher_recipient_name, is another
+-- session's (plan 261007f-gift-voucher-recipient-name-and-a-starter-article-written-up),
+-- which landed on dev first; its only checks here are its two objects in the
+-- "absent before" block.
+-- The ninth, 20261007073504_drop_queue_state_running_job_id, was added on
 -- 2026-10-07: a column drop Greg approved that day (plan 261007g § 2). Its checks
 -- are the queue_state blocks below, and queue_state and jobs in the lock and
--- ownership inspections.
+-- ownership inspections. It was generated as 20261007065807_… and regenerated
+-- after the voucher migration when the two branches met.
 -- Every query labelled VIOLATIONS must return ZERO rows. Counts may grow since
 -- the recorded investigation: only the violation counts must remain zero.
 -- A different catalog definition is a stop for inspection, even if it is equivalent.
@@ -189,7 +194,7 @@ SELECT NULL, a.created_at, 'unexpected ledger row or different hash'
 FROM actual a
 WHERE NOT EXISTS (SELECT 1 FROM expected e WHERE e.stamp = a.created_at AND e.hash = a.hash);
 
--- Must list all eight tags below, crosses_watermark=true for each; none applied.
+-- Must list all nine tags below, crosses_watermark=true for each; none applied.
 WITH pending(stamp, tag) AS (VALUES
   (1791334488929::bigint, '20261007005448_revision_blocks_article_block_index'),
   (1791334950895::bigint, '20261007010230_referee_criteria_shape_all_or_none'),
@@ -198,7 +203,8 @@ WITH pending(stamp, tag) AS (VALUES
   (1791336047829::bigint, '20261007012047_drop_duplicate_chat_messages_index'),
   (1791336414855::bigint, '20261007012654_declare_migration_only_indexes_and_checks'),
   (1791337115199::bigint, '20261007013835_ledger_indexes_declared_as_made'),
-  (1791356287082::bigint, '20261007065807_drop_queue_state_running_job_id')
+  (1791351184402::bigint, '20261007053304_billing_voucher_recipient_name'),
+  (1791358504947::bigint, '20261007073504_drop_queue_state_running_job_id')
 )
 SELECT tag, stamp,
        stamp > (SELECT max(created_at) FROM spideryarn_migrations.__drizzle_migrations) AS crosses_watermark,
@@ -216,9 +222,18 @@ WHERE EXISTS (SELECT 1 FROM pg_attribute
 UNION ALL
 SELECT 'referee_claims_empty_unless_done already exists'
 WHERE EXISTS (SELECT 1 FROM pg_constraint
- WHERE conrelid='spideryarn.referee_claims'::regclass AND conname='referee_claims_empty_unless_done');
+ WHERE conrelid='spideryarn.referee_claims'::regclass AND conname='referee_claims_empty_unless_done')
+UNION ALL
+SELECT 'billing_vouchers.recipient_name already exists'
+WHERE EXISTS (SELECT 1 FROM pg_attribute
+ WHERE attrelid='spideryarn.billing_vouchers'::regclass
+   AND attname='recipient_name' AND NOT attisdropped)
+UNION ALL
+SELECT 'billing_vouchers_recipient_name_length already exists'
+WHERE EXISTS (SELECT 1 FROM pg_constraint
+ WHERE conrelid='spideryarn.billing_vouchers'::regclass AND conname='billing_vouchers_recipient_name_length');
 
--- VIOLATIONS: the column the eighth migration drops, and its foreign key, must be
+-- VIOLATIONS: the column the ninth migration drops, and its foreign key, must be
 -- there exactly as 0000 made them, and the column must hold nothing. A missing
 -- one means the drop would fail; a value means it would throw away a fact.
 SELECT 'queue_state.running_job_id is missing' AS problem

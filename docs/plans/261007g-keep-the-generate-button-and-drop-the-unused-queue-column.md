@@ -104,7 +104,7 @@ anybody receives: the reader's bundle `manifest.json` no longer lists `queue_sta
 tables it leaves out. Neither export ever wrote a byte of it. `db:reown` finds its tables by an
 `owner_id` column, which `queue_state` never had, so it is unaffected.
 
-**The migration**, `drizzle/20261007065807_drop_queue_state_running_job_id.sql`, generated, and
+**The migration**, `drizzle/20261007073504_drop_queue_state_running_job_id.sql`, generated, and
 exactly:
 
 ```sql
@@ -112,9 +112,13 @@ ALTER TABLE "spideryarn"."queue_state" DROP CONSTRAINT "queue_state_running_job_
 ALTER TABLE "spideryarn"."queue_state" DROP COLUMN "running_job_id";
 ```
 
-Its stamp, `1791356287082`, sorts after the seven already waiting for production
+It was first generated as `20261007065807_…` (stamp `1791356287082`); when `origin/dev` was merged
+it had landed a peer's `20261007053304_billing_voucher_recipient_name` at the same journal index,
+so ours was deleted and regenerated behind it (database.md § Repairing a fork), with the same two
+statements. Its stamp, `1791358504947`, sorts after the seven already waiting for production and
+the voucher migration
 ([261007c § Before applying to production](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md#before-applying-to-production),
-which now lists eight and whose pre-flight now checks this one).
+which now lists nine and whose pre-flight now checks this one).
 
 **Not applied to the shared local database.** `npm run db:migrate` (Target
 `postgresql://postgres@127.0.0.1:54362/postgres`) refused, rightly: that database carries two
