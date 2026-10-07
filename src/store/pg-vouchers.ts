@@ -508,7 +508,11 @@ export async function createVoucher(
   let starter: Starter | null = null;
   if (input.starterSlug !== null) {
     const resolved = await (deps.resolveStarter ?? resolveStarter)(input.starterSlug);
-    if (resolved.kind !== "ready") return { kind: "starter-refused", reason: resolved.kind };
+    if (resolved.kind !== "ready") {
+      /* A concurrent create may have committed while these reads were in
+         flight. Its replay identity still wins over the article's live state. */
+      return (await replayOf(getDb(), input, email, createdBy)) ?? { kind: "starter-refused", reason: resolved.kind };
+    }
     starter = resolved.starter;
   }
   /* Before the transaction: a network call does not belong inside one. */
@@ -785,14 +789,16 @@ export type VoucherUpdate =
  * only then the voucher. If the unlocked read saw it unclaimed and the locked
  * read finds it claimed (a claim landed in between), this transaction holds the
  * voucher without the billing lock, so it gives up and starts again; the second
- * attempt sees the claimant on the unlocked read. Two attempts are enough —
- * nothing claims a voucher twice — and a third is a bug, said loudly.
+ * attempt sees the claimant on the unlocked read. A concurrent readdress or
+ * restore can also require another attempt when an email becomes due. Three
+ * attempts bound those races; continued contention fails the change.
  *
  * **A starter is resolved afresh for the new email** (plan 261007j), as
  * whoever is making the change, and only when the change will send one. It is
- * read before the transaction, from the unlocked read: the starter's slug never
- * changes, so nothing can make it stale. An article that can no longer be
- * linked — gone, not theirs, unpublished, its link off — is left out of the
+ * read before the transaction, from the unlocked read. Its id is checked
+ * again under the voucher lock: deleting an article can free its slug for
+ * another article, which is not the starter this voucher named. An article
+ * that can no longer be linked — gone, not theirs, unpublished, its link off — is left out of the
  * email and the answer says `dropped`; a read that *fails* fails the change,
  * because an email quietly missing its starter looks exactly like one meant to.
  */
@@ -808,7 +814,7 @@ export async function updateVoucher(id: string, patch: VoucherPatch, deps: Vouch
     const answer = await updateOnce(id, patch, audience, resolve);
     if (answer !== "retry") return answer;
   }
-  throw new Error(`updating gift voucher ${id} kept racing its claim`);
+  throw new Error(`updating gift voucher ${id} kept racing another change`);
 }
 
 /** The write's last fail-open boundary: audience enrichment never owns the voucher event. */
@@ -840,6 +846,7 @@ async function updateOnce(
       email: billingVouchers.email,
       revokedAt: billingVouchers.revokedAt,
       starterSlug: billingVouchers.starterSlug,
+      starterArticleId: billingVouchers.starterArticleId,
     })
     .from(billingVouchers)
     .where(eq(billingVouchers.id, id))
@@ -851,7 +858,11 @@ async function updateOnce(
      restore landed in between — and an email is due after all, that attempt
      starts again rather than sending without having asked. */
   const starter =
-    seen.starterSlug !== null && sendsGift(patch, seen) ? await resolve(seen.starterSlug) : undefined;
+    seen.starterSlug !== null && sendsGift(patch, seen)
+      ? seen.starterArticleId === null
+        ? { kind: "absent" as const }
+        : await resolve(seen.starterSlug)
+      : undefined;
 
   return await db.transaction(
     async (tx): Promise<VoucherUpdate | "retry"> => {
@@ -867,6 +878,7 @@ async function updateOnce(
           recipientNote: billingVouchers.recipientNote,
           recipientName: billingVouchers.recipientName,
           starterSlug: billingVouchers.starterSlug,
+          starterArticleId: billingVouchers.starterArticleId,
         })
         .from(billingVouchers)
         .where(eq(billingVouchers.id, id))
@@ -883,6 +895,13 @@ async function updateOnce(
       const revokedAfter = patch.revoked === undefined ? current.revokedAt !== null : patch.revoked;
       /* An email is due and its starter was not asked for: see above. */
       if (readdressed && !revokedAfter && current.starterSlug !== null && starter === undefined) return "retry";
+
+      /* The slug may now name a replacement, or deletion may have landed
+         after resolution. Neither can replace the article chosen at create. */
+      const linkedStarter =
+        starter?.kind === "ready" && starter.starter.articleId === current.starterArticleId
+          ? giftStarterOf(starter.starter)
+          : null;
 
       await tx
         .update(billingVouchers)
@@ -920,12 +939,12 @@ async function updateOnce(
           {
             recipientName: patch.recipientName === undefined ? current.recipientName : patch.recipientName,
             recipientNote: patch.recipientNote === undefined ? current.recipientNote : patch.recipientNote,
-            starter: starter?.kind === "ready" ? giftStarterOf(starter.starter) : null,
+            starter: linkedStarter,
           },
         );
         return starter === undefined
           ? { kind: "updated", giftDelivery }
-          : { kind: "updated", giftDelivery, starter: starter.kind === "ready" ? "kept" : "dropped" };
+          : { kind: "updated", giftDelivery, starter: linkedStarter === null ? "dropped" : "kept" };
       }
       return { kind: "updated" };
     },

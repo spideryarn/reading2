@@ -11,9 +11,11 @@
  *
  * `articles.share_token` is a credential. `currentShareLinkQuery` below is the
  * one statement in `src/` that selects it, it is scoped by `ownedSlug`, and its
- * answer goes to the owner's `GET /api/article/:slug/share-link` and nowhere
- * else. tests/share-link-token-stays-home.test.ts greps the tree for a second
- * reader. Nothing here logs the key or puts it in an error.
+ * answer goes to the owner's `GET /api/article/:slug/share-link` and to a gift
+ * voucher's starter resolution (`voucher-starter.ts`), which puts the private
+ * link into that gift's kept email and sends it through Resend. The callers
+ * are pinned by tests/share-link-token-stays-home.test.ts. Nothing here logs
+ * the key or puts it in an error.
  *
  * ## One transaction per change
  *
