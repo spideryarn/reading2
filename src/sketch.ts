@@ -91,6 +91,16 @@ export const OVERVIEW_MIN = 6;
 export const OVERVIEW_MAX = 16;
 
 /**
+ * The answer the Sketch asks room for. A scene is a few thousand tokens of
+ * coordinates, and there may be four of them. Generous rather than tight:
+ * undersizing does not degrade here, it throws `truncationFailure` and loses
+ * the whole pass, and half a scene is not half a picture. Exported because the
+ * call's `max_tokens` is also how long it may run, and `STEP_BUDGET_MS.sketch`
+ * (src/jobs.ts) is held to that in tests/jobs-lease-budget.test.ts.
+ */
+export const SKETCH_ANSWER_TOKENS = 12_000;
+
+/**
  * **The blocks, the section boundaries and the head this was drawn against, all
  * three** — `articleFingerprint` in src/source-hash.ts.
  *
@@ -648,11 +658,7 @@ export async function generateSketch(opts: {
   const profile = opts.profile ?? null;
   const started = Date.now();
 
-  /* A scene is a few thousand tokens of coordinates, and there may be four of
-     them. Generous rather than tight: undersizing does not degrade here, it
-     throws `truncationFailure` and loses the whole pass, and half a scene is
-     not half a picture. */
-  const answerTokens = 12_000;
+  const answerTokens = SKETCH_ANSWER_TOKENS;
   const maxTokens = budgetFor("sketch", answerTokens);
 
   let message: Anthropic.Message;

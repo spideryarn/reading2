@@ -241,6 +241,20 @@ export function suggestedLength(words: number): number {
   return Math.min(15, Math.max(4, Math.round(words / 700)));
 }
 
+/**
+ * The answer a thread of `posts` asks room for.
+ *
+ * A thread is a bounded thing — `suggestedLength` caps it — so the answer is a
+ * few thousand tokens whatever the article. The allowance still has to scale,
+ * because the model reads the whole piece to write it and thinks about it
+ * inside this same number. See src/token-budget.ts. Exported because the
+ * call's `max_tokens` is also how long it may run, and `STEP_BUDGET_MS.tweets`
+ * (src/jobs.ts) is held to that in tests/jobs-lease-budget.test.ts.
+ */
+export function threadAnswerTokens(posts: number): number {
+  return 500 + posts * 140;
+}
+
 export const TWEETS_SYSTEM = `You are writing a NUMBERED THREAD: one long article compressed into a short
 sequence of standalone posts, each a few sentences long.
 
@@ -670,11 +684,7 @@ export async function generateTweets(opts: {
   const posts = suggestedLength(words);
   const started = Date.now();
 
-  /* A thread is a bounded thing — `suggestedLength` caps it — so the answer is
-     a few thousand tokens whatever the article. The allowance still has to
-     scale, because the model reads the whole piece to write it and thinks about
-     it inside this same number. See src/token-budget.ts. */
-  const answerTokens = 500 + posts * 140;
+  const answerTokens = threadAnswerTokens(posts);
   const maxTokens = budgetFor("thread", answerTokens);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught

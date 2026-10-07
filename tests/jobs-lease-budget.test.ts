@@ -24,8 +24,14 @@ import { PDF_FIGURES_BUDGET_MS } from "../src/collect-pdf-figures.js";
 import { DEFAULTS as FETCH_DEFAULTS, retryDelayMs } from "../src/fetch.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import { SOURCES } from "../src/paper-sources.js";
+import { ANSWER_TOKENS as DEBATE_ANSWER_TOKENS } from "../src/debate.js";
+import { SYNTHESIS_ANSWER_TOKENS } from "../src/debate-themes.js";
+import { ideasAnswerTokens, suggestedIdeas } from "../src/ideas.js";
+import { ILLUSTRATED_ANSWER_TOKENS } from "../src/illustrated.js";
 import { QUIZ_MAX_TOKENS } from "../src/quiz.js";
-import { deadlineFor } from "../src/token-budget.js";
+import { SKETCH_ANSWER_TOKENS } from "../src/sketch.js";
+import { budgetFor, deadlineFor } from "../src/token-budget.js";
+import { suggestedLength, threadAnswerTokens } from "../src/tweets.js";
 import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -404,5 +410,77 @@ describe("the job lease and the platform's kill", () => {
       `\`fetch\` may make ${requestsAtMost} requests with ${oneFetchDocumentMs} ms of clocks each`,
     ).toBeGreaterThanOrEqual(requestsAtMost * oneFetchDocumentMs);
     expect(STEP_BUDGET_MS.fetch).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+
+  /**
+   * **The same rule for the steps whose only stated limit is a token count.**
+   *
+   * `ideas`, `tweets`, `sketch` and the `illustrated` brief are one streamed
+   * Messages call each, and `debate` three non-streamed ones; none has a wall
+   * clock of its own (`streamMessage` sets none, the SDK's timeout stops at
+   * the response headers, `openRouterJson` fetches without one). What the code
+   * does state is each call's `max_tokens`, and `deadlineFor` is this repo's
+   * own conversion of that into time — the one the quiz case above uses. So
+   * the floor is the token time of the step's largest request, built from the
+   * same exported sizing the step itself calls. Transport backoffs (a few
+   * seconds), debate's searches and anything untimed are not in it; the rows
+   * in src/jobs.ts carry the headroom and say so.
+   *
+   * Assumes the default `THINKING_HEADROOM` in `budgetFor`, which is what all
+   * four call sites pass today. docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md.
+   */
+  const claimMs = LEASE_MS - DEADLINE_MARGIN_MS;
+  const tokenTimeMs = (stage: string, answerTokens: number) => deadlineFor(budgetFor(stage, answerTokens));
+
+  it("reserves the token time of the longest Ideas call, and less than a claim", () => {
+    const floor = tokenTimeMs("ideas", ideasAnswerTokens(suggestedIdeas(Number.MAX_SAFE_INTEGER)));
+    expect(STEP_BUDGET_MS.ideas, `the longest ideas call may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.ideas).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of the longest thread, and less than a claim", () => {
+    const floor = tokenTimeMs("thread", threadAnswerTokens(suggestedLength(Number.MAX_SAFE_INTEGER)));
+    expect(STEP_BUDGET_MS.tweets, `the longest thread may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.tweets).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of the Sketch call, and less than a claim", () => {
+    const floor = tokenTimeMs("sketch", SKETCH_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.sketch, `the sketch call may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.sketch).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of Debate's three calls, and less than a claim", () => {
+    /* Two search passes and one synthesis, in sequence (src/debate.ts §
+       `generateDebate`). The searches add time no token count bounds, so this
+       is a floor and not a ceiling. */
+    const floor = 2 * deadlineFor(DEBATE_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.debate, `debate's three calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.debate).toBeLessThan(claimMs);
+  });
+
+  /**
+   * **Illustrated is the one whose ceiling does not fit in a claim**, so its
+   * row is a reservation: large enough that every real Sketch run before it
+   * in one claim hands back, so `illustrated` starts as a fresh claim's first
+   * step with the whole window, rather than on a remnant it is certain to be
+   * able to outlive. The first assertion is the tripwire: the day the brief
+   * fits a claim, this row should be sized to it like the four above.
+   */
+  it("hands Illustrated a fresh claim after any measured Sketch, since its brief alone outlasts a claim", () => {
+    const briefMs = tokenTimeMs("illustrated", ILLUSTRATED_ANSWER_TOKENS);
+    expect(
+      briefMs,
+      "the brief's token time now fits a claim — size STEP_BUDGET_MS.illustrated to it, like ideas and sketch",
+    ).toBeGreaterThanOrEqual(claimMs);
+    /* MEASURED 2026-10-07, production `revision_step_runs`: the fastest
+       `sketch` that ran is 49.6 s (25 runs). A budget over what it leaves
+       hands every real chain back before `illustrated`. */
+    const fastestMeasuredSketchMs = 49_600;
+    expect(
+      STEP_BUDGET_MS.illustrated,
+      "the walk would start `illustrated` after a real Sketch, on a remnant its brief alone can outlive",
+    ).toBeGreaterThan(claimMs - fastestMeasuredSketchMs);
+    expect(STEP_BUDGET_MS.illustrated).toBeLessThan(claimMs);
   });
 });

@@ -173,3 +173,9 @@ GPT Sol reviewed the code
   `illustrated` 600 s vs 739.3 s (it follows Sketch), `debate` 120 s vs 161.6 s, `tweets` 90 s vs
   114.7 s. The table above understates this when it says they usually run alone. `arc` and
   `blocks` exceed only their local maxima.
+  **Done 2026-10-07** in
+  [261007h](261007h-five-more-step-budgets-to-what-they-measure.md): each row set to its calls'
+  token time with headroom (`ideas` and `tweets` 600 s, `sketch` 700 s, `debate` 360 s);
+  `illustrated` 700 s as a reservation, since its brief alone outlasts a claim, which is left as a
+  design question. Of the five, only `ideas` (in Skim) and `illustrated` (after Sketch) follow
+  another step in anything the app queues; the other three do so only in a hand-written job.
