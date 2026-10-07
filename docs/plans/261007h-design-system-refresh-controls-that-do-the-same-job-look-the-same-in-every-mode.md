@@ -1,7 +1,8 @@
 # Design-system refresh: controls that do the same job look the same in every mode
 
-**Status: planned, 2026-10-07. Session `fbrgq3f6-design-consistency`. Report `spya-rgq3f6`,
-queue item `qi-9sv8cha4`.**
+**Status: done enough to stop here, 2026-10-07. F1 to F7 are on `dev`; F8 and four smaller
+follow-ups are queued (§ Left, and where it went). Session `fbrgq3f6-design-consistency`. Report
+`spya-rgq3f6`, queue item `qi-9sv8cha4`. The AGENTS.md line is a question for Greg, not applied.**
 
 Up: [261007a-ui-sweep-umbrella.md](261007a-ui-sweep-umbrella.md) § For Greg, whose three
 questions this builds.
@@ -305,6 +306,13 @@ Two builders at a time at most (the box is busy), never two on one file:
 - Plan: [GPT Sol](261007h-design-refresh-plan-review-sol.md), read-only, **ready with these
   fixes**; all twenty applied above. No second round: the fixes narrow or specify, and each
   family's code gets its own review.
+- Code, round 1, one per family, write-capable: F4b+F5c, F5b+F6, F5a, F2+wording, F3 — **ready
+  with these fixes**; F1 — **not ready** on E1, which the orchestrator fixed (§ What landed);
+  F5a — **not ready** on H6, a dependency that landed with F2 before any push. F4a+F7 had their
+  round 1 in the same run as round 2 below.
+- Round 2, [one run](261007h-f4a-f7-and-round-2-code-review-sol.md): every round-1 P1 fix (E1–E4,
+  C1, C2, D1, H1, H2, K1, K2) checked narrowly and found right and complete; F4a and F7 **ready
+  with these fixes** (M1, M2, R2-1, all fixed). Nothing overruled.
 
 ## What landed
 
@@ -354,3 +362,71 @@ family by pathspec.
   [261007k](../postmortems/261007k-a-shared-wait-still-belongs-to-one-request.md). **Left (E7,
   pre-existing):** Learn's Start over shows "Fetching your Learn conversation…" while the old one
   is being deleted.
+- **F5a — hit areas** (`f868ce9d9`, fixes `f7febe8e6`; [review](261007h-f5a-code-review-sol.md)).
+  `.tap-target` (`styles/tap-target.css`): under a coarse pointer an invisible `::after` at least
+  40×40. On Quotes' ⓘ (17px; its row stacks it over its id), a bare passage id (bounded to its
+  width and 1.3rem, since ids sit 3px apart), /profile's and Metadata's section headings (14px
+  tall), "Forgot your password?" and "back to sign in". Measured with `elementFromPoint` at 390 on
+  a touch pointer; nothing changes for a mouse. **Sol's P1s:** wrapped rows of ids and adjacent
+  short Quotes rows still overlapped (fixed: those rows grow under a coarse pointer). Postmortem
+  [261007l](../postmortems/261007l-an-invisible-target-needs-space-at-every-layout-boundary.md).
+  **What the plan had wrong:** Quotes' ⓘ buttons are 88–110px apart, not 20; their real neighbour
+  was the id 2px away. `BlockRange` is dead code (reported, not removed).
+- **F6 — wording** (`36cd57218`). "One model pass" → "One model call" (FAQ, Tweets, Citations, six
+  catalog cards, Skim's "short model call"); "this piece" → "this one" in not-made-yet lines (FAQ,
+  Simple, Citations, Skim, `notBuiltYet`, `builtButEmpty`). Results and descriptions keep "this
+  piece". An older guard (Citations F17, "a reader should not meet 'model call'") was written for
+  the Dig deeper sentence's search count, so it is narrowed to that sentence.
+- **F2 — the part-switcher** (`40ea6ea43`, fixes `337fee2ed`; [review](261007h-f2-code-review-sol.md)).
+  Nine switchers draw Summary's joined bar from one rule set in `mode-band.css`: Summary, Debate,
+  Structure, Referee and its criterion-kind row, Learn (moved to the left), Diagram, Search's
+  matchers and Skim's depths. Neutral "on" everywhere. All 27.6px at 1440 (Skim 38), 44px under a
+  finger (Structure, Learn, Search and Diagram were 24–28). Narrow: the bar scrolls inside itself,
+  the chosen part kept in view by `useRevealChosen` (extracted from `OrderGroup`); Diagram at 390
+  went from two rows to one. A peer added Referee's fifth chip (Hidden text) mid-run; the merge
+  kept both. **Sol's P1s:** the wait line's unseen sentence could not wrap like the real one; Skim's
+  depth bar could miss its reveal. Its K4: a hidden scrollbar can hide a whole option, so the bar's
+  thin scrollbar shows when it overflows. Postmortem
+  [261007m](../postmortems/261007m-a-delayed-control-must-keep-both-its-geometry-and-its-attachment.md).
+  **Measured, and accepted:** the raised fill is only 1.19:1 (dark) against the band; "chosen" is
+  carried by weight 600 and full ink (14.2:1 against 5.5:1 for the rest), as Summary's always was.
+  **After the designer's before/after review** (uncommitted at time of writing): Learn's four
+  chips were 4px a side at every width; the tightening is now an `@container learn-head
+  (max-width: 19rem)` query, so 1440 is 9.6px (bar 194 → 239px), a phone 12.8px (265px in a
+  317px head), and only the iPad's 226px head keeps 4px. And a bar or order row that can scroll
+  further fades 1.25rem at that edge (`data-more-start`/`-end`, set by `useRevealChosen`); the
+  reveal keeps a chosen or focused button that far from a faded edge. At 390: Diagram, Referee's
+  parts and kinds rows, and Quotes' order row fade at the end; Search and Learn fit and have none;
+  at 1440 no bar has a mark or a mask. Tests: `reveal-chosen-more`, `learn-submode-four-chips`.
+- **F3 — run buttons and text boxes** (`e7ac789ee`, fixes `acff24238`;
+  [review](261007h-f3-code-review-sol.md)). Referee's five runs, Search's find, Glossary's Look up,
+  Find more and Dig deeper and Citations' Dig deeper are shadcn `Button` outline (32px; Citations'
+  24px beside its row's Ask in chat). `button.tsx` gives `aria-disabled` the unavailable look and
+  no hover on any variant. The nine band text boxes share one rule (padding, `--rule-strong`
+  border, 10px corner, `--page` ground, the 2px focus mark); Learn's answer box and Illustrated's
+  steer box went from 4px corners and the browser's focus ring to the house ones.
+- **F4a — order chips and failure colour** (`1b1fe60d0`, fixes `7525f3b62`). Glossary's and
+  Search's order chips share a 10px corner, a 28px height (Glossary's were 23px) and a neutral
+  "on". Every failure sentence is `--danger` — about forty sites that were orange, red, ink or
+  grey, plus every `tw:text-destructive` on text in the client; `--danger` measures 5.2–6.7:1
+  where `--destructive` was 4.37:1 on the dark raised surface. Diagram's and Illustrated's shared
+  wait/empty/failure classes were split first, so waits and empties keep their grey.
+- **F7 — `/design` and the docs** (`c433e121b`, fixes `7525f3b62`). `/design` § Controls across
+  modes: one live example of each family with its rule, finger size and users, a checklist for
+  whoever adds a mode. `controls.md` opens with the aim in Greg's words, the orange rule and a
+  table of each family's shared piece and the test that holds it. **Narrowed (R19, M1):** the page
+  shows the pieces; the tests hold the callers. Elevation has no caller test yet.
+
+## Left, and where it went
+
+- **F8 (the voice row; Diagram's pager)** — not built: optional, and in the same panels as the
+  families above. Queued: `qi-zm95p9we`, `qi-mpnpp2qp`.
+- **Dig deeper beside Ask in chat at two sizes** (F3 review L2) — `qi-h2cneb4y`.
+- **Six more elevation shadows** still dark-tuned in light (F5b+F6 review D5) — `qi-a5gzv44d`.
+- **Learn's Start over shown as a read** (F1 review E7, pre-existing) — `qi-fahzat55`.
+- **Font sizes across modes** (`qi-f8h393sb`) — not answered by Greg and not touched. One change
+  would not cover both: this work lined up *controls*; the font question is about the *text*
+  each band draws (the same kind of line at a different size per mode). But the shape of the
+  answer transfers: a handful of recurring text roles, each with one shared class, a row on
+  `/design` § Controls across modes and a caller test, the same machinery F1–F7 used.
+- **AGENTS.md** — one line proposed to Greg as a question (the note links it), not applied.
