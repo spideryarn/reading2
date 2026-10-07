@@ -3035,9 +3035,10 @@ export const jobs = spideryarn.table(
      *
      * The queued rows, oldest first. Made when claiming scanned for the oldest
      * queued job; a claim names its job by id now, and the planner still reads
-     * the small queued subset through this (361 scans or more in production by
-     * 2026-10-06). Partial, because finished rows accumulate and are never what
-     * a question about the queue is asking for.
+     * the small queued subset through this (1,869 scans in production between
+     * 2026-08-20 and 2026-10-06; which query, nobody has looked). Partial,
+     * because finished rows accumulate and are never what a question about the
+     * queue is asking for.
      */
     index("jobs_queued_idx")
       .on(t.createdAt)
