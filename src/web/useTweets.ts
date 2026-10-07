@@ -36,6 +36,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
@@ -102,7 +103,13 @@ export function useTweets(slug: string): UseTweets {
       try {
         const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
         if (!current()) return;
-        if (res.status === 404) {
+        /* **Checked before anything is published** (plan 261007d, WCO4):
+           `readJson` checks no shape, and an empty 200 is `{}`. A 404 is
+           "none yet", and so is `200 null`, which this route does not send
+           today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+        const found = res.status === 404 ? null : await readJson<ThreadResponse | null>(res);
+        if (!current()) return;
+        if (found === null) {
           setLoaded(null);
           landed(started, res, null);
           setError(null);
@@ -110,11 +117,18 @@ export function useTweets(slug: string): UseTweets {
           setStatus("none");
           return;
         }
-        const found = await readJson<ThreadResponse>(res);
-        if (!current()) return;
+        /* A reply without a thread is published nowhere: a `MalformedReply`,
+           caught below like any failed read, so a thread already on screen
+           stays and an opening read says `PAGE_FAULT`
+           (tests/read-error-matrix.test.tsx). A thread is all the server
+           itself requires before it answers 200 (`loadTweets`,
+           src/store/pg.ts), so no reply it sends fails this. */
+        const thread = (found as Partial<ThreadResponse> | undefined)?.thread;
+        if (typeof thread !== "object" || thread === null) {
+          throw new MalformedReply("the thread reply has no thread");
+        }
         setLoaded(found);
-        /* `?.`: a null thread is drawn as it always was, not thrown on here. */
-        landed(started, res, found.thread?.generatedAt ?? null);
+        landed(started, res, thread.generatedAt ?? null);
         setError(null);
         answered.current = true;
         setStatus("ready");

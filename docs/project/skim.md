@@ -196,6 +196,12 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   they answer; the hold starts when the request is made. The unforced run (the empty state's
   button, the automatic run, *Plan the route for this*) is never held.
 
+  **A reply is checked before it is published** (the same plan). The read asks that a reply has a
+  route with a list of stops, which is what the server itself requires before it answers 200; a
+  404 and a `200 null` both mean none yet. Anything else is a failed read: the route on screen and
+  its banners stay, and the band says so with *Try again* —
+  [`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx).
+
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
 written under `trajectory/7` and unchanged in `skim/8` (whose request adds a strict JSON schema):
 

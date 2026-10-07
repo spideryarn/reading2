@@ -31,6 +31,7 @@ import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { IdeasRead } from "./useIdeas.js";
@@ -115,7 +116,13 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
       try {
         const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`);
         if (!current()) return;
-        if (res.status === 404) {
+        /* **Checked and derived before anything is published** (plan 261007d,
+           WCO4): `readJson` checks no shape, and an empty 200 is `{}`.
+           A 404 is "none yet", and so is `200 null`, which this route does not
+           send today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+        const loaded = res.status === 404 ? null : await readJson<SkimResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case: nobody has asked for a route yet. */
           setSkim(null);
           setStale(false);
@@ -127,10 +134,17 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
           setStatus("none");
           return;
         }
-        const loaded = await readJson<SkimResponse>(res);
-        if (!current()) return;
-        setSkim(loaded.skim);
-        landed(started, res, loaded.skim.generatedAt);
+        /* A reply without a route is published nowhere: a `MalformedReply`,
+           so the reader gets `PAGE_FAULT` and what is on screen stays
+           (tests/read-error-matrix.test.tsx). The list of stops is what the
+           server itself requires of a stored route before it answers 200
+           (`loadSkim`, src/store/pg.ts), so no route it sends fails this. */
+        const route = (loaded as Partial<SkimResponse> | undefined)?.skim;
+        if (typeof route !== "object" || route === null || !Array.isArray(route.stops)) {
+          throw new MalformedReply("the skim reply has no route");
+        }
+        setSkim(route);
+        landed(started, res, route.generatedAt);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);

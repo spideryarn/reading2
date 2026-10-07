@@ -84,3 +84,64 @@ Two tests pin the first and third points
 - The brief allowed one fixture field in `tests/skim-panel.test.tsx`. The interface grew two
   (`rewriting`, `refresh`), and `tests/skim-purpose-line.test.tsx` builds the same fixture, so
   both files gained both lines.
+
+## 2. Thread and Skim check a reply before publishing it (WCO4)
+
+**What was wrong.** `readJson<T>` parses and checks no shape (an empty 200 is `{}`). `useTweets`
+queued `setLoaded(found)` and only then touched `found.thread`; `useSkim` set five pieces of state
+straight from the reply. Nine sibling hooks refuse a reply without its artefact by throwing
+`MalformedReply` first.
+
+**Reproduced.** New rows in
+[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx) §
+*a reply is checked before it is published*, driving the two real hooks: 25 red before the fix.
+Sol's two probes are among them (Thread after `null` lost its thread; Skim after `{}` ended
+`ready` with `undefined` for a route), and so is one the review did not pose: a malformed reply's
+`stale: true` was published beside the old route.
+
+**What landed.** In both hooks the reply is read, checked and only then published:
+
+- a 404 **or a `200 null`** is "none yet" (U15). Neither route sends `null` today; the test holds
+  the two answers to the same outcome, including Thread's start-on-arrival;
+- Thread asks for a `thread` that is an object; Skim asks for a `skim` that is an object with a
+  `stops` list;
+- anything else throws `MalformedReply` into the catch each hook already had, so the accepted
+  answer and its flags stay. Skim then says `PAGE_FAULT`, as the nine do. Thread says its own
+  re-read sentence (`THREAD_RECHECK_FAILED`) when it has a thread, which is what it already said
+  for every failed re-read, and `PAGE_FAULT` on an opening read.
+
+**The retreat rule: no real envelope is refused.** Each check asks only for what the server
+already requires before answering 200. `loadTweets` (`src/store/pg.ts`) answers 404 unless the
+stored thread is truthy; `loadSkim` answers 404 unless `skim.stops` is an array; the routes add the
+flags (`src/routes.ts`). The two threads stored in the fixture corpus (`writes`, `noema-…`) are
+wrapped as the route wraps them and are accepted (§ *every thread stored in the fixture corpus*).
+**Not sampled:** the corpus holds no Skim route, and no stored row in any database was read, so
+for Skim the argument is the route's code alone. One gap in it: a stored thread that is truthy and
+not an object (a string) would pass the server and be refused here. The stage writes objects only.
+
+The flags and `notOnRoute` are not type-checked, as in the nine: a reply with a route and no
+`stale` reads as not stale.
+
+**Mutations, each put back** (84 tests in the file):
+
+| Mutation | Red |
+|---|---|
+| Skim: no check | 11 |
+| Skim: refuse only an absent `skim` | 3 |
+| Skim: `stops` not asked for | 2 |
+| Skim: `null` is not absence | 1 |
+| Thread: no check | 7 |
+| Thread: refuse only an absent `thread` | 3 |
+| Thread: `null` is not absence | 1 |
+
+**A hole in these tests, closed by the typecheck and not by them.** With `MalformedReply` not
+imported, the throw was a `ReferenceError` and every row still passed, because any thrown thing
+lands in the same catch. `npm run typecheck` is what refused it.
+
+**What the documents got wrong.**
+
+- Sol's probe reads as if Thread after `null` should keep its thread. Under U15 a `200 null` is
+  absence, so it takes the thread away exactly as a 404 does; the cases that keep it are `{}` and
+  a reply whose `thread` is `null`.
+- The brief's "surface the failure the way the nine do" fits Skim. Thread already had a sentence
+  of its own for a failed re-read and keeps it.
