@@ -57,6 +57,8 @@ let ideasBody: unknown = null;
 let faqBody: unknown = null;
 /** A held Ideas read, for the prerequisite-loading race. */
 let ideasReply: Promise<Response> | null = null;
+/** The Ideas read fails: the server answers a 500 in its own sentence. */
+let ideasFails = false;
 /** Every request, so a test can say the card started no job. */
 const requested: { url: string; method: string }[] = [];
 /** The body of every POST, parsed — what a press asked the queue for. */
@@ -72,6 +74,8 @@ vi.mock("../src/web/lib/api.js", async () => {
       return skimBody === null
         ? new Response(null, { status: 404 })
         : new Response(JSON.stringify(skimBody), { status: 200 });
+    if (url.startsWith("/api/ideas/") && ideasFails)
+      return new Response(JSON.stringify({ error: "The Ideas could not be read." }), { status: 500 });
     if (url.startsWith("/api/ideas/"))
       return ideasReply ?? (ideasBody === null
         ? new Response(null, { status: 404 })
@@ -344,6 +348,7 @@ beforeEach(() => {
   ideasBody = null;
   faqBody = null;
   ideasReply = null;
+  ideasFails = false;
   finishers.length = 0;
   skimBody = SKIM_BODY;
   history.replaceState(null, "", "/read/a-route?mode=skim");
@@ -2360,6 +2365,45 @@ describe("the scrapbook, walked", () => {
     await settled();
     expect(ideaReads()).toBeGreaterThan(before);
     expect(host.querySelector(".skim-row.current .skim-card")?.textContent).toContain("Fieldwork is the test");
+  });
+
+  /* The stop card's Ideas across the read's states — the SkimMode half of
+     tests/ideas-read-states.test.tsx, here because this file has the walk. */
+  it("goes on showing a current list's ideas after a refresh of them fails", async () => {
+    ideasBody = IDEAS_BODY;
+    await mount();
+    const card = () => host.querySelector(".skim-row.current .skim-card")?.textContent ?? "";
+    expect(card()).toContain("Fieldwork is the test");
+
+    ideasFails = true;
+    const ideaReads = () => requested.filter((r) => r.url.startsWith("/api/ideas/")).length;
+    const before = ideaReads();
+    await act(async () => {
+      finishers.at(-1)!({ id: "job-f", slug: "a-route", status: "done", steps: [{ name: "ideas" }, { name: "skim" }] });
+    });
+    await settled();
+    expect(ideaReads(), "the failed refresh was asked").toBeGreaterThan(before);
+    expect(card()).toContain("Fieldwork is the test");
+  });
+
+  it("shows no idea from a stale list, or from a read that failed", async () => {
+    const card = () => host.querySelector(".skim-row.current .skim-card")?.textContent ?? "";
+    ideasBody = { ...(IDEAS_BODY as object), stale: true };
+    await mount();
+    expect(current()).toBe(Q[2]);
+    expect(card()).not.toContain("Fieldwork is the test");
+    /* The control: the term on the same card is drawn, so the card ran. */
+    expect(card()).toContain("laboratory");
+  });
+
+  it("shows no idea when the Ideas' opening read failed", async () => {
+    ideasBody = IDEAS_BODY;
+    ideasFails = true;
+    await mount();
+    expect(current()).toBe(Q[2]);
+    const card = host.querySelector(".skim-row.current .skim-card")?.textContent ?? "";
+    expect(card).not.toContain("Fieldwork is the test");
+    expect(card).toContain("laboratory");
   });
 
   it("finds a plural the stored list never named, and draws no card from a stale glossary", async () => {

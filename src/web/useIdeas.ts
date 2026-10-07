@@ -152,13 +152,27 @@ export interface IdeasRead {
   refresh(): Promise<void>;
 }
 
+/**
+ * **Everything that arrives with the list, as one value** — so the four facts
+ * about it cannot outlive it. They were five `useState`s, each reset by hand in
+ * the "none yet" branch; one object set once is the same thing with nothing to
+ * forget. docs/plans/261006n-one-type-for-a-read-spiked-on-useideas.md.
+ */
+export interface IdeasAnswer {
+  ideas: Ideas;
+  /** The article moved after these were written — blocks **or** sections. */
+  stale: boolean;
+  /** They predate the current prompt. A different fact from `stale`. */
+  outdated: boolean;
+  /** These were written from a reader profile at all. */
+  profiled: boolean;
+  /** ...and that profile is no longer the reader's. See `UseIdeas.profileChanged`. */
+  profileChanged: boolean;
+}
+
 export function useIdeasRead(slug: string): IdeasRead {
   const [status, setStatus] = useState<IdeasStatus>("loading");
-  const [ideas, setIdeas] = useState<Ideas | null>(null);
-  const [stale, setStale] = useState(false);
-  const [outdated, setOutdated] = useState(false);
-  const [profiled, setProfiled] = useState(false);
-  const [profileChanged, setProfileChanged] = useState(false);
+  const [answer, setAnswer] = useState<IdeasAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
@@ -185,11 +199,7 @@ export function useIdeasRead(slug: string): IdeasRead {
       if (loaded === null) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
-        setIdeas(null);
-        setStale(false);
-        setOutdated(false);
-        setProfiled(false);
-        setProfileChanged(false);
+        setAnswer(null);
         landed(started, res, null);
         setError(null);
         setStatus("none");
@@ -202,14 +212,15 @@ export function useIdeasRead(slug: string): IdeasRead {
       if (typeof loaded?.ideas !== "object" || loaded.ideas === null) {
         throw new MalformedReply("the ideas reply has no ideas");
       }
-      const profiled = loaded.ideas.profileHash != null;
-      setIdeas(loaded.ideas);
-      setStale(loaded.stale);
-      setOutdated(loaded.outdated);
-      /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "written without one". */
-      setProfiled(profiled);
-      setProfileChanged(loaded.profileChanged);
+      setAnswer({
+        ideas: loaded.ideas,
+        stale: loaded.stale,
+        outdated: loaded.outdated,
+        /* `!= null` rather than truthiness: the field is `string | null |
+           undefined` and only `null` and absent mean "written without one". */
+        profiled: loaded.ideas.profileHash != null,
+        profileChanged: loaded.profileChanged,
+      });
       landed(started, res, loaded.ideas.generatedAt);
       setError(null);
       setStatus("ready");
@@ -239,15 +250,27 @@ export function useIdeasRead(slug: string): IdeasRead {
      revalidation is tried again; only the opening error returns to loading. */
   const retryRead = useCallback(async () => {
     setError(null);
-    if (ideas === null) setStatus("loading");
+    if (answer === null) setStatus("loading");
     await reload();
-  }, [ideas, reload]);
+  }, [answer, reload]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { status, ideas, stale, outdated, profiled, profileChanged, fresh, error, retryRead, reload, refresh };
+  return {
+    status,
+    ideas: answer?.ideas ?? null,
+    stale: answer?.stale ?? false,
+    outdated: answer?.outdated ?? false,
+    profiled: answer?.profiled ?? false,
+    profileChanged: answer?.profileChanged ?? false,
+    fresh,
+    error,
+    retryRead,
+    reload,
+    refresh,
+  };
 }
 
 export function useIdeas(slug: string): UseIdeas {
