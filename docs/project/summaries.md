@@ -162,6 +162,29 @@ for both.
   the owner's read compare against the current version on their own
   ([`pg.ts`](../../src/store/pg.ts)), so *outdated* and Metadata's Rerun work as they did.
 
+  **This is the one step that does it, and it is a deliberate exception**, not an oversight to
+  tidy. Every other step with a stamp
+  ([architecture.md § Conventions](architecture.md#conventions)) expects the *current* prompt
+  version and model, so a version bump makes its stored output not current and the next unforced
+  job that names the step writes it again. `simple` alone expects the stored summary's own, which
+  splits two questions the other steps answer together:
+
+  | | asked by | against | a version bump alone |
+  |---|---|---|---|
+  | *outdated*: was it written with an older prompt? | the owner's read and Metadata's row (`pg.ts`) | the current version | says yes |
+  | may an unforced job rewrite it? | the `simple` step's `stamp` (`pipeline.ts` § `STEPS`) | the stored summary's own version and model | says no |
+
+  The code records it as deliberate and gives the reason, in the comment above that stamp:
+
+  > Without this every bump of `SIMPLE_PROMPT_VERSION` made each stored summary eligible for a
+  > rewrite by any unforced job that names `simple`, and the add page's *Generate the main modes*
+  > queues one (GPT Sol's review of plan 261004f stage 2, S1).
+
+  It is what makes the write-once rule quoted
+  [below](#when-summary-offers-a-rewrite-since-2026-10-04) hold for a job nobody pressed a button
+  for. Whether the other modes should follow it has not been decided; until it is, do not copy
+  this stamp into another step, and do not "fix" this one to match them.
+
 **The two waits, measured.** Three local articles of 8.6k to 12.6k words, two cold writes each, on
 Opus with the guard on, timed from the start of the write to each level being final
 (`evals/simple/probe.ts`; `evals/results/simple/high-none-timed350a|b` and `high-none-timed500a|b`):

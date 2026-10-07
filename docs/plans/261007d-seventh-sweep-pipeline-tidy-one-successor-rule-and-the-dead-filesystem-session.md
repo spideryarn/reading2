@@ -1,6 +1,6 @@
 # Seventh sweep: pipeline tidy (C8)
 
-Status as of 2026-10-07: item 1 built. Items 2 to 4 follow, one commit each. Not pushed: a GPT
+Status as of 2026-10-07: all four items built, one commit each. Not pushed: a GPT
 review comes first.
 
 ## Goal
@@ -219,7 +219,33 @@ One difference from the OpenRouter cases: the SDK sets a timer of its own per re
 case wraps only the timer whose length is a first backoff's (375 to 625 ms) and asserts that it
 saw exactly one.
 
-**What the docs got wrong.** The Opus read said neither test had been seen red; the Sol review
+## Item 4: Summary's stamp, written down
+
+Docs only; no behaviour changed. `src/pipeline.ts` § `STEPS.simple.stamp` expects the prompt
+version and model of the summary already stored, where every other step's stamp expects the
+current ones (checked: `simple` is the only stamp in `STEPS` that reads `store.stampFor`). Its
+comment says so and says why:
+
+> **The prompt version and model expected are the stored summary's own, when one is stored.** So
+> an unforced run never rewrites a summary because the prompt or model has moved on since; it
+> still rewrites when the article moved, and a forced run never asks. Without this every bump of
+> `SIMPLE_PROMPT_VERSION` made each stored summary eligible for a rewrite by any unforced job that
+> names `simple`, and the add page's *Generate the main modes* queues one (GPT Sol's review of
+> plan 261004f stage 2, S1). *Outdated* is asked elsewhere, against the current version:
+> src/store/pg.ts, the owner's GET and Metadata's row.
+
+[summaries.md](../project/summaries.md) already stated the behaviour (the bullet *An unforced job
+never rewrites a stored summary for the prompt's or model's age*) and already quotes Greg's
+write-once rule of 2026-10-04. What it did not say is that this is the one step that differs from
+the rest, on purpose. That paragraph is added under the bullet, with the two questions the code
+keeps apart: *outdated* (shown, against the current version) and *may an unforced job rewrite it*
+(the stamp, against the stored version). It attributes the stamp to the code's own comment, and
+Greg's rule to the quote that was already there.
+
+`architecture.md § Conventions` is unchanged. What it says about stamps is still true, and it is
+an entry point whose wording is a rule.
+
+**What the docs got wrong (item 3).** The Opus read said neither test had been seen red; the Sol review
 corrected that for the transport cases and was right. The Opus read's file for the Messages check
 (`src/messages-stream.ts`) was right; the brief for this cluster named `src/messages.ts` and
 `src/ai-call.ts`, where it is not.
